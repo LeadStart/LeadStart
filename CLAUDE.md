@@ -1,1 +1,31 @@
 @AGENTS.md
+@PROJECT_STATUS.md
+
+# LeadStart — Cold Email CMS Platform
+
+## What This Is
+A Next.js 16 app for managing cold email campaigns via Instantly.ai. Two dashboards:
+- **Admin** (`/admin/*`) — Owner/VA view for managing all clients, campaigns, billing, reports
+- **Client** (`/client/*`) — Client-facing portal showing their campaigns, activity, reports, feedback
+
+## How to Run Locally
+```bash
+npm install
+npm run dev
+# Opens at localhost:3000 — runs in demo mode with mock data, no Supabase needed
+```
+
+## Key Architecture Decisions
+- **Demo mode**: When no Supabase URL is set, the app uses `src/lib/supabase/demo-client.ts` which returns mock data from `src/lib/mock-data.ts`. This lets everything work locally without a database.
+- **Role switching**: In demo mode, a toggle in the topbar lets you switch between admin and client views. The demo client swaps the returned user based on the URL path (`/client/*` returns a client user, `/admin/*` returns an owner user).
+- **Styling**: Bold & branded theme — indigo/violet gradient sidebar, color-coded KPI cards (green=good, amber=warning, red=bad), area charts with gradient fills. All interactive elements use pointer cursor.
+- **UI Components**: shadcn/ui (Base UI primitives) + Tailwind CSS v4 + Lucide icons. Custom gradient utilities use inline styles (Tailwind v4 @layer utilities don't reliably generate custom gradient classes).
+
+## Tech Stack
+- Next.js 16 (App Router) + React 19 + TypeScript
+- Tailwind CSS v4 + shadcn/ui (Base UI)
+- Recharts for data visualization
+- Supabase (auth + database) — migrations in `supabase/migrations/`
+- Resend + React Email for transactional emails
+- Instantly.ai API for campaign data (placeholder client in `src/lib/instantly/`)
+- Stripe for billing (placeholder, not wired)
