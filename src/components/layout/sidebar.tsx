@@ -38,7 +38,7 @@ const adminNav: NavItem[] = [
 
 const adminSettingsNav: NavItem[] = [
   { href: "/admin/settings/team", label: "Team", icon: <Building2 size={18} /> },
-  { href: "/admin/settings/api", label: "API Settings", icon: <Key size={18} /> },
+  { href: "/admin/settings/api", label: "Integrations", icon: <Key size={18} /> },
 ];
 
 const clientNav: NavItem[] = [
