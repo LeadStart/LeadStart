@@ -6,7 +6,7 @@ import { analyzeStepHealth, getCampaignStepHealth } from "@/lib/kpi/step-health"
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
-import { ArrowRight, AlertTriangle, TrendingDown } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import type { CampaignSnapshot, Campaign, Client, KPIMetrics, CampaignStepMetric, StepHealthAlert } from "@/types/app";
 
 function HealthDot({ health }: { health: "good" | "warning" | "bad" | "none" }) {
@@ -155,25 +155,8 @@ export default function AdminOverviewPage() {
                       </div>
                       <ArrowRight size={16} className="text-muted-foreground mt-1 opacity-0 transition-all group-hover:opacity-100 group-hover:translate-x-0.5" />
                     </div>
-                    <div className="mb-3 space-y-1.5">
+                    <div className="mb-4">
                       <Badge variant="secondary" className={`text-xs border ${healthLabel.class}`}><HealthDot health={health} /><span className="ml-1.5">{healthLabel.text}</span></Badge>
-                      {/* Step-level alerts */}
-                      {stepAlerts.length > 0 && (
-                        <div className="space-y-1">
-                          {stepAlerts.slice(0, 2).map((alert, i) => (
-                            <div key={i} className={`flex items-center gap-1.5 text-[10px] rounded-md px-2 py-1 ${
-                              alert.severity === "critical"
-                                ? "bg-red-50 text-red-700"
-                                : "bg-amber-50 text-amber-700"
-                            }`}>
-                              {alert.severity === "critical" ? <AlertTriangle size={10} /> : <TrendingDown size={10} />}
-                              <span className="font-medium">Step {alert.step}</span>
-                              <span>{alert.metric === "reply_rate" ? "reply" : "bounce"} {alert.change_pct > 0 ? "+" : ""}{alert.change_pct}%</span>
-                              <span className="text-[9px] opacity-70">({alert.current_value}% vs {alert.baseline_value}% avg)</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
                     </div>
                     {metrics.emails_sent > 0 ? (
                       <div className="grid grid-cols-4 gap-2 pt-3 border-t border-border/50">

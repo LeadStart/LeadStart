@@ -6,7 +6,9 @@ import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import { KPICard } from "@/components/charts/kpi-card";
 import { DailyChart } from "@/components/charts/daily-chart";
+import { StepFunnel } from "@/components/charts/step-funnel";
 import { calculateMetrics } from "@/lib/kpi/calculator";
+import { analyzeStepHealth } from "@/lib/kpi/step-health";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -18,7 +20,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { RefreshButton } from "./refresh-button";
-import type { Campaign, CampaignSnapshot, LeadFeedback } from "@/types/app";
+import { ArrowLeft, MessageSquare } from "lucide-react";
+import type { Campaign, CampaignSnapshot, CampaignStepMetric, LeadFeedback, Client } from "@/types/app";
 
 const supabase = createClient();
 
@@ -31,7 +34,16 @@ async function fetchCampaignDetail(campaignId: string) {
 
   if (!campaign) return null;
 
-  const [snapshotsRes, feedbackRes] = await Promise.all([
+  const typedCampaign = campaign as Campaign;
+
+  // Get client name for step health alerts
+  const { data: clientData } = await supabase
+    .from("clients")
+    .select("name")
+    .eq("id", typedCampaign.client_id)
+    .single();
+
+  const [snapshotsRes, feedbackRes, stepMetricsRes] = await Promise.all([
     supabase
       .from("campaign_snapshots")
       .select("*")
@@ -42,12 +54,19 @@ async function fetchCampaignDetail(campaignId: string) {
       .select("*")
       .eq("campaign_id", campaignId)
       .order("created_at", { ascending: false }),
+    supabase
+      .from("campaign_step_metrics")
+      .select("*")
+      .eq("campaign_id", campaignId)
+      .order("period_start", { ascending: true }),
   ]);
 
   return {
-    campaign: campaign as Campaign,
+    campaign: typedCampaign,
+    clientName: (clientData as Client | null)?.name || "Unknown",
     snapshots: (snapshotsRes.data || []) as CampaignSnapshot[],
     feedback: (feedbackRes.data || []) as LeadFeedback[],
+    stepMetrics: (stepMetricsRes.data || []) as CampaignStepMetric[],
   };
 }
 
@@ -63,6 +82,7 @@ export default function CampaignDetailPage({
     return (
       <div className="space-y-6 animate-pulse">
         <div className="h-8 w-48 rounded bg-muted" />
+        <div className="h-32 rounded-xl bg-muted" />
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {[1, 2, 3, 4].map((i) => (
             <div key={i} className="h-24 rounded-xl bg-muted" />
@@ -81,36 +101,46 @@ export default function CampaignDetailPage({
     );
   }
 
-  const { campaign: typedCampaign, snapshots, feedback } = data;
+  const { campaign: typedCampaign, clientName, snapshots, feedback, stepMetrics } = data;
   const metrics = calculateMetrics(snapshots);
+
+  // Run step health analysis
+  const campaignInfoMap = new Map([[campaignId, { id: campaignId, name: typedCampaign.name, client_name: clientName }]]);
+  const stepAlerts = analyzeStepHealth(stepMetrics, campaignInfoMap);
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <Link
-            href={`/admin/clients/${clientId}`}
-            className="text-sm text-gray-500 hover:text-gray-700"
-          >
-            &larr; Back to Client
-          </Link>
-          <h1 className="text-2xl font-bold mt-1">{typedCampaign.name}</h1>
-          <p className="text-xs text-gray-500">
-            Instantly ID: {typedCampaign.instantly_campaign_id}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Badge
-            variant="secondary"
-            className={
-              typedCampaign.status === "active"
-                ? "bg-green-100 text-green-800"
-                : "bg-gray-100 text-gray-600"
-            }
-          >
-            {typedCampaign.status}
-          </Badge>
-          <RefreshButton campaignId={campaignId} />
+      {/* Header */}
+      <div>
+        <Link
+          href={`/admin/clients/${clientId}`}
+          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <ArrowLeft size={14} />
+          Back to Client
+        </Link>
+        <div className="relative overflow-hidden rounded-xl p-6 text-white mt-3" style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed, #6366f1)', boxShadow: '0 10px 30px -5px rgba(99, 102, 241, 0.2)' }}>
+          <div className="relative z-10 flex items-start justify-between">
+            <div>
+              <h1 className="text-2xl font-bold">{typedCampaign.name}</h1>
+              <p className="text-xs text-white/50 font-mono mt-1">
+                {typedCampaign.instantly_campaign_id}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Badge
+                className={
+                  typedCampaign.status === "active"
+                    ? "bg-white/15 text-white border-0"
+                    : "bg-white/10 text-white/60 border-0"
+                }
+              >
+                {typedCampaign.status}
+              </Badge>
+              <RefreshButton campaignId={campaignId} />
+            </div>
+          </div>
+          <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-white/5" />
         </div>
       </div>
 
@@ -118,64 +148,49 @@ export default function CampaignDetailPage({
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <KPICard label="Emails Sent" value={metrics.emails_sent} unit="count" />
         <KPICard label="Reply Rate" value={metrics.reply_rate} unit="percent" kpiKey="reply_rate" />
-        <KPICard
-          label="Positive Reply Rate"
-          value={metrics.positive_reply_rate}
-          unit="percent"
-          kpiKey="positive_reply_rate"
-        />
         <KPICard label="Bounce Rate" value={metrics.bounce_rate} unit="percent" kpiKey="bounce_rate" />
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <KPICard
-          label="Unsubscribe Rate"
-          value={metrics.unsubscribe_rate}
-          unit="percent"
-          kpiKey="unsubscribe_rate"
-        />
         <KPICard label="Positive Responses" value={metrics.meetings_booked} unit="count" />
-        <KPICard
-          label="Reply-to-Meeting"
-          value={metrics.reply_to_meeting_rate}
-          unit="percent"
-          kpiKey="reply_to_meeting_rate"
-        />
-        <KPICard label="Total Replies" value={metrics.unique_replies} unit="count" />
       </div>
 
-      {/* Chart */}
+      {/* Daily Chart */}
       <DailyChart snapshots={snapshots} />
 
-      {/* Snapshot History */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Daily Breakdown</CardTitle>
+      {/* Step Performance Funnel — THE KEY SECTION */}
+      <StepFunnel
+        stepMetrics={stepMetrics}
+        alerts={stepAlerts}
+        campaignName={typedCampaign.name}
+      />
+
+      {/* Daily Breakdown */}
+      <Card className="border-border/50 shadow-sm">
+        <CardHeader className="flex flex-row items-center gap-2 pb-3">
+          <CardTitle className="text-base">Daily Breakdown</CardTitle>
         </CardHeader>
         <CardContent>
           {snapshots.length === 0 ? (
-            <p className="text-sm text-gray-500">No data synced yet.</p>
+            <p className="text-sm text-muted-foreground">No data synced yet.</p>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Date</TableHead>
-                  <TableHead>Sent</TableHead>
-                  <TableHead>Replies</TableHead>
-                  <TableHead>Bounces</TableHead>
-                  <TableHead>Unsubs</TableHead>
-                  <TableHead>Positive</TableHead>
+                  <TableHead className="text-right">Sent</TableHead>
+                  <TableHead className="text-right">Replies</TableHead>
+                  <TableHead className="text-right">Bounces</TableHead>
+                  <TableHead className="text-right">Unsubs</TableHead>
+                  <TableHead className="text-right">Positive</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {snapshots.slice(0, 14).map((s) => (
                   <TableRow key={s.id}>
-                    <TableCell>{s.snapshot_date}</TableCell>
-                    <TableCell>{s.emails_sent}</TableCell>
-                    <TableCell>{s.replies}</TableCell>
-                    <TableCell>{s.bounces}</TableCell>
-                    <TableCell>{s.unsubscribes}</TableCell>
-                    <TableCell>{s.meetings_booked}</TableCell>
+                    <TableCell className="text-sm">{s.snapshot_date}</TableCell>
+                    <TableCell className="text-right">{s.emails_sent}</TableCell>
+                    <TableCell className="text-right">{s.replies}</TableCell>
+                    <TableCell className="text-right">{s.bounces}</TableCell>
+                    <TableCell className="text-right">{s.unsubscribes}</TableCell>
+                    <TableCell className="text-right">{s.meetings_booked}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -185,47 +200,43 @@ export default function CampaignDetailPage({
       </Card>
 
       {/* Lead Feedback */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Lead Feedback ({feedback.length})</CardTitle>
+      <Card className="border-border/50 shadow-sm">
+        <CardHeader className="flex flex-row items-center gap-2 pb-3">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50">
+            <MessageSquare size={16} className="text-indigo-500" />
+          </div>
+          <CardTitle className="text-base">Lead Feedback ({feedback.length})</CardTitle>
         </CardHeader>
         <CardContent>
           {feedback.length === 0 ? (
-            <p className="text-sm text-gray-500">No feedback submitted yet.</p>
+            <p className="text-sm text-muted-foreground">No feedback submitted yet.</p>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Lead</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Comment</TableHead>
-                  <TableHead>Date</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {feedback.map((f) => (
-                  <TableRow key={f.id}>
-                    <TableCell>
-                      <div>
-                        <p className="font-medium">{f.lead_email}</p>
-                        {f.lead_company && (
-                          <p className="text-xs text-gray-500">{f.lead_company}</p>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{f.status.replace("_", " ")}</Badge>
-                    </TableCell>
-                    <TableCell className="max-w-xs truncate">
-                      {f.comment || "—"}
-                    </TableCell>
-                    <TableCell className="text-sm text-gray-500">
-                      {new Date(f.created_at).toLocaleDateString()}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            <div className="space-y-2">
+              {feedback.map((f) => (
+                <div key={f.id} className="flex items-center gap-3 rounded-xl border border-border/50 p-3 text-sm hover:bg-muted/30 transition-colors">
+                  <Badge
+                    variant="secondary"
+                    className={
+                      ["good_lead", "interested"].includes(f.status)
+                        ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                        : ["bad_lead", "wrong_person", "not_interested"].includes(f.status)
+                        ? "bg-red-100 text-red-800 border border-red-200"
+                        : "bg-gray-100 text-gray-600 border border-gray-200"
+                    }
+                  >
+                    {f.status.replace(/_/g, " ")}
+                  </Badge>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium truncate">{f.lead_email}</p>
+                    {f.lead_company && <p className="text-xs text-muted-foreground">{f.lead_company}</p>}
+                  </div>
+                  {f.comment && <span className="text-muted-foreground truncate hidden sm:inline text-xs max-w-xs">{f.comment}</span>}
+                  <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0">
+                    {new Date(f.created_at).toLocaleDateString()}
+                  </span>
+                </div>
+              ))}
+            </div>
           )}
         </CardContent>
       </Card>
