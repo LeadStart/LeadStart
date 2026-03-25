@@ -10,17 +10,18 @@ export default async function DashboardLayout({
 }) {
   const supabase = await createClient();
 
-  // getUser() validates the JWT — this is the auth check.
-  // The middleware already does role-based routing, so this is
-  // primarily to get the user's email and role for the shell.
+  // Use getSession() instead of getUser() — reads from cookie locally
+  // without a network round-trip. The middleware already validated
+  // the user with getUser(), so we just need the session data here.
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    data: { session },
+  } = await supabase.auth.getSession();
 
-  if (!user) {
+  if (!session?.user) {
     redirect("/login");
   }
 
+  const user = session.user;
   const role = ((user as { app_metadata?: { role?: string } }).app_metadata?.role || "client") as AppRole;
 
   return (
