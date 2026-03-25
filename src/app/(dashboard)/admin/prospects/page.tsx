@@ -126,7 +126,7 @@ export default function ProspectsPage() {
 
   useEffect(() => {
     const supabase = createClient();
-    supabase.from("prospects").select("*").order("updated_at", { ascending: false }).then(({ data }) => {
+    supabase.from("prospects").select("*").order("updated_at", { ascending: false }).then(({ data }: { data: unknown }) => {
       setProspects((data || []) as Prospect[]);
     });
   }, []);

@@ -50,7 +50,7 @@ export default async function ClientDashboardPage() {
         "campaign_id",
         (
           await supabase.from("campaigns").select("id").eq("client_id", client.id)
-        ).data?.map((c: { id: string }) => c.id) || ["none"]
+        ).data?.map((c: Record<string, unknown>) => c.id as string) || ["none"]
       )
       .gte("snapshot_date", new Date(Date.now() - 30 * 86400000).toISOString().split("T")[0])
       .order("snapshot_date", { ascending: false }),

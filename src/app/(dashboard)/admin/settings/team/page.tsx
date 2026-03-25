@@ -32,7 +32,7 @@ export default function TeamPage() {
       .select("*")
       .in("role", ["owner", "va"])
       .order("created_at")
-      .then(({ data }) => {
+      .then(({ data }: { data: unknown }) => {
         setMembers((data || []) as Profile[]);
       });
   }, []);

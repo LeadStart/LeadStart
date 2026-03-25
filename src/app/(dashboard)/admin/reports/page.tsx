@@ -49,7 +49,7 @@ export default function ReportsPage() {
 
   useEffect(() => {
     const supabase = createClient();
-    supabase.from("clients").select("*").order("name").then(({ data }) => {
+    supabase.from("clients").select("*").order("name").then(({ data }: { data: unknown }) => {
       setClients((data || []) as Client[]);
     });
     supabase
@@ -57,7 +57,7 @@ export default function ReportsPage() {
       .select("*")
       .order("created_at", { ascending: false })
       .limit(20)
-      .then(({ data }) => {
+      .then(({ data }: { data: unknown }) => {
         setReports((data || []) as KPIReport[]);
       });
   }, []);

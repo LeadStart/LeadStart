@@ -30,7 +30,7 @@ export default function APISettingsPage() {
       .select("*")
       .eq("id", organizationId)
       .single()
-      .then(({ data }) => {
+      .then(({ data }: { data: unknown }) => {
         if (data) {
           const typedOrg = data as Organization;
           setOrg(typedOrg);

@@ -30,6 +30,9 @@ const TABLES: Record<string, MockRow[]> = {
   prospects: MOCK_PROSPECTS as unknown as MockRow[],
 };
 
+type QueryResult = { data: MockRow[]; error: null };
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
 interface QueryBuilder {
   select: (columns?: string) => QueryBuilder;
   eq: (col: string, val: unknown) => QueryBuilder;
@@ -39,8 +42,11 @@ interface QueryBuilder {
   order: (col: string, opts?: { ascending?: boolean }) => QueryBuilder;
   limit: (n: number) => QueryBuilder;
   single: () => Promise<{ data: MockRow | null; error: null }>;
-  then: (resolve: (val: { data: MockRow[]; error: null }) => void) => void;
+  then: (onfulfilled?: (value: QueryResult) => any, onrejected?: (reason: any) => any) => Promise<any>;
+  catch: (onrejected?: (reason: any) => any) => Promise<any>;
+  [Symbol.toStringTag]: string;
 }
+/* eslint-enable @typescript-eslint/no-explicit-any */
 
 function createQueryBuilder(tableName: string): QueryBuilder {
   let rows = [...(TABLES[tableName] || [])];
@@ -83,7 +89,8 @@ function createQueryBuilder(tableName: string): QueryBuilder {
       for (const fn of filters) result = fn(result);
       return { data: result[0] || null, error: null };
     },
-    then(resolve) {
+    [Symbol.toStringTag]: "QueryBuilder" as const,
+    then(onfulfilled?: (value: QueryResult) => unknown) {
       let result = [...rows];
       for (const fn of filters) result = fn(result);
       if (orderCol) {
@@ -96,7 +103,11 @@ function createQueryBuilder(tableName: string): QueryBuilder {
         });
       }
       if (limitN !== null) result = result.slice(0, limitN);
-      resolve({ data: result, error: null });
+      const value: QueryResult = { data: result, error: null };
+      return Promise.resolve(onfulfilled ? onfulfilled(value) : value);
+    },
+    catch() {
+      return Promise.resolve({ data: [], error: null });
     },
   };
 
@@ -146,6 +157,9 @@ export function createDemoClient() {
       },
       async signOut() {
         return { error: null };
+      },
+      async updateUser(_updates: unknown) {
+        return { data: { user: DEMO_USER_ADMIN }, error: null };
       },
       onAuthStateChange(_callback: unknown) {
         return {

@@ -37,7 +37,7 @@ export default async function ClientDetailPage({
         "campaign_id",
         (
           await supabase.from("campaigns").select("id").eq("client_id", clientId)
-        ).data?.map((c: { id: string }) => c.id) || []
+        ).data?.map((c: Record<string, unknown>) => c.id as string) || []
       )
       .order("created_at", { ascending: false })
       .limit(20),
