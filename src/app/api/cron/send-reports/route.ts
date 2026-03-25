@@ -4,6 +4,24 @@ import { calculateMetrics } from "@/lib/kpi/calculator";
 import { buildWeeklyReportEmail as buildWeeklyReportEmailHtml } from "@/lib/email/weekly-report";
 import type { CampaignSnapshot, Client, Campaign, KPIReportData, KPIReport } from "@/types/app";
 
+// GET handler for Vercel Cron — sends weekly reports to all clients
+export async function GET(request: NextRequest) {
+  if (process.env.CRON_SECRET && request.headers.get("authorization") !== `Bearer ${process.env.CRON_SECRET}`) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // Generate and send reports for last 7 days for all clients
+  const fakeRequest = new NextRequest(request.url, {
+    method: "POST",
+    body: JSON.stringify({
+      start_date: new Date(Date.now() - 7 * 86400000).toISOString().split("T")[0],
+      end_date: new Date().toISOString().split("T")[0],
+    }),
+  });
+  return POST(fakeRequest);
+}
+
+// POST handler for manual sends from the admin UI
 export async function POST(request: NextRequest) {
   const admin = createAdminClient();
 
