@@ -1,8 +1,5 @@
-"use client";
-
-import { use } from "react";
-import useSWR from "swr";
-import { createClient } from "@/lib/supabase/client";
+import { createClient } from "@/lib/supabase/server";
+import { notFound } from "next/navigation";
 import Link from "next/link";
 import { KPICard } from "@/components/charts/kpi-card";
 import { DailyChart } from "@/components/charts/daily-chart";
@@ -13,80 +10,52 @@ import { InviteClientButton } from "./invite-client-button";
 import { ArrowLeft, ArrowRight, Mail, MessageSquare } from "lucide-react";
 import type { Client, Campaign, CampaignSnapshot, LeadFeedback } from "@/types/app";
 
-const supabase = createClient();
+export default async function ClientDetailPage({
+  params,
+}: {
+  params: Promise<{ clientId: string }>;
+}) {
+  const { clientId } = await params;
+  const supabase = await createClient();
 
-async function fetchClientDetail(clientId: string) {
   const { data: client } = await supabase
     .from("clients")
     .select("*")
     .eq("id", clientId)
     .single();
 
-  if (!client) return null;
+  if (!client) notFound();
 
-  const { data: campaignsData } = await supabase
-    .from("campaigns")
-    .select("*")
-    .eq("client_id", clientId);
+  const typedClient = client as Client;
 
-  const campaigns = (campaignsData || []) as Campaign[];
-  const campaignIds = campaigns.map((c) => c.id);
-
-  const [snapshotsRes, feedbackRes] = await Promise.all([
-    supabase
-      .from("campaign_snapshots")
-      .select("*")
-      .in("campaign_id", campaignIds.length > 0 ? campaignIds : ["none"])
-      .gte("snapshot_date", new Date(Date.now() - 30 * 86400000).toISOString().split("T")[0])
-      .order("snapshot_date", { ascending: false }),
+  const [campaignsRes, feedbackRes] = await Promise.all([
+    supabase.from("campaigns").select("*").eq("client_id", clientId),
     supabase
       .from("lead_feedback")
       .select("*")
-      .in("campaign_id", campaignIds.length > 0 ? campaignIds : ["none"])
+      .in(
+        "campaign_id",
+        (
+          await supabase.from("campaigns").select("id").eq("client_id", clientId)
+        ).data?.map((c) => (c as Record<string, unknown>).id as string) || []
+      )
       .order("created_at", { ascending: false })
       .limit(20),
   ]);
 
-  return {
-    client: client as Client,
-    campaigns,
-    snapshots: (snapshotsRes.data || []) as CampaignSnapshot[],
-    feedback: (feedbackRes.data || []) as LeadFeedback[],
-  };
-}
+  const campaigns = (campaignsRes.data || []) as Campaign[];
+  const feedback = (feedbackRes.data || []) as LeadFeedback[];
 
-export default function ClientDetailPage({
-  params,
-}: {
-  params: Promise<{ clientId: string }>;
-}) {
-  const { clientId } = use(params);
-  const { data } = useSWR(`admin-client-${clientId}`, () => fetchClientDetail(clientId));
+  // Get snapshots for all client campaigns
+  const campaignIds = campaigns.map((c) => c.id);
+  const { data: snapshotsData } = await supabase
+    .from("campaign_snapshots")
+    .select("*")
+    .in("campaign_id", campaignIds.length > 0 ? campaignIds : ["none"])
+    .gte("snapshot_date", new Date(Date.now() - 30 * 86400000).toISOString().split("T")[0])
+    .order("snapshot_date", { ascending: false });
 
-  if (!data) {
-    return (
-      <div className="space-y-6 animate-pulse">
-        <div className="h-8 w-32 rounded bg-muted" />
-        <div className="h-32 rounded-xl bg-muted" />
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="h-24 rounded-xl bg-muted" />
-          ))}
-        </div>
-        <div className="h-64 rounded-xl bg-muted" />
-      </div>
-    );
-  }
-
-  if (!data.client) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <p className="text-muted-foreground">Client not found.</p>
-      </div>
-    );
-  }
-
-  const { client: typedClient, campaigns, snapshots, feedback } = data;
+  const snapshots = (snapshotsData || []) as CampaignSnapshot[];
   const metrics = calculateMetrics(snapshots);
 
   return (
@@ -126,7 +95,7 @@ export default function ClientDetailPage({
         <KPICard label="Emails Sent (30d)" value={metrics.emails_sent} unit="count" />
         <KPICard label="Reply Rate" value={metrics.reply_rate} unit="percent" kpiKey="reply_rate" />
         <KPICard label="Bounce Rate" value={metrics.bounce_rate} unit="percent" kpiKey="bounce_rate" />
-        <KPICard label="Meetings Booked" value={metrics.meetings_booked} unit="count" kpiKey="meetings_booked" />
+        <KPICard label="Positive Responses" value={metrics.meetings_booked} unit="count" kpiKey="meetings_booked" />
       </div>
 
       {/* Chart */}
@@ -207,7 +176,7 @@ export default function ClientDetailPage({
                         </div>
                         <div>
                           <p className="text-sm font-bold">{campMetrics.meetings_booked}</p>
-                          <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Meetings</p>
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Positive</p>
                         </div>
                       </div>
                     ) : (

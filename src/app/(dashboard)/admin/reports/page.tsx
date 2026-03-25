@@ -212,79 +212,74 @@ export default function ReportsPage() {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-wrap items-end gap-4">
-            <div className="space-y-1 min-w-[200px] flex-1">
-              <Label className="text-sm font-medium">Client</Label>
-              <Select value={selectedClient} onValueChange={(val) => setSelectedClient(val ?? "")}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select client" />
-                </SelectTrigger>
-                <SelectContent>
-                  {clients.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-sm font-medium">Quick Select</Label>
-              <Select
-                value=""
-                onValueChange={(val) => {
-                  const today = new Date();
-                  let start: Date;
-                  let end: Date;
-                  if (val === "7d") {
-                    end = today;
-                    start = new Date(today);
-                    start.setDate(start.getDate() - 7);
-                  } else if (val === "last_month") {
-                    start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-                    end = new Date(today.getFullYear(), today.getMonth(), 0);
-                  } else if (val === "mtd") {
-                    start = new Date(today.getFullYear(), today.getMonth(), 1);
-                    end = today;
-                  } else if (val === "30d") {
-                    end = today;
-                    start = new Date(today);
-                    start.setDate(start.getDate() - 30);
-                  } else {
-                    return;
-                  }
-                  setStartDate(start.toISOString().split("T")[0]);
-                  setEndDate(end.toISOString().split("T")[0]);
-                }}
-              >
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="Choose range..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="7d">Last 7 Days</SelectItem>
-                  <SelectItem value="last_month">Last Calendar Month</SelectItem>
-                  <SelectItem value="mtd">Month to Date</SelectItem>
-                  <SelectItem value="30d">Last 30 Days</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-sm font-medium">Start Date</Label>
-              <Input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-              />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-sm font-medium">End Date</Label>
-              <Input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-              />
-            </div>
-            <Button onClick={handleGenerate} disabled={generating} variant="outline">
+          <div className="grid gap-1.5" style={{ gridTemplateColumns: '200px 180px 160px 160px auto' }}>
+            <Label className="text-sm font-medium">Client</Label>
+            <Label className="text-sm font-medium">Quick Select</Label>
+            <Label className="text-sm font-medium">Start Date</Label>
+            <Label className="text-sm font-medium">End Date</Label>
+            <div />
+            <Select value={selectedClient} onValueChange={(val) => setSelectedClient(val ?? "")}>
+              <SelectTrigger className="w-full" style={{ height: '36px' }}>
+                <SelectValue placeholder="Select client" />
+              </SelectTrigger>
+              <SelectContent>
+                {clients.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select
+              value=""
+              onValueChange={(val) => {
+                const today = new Date();
+                let start: Date;
+                let end: Date;
+                if (val === "7d") {
+                  end = today;
+                  start = new Date(today);
+                  start.setDate(start.getDate() - 7);
+                } else if (val === "last_month") {
+                  start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+                  end = new Date(today.getFullYear(), today.getMonth(), 0);
+                } else if (val === "mtd") {
+                  start = new Date(today.getFullYear(), today.getMonth(), 1);
+                  end = today;
+                } else if (val === "30d") {
+                  end = today;
+                  start = new Date(today);
+                  start.setDate(start.getDate() - 30);
+                } else {
+                  return;
+                }
+                setStartDate(start.toISOString().split("T")[0]);
+                setEndDate(end.toISOString().split("T")[0]);
+              }}
+            >
+              <SelectTrigger className="w-full" style={{ height: '36px' }}>
+                <SelectValue placeholder="Choose range..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="7d">Last 7 Days</SelectItem>
+                <SelectItem value="last_month">Last Calendar Month</SelectItem>
+                <SelectItem value="mtd">Month to Date</SelectItem>
+                <SelectItem value="30d">Last 30 Days</SelectItem>
+              </SelectContent>
+            </Select>
+            <Input
+              style={{ height: '36px' }}
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+            />
+            <Input
+              style={{ height: '36px' }}
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+            />
+            <Button style={{ height: '36px' }} onClick={handleGenerate} disabled={generating} variant="outline">
               {generating ? "Generating..." : "Generate Draft"}
             </Button>
           </div>
@@ -481,7 +476,7 @@ export default function ReportsPage() {
                 </div>
                 <div className="text-center p-3 rounded-lg bg-amber-50/50 border border-amber-100">
                   <p className="text-xl font-bold">{selectedReport.report_data.totals.meetings_booked}</p>
-                  <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Meetings</p>
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Positive Responses</p>
                 </div>
                 <div className="text-center p-3 rounded-lg bg-blue-50/50 border border-blue-100">
                   <p className="text-xl font-bold text-blue-700">{selectedReport.report_data.totals.positive_reply_rate}%</p>
@@ -512,7 +507,7 @@ export default function ReportsPage() {
                     </div>
                     <div>
                       <p className="text-sm font-bold">{camp.metrics.meetings_booked}</p>
-                      <p className="text-[10px] text-muted-foreground uppercase">Meetings</p>
+                      <p className="text-[10px] text-muted-foreground uppercase">Positive</p>
                     </div>
                   </div>
                 </div>

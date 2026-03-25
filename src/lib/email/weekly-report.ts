@@ -123,7 +123,7 @@ export function buildWeeklyReportEmail(data: KPIReportData, portalUrl?: string):
                         ${data.totals.meetings_booked}
                       </p>
                       <p style="margin: 4px 0 0; font-size: 10px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px;">
-                        Meetings
+                        Positive Responses
                       </p>
                     </div>
                   </td>
@@ -204,7 +204,7 @@ export function buildWeeklyReportEmail(data: KPIReportData, portalUrl?: string):
                       Bounce %
                     </th>
                     <th style="padding: 12px 16px; text-align: center; font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">
-                      Meetings
+                      Positive Responses
                     </th>
                   </tr>
                 </thead>

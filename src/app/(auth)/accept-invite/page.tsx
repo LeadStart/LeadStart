@@ -26,8 +26,8 @@ export default function AcceptInvitePage() {
   useEffect(() => {
     // The invite link redirects here with a session already established
     const supabase = createClient();
-    supabase.auth.getUser().then(({ data }: { data: { user: unknown } }) => {
-      if (data.user) {
+    supabase.auth.getUser().then(({ data: { user } }: { data: { user: unknown } }) => {
+      if (user) {
         setReady(true);
       }
     });

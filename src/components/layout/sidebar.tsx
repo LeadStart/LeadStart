@@ -15,8 +15,10 @@ import {
   Building2,
   Key,
   LayoutDashboard,
-  Activity,
   Target,
+  ContactRound,
+  CheckSquare,
+  Inbox,
 } from "lucide-react";
 
 interface NavItem {
@@ -29,23 +31,23 @@ const adminNav: NavItem[] = [
   { href: "/admin", label: "Overview", icon: <BarChart3 size={18} /> },
   { href: "/admin/clients", label: "Clients", icon: <Users size={18} /> },
   { href: "/admin/campaigns", label: "Campaigns", icon: <Mail size={18} /> },
+  { href: "/admin/contacts", label: "Contacts", icon: <ContactRound size={18} /> },
   { href: "/admin/feedback", label: "Feedback", icon: <MessageSquare size={18} /> },
   { href: "/admin/reports", label: "Reports", icon: <FileText size={18} /> },
   { href: "/admin/prospects", label: "Prospects", icon: <Target size={18} /> },
+  { href: "/admin/inbox-health", label: "Inbox Health", icon: <Inbox size={18} /> },
   { href: "/admin/billing", label: "Billing", icon: <CreditCard size={18} /> },
   { href: "/admin/webhooks", label: "Events", icon: <Bell size={18} /> },
 ];
 
 const adminSettingsNav: NavItem[] = [
+  { href: "/admin/tasks", label: "Tasks", icon: <CheckSquare size={18} /> },
   { href: "/admin/settings/team", label: "Team", icon: <Building2 size={18} /> },
   { href: "/admin/settings/api", label: "Integrations", icon: <Key size={18} /> },
 ];
 
 const clientNav: NavItem[] = [
   { href: "/client", label: "Dashboard", icon: <LayoutDashboard size={18} /> },
-  { href: "/client/activity", label: "Activity", icon: <Activity size={18} /> },
-  { href: "/client/reports", label: "Reports", icon: <FileText size={18} /> },
-  { href: "/client/feedback", label: "My Feedback", icon: <MessageSquare size={18} /> },
 ];
 
 export function Sidebar({ role }: { role: AppRole }) {

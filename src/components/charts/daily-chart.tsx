@@ -8,17 +8,30 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  Legend,
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { CampaignSnapshot } from "@/types/app";
 
+type SeriesKey = "Sent" | "Replies" | "Bounces" | "Positive";
+
+const SERIES_CONFIG: Record<SeriesKey, { color: string; label: string }> = {
+  Sent: { color: "#6366f1", label: "Sent" },
+  Replies: { color: "#10b981", label: "Replies" },
+  Bounces: { color: "#ef4444", label: "Bounces" },
+  Positive: { color: "#f59e0b", label: "Positive Responses" },
+};
+
 interface DailyChartProps {
   snapshots: CampaignSnapshot[];
   title?: string;
+  series?: SeriesKey[];
 }
 
-export function DailyChart({ snapshots, title = "Daily Performance" }: DailyChartProps) {
+export function DailyChart({
+  snapshots,
+  title = "Daily Performance",
+  series = ["Sent", "Replies", "Bounces", "Positive"],
+}: DailyChartProps) {
   const data = snapshots
     .sort((a, b) => a.snapshot_date.localeCompare(b.snapshot_date))
     .map((s) => ({
@@ -29,8 +42,10 @@ export function DailyChart({ snapshots, title = "Daily Performance" }: DailyChar
       Sent: s.emails_sent,
       Replies: s.replies,
       Bounces: s.bounces,
-      Meetings: s.meetings_booked,
+      Positive: s.meetings_booked,
     }));
+
+  const activeSeries = series.filter((s) => SERIES_CONFIG[s]);
 
   return (
     <Card className="border-border/50 shadow-sm">
@@ -38,18 +53,12 @@ export function DailyChart({ snapshots, title = "Daily Performance" }: DailyChar
         <div className="flex items-center justify-between">
           <CardTitle className="text-base font-semibold">{title}</CardTitle>
           <div className="flex items-center gap-4 text-xs text-muted-foreground">
-            <span className="flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full bg-[#6366f1]" /> Sent
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full bg-[#10b981]" /> Replies
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full bg-[#ef4444]" /> Bounces
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full bg-[#f59e0b]" /> Meetings
-            </span>
+            {activeSeries.map((key) => (
+              <span key={key} className="flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: SERIES_CONFIG[key].color }} />
+                {SERIES_CONFIG[key].label}
+              </span>
+            ))}
           </div>
         </div>
       </CardHeader>
@@ -67,19 +76,8 @@ export function DailyChart({ snapshots, title = "Daily Performance" }: DailyChar
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-            <XAxis
-              dataKey="date"
-              fontSize={11}
-              tick={{ fill: "#9ca3af" }}
-              axisLine={{ stroke: "#e5e7eb" }}
-              tickLine={false}
-            />
-            <YAxis
-              fontSize={11}
-              tick={{ fill: "#9ca3af" }}
-              axisLine={false}
-              tickLine={false}
-            />
+            <XAxis dataKey="date" fontSize={11} tick={{ fill: "#9ca3af" }} axisLine={{ stroke: "#e5e7eb" }} tickLine={false} />
+            <YAxis fontSize={11} tick={{ fill: "#9ca3af" }} axisLine={false} tickLine={false} />
             <Tooltip
               contentStyle={{
                 background: "white",
@@ -89,39 +87,18 @@ export function DailyChart({ snapshots, title = "Daily Performance" }: DailyChar
                 fontSize: "12px",
               }}
             />
-            <Area
-              type="monotone"
-              dataKey="Sent"
-              stroke="#6366f1"
-              strokeWidth={2}
-              fill="url(#gradSent)"
-              dot={false}
-            />
-            <Area
-              type="monotone"
-              dataKey="Replies"
-              stroke="#10b981"
-              strokeWidth={2}
-              fill="url(#gradReplies)"
-              dot={false}
-            />
-            <Area
-              type="monotone"
-              dataKey="Bounces"
-              stroke="#ef4444"
-              strokeWidth={1.5}
-              fill="transparent"
-              dot={false}
-              strokeDasharray="4 2"
-            />
-            <Area
-              type="monotone"
-              dataKey="Meetings"
-              stroke="#f59e0b"
-              strokeWidth={2}
-              fill="transparent"
-              dot={{ r: 3, fill: "#f59e0b", stroke: "#f59e0b" }}
-            />
+            {activeSeries.includes("Sent") && (
+              <Area type="monotone" dataKey="Sent" stroke="#6366f1" strokeWidth={2} fill="url(#gradSent)" dot={false} />
+            )}
+            {activeSeries.includes("Replies") && (
+              <Area type="monotone" dataKey="Replies" stroke="#10b981" strokeWidth={2} fill="url(#gradReplies)" dot={false} />
+            )}
+            {activeSeries.includes("Bounces") && (
+              <Area type="monotone" dataKey="Bounces" stroke="#ef4444" strokeWidth={1.5} fill="transparent" dot={false} strokeDasharray="4 2" />
+            )}
+            {activeSeries.includes("Positive") && (
+              <Area type="monotone" dataKey="Positive" stroke="#f59e0b" strokeWidth={2} fill="transparent" dot={{ r: 3, fill: "#f59e0b", stroke: "#f59e0b" }} />
+            )}
           </AreaChart>
         </ResponsiveContainer>
       </CardContent>

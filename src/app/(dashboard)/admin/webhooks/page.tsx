@@ -1,17 +1,11 @@
 "use client";
 
-import useSWR from "swr";
-import { createClient } from "@/lib/supabase/client";
+import { useSupabaseQuery } from "@/hooks/use-supabase-query";
+import { useSort } from "@/hooks/use-sort";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SortableHead } from "@/components/ui/sortable-head";
 import { Bell, Mail, MailOpen, AlertTriangle, CalendarCheck, CheckCircle } from "lucide-react";
 import type { WebhookEvent } from "@/types/app";
 
@@ -22,118 +16,46 @@ const EVENT_STYLES: Record<string, { class: string; icon: React.ReactNode }> = {
   meeting_booked: { class: "bg-emerald-100 text-emerald-700 border border-emerald-200", icon: <CalendarCheck size={11} className="mr-1" /> },
 };
 
-const supabase = createClient();
-
-async function fetchWebhookEvents() {
-  const { data } = await supabase
-    .from("webhook_events")
-    .select("*")
-    .order("received_at", { ascending: false })
-    .limit(100);
-
-  return (data || []) as WebhookEvent[];
-}
-
 export default function WebhooksPage() {
-  const { data: events } = useSWR("admin-webhooks", fetchWebhookEvents);
+  const { data: events, loading } = useSupabaseQuery("admin-webhooks", async (supabase) => {
+    const { data } = await supabase.from("webhook_events").select("*").order("received_at", { ascending: false }).limit(100);
+    return (data || []) as WebhookEvent[];
+  });
 
-  if (!events) {
-    return (
-      <div className="space-y-6 animate-pulse">
-        <div className="h-32 rounded-xl bg-muted" />
-        <div className="flex gap-2">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="h-8 w-24 rounded-full bg-muted" />
-          ))}
-        </div>
-        <div className="h-64 rounded-xl bg-muted" />
-      </div>
-    );
-  }
+  const eventsList = events || [];
+  const { sorted, sortConfig, requestSort } = useSort(eventsList);
+  const eventCounts = eventsList.reduce<Record<string, number>>((acc, e) => { acc[e.event_type] = (acc[e.event_type] || 0) + 1; return acc; }, {});
 
-  const eventCounts = events.reduce<Record<string, number>>((acc, e) => {
-    acc[e.event_type] = (acc[e.event_type] || 0) + 1;
-    return acc;
-  }, {});
+  if (loading) return <div className="space-y-6 animate-pulse"><div className="rounded-xl h-36 bg-muted/50" /><div className="rounded-xl h-64 bg-muted/50" /></div>;
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="relative overflow-hidden rounded-xl p-6 text-white" style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed, #6366f1)', boxShadow: '0 10px 30px -5px rgba(99, 102, 241, 0.2)' }}>
-        <div className="relative z-10">
-          <p className="text-sm font-medium text-white/70">Instantly.ai Webhooks</p>
-          <h1 className="text-2xl font-bold mt-1">Event Log</h1>
-          <p className="text-sm text-white/60 mt-1">
-            {events.length} events received
-          </p>
-        </div>
+        <div className="relative z-10"><p className="text-sm font-medium text-white/70">Instantly.ai Webhooks</p><h1 className="text-2xl font-bold mt-1">Event Log</h1><p className="text-sm text-white/60 mt-1">{eventsList.length} events received</p></div>
         <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-white/5" />
       </div>
-
-      {/* Summary chips */}
       <div className="flex flex-wrap gap-2">
         {Object.entries(eventCounts).map(([type, count]) => {
           const style = EVENT_STYLES[type];
-          return (
-            <Badge key={type} variant="secondary" className={style?.class || "bg-gray-100 text-gray-600 border border-gray-200"}>
-              {style?.icon}
-              {type.replace(/_/g, " ")}: {count}
-            </Badge>
-          );
+          return <Badge key={type} variant="secondary" className={style?.class || "bg-gray-100 text-gray-600 border border-gray-200"}>{style?.icon}{type.replace(/_/g, " ")}: {count}</Badge>;
         })}
       </div>
-
       <Card className="border-border/50 shadow-sm">
-        <CardHeader className="flex flex-row items-center gap-2 pb-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50">
-            <Bell size={16} className="text-indigo-500" />
-          </div>
-          <CardTitle className="text-base">Recent Events</CardTitle>
-        </CardHeader>
+        <CardHeader className="flex flex-row items-center gap-2 pb-3"><div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50"><Bell size={16} className="text-indigo-500" /></div><CardTitle className="text-base">Recent Events</CardTitle></CardHeader>
         <CardContent>
-          {events.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No webhook events received yet.</p>
-          ) : (
+          {eventsList.length === 0 ? <p className="text-sm text-muted-foreground">No webhook events received yet.</p> : (
             <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Lead</TableHead>
-                  <TableHead>Campaign ID</TableHead>
-                  <TableHead>Processed</TableHead>
-                  <TableHead>Received</TableHead>
-                </TableRow>
-              </TableHeader>
+              <TableHeader><TableRow><SortableHead sortKey="event_type" sortConfig={sortConfig} onSort={requestSort}>Type</SortableHead><SortableHead sortKey="lead_email" sortConfig={sortConfig} onSort={requestSort}>Lead</SortableHead><SortableHead sortKey="campaign_instantly_id" sortConfig={sortConfig} onSort={requestSort}>Campaign ID</SortableHead><SortableHead sortKey="processed" sortConfig={sortConfig} onSort={requestSort}>Processed</SortableHead><SortableHead sortKey="received_at" sortConfig={sortConfig} onSort={requestSort}>Received</SortableHead></TableRow></TableHeader>
               <TableBody>
-                {events.map((event) => {
+                {sorted.map((event) => {
                   const style = EVENT_STYLES[event.event_type];
                   return (
                     <TableRow key={event.id}>
-                      <TableCell>
-                        <Badge variant="secondary" className={style?.class || "bg-gray-100 text-gray-600 border border-gray-200"}>
-                          {style?.icon}
-                          {event.event_type.replace(/_/g, " ")}
-                        </Badge>
-                      </TableCell>
+                      <TableCell><Badge variant="secondary" className={style?.class || "bg-gray-100 text-gray-600 border border-gray-200"}>{style?.icon}{event.event_type.replace(/_/g, " ")}</Badge></TableCell>
                       <TableCell className="font-medium">{event.lead_email || "—"}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground font-mono">
-                        {event.campaign_instantly_id || "—"}
-                      </TableCell>
-                      <TableCell>
-                        {event.processed ? (
-                          <Badge className="bg-emerald-100 text-emerald-700 border border-emerald-200">
-                            <CheckCircle size={11} className="mr-1" />
-                            Yes
-                          </Badge>
-                        ) : (
-                          <Badge variant="secondary" className="bg-amber-100 text-amber-700 border border-amber-200">
-                            Pending
-                          </Badge>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {new Date(event.received_at).toLocaleString()}
-                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground font-mono">{event.campaign_instantly_id || "—"}</TableCell>
+                      <TableCell>{event.processed ? <Badge className="bg-emerald-100 text-emerald-700 border border-emerald-200"><CheckCircle size={11} className="mr-1" /> Yes</Badge> : <Badge variant="secondary" className="bg-amber-100 text-amber-700 border border-amber-200">Pending</Badge>}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{new Date(event.received_at).toLocaleString()}</TableCell>
                     </TableRow>
                   );
                 })}

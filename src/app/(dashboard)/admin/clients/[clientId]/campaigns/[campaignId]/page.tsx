@@ -134,7 +134,7 @@ export default function CampaignDetailPage({
           unit="percent"
           kpiKey="unsubscribe_rate"
         />
-        <KPICard label="Meetings Booked" value={metrics.meetings_booked} unit="count" />
+        <KPICard label="Positive Responses" value={metrics.meetings_booked} unit="count" />
         <KPICard
           label="Reply-to-Meeting"
           value={metrics.reply_to_meeting_rate}
@@ -164,7 +164,7 @@ export default function CampaignDetailPage({
                   <TableHead>Replies</TableHead>
                   <TableHead>Bounces</TableHead>
                   <TableHead>Unsubs</TableHead>
-                  <TableHead>Meetings</TableHead>
+                  <TableHead>Positive</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>

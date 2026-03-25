@@ -25,7 +25,7 @@ export default async function DashboardLayout({
   const role = ((user as { app_metadata?: { role?: string } }).app_metadata?.role || "client") as AppRole;
 
   return (
-    <DashboardShell role={role} userEmail={(user as { email?: string }).email || "demo@leadstart.com"}>
+    <DashboardShell role={role} actualRole={role} userEmail={(user as { email?: string }).email || "demo@leadstart.com"}>
       {children}
     </DashboardShell>
   );
