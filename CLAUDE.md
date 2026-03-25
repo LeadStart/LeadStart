@@ -1,6 +1,9 @@
 @AGENTS.md
 @PROJECT_STATUS.md
 
+# IMPORTANT: Session Start Protocol
+**Every new session MUST run `git pull origin master` before reading or editing any local files.** The codebase is actively developed across multiple machines and Claude sessions. GitHub is the single source of truth — never assume local files are current. Also run `npm install` if package.json changed.
+
 # LeadStart — Cold Email CMS Platform
 
 ## What This Is
