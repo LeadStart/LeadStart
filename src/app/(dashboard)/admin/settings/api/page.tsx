@@ -28,34 +28,33 @@ import {
 } from "lucide-react";
 import type { Organization } from "@/types/app";
 
-const SYNC_TIME_OPTIONS = [
-  { value: "3", label: "3:00 AM ET" },
-  { value: "4", label: "4:00 AM ET" },
-  { value: "5", label: "5:00 AM ET" },
-  { value: "6", label: "6:00 AM ET (Current)" },
-  { value: "7", label: "7:00 AM ET" },
-  { value: "8", label: "8:00 AM ET" },
-  { value: "9", label: "9:00 AM ET" },
-  { value: "12", label: "12:00 PM ET" },
-  { value: "18", label: "6:00 PM ET" },
+// Generate hour options 1-12 for AM/PM display
+const HOUR_OPTIONS = Array.from({ length: 12 }, (_, i) => ({
+  value: String(i === 0 ? 12 : i),
+  label: String(i === 0 ? 12 : i),
+}));
+
+const AMPM_OPTIONS = [
+  { value: "AM", label: "AM" },
+  { value: "PM", label: "PM" },
 ];
 
-const REPORT_DAY_OPTIONS = [
-  { value: "1", label: "Monday (Current)" },
-  { value: "2", label: "Tuesday" },
-  { value: "3", label: "Wednesday" },
-  { value: "4", label: "Thursday" },
-  { value: "5", label: "Friday" },
-];
+// Convert 24h to 12h + AM/PM
+function to12h(hour24: string): { hour: string; ampm: string } {
+  const h = parseInt(hour24);
+  if (h === 0) return { hour: "12", ampm: "AM" };
+  if (h === 12) return { hour: "12", ampm: "PM" };
+  if (h > 12) return { hour: String(h - 12), ampm: "PM" };
+  return { hour: String(h), ampm: "AM" };
+}
 
-const REPORT_TIME_OPTIONS = [
-  { value: "8", label: "8:00 AM ET" },
-  { value: "9", label: "9:00 AM ET" },
-  { value: "10", label: "10:00 AM ET (Current)" },
-  { value: "11", label: "11:00 AM ET" },
-  { value: "12", label: "12:00 PM ET" },
-  { value: "14", label: "2:00 PM ET" },
-];
+// Convert 12h + AM/PM to 24h
+function to24h(hour12: string, ampm: string): string {
+  let h = parseInt(hour12);
+  if (ampm === "AM" && h === 12) h = 0;
+  else if (ampm === "PM" && h !== 12) h += 12;
+  return String(h);
+}
 
 export default function IntegrationsPage() {
   const { organizationId } = useUser();
@@ -63,9 +62,8 @@ export default function IntegrationsPage() {
   const [apiKey, setApiKey] = useState("");
   const [resendKey, setResendKey] = useState("");
   const [emailFrom, setEmailFrom] = useState("");
-  const [syncHour, setSyncHour] = useState("6");
-  const [reportDay, setReportDay] = useState("1");
-  const [reportHour, setReportHour] = useState("10");
+  const [syncHour12, setSyncHour12] = useState("6");
+  const [syncAmPm, setSyncAmPm] = useState("AM");
   const [saving, setSaving] = useState(false);
   const [savingSchedule, setSavingSchedule] = useState(false);
   const [savingResend, setSavingResend] = useState(false);
@@ -89,16 +87,16 @@ export default function IntegrationsPage() {
         if (data) {
           const typedOrg = data as Organization & {
             sync_hour?: string;
-            report_day?: string;
-            report_hour?: string;
             resend_api_key?: string;
             email_from?: string;
           };
           setOrg(typedOrg);
           setApiKey(typedOrg.instantly_api_key || "");
-          if (typedOrg.sync_hour) setSyncHour(typedOrg.sync_hour);
-          if (typedOrg.report_day) setReportDay(typedOrg.report_day);
-          if (typedOrg.report_hour) setReportHour(typedOrg.report_hour);
+          if (typedOrg.sync_hour) {
+            const { hour, ampm } = to12h(typedOrg.sync_hour);
+            setSyncHour12(hour);
+            setSyncAmPm(ampm);
+          }
           if (typedOrg.resend_api_key) setResendKey(typedOrg.resend_api_key);
           if (typedOrg.email_from) setEmailFrom(typedOrg.email_from);
         }
@@ -158,14 +156,11 @@ export default function IntegrationsPage() {
     setSavingSchedule(true);
     setScheduleSaved(false);
 
+    const syncHour24 = to24h(syncHour12, syncAmPm);
     const supabase = createClient();
     await supabase
       .from("organizations")
-      .update({
-        sync_hour: syncHour,
-        report_day: reportDay,
-        report_hour: reportHour,
-      })
+      .update({ sync_hour: syncHour24 })
       .eq("id", organizationId);
 
     setScheduleSaved(true);
@@ -310,92 +305,58 @@ export default function IntegrationsPage() {
             <Clock size={16} className="text-amber-500" />
           </div>
           <div>
-            <CardTitle className="text-base">Sync &amp; Report Schedule</CardTitle>
-            <p className="text-xs text-muted-foreground">Control when data syncs and reports are sent</p>
+            <CardTitle className="text-base">Data Sync Schedule</CardTitle>
+            <p className="text-xs text-muted-foreground">Control when campaign analytics are pulled from Instantly</p>
           </div>
         </CardHeader>
-        <CardContent className="space-y-5">
-          {/* Analytics Sync */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <RefreshCw size={14} className="text-muted-foreground" />
-              <p className="text-sm font-medium">Daily Analytics Sync</p>
-              <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 border border-emerald-200 text-[10px]">Active</Badge>
-            </div>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="space-y-1">
-                <Label className="text-sm font-medium">Sync Time</Label>
-                <Select value={syncHour} onValueChange={(v) => v && setSyncHour(v)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {SYNC_TIME_OPTIONS.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-[11px] text-muted-foreground">Pulls latest campaign data from Instantly</p>
-              </div>
-            </div>
+        <CardContent className="space-y-4">
+          <div className="flex items-center gap-2 mb-2">
+            <RefreshCw size={14} className="text-muted-foreground" />
+            <p className="text-sm font-medium">Daily Analytics Sync</p>
+            <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 border border-emerald-200 text-[10px]">Active</Badge>
           </div>
 
-          <div className="h-px bg-border/50" />
-
-          {/* Weekly Reports */}
-          <div className="space-y-3">
+          <div className="space-y-1">
+            <Label className="text-sm font-medium">Sync Time</Label>
             <div className="flex items-center gap-2">
-              <Mail size={14} className="text-muted-foreground" />
-              <p className="text-sm font-medium">Weekly KPI Reports</p>
-              <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 border border-emerald-200 text-[10px]">Active</Badge>
+              <Select value={syncHour12} onValueChange={(v) => v && setSyncHour12(v)}>
+                <SelectTrigger className="w-20">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {HOUR_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <span className="text-muted-foreground text-sm">:</span>
+              <span className="text-sm font-medium w-8">00</span>
+              <Select value={syncAmPm} onValueChange={(v) => v && setSyncAmPm(v)}>
+                <SelectTrigger className="w-20">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {AMPM_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Badge variant="secondary" className="bg-blue-100 text-blue-700 border border-blue-200 text-[10px] ml-2">
+                Eastern Time (ET)
+              </Badge>
             </div>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="space-y-1">
-                <Label className="text-sm font-medium">Day</Label>
-                <Select value={reportDay} onValueChange={(v) => v && setReportDay(v)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {REPORT_DAY_OPTIONS.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1">
-                <Label className="text-sm font-medium">Time</Label>
-                <Select value={reportHour} onValueChange={(v) => v && setReportHour(v)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {REPORT_TIME_OPTIONS.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <p className="text-[11px] text-muted-foreground">Auto-generates and emails last 7 days of KPIs to all clients with a contact email</p>
+            <p className="text-[11px] text-muted-foreground">Pulls latest campaign data from Instantly.ai for all active campaigns</p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 pt-2">
             <Button onClick={handleSaveSchedule} disabled={savingSchedule} style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed)' }}>
               {savingSchedule ? "Saving..." : "Save Schedule"}
             </Button>
             {scheduleSaved && (
               <span className="text-sm text-emerald-600 flex items-center gap-1">
-                <CheckCircle size={14} /> Schedule saved
+                <CheckCircle size={14} /> Saved
               </span>
             )}
-          </div>
-
-          <div className="rounded-lg bg-amber-50 border border-amber-200 p-3">
-            <p className="text-xs text-amber-700">
-              <strong>Note:</strong> Schedule changes are saved to your settings. The Vercel cron runs daily at 6 AM ET and weekly on Mondays at 10 AM ET.
-              The cron will check your saved preferences before executing. To change the actual cron trigger times, a redeployment is needed.
-            </p>
           </div>
         </CardContent>
       </Card>

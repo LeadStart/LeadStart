@@ -291,6 +291,75 @@ export default function ReportsPage() {
         </CardContent>
       </Card>
 
+      {/* Per-Client Auto Report Schedule */}
+      <Card className="border-border/50 shadow-sm">
+        <CardHeader className="flex flex-row items-center gap-2 pb-3">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-50">
+            <Clock size={16} className="text-amber-500" />
+          </div>
+          <div>
+            <CardTitle className="text-base">Automated Report Schedules</CardTitle>
+            <p className="text-xs text-muted-foreground mt-0.5">Configure per-client auto-send schedules</p>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {clients.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No clients to configure.</p>
+          ) : (
+            <div className="space-y-3">
+              {clients.map((client) => {
+                const reportCount = reports.filter((r) => r.client_id === client.id).length;
+                return (
+                  <div key={client.id} className="flex items-center justify-between rounded-xl border border-border/50 p-4 hover:bg-muted/20 transition-colors">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold text-white shrink-0" style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed)' }}>
+                        {client.name.charAt(0)}
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium">{client.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {client.contact_email || "No email"} &middot; {reportCount} report{reportCount !== 1 ? "s" : ""} sent
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Select
+                        value=""
+                        onValueChange={(val) => {
+                          if (!val) return;
+                          // TODO: Save per-client schedule to database
+                          console.log(`Set ${client.name} schedule to ${val}`);
+                        }}
+                      >
+                        <SelectTrigger className="w-36 h-8 text-xs">
+                          <SelectValue placeholder="Not scheduled" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="weekly">Weekly (Mon)</SelectItem>
+                          <SelectItem value="biweekly">Biweekly</SelectItem>
+                          <SelectItem value="monthly">Monthly (1st)</SelectItem>
+                          <SelectItem value="off">Off</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {!client.contact_email && (
+                        <Badge variant="secondary" className="bg-amber-100 text-amber-700 border border-amber-200 text-[10px]">
+                          No email
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+              <div className="rounded-lg bg-blue-50 border border-blue-200 p-3">
+                <p className="text-xs text-blue-700">
+                  Scheduled reports auto-generate and send KPI summaries for the configured period. Reports are sent at <strong>10:00 AM ET</strong> on the scheduled day.
+                </p>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Report History */}
       <Card className="border-border/50">
         <CardHeader className="flex flex-row items-center gap-2 pb-3">
