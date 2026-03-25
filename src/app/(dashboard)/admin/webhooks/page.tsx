@@ -1,4 +1,7 @@
-import { createClient } from "@/lib/supabase/server";
+"use client";
+
+import useSWR from "swr";
+import { createClient } from "@/lib/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -19,16 +22,34 @@ const EVENT_STYLES: Record<string, { class: string; icon: React.ReactNode }> = {
   meeting_booked: { class: "bg-emerald-100 text-emerald-700 border border-emerald-200", icon: <CalendarCheck size={11} className="mr-1" /> },
 };
 
-export default async function WebhooksPage() {
-  const supabase = await createClient();
+const supabase = createClient();
 
+async function fetchWebhookEvents() {
   const { data } = await supabase
     .from("webhook_events")
     .select("*")
     .order("received_at", { ascending: false })
     .limit(100);
 
-  const events = (data || []) as WebhookEvent[];
+  return (data || []) as WebhookEvent[];
+}
+
+export default function WebhooksPage() {
+  const { data: events } = useSWR("admin-webhooks", fetchWebhookEvents);
+
+  if (!events) {
+    return (
+      <div className="space-y-6 animate-pulse">
+        <div className="h-32 rounded-xl bg-muted" />
+        <div className="flex gap-2">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="h-8 w-24 rounded-full bg-muted" />
+          ))}
+        </div>
+        <div className="h-64 rounded-xl bg-muted" />
+      </div>
+    );
+  }
 
   const eventCounts = events.reduce<Record<string, number>>((acc, e) => {
     acc[e.event_type] = (acc[e.event_type] || 0) + 1;

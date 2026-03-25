@@ -1,5 +1,8 @@
-import { createClient } from "@/lib/supabase/server";
-import { notFound } from "next/navigation";
+"use client";
+
+import { use } from "react";
+import useSWR from "swr";
+import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import { KPICard } from "@/components/charts/kpi-card";
 import { DailyChart } from "@/components/charts/daily-chart";
@@ -17,23 +20,16 @@ import {
 import { RefreshButton } from "./refresh-button";
 import type { Campaign, CampaignSnapshot, LeadFeedback } from "@/types/app";
 
-export default async function CampaignDetailPage({
-  params,
-}: {
-  params: Promise<{ clientId: string; campaignId: string }>;
-}) {
-  const { clientId, campaignId } = await params;
-  const supabase = await createClient();
+const supabase = createClient();
 
+async function fetchCampaignDetail(campaignId: string) {
   const { data: campaign } = await supabase
     .from("campaigns")
     .select("*")
     .eq("id", campaignId)
     .single();
 
-  if (!campaign) notFound();
-
-  const typedCampaign = campaign as Campaign;
+  if (!campaign) return null;
 
   const [snapshotsRes, feedbackRes] = await Promise.all([
     supabase
@@ -48,8 +44,44 @@ export default async function CampaignDetailPage({
       .order("created_at", { ascending: false }),
   ]);
 
-  const snapshots = (snapshotsRes.data || []) as CampaignSnapshot[];
-  const feedback = (feedbackRes.data || []) as LeadFeedback[];
+  return {
+    campaign: campaign as Campaign,
+    snapshots: (snapshotsRes.data || []) as CampaignSnapshot[],
+    feedback: (feedbackRes.data || []) as LeadFeedback[],
+  };
+}
+
+export default function CampaignDetailPage({
+  params,
+}: {
+  params: Promise<{ clientId: string; campaignId: string }>;
+}) {
+  const { clientId, campaignId } = use(params);
+  const { data } = useSWR(`admin-campaign-${campaignId}`, () => fetchCampaignDetail(campaignId));
+
+  if (!data) {
+    return (
+      <div className="space-y-6 animate-pulse">
+        <div className="h-8 w-48 rounded bg-muted" />
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="h-24 rounded-xl bg-muted" />
+          ))}
+        </div>
+        <div className="h-64 rounded-xl bg-muted" />
+      </div>
+    );
+  }
+
+  if (!data.campaign) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <p className="text-muted-foreground">Campaign not found.</p>
+      </div>
+    );
+  }
+
+  const { campaign: typedCampaign, snapshots, feedback } = data;
   const metrics = calculateMetrics(snapshots);
 
   return (

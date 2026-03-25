@@ -1,4 +1,7 @@
-import { createClient } from "@/lib/supabase/server";
+"use client";
+
+import useSWR from "swr";
+import { createClient } from "@/lib/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { FileText, TrendingUp, TrendingDown, Minus, Calendar, Mail } from "lucide-react";
@@ -20,18 +23,47 @@ function MetricRow({ label, value, unit, trend }: { label: string; value: number
   );
 }
 
-export default async function ClientReportsPage() {
-  const supabase = await createClient();
+const supabase = createClient();
 
+async function fetchClientReports() {
   const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) return { client: null, reports: [] };
 
   const { data: clientData } = await supabase
     .from("clients")
     .select("*")
-    .eq("user_id", user!.id)
+    .eq("user_id", user.id)
     .single();
 
   const client = clientData as Client | null;
+  if (!client) return { client: null, reports: [] };
+
+  const { data: reportsData } = await supabase
+    .from("kpi_reports")
+    .select("*")
+    .eq("client_id", client.id)
+    .order("created_at", { ascending: false });
+
+  return {
+    client,
+    reports: (reportsData || []) as KPIReport[],
+  };
+}
+
+export default function ClientReportsPage() {
+  const { data } = useSWR("client-reports", fetchClientReports);
+
+  if (!data) {
+    return (
+      <div className="space-y-6 animate-pulse">
+        <div className="h-32 rounded-xl bg-muted" />
+        <div className="h-64 rounded-xl bg-muted" />
+      </div>
+    );
+  }
+
+  const { client, reports } = data;
 
   if (!client) {
     return (
@@ -40,14 +72,6 @@ export default async function ClientReportsPage() {
       </div>
     );
   }
-
-  const { data: reportsData } = await supabase
-    .from("kpi_reports")
-    .select("*")
-    .eq("client_id", client.id)
-    .order("created_at", { ascending: false });
-
-  const reports = (reportsData || []) as KPIReport[];
 
   return (
     <div className="space-y-6">

@@ -151,6 +151,10 @@ export function createDemoClient() {
         const user = currentDemoRole === "client" ? DEMO_USER_CLIENT : DEMO_USER_ADMIN;
         return { data: { user }, error: null };
       },
+      async getSession() {
+        const user = currentDemoRole === "client" ? DEMO_USER_CLIENT : DEMO_USER_ADMIN;
+        return { data: { session: { user } }, error: null };
+      },
       async signInWithPassword() {
         const user = currentDemoRole === "client" ? DEMO_USER_CLIENT : DEMO_USER_ADMIN;
         return { data: { user, session: {} }, error: null };

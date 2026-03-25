@@ -1,4 +1,7 @@
-import { createClient } from "@/lib/supabase/server";
+"use client";
+
+import useSWR from "swr";
+import { createClient } from "@/lib/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { StatCard } from "@/components/charts/stat-card";
@@ -70,18 +73,61 @@ function getRelativeTime(dateStr: string): string {
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-export default async function ClientActivityPage() {
-  const supabase = await createClient();
+const supabase = createClient();
 
+async function fetchClientActivity() {
   const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) return { client: null, events: [], campaigns: [] };
 
   const { data: clientData } = await supabase
     .from("clients")
     .select("*")
-    .eq("user_id", user!.id)
+    .eq("user_id", user.id)
     .single();
 
   const client = clientData as Client | null;
+  if (!client) return { client: null, events: [], campaigns: [] };
+
+  const { data: campaignsData } = await supabase
+    .from("campaigns")
+    .select("*")
+    .eq("client_id", client.id);
+
+  const campaigns = (campaignsData || []) as Campaign[];
+  const campaignInstantlyIds = campaigns.map((c) => c.instantly_campaign_id);
+
+  const { data: eventsData } = await supabase
+    .from("webhook_events")
+    .select("*")
+    .in("campaign_instantly_id", campaignInstantlyIds.length > 0 ? campaignInstantlyIds : ["none"])
+    .order("received_at", { ascending: false });
+
+  return {
+    client,
+    events: (eventsData || []) as WebhookEvent[],
+    campaigns,
+  };
+}
+
+export default function ClientActivityPage() {
+  const { data } = useSWR("client-activity", fetchClientActivity);
+
+  if (!data) {
+    return (
+      <div className="space-y-6 animate-pulse">
+        <div className="h-32 rounded-xl bg-muted" />
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="h-24 rounded-xl bg-muted" />
+          ))}
+        </div>
+        <div className="h-64 rounded-xl bg-muted" />
+      </div>
+    );
+  }
+
+  const { client, events, campaigns } = data;
 
   if (!client) {
     return (
@@ -91,24 +137,7 @@ export default async function ClientActivityPage() {
     );
   }
 
-  // Get client's campaigns to match events
-  const { data: campaignsData } = await supabase
-    .from("campaigns")
-    .select("*")
-    .eq("client_id", client.id);
-
-  const campaigns = (campaignsData || []) as Campaign[];
-  const campaignInstantlyIds = campaigns.map((c) => c.instantly_campaign_id);
   const campaignNameMap = new Map(campaigns.map((c) => [c.instantly_campaign_id, c.name]));
-
-  // Get events for client's campaigns
-  const { data: eventsData } = await supabase
-    .from("webhook_events")
-    .select("*")
-    .in("campaign_instantly_id", campaignInstantlyIds.length > 0 ? campaignInstantlyIds : ["none"])
-    .order("received_at", { ascending: false });
-
-  const events = (eventsData || []) as WebhookEvent[];
 
   // Summary counts
   const totalEvents = events.length;

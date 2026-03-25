@@ -1,4 +1,7 @@
-import { createClient } from "@/lib/supabase/server";
+"use client";
+
+import useSWR from "swr";
+import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -14,16 +17,34 @@ import { AddClientForm } from "./add-client-form";
 import { Users, ArrowRight } from "lucide-react";
 import type { Client, Campaign } from "@/types/app";
 
-export default async function ClientsPage() {
-  const supabase = await createClient();
+const supabase = createClient();
 
+async function fetchClients() {
   const [clientsRes, campaignsRes] = await Promise.all([
     supabase.from("clients").select("*").order("name"),
     supabase.from("campaigns").select("*"),
   ]);
 
-  const clients = (clientsRes.data || []) as Client[];
-  const campaigns = (campaignsRes.data || []) as Campaign[];
+  return {
+    clients: (clientsRes.data || []) as Client[],
+    campaigns: (campaignsRes.data || []) as Campaign[],
+  };
+}
+
+export default function ClientsPage() {
+  const { data } = useSWR("admin-clients", fetchClients);
+
+  if (!data) {
+    return (
+      <div className="space-y-6 animate-pulse">
+        <div className="h-32 rounded-xl bg-muted" />
+        <div className="h-12 rounded-lg bg-muted" />
+        <div className="h-64 rounded-xl bg-muted" />
+      </div>
+    );
+  }
+
+  const { clients, campaigns } = data;
 
   return (
     <div className="space-y-6">

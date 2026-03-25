@@ -1,4 +1,7 @@
-import { createClient } from "@/lib/supabase/server";
+"use client";
+
+import useSWR from "swr";
+import { createClient } from "@/lib/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -13,15 +16,33 @@ import { StatCard } from "@/components/charts/stat-card";
 import { MessageSquare, ThumbsUp, ThumbsDown } from "lucide-react";
 import type { LeadFeedback } from "@/types/app";
 
-export default async function ClientFeedbackPage() {
-  const supabase = await createClient();
+const supabase = createClient();
 
+async function fetchClientFeedback() {
   const { data } = await supabase
     .from("lead_feedback")
     .select("*")
     .order("created_at", { ascending: false });
 
-  const feedback = (data || []) as LeadFeedback[];
+  return (data || []) as LeadFeedback[];
+}
+
+export default function ClientFeedbackPage() {
+  const { data: feedback } = useSWR("client-feedback", fetchClientFeedback);
+
+  if (!feedback) {
+    return (
+      <div className="space-y-6 animate-pulse">
+        <div className="h-32 rounded-xl bg-muted" />
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="h-24 rounded-xl bg-muted" />
+          ))}
+        </div>
+        <div className="h-64 rounded-xl bg-muted" />
+      </div>
+    );
+  }
 
   const total = feedback.length;
   const good = feedback.filter((f) =>

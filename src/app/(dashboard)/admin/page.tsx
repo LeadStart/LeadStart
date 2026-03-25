@@ -1,4 +1,7 @@
-import { createClient } from "@/lib/supabase/server";
+"use client";
+
+import useSWR from "swr";
+import { createClient } from "@/lib/supabase/client";
 import { calculateMetrics } from "@/lib/kpi/calculator";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -66,9 +69,9 @@ function getHealthLabel(health: "good" | "warning" | "bad" | "none") {
   }[health];
 }
 
-export default async function AdminOverviewPage() {
-  const supabase = await createClient();
+const supabase = createClient();
 
+async function fetchAdminOverview() {
   const [clientsRes, campaignsRes, snapshotsRes] = await Promise.all([
     supabase.from("clients").select("*").order("name"),
     supabase.from("campaigns").select("*"),
@@ -79,9 +82,30 @@ export default async function AdminOverviewPage() {
       .order("snapshot_date", { ascending: false }),
   ]);
 
-  const clients = (clientsRes.data || []) as Client[];
-  const campaigns = (campaignsRes.data || []) as Campaign[];
-  const snapshots = (snapshotsRes.data || []) as CampaignSnapshot[];
+  return {
+    clients: (clientsRes.data || []) as Client[],
+    campaigns: (campaignsRes.data || []) as Campaign[],
+    snapshots: (snapshotsRes.data || []) as CampaignSnapshot[],
+  };
+}
+
+export default function AdminOverviewPage() {
+  const { data } = useSWR("admin-overview", fetchAdminOverview);
+
+  if (!data) {
+    return (
+      <div className="space-y-6 animate-pulse">
+        <div className="h-32 rounded-xl bg-muted" />
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="h-48 rounded-xl bg-muted" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  const { clients, campaigns, snapshots } = data;
 
   // Build per-client data
   const clientCards = clients.map((client) => {

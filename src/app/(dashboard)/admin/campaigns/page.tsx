@@ -1,4 +1,7 @@
-import { createClient } from "@/lib/supabase/server";
+"use client";
+
+import useSWR from "swr";
+import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -14,9 +17,9 @@ import { calculateMetrics } from "@/lib/kpi/calculator";
 import { Mail, ArrowRight } from "lucide-react";
 import type { Campaign, Client, CampaignSnapshot } from "@/types/app";
 
-export default async function AllCampaignsPage() {
-  const supabase = await createClient();
+const supabase = createClient();
 
+async function fetchAllCampaigns() {
   const [campaignsRes, clientsRes, snapshotsRes] = await Promise.all([
     supabase.from("campaigns").select("*").order("created_at", { ascending: false }),
     supabase.from("clients").select("*"),
@@ -26,10 +29,26 @@ export default async function AllCampaignsPage() {
       .gte("snapshot_date", new Date(Date.now() - 30 * 86400000).toISOString().split("T")[0]),
   ]);
 
-  const campaigns = (campaignsRes.data || []) as Campaign[];
-  const clients = (clientsRes.data || []) as Client[];
-  const snapshots = (snapshotsRes.data || []) as CampaignSnapshot[];
+  return {
+    campaigns: (campaignsRes.data || []) as Campaign[],
+    clients: (clientsRes.data || []) as Client[],
+    snapshots: (snapshotsRes.data || []) as CampaignSnapshot[],
+  };
+}
 
+export default function AllCampaignsPage() {
+  const { data } = useSWR("admin-campaigns", fetchAllCampaigns);
+
+  if (!data) {
+    return (
+      <div className="space-y-6 animate-pulse">
+        <div className="h-32 rounded-xl bg-muted" />
+        <div className="h-64 rounded-xl bg-muted" />
+      </div>
+    );
+  }
+
+  const { campaigns, clients, snapshots } = data;
   const clientMap = new Map(clients.map((c) => [c.id, c]));
 
   const active = campaigns.filter((c) => c.status === "active").length;

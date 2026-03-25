@@ -1,4 +1,7 @@
-import { createClient } from "@/lib/supabase/server";
+"use client";
+
+import useSWR from "swr";
+import { createClient } from "@/lib/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -13,9 +16,9 @@ import { StatCard } from "@/components/charts/stat-card";
 import { MessageSquare, ThumbsUp, ThumbsDown } from "lucide-react";
 import type { LeadFeedback, Campaign } from "@/types/app";
 
-export default async function FeedbackPage() {
-  const supabase = await createClient();
+const supabase = createClient();
 
+async function fetchFeedback() {
   const [feedbackRes, campaignsRes] = await Promise.all([
     supabase
       .from("lead_feedback")
@@ -25,8 +28,30 @@ export default async function FeedbackPage() {
     supabase.from("campaigns").select("id, name"),
   ]);
 
-  const feedback = (feedbackRes.data || []) as LeadFeedback[];
-  const campaigns = (campaignsRes.data || []) as Pick<Campaign, "id" | "name">[];
+  return {
+    feedback: (feedbackRes.data || []) as LeadFeedback[],
+    campaigns: (campaignsRes.data || []) as Pick<Campaign, "id" | "name">[],
+  };
+}
+
+export default function FeedbackPage() {
+  const { data } = useSWR("admin-feedback", fetchFeedback);
+
+  if (!data) {
+    return (
+      <div className="space-y-6 animate-pulse">
+        <div className="h-32 rounded-xl bg-muted" />
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="h-24 rounded-xl bg-muted" />
+          ))}
+        </div>
+        <div className="h-64 rounded-xl bg-muted" />
+      </div>
+    );
+  }
+
+  const { feedback, campaigns } = data;
   const campaignMap = new Map(campaigns.map((c) => [c.id, c.name]));
 
   const total = feedback.length;

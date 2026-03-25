@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { Bell, Search, ArrowLeftRight, Settings, LogOut, ChevronDown, User } from "lucide-react";
+import { Bell, Search, Settings, LogOut, ChevronDown, User } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,10 +17,9 @@ import type { AppRole } from "@/types/app";
 interface TopbarProps {
   userEmail: string;
   role: AppRole;
-  onRoleSwitch: (role: AppRole) => void;
 }
 
-export function Topbar({ userEmail, role, onRoleSwitch }: TopbarProps) {
+export function Topbar({ userEmail, role }: TopbarProps) {
   const router = useRouter();
 
   async function handleSignOut() {
@@ -32,8 +31,6 @@ export function Topbar({ userEmail, role, onRoleSwitch }: TopbarProps) {
 
   const isAdmin = role === "owner" || role === "va";
   const displayRole = isAdmin ? "Admin" : "Client";
-  const switchToRole: AppRole = isAdmin ? "client" : "owner";
-  const switchLabel = isAdmin ? "Client View" : "Admin View";
 
   return (
     <header className="flex h-16 items-center justify-between border-b border-border/50 bg-white px-6">
@@ -44,15 +41,6 @@ export function Topbar({ userEmail, role, onRoleSwitch }: TopbarProps) {
       </div>
 
       <div className="flex items-center gap-3">
-        {/* Role Switcher */}
-        <button
-          onClick={() => onRoleSwitch(switchToRole)}
-          className="flex items-center gap-2 rounded-lg border border-dashed border-indigo-300 bg-indigo-50 px-3 py-1.5 text-xs font-medium text-indigo-700 transition-all hover:bg-indigo-100 hover:border-indigo-400"
-        >
-          <ArrowLeftRight size={13} />
-          Switch to {switchLabel}
-        </button>
-
         {/* Notification bell */}
         <button className="relative flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors">
           <Bell size={18} />
@@ -91,14 +79,12 @@ export function Topbar({ userEmail, role, onRoleSwitch }: TopbarProps) {
                 <User size={14} className="mr-2" />
                 Profile
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => router.push("/admin/settings/api")}>
-                <Settings size={14} className="mr-2" />
-                Settings
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onRoleSwitch(switchToRole)}>
-                <ArrowLeftRight size={14} className="mr-2" />
-                Switch to {switchLabel}
-              </DropdownMenuItem>
+              {isAdmin && (
+                <DropdownMenuItem onClick={() => router.push("/admin/settings/api")}>
+                  <Settings size={14} className="mr-2" />
+                  Settings
+                </DropdownMenuItem>
+              )}
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>

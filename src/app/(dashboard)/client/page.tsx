@@ -1,4 +1,7 @@
-import { createClient } from "@/lib/supabase/server";
+"use client";
+
+import useSWR from "swr";
+import { createClient } from "@/lib/supabase/client";
 import { KPICard } from "@/components/charts/kpi-card";
 import { DailyChart } from "@/components/charts/daily-chart";
 import { calculateMetrics } from "@/lib/kpi/calculator";
@@ -8,21 +11,64 @@ import Link from "next/link";
 import { ArrowRight, TrendingUp } from "lucide-react";
 import type { Campaign, CampaignSnapshot, Client } from "@/types/app";
 
-export default async function ClientDashboardPage() {
-  const supabase = await createClient();
+const supabase = createClient();
 
+async function fetchClientDashboard() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // Get client record linked to this user
+  if (!user) return { client: null, campaigns: [], snapshots: [] };
+
   const { data: clientData } = await supabase
     .from("clients")
     .select("*")
-    .eq("user_id", user!.id)
+    .eq("user_id", user.id)
     .single();
 
   const client = clientData as Client | null;
+  if (!client) return { client: null, campaigns: [], snapshots: [] };
+
+  const { data: campaignsData } = await supabase
+    .from("campaigns")
+    .select("*")
+    .eq("client_id", client.id);
+
+  const campaigns = (campaignsData || []) as Campaign[];
+  const campaignIds = campaigns.map((c) => c.id);
+
+  const { data: snapshotsData } = await supabase
+    .from("campaign_snapshots")
+    .select("*")
+    .in("campaign_id", campaignIds.length > 0 ? campaignIds : ["none"])
+    .gte("snapshot_date", new Date(Date.now() - 30 * 86400000).toISOString().split("T")[0])
+    .order("snapshot_date", { ascending: false });
+
+  return {
+    client,
+    campaigns,
+    snapshots: (snapshotsData || []) as CampaignSnapshot[],
+  };
+}
+
+export default function ClientDashboardPage() {
+  const { data } = useSWR("client-dashboard", fetchClientDashboard);
+
+  if (!data) {
+    return (
+      <div className="space-y-6 animate-pulse">
+        <div className="h-32 rounded-xl bg-muted" />
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="h-24 rounded-xl bg-muted" />
+          ))}
+        </div>
+        <div className="h-64 rounded-xl bg-muted" />
+      </div>
+    );
+  }
+
+  const { client, campaigns, snapshots } = data;
 
   if (!client) {
     return (
@@ -40,24 +86,6 @@ export default async function ClientDashboardPage() {
     );
   }
 
-  // Get campaigns and snapshots
-  const [campaignsRes, snapshotsRes] = await Promise.all([
-    supabase.from("campaigns").select("*").eq("client_id", client.id),
-    supabase
-      .from("campaign_snapshots")
-      .select("*")
-      .in(
-        "campaign_id",
-        (
-          await supabase.from("campaigns").select("id").eq("client_id", client.id)
-        ).data?.map((c: Record<string, unknown>) => c.id as string) || ["none"]
-      )
-      .gte("snapshot_date", new Date(Date.now() - 30 * 86400000).toISOString().split("T")[0])
-      .order("snapshot_date", { ascending: false }),
-  ]);
-
-  const campaigns = (campaignsRes.data || []) as Campaign[];
-  const snapshots = (snapshotsRes.data || []) as CampaignSnapshot[];
   const metrics = calculateMetrics(snapshots);
 
   return (
