@@ -14,6 +14,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Mail, Lock } from "lucide-react";
+import Link from "next/link";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -140,6 +141,14 @@ export default function LoginPage() {
               >
                 {loading ? "Signing in..." : "Sign In"}
               </Button>
+              <div className="text-center">
+                <Link
+                  href="/reset-password"
+                  className="text-sm text-muted-foreground hover:text-indigo-600 transition-colors"
+                >
+                  Forgot your password?
+                </Link>
+              </div>
             </form>
           </CardContent>
         </Card>

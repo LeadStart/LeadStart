@@ -46,6 +46,47 @@ export default function ReportsPage() {
   const [error, setError] = useState<string | null>(null);
   const [selectedReport, setSelectedReport] = useState<KPIReport | null>(null);
   const [showPreview, setShowPreview] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [sendSuccess, setSendSuccess] = useState(false);
+
+  async function handleSendReport(report: KPIReport) {
+    setSending(true);
+    setSendSuccess(false);
+    setError(null);
+
+    try {
+      const res = await fetch("/api/cron/send-reports", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reportId: report.id }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to send report");
+      }
+
+      setSendSuccess(true);
+      // Update the report in the local list to show as sent
+      setReports((prev) =>
+        prev.map((r) =>
+          r.id === report.id
+            ? { ...r, sent_at: new Date().toISOString(), sent_to: [clients.find(c => c.id === r.client_id)?.contact_email || ""] }
+            : r
+        )
+      );
+      // Update selected report too
+      setSelectedReport((prev) =>
+        prev && prev.id === report.id
+          ? { ...prev, sent_at: new Date().toISOString() }
+          : prev
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to send report");
+    } finally {
+      setSending(false);
+    }
+  }
 
   useEffect(() => {
     const supabase = createClient();
@@ -397,16 +438,33 @@ export default function ReportsPage() {
                     {showPreview ? "Hide Preview" : "Email Preview"}
                   </Button>
                   {!selectedReport.sent_at && (
-                    <Button size="sm" className="text-xs" style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed)' }}>
+                    <Button
+                      size="sm"
+                      className="text-xs"
+                      style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed)' }}
+                      onClick={() => handleSendReport(selectedReport)}
+                      disabled={sending}
+                    >
                       <Send size={13} className="mr-1" />
-                      Send
+                      {sending ? "Sending..." : "Send"}
                     </Button>
                   )}
                   {selectedReport.sent_at && (
-                    <Button variant="outline" size="sm" className="text-xs">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-xs"
+                      onClick={() => handleSendReport(selectedReport)}
+                      disabled={sending}
+                    >
                       <Send size={13} className="mr-1" />
-                      Resend
+                      {sending ? "Sending..." : "Resend"}
                     </Button>
+                  )}
+                  {sendSuccess && (
+                    <span className="text-xs text-emerald-600 flex items-center gap-1">
+                      <CheckCircle size={12} /> Sent!
+                    </span>
                   )}
                 </div>
               </div>
