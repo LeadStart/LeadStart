@@ -72,49 +72,42 @@ export default async function ClientsPage() {
                   );
 
                   return (
-                    <TableRow key={client.id} className="group">
-                      <TableCell>
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold text-white shrink-0" style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed)' }}>
-                            {client.name.charAt(0)}
+                    <Link key={client.id} href={`/admin/clients/${client.id}`} className="contents group">
+                      <TableRow className="cursor-pointer transition-colors hover:bg-indigo-50/50">
+                        <TableCell>
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold text-white shrink-0" style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed)' }}>
+                              {client.name.charAt(0)}
+                            </div>
+                            <span className="font-medium text-foreground group-hover:text-indigo-600 transition-colors">
+                              {client.name}
+                            </span>
                           </div>
-                          <Link
-                            href={`/admin/clients/${client.id}`}
-                            className="font-medium text-foreground hover:text-indigo-600 transition-colors"
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">{client.contact_email || "—"}</TableCell>
+                        <TableCell>
+                          <span className="text-sm">
+                            <span className="font-medium">{activeCampaigns.length}</span>
+                            <span className="text-muted-foreground"> active / {clientCampaigns.length} total</span>
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant="secondary"
+                            className={
+                              client.user_id
+                                ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                                : "bg-amber-100 text-amber-800 border border-amber-200"
+                            }
                           >
-                            {client.name}
-                          </Link>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">{client.contact_email || "—"}</TableCell>
-                      <TableCell>
-                        <span className="text-sm">
-                          <span className="font-medium">{activeCampaigns.length}</span>
-                          <span className="text-muted-foreground"> active / {clientCampaigns.length} total</span>
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant="secondary"
-                          className={
-                            client.user_id
-                              ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
-                              : "bg-amber-100 text-amber-800 border border-amber-200"
-                          }
-                        >
-                          {client.user_id ? "Linked" : "Not invited"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Link
-                          href={`/admin/clients/${client.id}`}
-                          className="flex items-center gap-1 text-sm text-muted-foreground hover:text-indigo-600 transition-colors"
-                        >
-                          View
-                          <ArrowRight size={13} className="opacity-0 group-hover:opacity-100 transition-opacity" />
-                        </Link>
-                      </TableCell>
-                    </TableRow>
+                            {client.user_id ? "Linked" : "Not invited"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <ArrowRight size={14} className="text-muted-foreground opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
+                        </TableCell>
+                      </TableRow>
+                    </Link>
                   );
                 })}
               </TableBody>
