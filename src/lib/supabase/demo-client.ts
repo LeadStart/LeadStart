@@ -14,6 +14,7 @@ import {
   MOCK_EVENTS,
   MOCK_PROFILES,
   MOCK_PROSPECTS,
+  MOCK_STEP_METRICS,
 } from "@/lib/mock-data";
 
 type MockRow = Record<string, unknown>;
@@ -28,6 +29,7 @@ const TABLES: Record<string, MockRow[]> = {
   webhook_events: MOCK_EVENTS as unknown as MockRow[],
   profiles: MOCK_PROFILES as unknown as MockRow[],
   prospects: MOCK_PROSPECTS as unknown as MockRow[],
+  campaign_step_metrics: MOCK_STEP_METRICS as unknown as MockRow[],
 };
 
 type QueryResult = { data: MockRow[]; error: null };

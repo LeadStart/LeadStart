@@ -508,6 +508,62 @@ export const MOCK_BILLING: BillingClient[] = [
   },
 ];
 
+// ---------- Step Metrics (for step-level health analysis) ----------
+import type { CampaignStepMetric } from "@/types/app";
+
+function generateStepMetrics(): CampaignStepMetric[] {
+  const metrics: CampaignStepMetric[] = [];
+  const campaigns = ["camp-001", "camp-002", "camp-003"];
+
+  for (const campId of campaigns) {
+    for (let step = 1; step <= 3; step++) {
+      // Generate 4 weekly periods
+      for (let weekOffset = 3; weekOffset >= 0; weekOffset--) {
+        const end = new Date();
+        end.setDate(end.getDate() - weekOffset * 7);
+        const start = new Date(end);
+        start.setDate(start.getDate() - 7);
+
+        const baseSent = Math.round(40 + Math.random() * 30);
+        // Step 1 has higher reply rate, drops for later steps
+        const baseReplyRate = step === 1 ? 8 + Math.random() * 4 : step === 2 ? 4 + Math.random() * 3 : 2 + Math.random() * 2;
+
+        // For camp-003, simulate a drop in step 1 reply rate in the latest period
+        let replyRate = baseReplyRate;
+        if (campId === "camp-003" && step === 1 && weekOffset === 0) {
+          replyRate = 2.5; // Dropped from ~10% to 2.5%
+        }
+
+        const replies = Math.round(baseSent * (replyRate / 100));
+        const opens = Math.round(baseSent * (0.3 + Math.random() * 0.2));
+        const bounces = Math.round(baseSent * (0.01 + Math.random() * 0.02));
+
+        metrics.push({
+          id: `step-${campId}-s${step}-w${weekOffset}`,
+          campaign_id: campId,
+          step,
+          period_start: start.toISOString().split("T")[0],
+          period_end: end.toISOString().split("T")[0],
+          sent: baseSent,
+          replies,
+          unique_replies: replies,
+          opens,
+          unique_opens: opens,
+          bounces,
+          reply_rate: Number(replyRate.toFixed(2)),
+          open_rate: baseSent > 0 ? Number(((opens / baseSent) * 100).toFixed(2)) : 0,
+          bounce_rate: baseSent > 0 ? Number(((bounces / baseSent) * 100).toFixed(2)) : 0,
+          fetched_at: new Date().toISOString(),
+        });
+      }
+    }
+  }
+
+  return metrics;
+}
+
+export const MOCK_STEP_METRICS: CampaignStepMetric[] = generateStepMetrics();
+
 // ---------- Prospects / CRM ----------
 export const MOCK_PROSPECTS: Prospect[] = [
   {

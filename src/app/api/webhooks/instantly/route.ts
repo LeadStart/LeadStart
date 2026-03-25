@@ -55,5 +55,38 @@ export async function POST(request: NextRequest) {
     processed: false,
   });
 
+  // Track bounces per step (since the analytics API doesn't provide per-step bounces)
+  if (payload.event_type === "email_bounced" && payload.campaign_id && payload.step) {
+    const { data: campaign } = await admin
+      .from("campaigns")
+      .select("id")
+      .eq("instantly_campaign_id", payload.campaign_id)
+      .limit(1)
+      .single();
+
+    if (campaign) {
+      const today = new Date().toISOString().split("T")[0];
+      // Increment bounce count for this campaign + step + today's period
+      const { data: existing } = await admin
+        .from("campaign_step_metrics")
+        .select("id, bounces, sent, bounce_rate")
+        .eq("campaign_id", campaign.id)
+        .eq("step", payload.step)
+        .eq("period_start", today)
+        .single();
+
+      if (existing) {
+        const newBounces = (existing.bounces || 0) + 1;
+        const newBounceRate = existing.sent > 0
+          ? Number(((newBounces / existing.sent) * 100).toFixed(2))
+          : 0;
+        await admin
+          .from("campaign_step_metrics")
+          .update({ bounces: newBounces, bounce_rate: newBounceRate })
+          .eq("id", existing.id);
+      }
+    }
+  }
+
   return NextResponse.json({ received: true });
 }

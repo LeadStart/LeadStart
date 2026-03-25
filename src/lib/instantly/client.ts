@@ -11,6 +11,7 @@ import type {
   InstantlyWarmupAnalytics,
   InstantlyAccountCampaignMapping,
   InstantlyAccountCampaignMappingResponse,
+  InstantlyStepAnalytics,
 } from "./types";
 
 const BASE_URL = "https://api.instantly.ai/api/v2";
@@ -122,6 +123,23 @@ export class InstantlyClient {
 
     return this.request<InstantlyAnalyticsResponse>(
       `/campaigns/analytics/daily?${params.toString()}`
+    );
+  }
+
+  // ===== STEP-LEVEL ANALYTICS =====
+
+  async getStepAnalytics(
+    campaignId?: string,
+    startDate?: string,
+    endDate?: string
+  ): Promise<InstantlyStepAnalytics[]> {
+    const params = new URLSearchParams();
+    if (campaignId) params.set("campaign_id", campaignId);
+    if (startDate) params.set("start_date", startDate);
+    if (endDate) params.set("end_date", endDate);
+
+    return this.request<InstantlyStepAnalytics[]>(
+      `/campaigns/analytics/steps?${params.toString()}`
     );
   }
 

@@ -106,6 +106,51 @@ export async function GET(request: NextRequest) {
           );
         }
 
+        // ===== STEP-LEVEL ANALYTICS =====
+        // Pull per-step metrics for the same period
+        try {
+          const stepData = await instantly.getStepAnalytics(
+            campaign.instantly_campaign_id,
+            startDate,
+            endDate
+          );
+
+          const steps = Array.isArray(stepData) ? stepData : [];
+          for (const step of steps) {
+            if (step.step === null || step.step === undefined) continue;
+
+            const replyRate = step.sent > 0
+              ? Number(((step.unique_replies / step.sent) * 100).toFixed(2))
+              : 0;
+            const openRate = step.sent > 0
+              ? Number(((step.unique_opened / step.sent) * 100).toFixed(2))
+              : 0;
+            // Bounces not available per step via analytics — tracked via webhooks
+            const bounceRate = 0;
+
+            await admin.from("campaign_step_metrics").upsert(
+              {
+                campaign_id: campaign.id,
+                step: step.step,
+                period_start: startDate,
+                period_end: endDate,
+                sent: step.sent,
+                replies: step.replies,
+                unique_replies: step.unique_replies,
+                opens: step.opened,
+                unique_opens: step.unique_opened,
+                bounces: 0,
+                reply_rate: replyRate,
+                open_rate: openRate,
+                bounce_rate: bounceRate,
+              },
+              { onConflict: "campaign_id,step,period_start,period_end" }
+            );
+          }
+        } catch (stepError) {
+          console.error(`Failed to sync step analytics for campaign ${campaign.id}:`, stepError);
+        }
+
         totalSynced++;
       } catch (error) {
         console.error(`Failed to sync campaign ${campaign.id}:`, error);

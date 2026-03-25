@@ -129,6 +129,38 @@ export interface KPIMetrics {
   reply_to_meeting_rate: number;
 }
 
+// Step-level campaign metrics (per-step analytics from Instantly)
+export interface CampaignStepMetric {
+  id: string;
+  campaign_id: string;
+  step: number;
+  period_start: string;
+  period_end: string;
+  sent: number;
+  replies: number;
+  unique_replies: number;
+  opens: number;
+  unique_opens: number;
+  bounces: number;
+  reply_rate: number;
+  open_rate: number;
+  bounce_rate: number;
+  fetched_at: string;
+}
+
+// Step health — compares current period vs trailing average
+export interface StepHealthAlert {
+  campaign_id: string;
+  campaign_name: string;
+  client_name: string;
+  step: number;
+  metric: string;        // "reply_rate" | "bounce_rate"
+  current_value: number;
+  baseline_value: number; // trailing average
+  change_pct: number;     // negative = drop
+  severity: "warning" | "critical";
+}
+
 // CRM / Prospects
 export type ProspectStage = "lead" | "contacted" | "meeting" | "proposal" | "closed" | "lost";
 

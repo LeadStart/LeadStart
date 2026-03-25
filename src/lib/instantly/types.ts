@@ -103,6 +103,24 @@ export interface InstantlyAccountCampaignMappingResponse {
   next_starting_after?: string;
 }
 
+// Step-level analytics from /campaigns/analytics/steps
+export interface InstantlyStepAnalytics {
+  campaign_id: string;
+  step: number | null;
+  variant: number | null;
+  sent: number;
+  opened: number;
+  unique_opened: number;
+  replies: number;
+  unique_replies: number;
+  replies_automatic: number;
+  unique_replies_automatic: number;
+  clicks: number;
+  unique_clicks: number;
+  opportunities?: number;
+  unique_opportunities?: number;
+}
+
 export interface InstantlyWebhookPayload {
   event_type: string;
   timestamp: string;
