@@ -107,7 +107,7 @@ function createQueryBuilder(tableName: string): QueryBuilder {
 const DEMO_USER_ADMIN = {
   id: "user-owner-001",
   email: "admin@leadstart.com",
-  app_metadata: { role: "owner" },
+  app_metadata: { role: "owner", organization_id: "00000000-0000-0000-0000-000000000001" },
   user_metadata: {},
 };
 
@@ -115,7 +115,7 @@ const DEMO_USER_ADMIN = {
 const DEMO_USER_CLIENT = {
   id: "user-client-001",
   email: "john@acmecorp.com",
-  app_metadata: { role: "client" },
+  app_metadata: { role: "client", organization_id: "00000000-0000-0000-0000-000000000001" },
   user_metadata: {},
 };
 

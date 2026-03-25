@@ -2,24 +2,33 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import type { User } from "@supabase/supabase-js";
 import type { AppRole } from "@/types/app";
 
+interface AppUser {
+  id: string;
+  email?: string;
+  app_metadata?: {
+    role?: string;
+    organization_id?: string;
+  };
+  user_metadata?: Record<string, unknown>;
+}
+
 export function useUser() {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<AppUser | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const supabase = createClient();
 
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      setUser(user);
+    supabase.auth.getUser().then(({ data }: { data: { user: AppUser | null } }) => {
+      setUser(data.user);
       setLoading(false);
     });
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((_event: unknown, session: { user?: AppUser } | null) => {
       setUser(session?.user ?? null);
     });
 
