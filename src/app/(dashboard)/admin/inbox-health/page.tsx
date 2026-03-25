@@ -12,15 +12,17 @@ import { Inbox, Globe, Activity, AlertTriangle, Shield, RefreshCw } from "lucide
 interface InboxData {
   email: string;
   domain: string;
+  name: string | null;
   status: string;
   warmupStatus: number;
   healthScore: number | null;
-  healthLabel: string | null;
-  landedInbox: number;
-  landedSpam: number;
-  inboxRate: number | null;
+  healthLabel?: string | null;
+  landedInbox?: number;
+  landedSpam?: number;
+  inboxRate?: number | null;
   sent30d: number;
-  campaigns: { id: string; name: string }[];
+  dailyLimit?: number;
+  campaigns?: { id: string; name: string }[];
   createdAt: string;
 }
 
@@ -29,7 +31,7 @@ interface DomainData {
   inboxCount: number;
   avgHealthScore: number | null;
   totalSent30d: number;
-  inboxRate: number | null;
+  inboxRate?: number | null;
 }
 
 interface InboxHealthResponse {
@@ -232,8 +234,8 @@ export default function InboxHealthPage() {
                     <TableCell className="text-right font-medium">{inbox.sent30d.toLocaleString()}</TableCell>
                     <TableCell>
                       <div className="flex flex-wrap gap-1">
-                        {inbox.campaigns.length === 0 ? (
-                          <span className="text-xs text-muted-foreground">None</span>
+                        {!inbox.campaigns || inbox.campaigns.length === 0 ? (
+                          <span className="text-xs text-muted-foreground">—</span>
                         ) : (
                           inbox.campaigns.slice(0, 3).map((c) => (
                             <Badge key={c.id} variant="secondary" className="bg-indigo-50 text-indigo-700 border border-indigo-200 text-[10px]">
@@ -241,7 +243,7 @@ export default function InboxHealthPage() {
                             </Badge>
                           ))
                         )}
-                        {inbox.campaigns.length > 3 && (
+                        {inbox.campaigns && inbox.campaigns.length > 3 && (
                           <Badge variant="secondary" className="bg-gray-100 text-gray-500 text-[10px]">+{inbox.campaigns.length - 3}</Badge>
                         )}
                       </div>
