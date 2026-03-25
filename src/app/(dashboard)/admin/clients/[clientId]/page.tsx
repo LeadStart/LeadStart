@@ -1,5 +1,8 @@
-import { createClient } from "@/lib/supabase/server";
-import { notFound } from "next/navigation";
+"use client";
+
+import { use, useState } from "react";
+import useSWR from "swr";
+import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import { KPICard } from "@/components/charts/kpi-card";
 import { DailyChart } from "@/components/charts/daily-chart";
@@ -7,26 +10,19 @@ import { calculateMetrics } from "@/lib/kpi/calculator";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { InviteClientButton } from "./invite-client-button";
-import { ArrowLeft, ArrowRight, Mail, MessageSquare } from "lucide-react";
+import { ArrowLeft, ArrowRight, Mail, MessageSquare, Calendar } from "lucide-react";
 import type { Client, Campaign, CampaignSnapshot, LeadFeedback } from "@/types/app";
 
-export default async function ClientDetailPage({
-  params,
-}: {
-  params: Promise<{ clientId: string }>;
-}) {
-  const { clientId } = await params;
-  const supabase = await createClient();
+const supabase = createClient();
 
+async function fetchClientDetail(clientId: string) {
   const { data: client } = await supabase
     .from("clients")
     .select("*")
     .eq("id", clientId)
     .single();
 
-  if (!client) notFound();
-
-  const typedClient = client as Client;
+  if (!client) return null;
 
   const [campaignsRes, feedbackRes] = await Promise.all([
     supabase.from("campaigns").select("*").eq("client_id", clientId),
@@ -45,18 +41,68 @@ export default async function ClientDetailPage({
 
   const campaigns = (campaignsRes.data || []) as Campaign[];
   const feedback = (feedbackRes.data || []) as LeadFeedback[];
-
-  // Get snapshots for all client campaigns
   const campaignIds = campaigns.map((c) => c.id);
-  const { data: snapshotsData } = await supabase
+
+  // Fetch ALL snapshots (lifetime) — no date filter
+  const { data: allSnapshotsData } = await supabase
     .from("campaign_snapshots")
     .select("*")
     .in("campaign_id", campaignIds.length > 0 ? campaignIds : ["none"])
-    .gte("snapshot_date", new Date(Date.now() - 30 * 86400000).toISOString().split("T")[0])
     .order("snapshot_date", { ascending: false });
 
-  const snapshots = (snapshotsData || []) as CampaignSnapshot[];
-  const metrics = calculateMetrics(snapshots);
+  return {
+    client: client as Client,
+    campaigns,
+    feedback,
+    allSnapshots: (allSnapshotsData || []) as CampaignSnapshot[],
+  };
+}
+
+type Period = "7d" | "30d" | "lifetime";
+
+function filterByPeriod(snapshots: CampaignSnapshot[], period: Period): CampaignSnapshot[] {
+  if (period === "lifetime") return snapshots;
+  const days = period === "7d" ? 7 : 30;
+  const cutoff = new Date(Date.now() - days * 86400000).toISOString().split("T")[0];
+  return snapshots.filter((s) => s.snapshot_date >= cutoff);
+}
+
+export default function ClientDetailPage({
+  params,
+}: {
+  params: Promise<{ clientId: string }>;
+}) {
+  const { clientId } = use(params);
+  const { data } = useSWR(`client-detail-${clientId}`, () => fetchClientDetail(clientId));
+  const [period, setPeriod] = useState<Period>("30d");
+
+  if (!data) {
+    return (
+      <div className="space-y-6 animate-pulse">
+        <div className="h-8 w-32 rounded bg-muted" />
+        <div className="h-32 rounded-xl bg-muted" />
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {[1, 2, 3, 4].map((i) => <div key={i} className="h-24 rounded-xl bg-muted" />)}
+        </div>
+        <div className="h-64 rounded-xl bg-muted" />
+      </div>
+    );
+  }
+
+  if (!data.client) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <p className="text-muted-foreground">Client not found.</p>
+      </div>
+    );
+  }
+
+  const { client: typedClient, campaigns, feedback, allSnapshots } = data;
+  const periodSnapshots = filterByPeriod(allSnapshots, period);
+  const periodMetrics = calculateMetrics(periodSnapshots);
+  const lifetimeMetrics = calculateMetrics(allSnapshots);
+
+  const periodLabel = period === "7d" ? "Last 7 Days" : period === "30d" ? "Last 30 Days" : "Lifetime";
 
   return (
     <div className="space-y-6">
@@ -90,17 +136,58 @@ export default async function ClientDetailPage({
         </div>
       </div>
 
-      {/* Aggregate KPIs for this client */}
+      {/* Period Selector */}
+      <div className="flex items-center gap-2">
+        <Calendar size={14} className="text-muted-foreground" />
+        {(["7d", "30d", "lifetime"] as Period[]).map((p) => (
+          <button
+            key={p}
+            onClick={() => setPeriod(p)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+              period === p
+                ? "bg-indigo-100 text-indigo-700 border border-indigo-200"
+                : "bg-muted/50 text-muted-foreground hover:bg-muted"
+            }`}
+          >
+            {p === "7d" ? "7 Days" : p === "30d" ? "30 Days" : "Lifetime"}
+          </button>
+        ))}
+      </div>
+
+      {/* Aggregate KPIs — period metrics with lifetime comparison */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <KPICard label="Emails Sent (30d)" value={metrics.emails_sent} unit="count" />
-        <KPICard label="Reply Rate" value={metrics.reply_rate} unit="percent" kpiKey="reply_rate" />
-        <KPICard label="Bounce Rate" value={metrics.bounce_rate} unit="percent" kpiKey="bounce_rate" />
-        <KPICard label="Positive Responses" value={metrics.meetings_booked} unit="count" kpiKey="meetings_booked" />
+        <KPICard
+          label={`Emails Sent (${periodLabel})`}
+          value={periodMetrics.emails_sent}
+          unit="count"
+          subtitle={period !== "lifetime" ? `${lifetimeMetrics.emails_sent.toLocaleString()} lifetime` : undefined}
+        />
+        <KPICard
+          label="Reply Rate"
+          value={periodMetrics.reply_rate}
+          unit="percent"
+          kpiKey="reply_rate"
+          subtitle={period !== "lifetime" ? `${lifetimeMetrics.reply_rate}% lifetime` : undefined}
+        />
+        <KPICard
+          label="Bounce Rate"
+          value={periodMetrics.bounce_rate}
+          unit="percent"
+          kpiKey="bounce_rate"
+          subtitle={period !== "lifetime" ? `${lifetimeMetrics.bounce_rate}% lifetime` : undefined}
+        />
+        <KPICard
+          label="Positive Responses"
+          value={periodMetrics.meetings_booked}
+          unit="count"
+          kpiKey="meetings_booked"
+          subtitle={period !== "lifetime" ? `${lifetimeMetrics.meetings_booked} lifetime` : undefined}
+        />
       </div>
 
       {/* Chart */}
-      {snapshots.length > 0 && (
-        <DailyChart snapshots={snapshots} title={`${typedClient.name} — Last 30 Days`} />
+      {periodSnapshots.length > 0 && (
+        <DailyChart snapshots={periodSnapshots} title={`${typedClient.name} — ${periodLabel}`} />
       )}
 
       {/* Per-Campaign Breakdown */}
@@ -117,8 +204,10 @@ export default async function ClientDetailPage({
           ) : (
             <div className="space-y-3">
               {campaigns.map((campaign) => {
-                const campSnapshots = snapshots.filter((s) => s.campaign_id === campaign.id);
-                const campMetrics = calculateMetrics(campSnapshots);
+                const campAllSnapshots = allSnapshots.filter((s) => s.campaign_id === campaign.id);
+                const campPeriodSnapshots = filterByPeriod(campAllSnapshots, period);
+                const campPeriodMetrics = calculateMetrics(campPeriodSnapshots);
+                const campLifetimeMetrics = calculateMetrics(campAllSnapshots);
 
                 return (
                   <Link
@@ -155,29 +244,53 @@ export default async function ClientDetailPage({
                       </div>
                     </div>
 
-                    {/* Campaign-level mini metrics */}
-                    {campMetrics.emails_sent > 0 ? (
-                      <div className="grid grid-cols-4 gap-4 pt-3 border-t border-border/30">
-                        <div>
-                          <p className="text-sm font-bold">{campMetrics.emails_sent.toLocaleString()}</p>
-                          <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Sent</p>
+                    {/* Campaign metrics — period row */}
+                    {campPeriodMetrics.emails_sent > 0 || campLifetimeMetrics.emails_sent > 0 ? (
+                      <div className="space-y-2 pt-3 border-t border-border/30">
+                        {/* Period metrics */}
+                        <div className="grid grid-cols-4 gap-4">
+                          <div>
+                            <p className="text-sm font-bold">{campPeriodMetrics.emails_sent.toLocaleString()}</p>
+                            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Sent</p>
+                          </div>
+                          <div>
+                            <p className={`text-sm font-bold ${campPeriodMetrics.reply_rate >= 5 ? "text-emerald-700" : campPeriodMetrics.reply_rate >= 2 ? "text-amber-700" : "text-red-700"}`}>
+                              {campPeriodMetrics.reply_rate}%
+                            </p>
+                            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Reply</p>
+                          </div>
+                          <div>
+                            <p className={`text-sm font-bold ${campPeriodMetrics.bounce_rate <= 2 ? "text-emerald-700" : campPeriodMetrics.bounce_rate <= 5 ? "text-amber-700" : "text-red-700"}`}>
+                              {campPeriodMetrics.bounce_rate}%
+                            </p>
+                            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Bounce</p>
+                          </div>
+                          <div>
+                            <p className="text-sm font-bold">{campPeriodMetrics.meetings_booked}</p>
+                            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Positive</p>
+                          </div>
                         </div>
-                        <div>
-                          <p className={`text-sm font-bold ${campMetrics.reply_rate >= 5 ? "text-emerald-700" : campMetrics.reply_rate >= 2 ? "text-amber-700" : "text-red-700"}`}>
-                            {campMetrics.reply_rate}%
-                          </p>
-                          <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Reply</p>
-                        </div>
-                        <div>
-                          <p className={`text-sm font-bold ${campMetrics.bounce_rate <= 2 ? "text-emerald-700" : campMetrics.bounce_rate <= 5 ? "text-amber-700" : "text-red-700"}`}>
-                            {campMetrics.bounce_rate}%
-                          </p>
-                          <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Bounce</p>
-                        </div>
-                        <div>
-                          <p className="text-sm font-bold">{campMetrics.meetings_booked}</p>
-                          <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Positive</p>
-                        </div>
+                        {/* Lifetime row (if not already viewing lifetime) */}
+                        {period !== "lifetime" && campLifetimeMetrics.emails_sent > 0 && (
+                          <div className="grid grid-cols-4 gap-4 text-muted-foreground">
+                            <div>
+                              <p className="text-xs">{campLifetimeMetrics.emails_sent.toLocaleString()}</p>
+                              <p className="text-[9px] uppercase tracking-wide">Lifetime</p>
+                            </div>
+                            <div>
+                              <p className="text-xs">{campLifetimeMetrics.reply_rate}%</p>
+                              <p className="text-[9px] uppercase tracking-wide">Lifetime</p>
+                            </div>
+                            <div>
+                              <p className="text-xs">{campLifetimeMetrics.bounce_rate}%</p>
+                              <p className="text-[9px] uppercase tracking-wide">Lifetime</p>
+                            </div>
+                            <div>
+                              <p className="text-xs">{campLifetimeMetrics.meetings_booked}</p>
+                              <p className="text-[9px] uppercase tracking-wide">Lifetime</p>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     ) : (
                       <div className="pt-3 border-t border-border/30">
