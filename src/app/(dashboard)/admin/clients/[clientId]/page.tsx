@@ -37,7 +37,7 @@ export default async function ClientDetailPage({
         "campaign_id",
         (
           await supabase.from("campaigns").select("id").eq("client_id", clientId)
-        ).data?.map((c: { id: string }) => c.id) || []
+        ).data?.map((c) => (c as Record<string, unknown>).id as string) || []
       )
       .order("created_at", { ascending: false })
       .limit(20),
@@ -95,7 +95,7 @@ export default async function ClientDetailPage({
         <KPICard label="Emails Sent (30d)" value={metrics.emails_sent} unit="count" />
         <KPICard label="Reply Rate" value={metrics.reply_rate} unit="percent" kpiKey="reply_rate" />
         <KPICard label="Bounce Rate" value={metrics.bounce_rate} unit="percent" kpiKey="bounce_rate" />
-        <KPICard label="Meetings Booked" value={metrics.meetings_booked} unit="count" kpiKey="meetings_booked" />
+        <KPICard label="Positive Responses" value={metrics.meetings_booked} unit="count" kpiKey="meetings_booked" />
       </div>
 
       {/* Chart */}
@@ -176,7 +176,7 @@ export default async function ClientDetailPage({
                         </div>
                         <div>
                           <p className="text-sm font-bold">{campMetrics.meetings_booked}</p>
-                          <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Meetings</p>
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Positive</p>
                         </div>
                       </div>
                     ) : (

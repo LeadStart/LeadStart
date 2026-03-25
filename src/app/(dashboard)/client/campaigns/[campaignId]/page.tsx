@@ -69,7 +69,7 @@ export default async function ClientCampaignPage({
         <KPICard label="Emails Sent" value={metrics.emails_sent} unit="count" />
         <KPICard label="Reply Rate" value={metrics.reply_rate} unit="percent" kpiKey="reply_rate" />
         <KPICard label="Bounce Rate" value={metrics.bounce_rate} unit="percent" kpiKey="bounce_rate" />
-        <KPICard label="Meetings Booked" value={metrics.meetings_booked} unit="count" />
+        <KPICard label="Positive Responses" value={metrics.meetings_booked} unit="count" />
       </div>
 
       {/* Chart */}

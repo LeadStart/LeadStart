@@ -56,6 +56,53 @@ export interface InstantlyLeadListResponse {
   next_starting_after?: string;
 }
 
+// ===== INBOX / ACCOUNT TYPES =====
+
+export interface InstantlyAccount {
+  email: string;
+  first_name?: string;
+  last_name?: string;
+  status: number; // 1 = active
+  warmup_status: number;
+  created_at: string;
+}
+
+export interface InstantlyAccountListResponse {
+  items: InstantlyAccount[];
+  next_starting_after?: string;
+}
+
+export interface InstantlyAccountDailyAnalytics {
+  email: string;
+  date: string;
+  sent: number;
+}
+
+export interface InstantlyAccountDailyResponse {
+  data: InstantlyAccountDailyAnalytics[];
+}
+
+export interface InstantlyWarmupAnalytics {
+  email: string;
+  sent: number;
+  landed_inbox: number;
+  landed_spam: number;
+  received: number;
+  health_score: number;
+  health_score_label: string;
+}
+
+export interface InstantlyAccountCampaignMapping {
+  email: string;
+  campaign_id: string;
+  campaign_name: string;
+}
+
+export interface InstantlyAccountCampaignMappingResponse {
+  items: InstantlyAccountCampaignMapping[];
+  next_starting_after?: string;
+}
+
 export interface InstantlyWebhookPayload {
   event_type: string;
   timestamp: string;

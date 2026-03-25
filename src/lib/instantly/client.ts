@@ -5,6 +5,12 @@ import type {
   InstantlyAnalyticsResponse,
   InstantlyLead,
   InstantlyLeadListResponse,
+  InstantlyAccount,
+  InstantlyAccountListResponse,
+  InstantlyAccountDailyResponse,
+  InstantlyWarmupAnalytics,
+  InstantlyAccountCampaignMapping,
+  InstantlyAccountCampaignMappingResponse,
 } from "./types";
 
 const BASE_URL = "https://api.instantly.ai/api/v2";
@@ -134,6 +140,61 @@ export class InstantlyClient {
     return this.request<InstantlyLeadListResponse>(
       `/leads?${params.toString()}`
     );
+  }
+
+  // ===== ACCOUNTS / INBOXES =====
+
+  async listAccounts(startingAfter?: string): Promise<InstantlyAccountListResponse> {
+    const params = new URLSearchParams({ limit: "100" });
+    if (startingAfter) params.set("starting_after", startingAfter);
+    return this.request<InstantlyAccountListResponse>(`/accounts?${params.toString()}`);
+  }
+
+  async getAllAccounts(): Promise<InstantlyAccount[]> {
+    const all: InstantlyAccount[] = [];
+    let cursor: string | undefined;
+    do {
+      const response = await this.listAccounts(cursor);
+      all.push(...response.items);
+      cursor = response.next_starting_after;
+    } while (cursor);
+    return all;
+  }
+
+  async getAccountDailyAnalytics(
+    emails?: string[],
+    startDate?: string,
+    endDate?: string
+  ): Promise<InstantlyAccountDailyResponse> {
+    const params = new URLSearchParams();
+    if (startDate) params.set("start_date", startDate);
+    if (endDate) params.set("end_date", endDate);
+    if (emails?.length) params.set("emails", emails.join(","));
+    return this.request<InstantlyAccountDailyResponse>(`/accounts/analytics/daily?${params.toString()}`);
+  }
+
+  async getWarmupAnalytics(emails: string[]): Promise<InstantlyWarmupAnalytics[]> {
+    return this.request<InstantlyWarmupAnalytics[]>(`/accounts/warmup-analytics`, {
+      method: "POST",
+      body: JSON.stringify({ emails }),
+    });
+  }
+
+  async getAccountCampaignMappings(startingAfter?: string): Promise<InstantlyAccountCampaignMappingResponse> {
+    const params = new URLSearchParams({ limit: "100" });
+    if (startingAfter) params.set("starting_after", startingAfter);
+    return this.request<InstantlyAccountCampaignMappingResponse>(`/account-campaign-mappings?${params.toString()}`);
+  }
+
+  async getAllAccountCampaignMappings(): Promise<InstantlyAccountCampaignMapping[]> {
+    const all: InstantlyAccountCampaignMapping[] = [];
+    let cursor: string | undefined;
+    do {
+      const response = await this.getAccountCampaignMappings(cursor);
+      all.push(...response.items);
+      cursor = response.next_starting_after;
+    } while (cursor);
+    return all;
   }
 
   // ===== CONNECTION TEST =====

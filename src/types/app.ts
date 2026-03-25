@@ -158,3 +158,59 @@ export interface WebhookEvent {
   processed: boolean;
   received_at: string;
 }
+
+// Contacts (campaign leads)
+export type ContactStatus = "new" | "enriched" | "uploaded" | "active" | "bounced" | "replied" | "unsubscribed";
+
+export interface Contact {
+  id: string;
+  organization_id: string;
+  client_id: string | null;
+  campaign_id: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  email: string;
+  company_name: string | null;
+  title: string | null;
+  phone: string | null;
+  linkedin_url: string | null;
+  intro_line: string | null;
+  enrichment_data: Record<string, unknown>;
+  tags: string[];
+  status: ContactStatus;
+  source: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// Notifications
+export interface Notification {
+  id: string;
+  user_id: string;
+  organization_id: string;
+  type: string;
+  title: string;
+  message: string | null;
+  read: boolean;
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
+
+// Tasks (internal to-do tracking)
+export type TaskStatus = "todo" | "in_progress" | "done";
+export type TaskPriority = "low" | "medium" | "high";
+
+export interface Task {
+  id: string;
+  organization_id: string;
+  title: string;
+  description: string | null;
+  status: TaskStatus;
+  priority: TaskPriority;
+  category: string | null;
+  due_date: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}

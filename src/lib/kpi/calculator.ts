@@ -22,20 +22,16 @@ export function calculateMetrics(snapshots: CampaignSnapshot[]): KPIMetrics {
     }
   );
 
-  const sent = totals.emails_sent || 1; // Avoid division by zero
-  const replies = totals.unique_replies || 1;
+  const sent = totals.emails_sent;
+  const replies = totals.unique_replies;
 
   return {
     ...totals,
-    reply_rate: Number(((totals.unique_replies / sent) * 100).toFixed(2)),
-    positive_reply_rate: Number(
-      ((totals.positive_replies / replies) * 100).toFixed(2)
-    ),
-    bounce_rate: Number(((totals.bounces / sent) * 100).toFixed(2)),
-    unsubscribe_rate: Number(((totals.unsubscribes / sent) * 100).toFixed(2)),
-    reply_to_meeting_rate: Number(
-      ((totals.meetings_booked / replies) * 100).toFixed(2)
-    ),
+    reply_rate: sent > 0 ? Number(((replies / sent) * 100).toFixed(2)) : 0,
+    positive_reply_rate: replies > 0 ? Number(((totals.positive_replies / replies) * 100).toFixed(2)) : 0,
+    bounce_rate: sent > 0 ? Number(((totals.bounces / sent) * 100).toFixed(2)) : 0,
+    unsubscribe_rate: sent > 0 ? Number(((totals.unsubscribes / sent) * 100).toFixed(2)) : 0,
+    reply_to_meeting_rate: replies > 0 ? Number(((totals.meetings_booked / replies) * 100).toFixed(2)) : 0,
   };
 }
 

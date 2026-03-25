@@ -64,28 +64,33 @@ export async function POST(request: NextRequest) {
           endDate
         );
 
-        if (!analytics.data || analytics.data.length === 0) continue;
+        const days = Array.isArray(analytics) ? analytics : (analytics.data || []);
+        if (days.length === 0) continue;
 
         // Upsert each day's data
-        for (const day of analytics.data) {
-          const sent = day.emails_sent || 0;
+        // Note: Instantly daily API uses "sent" not "emails_sent", "contacted" not "new_leads_contacted"
+        for (const day of days) {
+          const sent = (day as any).sent || day.emails_sent || 0;
           const replies = day.replies || 0;
+          const uniqueReplies = (day as any).unique_replies || replies;
           const bounced = day.bounced || 0;
           const unsubs = day.unsubscribed || 0;
+          const newLeads = day.new_leads_contacted || 0;
+          const meetings = (day as any).opportunities || day.meetings_booked || 0;
 
           await admin.from("campaign_snapshots").upsert(
             {
               campaign_id: campaign.id,
               snapshot_date: day.date,
-              total_leads: day.new_leads_contacted || 0,
+              total_leads: newLeads,
               emails_sent: sent,
               replies: replies,
-              unique_replies: replies,
-              positive_replies: 0, // Updated from webhook data
+              unique_replies: uniqueReplies,
+              positive_replies: 0,
               bounces: bounced,
               unsubscribes: unsubs,
-              meetings_booked: day.meetings_booked || 0,
-              new_leads_contacted: day.new_leads_contacted || 0,
+              meetings_booked: meetings,
+              new_leads_contacted: newLeads,
               reply_rate: sent > 0 ? Number(((replies / sent) * 100).toFixed(2)) : 0,
               positive_reply_rate: 0,
               bounce_rate: sent > 0 ? Number(((bounced / sent) * 100).toFixed(2)) : 0,

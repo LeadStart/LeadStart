@@ -71,7 +71,7 @@ export function KPICard({ label, value, unit, kpiKey, subtitle, icon }: KPICardP
 
   return (
     <Card className={cn(
-      "relative overflow-hidden border transition-all duration-200 hover:shadow-md",
+      "relative overflow-hidden border transition-all duration-200 hover:shadow-md h-full",
       styles.border,
     )}>
       {/* Top colored bar */}

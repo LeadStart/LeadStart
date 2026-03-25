@@ -8,10 +8,12 @@ import type { AppRole } from "@/types/app";
 
 export function DashboardShell({
   role: initialRole,
+  actualRole,
   userEmail,
   children,
 }: {
   role: AppRole;
+  actualRole?: AppRole;
   userEmail: string;
   children: React.ReactNode;
 }) {
@@ -36,6 +38,7 @@ export function DashboardShell({
         <Topbar
           userEmail={userEmail}
           role={role}
+          actualRole={actualRole || initialRole}
           onRoleSwitch={handleRoleSwitch}
         />
         <main className="flex-1 overflow-y-auto p-6">
