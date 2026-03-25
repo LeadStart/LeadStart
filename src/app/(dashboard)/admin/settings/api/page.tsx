@@ -325,7 +325,7 @@ export default function IntegrationsPage() {
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-1">
                 <Label className="text-sm font-medium">Sync Time</Label>
-                <Select value={syncHour} onValueChange={setSyncHour}>
+                <Select value={syncHour} onValueChange={(v) => v && setSyncHour(v)}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -352,7 +352,7 @@ export default function IntegrationsPage() {
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-1">
                 <Label className="text-sm font-medium">Day</Label>
-                <Select value={reportDay} onValueChange={setReportDay}>
+                <Select value={reportDay} onValueChange={(v) => v && setReportDay(v)}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -365,7 +365,7 @@ export default function IntegrationsPage() {
               </div>
               <div className="space-y-1">
                 <Label className="text-sm font-medium">Time</Label>
-                <Select value={reportHour} onValueChange={setReportHour}>
+                <Select value={reportHour} onValueChange={(v) => v && setReportHour(v)}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
