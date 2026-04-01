@@ -135,35 +135,41 @@ export default function ClientDashboardPage() {
         <div className="absolute -bottom-6 -right-4 h-24 w-24 rounded-full bg-white/5" />
       </div>
 
-      {/* Date Range Picker */}
-      <Card className="border-border/50 shadow-sm">
-        <CardContent className="pt-5 pb-4">
-          <div className="grid gap-1.5" style={{ gridTemplateColumns: '180px 160px 160px' }}>
-            <Label className="text-sm font-medium">Date Range</Label>
-            <Label className="text-sm font-medium">Start Date</Label>
-            <Label className="text-sm font-medium">End Date</Label>
-            <Select value={datePreset} onValueChange={handlePresetChange}>
-              <SelectTrigger className="w-full" style={{ height: '36px' }}><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="7d">Last 7 Days</SelectItem>
-                <SelectItem value="30d">Last 30 Days</SelectItem>
-                <SelectItem value="90d">Last 90 Days</SelectItem>
-                <SelectItem value="mtd">Month to Date</SelectItem>
-                <SelectItem value="last_month">Last Month</SelectItem>
-              </SelectContent>
-            </Select>
-            <Input style={{ height: '36px' }} type="date" value={startDate} onChange={(e) => { setStartDate(e.target.value); setDatePreset(""); }} />
-            <Input style={{ height: '36px' }} type="date" value={endDate} onChange={(e) => { setEndDate(e.target.value); setDatePreset(""); }} />
-          </div>
-        </CardContent>
-      </Card>
-
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      {/* KPIs + Date Range — compact row */}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
         <KPICard label="Emails Sent" value={metrics.emails_sent} unit="count" />
         <KPICard label="Positive Responses" value={metrics.meetings_booked} unit="count" />
+        <Card className="border-border/50 shadow-sm lg:col-span-2">
+          <CardContent className="pt-4 pb-3">
+            <div className="flex items-end gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs font-medium text-muted-foreground">Range</Label>
+                <Select value={datePreset} onValueChange={handlePresetChange}>
+                  <SelectTrigger className="w-[130px]" style={{ height: '32px' }}><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="7d">Last 7 Days</SelectItem>
+                    <SelectItem value="30d">Last 30 Days</SelectItem>
+                    <SelectItem value="90d">Last 90 Days</SelectItem>
+                    <SelectItem value="mtd">Month to Date</SelectItem>
+                    <SelectItem value="last_month">Last Month</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-medium text-muted-foreground">From</Label>
+                <Input style={{ height: '32px' }} className="w-[130px] text-xs" type="date" value={startDate} onChange={(e) => { setStartDate(e.target.value); setDatePreset(""); }} />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-medium text-muted-foreground">To</Label>
+                <Input style={{ height: '32px' }} className="w-[130px] text-xs" type="date" value={endDate} onChange={(e) => { setEndDate(e.target.value); setDatePreset(""); }} />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
-      {snapshots.length > 0 && <DailyChart snapshots={snapshots} title="Your Campaign Performance" series={["Sent", "Positive"]} />}
+      {/* Compact chart — Positive Responses only */}
+      {snapshots.length > 0 && <DailyChart snapshots={snapshots} title="Positive Responses Over Time" series={["Positive"]} height={180} />}
 
       {/* Campaigns (left) + Reports & Feedback (right) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">

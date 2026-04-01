@@ -25,12 +25,14 @@ interface DailyChartProps {
   snapshots: CampaignSnapshot[];
   title?: string;
   series?: SeriesKey[];
+  height?: number;
 }
 
 export function DailyChart({
   snapshots,
   title = "Daily Performance",
   series = ["Sent", "Replies", "Bounces", "Positive"],
+  height = 300,
 }: DailyChartProps) {
   const data = snapshots
     .sort((a, b) => a.snapshot_date.localeCompare(b.snapshot_date))
@@ -63,7 +65,7 @@ export function DailyChart({
         </div>
       </CardHeader>
       <CardContent>
-        <ResponsiveContainer width="100%" height={300}>
+        <ResponsiveContainer width="100%" height={height}>
           <AreaChart data={data}>
             <defs>
               <linearGradient id="gradSent" x1="0" y1="0" x2="0" y2="1">
