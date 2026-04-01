@@ -28,6 +28,26 @@ export async function GET(request: NextRequest) {
   for (const org of orgs) {
     const instantly = new InstantlyClient(org.instantly_api_key);
 
+    // Sync campaign metadata (names, statuses) from Instantly
+    try {
+      const instantlyCampaigns = await instantly.getAllCampaigns();
+      const { data: dbCampaigns } = await admin
+        .from("campaigns")
+        .select("id, instantly_campaign_id, name, status")
+        .eq("organization_id", org.id);
+
+      for (const dbCamp of dbCampaigns || []) {
+        const match = instantlyCampaigns.find(ic => ic.id === dbCamp.instantly_campaign_id);
+        if (!match) continue;
+        const newStatus = match.status === 1 ? "active" : match.status === 0 ? "draft" : match.status === 2 ? "paused" : match.status === 3 ? "completed" : dbCamp.status;
+        if (match.name !== dbCamp.name || newStatus !== dbCamp.status) {
+          await admin.from("campaigns").update({ name: match.name, status: newStatus }).eq("id", dbCamp.id);
+        }
+      }
+    } catch (metaErr) {
+      console.error(`Failed to sync campaign metadata for org ${org.id}:`, metaErr);
+    }
+
     // Get campaigns to sync
     let campaignsToSync;
     if (campaignId) {
