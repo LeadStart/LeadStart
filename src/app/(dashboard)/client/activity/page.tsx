@@ -83,10 +83,9 @@ export default function ClientActivityPage() {
         <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-white/5" />
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
         <StatCard label="Replies" value={replies} icon={<MailOpen size={16} className="text-blue-500" />} iconBg="bg-blue-50" />
         <StatCard label="Positive Responses" value={meetings} icon={<CalendarCheck size={16} className="text-emerald-500" />} iconBg="bg-emerald-50" />
-        <StatCard label="Bounces" value={bounces} icon={<AlertTriangle size={16} className="text-red-500" />} iconBg="bg-red-50" />
         <StatCard label="Total" value={events.length} icon={<Activity size={16} className="text-indigo-500" />} iconBg="bg-indigo-50" />
       </div>
 

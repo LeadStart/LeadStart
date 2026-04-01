@@ -94,7 +94,6 @@ export default function ClientReportsPage() {
                       <MetricRow label="Emails Sent" value={camp.metrics.emails_sent} unit="count" />
                       <MetricRow label="Reply Rate" value={camp.metrics.reply_rate} unit="percent" trend={camp.metrics.reply_rate >= 5 ? "up" : "down"} />
                       <MetricRow label="Positive Reply Rate" value={camp.metrics.positive_reply_rate} unit="percent" trend={camp.metrics.positive_reply_rate >= 30 ? "up" : "flat"} />
-                      <MetricRow label="Bounce Rate" value={camp.metrics.bounce_rate} unit="percent" trend={camp.metrics.bounce_rate <= 2 ? "up" : "down"} />
                       <MetricRow label="Positive Responses" value={camp.metrics.meetings_booked} unit="count" trend="up" />
                       <MetricRow label="Reply → Meeting" value={camp.metrics.reply_to_meeting_rate} unit="percent" />
                     </div>
