@@ -127,6 +127,32 @@ export interface InstantlyStepAnalytics {
   unique_opportunities?: number;
 }
 
+// ===== EMAIL / UNIBOX TYPES =====
+
+export interface InstantlyEmail {
+  id: string;
+  timestamp_created: string;
+  timestamp_email: string;
+  message_id?: string;
+  subject?: string;
+  body?: { text?: string; html?: string } | string;
+  content_preview?: string;
+  from_address_email: string;
+  to_address_email_list?: string[];
+  campaign_id?: string;
+  lead?: string;
+  ue_type?: number;
+  step?: number;
+  is_unread?: boolean;
+  ai_interest_value?: number;
+  thread_id?: string;
+}
+
+export interface InstantlyEmailListResponse {
+  items: InstantlyEmail[];
+  next_starting_after?: string;
+}
+
 export interface InstantlyWebhookPayload {
   event_type: string;
   timestamp: string;

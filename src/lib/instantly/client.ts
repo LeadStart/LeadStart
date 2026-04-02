@@ -12,6 +12,8 @@ import type {
   InstantlyAccountCampaignMapping,
   InstantlyAccountCampaignMappingResponse,
   InstantlyStepAnalytics,
+  InstantlyEmail,
+  InstantlyEmailListResponse,
 } from "./types";
 
 const BASE_URL = "https://api.instantly.ai/api/v2";
@@ -210,6 +212,37 @@ export class InstantlyClient {
     let cursor: string | undefined;
     do {
       const response = await this.getAccountCampaignMappings(cursor);
+      all.push(...response.items);
+      cursor = response.next_starting_after;
+    } while (cursor);
+    return all;
+  }
+
+  // ===== EMAILS / UNIBOX =====
+
+  async getEmails(
+    campaignId?: string,
+    emailType?: "sent" | "received" | "all",
+    startingAfter?: string,
+    limit = 100
+  ): Promise<InstantlyEmailListResponse> {
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (campaignId) params.set("campaign_id", campaignId);
+    if (emailType) params.set("email_type", emailType);
+    if (startingAfter) params.set("starting_after", startingAfter);
+    return this.request<InstantlyEmailListResponse>(
+      `/emails?${params.toString()}`
+    );
+  }
+
+  async getAllEmails(
+    campaignId?: string,
+    emailType?: "sent" | "received" | "all"
+  ): Promise<InstantlyEmail[]> {
+    const all: InstantlyEmail[] = [];
+    let cursor: string | undefined;
+    do {
+      const response = await this.getEmails(campaignId, emailType, cursor);
       all.push(...response.items);
       cursor = response.next_starting_after;
     } while (cursor);

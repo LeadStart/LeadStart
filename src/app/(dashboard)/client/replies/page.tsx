@@ -39,6 +39,14 @@ function getTimeBetween(start: string, end: string): string {
   return `${days}d ${hours % 24}h`;
 }
 
+function formatReplyHtml(html: string): string {
+  // If it looks like plain text (no HTML tags), convert newlines to <br>
+  if (!html.includes("<") || !html.includes(">")) {
+    return html.replace(/\n/g, "<br>");
+  }
+  return html;
+}
+
 const EVENT_ICONS: Record<string, { icon: React.ReactNode; color: string; label: string }> = {
   email_sent: { icon: <Send size={14} />, color: "text-gray-500 bg-gray-100", label: "Email Sent" },
   email_replied: { icon: <MailOpen size={14} />, color: "text-blue-500 bg-blue-100", label: "Reply Received" },
@@ -97,6 +105,12 @@ function ThreadCard({ thread }: { thread: LeadThread }) {
 
             {thread.events.map((event, i) => {
               const config = EVENT_ICONS[event.event_type] || { icon: <Send size={14} />, color: "text-gray-500 bg-gray-100", label: event.event_type.replace(/_/g, " ") };
+              const payload = event.payload as Record<string, unknown> | null;
+              const replyBody = payload?.reply_body as string | undefined;
+              const replySubject = payload?.reply_subject as string | undefined;
+              const replyPreview = payload?.reply_preview as string | undefined;
+              const hasReplyContent = event.event_type === "email_replied" && (replyBody || replyPreview);
+
               return (
                 <div key={event.id} className={`relative flex items-start gap-3 ${i < thread.events.length - 1 ? "pb-4" : ""}`}>
                   {/* Dot on timeline */}
@@ -107,6 +121,23 @@ function ThreadCard({ thread }: { thread: LeadThread }) {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium">{config.label}</p>
                     <p className="text-xs text-muted-foreground">{formatDateTime(event.received_at)}</p>
+
+                    {/* Reply content */}
+                    {hasReplyContent && (
+                      <div className="mt-2 rounded-lg bg-white border border-border/60 p-3 shadow-sm">
+                        {replySubject && (
+                          <p className="text-xs font-semibold text-muted-foreground mb-1">
+                            Re: {replySubject}
+                          </p>
+                        )}
+                        <div
+                          className="text-sm text-foreground leading-relaxed max-w-none overflow-hidden [&_blockquote]:border-l-2 [&_blockquote]:border-gray-300 [&_blockquote]:pl-3 [&_blockquote]:ml-2 [&_blockquote]:text-muted-foreground [&_blockquote]:text-xs [&_img]:hidden [&_a]:text-indigo-600 [&_a]:underline"
+                          dangerouslySetInnerHTML={{
+                            __html: formatReplyHtml(replyBody || replyPreview || ""),
+                          }}
+                        />
+                      </div>
+                    )}
                   </div>
                 </div>
               );
