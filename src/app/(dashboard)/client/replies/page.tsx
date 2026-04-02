@@ -14,6 +14,7 @@ import {
   ChevronUp,
   MessageSquare,
   Loader2,
+  Trash2,
 } from "lucide-react";
 import type { Client, Campaign, WebhookEvent } from "@/types/app";
 
@@ -117,20 +118,6 @@ function formatReplyHtml(raw: string): string {
   return html;
 }
 
-const STATUS_OPTIONS = [
-  { value: "interested", label: "Interested", color: "bg-emerald-100 text-emerald-800 border-emerald-200" },
-  { value: "not_interested", label: "Not Interested", color: "bg-red-100 text-red-800 border-red-200" },
-  { value: "good_lead", label: "Good Lead", color: "bg-emerald-100 text-emerald-800 border-emerald-200" },
-  { value: "bad_lead", label: "Bad Lead", color: "bg-red-100 text-red-800 border-red-200" },
-  { value: "wrong_person", label: "Wrong Person", color: "bg-orange-100 text-orange-800 border-orange-200" },
-  { value: "already_contacted", label: "Already Contacted", color: "bg-gray-100 text-gray-700 border-gray-200" },
-  { value: "other", label: "Other", color: "bg-gray-100 text-gray-600 border-gray-200" },
-];
-
-function statusColor(status: string): string {
-  return STATUS_OPTIONS.find((s) => s.value === status)?.color || "bg-gray-100 text-gray-600 border-gray-200";
-}
-
 // ===== Event Icons =====
 
 const EVENT_ICONS: Record<string, { icon: React.ReactNode; color: string; label: string }> = {
@@ -145,20 +132,22 @@ function ThreadCard({
   thread,
   userId,
   onNoteAdded,
+  onNoteDeleted,
 }: {
   thread: LeadThread;
   userId: string;
   onNoteAdded: (threadKey: string, note: LeadNote) => void;
+  onNoteDeleted: (threadKey: string, noteId: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [noteText, setNoteText] = useState("");
-  const [noteStatus, setNoteStatus] = useState("interested");
   const [submitting, setSubmitting] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const threadKey = `${thread.leadEmail}::${thread.campaignInstantlyId}`;
 
   async function handleSubmitNote() {
-    if (!noteText.trim() && !noteStatus) return;
+    if (!noteText.trim()) return;
     setSubmitting(true);
 
     const supabase = createClient();
@@ -169,8 +158,8 @@ function ThreadCard({
         lead_email: thread.leadEmail,
         lead_name: thread.leadName || null,
         lead_company: thread.leadCompany || null,
-        status: noteStatus,
-        comment: noteText.trim() || null,
+        status: "other",
+        comment: noteText.trim(),
         submitted_by: userId,
       })
       .select("id, status, comment, created_at")
@@ -181,6 +170,16 @@ function ThreadCard({
     if (!error && data) {
       onNoteAdded(threadKey, data as LeadNote);
       setNoteText("");
+    }
+  }
+
+  async function handleDeleteNote(noteId: string) {
+    setDeletingId(noteId);
+    const supabase = createClient();
+    const { error } = await supabase.from("lead_feedback").delete().eq("id", noteId);
+    setDeletingId(null);
+    if (!error) {
+      onNoteDeleted(threadKey, noteId);
     }
   }
 
@@ -260,8 +259,65 @@ function ThreadCard({
       {/* Expanded content */}
       {expanded && (
         <div className="border-t border-border/50">
+          {/* Notes + Add Note — TOP of expanded card */}
+          <div className="px-5 py-4 bg-gradient-to-b from-amber-50/50 to-transparent">
+            <div className="flex items-center gap-2 mb-3">
+              <MessageSquare size={14} className="text-amber-600" />
+              <p className="text-xs font-semibold text-amber-800 uppercase tracking-wide">Interaction Notes</p>
+            </div>
+
+            {/* Existing notes */}
+            {thread.notes.length > 0 && (
+              <div className="space-y-2 mb-3">
+                {thread.notes.map((note) => (
+                  <div key={note.id} className="flex items-start gap-2 group rounded-lg bg-white border border-amber-200/60 px-3 py-2 shadow-sm">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-foreground">{note.comment || <span className="italic text-muted-foreground">No text</span>}</p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">{formatDateTime(note.created_at)}</p>
+                    </div>
+                    <button
+                      onClick={() => handleDeleteNote(note.id)}
+                      disabled={deletingId === note.id}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-red-500 cursor-pointer shrink-0 p-1 rounded hover:bg-red-50"
+                      title="Delete note"
+                    >
+                      {deletingId === note.id ? (
+                        <Loader2 size={13} className="animate-spin" />
+                      ) : (
+                        <Trash2 size={13} />
+                      )}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Add note form */}
+            <div className="flex gap-2">
+              <input
+                type="text"
+                placeholder="Add a note about this interaction..."
+                value={noteText}
+                onChange={(e) => setNoteText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !submitting && noteText.trim()) handleSubmitNote();
+                }}
+                className="flex-1 rounded-lg border border-border/60 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200 placeholder:text-muted-foreground/50"
+              />
+
+              <button
+                onClick={handleSubmitNote}
+                disabled={submitting || !noteText.trim()}
+                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer shrink-0 flex items-center gap-1.5"
+              >
+                {submitting ? <Loader2 size={14} className="animate-spin" /> : null}
+                {submitting ? "Saving..." : "Save"}
+              </button>
+            </div>
+          </div>
+
           {/* Timeline */}
-          <div className="bg-muted/20 px-5 py-4">
+          <div className="border-t border-border/30 bg-muted/20 px-5 py-4">
             <div className="relative pl-6">
               <div className="absolute left-[11px] top-2 bottom-2 w-px bg-border" />
 
@@ -305,67 +361,6 @@ function ThreadCard({
             </div>
           </div>
 
-          {/* Existing Notes */}
-          {thread.notes.length > 0 && (
-            <div className="border-t border-border/50 px-5 py-3 bg-amber-50/30">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Notes</p>
-              <div className="space-y-2">
-                {thread.notes.map((note) => (
-                  <div key={note.id} className="flex items-start gap-2">
-                    <Badge variant="secondary" className={`text-[10px] shrink-0 mt-0.5 border ${statusColor(note.status)}`}>
-                      {note.status.replace(/_/g, " ")}
-                    </Badge>
-                    <div className="flex-1 min-w-0">
-                      {note.comment && <p className="text-sm text-foreground">{note.comment}</p>}
-                      <p className="text-[10px] text-muted-foreground">{formatDateTime(note.created_at)}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Add Note Form */}
-          <div className="border-t border-border/50 px-5 py-4 bg-muted/10">
-            <div className="flex items-center gap-2 mb-2">
-              <MessageSquare size={14} className="text-muted-foreground" />
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Add Note</p>
-            </div>
-
-            <div className="flex flex-col sm:flex-row gap-2">
-              <select
-                value={noteStatus}
-                onChange={(e) => setNoteStatus(e.target.value)}
-                className="rounded-lg border border-border/60 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200 cursor-pointer"
-              >
-                {STATUS_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-
-              <input
-                type="text"
-                placeholder="Add a note about this lead..."
-                value={noteText}
-                onChange={(e) => setNoteText(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !submitting) handleSubmitNote();
-                }}
-                className="flex-1 rounded-lg border border-border/60 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200 placeholder:text-muted-foreground/50"
-              />
-
-              <button
-                onClick={handleSubmitNote}
-                disabled={submitting || (!noteText.trim() && !noteStatus)}
-                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer shrink-0 flex items-center gap-1.5"
-              >
-                {submitting ? <Loader2 size={14} className="animate-spin" /> : null}
-                {submitting ? "Saving..." : "Save"}
-              </button>
-            </div>
-          </div>
         </div>
       )}
     </Card>
@@ -496,6 +491,18 @@ export default function ClientRepliesPage() {
     );
   }, []);
 
+  const handleNoteDeleted = useCallback((threadKey: string, noteId: string) => {
+    setThreads((prev) =>
+      prev.map((t) => {
+        const key = `${t.leadEmail}::${t.campaignInstantlyId}`;
+        if (key === threadKey) {
+          return { ...t, notes: t.notes.filter((n) => n.id !== noteId) };
+        }
+        return t;
+      })
+    );
+  }, []);
+
   if (loading) {
     return (
       <div className="space-y-6 animate-pulse">
@@ -592,6 +599,7 @@ export default function ClientRepliesPage() {
               thread={thread}
               userId={userId}
               onNoteAdded={handleNoteAdded}
+              onNoteDeleted={handleNoteDeleted}
             />
           ))}
         </div>
