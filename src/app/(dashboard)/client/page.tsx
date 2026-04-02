@@ -161,8 +161,8 @@ export default function ClientDashboardPage() {
       {/* Row 1: Combined KPI + Date Range Card (Option C) */}
       <Card className="border-border/50 shadow-sm overflow-hidden">
         {/* Gradient header bar */}
-        <div className="flex items-center justify-between px-6 py-3" style={{ background: 'linear-gradient(to right, rgba(79,70,229,0.3), rgba(124,58,237,0.15) 50%, rgba(255,255,255,0) 100%)' }}>
-          <span className="text-sm font-semibold text-indigo-900">Campaign Performance</span>
+        <div className="flex items-center justify-between px-6 py-3" style={{ background: 'linear-gradient(to right, rgba(79,70,229,0.85), rgba(99,102,241,0.5) 55%, rgba(238,242,255,0.3) 100%)' }}>
+          <span className="text-sm font-semibold text-white">Campaign Performance</span>
           <div className="flex items-center gap-3">
             {datePreset !== "custom" && (
               <span className="text-xs text-indigo-700/70">
