@@ -1,24 +1,47 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { StatCard } from "@/components/charts/stat-card";
-import { FeedbackDonut } from "@/components/charts/feedback-donut";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { MailOpen, Send, CalendarCheck, Clock, ChevronDown, ChevronUp, MessageSquare, ThumbsUp, ThumbsDown } from "lucide-react";
-import type { Client, Campaign, WebhookEvent, LeadFeedback } from "@/types/app";
+import {
+  MailOpen,
+  Send,
+  CalendarCheck,
+  Clock,
+  ChevronDown,
+  ChevronUp,
+  MessageSquare,
+  Loader2,
+} from "lucide-react";
+import type { Client, Campaign, WebhookEvent } from "@/types/app";
+
+// ===== Types =====
+
+interface LeadNote {
+  id: string;
+  status: string;
+  comment: string | null;
+  created_at: string;
+}
 
 interface LeadThread {
   leadEmail: string;
+  leadName: string | null;
+  leadCompany: string | null;
   campaignName: string;
+  campaignId: string; // DB UUID for feedback inserts
+  campaignInstantlyId: string;
   events: WebhookEvent[];
   firstSent: string | null;
   lastReply: string | null;
   hasReply: boolean;
   hasMeeting: boolean;
+  notes: LeadNote[];
 }
+
+// ===== Helpers =====
 
 function formatDateTime(dateStr: string): string {
   return new Date(dateStr).toLocaleString("en-US", {
@@ -42,11 +65,13 @@ function getTimeBetween(start: string, end: string): string {
 }
 
 function formatReplyHtml(raw: string): string {
-  const isHtml = raw.includes("<div") || raw.includes("<p") || raw.includes("<br") || raw.includes("<table");
+  const isHtml =
+    raw.includes("<div") ||
+    raw.includes("<p") ||
+    raw.includes("<br") ||
+    raw.includes("<table");
 
   if (isHtml) {
-    // HTML email — collapse quoted sections (gmail_quote, blockquote, outlook-style)
-    // Find the first quoted block and wrap everything from there in a collapsible
     const quotePatterns = [
       /(<div[^>]*class="[^"]*gmail_quote[^"]*"[^>]*>[\s\S]*$)/i,
       /(<blockquote[^>]*class="[^"]*gmail_quote[^"]*"[^>]*>[\s\S]*$)/i,
@@ -62,11 +87,10 @@ function formatReplyHtml(raw: string): string {
         return `${replyPart}<details class="mt-3"><summary class="text-xs text-muted-foreground cursor-pointer hover:text-foreground">Show original message</summary><div class="mt-2 pl-3 border-l-2 border-gray-200 text-xs text-muted-foreground">${quotedPart}</div></details>`;
       }
     }
-
     return raw;
   }
 
-  // Plain text — split into the lead's reply vs quoted original
+  // Plain text
   const lines = raw.split("\n");
   const replyLines: string[] = [];
   const quotedLines: string[] = [];
@@ -93,14 +117,72 @@ function formatReplyHtml(raw: string): string {
   return html;
 }
 
+const STATUS_OPTIONS = [
+  { value: "interested", label: "Interested", color: "bg-emerald-100 text-emerald-800 border-emerald-200" },
+  { value: "not_interested", label: "Not Interested", color: "bg-red-100 text-red-800 border-red-200" },
+  { value: "good_lead", label: "Good Lead", color: "bg-emerald-100 text-emerald-800 border-emerald-200" },
+  { value: "bad_lead", label: "Bad Lead", color: "bg-red-100 text-red-800 border-red-200" },
+  { value: "wrong_person", label: "Wrong Person", color: "bg-orange-100 text-orange-800 border-orange-200" },
+  { value: "already_contacted", label: "Already Contacted", color: "bg-gray-100 text-gray-700 border-gray-200" },
+  { value: "other", label: "Other", color: "bg-gray-100 text-gray-600 border-gray-200" },
+];
+
+function statusColor(status: string): string {
+  return STATUS_OPTIONS.find((s) => s.value === status)?.color || "bg-gray-100 text-gray-600 border-gray-200";
+}
+
+// ===== Event Icons =====
+
 const EVENT_ICONS: Record<string, { icon: React.ReactNode; color: string; label: string }> = {
   email_sent: { icon: <Send size={14} />, color: "text-gray-500 bg-gray-100", label: "Email Sent" },
   email_replied: { icon: <MailOpen size={14} />, color: "text-blue-500 bg-blue-100", label: "Reply Received" },
   meeting_booked: { icon: <CalendarCheck size={14} />, color: "text-emerald-500 bg-emerald-100", label: "Meeting Booked" },
 };
 
-function ThreadCard({ thread }: { thread: LeadThread }) {
+// ===== Thread Card =====
+
+function ThreadCard({
+  thread,
+  userId,
+  onNoteAdded,
+}: {
+  thread: LeadThread;
+  userId: string;
+  onNoteAdded: (threadKey: string, note: LeadNote) => void;
+}) {
   const [expanded, setExpanded] = useState(false);
+  const [noteText, setNoteText] = useState("");
+  const [noteStatus, setNoteStatus] = useState("interested");
+  const [submitting, setSubmitting] = useState(false);
+
+  const threadKey = `${thread.leadEmail}::${thread.campaignInstantlyId}`;
+
+  async function handleSubmitNote() {
+    if (!noteText.trim() && !noteStatus) return;
+    setSubmitting(true);
+
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from("lead_feedback")
+      .insert({
+        campaign_id: thread.campaignId,
+        lead_email: thread.leadEmail,
+        lead_name: thread.leadName || null,
+        lead_company: thread.leadCompany || null,
+        status: noteStatus,
+        comment: noteText.trim() || null,
+        submitted_by: userId,
+      })
+      .select("id, status, comment, created_at")
+      .single();
+
+    setSubmitting(false);
+
+    if (!error && data) {
+      onNoteAdded(threadKey, data as LeadNote);
+      setNoteText("");
+    }
+  }
 
   return (
     <Card className="border-border/50 shadow-sm overflow-hidden">
@@ -109,8 +191,22 @@ function ThreadCard({ thread }: { thread: LeadThread }) {
         className="w-full text-left px-5 py-4 flex items-center gap-4 hover:bg-muted/30 transition-colors cursor-pointer"
       >
         {/* Status indicator */}
-        <div className={`flex h-10 w-10 items-center justify-center rounded-full shrink-0 ${thread.hasMeeting ? "bg-emerald-100 text-emerald-600" : thread.hasReply ? "bg-blue-100 text-blue-600" : "bg-gray-100 text-gray-500"}`}>
-          {thread.hasMeeting ? <CalendarCheck size={18} /> : thread.hasReply ? <MailOpen size={18} /> : <Send size={18} />}
+        <div
+          className={`flex h-10 w-10 items-center justify-center rounded-full shrink-0 ${
+            thread.hasMeeting
+              ? "bg-emerald-100 text-emerald-600"
+              : thread.hasReply
+              ? "bg-blue-100 text-blue-600"
+              : "bg-gray-100 text-gray-500"
+          }`}
+        >
+          {thread.hasMeeting ? (
+            <CalendarCheck size={18} />
+          ) : thread.hasReply ? (
+            <MailOpen size={18} />
+          ) : (
+            <Send size={18} />
+          )}
         </div>
 
         {/* Lead info */}
@@ -118,13 +214,28 @@ function ThreadCard({ thread }: { thread: LeadThread }) {
           <div className="flex items-center gap-2">
             <p className="font-medium text-sm truncate">{thread.leadEmail}</p>
             {thread.hasMeeting && (
-              <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 border border-emerald-200 text-[10px]">Meeting</Badge>
+              <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 border border-emerald-200 text-[10px]">
+                Meeting
+              </Badge>
             )}
             {thread.hasReply && !thread.hasMeeting && (
-              <Badge variant="secondary" className="bg-blue-100 text-blue-700 border border-blue-200 text-[10px]">Replied</Badge>
+              <Badge variant="secondary" className="bg-blue-100 text-blue-700 border border-blue-200 text-[10px]">
+                Replied
+              </Badge>
+            )}
+            {thread.notes.length > 0 && (
+              <Badge variant="secondary" className="bg-amber-100 text-amber-700 border border-amber-200 text-[10px]">
+                {thread.notes.length} note{thread.notes.length > 1 ? "s" : ""}
+              </Badge>
             )}
           </div>
-          <p className="text-xs text-muted-foreground mt-0.5">{thread.campaignName}</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {thread.leadName && <span className="font-medium text-foreground/70">{thread.leadName}</span>}
+            {thread.leadName && thread.leadCompany && <span> · </span>}
+            {thread.leadCompany && <span>{thread.leadCompany}</span>}
+            {(thread.leadName || thread.leadCompany) && <span> · </span>}
+            {thread.campaignName}
+          </p>
         </div>
 
         {/* Response time */}
@@ -135,59 +246,125 @@ function ThreadCard({ thread }: { thread: LeadThread }) {
           </div>
         )}
 
-        {/* Event count + expand */}
+        {/* Expand */}
         <div className="flex items-center gap-2 shrink-0">
           <span className="text-xs text-muted-foreground">{thread.events.length} events</span>
-          {expanded ? <ChevronUp size={16} className="text-muted-foreground" /> : <ChevronDown size={16} className="text-muted-foreground" />}
+          {expanded ? (
+            <ChevronUp size={16} className="text-muted-foreground" />
+          ) : (
+            <ChevronDown size={16} className="text-muted-foreground" />
+          )}
         </div>
       </button>
 
-      {/* Expanded timeline */}
+      {/* Expanded content */}
       {expanded && (
-        <div className="border-t border-border/50 bg-muted/20 px-5 py-4">
-          <div className="relative pl-6">
-            {/* Vertical line */}
-            <div className="absolute left-[11px] top-2 bottom-2 w-px bg-border" />
+        <div className="border-t border-border/50">
+          {/* Timeline */}
+          <div className="bg-muted/20 px-5 py-4">
+            <div className="relative pl-6">
+              <div className="absolute left-[11px] top-2 bottom-2 w-px bg-border" />
 
-            {thread.events.map((event, i) => {
-              const config = EVENT_ICONS[event.event_type] || { icon: <Send size={14} />, color: "text-gray-500 bg-gray-100", label: event.event_type.replace(/_/g, " ") };
-              const payload = event.payload as Record<string, unknown> | null;
-              const replyBody = payload?.reply_body as string | undefined;
-              const replySubject = payload?.reply_subject as string | undefined;
-              const replyPreview = payload?.reply_preview as string | undefined;
-              const hasReplyContent = event.event_type === "email_replied" && (replyBody || replyPreview);
+              {thread.events.map((event, i) => {
+                const config = EVENT_ICONS[event.event_type] || {
+                  icon: <Send size={14} />,
+                  color: "text-gray-500 bg-gray-100",
+                  label: event.event_type.replace(/_/g, " "),
+                };
+                const payload = event.payload as Record<string, unknown> | null;
+                const replyBody = payload?.reply_body as string | undefined;
+                const replySubject = payload?.reply_subject as string | undefined;
+                const replyPreview = payload?.reply_preview as string | undefined;
+                const hasReplyContent = event.event_type === "email_replied" && (replyBody || replyPreview);
 
-              return (
-                <div key={event.id} className={`relative flex items-start gap-3 ${i < thread.events.length - 1 ? "pb-4" : ""}`}>
-                  {/* Dot on timeline */}
-                  <div className={`absolute -left-6 flex h-[22px] w-[22px] items-center justify-center rounded-full ${config.color} shrink-0 z-10`}>
-                    {config.icon}
+                return (
+                  <div key={event.id} className={`relative flex items-start gap-3 ${i < thread.events.length - 1 ? "pb-4" : ""}`}>
+                    <div className={`absolute -left-6 flex h-[22px] w-[22px] items-center justify-center rounded-full ${config.color} shrink-0 z-10`}>
+                      {config.icon}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium">{config.label}</p>
+                      <p className="text-xs text-muted-foreground">{formatDateTime(event.received_at)}</p>
+                      {hasReplyContent && (
+                        <div className="mt-2 rounded-lg bg-white border border-border/60 p-3 shadow-sm">
+                          {replySubject && (
+                            <p className="text-xs font-semibold text-muted-foreground mb-1">Re: {replySubject}</p>
+                          )}
+                          <div
+                            className="text-sm text-foreground leading-relaxed max-w-none overflow-hidden [&_blockquote]:border-l-2 [&_blockquote]:border-gray-300 [&_blockquote]:pl-3 [&_blockquote]:ml-2 [&_blockquote]:text-muted-foreground [&_blockquote]:text-xs [&_img]:hidden [&_a]:text-indigo-600 [&_a]:underline"
+                            dangerouslySetInnerHTML={{
+                              __html: formatReplyHtml(replyBody || replyPreview || ""),
+                            }}
+                          />
+                        </div>
+                      )}
+                    </div>
                   </div>
+                );
+              })}
+            </div>
+          </div>
 
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium">{config.label}</p>
-                    <p className="text-xs text-muted-foreground">{formatDateTime(event.received_at)}</p>
-
-                    {/* Reply content */}
-                    {hasReplyContent && (
-                      <div className="mt-2 rounded-lg bg-white border border-border/60 p-3 shadow-sm">
-                        {replySubject && (
-                          <p className="text-xs font-semibold text-muted-foreground mb-1">
-                            Re: {replySubject}
-                          </p>
-                        )}
-                        <div
-                          className="text-sm text-foreground leading-relaxed max-w-none overflow-hidden [&_blockquote]:border-l-2 [&_blockquote]:border-gray-300 [&_blockquote]:pl-3 [&_blockquote]:ml-2 [&_blockquote]:text-muted-foreground [&_blockquote]:text-xs [&_img]:hidden [&_a]:text-indigo-600 [&_a]:underline"
-                          dangerouslySetInnerHTML={{
-                            __html: formatReplyHtml(replyBody || replyPreview || ""),
-                          }}
-                        />
-                      </div>
-                    )}
+          {/* Existing Notes */}
+          {thread.notes.length > 0 && (
+            <div className="border-t border-border/50 px-5 py-3 bg-amber-50/30">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Notes</p>
+              <div className="space-y-2">
+                {thread.notes.map((note) => (
+                  <div key={note.id} className="flex items-start gap-2">
+                    <Badge variant="secondary" className={`text-[10px] shrink-0 mt-0.5 border ${statusColor(note.status)}`}>
+                      {note.status.replace(/_/g, " ")}
+                    </Badge>
+                    <div className="flex-1 min-w-0">
+                      {note.comment && <p className="text-sm text-foreground">{note.comment}</p>}
+                      <p className="text-[10px] text-muted-foreground">{formatDateTime(note.created_at)}</p>
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Add Note Form */}
+          <div className="border-t border-border/50 px-5 py-4 bg-muted/10">
+            <div className="flex items-center gap-2 mb-2">
+              <MessageSquare size={14} className="text-muted-foreground" />
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Add Note</p>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-2">
+              <select
+                value={noteStatus}
+                onChange={(e) => setNoteStatus(e.target.value)}
+                className="rounded-lg border border-border/60 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200 cursor-pointer"
+              >
+                {STATUS_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+
+              <input
+                type="text"
+                placeholder="Add a note about this lead..."
+                value={noteText}
+                onChange={(e) => setNoteText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !submitting) handleSubmitNote();
+                }}
+                className="flex-1 rounded-lg border border-border/60 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200 placeholder:text-muted-foreground/50"
+              />
+
+              <button
+                onClick={handleSubmitNote}
+                disabled={submitting || (!noteText.trim() && !noteStatus)}
+                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer shrink-0 flex items-center gap-1.5"
+              >
+                {submitting ? <Loader2 size={14} className="animate-spin" /> : null}
+                {submitting ? "Saving..." : "Save"}
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -195,26 +372,37 @@ function ThreadCard({ thread }: { thread: LeadThread }) {
   );
 }
 
+// ===== Main Page =====
+
 export default function ClientRepliesPage() {
   const [threads, setThreads] = useState<LeadThread[]>([]);
-  const [feedback, setFeedback] = useState<LeadFeedback[]>([]);
   const [filter, setFilter] = useState<"all" | "replied" | "meetings">("all");
   const [loading, setLoading] = useState(true);
+  const [userId, setUserId] = useState("");
 
   useEffect(() => {
     const supabase = createClient();
     supabase.auth.getUser().then(async ({ data: { user } }) => {
       if (!user) return;
+      setUserId(user.id);
+
       const { data: clientData } = await supabase.from("clients").select("*").eq("user_id", user.id).single();
-      if (!clientData) { setLoading(false); return; }
+      if (!clientData) {
+        setLoading(false);
+        return;
+      }
       const client = clientData as Client;
       const { data: campaignsData } = await supabase.from("campaigns").select("*").eq("client_id", client.id);
       const campaigns = (campaignsData || []) as Campaign[];
-      const campaignNameMap = new Map(campaigns.map((c) => [c.instantly_campaign_id, c.name]));
-      const ids = campaigns.map((c) => c.instantly_campaign_id);
 
-      // Fetch events and feedback in parallel
-      const [eventsResult, feedbackResult] = await Promise.all([
+      // Build maps: instantly_id → name, instantly_id → db UUID
+      const campaignNameMap = new Map(campaigns.map((c) => [c.instantly_campaign_id, c.name]));
+      const campaignIdMap = new Map(campaigns.map((c) => [c.instantly_campaign_id, c.id]));
+      const ids = campaigns.map((c) => c.instantly_campaign_id);
+      const dbIds = campaigns.map((c) => c.id);
+
+      // Fetch events and existing notes in parallel
+      const [eventsResult, notesResult] = await Promise.all([
         supabase
           .from("webhook_events")
           .select("*")
@@ -223,16 +411,26 @@ export default function ClientRepliesPage() {
           .order("received_at", { ascending: true }),
         supabase
           .from("lead_feedback")
-          .select("*")
-          .order("created_at", { ascending: false }),
+          .select("id, campaign_id, lead_email, status, comment, created_at")
+          .in("campaign_id", dbIds.length > 0 ? dbIds : ["00000000-0000-0000-0000-000000000000"])
+          .order("created_at", { ascending: true }),
       ]);
 
-      setFeedback((feedbackResult.data || []) as LeadFeedback[]);
+      const events = (eventsResult.data || []) as WebhookEvent[];
 
-      const { data: eventsData } = eventsResult;
-      const events = (eventsData || []) as WebhookEvent[];
+      // Build notes map: "email::campaign_instantly_id" → notes[]
+      const notesMap = new Map<string, LeadNote[]>();
+      const dbIdToInstantlyId = new Map(campaigns.map((c) => [c.id, c.instantly_campaign_id]));
+      for (const note of (notesResult.data || []) as { id: string; campaign_id: string; lead_email: string; status: string; comment: string | null; created_at: string }[]) {
+        const instantlyId = dbIdToInstantlyId.get(note.campaign_id);
+        if (!instantlyId) continue;
+        const key = `${note.lead_email}::${instantlyId}`;
+        const existing = notesMap.get(key) || [];
+        existing.push({ id: note.id, status: note.status, comment: note.comment, created_at: note.created_at });
+        notesMap.set(key, existing);
+      }
 
-      // Group events by lead email
+      // Group events by lead email + campaign
       const leadMap = new Map<string, WebhookEvent[]>();
       events.forEach((e) => {
         if (!e.lead_email) return;
@@ -245,24 +443,34 @@ export default function ClientRepliesPage() {
       // Build threads
       const builtThreads: LeadThread[] = Array.from(leadMap.entries()).map(([key, evts]) => {
         const [leadEmail] = key.split("::");
-        const campaignId = evts[0]?.campaign_instantly_id;
-        const campaignName = campaignId ? campaignNameMap.get(campaignId) || "Unknown Campaign" : "Unknown Campaign";
+        const campaignInstantlyId = evts[0]?.campaign_instantly_id || "";
+        const campaignName = campaignNameMap.get(campaignInstantlyId) || "Unknown Campaign";
+        const campaignId = campaignIdMap.get(campaignInstantlyId) || "";
         const sentEvents = evts.filter((e) => e.event_type === "email_sent");
         const replyEvents = evts.filter((e) => e.event_type === "email_replied");
         const meetingEvents = evts.filter((e) => e.event_type === "meeting_booked");
 
+        // Extract lead name/company from payload
+        const anyPayload = evts.find((e) => e.payload)?.payload as Record<string, unknown> | null;
+        const leadName = (anyPayload?.first_name as string) || null;
+        const leadCompany = (anyPayload?.company_name as string) || null;
+
         return {
           leadEmail,
+          leadName,
+          leadCompany,
           campaignName,
+          campaignId,
+          campaignInstantlyId,
           events: evts,
           firstSent: sentEvents.length > 0 ? sentEvents[0].received_at : null,
           lastReply: replyEvents.length > 0 ? replyEvents[replyEvents.length - 1].received_at : null,
           hasReply: replyEvents.length > 0,
           hasMeeting: meetingEvents.length > 0,
+          notes: notesMap.get(key) || [],
         };
       });
 
-      // Sort: meetings first, then replies, then sent-only — most recent first within each group
       builtThreads.sort((a, b) => {
         if (a.hasMeeting !== b.hasMeeting) return a.hasMeeting ? -1 : 1;
         if (a.hasReply !== b.hasReply) return a.hasReply ? -1 : 1;
@@ -276,20 +484,38 @@ export default function ClientRepliesPage() {
     });
   }, []);
 
+  const handleNoteAdded = useCallback((threadKey: string, note: LeadNote) => {
+    setThreads((prev) =>
+      prev.map((t) => {
+        const key = `${t.leadEmail}::${t.campaignInstantlyId}`;
+        if (key === threadKey) {
+          return { ...t, notes: [...t.notes, note] };
+        }
+        return t;
+      })
+    );
+  }, []);
+
   if (loading) {
     return (
       <div className="space-y-6 animate-pulse">
         <div className="rounded-xl h-36 bg-muted/50" />
-        <div className="grid grid-cols-3 gap-4">{[1, 2, 3].map((i) => <div key={i} className="rounded-xl h-24 bg-muted/50" />)}</div>
-        <div className="space-y-3">{[1, 2, 3].map((i) => <div key={i} className="rounded-xl h-20 bg-muted/50" />)}</div>
+        <div className="grid grid-cols-3 gap-4">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="rounded-xl h-24 bg-muted/50" />
+          ))}
+        </div>
+        <div className="space-y-3">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="rounded-xl h-20 bg-muted/50" />
+          ))}
+        </div>
       </div>
     );
   }
 
   const totalReplies = threads.filter((t) => t.hasReply).length;
   const totalMeetings = threads.filter((t) => t.hasMeeting).length;
-  const feedbackGood = feedback.filter((f) => ["good_lead", "interested"].includes(f.status)).length;
-  const feedbackBad = feedback.filter((f) => ["bad_lead", "wrong_person", "not_interested"].includes(f.status)).length;
 
   const filtered = threads.filter((t) => {
     if (filter === "replied") return t.hasReply;
@@ -300,11 +526,17 @@ export default function ClientRepliesPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="relative overflow-hidden rounded-xl p-6 text-white" style={{ background: "linear-gradient(135deg, #4f46e5, #7c3aed, #6366f1)", boxShadow: "0 10px 30px -5px rgba(99, 102, 241, 0.2)" }}>
+      <div
+        className="relative overflow-hidden rounded-xl p-6 text-white"
+        style={{
+          background: "linear-gradient(135deg, #4f46e5, #7c3aed, #6366f1)",
+          boxShadow: "0 10px 30px -5px rgba(99, 102, 241, 0.2)",
+        }}
+      >
         <div className="relative z-10">
           <p className="text-sm font-medium text-white/70">Campaign Responses</p>
           <h1 className="text-2xl font-bold mt-1">Replies</h1>
-          <p className="text-sm text-white/60 mt-1">Track every lead interaction across your campaigns</p>
+          <p className="text-sm text-white/60 mt-1">Track lead interactions and add notes for your team</p>
         </div>
         <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-white/5" />
       </div>
@@ -318,11 +550,13 @@ export default function ClientRepliesPage() {
 
       {/* Filter tabs */}
       <div className="flex gap-2">
-        {([
-          { key: "all", label: "All Leads", count: threads.length },
-          { key: "replied", label: "Replied", count: totalReplies },
-          { key: "meetings", label: "Meetings", count: totalMeetings },
-        ] as const).map((tab) => (
+        {(
+          [
+            { key: "all", label: "All Leads", count: threads.length },
+            { key: "replied", label: "Replied", count: totalReplies },
+            { key: "meetings", label: "Meetings", count: totalMeetings },
+          ] as const
+        ).map((tab) => (
           <button
             key={tab.key}
             onClick={() => setFilter(tab.key)}
@@ -353,81 +587,15 @@ export default function ClientRepliesPage() {
       ) : (
         <div className="space-y-3">
           {filtered.map((thread) => (
-            <ThreadCard key={`${thread.leadEmail}::${thread.campaignName}`} thread={thread} />
+            <ThreadCard
+              key={`${thread.leadEmail}::${thread.campaignName}`}
+              thread={thread}
+              userId={userId}
+              onNoteAdded={handleNoteAdded}
+            />
           ))}
         </div>
       )}
-
-      {/* Feedback Section */}
-      <div className="pt-4 border-t border-border/50">
-        <div className="flex items-center gap-2 mb-4">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50">
-            <MessageSquare size={16} className="text-indigo-500" />
-          </div>
-          <h2 className="text-lg font-semibold">Lead Feedback</h2>
-        </div>
-
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-4">
-          <StatCard label="Total Feedback" value={feedback.length} icon={<MessageSquare size={16} className="text-indigo-500" />} iconBg="bg-indigo-50" />
-          <StatCard label="Positive" value={feedbackGood} icon={<ThumbsUp size={16} className="text-emerald-500" />} iconBg="bg-emerald-50" valueColor="text-emerald-600" />
-          <StatCard label="Negative" value={feedbackBad} icon={<ThumbsDown size={16} className="text-red-500" />} iconBg="bg-red-50" valueColor="text-red-600" />
-        </div>
-
-        {feedback.length > 0 && (
-          <>
-            <Card className="border-border/50 shadow-sm mb-4">
-              <CardContent className="pt-5">
-                <FeedbackDonut feedback={feedback} />
-              </CardContent>
-            </Card>
-
-            <Card className="border-border/50 shadow-sm">
-              <CardContent className="pt-5">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Lead</TableHead>
-                      <TableHead>Company</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Comment</TableHead>
-                      <TableHead>Date</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {feedback.map((f) => (
-                      <TableRow key={f.id}>
-                        <TableCell className="font-medium text-sm">{f.lead_email}</TableCell>
-                        <TableCell className="text-sm">{f.lead_company || "—"}</TableCell>
-                        <TableCell>
-                          <Badge variant="secondary" className={
-                            ["good_lead", "interested"].includes(f.status)
-                              ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
-                              : ["bad_lead", "wrong_person", "not_interested"].includes(f.status)
-                              ? "bg-red-100 text-red-800 border border-red-200"
-                              : "bg-gray-100 text-gray-600 border border-gray-200"
-                          }>
-                            {f.status.replace(/_/g, " ")}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="max-w-xs truncate text-sm text-muted-foreground">{f.comment || "—"}</TableCell>
-                        <TableCell className="text-sm text-muted-foreground">{new Date(f.created_at).toLocaleDateString()}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          </>
-        )}
-
-        {feedback.length === 0 && (
-          <Card className="border-border/50 shadow-sm">
-            <CardContent className="py-8 text-center">
-              <p className="text-sm text-muted-foreground">No feedback submitted yet.</p>
-            </CardContent>
-          </Card>
-        )}
-      </div>
     </div>
   );
 }
