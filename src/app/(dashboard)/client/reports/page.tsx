@@ -82,20 +82,15 @@ export default function ClientReportsPage() {
                   </div>
                 </div>
                 <CardContent className="pt-4">
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
+                  <div className="grid grid-cols-2 gap-4 mb-4">
                     <div className="text-center p-3 rounded-lg bg-indigo-50/50"><p className="text-xl font-bold text-indigo-700">{totals.emails_sent.toLocaleString()}</p><p className="text-xs text-muted-foreground">Emails Sent</p></div>
-                    <div className="text-center p-3 rounded-lg bg-emerald-50/50"><p className="text-xl font-bold text-emerald-700">{totals.reply_rate}%</p><p className="text-xs text-muted-foreground">Reply Rate</p></div>
-                    <div className="text-center p-3 rounded-lg bg-amber-50/50"><p className="text-xl font-bold text-amber-700">{totals.meetings_booked}</p><p className="text-xs text-muted-foreground">Positive Responses</p></div>
-                    <div className="text-center p-3 rounded-lg bg-blue-50/50"><p className="text-xl font-bold text-blue-700">{totals.positive_reply_rate}%</p><p className="text-xs text-muted-foreground">Positive Rate</p></div>
+                    <div className="text-center p-3 rounded-lg bg-emerald-50/50"><p className="text-xl font-bold text-emerald-700">{totals.meetings_booked}</p><p className="text-xs text-muted-foreground">Positive Responses</p></div>
                   </div>
                   {campaigns.map((camp) => (
                     <div key={camp.campaign_id} className="rounded-xl border border-border/50 p-4 mt-3">
                       <p className="text-sm font-semibold mb-2">{camp.campaign_name}</p>
                       <MetricRow label="Emails Sent" value={camp.metrics.emails_sent} unit="count" />
-                      <MetricRow label="Reply Rate" value={camp.metrics.reply_rate} unit="percent" trend={camp.metrics.reply_rate >= 5 ? "up" : "down"} />
-                      <MetricRow label="Positive Reply Rate" value={camp.metrics.positive_reply_rate} unit="percent" trend={camp.metrics.positive_reply_rate >= 30 ? "up" : "flat"} />
                       <MetricRow label="Positive Responses" value={camp.metrics.meetings_booked} unit="count" trend="up" />
-                      <MetricRow label="Reply → Meeting" value={camp.metrics.reply_to_meeting_rate} unit="percent" />
                     </div>
                   ))}
                 </CardContent>
