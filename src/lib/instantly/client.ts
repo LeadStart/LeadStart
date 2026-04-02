@@ -149,15 +149,16 @@ export class InstantlyClient {
     campaignId: string,
     startingAfter?: string
   ): Promise<InstantlyLeadListResponse> {
-    const params = new URLSearchParams({
+    const body: Record<string, unknown> = {
       campaign_id: campaignId,
-      limit: "100",
-    });
-    if (startingAfter) params.set("starting_after", startingAfter);
+      limit: 100,
+    };
+    if (startingAfter) body.starting_after = startingAfter;
 
-    return this.request<InstantlyLeadListResponse>(
-      `/leads?${params.toString()}`
-    );
+    return this.request<InstantlyLeadListResponse>(`/leads/list`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
   }
 
   // ===== ACCOUNTS / INBOXES =====

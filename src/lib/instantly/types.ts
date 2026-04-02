@@ -41,14 +41,20 @@ export interface InstantlyAnalyticsResponse {
 }
 
 export interface InstantlyLead {
+  id: string;
   email: string;
   first_name?: string;
   last_name?: string;
   company_name?: string;
-  status: string;
+  company_domain?: string;
+  status: number;
   lead_status?: string;
-  campaign_id: string;
-  created_at: string;
+  email_reply_count: number;
+  email_open_count: number;
+  email_click_count: number;
+  timestamp_created: string;
+  timestamp_updated: string;
+  payload?: Record<string, unknown>;
 }
 
 export interface InstantlyLeadListResponse {
