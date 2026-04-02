@@ -37,6 +37,11 @@ export async function updateSession(request: NextRequest) {
     pathname.startsWith(route)
   );
 
+  // API routes handle their own auth (cron secrets, webhook secrets, etc.)
+  if (pathname.startsWith("/api/")) {
+    return supabaseResponse;
+  }
+
   // If not logged in and trying to access protected route
   if (!user && !isPublicRoute && pathname !== "/") {
     const url = request.nextUrl.clone();
