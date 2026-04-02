@@ -145,12 +145,12 @@ export default function ClientDashboardPage() {
         <KPICard label="Emails Sent" value={metrics.emails_sent} unit="count" />
         <KPICard label="Positive Responses" value={metrics.meetings_booked} unit="count" />
         <Card className="border-border/50 shadow-sm col-span-2">
-          <CardContent className="pt-4 pb-3">
-            <div className="flex items-end gap-3 flex-wrap">
+          <CardContent className="h-full flex items-center pt-4 pb-3">
+            <div className="flex items-end gap-4 w-full">
               <div className="space-y-1">
                 <Label className="text-xs font-medium text-muted-foreground">Range</Label>
                 <Select value={datePreset} onValueChange={handlePresetChange}>
-                  <SelectTrigger className="w-[120px]" style={{ height: '32px' }}><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="w-[130px] h-9"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="7d">Last 7 Days</SelectItem>
                     <SelectItem value="30d">Last 30 Days</SelectItem>
@@ -160,13 +160,13 @@ export default function ClientDashboardPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-1">
+              <div className="space-y-1 flex-1 min-w-0">
                 <Label className="text-xs font-medium text-muted-foreground">From</Label>
-                <Input style={{ height: '32px' }} className="w-[120px] text-xs" type="date" value={startDate} onChange={(e) => { setStartDate(e.target.value); setDatePreset(""); }} />
+                <Input className="h-9 w-full text-sm" type="date" value={startDate} onChange={(e) => { setStartDate(e.target.value); setDatePreset(""); }} />
               </div>
-              <div className="space-y-1">
+              <div className="space-y-1 flex-1 min-w-0">
                 <Label className="text-xs font-medium text-muted-foreground">To</Label>
-                <Input style={{ height: '32px' }} className="w-[120px] text-xs" type="date" value={endDate} onChange={(e) => { setEndDate(e.target.value); setDatePreset(""); }} />
+                <Input className="h-9 w-full text-sm" type="date" value={endDate} onChange={(e) => { setEndDate(e.target.value); setDatePreset(""); }} />
               </div>
             </div>
           </CardContent>
