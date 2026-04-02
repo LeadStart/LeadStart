@@ -26,8 +26,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing eventId or excluded boolean" }, { status: 400 });
   }
 
-  const { error } = await supabase
-    .from("webhook_events")
+  const { error } = await (supabase
+    .from("webhook_events") as any)
     .update({ excluded })
     .eq("id", eventId);
 

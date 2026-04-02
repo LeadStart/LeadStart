@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { KPICard } from "@/components/charts/kpi-card";
 import { MonthlyPositiveChart } from "@/components/charts/monthly-positive-chart";
 import { calculateMetrics } from "@/lib/kpi/calculator";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,8 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import Link from "next/link";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ArrowRight, TrendingUp, FileText, Mail } from "lucide-react";
+import { ArrowRight, TrendingUp, FileText, Mail, ChevronDown, ChevronUp } from "lucide-react";
 import type { Campaign, CampaignSnapshot, Client, KPIReport } from "@/types/app";
 
 function getDateRange(preset: string): { start: string; end: string } {
@@ -51,6 +49,7 @@ export default function ClientDashboardPage() {
   const [campaignIds, setCampaignIds] = useState<string[]>([]);
   const [instantlyIds, setInstantlyIds] = useState<string[]>([]);
   const [excludedMeetings, setExcludedMeetings] = useState(0);
+  const [campaignsExpanded, setCampaignsExpanded] = useState(true);
 
   // Initial load — get client and campaigns
   useEffect(() => {
@@ -109,7 +108,8 @@ export default function ClientDashboardPage() {
 
   useEffect(() => { fetchSnapshots(); }, [fetchSnapshots]);
 
-  function handlePresetChange(val: string) {
+  function handlePresetChange(val: string | null) {
+    if (!val) return;
     setDatePreset(val);
     if (val !== "custom") {
       const range = getDateRange(val);
@@ -158,86 +158,106 @@ export default function ClientDashboardPage() {
         <div className="absolute -bottom-6 -right-4 h-24 w-24 rounded-full bg-white/5" />
       </div>
 
-      {/* Row 1: KPIs + Date Range */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KPICard label="Emails Sent" value={metrics.emails_sent} unit="count" />
-        <KPICard label="Positive Responses" value={metrics.meetings_booked} unit="count" />
-        <Card className="border-border/50 shadow-sm col-span-2">
-          <CardContent className="h-full flex items-center pt-4 pb-3">
-            <div className="flex items-end gap-4 w-full">
-              <div className="space-y-1">
-                <Label className="text-xs font-medium text-muted-foreground">Range</Label>
-                <Select value={datePreset} onValueChange={handlePresetChange}>
-                  <SelectTrigger className="w-[130px] h-9"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="7d">Last 7 Days</SelectItem>
-                    <SelectItem value="30d">Last 30 Days</SelectItem>
-                    <SelectItem value="90d">Last 90 Days</SelectItem>
-                    <SelectItem value="mtd">Month to Date</SelectItem>
-                    <SelectItem value="last_month">Last Month</SelectItem>
-                    <SelectItem value="custom">Custom</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              {datePreset === "custom" && (
-                <>
-                  <div className="space-y-1 flex-1 min-w-0">
-                    <Label className="text-xs font-medium text-muted-foreground">From</Label>
-                    <Input className="h-9 w-full text-sm" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-                  </div>
-                  <div className="space-y-1 flex-1 min-w-0">
-                    <Label className="text-xs font-medium text-muted-foreground">To</Label>
-                    <Input className="h-9 w-full text-sm" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
-                  </div>
-                </>
-              )}
+      {/* Row 1: Combined KPI + Date Range Card (Option C) */}
+      <Card className="border-border/50 shadow-sm overflow-hidden">
+        {/* Gradient header bar */}
+        <div className="flex items-center justify-between px-6 py-3" style={{ background: 'linear-gradient(135deg, rgba(79,70,229,0.35), rgba(124,58,237,0.35), rgba(99,102,241,0.35))' }}>
+          <span className="text-sm font-semibold text-indigo-900">Campaign Performance</span>
+          <div className="flex items-center gap-3">
+            {datePreset !== "custom" && (
+              <span className="text-xs text-indigo-700/70">
+                {new Date(startDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })} — {new Date(endDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+              </span>
+            )}
+            <Select value={datePreset} onValueChange={handlePresetChange}>
+              <SelectTrigger className="h-8 w-[130px] bg-white/60 backdrop-blur-sm border-white/40 text-xs font-medium text-indigo-900"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="7d">Last 7 Days</SelectItem>
+                <SelectItem value="30d">Last 30 Days</SelectItem>
+                <SelectItem value="90d">Last 90 Days</SelectItem>
+                <SelectItem value="mtd">Month to Date</SelectItem>
+                <SelectItem value="last_month">Last Month</SelectItem>
+                <SelectItem value="custom">Custom</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        {/* Custom date inputs (shown when Custom selected) */}
+        {datePreset === "custom" && (
+          <div className="flex items-end gap-4 px-6 py-3 bg-indigo-50/50 border-b border-indigo-100/50">
+            <div className="space-y-1 flex-1 min-w-0">
+              <Label className="text-xs font-medium text-indigo-600/70">From</Label>
+              <Input className="h-9 w-full text-sm" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
             </div>
-          </CardContent>
-        </Card>
-      </div>
+            <div className="space-y-1 flex-1 min-w-0">
+              <Label className="text-xs font-medium text-indigo-600/70">To</Label>
+              <Input className="h-9 w-full text-sm" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+            </div>
+          </div>
+        )}
+        {/* KPI metrics row */}
+        <div className="grid grid-cols-2 divide-x divide-border/50">
+          <div className="px-6 py-5 text-center">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">Emails Sent</p>
+            <p className="text-3xl font-bold text-foreground">{metrics.emails_sent.toLocaleString()}</p>
+          </div>
+          <div className="px-6 py-5 text-center">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">Positive Responses</p>
+            <p className="text-3xl font-bold text-emerald-600">{metrics.meetings_booked}</p>
+          </div>
+        </div>
+      </Card>
 
       {/* Row 2: Monthly chart (left) + Campaigns (right) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
         {allTimeSnapshots.length > 0 && <MonthlyPositiveChart snapshots={allTimeSnapshots} height={200} />}
 
         <Card className="border-border/50 shadow-sm">
-          <CardHeader className="flex flex-row items-center gap-2 pb-3">
+          <CardHeader
+            className="flex flex-row items-center gap-2 pb-3 cursor-pointer select-none"
+            onClick={() => setCampaignsExpanded((v) => !v)}
+          >
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50">
               <TrendingUp size={16} className="text-indigo-500" />
             </div>
-            <CardTitle className="text-base">Your Campaigns</CardTitle>
+            <CardTitle className="text-base flex-1">Your Campaigns</CardTitle>
+            <span className="text-muted-foreground">
+              {campaignsExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+            </span>
           </CardHeader>
-          <CardContent>
-            {campaigns.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No campaigns yet.</p>
-            ) : (
-              <div className="space-y-2">
-                {campaigns.map((campaign) => {
-                  const campSnapshots = snapshots.filter((s) => s.campaign_id === campaign.id);
-                  const campMetrics = calculateMetrics(campSnapshots);
-                  return (
-                    <Link key={campaign.id} href={`/client/campaigns/${campaign.id}`} className="group flex items-center justify-between rounded-xl border border-border/50 p-3 transition-all duration-200 hover:border-indigo-200 hover:shadow-md hover:bg-indigo-50/30">
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-9 w-9 items-center justify-center rounded-lg text-sm font-bold text-white shrink-0" style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed)' }}>
-                          {campaign.name.charAt(0)}
+          {campaignsExpanded && (
+            <CardContent>
+              {campaigns.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No campaigns yet.</p>
+              ) : (
+                <div className="space-y-2">
+                  {campaigns.map((campaign) => {
+                    const campSnapshots = snapshots.filter((s) => s.campaign_id === campaign.id);
+                    const campMetrics = calculateMetrics(campSnapshots);
+                    return (
+                      <Link key={campaign.id} href={`/client/campaigns/${campaign.id}`} className="group flex items-center justify-between rounded-xl border border-border/50 p-3 transition-all duration-200 hover:border-indigo-200 hover:shadow-md hover:bg-indigo-50/30">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-9 w-9 items-center justify-center rounded-lg text-sm font-bold text-white shrink-0" style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed)' }}>
+                            {campaign.name.charAt(0)}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-medium text-sm text-foreground truncate">{campaign.name}</p>
+                            <p className="text-xs text-muted-foreground">{campMetrics.emails_sent.toLocaleString()} sent · {campMetrics.meetings_booked} positive</p>
+                          </div>
                         </div>
-                        <div className="min-w-0">
-                          <p className="font-medium text-sm text-foreground truncate">{campaign.name}</p>
-                          <p className="text-xs text-muted-foreground">{campMetrics.emails_sent.toLocaleString()} sent · {campMetrics.meetings_booked} positive</p>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <Badge variant="secondary" className={`text-[10px] ${campaign.status === "active" ? "bg-emerald-100 text-emerald-800 border border-emerald-200" : "bg-gray-100 text-gray-600 border border-gray-200"}`}>
+                            {campaign.status}
+                          </Badge>
+                          <ArrowRight size={14} className="text-muted-foreground opacity-0 group-hover:opacity-100" />
                         </div>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <Badge variant="secondary" className={`text-[10px] ${campaign.status === "active" ? "bg-emerald-100 text-emerald-800 border border-emerald-200" : "bg-gray-100 text-gray-600 border border-gray-200"}`}>
-                          {campaign.status}
-                        </Badge>
-                        <ArrowRight size={14} className="text-muted-foreground opacity-0 group-hover:opacity-100" />
-                      </div>
-                    </Link>
-                  );
-                })}
-              </div>
-            )}
-          </CardContent>
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          )}
         </Card>
       </div>
 

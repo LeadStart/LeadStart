@@ -264,6 +264,7 @@ export const MOCK_EVENTS: WebhookEvent[] = [
     lead_email: "mark.johnson@bigcorp.com",
     payload: { reply_type: "positive" },
     processed: true,
+    excluded: false,
     received_at: "2025-03-23T10:30:00Z",
   },
   {
@@ -274,6 +275,7 @@ export const MOCK_EVENTS: WebhookEvent[] = [
     lead_email: "new.lead@prospect.com",
     payload: {},
     processed: true,
+    excluded: false,
     received_at: "2025-03-23T09:15:00Z",
   },
   {
@@ -284,6 +286,7 @@ export const MOCK_EVENTS: WebhookEvent[] = [
     lead_email: "invalid@old-domain.com",
     payload: { bounce_type: "hard" },
     processed: true,
+    excluded: false,
     received_at: "2025-03-22T22:00:00Z",
   },
   {
@@ -294,6 +297,7 @@ export const MOCK_EVENTS: WebhookEvent[] = [
     lead_email: "sarah.williams@realtyfund.com",
     payload: { meeting_date: "2025-03-28" },
     processed: true,
+    excluded: false,
     received_at: "2025-03-22T15:45:00Z",
   },
   {
@@ -304,6 +308,7 @@ export const MOCK_EVENTS: WebhookEvent[] = [
     lead_email: "jennifer.lee@saasco.io",
     payload: { reply_type: "positive" },
     processed: true,
+    excluded: false,
     received_at: "2025-03-22T11:30:00Z",
   },
 ];
