@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { KPICard } from "@/components/charts/kpi-card";
-import { DailyChart } from "@/components/charts/daily-chart";
+import { SentVsPositiveChart } from "@/components/charts/sent-vs-positive-chart";
 import { calculateMetrics } from "@/lib/kpi/calculator";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -12,8 +12,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import Link from "next/link";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ArrowRight, TrendingUp, FileText, MessageSquare, Calendar, Mail } from "lucide-react";
-import type { Campaign, CampaignSnapshot, Client, KPIReport, LeadFeedback } from "@/types/app";
+import { ArrowRight, TrendingUp, FileText, Mail } from "lucide-react";
+import type { Campaign, CampaignSnapshot, Client, KPIReport } from "@/types/app";
 
 function getDateRange(preset: string): { start: string; end: string } {
   const today = new Date();
@@ -42,7 +42,6 @@ export default function ClientDashboardPage() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [snapshots, setSnapshots] = useState<CampaignSnapshot[]>([]);
   const [reports, setReports] = useState<KPIReport[]>([]);
-  const [feedback, setFeedback] = useState<LeadFeedback[]>([]);
   const [loading, setLoading] = useState(true);
   const [noClient, setNoClient] = useState(false);
   const [datePreset, setDatePreset] = useState("30d");
@@ -59,16 +58,14 @@ export default function ClientDashboardPage() {
       if (!clientData) { setNoClient(true); setLoading(false); return; }
       const c = clientData as Client;
       setClient(c);
-      const [campsRes, reportsRes, feedbackRes] = await Promise.all([
+      const [campsRes, reportsRes] = await Promise.all([
         supabase.from("campaigns").select("*").eq("client_id", c.id),
         supabase.from("kpi_reports").select("*").eq("client_id", c.id).order("created_at", { ascending: false }).limit(5),
-        supabase.from("lead_feedback").select("*").order("created_at", { ascending: false }).limit(20),
       ]);
       const camps = (campsRes.data || []) as Campaign[];
       setCampaigns(camps);
       setCampaignIds(camps.map(x => x.id));
       setReports((reportsRes.data || []) as KPIReport[]);
-      setFeedback((feedbackRes.data || []) as LeadFeedback[]);
     });
   }, []);
 
@@ -168,10 +165,10 @@ export default function ClientDashboardPage() {
         </Card>
       </div>
 
-      {/* Compact chart — Positive Responses only */}
-      {snapshots.length > 0 && <DailyChart snapshots={snapshots} title="Positive Responses Over Time" series={["Positive"]} height={180} />}
+      {/* Bar chart — Sent vs Positive */}
+      {snapshots.length > 0 && <SentVsPositiveChart snapshots={snapshots} />}
 
-      {/* Campaigns (left) + Reports & Feedback (right) */}
+      {/* Campaigns + Report History */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
         <Card className="border-border/50 shadow-sm">
           <CardHeader className="flex flex-row items-center gap-2 pb-3">
@@ -213,9 +210,7 @@ export default function ClientDashboardPage() {
           </CardContent>
         </Card>
 
-        <div className="space-y-4">
-          {/* Report History */}
-          <Card className="border-border/50 shadow-sm">
+        <Card className="border-border/50 shadow-sm">
             <CardHeader className="flex flex-row items-center gap-2 pb-3">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50">
                 <FileText size={16} className="text-indigo-500" />
@@ -249,37 +244,6 @@ export default function ClientDashboardPage() {
               )}
             </CardContent>
           </Card>
-
-          {/* Feedback */}
-          {/* Feedback */}
-          <Card className="border-border/50 shadow-sm">
-            <CardHeader className="flex flex-row items-center gap-2 pb-3">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50">
-                <MessageSquare size={16} className="text-indigo-500" />
-              </div>
-              <CardTitle className="text-base">Your Feedback</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {feedback.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No feedback yet. Submit feedback from your campaign pages.</p>
-              ) : (
-                <div className="space-y-2">
-                  {feedback.slice(0, 10).map((f) => (
-                    <div key={f.id} className="flex items-center justify-between py-2 border-b border-border/30 last:border-0">
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium truncate">{f.lead_email}</p>
-                        {f.lead_company && <p className="text-xs text-muted-foreground">{f.lead_company}</p>}
-                      </div>
-                      <Badge variant="secondary" className={["good_lead", "interested"].includes(f.status) ? "bg-emerald-100 text-emerald-800 border border-emerald-200 text-[10px]" : ["bad_lead", "wrong_person", "not_interested"].includes(f.status) ? "bg-red-100 text-red-800 border border-red-200 text-[10px]" : "bg-gray-100 text-gray-600 border border-gray-200 text-[10px]"}>
-                        {f.status.replace(/_/g, " ")}
-                      </Badge>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
       </div>
     </div>
   );
