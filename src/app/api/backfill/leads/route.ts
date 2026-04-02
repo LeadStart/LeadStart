@@ -2,9 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { InstantlyClient } from "@/lib/instantly/client";
 
-// One-time backfill: pull all leads from Instantly and create webhook_events
-// for leads that have replied or booked meetings.
-// Run via: GET /api/backfill/leads?secret=<CRON_SECRET>
+// One-time backfill: pull leads from Instantly and create webhook_events.
+// Run one campaign at a time to avoid Vercel timeout:
+//   GET /api/backfill/leads?campaign=<instantly_campaign_id>
+// Or run all (will process first campaign only to avoid timeout):
+//   GET /api/backfill/leads
 
 export async function GET(request: NextRequest) {
   const secret = request.nextUrl.searchParams.get("secret");
@@ -12,6 +14,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const targetCampaignId = request.nextUrl.searchParams.get("campaign");
   const admin = createAdminClient();
 
   // Get all organizations with API keys
@@ -32,12 +35,17 @@ export async function GET(request: NextRequest) {
   for (const org of orgs) {
     const instantly = new InstantlyClient(org.instantly_api_key);
 
-    // Get all campaigns for this org
-    const { data: campaigns } = await admin
+    // Get campaigns to process
+    let campaignQuery = admin
       .from("campaigns")
       .select("*")
       .eq("organization_id", org.id);
 
+    if (targetCampaignId) {
+      campaignQuery = campaignQuery.eq("instantly_campaign_id", targetCampaignId);
+    }
+
+    const { data: campaigns } = await campaignQuery;
     if (!campaigns) continue;
 
     for (const campaign of campaigns) {
