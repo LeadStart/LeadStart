@@ -411,7 +411,8 @@ export default function ClientRepliesPage() {
           .order("created_at", { ascending: true }),
       ]);
 
-      const events = (eventsResult.data || []) as WebhookEvent[];
+      // Filter out excluded events (admin-excluded leads)
+      const events = ((eventsResult.data || []) as WebhookEvent[]).filter((e) => !e.excluded);
 
       // Build notes map: "email::campaign_instantly_id" → notes[]
       const notesMap = new Map<string, LeadNote[]>();

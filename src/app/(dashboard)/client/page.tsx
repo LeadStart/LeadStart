@@ -49,6 +49,8 @@ export default function ClientDashboardPage() {
   const [startDate, setStartDate] = useState(() => getDateRange("30d").start);
   const [endDate, setEndDate] = useState(() => getDateRange("30d").end);
   const [campaignIds, setCampaignIds] = useState<string[]>([]);
+  const [instantlyIds, setInstantlyIds] = useState<string[]>([]);
+  const [excludedMeetings, setExcludedMeetings] = useState(0);
 
   // Initial load — get client and campaigns
   useEffect(() => {
@@ -66,7 +68,20 @@ export default function ClientDashboardPage() {
       const camps = (campsRes.data || []) as Campaign[];
       setCampaigns(camps);
       setCampaignIds(camps.map(x => x.id));
+      const iIds = camps.map(x => x.instantly_campaign_id);
+      setInstantlyIds(iIds);
       setReports((reportsRes.data || []) as KPIReport[]);
+
+      // Count excluded meeting_booked events to subtract from snapshot totals
+      if (iIds.length > 0) {
+        const { count } = await supabase
+          .from("webhook_events")
+          .select("*", { count: "exact", head: true })
+          .in("campaign_instantly_id", iIds)
+          .eq("event_type", "meeting_booked")
+          .eq("excluded", true);
+        setExcludedMeetings(count || 0);
+      }
     });
   }, []);
 
@@ -96,9 +111,11 @@ export default function ClientDashboardPage() {
 
   function handlePresetChange(val: string) {
     setDatePreset(val);
-    const range = getDateRange(val);
-    setStartDate(range.start);
-    setEndDate(range.end);
+    if (val !== "custom") {
+      const range = getDateRange(val);
+      setStartDate(range.start);
+      setEndDate(range.end);
+    }
   }
 
   if (loading && !client) {
@@ -127,7 +144,8 @@ export default function ClientDashboardPage() {
     );
   }
 
-  const metrics = calculateMetrics(snapshots);
+  const rawMetrics = calculateMetrics(snapshots);
+  const metrics = { ...rawMetrics, meetings_booked: Math.max(0, rawMetrics.meetings_booked - excludedMeetings) };
   return (
     <div className="space-y-6">
       <div className="relative overflow-hidden rounded-xl p-6 text-white" style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed, #6366f1)', boxShadow: '0 10px 30px -5px rgba(99, 102, 241, 0.2)' }}>
@@ -157,17 +175,22 @@ export default function ClientDashboardPage() {
                     <SelectItem value="90d">Last 90 Days</SelectItem>
                     <SelectItem value="mtd">Month to Date</SelectItem>
                     <SelectItem value="last_month">Last Month</SelectItem>
+                    <SelectItem value="custom">Custom</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-1 flex-1 min-w-0">
-                <Label className="text-xs font-medium text-muted-foreground">From</Label>
-                <Input className="h-9 w-full text-sm" type="date" value={startDate} onChange={(e) => { setStartDate(e.target.value); setDatePreset(""); }} />
-              </div>
-              <div className="space-y-1 flex-1 min-w-0">
-                <Label className="text-xs font-medium text-muted-foreground">To</Label>
-                <Input className="h-9 w-full text-sm" type="date" value={endDate} onChange={(e) => { setEndDate(e.target.value); setDatePreset(""); }} />
-              </div>
+              {datePreset === "custom" && (
+                <>
+                  <div className="space-y-1 flex-1 min-w-0">
+                    <Label className="text-xs font-medium text-muted-foreground">From</Label>
+                    <Input className="h-9 w-full text-sm" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+                  </div>
+                  <div className="space-y-1 flex-1 min-w-0">
+                    <Label className="text-xs font-medium text-muted-foreground">To</Label>
+                    <Input className="h-9 w-full text-sm" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+                  </div>
+                </>
+              )}
             </div>
           </CardContent>
         </Card>

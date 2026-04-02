@@ -39,5 +39,9 @@ export function useSupabaseQuery<T>(
     refreshing: isValidating && !isLoading,
     error: error?.message ?? null,
     refetch: mutate,
+    /** Optimistically update cached data without revalidation */
+    setData: (updater: (prev: T | null) => T) => {
+      mutate((prev?: T) => updater(prev ?? null), { revalidate: false });
+    },
   };
 }

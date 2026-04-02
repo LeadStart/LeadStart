@@ -188,6 +188,7 @@ export interface WebhookEvent {
   lead_email: string | null;
   payload: Record<string, unknown>;
   processed: boolean;
+  excluded: boolean;
   received_at: string;
 }
 
