@@ -39,11 +39,40 @@ function getTimeBetween(start: string, end: string): string {
   return `${days}d ${hours % 24}h`;
 }
 
-function formatReplyHtml(html: string): string {
-  // If it looks like plain text (no HTML tags), convert newlines to <br>
-  if (!html.includes("<") || !html.includes(">")) {
-    return html.replace(/\n/g, "<br>");
+function formatReplyHtml(raw: string): string {
+  // If it's already HTML, return as-is
+  if (raw.includes("<div") || raw.includes("<p") || raw.includes("<br") || raw.includes("<table")) {
+    return raw;
   }
+
+  // Plain text — split into the lead's reply vs quoted original
+  const lines = raw.split("\n");
+  const replyLines: string[] = [];
+  const quotedLines: string[] = [];
+  let inQuote = false;
+
+  for (const line of lines) {
+    if (line.startsWith(">") || line.startsWith("&gt;")) {
+      inQuote = true;
+      quotedLines.push(line.replace(/^>\s?/, "").replace(/^&gt;\s?/, ""));
+    } else if (inQuote) {
+      quotedLines.push(line);
+    } else {
+      replyLines.push(line);
+    }
+  }
+
+  // Build HTML: reply text + collapsed quoted section
+  let html = replyLines
+    .join("\n")
+    .trim()
+    .replace(/\n/g, "<br>");
+
+  if (quotedLines.length > 0) {
+    const quotedHtml = quotedLines.join("\n").trim().replace(/\n/g, "<br>");
+    html += `<details class="mt-3"><summary class="text-xs text-muted-foreground cursor-pointer hover:text-foreground">Show original message</summary><div class="mt-2 pl-3 border-l-2 border-gray-200 text-xs text-muted-foreground">${quotedHtml}</div></details>`;
+  }
+
   return html;
 }
 
