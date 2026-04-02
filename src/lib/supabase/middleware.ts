@@ -13,7 +13,7 @@ export async function updateSession(request: NextRequest) {
           return request.cookies.getAll();
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) =>
+          cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value)
           );
           supabaseResponse = NextResponse.next({ request });
@@ -24,6 +24,29 @@ export async function updateSession(request: NextRequest) {
       },
     }
   );
+
+  // If the URL has a `code` param (Supabase PKCE flow — password reset, magic link, etc.)
+  // exchange it for a session right here in the middleware
+  const code = request.nextUrl.searchParams.get("code");
+  if (code) {
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    if (!error) {
+      // Check if there's a `next` param to redirect to (e.g. /update-password)
+      const next = request.nextUrl.searchParams.get("next");
+      if (next) {
+        const url = request.nextUrl.clone();
+        url.pathname = next;
+        url.searchParams.delete("code");
+        url.searchParams.delete("next");
+        return NextResponse.redirect(url);
+      }
+      // Default: redirect to update-password for recovery flows
+      const url = request.nextUrl.clone();
+      url.pathname = "/update-password";
+      url.searchParams.delete("code");
+      return NextResponse.redirect(url);
+    }
+  }
 
   const {
     data: { user },
