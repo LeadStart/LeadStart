@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -13,7 +13,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Mail, Lock, CheckCircle } from "lucide-react";
+import { Mail, Lock, CheckCircle, Loader2 } from "lucide-react";
 
 export default function UpdatePasswordPage() {
   const [password, setPassword] = useState("");
@@ -21,7 +21,42 @@ export default function UpdatePasswordPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [sessionReady, setSessionReady] = useState(false);
+  const [sessionError, setSessionError] = useState(false);
   const router = useRouter();
+
+  // On mount, wait for Supabase to pick up the recovery token from the URL hash
+  useEffect(() => {
+    const supabase = createClient();
+
+    // Listen for the PASSWORD_RECOVERY event which fires when Supabase
+    // processes the recovery token from the URL hash fragment
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "PASSWORD_RECOVERY" || event === "SIGNED_IN") {
+        setSessionReady(true);
+      }
+    });
+
+    // Also check if there's already a session (e.g. if the event already fired)
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        setSessionReady(true);
+      }
+    });
+
+    // If no session after 5 seconds, show an error
+    const timeout = setTimeout(() => {
+      setSessionReady((ready) => {
+        if (!ready) setSessionError(true);
+        return ready;
+      });
+    }, 5000);
+
+    return () => {
+      subscription.unsubscribe();
+      clearTimeout(timeout);
+    };
+  }, []);
 
   async function handleUpdate(e: React.FormEvent) {
     e.preventDefault();
@@ -93,11 +128,15 @@ export default function UpdatePasswordPage() {
               </div>
             </div>
             <CardTitle className="text-2xl font-bold">
-              {success ? "Password updated!" : "New password"}
+              {success ? "Password updated!" : sessionError ? "Link expired" : "New password"}
             </CardTitle>
             <CardDescription className="text-muted-foreground">
               {success
                 ? "Redirecting you to your dashboard..."
+                : sessionError
+                ? "This reset link is no longer valid"
+                : !sessionReady
+                ? "Verifying your reset link..."
                 : "Enter your new password below"
               }
             </CardDescription>
@@ -113,6 +152,24 @@ export default function UpdatePasswordPage() {
                 <p className="text-sm text-center text-muted-foreground">
                   Your password has been updated. Taking you to your dashboard now...
                 </p>
+              </div>
+            ) : sessionError ? (
+              <div className="space-y-4">
+                <div className="rounded-lg bg-red-50 border border-red-200 p-4">
+                  <p className="text-sm text-red-700">
+                    This password reset link has expired or is invalid. Please request a new one.
+                  </p>
+                </div>
+                <Button
+                  onClick={() => router.push("/reset-password")}
+                  className="w-full bg-indigo-600 hover:opacity-90 transition-opacity font-medium cursor-pointer"
+                >
+                  Request New Reset Link
+                </Button>
+              </div>
+            ) : !sessionReady ? (
+              <div className="flex justify-center py-8">
+                <Loader2 size={24} className="animate-spin text-indigo-500" />
               </div>
             ) : (
               <form onSubmit={handleUpdate} className="space-y-4">
