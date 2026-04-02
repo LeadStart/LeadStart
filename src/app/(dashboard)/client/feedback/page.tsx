@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { StatCard } from "@/components/charts/stat-card";
+import { FeedbackDonut } from "@/components/charts/feedback-donut";
 import { MessageSquare, ThumbsUp, ThumbsDown } from "lucide-react";
 import type { LeadFeedback } from "@/types/app";
 
@@ -45,6 +46,18 @@ export default function ClientFeedbackPage() {
         <StatCard label="Positive" value={good} icon={<ThumbsUp size={18} className="text-emerald-500" />} iconBg="bg-emerald-50" valueColor="text-emerald-600" />
         <StatCard label="Negative" value={bad} icon={<ThumbsDown size={18} className="text-red-500" />} iconBg="bg-red-50" valueColor="text-red-600" />
       </div>
+
+      {feedback.length > 0 && (
+        <Card className="border-border/50 shadow-sm">
+          <CardHeader className="flex flex-row items-center gap-2 pb-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50"><MessageSquare size={16} className="text-indigo-500" /></div>
+            <CardTitle className="text-base">Response Breakdown</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <FeedbackDonut feedback={feedback} />
+          </CardContent>
+        </Card>
+      )}
 
       <Card className="border-border/50 shadow-sm">
         <CardHeader className="flex flex-row items-center gap-2 pb-3">
