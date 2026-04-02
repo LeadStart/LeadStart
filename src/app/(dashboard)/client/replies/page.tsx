@@ -5,8 +5,10 @@ import { createClient } from "@/lib/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { StatCard } from "@/components/charts/stat-card";
-import { MailOpen, Send, CalendarCheck, Clock, ChevronDown, ChevronUp } from "lucide-react";
-import type { Client, Campaign, WebhookEvent } from "@/types/app";
+import { FeedbackDonut } from "@/components/charts/feedback-donut";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { MailOpen, Send, CalendarCheck, Clock, ChevronDown, ChevronUp, MessageSquare, ThumbsUp, ThumbsDown } from "lucide-react";
+import type { Client, Campaign, WebhookEvent, LeadFeedback } from "@/types/app";
 
 interface LeadThread {
   leadEmail: string;
@@ -40,8 +42,27 @@ function getTimeBetween(start: string, end: string): string {
 }
 
 function formatReplyHtml(raw: string): string {
-  // If it's already HTML, return as-is
-  if (raw.includes("<div") || raw.includes("<p") || raw.includes("<br") || raw.includes("<table")) {
+  const isHtml = raw.includes("<div") || raw.includes("<p") || raw.includes("<br") || raw.includes("<table");
+
+  if (isHtml) {
+    // HTML email — collapse quoted sections (gmail_quote, blockquote, outlook-style)
+    // Find the first quoted block and wrap everything from there in a collapsible
+    const quotePatterns = [
+      /(<div[^>]*class="[^"]*gmail_quote[^"]*"[^>]*>[\s\S]*$)/i,
+      /(<blockquote[^>]*class="[^"]*gmail_quote[^"]*"[^>]*>[\s\S]*$)/i,
+      /(<blockquote[\s\S]*$)/i,
+      /(On\s+\w{3},\s+\w{3}\s+\d{1,2},\s+\d{4}[\s\S]*wrote:[\s\S]*$)/i,
+    ];
+
+    for (const pattern of quotePatterns) {
+      const match = raw.match(pattern);
+      if (match && match.index !== undefined && match.index > 20) {
+        const replyPart = raw.substring(0, match.index);
+        const quotedPart = raw.substring(match.index);
+        return `${replyPart}<details class="mt-3"><summary class="text-xs text-muted-foreground cursor-pointer hover:text-foreground">Show original message</summary><div class="mt-2 pl-3 border-l-2 border-gray-200 text-xs text-muted-foreground">${quotedPart}</div></details>`;
+      }
+    }
+
     return raw;
   }
 
@@ -62,11 +83,7 @@ function formatReplyHtml(raw: string): string {
     }
   }
 
-  // Build HTML: reply text + collapsed quoted section
-  let html = replyLines
-    .join("\n")
-    .trim()
-    .replace(/\n/g, "<br>");
+  let html = replyLines.join("\n").trim().replace(/\n/g, "<br>");
 
   if (quotedLines.length > 0) {
     const quotedHtml = quotedLines.join("\n").trim().replace(/\n/g, "<br>");
@@ -180,6 +197,7 @@ function ThreadCard({ thread }: { thread: LeadThread }) {
 
 export default function ClientRepliesPage() {
   const [threads, setThreads] = useState<LeadThread[]>([]);
+  const [feedback, setFeedback] = useState<LeadFeedback[]>([]);
   const [filter, setFilter] = useState<"all" | "replied" | "meetings">("all");
   const [loading, setLoading] = useState(true);
 
@@ -195,13 +213,23 @@ export default function ClientRepliesPage() {
       const campaignNameMap = new Map(campaigns.map((c) => [c.instantly_campaign_id, c.name]));
       const ids = campaigns.map((c) => c.instantly_campaign_id);
 
-      const { data: eventsData } = await supabase
-        .from("webhook_events")
-        .select("*")
-        .in("campaign_instantly_id", ids.length > 0 ? ids : ["none"])
-        .in("event_type", ["email_sent", "email_replied", "meeting_booked"])
-        .order("received_at", { ascending: true });
+      // Fetch events and feedback in parallel
+      const [eventsResult, feedbackResult] = await Promise.all([
+        supabase
+          .from("webhook_events")
+          .select("*")
+          .in("campaign_instantly_id", ids.length > 0 ? ids : ["none"])
+          .in("event_type", ["email_sent", "email_replied", "meeting_booked"])
+          .order("received_at", { ascending: true }),
+        supabase
+          .from("lead_feedback")
+          .select("*")
+          .order("created_at", { ascending: false }),
+      ]);
 
+      setFeedback((feedbackResult.data || []) as LeadFeedback[]);
+
+      const { data: eventsData } = eventsResult;
       const events = (eventsData || []) as WebhookEvent[];
 
       // Group events by lead email
@@ -260,6 +288,8 @@ export default function ClientRepliesPage() {
 
   const totalReplies = threads.filter((t) => t.hasReply).length;
   const totalMeetings = threads.filter((t) => t.hasMeeting).length;
+  const feedbackGood = feedback.filter((f) => ["good_lead", "interested"].includes(f.status)).length;
+  const feedbackBad = feedback.filter((f) => ["bad_lead", "wrong_person", "not_interested"].includes(f.status)).length;
 
   const filtered = threads.filter((t) => {
     if (filter === "replied") return t.hasReply;
@@ -327,6 +357,77 @@ export default function ClientRepliesPage() {
           ))}
         </div>
       )}
+
+      {/* Feedback Section */}
+      <div className="pt-4 border-t border-border/50">
+        <div className="flex items-center gap-2 mb-4">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50">
+            <MessageSquare size={16} className="text-indigo-500" />
+          </div>
+          <h2 className="text-lg font-semibold">Lead Feedback</h2>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-4">
+          <StatCard label="Total Feedback" value={feedback.length} icon={<MessageSquare size={16} className="text-indigo-500" />} iconBg="bg-indigo-50" />
+          <StatCard label="Positive" value={feedbackGood} icon={<ThumbsUp size={16} className="text-emerald-500" />} iconBg="bg-emerald-50" valueColor="text-emerald-600" />
+          <StatCard label="Negative" value={feedbackBad} icon={<ThumbsDown size={16} className="text-red-500" />} iconBg="bg-red-50" valueColor="text-red-600" />
+        </div>
+
+        {feedback.length > 0 && (
+          <>
+            <Card className="border-border/50 shadow-sm mb-4">
+              <CardContent className="pt-5">
+                <FeedbackDonut feedback={feedback} />
+              </CardContent>
+            </Card>
+
+            <Card className="border-border/50 shadow-sm">
+              <CardContent className="pt-5">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Lead</TableHead>
+                      <TableHead>Company</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Comment</TableHead>
+                      <TableHead>Date</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {feedback.map((f) => (
+                      <TableRow key={f.id}>
+                        <TableCell className="font-medium text-sm">{f.lead_email}</TableCell>
+                        <TableCell className="text-sm">{f.lead_company || "—"}</TableCell>
+                        <TableCell>
+                          <Badge variant="secondary" className={
+                            ["good_lead", "interested"].includes(f.status)
+                              ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                              : ["bad_lead", "wrong_person", "not_interested"].includes(f.status)
+                              ? "bg-red-100 text-red-800 border border-red-200"
+                              : "bg-gray-100 text-gray-600 border border-gray-200"
+                          }>
+                            {f.status.replace(/_/g, " ")}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="max-w-xs truncate text-sm text-muted-foreground">{f.comment || "—"}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{new Date(f.created_at).toLocaleDateString()}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </>
+        )}
+
+        {feedback.length === 0 && (
+          <Card className="border-border/50 shadow-sm">
+            <CardContent className="py-8 text-center">
+              <p className="text-sm text-muted-foreground">No feedback submitted yet.</p>
+            </CardContent>
+          </Card>
+        )}
+      </div>
     </div>
   );
 }
