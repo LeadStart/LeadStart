@@ -1,25 +1,12 @@
 import type { KPIReportData } from "@/types/app";
 
-function healthColor(rate: number, goodThreshold: number, direction: "higher" | "lower"): string {
-  if (direction === "higher") {
-    return rate >= goodThreshold ? "#10b981" : rate >= goodThreshold * 0.6 ? "#f59e0b" : "#ef4444";
-  }
-  return rate <= goodThreshold ? "#10b981" : rate <= goodThreshold * 2 ? "#f59e0b" : "#ef4444";
-}
-
 function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 }
 
 export function buildWeeklyReportEmail(data: KPIReportData, portalUrl?: string): string {
-  const replyColor = healthColor(data.totals.reply_rate, 5, "higher");
-  const bounceColor = healthColor(data.totals.bounce_rate, 2, "lower");
-  const positiveColor = healthColor(data.totals.positive_reply_rate, 30, "higher");
-
   const campaignRows = data.campaigns
     .map((c) => {
-      const rColor = healthColor(c.metrics.reply_rate, 5, "higher");
-      const bColor = healthColor(c.metrics.bounce_rate, 2, "lower");
       return `
         <tr>
           <td style="padding: 14px 16px; border-bottom: 1px solid #f0f0f5; font-weight: 500; color: #1a1a2e;">
@@ -27,12 +14,6 @@ export function buildWeeklyReportEmail(data: KPIReportData, portalUrl?: string):
           </td>
           <td style="padding: 14px 16px; border-bottom: 1px solid #f0f0f5; text-align: center; color: #374151;">
             ${c.metrics.emails_sent.toLocaleString()}
-          </td>
-          <td style="padding: 14px 16px; border-bottom: 1px solid #f0f0f5; text-align: center; font-weight: 600; color: ${rColor};">
-            ${c.metrics.reply_rate}%
-          </td>
-          <td style="padding: 14px 16px; border-bottom: 1px solid #f0f0f5; text-align: center; color: ${bColor};">
-            ${c.metrics.bounce_rate}%
           </td>
           <td style="padding: 14px 16px; border-bottom: 1px solid #f0f0f5; text-align: center; font-weight: 600; color: #374151;">
             ${c.metrics.meetings_booked}
@@ -94,86 +75,26 @@ export function buildWeeklyReportEmail(data: KPIReportData, portalUrl?: string):
 
           <!-- KPI Summary Cards -->
           <tr>
-            <td style="background: #fff; padding: 28px 24px 8px;">
+            <td style="background: #fff; padding: 28px 24px 28px;">
               <table role="presentation" cellpadding="0" cellspacing="0" width="100%">
                 <tr>
-                  <td width="25%" style="padding: 0 4px;">
-                    <div style="background: #f0f0ff; border-radius: 12px; padding: 16px; text-align: center;">
-                      <p style="margin: 0; font-size: 24px; font-weight: 700; color: #4f46e5;">
+                  <td width="50%" style="padding: 0 6px;">
+                    <div style="background: #f0f0ff; border-radius: 12px; padding: 20px; text-align: center;">
+                      <p style="margin: 0; font-size: 32px; font-weight: 700; color: #4f46e5;">
                         ${data.totals.emails_sent.toLocaleString()}
                       </p>
-                      <p style="margin: 4px 0 0; font-size: 10px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px;">
+                      <p style="margin: 6px 0 0; font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px;">
                         Emails Sent
                       </p>
                     </div>
                   </td>
-                  <td width="25%" style="padding: 0 4px;">
-                    <div style="background: ${replyColor}11; border-radius: 12px; padding: 16px; text-align: center;">
-                      <p style="margin: 0; font-size: 24px; font-weight: 700; color: ${replyColor};">
-                        ${data.totals.reply_rate}%
-                      </p>
-                      <p style="margin: 4px 0 0; font-size: 10px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px;">
-                        Reply Rate
-                      </p>
-                    </div>
-                  </td>
-                  <td width="25%" style="padding: 0 4px;">
-                    <div style="background: #fef3c711; border-radius: 12px; padding: 16px; text-align: center;">
-                      <p style="margin: 0; font-size: 24px; font-weight: 700; color: #374151;">
+                  <td width="50%" style="padding: 0 6px;">
+                    <div style="background: #f0fdf4; border-radius: 12px; padding: 20px; text-align: center;">
+                      <p style="margin: 0; font-size: 32px; font-weight: 700; color: #10b981;">
                         ${data.totals.meetings_booked}
                       </p>
-                      <p style="margin: 4px 0 0; font-size: 10px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px;">
+                      <p style="margin: 6px 0 0; font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px;">
                         Positive Responses
-                      </p>
-                    </div>
-                  </td>
-                  <td width="25%" style="padding: 0 4px;">
-                    <div style="background: ${positiveColor}11; border-radius: 12px; padding: 16px; text-align: center;">
-                      <p style="margin: 0; font-size: 24px; font-weight: 700; color: ${positiveColor};">
-                        ${data.totals.positive_reply_rate}%
-                      </p>
-                      <p style="margin: 4px 0 0; font-size: 10px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px;">
-                        Positive Rate
-                      </p>
-                    </div>
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-
-          <!-- Secondary Metrics -->
-          <tr>
-            <td style="background: #fff; padding: 12px 24px 28px;">
-              <table role="presentation" cellpadding="0" cellspacing="0" width="100%">
-                <tr>
-                  <td width="33%" style="padding: 0 4px;">
-                    <div style="border: 1px solid #f0f0f5; border-radius: 10px; padding: 14px; text-align: center;">
-                      <p style="margin: 0; font-size: 18px; font-weight: 700; color: ${bounceColor};">
-                        ${data.totals.bounce_rate}%
-                      </p>
-                      <p style="margin: 2px 0 0; font-size: 10px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px;">
-                        Bounce Rate
-                      </p>
-                    </div>
-                  </td>
-                  <td width="33%" style="padding: 0 4px;">
-                    <div style="border: 1px solid #f0f0f5; border-radius: 10px; padding: 14px; text-align: center;">
-                      <p style="margin: 0; font-size: 18px; font-weight: 700; color: #374151;">
-                        ${data.totals.unsubscribe_rate}%
-                      </p>
-                      <p style="margin: 2px 0 0; font-size: 10px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px;">
-                        Unsub Rate
-                      </p>
-                    </div>
-                  </td>
-                  <td width="33%" style="padding: 0 4px;">
-                    <div style="border: 1px solid #f0f0f5; border-radius: 10px; padding: 14px; text-align: center;">
-                      <p style="margin: 0; font-size: 18px; font-weight: 700; color: #374151;">
-                        ${data.totals.reply_to_meeting_rate}%
-                      </p>
-                      <p style="margin: 2px 0 0; font-size: 10px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px;">
-                        Reply &#8594; Meeting
                       </p>
                     </div>
                   </td>
@@ -196,12 +117,6 @@ export function buildWeeklyReportEmail(data: KPIReportData, portalUrl?: string):
                     </th>
                     <th style="padding: 12px 16px; text-align: center; font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">
                       Sent
-                    </th>
-                    <th style="padding: 12px 16px; text-align: center; font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">
-                      Reply %
-                    </th>
-                    <th style="padding: 12px 16px; text-align: center; font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">
-                      Bounce %
                     </th>
                     <th style="padding: 12px 16px; text-align: center; font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">
                       Positive Responses
