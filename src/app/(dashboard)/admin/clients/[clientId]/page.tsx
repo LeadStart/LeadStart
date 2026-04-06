@@ -9,7 +9,7 @@ import { DailyChart } from "@/components/charts/daily-chart";
 import { calculateMetrics } from "@/lib/kpi/calculator";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { InviteClientButton } from "./invite-client-button";
+import { ClientActions } from "./client-actions";
 import { ArrowLeft, ArrowRight, Mail, MessageSquare, Calendar } from "lucide-react";
 import type { Client, Campaign, CampaignSnapshot, LeadFeedback } from "@/types/app";
 
@@ -113,23 +113,19 @@ export default function ClientDetailPage({
           Back to Overview
         </Link>
         <div className="relative overflow-hidden rounded-xl p-6 text-white mt-3" style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed, #6366f1)', boxShadow: '0 10px 30px -5px rgba(99, 102, 241, 0.2)' }}>
-          <div className="relative z-10 flex items-start justify-between">
-            <div>
-              <h1 className="text-2xl font-bold">{typedClient.name}</h1>
-              <p className="text-sm text-white/60 mt-1">
-                {typedClient.contact_email || "No email"} &middot; {campaigns.length} campaign{campaigns.length !== 1 ? "s" : ""}
-              </p>
+          <div className="relative z-10">
+            <div className="flex items-start justify-between">
+              <div>
+                <h1 className="text-2xl font-bold">{typedClient.name}</h1>
+                <p className="text-xs text-white/50 mt-0.5">
+                  {campaigns.length} campaign{campaigns.length !== 1 ? "s" : ""}
+                </p>
+              </div>
             </div>
-            <div className="flex gap-2">
-              {!typedClient.user_id && typedClient.contact_email && (
-                <InviteClientButton
-                  clientId={typedClient.id}
-                  clientEmail={typedClient.contact_email}
-                />
-              )}
-              {typedClient.user_id && (
-                <Badge className="bg-white/15 text-white border-0">Portal Active</Badge>
-              )}
+            <div className="mt-3">
+              <ClientActions client={typedClient} onEmailUpdated={(email) => {
+                typedClient.contact_email = email;
+              }} />
             </div>
           </div>
           <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-white/5" />

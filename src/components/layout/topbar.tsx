@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { Bell, Search, ArrowLeftRight, Settings, LogOut, ChevronDown, User, MessageSquare, Mail, FileText } from "lucide-react";
+import { Bell, Search, Settings, LogOut, ChevronDown, User, MessageSquare, Mail, FileText } from "lucide-react";
 import { useSupabaseQuery } from "@/hooks/use-supabase-query";
 import type { Notification } from "@/types/app";
 import {
@@ -56,8 +56,6 @@ export function Topbar({ userEmail, role, actualRole, onRoleSwitch }: TopbarProp
   const isAdmin = role === "owner" || role === "va";
   const isActualAdmin = actualRole === "owner" || actualRole === "va";
   const displayRole = isAdmin ? "Admin" : "Client";
-  const switchToRole: AppRole = isAdmin ? "client" : "owner";
-  const switchLabel = isAdmin ? "Client View" : "Admin View";
 
   const { data: notifications, refetch: refetchNotifications } = useSupabaseQuery<Notification[]>(
     "notifications",
@@ -98,17 +96,6 @@ export function Topbar({ userEmail, role, actualRole, onRoleSwitch }: TopbarProp
       )}
 
       <div className="flex items-center gap-3">
-        {/* Role Switcher — only for admins */}
-        {isActualAdmin && (
-          <button
-            onClick={() => onRoleSwitch(switchToRole)}
-            className="flex items-center gap-2 rounded-lg border border-dashed border-indigo-300 bg-indigo-50 px-3 py-1.5 text-xs font-medium text-indigo-700 transition-all hover:bg-indigo-100 hover:border-indigo-400"
-          >
-            <ArrowLeftRight size={13} />
-            Switch to {switchLabel}
-          </button>
-        )}
-
         {/* Notification bell — admin only */}
         {isActualAdmin && (
           <DropdownMenu>
@@ -193,12 +180,6 @@ export function Topbar({ userEmail, role, actualRole, onRoleSwitch }: TopbarProp
                 <DropdownMenuItem onClick={() => router.push("/admin/settings/api")}>
                   <Settings size={14} className="mr-2" />
                   Settings
-                </DropdownMenuItem>
-              )}
-              {isActualAdmin && (
-                <DropdownMenuItem onClick={() => onRoleSwitch(switchToRole)}>
-                  <ArrowLeftRight size={14} className="mr-2" />
-                  Switch to {switchLabel}
                 </DropdownMenuItem>
               )}
             </DropdownMenuGroup>
