@@ -142,23 +142,41 @@ export function ClientActions({
   const hasPortal = !!client.user_id;
 
   // Client already has portal access
-  if (hasPortal) {
+  if (hasPortal && !editing) {
     return (
       <div className="space-y-2">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           <Mail size={14} className="text-white/50" />
           <span className="text-sm text-white/70">{savedEmail}</span>
-          <Badge className="bg-emerald-500/20 text-emerald-200 border-0 text-xs">Portal Active</Badge>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={handleResetPassword}
-            disabled={resetting || resetSent}
-            className="h-7 bg-white/10 border-white/20 text-white hover:bg-white/20 text-xs ml-auto"
+          <button
+            onClick={() => setEditing(true)}
+            className="flex h-6 w-6 items-center justify-center rounded-md text-white/40 hover:text-white hover:bg-white/10 transition-colors"
           >
-            <KeyRound size={12} className="mr-1.5" />
-            {resetSent ? "Reset Email Sent" : resetting ? "Sending..." : "Reset Password"}
-          </Button>
+            <Pencil size={11} />
+          </button>
+          <Badge className="bg-emerald-500/20 text-emerald-200 border-0 text-xs">Portal Active</Badge>
+          <div className="flex items-center gap-2 ml-auto">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleResetPassword}
+              disabled={resetting || resetSent}
+              className="h-7 bg-white/10 border-white/20 text-white hover:bg-white/20 text-xs"
+            >
+              <KeyRound size={12} className="mr-1.5" />
+              {resetSent ? "Reset Email Sent" : resetting ? "Sending..." : "Reset Password"}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleInvite}
+              disabled={inviting || invited}
+              className="h-7 bg-white/10 border-white/20 text-white hover:bg-white/20 text-xs"
+            >
+              <Send size={12} className="mr-1.5" />
+              {invited ? "Invite Re-sent" : inviting ? "Sending..." : "Re-send Invite"}
+            </Button>
+          </div>
         </div>
         {error && <p className="text-xs text-red-300 bg-red-500/20 rounded px-2 py-1">{error}</p>}
       </div>
