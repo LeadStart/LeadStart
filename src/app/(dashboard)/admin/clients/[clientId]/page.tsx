@@ -9,9 +9,9 @@ import { DailyChart } from "@/components/charts/daily-chart";
 import { calculateMetrics } from "@/lib/kpi/calculator";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ClientActions } from "./client-actions";
+import { ClientUsersSection } from "./client-users-section";
 import { ArrowLeft, ArrowRight, Mail, MessageSquare, Calendar } from "lucide-react";
-import type { Client, Campaign, CampaignSnapshot, LeadFeedback } from "@/types/app";
+import type { Client, Campaign, CampaignSnapshot, LeadFeedback, Profile } from "@/types/app";
 
 const supabase = createClient();
 
@@ -50,11 +50,33 @@ async function fetchClientDetail(clientId: string) {
     .in("campaign_id", campaignIds.length > 0 ? campaignIds : ["none"])
     .order("snapshot_date", { ascending: false });
 
+  // Fetch linked users via client_users join table
+  const { data: clientUsersData } = await supabase
+    .from("client_users")
+    .select("user_id, created_at")
+    .eq("client_id", clientId);
+
+  const userIds = (clientUsersData || []).map((cu: Record<string, unknown>) => cu.user_id as string);
+  const { data: userProfiles } = userIds.length > 0
+    ? await supabase.from("profiles").select("id, email, full_name").in("id", userIds)
+    : { data: [] };
+
+  const linkedUsers = (clientUsersData || []).map((cu: Record<string, unknown>) => {
+    const profile = (userProfiles || []).find((p: Record<string, unknown>) => p.id === cu.user_id) as Record<string, unknown> | undefined;
+    return {
+      user_id: cu.user_id as string,
+      email: (profile?.email as string) || "",
+      full_name: (profile?.full_name as string) || null,
+      created_at: cu.created_at as string,
+    };
+  });
+
   return {
     client: client as Client,
     campaigns,
     feedback,
     allSnapshots: (allSnapshotsData || []) as CampaignSnapshot[],
+    linkedUsers,
   };
 }
 
@@ -97,7 +119,7 @@ export default function ClientDetailPage({
     );
   }
 
-  const { client: typedClient, campaigns, feedback, allSnapshots } = data;
+  const { client: typedClient, campaigns, feedback, allSnapshots, linkedUsers } = data;
   const periodSnapshots = filterByPeriod(allSnapshots, period);
   const periodMetrics = calculateMetrics(periodSnapshots);
   const lifetimeMetrics = calculateMetrics(allSnapshots);
@@ -114,23 +136,24 @@ export default function ClientDetailPage({
         </Link>
         <div className="relative overflow-hidden rounded-[20px] p-7 text-[#0f172a] mt-3" style={{ background: 'linear-gradient(135deg, #EBF5FE 0%, #D6ECFB 50%, #fff 100%)', border: '1px solid rgba(30,143,232,0.2)', borderTop: '1px solid rgba(30,143,232,0.3)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.9), 0 4px 14px rgba(30,143,232,0.1)' }}>
           <div className="relative z-10">
-            <div className="flex items-start justify-between">
-              <div>
-                <h1 className="text-2xl font-bold">{typedClient.name}</h1>
-                <p className="text-xs text-[#0f172a]/50 mt-0.5">
-                  {campaigns.length} campaign{campaigns.length !== 1 ? "s" : ""}
-                </p>
-              </div>
-            </div>
-            <div className="mt-3">
-              <ClientActions client={typedClient} onEmailUpdated={(email) => {
-                typedClient.contact_email = email;
-              }} />
-            </div>
+            <h1 className="text-2xl font-bold">{typedClient.name}</h1>
+            <p className="text-xs text-[#0f172a]/50 mt-0.5">
+              {campaigns.length} campaign{campaigns.length !== 1 ? "s" : ""} &middot; {linkedUsers.length} portal user{linkedUsers.length !== 1 ? "s" : ""}
+            </p>
           </div>
           <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-[rgba(71,165,237,0.06)]" />
         </div>
       </div>
+
+      {/* Portal Users */}
+      <ClientUsersSection
+        clientId={clientId}
+        users={linkedUsers}
+        onUsersChanged={() => {
+          // SWR mutate to refetch
+          window.location.reload();
+        }}
+      />
 
       {/* Period Selector */}
       <div className="flex items-center gap-2">

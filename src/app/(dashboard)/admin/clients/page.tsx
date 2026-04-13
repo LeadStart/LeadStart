@@ -9,26 +9,29 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { SortableHead } from "@/components/ui/sortable-head";
 import { AddClientForm } from "./add-client-form";
 import { Users, ArrowRight } from "lucide-react";
-import type { Client, Campaign } from "@/types/app";
+import type { Client, Campaign, ClientUser } from "@/types/app";
 
 export default function ClientsPage() {
   const { data, loading } = useSupabaseQuery("admin-clients", async (supabase) => {
-    const [clientsRes, campaignsRes] = await Promise.all([
+    const [clientsRes, campaignsRes, clientUsersRes] = await Promise.all([
       supabase.from("clients").select("*").order("name"),
       supabase.from("campaigns").select("*"),
+      supabase.from("client_users").select("*"),
     ]);
     return {
       clients: (clientsRes.data || []) as Client[],
       campaigns: (campaignsRes.data || []) as Campaign[],
+      clientUsers: (clientUsersRes.data || []) as ClientUser[],
     };
   });
 
-  const { clients, campaigns } = data || { clients: [], campaigns: [] };
+  const { clients, campaigns, clientUsers } = data || { clients: [], campaigns: [], clientUsers: [] };
 
   const rows = clients.map(client => {
     const clientCampaigns = campaigns.filter(c => c.client_id === client.id);
     const activeCampaigns = clientCampaigns.filter(c => c.status === "active");
-    return { ...client, totalCampaigns: clientCampaigns.length, activeCampaigns: activeCampaigns.length };
+    const userCount = clientUsers.filter(cu => cu.client_id === client.id).length;
+    return { ...client, totalCampaigns: clientCampaigns.length, activeCampaigns: activeCampaigns.length, userCount };
   });
   const { sorted, sortConfig, requestSort } = useSort(rows, "name", "asc");
 
@@ -53,14 +56,14 @@ export default function ClientsPage() {
         <CardContent>
           {clients.length === 0 ? <p className="text-sm text-muted-foreground">No clients yet. Add one above.</p> : (
             <Table>
-              <TableHeader><TableRow><SortableHead sortKey="name" sortConfig={sortConfig} onSort={requestSort}>Name</SortableHead><SortableHead sortKey="contact_email" sortConfig={sortConfig} onSort={requestSort}>Email</SortableHead><SortableHead sortKey="activeCampaigns" sortConfig={sortConfig} onSort={requestSort}>Campaigns</SortableHead><SortableHead sortKey="user_id" sortConfig={sortConfig} onSort={requestSort}>Portal Access</SortableHead><TableHead></TableHead></TableRow></TableHeader>
+              <TableHeader><TableRow><SortableHead sortKey="name" sortConfig={sortConfig} onSort={requestSort}>Name</SortableHead><SortableHead sortKey="contact_email" sortConfig={sortConfig} onSort={requestSort}>Email</SortableHead><SortableHead sortKey="activeCampaigns" sortConfig={sortConfig} onSort={requestSort}>Campaigns</SortableHead><SortableHead sortKey="userCount" sortConfig={sortConfig} onSort={requestSort}>Portal Access</SortableHead><TableHead></TableHead></TableRow></TableHeader>
               <TableBody>
                 {sorted.map((row) => (
                     <TableRow key={row.id} className="group">
                       <TableCell><div className="flex items-center gap-3"><div className="flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold text-white shrink-0" style={{ background: '#1E8FE8' }}>{row.name.charAt(0)}</div><Link href={`/admin/clients/${row.id}`} className="font-medium text-foreground hover:text-[#1E8FE8] transition-colors">{row.name}</Link></div></TableCell>
                       <TableCell className="text-muted-foreground">{row.contact_email || "—"}</TableCell>
                       <TableCell><span className="text-sm"><span className="font-medium">{row.activeCampaigns}</span><span className="text-muted-foreground"> active / {row.totalCampaigns} total</span></span></TableCell>
-                      <TableCell><Badge variant="secondary" className={row.user_id ? "badge-green" : "badge-amber"}>{row.user_id ? "Linked" : "Not invited"}</Badge></TableCell>
+                      <TableCell><Badge variant="secondary" className={row.userCount > 0 ? "badge-green" : "badge-amber"}>{row.userCount > 0 ? `${row.userCount} user${row.userCount !== 1 ? "s" : ""}` : "Not invited"}</Badge></TableCell>
                       <TableCell><Link href={`/admin/clients/${row.id}`} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-[#1E8FE8] transition-colors">View<ArrowRight size={13} className="opacity-0 group-hover:opacity-100 transition-opacity" /></Link></TableCell>
                     </TableRow>
                 ))}

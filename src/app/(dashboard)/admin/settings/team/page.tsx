@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,18 +14,30 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Building2, UserPlus, Shield, User } from "lucide-react";
+import { Building2, UserPlus, Shield, User, Pencil, Trash2, Ban, Check, X } from "lucide-react";
 import type { Profile } from "@/types/app";
 
 export default function TeamPage() {
   const [members, setMembers] = useState<Profile[]>([]);
+  const [currentUserId, setCurrentUserId] = useState<string>("");
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("va");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
-  useEffect(() => {
+  // Edit state
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editRole, setEditRole] = useState("va");
+  const [editSaving, setEditSaving] = useState(false);
+
+  // Action states
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null);
+  const [removingId, setRemovingId] = useState<string | null>(null);
+
+  const fetchMembers = useCallback(() => {
     const supabase = createClient();
     supabase
       .from("profiles")
@@ -36,6 +48,15 @@ export default function TeamPage() {
         setMembers((data || []) as Profile[]);
       });
   }, []);
+
+  useEffect(() => {
+    fetchMembers();
+    // Get current user ID for self-protection
+    const supabase = createClient();
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) setCurrentUserId(session.user.id);
+    });
+  }, [fetchMembers]);
 
   async function handleInvite(e: React.FormEvent) {
     e.preventDefault();
@@ -57,12 +78,76 @@ export default function TeamPage() {
 
       setSuccess(true);
       setEmail("");
+      fetchMembers();
     } catch (err) {
       setError((err as Error).message);
     } finally {
       setLoading(false);
     }
   }
+
+  function startEdit(member: Profile) {
+    setEditingId(member.id);
+    setEditName(member.full_name || "");
+    setEditRole(member.role);
+  }
+
+  async function handleSaveEdit() {
+    if (!editingId) return;
+    setEditSaving(true);
+    try {
+      const res = await fetch("/api/admin/team", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: editingId, full_name: editName, role: editRole }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to update");
+      }
+      setEditingId(null);
+      fetchMembers();
+    } catch {
+      // silently fail
+    } finally {
+      setEditSaving(false);
+    }
+  }
+
+  async function handleToggleActive(memberId: string, currentlyActive: boolean) {
+    setTogglingId(memberId);
+    try {
+      const res = await fetch("/api/admin/team", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: memberId, is_active: !currentlyActive }),
+      });
+      if (res.ok) fetchMembers();
+    } catch {
+      // silently fail
+    } finally {
+      setTogglingId(null);
+    }
+  }
+
+  async function handleRemove(memberId: string) {
+    setRemovingId(memberId);
+    try {
+      const res = await fetch("/api/admin/team", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: memberId }),
+      });
+      if (res.ok) fetchMembers();
+    } catch {
+      // silently fail
+    } finally {
+      setRemovingId(null);
+      setConfirmRemoveId(null);
+    }
+  }
+
+  const isSelf = (id: string) => id === currentUserId;
 
   return (
     <div className="space-y-6">
@@ -144,42 +229,143 @@ export default function TeamPage() {
               {members.map((member) => (
                 <div
                   key={member.id}
-                  className="flex items-center justify-between rounded-xl border border-border/50 p-4 transition-colors hover:bg-muted/30"
+                  className="rounded-xl border border-border/50 p-4 transition-colors hover:bg-muted/30"
                 >
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg text-sm font-bold text-white shrink-0" style={{ background: '#1E8FE8' }}>
-                      {(member.full_name || member.email).charAt(0).toUpperCase()}
+                  {editingId === member.id ? (
+                    /* Edit mode */
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-lg text-sm font-bold text-white shrink-0" style={{ background: '#1E8FE8' }}>
+                        {(member.full_name || member.email).charAt(0).toUpperCase()}
+                      </div>
+                      <div className="flex items-center gap-3 flex-1">
+                        <Input
+                          value={editName}
+                          onChange={(e) => setEditName(e.target.value)}
+                          placeholder="Full name"
+                          className="h-8 w-48 text-sm"
+                          autoFocus
+                        />
+                        {!isSelf(member.id) && (
+                          <Select value={editRole} onValueChange={(val) => setEditRole(val ?? "va")}>
+                            <SelectTrigger className="h-8 w-28 text-sm">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="va">VA</SelectItem>
+                              <SelectItem value="owner">Admin</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        )}
+                        <Button
+                          size="sm"
+                          onClick={handleSaveEdit}
+                          disabled={editSaving}
+                          className="h-8 text-xs"
+                          style={{ background: '#1E8FE8' }}
+                        >
+                          <Check size={12} className="mr-1" />
+                          {editSaving ? "Saving..." : "Save"}
+                        </Button>
+                        <button
+                          onClick={() => setEditingId(null)}
+                          className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-medium">
-                        {member.full_name || member.email}
-                      </p>
-                      <p className="text-xs text-muted-foreground">{member.email}</p>
+                  ) : (
+                    /* View mode */
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-lg text-sm font-bold text-white shrink-0" style={{ background: '#1E8FE8' }}>
+                          {(member.full_name || member.email).charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                          <p className="font-medium">
+                            {member.full_name || member.email}
+                            {isSelf(member.id) && <span className="text-xs text-muted-foreground ml-2">(you)</span>}
+                          </p>
+                          <p className="text-xs text-muted-foreground">{member.email}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge
+                          variant="secondary"
+                          className={
+                            member.role === "owner"
+                              ? "bg-[#1E8FE8]/20 text-[#47A5ED] border border-[#1E8FE8]/20"
+                              : "badge-blue"
+                          }
+                        >
+                          {member.role === "owner" ? <Shield size={11} className="mr-1" /> : <User size={11} className="mr-1" />}
+                          {member.role === "owner" ? "Admin" : "VA"}
+                        </Badge>
+                        <Badge
+                          variant="secondary"
+                          className={member.is_active ? "badge-green" : "badge-red"}
+                        >
+                          {member.is_active ? "Active" : "Inactive"}
+                        </Badge>
+
+                        {/* Action buttons */}
+                        <div className="flex items-center gap-1 ml-2">
+                          <button
+                            onClick={() => startEdit(member)}
+                            className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                            title="Edit"
+                          >
+                            <Pencil size={13} />
+                          </button>
+
+                          {!isSelf(member.id) && (
+                            <>
+                              <button
+                                onClick={() => handleToggleActive(member.id, member.is_active)}
+                                disabled={togglingId === member.id}
+                                className={`flex h-7 w-7 items-center justify-center rounded-md transition-colors ${
+                                  member.is_active
+                                    ? "text-amber-500 hover:text-amber-600 hover:bg-amber-50"
+                                    : "text-emerald-500 hover:text-emerald-600 hover:bg-emerald-50"
+                                }`}
+                                title={member.is_active ? "Deactivate" : "Activate"}
+                              >
+                                {member.is_active ? <Ban size={13} /> : <Check size={13} />}
+                              </button>
+
+                              {confirmRemoveId === member.id ? (
+                                <div className="flex items-center gap-1">
+                                  <Button
+                                    size="sm"
+                                    variant="destructive"
+                                    onClick={() => handleRemove(member.id)}
+                                    disabled={removingId === member.id}
+                                    className="h-7 text-xs"
+                                  >
+                                    {removingId === member.id ? "..." : "Confirm"}
+                                  </Button>
+                                  <button
+                                    onClick={() => setConfirmRemoveId(null)}
+                                    className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                                  >
+                                    <X size={14} />
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => setConfirmRemoveId(member.id)}
+                                  className="flex h-7 w-7 items-center justify-center rounded-md text-red-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                                  title="Remove"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge
-                      variant="secondary"
-                      className={
-                        member.role === "owner"
-                          ? "bg-[#1E8FE8]/20 text-[#47A5ED] border border-[#1E8FE8]/20"
-                          : "badge-blue"
-                      }
-                    >
-                      {member.role === "owner" ? <Shield size={11} className="mr-1" /> : <User size={11} className="mr-1" />}
-                      {member.role === "owner" ? "Admin" : "VA"}
-                    </Badge>
-                    <Badge
-                      variant="secondary"
-                      className={
-                        member.is_active
-                          ? "badge-green"
-                          : "badge-red"
-                      }
-                    >
-                      {member.is_active ? "Active" : "Inactive"}
-                    </Badge>
-                  </div>
+                  )}
                 </div>
               ))}
             </div>

@@ -51,7 +51,6 @@ export const MOCK_CLIENTS: Client[] = [
     organization_id: MOCK_ORG.id,
     name: "Acme Corp",
     contact_email: "john@acmecorp.com",
-    user_id: "user-client-001",
     notes: "Real estate investor — focus on commercial leads",
     created_at: "2025-01-15T00:00:00Z",
     updated_at: "2025-03-01T00:00:00Z",
@@ -61,7 +60,6 @@ export const MOCK_CLIENTS: Client[] = [
     organization_id: MOCK_ORG.id,
     name: "TechStartup Inc",
     contact_email: "lisa@techstartup.io",
-    user_id: "user-client-002",
     notes: "SaaS founder — targeting CTOs at mid-market companies",
     created_at: "2025-02-01T00:00:00Z",
     updated_at: "2025-03-10T00:00:00Z",
@@ -71,11 +69,17 @@ export const MOCK_CLIENTS: Client[] = [
     organization_id: MOCK_ORG.id,
     name: "GrowthCo Marketing",
     contact_email: "mike@growthco.com",
-    user_id: null,
     notes: "New client — onboarding in progress",
     created_at: "2025-03-15T00:00:00Z",
     updated_at: "2025-03-15T00:00:00Z",
   },
+];
+
+// ---------- Client Users (join table) ----------
+export const MOCK_CLIENT_USERS = [
+  { client_id: "client-001", user_id: "user-client-001", created_at: "2025-01-15T00:00:00Z" },
+  { client_id: "client-001", user_id: "user-client-001b", created_at: "2025-02-20T00:00:00Z" },
+  { client_id: "client-002", user_id: "user-client-002", created_at: "2025-02-01T00:00:00Z" },
 ];
 
 // ---------- Campaigns ----------

@@ -44,10 +44,22 @@ export function ClientDataProvider({ children }: { children: ReactNode }) {
       }
       const user = session.user;
 
+      // Look up client via client_users join table
+      const { data: clientUserData } = await supabase
+        .from("client_users")
+        .select("client_id")
+        .eq("user_id", user.id)
+        .limit(1);
+
+      if (!clientUserData || clientUserData.length === 0) {
+        setData({ userId: user.id, client: null, campaigns: [], loading: false, noClient: true });
+        return;
+      }
+
       const { data: clientData } = await supabase
         .from("clients")
         .select("*")
-        .eq("user_id", user.id)
+        .eq("id", (clientUserData[0] as { client_id: string }).client_id)
         .single();
 
       if (!clientData) {

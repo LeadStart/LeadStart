@@ -38,10 +38,15 @@ export interface Client {
   organization_id: string;
   name: string;
   contact_email: string | null;
-  user_id: string | null;
   notes: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface ClientUser {
+  client_id: string;
+  user_id: string;
+  created_at: string;
 }
 
 export interface Campaign {
