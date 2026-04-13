@@ -243,13 +243,17 @@ function ThreadCard({
           )}
         </div>
 
-        {/* Response time */}
-        {thread.firstSent && thread.lastReply && (
-          <div className="hidden lg:flex items-center gap-1.5 text-xs text-muted-foreground shrink-0">
-            <Clock size={12} />
-            <span>{getTimeBetween(thread.firstSent, thread.lastReply)}</span>
-          </div>
-        )}
+        {/* Response time — always rendered for column alignment */}
+        <div className="hidden lg:flex items-center gap-1.5 text-xs text-muted-foreground shrink-0 w-20">
+          {thread.firstSent && thread.lastReply ? (
+            <>
+              <Clock size={12} />
+              <span>{getTimeBetween(thread.firstSent, thread.lastReply)}</span>
+            </>
+          ) : (
+            <span>—</span>
+          )}
+        </div>
 
         {/* Expand */}
         <div className="flex items-center gap-2 shrink-0">
