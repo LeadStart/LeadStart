@@ -176,12 +176,19 @@ function ThreadCard({
 
   async function handleDeleteNote(noteId: string) {
     setDeletingId(noteId);
-    const supabase = createClient();
-    const { error } = await supabase.from("lead_feedback").delete().eq("id", noteId);
-    setDeletingId(null);
-    if (!error) {
-      onNoteDeleted(threadKey, noteId);
+    try {
+      const res = await fetch("/api/feedback/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ noteId }),
+      });
+      if (res.ok) {
+        onNoteDeleted(threadKey, noteId);
+      }
+    } catch {
+      // silently fail
     }
+    setDeletingId(null);
   }
 
   return (
