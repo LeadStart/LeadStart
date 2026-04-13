@@ -39,12 +39,12 @@ import {
 import type { Prospect, ProspectStage } from "@/types/app";
 
 const STAGES: { value: ProspectStage; label: string; color: string; borderColor: string }[] = [
-  { value: "lead", label: "Lead", color: "bg-gray-100 text-gray-700", borderColor: "border-gray-200" },
-  { value: "contacted", label: "Contacted", color: "bg-blue-100 text-blue-700", borderColor: "border-blue-200" },
-  { value: "meeting", label: "Meeting", color: "bg-indigo-100 text-indigo-700", borderColor: "border-indigo-200" },
-  { value: "proposal", label: "Proposal", color: "bg-amber-100 text-amber-700", borderColor: "border-amber-200" },
-  { value: "closed", label: "Closed Won", color: "bg-emerald-100 text-emerald-700", borderColor: "border-emerald-200" },
-  { value: "lost", label: "Lost", color: "bg-red-100 text-red-700", borderColor: "border-red-200" },
+  { value: "lead", label: "Lead", color: "bg-[#e2e8f0] text-[#B8B5AE]", borderColor: "border-gray-200" },
+  { value: "contacted", label: "Contacted", color: "badge-blue", borderColor: "border-blue-200" },
+  { value: "meeting", label: "Meeting", color: "bg-[#1E8FE8]/20 text-[#47A5ED]", borderColor: "border-[#1E8FE8]/20" },
+  { value: "proposal", label: "Proposal", color: "badge-amber", borderColor: "border-amber-200" },
+  { value: "closed", label: "Closed Won", color: "badge-green", borderColor: "border-emerald-200" },
+  { value: "lost", label: "Lost", color: "badge-red", borderColor: "border-red-200" },
 ];
 
 function getStageConfig(stage: ProspectStage) {
@@ -56,13 +56,14 @@ function ProspectCard({ prospect, onSelect }: { prospect: Prospect; onSelect: ()
   const isOverdue = prospect.follow_up_date && new Date(prospect.follow_up_date) < new Date() && !["closed", "lost"].includes(prospect.stage);
 
   return (
-    <div
+    <Card
       onClick={onSelect}
-      className="group cursor-pointer rounded-xl border border-border/50 p-4 transition-all hover:border-indigo-200 hover:shadow-md"
+      className="group cursor-pointer transition-all hover:border-[#1E8FE8]/30 hover:shadow-md"
     >
+    <CardContent className="p-4">
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg text-sm font-bold text-white shrink-0" style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed)' }}>
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg text-sm font-bold text-white shrink-0" style={{ background: '#1E8FE8' }}>
             {prospect.company_name.charAt(0)}
           </div>
           <div>
@@ -83,7 +84,7 @@ function ProspectCard({ prospect, onSelect }: { prospect: Prospect; onSelect: ()
           </Badge>
         )}
         {isOverdue && (
-          <Badge variant="secondary" className="text-xs bg-red-100 text-red-700 border border-red-200">
+          <Badge variant="secondary" className="text-xs badge-red">
             Overdue
           </Badge>
         )}
@@ -106,7 +107,8 @@ function ProspectCard({ prospect, onSelect }: { prospect: Prospect; onSelect: ()
           </span>
         )}
       </div>
-    </div>
+    </CardContent>
+    </Card>
   );
 }
 
@@ -145,24 +147,24 @@ export default function ProspectsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="relative overflow-hidden rounded-xl p-6 text-white" style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed, #6366f1)', boxShadow: '0 10px 30px -5px rgba(99, 102, 241, 0.2)' }}>
+      <div className="relative overflow-hidden rounded-[20px] p-7 text-[#0f172a]" style={{ background: 'linear-gradient(135deg, #EBF5FE 0%, #D6ECFB 50%, #fff 100%)', border: '1px solid rgba(30,143,232,0.2)', borderTop: '1px solid rgba(30,143,232,0.3)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.9), 0 4px 14px rgba(30,143,232,0.1)' }}>
         <div className="relative z-10 flex items-start justify-between">
           <div>
-            <p className="text-sm font-medium text-white/70">Sales Pipeline</p>
-            <h1 className="text-2xl font-bold mt-1">Prospects</h1>
-            <p className="text-sm text-white/60 mt-1">
+            <p className="text-xs font-medium text-[#64748b]">Sales Pipeline</p>
+            <h1 className="text-[22px] font-bold mt-1" style={{ color: '#0f172a', letterSpacing: '-0.01em' }}>Prospects</h1>
+            <p className="text-sm text-[#0f172a]/60 mt-1">
               {prospects.length} total &middot; {activeProspects} active &middot; {closedWon} won
             </p>
           </div>
           <Button
             onClick={() => setShowAdd(true)}
-            className="bg-white/15 hover:bg-white/25 text-white border-0"
+            className="bg-white/15 hover:bg-white/25 text-[#0f172a] border-0"
           >
             <Plus size={16} className="mr-1" />
             Add Prospect
           </Button>
         </div>
-        <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-white/5" />
+        <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-[rgba(71,165,237,0.06)]" />
       </div>
 
       {/* Quick stats */}
@@ -170,8 +172,8 @@ export default function ProspectsPage() {
         <StatCard
           label="Active Pipeline"
           value={activeProspects}
-          icon={<Target size={18} className="text-indigo-500" />}
-          iconBg="bg-indigo-50"
+          icon={<Target size={18} className="text-[#1E8FE8]" />}
+          iconBg="bg-[#1E8FE8]/10"
         />
         <StatCard
           label="Closed Won"
@@ -195,7 +197,7 @@ export default function ProspectsPage() {
           onClick={() => setFilter("all")}
           className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
             filter === "all"
-              ? "bg-indigo-600 text-white"
+              ? "bg-[#1E8FE8] text-[#0f172a]"
               : "bg-muted text-muted-foreground hover:bg-muted/80"
           }`}
         >
@@ -241,7 +243,7 @@ export default function ProspectsPage() {
           <DialogContent className="max-w-lg">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg text-sm font-bold text-white" style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed)' }}>
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg text-sm font-bold text-[#0f172a]" style={{ background: '#1E8FE8' }}>
                   {selected.company_name.charAt(0)}
                 </div>
                 {selected.company_name}
@@ -348,7 +350,7 @@ export default function ProspectsPage() {
             </div>
             <Button
               className="w-full"
-              style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed)' }}
+              style={{ background: '#1E8FE8' }}
               disabled={!newCompany.trim()}
               onClick={() => {
                 // In demo mode, just close — real mode would insert to Supabase

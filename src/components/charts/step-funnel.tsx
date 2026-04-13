@@ -130,8 +130,8 @@ export function StepFunnel({ stepMetrics, alerts, campaignName }: StepFunnelProp
   return (
     <Card className="border-border/50 shadow-sm">
       <CardHeader className="flex flex-row items-center gap-2 pb-3">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50">
-          <Activity size={16} className="text-indigo-500" />
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#1E8FE8]/10">
+          <Activity size={16} className="text-[#1E8FE8]" />
         </div>
         <div>
           <CardTitle className="text-base">Step Performance</CardTitle>
@@ -144,7 +144,7 @@ export function StepFunnel({ stepMetrics, alerts, campaignName }: StepFunnelProp
           {steps.map((s, i) => {
             const alert = alerts.find((a) => a.step === s.step);
             const isLast = i === steps.length - 1;
-            const sparkColor = s.trend === "down" ? "#ef4444" : s.trend === "up" ? "#10b981" : "#6366f1";
+            const sparkColor = s.trend === "down" ? "#ef4444" : s.trend === "up" ? "#10b981" : "#1E8FE8";
 
             return (
               <div key={s.step}>
@@ -154,10 +154,10 @@ export function StepFunnel({ stepMetrics, alerts, campaignName }: StepFunnelProp
                   <div className="flex flex-col items-center shrink-0 w-10">
                     <div className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold ${
                       alert?.severity === "critical"
-                        ? "bg-red-100 text-red-700 ring-2 ring-red-300"
+                        ? "bg-red-100 text-red-700 ring-2 ring-red-500/30"
                         : alert?.severity === "warning"
-                        ? "bg-amber-100 text-amber-700 ring-2 ring-amber-300"
-                        : "bg-indigo-100 text-indigo-700"
+                        ? "bg-amber-100 text-amber-700 ring-2 ring-amber-500/30"
+                        : "bg-[#1E8FE8]/20 text-[#47A5ED]"
                     }`}>
                       {s.step}
                     </div>
@@ -222,8 +222,8 @@ export function StepFunnel({ stepMetrics, alerts, campaignName }: StepFunnelProp
                     {alert && (
                       <div className={`mt-2 rounded-lg px-3 py-2 text-[11px] ${
                         alert.severity === "critical"
-                          ? "bg-red-50 text-red-700 border border-red-100"
-                          : "bg-amber-50 text-amber-700 border border-amber-100"
+                          ? "bg-red-50 text-red-700 border border-red-200"
+                          : "bg-amber-50 text-amber-700 border border-amber-200"
                       }`}>
                         {alert.metric === "reply_rate"
                           ? `Reply rate dropped from ${alert.baseline_value}% average to ${alert.current_value}% this period (${alert.change_pct}% change). ${s.latest.sent} emails sent this period.`

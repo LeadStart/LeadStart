@@ -119,11 +119,11 @@ export default function CampaignDetailPage({
           <ArrowLeft size={14} />
           Back to Client
         </Link>
-        <div className="relative overflow-hidden rounded-xl p-6 text-white mt-3" style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed, #6366f1)', boxShadow: '0 10px 30px -5px rgba(99, 102, 241, 0.2)' }}>
+        <div className="relative overflow-hidden rounded-[20px] p-7 text-[#0f172a] mt-3" style={{ background: 'linear-gradient(135deg, #EBF5FE 0%, #D6ECFB 50%, #fff 100%)', border: '1px solid rgba(30,143,232,0.2)', borderTop: '1px solid rgba(30,143,232,0.3)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.9), 0 4px 14px rgba(30,143,232,0.1)' }}>
           <div className="relative z-10 flex items-start justify-between">
             <div>
               <h1 className="text-2xl font-bold">{typedCampaign.name}</h1>
-              <p className="text-xs text-white/50 font-mono mt-1">
+              <p className="text-xs text-[#0f172a]/50 font-mono mt-1">
                 {typedCampaign.instantly_campaign_id}
               </p>
             </div>
@@ -131,8 +131,8 @@ export default function CampaignDetailPage({
               <Badge
                 className={
                   typedCampaign.status === "active"
-                    ? "bg-white/15 text-white border-0"
-                    : "bg-white/10 text-white/60 border-0"
+                    ? "bg-white/15 text-[#0f172a] border-0"
+                    : "bg-white/10 text-[#0f172a]/60 border-0"
                 }
               >
                 {typedCampaign.status}
@@ -140,7 +140,7 @@ export default function CampaignDetailPage({
               <RefreshButton campaignId={campaignId} />
             </div>
           </div>
-          <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-white/5" />
+          <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-[rgba(71,165,237,0.06)]" />
         </div>
       </div>
 
@@ -163,10 +163,10 @@ export default function CampaignDetailPage({
       />
 
       {/* Daily Breakdown */}
+      <div className="flex items-center gap-2 mb-3">
+        <h2 className="text-[15px] font-semibold text-[#0f172a]">Daily Breakdown</h2>
+      </div>
       <Card className="border-border/50 shadow-sm">
-        <CardHeader className="flex flex-row items-center gap-2 pb-3">
-          <CardTitle className="text-base">Daily Breakdown</CardTitle>
-        </CardHeader>
         <CardContent>
           {snapshots.length === 0 ? (
             <p className="text-sm text-muted-foreground">No data synced yet.</p>
@@ -202,8 +202,8 @@ export default function CampaignDetailPage({
       {/* Lead Feedback */}
       <Card className="border-border/50 shadow-sm">
         <CardHeader className="flex flex-row items-center gap-2 pb-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50">
-            <MessageSquare size={16} className="text-indigo-500" />
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#1E8FE8]/10">
+            <MessageSquare size={16} className="text-[#1E8FE8]" />
           </div>
           <CardTitle className="text-base">Lead Feedback ({feedback.length})</CardTitle>
         </CardHeader>
@@ -218,10 +218,10 @@ export default function CampaignDetailPage({
                     variant="secondary"
                     className={
                       ["good_lead", "interested"].includes(f.status)
-                        ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                        ? "badge-green"
                         : ["bad_lead", "wrong_person", "not_interested"].includes(f.status)
-                        ? "bg-red-100 text-red-800 border border-red-200"
-                        : "bg-gray-100 text-gray-600 border border-gray-200"
+                        ? "badge-red"
+                        : "badge-slate"
                     }
                   >
                     {f.status.replace(/_/g, " ")}

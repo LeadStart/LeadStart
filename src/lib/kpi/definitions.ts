@@ -100,21 +100,21 @@ export function getKPIHealth(
 export function getHealthColor(health: KPIHealth): string {
   switch (health) {
     case "good":
-      return "text-green-600";
+      return "text-emerald-700";
     case "warning":
-      return "text-yellow-600";
+      return "text-amber-700";
     case "bad":
-      return "text-red-600";
+      return "text-red-700";
   }
 }
 
 export function getHealthBgColor(health: KPIHealth): string {
   switch (health) {
     case "good":
-      return "bg-green-100 text-green-800";
+      return "badge-green";
     case "warning":
-      return "bg-yellow-100 text-yellow-800";
+      return "badge-amber";
     case "bad":
-      return "bg-red-100 text-red-800";
+      return "badge-red";
   }
 }

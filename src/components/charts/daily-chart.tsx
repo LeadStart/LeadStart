@@ -15,7 +15,7 @@ import type { CampaignSnapshot } from "@/types/app";
 type SeriesKey = "Sent" | "Replies" | "Bounces" | "Positive";
 
 const SERIES_CONFIG: Record<SeriesKey, { color: string; label: string }> = {
-  Sent: { color: "#6366f1", label: "Sent" },
+  Sent: { color: "#47A5ED", label: "Sent" },
   Replies: { color: "#10b981", label: "Replies" },
   Bounces: { color: "#ef4444", label: "Bounces" },
   Positive: { color: "#f59e0b", label: "Positive Responses" },
@@ -69,28 +69,29 @@ export function DailyChart({
           <AreaChart data={data}>
             <defs>
               <linearGradient id="gradSent" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#6366f1" stopOpacity={0.2} />
-                <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                <stop offset="5%" stopColor="#47A5ED" stopOpacity={0.2} />
+                <stop offset="95%" stopColor="#47A5ED" stopOpacity={0} />
               </linearGradient>
               <linearGradient id="gradReplies" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor="#10b981" stopOpacity={0.2} />
                 <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
               </linearGradient>
             </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-            <XAxis dataKey="date" fontSize={11} tick={{ fill: "#9ca3af" }} axisLine={{ stroke: "#e5e7eb" }} tickLine={false} />
-            <YAxis fontSize={11} tick={{ fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+            <XAxis dataKey="date" fontSize={11} tick={{ fill: "#64748b" }} axisLine={{ stroke: "#e2e8f0" }} tickLine={false} />
+            <YAxis fontSize={11} tick={{ fill: "#64748b" }} axisLine={false} tickLine={false} />
             <Tooltip
               contentStyle={{
-                background: "white",
-                border: "1px solid #e5e7eb",
+                background: "#ffffff",
+                border: "1px solid #e2e8f0",
                 borderRadius: "8px",
-                boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+                boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
                 fontSize: "12px",
+                color: "#0f172a",
               }}
             />
             {activeSeries.includes("Sent") && (
-              <Area type="monotone" dataKey="Sent" stroke="#6366f1" strokeWidth={2} fill="url(#gradSent)" dot={false} />
+              <Area type="monotone" dataKey="Sent" stroke="#47A5ED" strokeWidth={2} fill="url(#gradSent)" dot={false} />
             )}
             {activeSeries.includes("Replies") && (
               <Area type="monotone" dataKey="Replies" stroke="#10b981" strokeWidth={2} fill="url(#gradReplies)" dot={false} />

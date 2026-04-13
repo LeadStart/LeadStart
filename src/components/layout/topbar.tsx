@@ -32,7 +32,7 @@ function notificationIcon(type: string) {
     case "feedback": return <MessageSquare size={14} className="text-blue-500" />;
     case "webhook": return <Mail size={14} className="text-amber-500" />;
     case "report": return <FileText size={14} className="text-green-500" />;
-    default: return <Bell size={14} className="text-indigo-500" />;
+    default: return <Bell size={14} className="text-[#1E8FE8]" />;
   }
 }
 
@@ -87,7 +87,7 @@ export function Topbar({ userEmail, role, actualRole, onRoleSwitch }: TopbarProp
     <header className="flex h-16 items-center justify-between border-b border-border/50 bg-white px-6">
       {/* Search bar — admin only */}
       {isActualAdmin ? (
-        <div className="flex items-center gap-2 rounded-lg border border-border/50 bg-muted/30 px-3 py-2 text-sm text-muted-foreground w-72">
+        <div className="flex items-center gap-2 rounded-lg border border-border/50 bg-[#f8fafc] px-3 py-2 text-sm text-muted-foreground w-72">
           <Search size={14} />
           <span>Search campaigns, clients...</span>
         </div>
@@ -102,7 +102,7 @@ export function Topbar({ userEmail, role, actualRole, onRoleSwitch }: TopbarProp
             <DropdownMenuTrigger className="relative flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors outline-none cursor-pointer">
               <Bell size={18} />
               {unreadCount > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold text-white" style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed)' }}>
+                <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold text-white" style={{ background: '#1E8FE8' }}>
                   {unreadCount}
                 </span>
               )}
@@ -113,7 +113,7 @@ export function Topbar({ userEmail, role, actualRole, onRoleSwitch }: TopbarProp
                 {unreadCount > 0 && (
                   <button
                     onClick={handleMarkAllRead}
-                    className="text-xs text-indigo-600 hover:text-indigo-800 font-medium cursor-pointer"
+                    className="text-xs text-[#1E8FE8] hover:text-[#125FA0] font-medium cursor-pointer"
                   >
                     Mark all read
                   </button>
@@ -137,7 +137,7 @@ export function Topbar({ userEmail, role, actualRole, onRoleSwitch }: TopbarProp
                       <p className="text-xs text-muted-foreground mt-0.5">{timeAgo(n.created_at)}</p>
                     </div>
                     {!n.read && (
-                      <div className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-indigo-500" />
+                      <div className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-[#1E8FE8]" />
                     )}
                   </DropdownMenuItem>
                 ))
@@ -152,7 +152,7 @@ export function Topbar({ userEmail, role, actualRole, onRoleSwitch }: TopbarProp
         {/* User dropdown */}
         <DropdownMenu>
           <DropdownMenuTrigger className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 transition-colors hover:bg-muted/50 outline-none cursor-pointer">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold text-white shrink-0" style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed)' }}>
+            <div className="flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold text-white shrink-0" style={{ background: '#1E8FE8' }}>
               {userEmail.charAt(0).toUpperCase()}
             </div>
             <div className="hidden sm:block text-left">

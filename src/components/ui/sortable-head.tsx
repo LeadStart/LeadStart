@@ -26,7 +26,7 @@ export function SortableHead({ label, children, sortKey, sortConfig, onSort, cla
     >
       <span className="inline-flex items-center gap-1">
         {children || label}
-        <Icon size={13} className={isActive ? "text-indigo-500" : "text-muted-foreground/50"} />
+        <Icon size={13} className={isActive ? "text-[#1E8FE8]" : "text-muted-foreground/50"} />
       </span>
     </TableHead>
   );

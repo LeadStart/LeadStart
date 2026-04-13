@@ -45,15 +45,15 @@ const STATUS_LABELS: Record<TaskStatus, string> = {
 };
 
 const STATUS_COLORS: Record<TaskStatus, string> = {
-  todo: "bg-gray-100 text-gray-600 border-gray-200",
-  in_progress: "bg-blue-100 text-blue-700 border-blue-200",
-  done: "bg-emerald-100 text-emerald-700 border-emerald-200",
+  todo: "bg-[#e2e8f0] text-[#7A7872] border-gray-200",
+  in_progress: "badge-blue",
+  done: "badge-green",
 };
 
 const PRIORITY_COLORS: Record<TaskPriority, string> = {
   low: "bg-gray-100 text-gray-500",
-  medium: "bg-amber-100 text-amber-700",
-  high: "bg-red-100 text-red-700",
+  medium: "badge-amber",
+  high: "badge-red",
 };
 
 const NEXT_STATUS: Record<TaskStatus, TaskStatus> = {
@@ -132,19 +132,19 @@ export default function TasksPage() {
   return (
     <div className="space-y-6">
       {/* Gradient header banner */}
-      <div className="relative overflow-hidden rounded-xl p-6 text-white" style={{ background: 'linear-gradient(135deg, #7c3aed, #a855f7, #9333ea)', boxShadow: '0 10px 30px -5px rgba(124, 58, 237, 0.2)' }}>
+      <div className="relative overflow-hidden rounded-[20px] p-7 text-[#0f172a]" style={{ background: 'linear-gradient(135deg, #EBF5FE 0%, #D6ECFB 50%, #fff 100%)', border: '1px solid rgba(30,143,232,0.2)', borderTop: '1px solid rgba(30,143,232,0.3)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.9), 0 4px 14px rgba(30,143,232,0.1)' }}>
         <div className="relative z-10">
-          <p className="text-sm font-medium text-white/70">Internal Tracker</p>
-          <h1 className="text-2xl font-bold mt-1">Tasks</h1>
-          <p className="text-sm text-white/60 mt-1">{total} total tasks across all categories</p>
+          <p className="text-xs font-medium text-[#64748b]">Internal Tracker</p>
+          <h1 className="text-[22px] font-bold mt-1" style={{ color: '#0f172a', letterSpacing: '-0.01em' }}>Tasks</h1>
+          <p className="text-sm text-[#0f172a]/60 mt-1">{total} total tasks across all categories</p>
         </div>
-        <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-white/5" />
+        <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-[rgba(71,165,237,0.06)]" />
       </div>
 
       {/* Stat cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
         <StatCard label="Total Tasks" value={total} icon={<CheckSquare size={18} className="text-purple-500" />} iconBg="bg-purple-50" />
-        <StatCard label="To Do" value={todoCount} icon={<ListTodo size={18} className="text-gray-500" />} iconBg="bg-gray-50" />
+        <StatCard label="To Do" value={todoCount} icon={<ListTodo size={18} className="text-gray-500" />} iconBg="bg-background" />
         <StatCard label="In Progress" value={inProgressCount} icon={<Clock size={18} className="text-blue-500" />} iconBg="bg-blue-50" valueColor="text-blue-600" />
         <StatCard label="Done" value={doneCount} icon={<CheckCircle2 size={18} className="text-emerald-500" />} iconBg="bg-emerald-50" valueColor="text-emerald-600" />
       </div>
@@ -273,14 +273,14 @@ export default function TasksPage() {
       )}
 
       {/* Tasks table */}
+      <div className="flex items-center gap-2 mb-3">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-50">
+          <CheckSquare size={16} className="text-purple-500" />
+        </div>
+        <h2 className="text-[15px] font-semibold text-[#0f172a]">All Tasks</h2>
+        <span className="text-sm text-muted-foreground ml-auto">{filtered.length} task{filtered.length !== 1 ? "s" : ""}</span>
+      </div>
       <Card className="border-border/50 shadow-sm">
-        <CardHeader className="flex flex-row items-center gap-2 pb-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-50">
-            <CheckSquare size={16} className="text-purple-500" />
-          </div>
-          <CardTitle className="text-base">All Tasks</CardTitle>
-          <span className="text-sm text-muted-foreground ml-auto">{filtered.length} task{filtered.length !== 1 ? "s" : ""}</span>
-        </CardHeader>
         <CardContent>
           {filtered.length === 0 ? (
             <p className="text-sm text-muted-foreground">No tasks found.</p>

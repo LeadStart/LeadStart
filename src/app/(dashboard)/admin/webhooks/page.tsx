@@ -11,10 +11,10 @@ import { Bell, Mail, MailOpen, AlertTriangle, CalendarCheck, CheckCircle, Ban, U
 import type { WebhookEvent } from "@/types/app";
 
 const EVENT_STYLES: Record<string, { class: string; icon: React.ReactNode }> = {
-  email_sent: { class: "bg-gray-100 text-gray-600 border border-gray-200", icon: <Mail size={11} className="mr-1" /> },
-  email_replied: { class: "bg-blue-100 text-blue-700 border border-blue-200", icon: <MailOpen size={11} className="mr-1" /> },
-  email_bounced: { class: "bg-red-100 text-red-700 border border-red-200", icon: <AlertTriangle size={11} className="mr-1" /> },
-  meeting_booked: { class: "bg-emerald-100 text-emerald-700 border border-emerald-200", icon: <CalendarCheck size={11} className="mr-1" /> },
+  email_sent: { class: "badge-slate", icon: <Mail size={11} className="mr-1" /> },
+  email_replied: { class: "badge-blue", icon: <MailOpen size={11} className="mr-1" /> },
+  email_bounced: { class: "badge-red", icon: <AlertTriangle size={11} className="mr-1" /> },
+  meeting_booked: { class: "badge-green", icon: <CalendarCheck size={11} className="mr-1" /> },
 };
 
 export default function WebhooksPage() {
@@ -52,18 +52,21 @@ export default function WebhooksPage() {
 
   return (
     <div className="space-y-6">
-      <div className="relative overflow-hidden rounded-xl p-6 text-white" style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed, #6366f1)', boxShadow: '0 10px 30px -5px rgba(99, 102, 241, 0.2)' }}>
-        <div className="relative z-10"><p className="text-sm font-medium text-white/70">Instantly.ai Webhooks</p><h1 className="text-2xl font-bold mt-1">Event Log</h1><p className="text-sm text-white/60 mt-1">{eventsList.length} events received{excludedCount > 0 ? ` · ${excludedCount} excluded` : ""}</p></div>
-        <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-white/5" />
+      <div className="relative overflow-hidden rounded-[20px] p-7 text-[#0f172a]" style={{ background: 'linear-gradient(135deg, #EBF5FE 0%, #D6ECFB 50%, #fff 100%)', border: '1px solid rgba(30,143,232,0.2)', borderTop: '1px solid rgba(30,143,232,0.3)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.9), 0 4px 14px rgba(30,143,232,0.1)' }}>
+        <div className="relative z-10"><p className="text-xs font-medium text-[#64748b]">Instantly.ai Webhooks</p><h1 className="text-[22px] font-bold mt-1" style={{ color: '#0f172a', letterSpacing: '-0.01em' }}>Event Log</h1><p className="text-sm text-[#0f172a]/60 mt-1">{eventsList.length} events received{excludedCount > 0 ? ` · ${excludedCount} excluded` : ""}</p></div>
+        <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-[rgba(71,165,237,0.06)]" />
       </div>
       <div className="flex flex-wrap gap-2">
         {Object.entries(eventCounts).map(([type, count]) => {
           const style = EVENT_STYLES[type];
-          return <Badge key={type} variant="secondary" className={style?.class || "bg-gray-100 text-gray-600 border border-gray-200"}>{style?.icon}{type.replace(/_/g, " ")}: {count}</Badge>;
+          return <Badge key={type} variant="secondary" className={style?.class || "badge-slate"}>{style?.icon}{type.replace(/_/g, " ")}: {count}</Badge>;
         })}
       </div>
+      <div className="flex items-center gap-2 mb-3">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#1E8FE8]/10"><Bell size={16} className="text-[#1E8FE8]" /></div>
+        <h2 className="text-[15px] font-semibold text-[#0f172a]">Recent Events</h2>
+      </div>
       <Card className="border-border/50 shadow-sm">
-        <CardHeader className="flex flex-row items-center gap-2 pb-3"><div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50"><Bell size={16} className="text-indigo-500" /></div><CardTitle className="text-base">Recent Events</CardTitle></CardHeader>
         <CardContent>
           {eventsList.length === 0 ? <p className="text-sm text-muted-foreground">No webhook events received yet.</p> : (
             <Table>
@@ -73,16 +76,16 @@ export default function WebhooksPage() {
                   const style = EVENT_STYLES[event.event_type];
                   const isExcludable = event.event_type === "meeting_booked" || event.event_type === "email_replied";
                   return (
-                    <TableRow key={event.id} className={event.excluded ? "opacity-50 bg-red-50/30" : ""}>
+                    <TableRow key={event.id} className={event.excluded ? "opacity-50" : ""}>
                       <TableCell>
                         <div className="flex items-center gap-1.5">
-                          <Badge variant="secondary" className={style?.class || "bg-gray-100 text-gray-600 border border-gray-200"}>{style?.icon}{event.event_type.replace(/_/g, " ")}</Badge>
-                          {event.excluded && <Badge className="bg-red-100 text-red-600 border border-red-200 text-[10px]"><Ban size={9} className="mr-0.5" />Excluded</Badge>}
+                          <Badge variant="secondary" className={`min-w-[120px] justify-center ${style?.class || "badge-slate"}`}>{style?.icon}{event.event_type.replace(/_/g, " ")}</Badge>
+                          {event.excluded && <Badge className="bg-red-50 text-red-700 border border-red-200 text-[10px]"><Ban size={9} className="mr-0.5" />Excluded</Badge>}
                         </div>
                       </TableCell>
                       <TableCell className="font-medium">{event.lead_email || "—"}</TableCell>
                       <TableCell className="text-xs text-muted-foreground font-mono">{event.campaign_instantly_id || "—"}</TableCell>
-                      <TableCell>{event.processed ? <Badge className="bg-emerald-100 text-emerald-700 border border-emerald-200"><CheckCircle size={11} className="mr-1" /> Yes</Badge> : <Badge variant="secondary" className="bg-amber-100 text-amber-700 border border-amber-200">Pending</Badge>}</TableCell>
+                      <TableCell>{event.processed ? <Badge className="badge-green"><CheckCircle size={11} className="mr-1" /> Yes</Badge> : <Badge variant="secondary" className="badge-amber">Pending</Badge>}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">{new Date(event.received_at).toLocaleString()}</TableCell>
                       <TableCell>
                         {isExcludable && (
@@ -92,7 +95,7 @@ export default function WebhooksPage() {
                             className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer ${
                               event.excluded
                                 ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200"
-                                : "bg-red-50 text-red-600 hover:bg-red-100 border border-red-200"
+                                : "bg-red-50 text-red-700 hover:bg-red-100 border border-red-200"
                             } disabled:opacity-50 disabled:cursor-not-allowed`}
                             title={event.excluded ? "Restore this lead" : "Exclude this lead from client metrics"}
                           >

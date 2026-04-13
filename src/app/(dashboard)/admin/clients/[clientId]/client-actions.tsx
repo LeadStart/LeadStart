@@ -146,22 +146,22 @@ export function ClientActions({
     return (
       <div className="space-y-2">
         <div className="flex items-center gap-3 flex-wrap">
-          <Mail size={14} className="text-white/50" />
-          <span className="text-sm text-white/70">{savedEmail}</span>
+          <Mail size={14} className="text-[#0f172a]/50" />
+          <span className="text-sm text-[#0f172a]/70">{savedEmail}</span>
           <button
             onClick={() => setEditing(true)}
-            className="flex h-6 w-6 items-center justify-center rounded-md text-white/40 hover:text-white hover:bg-white/10 transition-colors"
+            className="flex h-6 w-6 items-center justify-center rounded-md text-[#0f172a]/40 hover:text-[#0f172a] hover:bg-white/10 transition-colors"
           >
             <Pencil size={11} />
           </button>
-          <Badge className="bg-emerald-500/20 text-emerald-200 border-0 text-xs">Portal Active</Badge>
+          <Badge className="bg-emerald-100 text-emerald-200 border-0 text-xs">Portal Active</Badge>
           <div className="flex items-center gap-2 ml-auto">
             <Button
               size="sm"
               variant="outline"
               onClick={handleResetPassword}
               disabled={resetting || resetSent}
-              className="h-7 bg-white/10 border-white/20 text-white hover:bg-white/20 text-xs"
+              className="h-7 bg-white/10 border-white/20 text-[#0f172a] hover:bg-white/20 text-xs"
             >
               <KeyRound size={12} className="mr-1.5" />
               {resetSent ? "Reset Email Sent" : resetting ? "Sending..." : "Reset Password"}
@@ -171,14 +171,14 @@ export function ClientActions({
               variant="outline"
               onClick={handleInvite}
               disabled={inviting || invited}
-              className="h-7 bg-white/10 border-white/20 text-white hover:bg-white/20 text-xs"
+              className="h-7 bg-white/10 border-white/20 text-[#0f172a] hover:bg-white/20 text-xs"
             >
               <Send size={12} className="mr-1.5" />
               {invited ? "Invite Re-sent" : inviting ? "Sending..." : "Re-send Invite"}
             </Button>
           </div>
         </div>
-        {error && <p className="text-xs text-red-300 bg-red-500/20 rounded px-2 py-1">{error}</p>}
+        {error && <p className="text-xs text-red-300 bg-red-100 rounded px-2 py-1">{error}</p>}
       </div>
     );
   }
@@ -193,7 +193,7 @@ export function ClientActions({
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="client@company.com"
-            className="h-8 w-64 bg-white/10 border-white/20 text-white placeholder:text-white/40 text-sm"
+            className="h-8 w-64 bg-white/10 border-white/20 text-[#0f172a] placeholder:text-[#0f172a]/40 text-sm"
             autoFocus
             onKeyDown={(e) => { if (e.key === "Enter") handleSaveAndInvite(); }}
           />
@@ -201,7 +201,7 @@ export function ClientActions({
             size="sm"
             onClick={handleSaveAndInvite}
             disabled={saving || !email.trim()}
-            className="h-8 bg-white/20 hover:bg-white/30 text-white text-xs"
+            className="h-8 bg-white/20 hover:bg-white/30 text-[#0f172a] text-xs"
           >
             <Send size={12} className="mr-1.5" />
             {saving ? "Sending..." : "Save & Send Invite"}
@@ -211,18 +211,18 @@ export function ClientActions({
             variant="ghost"
             onClick={handleSaveEmail}
             disabled={saving || !email.trim()}
-            className="h-8 text-white/60 hover:text-white hover:bg-white/10 text-xs"
+            className="h-8 text-[#0f172a]/60 hover:text-[#0f172a] hover:bg-white/10 text-xs"
           >
             Save Only
           </Button>
           <button
             onClick={() => { setEditing(false); setEmail(savedEmail); }}
-            className="flex h-7 w-7 items-center justify-center rounded-md text-white/40 hover:text-white hover:bg-white/10 transition-colors"
+            className="flex h-7 w-7 items-center justify-center rounded-md text-[#0f172a]/40 hover:text-[#0f172a] hover:bg-white/10 transition-colors"
           >
             <X size={14} />
           </button>
         </div>
-        {error && <p className="text-xs text-red-300 bg-red-500/20 rounded px-2 py-1">{error}</p>}
+        {error && <p className="text-xs text-red-300 bg-red-100 rounded px-2 py-1">{error}</p>}
       </div>
     );
   }
@@ -232,29 +232,29 @@ export function ClientActions({
     return (
       <div className="space-y-2">
         <div className="flex items-center gap-3">
-          <Mail size={14} className="text-white/50" />
-          <span className="text-sm text-white/70">{savedEmail}</span>
+          <Mail size={14} className="text-[#0f172a]/50" />
+          <span className="text-sm text-[#0f172a]/70">{savedEmail}</span>
           <button
             onClick={() => setEditing(true)}
-            className="flex h-6 w-6 items-center justify-center rounded-md text-white/40 hover:text-white hover:bg-white/10 transition-colors"
+            className="flex h-6 w-6 items-center justify-center rounded-md text-[#0f172a]/40 hover:text-[#0f172a] hover:bg-white/10 transition-colors"
           >
             <Pencil size={11} />
           </button>
           {invited ? (
-            <Badge className="bg-emerald-500/20 text-emerald-200 border-0 text-xs ml-auto">Invite Sent</Badge>
+            <Badge className="bg-emerald-100 text-emerald-200 border-0 text-xs ml-auto">Invite Sent</Badge>
           ) : (
             <Button
               size="sm"
               onClick={handleInvite}
               disabled={inviting}
-              className="h-7 bg-white/20 hover:bg-white/30 text-white text-xs ml-auto"
+              className="h-7 bg-white/20 hover:bg-white/30 text-[#0f172a] text-xs ml-auto"
             >
               <Send size={12} className="mr-1.5" />
               {inviting ? "Sending..." : "Send Portal Invite"}
             </Button>
           )}
         </div>
-        {error && <p className="text-xs text-red-300 bg-red-500/20 rounded px-2 py-1">{error}</p>}
+        {error && <p className="text-xs text-red-300 bg-red-100 rounded px-2 py-1">{error}</p>}
       </div>
     );
   }
@@ -264,13 +264,13 @@ export function ClientActions({
     <div className="space-y-2">
       <button
         onClick={() => setEditing(true)}
-        className="flex items-center gap-2 text-sm text-white/50 hover:text-white transition-colors"
+        className="flex items-center gap-2 text-sm text-[#0f172a]/50 hover:text-[#0f172a] transition-colors"
       >
         <Mail size={14} />
         <span>Add client email to send portal invite</span>
         <Pencil size={11} />
       </button>
-      {error && <p className="text-xs text-red-300 bg-red-500/20 rounded px-2 py-1">{error}</p>}
+      {error && <p className="text-xs text-red-300 bg-red-100 rounded px-2 py-1">{error}</p>}
     </div>
   );
 }

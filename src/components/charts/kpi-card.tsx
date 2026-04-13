@@ -48,12 +48,12 @@ function getHealthStyles(health: KPIHealth) {
 }
 
 const defaultStyles = {
-  bg: "bg-brand-50",
-  border: "border-brand-200",
-  text: "text-brand-700",
-  badge: "bg-brand-100 text-brand-700",
+  bg: "bg-[#EBF5FE]",
+  border: "border-[#A8D4F5]",
+  text: "text-[#1878C8]",
+  badge: "bg-[#D6ECFB] text-[#1878C8]",
   icon: <ArrowUpRight size={14} />,
-  indicator: "bg-brand-500",
+  indicator: "bg-[#1E8FE8]",
 };
 
 export function KPICard({ label, value, unit, kpiKey, subtitle, icon }: KPICardProps) {

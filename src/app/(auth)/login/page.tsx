@@ -46,39 +46,39 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-screen">
       {/* Left panel - branding */}
-      <div className="hidden lg:flex lg:w-1/2 items-center justify-center relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed, #6366f1)' }}>
-        <div className="relative z-10 max-w-md px-8 text-white">
+      <div className="hidden lg:flex lg:w-1/2 items-center justify-center relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #EBF5FE 0%, #D6ECFB 50%, #fff 100%)' }}>
+        <div className="relative z-10 max-w-md px-8 text-[#0f172a]">
           <div className="flex items-center gap-3 mb-8">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15 backdrop-blur-sm">
-              <Mail size={20} className="text-white" />
+              <Mail size={20} className="text-[#0f172a]" />
             </div>
             <span className="text-2xl font-bold tracking-tight">LeadStart</span>
           </div>
           <h2 className="text-3xl font-bold leading-tight">
             Cold email campaigns that convert.
           </h2>
-          <p className="mt-4 text-lg text-white/70 leading-relaxed">
+          <p className="mt-4 text-lg text-[#0f172a]/70 leading-relaxed">
             Monitor performance, manage clients, and scale your outreach — all from one dashboard.
           </p>
-          <div className="mt-8 flex gap-6 text-sm text-white/50">
+          <div className="mt-8 flex gap-6 text-sm text-[#0f172a]/50">
             <div>
-              <p className="text-2xl font-bold text-white">10K+</p>
+              <p className="text-2xl font-bold text-[#0f172a]">10K+</p>
               <p>Emails/month</p>
             </div>
             <div>
-              <p className="text-2xl font-bold text-white">6%+</p>
+              <p className="text-2xl font-bold text-[#0f172a]">6%+</p>
               <p>Reply rate</p>
             </div>
             <div>
-              <p className="text-2xl font-bold text-white">50+</p>
+              <p className="text-2xl font-bold text-[#0f172a]">50+</p>
               <p>Meetings/mo</p>
             </div>
           </div>
         </div>
         {/* Decorative elements */}
-        <div className="absolute -top-20 -right-20 h-64 w-64 rounded-full bg-white/5" />
-        <div className="absolute -bottom-16 -left-16 h-48 w-48 rounded-full bg-white/5" />
-        <div className="absolute top-1/3 right-1/4 h-32 w-32 rounded-full bg-white/5" />
+        <div className="absolute -top-20 -right-20 h-64 w-64 rounded-full bg-[rgba(71,165,237,0.06)]" />
+        <div className="absolute -bottom-16 -left-16 h-48 w-48 rounded-full bg-[rgba(71,165,237,0.06)]" />
+        <div className="absolute top-1/3 right-1/4 h-32 w-32 rounded-full bg-[rgba(71,165,237,0.06)]" />
       </div>
 
       {/* Right panel - form */}
@@ -87,10 +87,10 @@ export default function LoginPage() {
           <CardHeader className="text-center pb-2">
             <div className="flex justify-center lg:hidden mb-4">
               <div className="flex items-center gap-2">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#1E8FE8]">
                   <Mail size={16} className="text-white" />
                 </div>
-                <span className="text-xl font-bold text-indigo-600 font-bold">LeadStart</span>
+                <span className="text-xl font-bold text-[#1E8FE8] font-bold">LeadStart</span>
               </div>
             </div>
             <CardTitle className="text-2xl font-bold">Welcome back</CardTitle>
@@ -136,7 +136,7 @@ export default function LoginPage() {
               )}
               <Button
                 type="submit"
-                className="w-full bg-indigo-600 hover:opacity-90 transition-opacity font-medium"
+                className="w-full bg-[#1E8FE8] text-white hover:bg-[#1878C8] transition-colors font-medium"
                 disabled={loading}
               >
                 {loading ? "Signing in..." : "Sign In"}
@@ -144,7 +144,7 @@ export default function LoginPage() {
               <div className="text-center">
                 <Link
                   href="/reset-password"
-                  className="text-sm text-muted-foreground hover:text-indigo-600 transition-colors"
+                  className="text-sm text-[#1E8FE8] hover:text-[#47A5ED] transition-colors"
                 >
                   Forgot your password?
                 </Link>

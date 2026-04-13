@@ -213,17 +213,17 @@ function ThreadCard({
           <div className="flex items-center gap-2">
             <p className="font-medium text-sm truncate">{thread.leadEmail}</p>
             {thread.hasMeeting && (
-              <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 border border-emerald-200 text-[10px]">
+              <Badge variant="secondary" className="badge-green text-[10px]">
                 Meeting
               </Badge>
             )}
             {thread.hasReply && !thread.hasMeeting && (
-              <Badge variant="secondary" className="bg-blue-100 text-blue-700 border border-blue-200 text-[10px]">
+              <Badge variant="secondary" className="badge-blue text-[10px]">
                 Replied
               </Badge>
             )}
             {thread.notes.length > 0 && (
-              <Badge variant="secondary" className="bg-amber-100 text-amber-700 border border-amber-200 text-[10px]">
+              <Badge variant="secondary" className="badge-amber text-[10px]">
                 {thread.notes.length} note{thread.notes.length > 1 ? "s" : ""}
               </Badge>
             )}
@@ -263,14 +263,14 @@ function ThreadCard({
           <div className="px-5 py-4 bg-gradient-to-b from-amber-50/50 to-transparent">
             <div className="flex items-center gap-2 mb-3">
               <MessageSquare size={14} className="text-amber-600" />
-              <p className="text-xs font-semibold text-amber-800 uppercase tracking-wide">Interaction Notes</p>
+              <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide">Interaction Notes</p>
             </div>
 
             {/* Existing notes */}
             {thread.notes.length > 0 && (
               <div className="space-y-2 mb-3">
                 {thread.notes.map((note) => (
-                  <div key={note.id} className="flex items-start gap-2 group rounded-lg bg-white border border-amber-200/60 px-3 py-2 shadow-sm">
+                  <div key={note.id} className="flex items-start gap-2 group rounded-lg bg-card border border-amber-200 px-3 py-2 shadow-sm">
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-foreground">{note.comment || <span className="italic text-muted-foreground">No text</span>}</p>
                       <p className="text-[10px] text-muted-foreground mt-0.5">{formatDateTime(note.created_at)}</p>
@@ -302,13 +302,13 @@ function ThreadCard({
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !submitting && noteText.trim()) handleSubmitNote();
                 }}
-                className="flex-1 rounded-lg border border-border/60 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200 placeholder:text-muted-foreground/50"
+                className="flex-1 rounded-lg border border-border/60 bg-card px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1E8FE8]/30 placeholder:text-muted-foreground/50"
               />
 
               <button
                 onClick={handleSubmitNote}
                 disabled={submitting || !noteText.trim()}
-                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer shrink-0 flex items-center gap-1.5"
+                className="rounded-lg bg-[#1E8FE8] px-4 py-2 text-sm font-medium text-[#0f172a] hover:bg-[#1878C8] disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer shrink-0 flex items-center gap-1.5"
               >
                 {submitting ? <Loader2 size={14} className="animate-spin" /> : null}
                 {submitting ? "Saving..." : "Save"}
@@ -342,12 +342,12 @@ function ThreadCard({
                       <p className="text-sm font-medium">{config.label}</p>
                       <p className="text-xs text-muted-foreground">{formatDateTime(event.received_at)}</p>
                       {hasReplyContent && (
-                        <div className="mt-2 rounded-lg bg-white border border-border/60 p-3 shadow-sm">
+                        <div className="mt-2 rounded-lg bg-card border border-border/60 p-3 shadow-sm">
                           {replySubject && (
                             <p className="text-xs font-semibold text-muted-foreground mb-1">Re: {replySubject}</p>
                           )}
                           <div
-                            className="text-sm text-foreground leading-relaxed max-w-none overflow-hidden [&_blockquote]:border-l-2 [&_blockquote]:border-gray-300 [&_blockquote]:pl-3 [&_blockquote]:ml-2 [&_blockquote]:text-muted-foreground [&_blockquote]:text-xs [&_img]:hidden [&_a]:text-indigo-600 [&_a]:underline"
+                            className="text-sm text-foreground leading-relaxed max-w-none overflow-hidden [&_blockquote]:border-l-2 [&_blockquote]:border-gray-300 [&_blockquote]:pl-3 [&_blockquote]:ml-2 [&_blockquote]:text-muted-foreground [&_blockquote]:text-xs [&_img]:hidden [&_a]:text-[#1E8FE8] [&_a]:underline"
                             dangerouslySetInnerHTML={{
                               __html: formatReplyHtml(replyBody || replyPreview || ""),
                             }}
@@ -535,23 +535,25 @@ export default function ClientRepliesPage() {
     <div className="space-y-6">
       {/* Header */}
       <div
-        className="relative overflow-hidden rounded-xl p-6 text-white"
+        className="relative overflow-hidden rounded-[20px] p-7 text-[#0f172a]"
         style={{
-          background: "linear-gradient(135deg, #4f46e5, #7c3aed, #6366f1)",
-          boxShadow: "0 10px 30px -5px rgba(99, 102, 241, 0.2)",
+          background: "linear-gradient(135deg, #EBF5FE 0%, #D6ECFB 50%, #fff 100%)",
+          border: '1px solid rgba(30,143,232,0.2)',
+          borderTop: '1px solid rgba(30,143,232,0.3)',
+          boxShadow: "inset 0 1px 0 rgba(255,255,255,0.9), 0 4px 14px rgba(30,143,232,0.1)",
         }}
       >
         <div className="relative z-10">
-          <p className="text-sm font-medium text-white/70">Campaign Responses</p>
-          <h1 className="text-2xl font-bold mt-1">Replies</h1>
-          <p className="text-sm text-white/60 mt-1">Track lead interactions and add notes for your team</p>
+          <p className="text-xs font-medium text-[#64748b]">Campaign Responses</p>
+          <h1 className="text-[22px] font-bold mt-1" style={{ color: '#0f172a', letterSpacing: '-0.01em' }}>Replies</h1>
+          <p className="text-sm text-[#0f172a]/60 mt-1">Track lead interactions and add notes for your team</p>
         </div>
-        <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-white/5" />
+        <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-[rgba(71,165,237,0.06)]" />
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-        <StatCard label="Total Leads" value={threads.length} icon={<Send size={16} className="text-indigo-500" />} iconBg="bg-indigo-50" />
+        <StatCard label="Total Leads" value={threads.length} icon={<Send size={16} className="text-[#1E8FE8]" />} iconBg="bg-[#1E8FE8]/10" />
         <StatCard label="Replied" value={totalReplies} icon={<MailOpen size={16} className="text-blue-500" />} iconBg="bg-blue-50" />
         <StatCard label="Meetings Booked" value={totalMeetings} icon={<CalendarCheck size={16} className="text-emerald-500" />} iconBg="bg-emerald-50" />
       </div>
@@ -570,7 +572,7 @@ export default function ClientRepliesPage() {
             onClick={() => setFilter(tab.key)}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
               filter === tab.key
-                ? "bg-indigo-100 text-indigo-700 border border-indigo-200"
+                ? "bg-[#1E8FE8]/20 text-[#47A5ED] border border-[#1E8FE8]/20"
                 : "bg-muted/50 text-muted-foreground hover:bg-muted"
             }`}
           >
@@ -584,8 +586,8 @@ export default function ClientRepliesPage() {
         <Card className="border-border/50 shadow-sm">
           <CardContent className="py-12 text-center">
             <div className="flex justify-center mb-3">
-              <div className="h-12 w-12 rounded-full bg-indigo-50 flex items-center justify-center">
-                <MailOpen size={24} className="text-indigo-400" />
+              <div className="h-12 w-12 rounded-full bg-[#1E8FE8]/10 flex items-center justify-center">
+                <MailOpen size={24} className="text-[#1878C8]" />
               </div>
             </div>
             <p className="text-muted-foreground font-medium">No replies yet</p>

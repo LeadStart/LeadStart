@@ -41,13 +41,13 @@ export default function AllCampaignsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="relative overflow-hidden rounded-xl p-6 text-white" style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed, #6366f1)', boxShadow: '0 10px 30px -5px rgba(99, 102, 241, 0.2)' }}>
+      <div className="relative overflow-hidden rounded-[20px] p-7 text-[#0f172a]" style={{ background: 'linear-gradient(135deg, #EBF5FE 0%, #D6ECFB 50%, #fff 100%)', border: '1px solid rgba(30,143,232,0.2)', borderTop: '1px solid rgba(30,143,232,0.3)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.9), 0 4px 14px rgba(30,143,232,0.1)' }}>
         <div className="relative z-10">
-          <p className="text-sm font-medium text-white/70">Campaign Management</p>
-          <h1 className="text-2xl font-bold mt-1">All Campaigns</h1>
-          <p className="text-sm text-white/60 mt-1">{active} active &middot; {paused} paused &middot; {campaigns.length} total</p>
+          <p className="text-xs font-medium text-[#64748b]">Campaign Management</p>
+          <h1 className="text-[22px] font-bold mt-1" style={{ color: '#0f172a', letterSpacing: '-0.01em' }}>All Campaigns</h1>
+          <p className="text-sm text-[#0f172a]/60 mt-1">{active} active &middot; {paused} paused &middot; {campaigns.length} total</p>
         </div>
-        <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-white/5" />
+        <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-[rgba(71,165,237,0.06)]" />
       </div>
       <Card className="border-border/50 shadow-sm">
         <CardContent className="pt-6">
@@ -58,9 +58,9 @@ export default function AllCampaignsPage() {
                 {sorted.map((row) => {
                   return (
                     <TableRow key={row.id} className="group">
-                      <TableCell><div className="flex items-center gap-3"><div className="flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold text-white shrink-0" style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed)' }}><Mail size={14} /></div><Link href={`/admin/clients/${row.client_id}/campaigns/${row.id}`} className="font-medium text-foreground hover:text-indigo-600 transition-colors">{row.name}</Link></div></TableCell>
+                      <TableCell><div className="flex items-center gap-3"><div className="flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold text-white shrink-0" style={{ background: '#1E8FE8' }}><Mail size={14} /></div><Link href={`/admin/clients/${row.client_id}/campaigns/${row.id}`} className="font-medium text-foreground hover:text-[#1E8FE8] transition-colors">{row.name}</Link></div></TableCell>
                       <TableCell><Link href={`/admin/clients/${row.client_id}`} className="text-muted-foreground hover:text-foreground transition-colors">{row.clientName || "—"}</Link></TableCell>
-                      <TableCell><Badge variant="secondary" className={row.status === "active" ? "bg-emerald-100 text-emerald-800 border border-emerald-200" : row.status === "paused" ? "bg-amber-100 text-amber-800 border border-amber-200" : "bg-gray-100 text-gray-600 border border-gray-200"}>{row.status}</Badge></TableCell>
+                      <TableCell><Badge variant="secondary" className={row.status === "active" ? "badge-green" : row.status === "paused" ? "badge-amber" : "badge-slate"}>{row.status}</Badge></TableCell>
                       <TableCell className="text-right font-medium">{row.metrics.emails_sent.toLocaleString()}</TableCell>
                       <TableCell className="text-right"><span className={row.metrics.reply_rate >= 5 ? "text-emerald-600 font-medium" : "text-amber-600"}>{row.metrics.reply_rate}%</span></TableCell>
                       <TableCell className="text-right"><span className={row.metrics.bounce_rate <= 2 ? "text-emerald-600" : "text-red-600 font-medium"}>{row.metrics.bounce_rate}%</span></TableCell>

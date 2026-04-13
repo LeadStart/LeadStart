@@ -44,23 +44,23 @@ export default function ResetPasswordPage() {
   return (
     <div className="flex min-h-screen">
       {/* Left panel - branding */}
-      <div className="hidden lg:flex lg:w-1/2 items-center justify-center relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed, #6366f1)' }}>
-        <div className="relative z-10 max-w-md px-8 text-white">
+      <div className="hidden lg:flex lg:w-1/2 items-center justify-center relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #EBF5FE 0%, #D6ECFB 50%, #fff 100%)' }}>
+        <div className="relative z-10 max-w-md px-8 text-[#0f172a]">
           <div className="flex items-center gap-3 mb-8">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15 backdrop-blur-sm">
-              <Mail size={20} className="text-white" />
+              <Mail size={20} className="text-[#0f172a]" />
             </div>
             <span className="text-2xl font-bold tracking-tight">LeadStart</span>
           </div>
           <h2 className="text-3xl font-bold leading-tight">
             Reset your password
           </h2>
-          <p className="mt-4 text-lg text-white/70 leading-relaxed">
+          <p className="mt-4 text-lg text-[#0f172a]/70 leading-relaxed">
             We'll send you a secure link to reset your password and get back to your dashboard.
           </p>
         </div>
-        <div className="absolute -top-20 -right-20 h-64 w-64 rounded-full bg-white/5" />
-        <div className="absolute -bottom-16 -left-16 h-48 w-48 rounded-full bg-white/5" />
+        <div className="absolute -top-20 -right-20 h-64 w-64 rounded-full bg-[rgba(71,165,237,0.06)]" />
+        <div className="absolute -bottom-16 -left-16 h-48 w-48 rounded-full bg-[rgba(71,165,237,0.06)]" />
       </div>
 
       {/* Right panel - form */}
@@ -69,10 +69,10 @@ export default function ResetPasswordPage() {
           <CardHeader className="text-center pb-2">
             <div className="flex justify-center lg:hidden mb-4">
               <div className="flex items-center gap-2">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600">
-                  <Mail size={16} className="text-white" />
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#1E8FE8]">
+                  <Mail size={16} className="text-[#0f172a]" />
                 </div>
-                <span className="text-xl font-bold text-indigo-600">LeadStart</span>
+                <span className="text-xl font-bold text-[#1E8FE8]">LeadStart</span>
               </div>
             </div>
             <CardTitle className="text-2xl font-bold">
@@ -127,7 +127,7 @@ export default function ResetPasswordPage() {
                 )}
                 <Button
                   type="submit"
-                  className="w-full bg-indigo-600 hover:opacity-90 transition-opacity font-medium"
+                  className="w-full bg-[#1E8FE8] text-white hover:bg-[#1878C8] transition-colors font-medium"
                   disabled={loading}
                 >
                   {loading ? "Sending..." : "Send Reset Link"}

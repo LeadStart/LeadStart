@@ -22,10 +22,10 @@ import { StatCard } from "@/components/charts/stat-card";
 
 function StatusBadge({ status }: { status: BillingClient["status"] }) {
   const styles: Record<string, string> = {
-    active: "bg-emerald-100 text-emerald-800 border border-emerald-200",
-    trialing: "bg-blue-100 text-blue-800 border border-blue-200",
-    past_due: "bg-red-100 text-red-800 border border-red-200",
-    canceled: "bg-gray-100 text-gray-600 border border-gray-200",
+    active: "badge-green",
+    trialing: "badge-blue",
+    past_due: "badge-red",
+    canceled: "badge-slate",
   };
   return (
     <Badge variant="secondary" className={styles[status] || ""}>
@@ -36,10 +36,10 @@ function StatusBadge({ status }: { status: BillingClient["status"] }) {
 
 function InvoiceStatusBadge({ status }: { status: string }) {
   const styles: Record<string, string> = {
-    paid: "bg-emerald-100 text-emerald-800 border border-emerald-200",
-    open: "bg-amber-100 text-amber-800 border border-amber-200",
-    past_due: "bg-red-100 text-red-800 border border-red-200",
-    void: "bg-gray-100 text-gray-600 border border-gray-200",
+    paid: "badge-green",
+    open: "badge-amber",
+    past_due: "badge-red",
+    void: "badge-slate",
   };
   return (
     <Badge variant="secondary" className={styles[status] || ""}>
@@ -66,17 +66,17 @@ export default function BillingPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="relative overflow-hidden rounded-xl p-6 text-white" style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed, #6366f1)', boxShadow: '0 10px 30px -5px rgba(99, 102, 241, 0.2)' }}>
+      <div className="relative overflow-hidden rounded-[20px] p-7 text-[#0f172a]" style={{ background: 'linear-gradient(135deg, #EBF5FE 0%, #D6ECFB 50%, #fff 100%)', border: '1px solid rgba(30,143,232,0.2)', borderTop: '1px solid rgba(30,143,232,0.3)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.9), 0 4px 14px rgba(30,143,232,0.1)' }}>
         <div className="relative z-10 flex items-center justify-between">
           <div>
-            <p className="text-sm font-medium text-white/70">Revenue & Billing</p>
-            <h1 className="text-2xl font-bold mt-1">Billing & Subscriptions</h1>
+            <p className="text-xs font-medium text-[#64748b]">Revenue & Billing</p>
+            <h1 className="text-[22px] font-bold mt-1" style={{ color: '#0f172a', letterSpacing: '-0.01em' }}>Billing & Subscriptions</h1>
           </div>
-          <Badge variant="secondary" className="bg-white/15 text-white border-0">
+          <Badge variant="secondary" className="bg-white/15 text-[#0f172a] border-0">
             Stripe: Placeholder
           </Badge>
         </div>
-        <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-white/5" />
+        <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-[rgba(71,165,237,0.06)]" />
       </div>
 
       {/* Revenue Overview */}
@@ -91,8 +91,8 @@ export default function BillingPage() {
         <StatCard
           label="Active Subs"
           value={activeSubscriptions}
-          icon={<Users size={18} className="text-indigo-500" />}
-          iconBg="bg-indigo-50"
+          icon={<Users size={18} className="text-[#1E8FE8]" />}
+          iconBg="bg-[#1E8FE8]/10"
         />
         <StatCard
           label="In Trial"
@@ -112,8 +112,8 @@ export default function BillingPage() {
       {/* Pricing Plans */}
       <Card className="border-border/50 shadow-sm">
         <CardHeader className="flex flex-row items-center gap-2 pb-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50">
-            <CreditCard size={16} className="text-indigo-500" />
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#1E8FE8]/10">
+            <CreditCard size={16} className="text-[#1E8FE8]" />
           </div>
           <CardTitle className="text-base">Plans</CardTitle>
         </CardHeader>
@@ -124,13 +124,14 @@ export default function BillingPage() {
                 (b) => b.plan === plan.id
               ).length;
               return (
-                <div
+                <Card
                   key={plan.id}
-                  className="rounded-xl border border-border/50 p-5 space-y-3 transition-all hover:border-indigo-200 hover:shadow-md"
+                  className="transition-all hover:border-[#1E8FE8]/30 hover:shadow-md"
                 >
+                <CardContent className="p-5 space-y-3">
                   <div className="flex items-center justify-between">
                     <h3 className="font-semibold text-lg">{plan.name}</h3>
-                    <Badge variant="secondary" className="bg-indigo-100 text-indigo-700 border border-indigo-200">
+                    <Badge variant="secondary" className="bg-[#1E8FE8]/20 text-[#47A5ED] border border-[#1E8FE8]/20">
                       {subscriberCount} client{subscriberCount !== 1 ? "s" : ""}
                     </Badge>
                   </div>
@@ -146,7 +147,8 @@ export default function BillingPage() {
                       </li>
                     ))}
                   </ul>
-                </div>
+                </CardContent>
+                </Card>
               );
             })}
           </div>
@@ -154,13 +156,13 @@ export default function BillingPage() {
       </Card>
 
       {/* Client Subscriptions */}
+      <div className="flex items-center gap-2 mb-3">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#1E8FE8]/10">
+          <Repeat size={16} className="text-[#1E8FE8]" />
+        </div>
+        <h2 className="text-[15px] font-semibold text-[#0f172a]">Client Subscriptions</h2>
+      </div>
       <Card className="border-border/50 shadow-sm">
-        <CardHeader className="flex flex-row items-center gap-2 pb-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50">
-            <Repeat size={16} className="text-indigo-500" />
-          </div>
-          <CardTitle className="text-base">Client Subscriptions</CardTitle>
-        </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
@@ -179,7 +181,7 @@ export default function BillingPage() {
                 <TableRow key={b.clientId} className="group">
                   <TableCell>
                     <div className="flex items-center gap-2">
-                      <div className="flex h-7 w-7 items-center justify-center rounded-md text-[10px] font-bold text-white shrink-0" style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed)' }}>
+                      <div className="flex h-7 w-7 items-center justify-center rounded-md text-[10px] font-bold text-[#0f172a] shrink-0" style={{ background: '#1E8FE8' }}>
                         {b.clientName.charAt(0)}
                       </div>
                       <span className="font-medium">{b.clientName}</span>
@@ -219,15 +221,16 @@ export default function BillingPage() {
 
       {/* Invoice Detail */}
       {selectedBilling && (
+        <>
+        <div className="flex items-center gap-2 mb-3">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold text-white" style={{ background: '#1E8FE8' }}>
+            {selectedBilling.clientName.charAt(0)}
+          </div>
+          <h2 className="text-[15px] font-semibold text-[#0f172a]">
+            Invoices — {selectedBilling.clientName}
+          </h2>
+        </div>
         <Card className="border-border/50 shadow-sm">
-          <CardHeader className="flex flex-row items-center gap-2 pb-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold text-white" style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed)' }}>
-              {selectedBilling.clientName.charAt(0)}
-            </div>
-            <CardTitle className="text-base">
-              Invoices — {selectedBilling.clientName}
-            </CardTitle>
-          </CardHeader>
           <CardContent>
             {selectedBilling.invoices.length === 0 ? (
               <p className="text-sm text-muted-foreground">
@@ -270,25 +273,26 @@ export default function BillingPage() {
             )}
           </CardContent>
         </Card>
+        </>
       )}
 
       {/* Stripe Integration Status */}
       <Card className="border-border/50 shadow-sm">
         <CardHeader className="flex flex-row items-center gap-2 pb-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50">
-            <CreditCard size={16} className="text-indigo-500" />
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#1E8FE8]/10">
+            <CreditCard size={16} className="text-[#1E8FE8]" />
           </div>
           <CardTitle className="text-base">Stripe Integration</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="rounded-xl border border-dashed border-indigo-200 bg-indigo-50/30 p-6 text-center space-y-3">
+          <div className="rounded-xl border border-dashed border-[#1E8FE8]/20 bg-[#1E8FE8]/5 p-6 text-center space-y-3">
             <p className="text-sm text-muted-foreground">
               Stripe integration is in <strong>placeholder mode</strong>. When
               you&apos;re ready to go live, connect your Stripe account and billing
               data will sync automatically.
             </p>
             <div className="flex items-center justify-center gap-3 pt-1">
-              <Button disabled style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed)' }}>
+              <Button disabled style={{ background: '#1E8FE8' }}>
                 Connect Stripe Account
               </Button>
               <Button variant="outline" disabled>

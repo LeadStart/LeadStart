@@ -58,19 +58,23 @@ export function Sidebar({ role }: { role: AppRole }) {
   const settingsNav = isAdmin ? adminSettingsNav : [];
 
   return (
-    <aside className="flex h-full w-64 flex-col" style={{ background: 'linear-gradient(180deg, #1e1b4b 0%, #312e81 50%, #3730a3 100%)' }}>
+    <aside className="relative flex h-full w-64 flex-col overflow-visible border-r border-[#e2e8f0]" style={{ background: 'linear-gradient(180deg, #ffffff 0%, #47A5ED 100%)', boxShadow: '3px 0 12px rgba(15,23,42,0.06), 1px 0 3px rgba(15,23,42,0.03)' }}>
+      {/* Sidebar shadow cast into content area */}
+      <div className="absolute top-0 bottom-0 w-8 pointer-events-none z-0" style={{ right: '-32px', background: 'linear-gradient(90deg, rgba(15,23,42,0.12) 0%, rgba(24,120,200,0.03) 60%, transparent 100%)' }} />
+
       {/* Brand header */}
-      <div className="flex h-16 items-center gap-3 px-6">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/15 backdrop-blur-sm">
+      <div className="flex h-16 items-center gap-3 px-6 border-b border-[#e2e8f0]">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold text-white" style={{ background: '#1E8FE8' }}>
           <Mail size={16} className="text-white" />
         </div>
-        <Link href={isAdmin ? "/admin" : "/client"} className="text-lg font-bold text-white tracking-tight">
+        <Link href={isAdmin ? "/admin" : "/client"} className="text-lg font-bold text-[#0f172a] tracking-tight">
           LeadStart
         </Link>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 space-y-1 px-3 py-4">
+      <nav className="flex-1 space-y-1 px-3 py-4 overflow-visible" style={{ direction: 'rtl' }}>
+        <div style={{ direction: 'ltr' }}>
         {nav.map((item) => {
           const isActive = pathname === item.href;
           return (
@@ -78,19 +82,16 @@ export function Sidebar({ role }: { role: AppRole }) {
               key={item.href}
               href={item.href}
               className={cn(
-                "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200",
+                "relative flex items-center gap-3 px-3 py-2.5 text-sm font-medium transition-all duration-200 ml-2",
                 isActive
-                  ? "bg-white/15 text-white shadow-sm backdrop-blur-sm"
-                  : "text-indigo-200 hover:bg-white/10 hover:text-white"
+                  ? "nav-notch-active text-white font-semibold"
+                  : "nav-notch-hover text-[#0f172a]"
               )}
             >
-              <span className={cn(isActive ? "text-white" : "text-indigo-300")}>
+              <span className={cn("relative z-[1]", isActive ? "text-white" : "text-[#64748b]")}>
                 {item.icon}
               </span>
-              {item.label}
-              {isActive && (
-                <span className="ml-auto h-1.5 w-1.5 rounded-full bg-white" />
-              )}
+              <span className="relative z-[1]">{item.label}</span>
             </Link>
           );
         })}
@@ -98,7 +99,7 @@ export function Sidebar({ role }: { role: AppRole }) {
         {settingsNav.length > 0 && (
           <>
             <div className="pt-6 pb-2 px-3">
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-indigo-400">
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-[#64748b]">
                 Settings
               </p>
             </div>
@@ -109,34 +110,35 @@ export function Sidebar({ role }: { role: AppRole }) {
                   key={item.href}
                   href={item.href}
                   className={cn(
-                    "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200",
+                    "relative flex items-center gap-3 px-3 py-2.5 text-sm font-medium transition-all duration-200 ml-2",
                     isActive
-                      ? "bg-white/15 text-white shadow-sm backdrop-blur-sm"
-                      : "text-indigo-200 hover:bg-white/10 hover:text-white"
+                      ? "nav-notch-active text-white font-semibold"
+                      : "nav-notch-hover text-[#0f172a]"
                   )}
                 >
-                  <span className={cn(isActive ? "text-white" : "text-indigo-300")}>
+                  <span className={cn("relative z-[1]", isActive ? "text-white" : "text-[#64748b]")}>
                     {item.icon}
                   </span>
-                  {item.label}
+                  <span className="relative z-[1]">{item.label}</span>
                 </Link>
               );
             })}
           </>
         )}
+        </div>
       </nav>
 
       {/* Footer */}
-      <div className="border-t border-white/10 p-4">
+      <div className="border-t border-white/25 p-4">
         <div className="flex items-center gap-2">
-          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-white/15 text-xs font-bold text-white">
+          <div className="flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold text-white" style={{ background: '#1E8FE8' }}>
             {role === "owner" ? "A" : role === "va" ? "V" : "C"}
           </div>
           <div>
-            <p className="text-xs font-medium text-white">
+            <p className="text-xs font-medium text-[#0f172a]">
               {role === "owner" ? "Admin" : role === "va" ? "VA" : "Client"}
             </p>
-            <p className="text-[10px] text-indigo-300">LeadStart Agency</p>
+            <p className="text-[10px] text-[#64748b]">LeadStart Agency</p>
           </div>
         </div>
       </div>

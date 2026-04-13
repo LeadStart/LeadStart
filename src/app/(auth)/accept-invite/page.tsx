@@ -13,6 +13,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Mail, Lock, User } from "lucide-react";
 
 export default function AcceptInvitePage() {
   const [password, setPassword] = useState("");
@@ -67,63 +68,115 @@ export default function AcceptInvitePage() {
 
   if (!ready) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50">
-        <p className="text-gray-500">Verifying your invitation...</p>
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <p className="text-[#7A7872]">Verifying your invitation...</p>
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-bold">
-            Welcome to LeadStart
-          </CardTitle>
-          <CardDescription>
-            Set up your account to get started
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSetPassword} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="fullName">Full Name</Label>
-              <Input
-                id="fullName"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                placeholder="John Doe"
-                required
-              />
+    <div className="flex min-h-screen">
+      {/* Left panel - branding */}
+      <div className="hidden lg:flex lg:w-1/2 items-center justify-center relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #EBF5FE 0%, #D6ECFB 50%, #fff 100%)' }}>
+        <div className="relative z-10 max-w-md px-8 text-[#0f172a]">
+          <div className="flex items-center gap-3 mb-8">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15 backdrop-blur-sm">
+              <Mail size={20} className="text-[#0f172a]" />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Min 8 characters"
-                required
-              />
+            <span className="text-2xl font-bold tracking-tight">LeadStart</span>
+          </div>
+          <h2 className="text-3xl font-bold leading-tight">
+            Welcome aboard.
+          </h2>
+          <p className="mt-4 text-lg text-[#0f172a]/70 leading-relaxed">
+            Set up your account to access your campaign dashboard and start tracking results.
+          </p>
+        </div>
+        <div className="absolute -top-20 -right-20 h-64 w-64 rounded-full bg-[rgba(71,165,237,0.06)]" />
+        <div className="absolute -bottom-16 -left-16 h-48 w-48 rounded-full bg-[rgba(71,165,237,0.06)]" />
+      </div>
+
+      {/* Right panel - form */}
+      <div className="flex w-full lg:w-1/2 items-center justify-center bg-background px-4">
+        <Card className="w-full max-w-md border-border/50 shadow-lg">
+          <CardHeader className="text-center pb-2">
+            <div className="flex justify-center lg:hidden mb-4">
+              <div className="flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#1E8FE8]">
+                  <Mail size={16} className="text-[#0f172a]" />
+                </div>
+                <span className="text-xl font-bold text-[#1E8FE8]">LeadStart</span>
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="confirmPassword">Confirm Password</Label>
-              <Input
-                id="confirmPassword"
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                required
-              />
-            </div>
-            {error && <p className="text-sm text-red-600">{error}</p>}
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? "Setting up..." : "Complete Setup"}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+            <CardTitle className="text-2xl font-bold">
+              Welcome to LeadStart
+            </CardTitle>
+            <CardDescription className="text-muted-foreground">
+              Set up your account to get started
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSetPassword} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="fullName" className="text-sm font-medium">Full Name</Label>
+                <div className="relative">
+                  <User size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    id="fullName"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    placeholder="John Doe"
+                    className="pl-10"
+                    required
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="password" className="text-sm font-medium">Password</Label>
+                <div className="relative">
+                  <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    id="password"
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Min 8 characters"
+                    className="pl-10"
+                    required
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="confirmPassword" className="text-sm font-medium">Confirm Password</Label>
+                <div className="relative">
+                  <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    id="confirmPassword"
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Re-enter password"
+                    className="pl-10"
+                    required
+                  />
+                </div>
+              </div>
+              {error && (
+                <div className="rounded-lg bg-red-50 border border-red-500/20 p-3">
+                  <p className="text-sm text-red-700">{error}</p>
+                </div>
+              )}
+              <Button
+                type="submit"
+                className="w-full bg-[#1E8FE8] text-white hover:bg-[#1878C8] transition-colors font-medium"
+                disabled={loading}
+              >
+                {loading ? "Setting up..." : "Complete Setup"}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

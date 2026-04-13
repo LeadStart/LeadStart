@@ -44,12 +44,12 @@ import {
 import type { Contact, ContactStatus } from "@/types/app";
 
 const STATUS_COLORS: Record<ContactStatus, string> = {
-  new: "bg-gray-100 text-gray-600",
-  enriched: "bg-blue-100 text-blue-700",
-  uploaded: "bg-indigo-100 text-indigo-700",
-  active: "bg-emerald-100 text-emerald-700",
-  bounced: "bg-red-100 text-red-700",
-  replied: "bg-amber-100 text-amber-700",
+  new: "bg-[#e2e8f0] text-[#7A7872]",
+  enriched: "badge-blue",
+  uploaded: "bg-[#1E8FE8]/20 text-[#47A5ED]",
+  active: "badge-green",
+  bounced: "badge-red",
+  replied: "badge-amber",
   unsubscribed: "bg-gray-100 text-gray-500",
 };
 
@@ -188,30 +188,32 @@ export default function ContactsPage() {
     <div className="space-y-6">
       {/* Header */}
       <div
-        className="relative overflow-hidden rounded-xl p-6 text-white"
+        className="relative overflow-hidden rounded-[20px] p-7 text-[#0f172a]"
         style={{
-          background: "linear-gradient(135deg, #4f46e5, #7c3aed, #6366f1)",
-          boxShadow: "0 10px 30px -5px rgba(99, 102, 241, 0.2)",
+          background: "linear-gradient(135deg, #EBF5FE 0%, #D6ECFB 50%, #fff 100%)",
+          border: '1px solid rgba(30,143,232,0.2)',
+          borderTop: '1px solid rgba(30,143,232,0.3)',
+          boxShadow: "inset 0 1px 0 rgba(255,255,255,0.9), 0 4px 14px rgba(30,143,232,0.1)",
         }}
       >
         <div className="relative z-10 flex items-start justify-between">
           <div>
-            <p className="text-sm font-medium text-white/70">Campaign Leads</p>
-            <h1 className="text-2xl font-bold mt-1">Contacts</h1>
-            <p className="text-sm text-white/60 mt-1">
+            <p className="text-xs font-medium text-[#64748b]">Campaign Leads</p>
+            <h1 className="text-[22px] font-bold mt-1" style={{ color: '#0f172a', letterSpacing: '-0.01em' }}>Contacts</h1>
+            <p className="text-sm text-[#0f172a]/60 mt-1">
               {totalContacts} total &middot; {enrichedCount} enriched &middot;{" "}
               {uploadedCount} uploaded
             </p>
           </div>
           <Button
             onClick={() => setShowAdd(true)}
-            className="bg-white/15 hover:bg-white/25 text-white border-0"
+            className="bg-white/15 hover:bg-white/25 text-[#0f172a] border-0"
           >
             <Plus size={16} className="mr-1" />
             Add Contact
           </Button>
         </div>
-        <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-white/5" />
+        <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-[rgba(71,165,237,0.06)]" />
       </div>
 
       {/* Stat cards */}
@@ -219,8 +221,8 @@ export default function ContactsPage() {
         <StatCard
           label="Total Contacts"
           value={totalContacts}
-          icon={<Users size={18} className="text-indigo-500" />}
-          iconBg="bg-indigo-50"
+          icon={<Users size={18} className="text-[#1E8FE8]" />}
+          iconBg="bg-[#1E8FE8]/10"
         />
         <StatCard
           label="Enriched"
@@ -535,7 +537,7 @@ export default function ContactsPage() {
             </div>
             <Button
               className="w-full"
-              style={{ background: "linear-gradient(135deg, #4f46e5, #7c3aed)" }}
+              style={{ background: "#1E8FE8" }}
               disabled={!formEmail.trim() || saving}
               onClick={handleAdd}
             >

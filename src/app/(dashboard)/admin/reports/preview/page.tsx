@@ -18,15 +18,15 @@ export default function ReportPreviewPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="relative overflow-hidden rounded-xl p-6 text-white" style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed, #6366f1)', boxShadow: '0 10px 30px -5px rgba(99, 102, 241, 0.2)' }}>
+      <div className="relative overflow-hidden rounded-[20px] p-7 text-[#0f172a]" style={{ background: 'linear-gradient(135deg, #EBF5FE 0%, #D6ECFB 50%, #fff 100%)', border: '1px solid rgba(30,143,232,0.2)', borderTop: '1px solid rgba(30,143,232,0.3)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.9), 0 4px 14px rgba(30,143,232,0.1)' }}>
         <div className="relative z-10">
-          <p className="text-sm font-medium text-white/70">Email Templates</p>
-          <h1 className="text-2xl font-bold mt-1">Weekly KPI Report Preview</h1>
-          <p className="text-sm text-white/60 mt-1">
+          <p className="text-xs font-medium text-[#64748b]">Email Templates</p>
+          <h1 className="text-[22px] font-bold mt-1" style={{ color: '#0f172a', letterSpacing: '-0.01em' }}>Weekly KPI Report Preview</h1>
+          <p className="text-sm text-[#0f172a]/60 mt-1">
             This is what clients see when you send a weekly report
           </p>
         </div>
-        <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-white/5" />
+        <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-[rgba(71,165,237,0.06)]" />
       </div>
 
       {/* Controls */}
@@ -45,7 +45,7 @@ export default function ReportPreviewPage() {
             onClick={() => setViewport("desktop")}
             className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
               viewport === "desktop"
-                ? "bg-indigo-100 text-indigo-700"
+                ? "bg-[#1E8FE8]/20 text-[#47A5ED]"
                 : "text-muted-foreground hover:text-foreground"
             }`}
           >
@@ -56,7 +56,7 @@ export default function ReportPreviewPage() {
             onClick={() => setViewport("mobile")}
             className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
               viewport === "mobile"
-                ? "bg-indigo-100 text-indigo-700"
+                ? "bg-[#1E8FE8]/20 text-[#47A5ED]"
                 : "text-muted-foreground hover:text-foreground"
             }`}
           >
@@ -95,7 +95,7 @@ export default function ReportPreviewPage() {
                 width: "100%",
                 height: "900px",
                 border: "none",
-                background: "#f4f4f8",
+                background: "#f8fafc",
               }}
               title="Email Preview"
             />

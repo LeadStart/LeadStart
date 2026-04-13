@@ -190,22 +190,22 @@ export default function IntegrationsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="relative overflow-hidden rounded-xl p-6 text-white" style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed, #6366f1)', boxShadow: '0 10px 30px -5px rgba(99, 102, 241, 0.2)' }}>
+      <div className="relative overflow-hidden rounded-[20px] p-7 text-[#0f172a]" style={{ background: 'linear-gradient(135deg, #EBF5FE 0%, #D6ECFB 50%, #fff 100%)', border: '1px solid rgba(30,143,232,0.2)', borderTop: '1px solid rgba(30,143,232,0.3)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.9), 0 4px 14px rgba(30,143,232,0.1)' }}>
         <div className="relative z-10">
-          <p className="text-sm font-medium text-white/70">Settings</p>
-          <h1 className="text-2xl font-bold mt-1">Integrations</h1>
-          <p className="text-sm text-white/60 mt-1">
+          <p className="text-xs font-medium text-[#64748b]">Settings</p>
+          <h1 className="text-[22px] font-bold mt-1" style={{ color: '#0f172a', letterSpacing: '-0.01em' }}>Integrations</h1>
+          <p className="text-sm text-[#0f172a]/60 mt-1">
             Manage API connections, email, and sync schedules
           </p>
         </div>
-        <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-white/5" />
+        <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-[rgba(71,165,237,0.06)]" />
       </div>
 
       {/* Instantly.ai API Key */}
       <Card className="border-border/50 shadow-sm">
         <CardHeader className="flex flex-row items-center gap-2 pb-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50">
-            <Key size={16} className="text-indigo-500" />
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#1E8FE8]/10">
+            <Key size={16} className="text-[#1E8FE8]" />
           </div>
           <div>
             <CardTitle className="text-base">Instantly.ai</CardTitle>
@@ -224,7 +224,7 @@ export default function IntegrationsPage() {
             />
           </div>
           <div className="flex gap-2">
-            <Button onClick={handleSaveApiKey} disabled={saving} style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed)' }}>
+            <Button onClick={handleSaveApiKey} disabled={saving} style={{ background: '#1E8FE8' }}>
               {saving ? "Saving..." : "Save Key"}
             </Button>
             <Button variant="outline" onClick={handleTest} disabled={testing || !apiKey}>
@@ -286,7 +286,7 @@ export default function IntegrationsPage() {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <Button onClick={handleSaveResend} disabled={savingResend} style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed)' }}>
+            <Button onClick={handleSaveResend} disabled={savingResend} style={{ background: '#1E8FE8' }}>
               {savingResend ? "Saving..." : "Save Email Settings"}
             </Button>
             {resendSaved && (
@@ -313,7 +313,7 @@ export default function IntegrationsPage() {
           <div className="flex items-center gap-2 mb-2">
             <RefreshCw size={14} className="text-muted-foreground" />
             <p className="text-sm font-medium">Daily Analytics Sync</p>
-            <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 border border-emerald-200 text-[10px]">Active</Badge>
+            <Badge variant="secondary" className="badge-green text-[10px]">Active</Badge>
           </div>
 
           <div className="space-y-1">
@@ -341,7 +341,7 @@ export default function IntegrationsPage() {
                   ))}
                 </SelectContent>
               </Select>
-              <Badge variant="secondary" className="bg-blue-100 text-blue-700 border border-blue-200 text-[10px] ml-2">
+              <Badge variant="secondary" className="badge-blue text-[10px] ml-2">
                 Eastern Time (ET)
               </Badge>
             </div>
@@ -349,7 +349,7 @@ export default function IntegrationsPage() {
           </div>
 
           <div className="flex items-center gap-3 pt-2">
-            <Button onClick={handleSaveSchedule} disabled={savingSchedule} style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed)' }}>
+            <Button onClick={handleSaveSchedule} disabled={savingSchedule} style={{ background: '#1E8FE8' }}>
               {savingSchedule ? "Saving..." : "Save Schedule"}
             </Button>
             {scheduleSaved && (
@@ -364,8 +364,8 @@ export default function IntegrationsPage() {
       {/* Manual Sync */}
       <Card className="border-border/50 shadow-sm">
         <CardHeader className="flex flex-row items-center gap-2 pb-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50">
-            <Zap size={16} className="text-indigo-500" />
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#1E8FE8]/10">
+            <Zap size={16} className="text-[#1E8FE8]" />
           </div>
           <CardTitle className="text-base">Manual Sync</CardTitle>
         </CardHeader>
@@ -378,9 +378,9 @@ export default function IntegrationsPage() {
             {syncing ? "Syncing..." : "Sync Now"}
           </Button>
           {syncResult && (
-            <div className="flex items-center gap-2 rounded-lg bg-indigo-50 border border-indigo-200 p-3">
-              <Zap size={16} className="text-indigo-500" />
-              <span className="text-sm font-medium text-indigo-700">{syncResult}</span>
+            <div className="flex items-center gap-2 rounded-lg bg-[#1E8FE8]/10 border border-[#1E8FE8]/20 p-3">
+              <Zap size={16} className="text-[#1E8FE8]" />
+              <span className="text-sm font-medium text-[#47A5ED]">{syncResult}</span>
             </div>
           )}
         </CardContent>
@@ -399,7 +399,7 @@ export default function IntegrationsPage() {
           <Badge variant="secondary" className="ml-auto bg-gray-100 text-gray-500 border border-gray-200 text-[10px]">Coming Soon</Badge>
         </CardHeader>
         <CardContent>
-          <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50/50 p-6 text-center space-y-2">
+          <div className="rounded-xl border border-dashed border-gray-200 bg-background/50 p-6 text-center space-y-2">
             <p className="text-sm text-muted-foreground">
               Stripe integration for automated billing, invoicing, and payment tracking will be available soon.
             </p>

@@ -133,8 +133,8 @@ export default function ClientDashboardPage() {
       <div className="flex items-center justify-center h-64">
         <div className="text-center space-y-2">
           <div className="flex justify-center">
-            <div className="h-12 w-12 rounded-full bg-indigo-50 flex items-center justify-center">
-              <TrendingUp size={24} className="text-indigo-400" />
+            <div className="h-12 w-12 rounded-full bg-[#1E8FE8]/10 flex items-center justify-center">
+              <TrendingUp size={24} className="text-[#1878C8]" />
             </div>
           </div>
           <p className="text-muted-foreground font-medium">Your account is being set up.</p>
@@ -148,29 +148,29 @@ export default function ClientDashboardPage() {
   const metrics = { ...rawMetrics, meetings_booked: Math.max(0, rawMetrics.meetings_booked - excludedMeetings) };
   return (
     <div className="space-y-6">
-      <div className="relative overflow-hidden rounded-xl p-6 text-white" style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed, #6366f1)', boxShadow: '0 10px 30px -5px rgba(99, 102, 241, 0.2)' }}>
+      <div className="relative overflow-hidden rounded-[20px] p-7 text-[#0f172a]" style={{ background: 'linear-gradient(135deg, #EBF5FE 0%, #D6ECFB 50%, #fff 100%)', border: '1px solid rgba(30,143,232,0.2)', borderTop: '1px solid rgba(30,143,232,0.3)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.9), 0 4px 14px rgba(30,143,232,0.1)' }}>
         <div className="relative z-10">
-          <p className="text-sm font-medium text-white/70">Welcome back</p>
-          <h1 className="text-2xl font-bold mt-1">{client.name}</h1>
-          <p className="text-sm text-white/60 mt-1">{campaigns.length} campaign{campaigns.length !== 1 ? "s" : ""}</p>
+          <p className="text-xs font-medium text-[#64748b]">Welcome back</p>
+          <h1 className="text-[22px] font-bold mt-1" style={{ color: '#0f172a', letterSpacing: '-0.01em' }}>{client.name}</h1>
+          <p className="text-sm text-[#0f172a]/60 mt-1">{campaigns.length} campaign{campaigns.length !== 1 ? "s" : ""}</p>
         </div>
-        <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-white/5" />
-        <div className="absolute -bottom-6 -right-4 h-24 w-24 rounded-full bg-white/5" />
+        <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-[rgba(71,165,237,0.06)]" />
+        <div className="absolute -bottom-6 -right-4 h-24 w-24 rounded-full bg-[rgba(71,165,237,0.06)]" />
       </div>
 
       {/* Row 1: Combined KPI + Date Range Card (Option C) */}
       <Card className="border-border/50 shadow-sm overflow-hidden">
         {/* Gradient header bar */}
-        <div className="flex items-center justify-between px-6 py-3" style={{ background: 'linear-gradient(to right, rgba(79,70,229,0.85), rgba(99,102,241,0.5) 55%, rgba(238,242,255,0.3) 100%)' }}>
-          <span className="text-sm font-semibold text-white">Campaign Performance</span>
+        <div className="flex items-center justify-between px-6 py-3" style={{ background: 'linear-gradient(to right, rgba(30,143,232,0.85), rgba(71,165,237,0.5) 55%, rgba(235,245,254,0.3) 100%)' }}>
+          <span className="text-sm font-semibold text-[#0f172a]">Campaign Performance</span>
           <div className="flex items-center gap-3">
             {datePreset !== "custom" && (
-              <span className="text-xs text-indigo-700/70">
+              <span className="text-xs text-[#47A5ED]/70">
                 {new Date(startDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })} — {new Date(endDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
               </span>
             )}
             <Select value={datePreset} onValueChange={handlePresetChange}>
-              <SelectTrigger className="h-8 w-[130px] bg-white/60 backdrop-blur-sm border-white/40 text-xs font-medium text-indigo-900"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="h-8 w-[130px] bg-white/60 backdrop-blur-sm border-white/40 text-xs font-medium text-[#E8E6E1]"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="7d">Last 7 Days</SelectItem>
                 <SelectItem value="30d">Last 30 Days</SelectItem>
@@ -184,13 +184,13 @@ export default function ClientDashboardPage() {
         </div>
         {/* Custom date inputs (shown when Custom selected) */}
         {datePreset === "custom" && (
-          <div className="flex items-end gap-4 px-6 py-3 bg-indigo-50/50 border-b border-indigo-100/50">
+          <div className="flex items-end gap-4 px-6 py-3 bg-[#1E8FE8]/5 border-b border-[#1E8FE8]/10/50">
             <div className="space-y-1 flex-1 min-w-0">
-              <Label className="text-xs font-medium text-indigo-600/70">From</Label>
+              <Label className="text-xs font-medium text-[#1E8FE8]/70">From</Label>
               <Input className="h-9 w-full text-sm" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
             </div>
             <div className="space-y-1 flex-1 min-w-0">
-              <Label className="text-xs font-medium text-indigo-600/70">To</Label>
+              <Label className="text-xs font-medium text-[#1E8FE8]/70">To</Label>
               <Input className="h-9 w-full text-sm" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
             </div>
           </div>
@@ -217,8 +217,8 @@ export default function ClientDashboardPage() {
             className="flex flex-row items-center gap-2 pb-3 cursor-pointer select-none"
             onClick={() => setCampaignsExpanded((v) => !v)}
           >
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50">
-              <TrendingUp size={16} className="text-indigo-500" />
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#1E8FE8]/10">
+              <TrendingUp size={16} className="text-[#1E8FE8]" />
             </div>
             <CardTitle className="text-base flex-1">Your Campaigns</CardTitle>
             <span className="text-muted-foreground">
@@ -235,9 +235,9 @@ export default function ClientDashboardPage() {
                     const campSnapshots = snapshots.filter((s) => s.campaign_id === campaign.id);
                     const campMetrics = calculateMetrics(campSnapshots);
                     return (
-                      <Link key={campaign.id} href={`/client/campaigns/${campaign.id}`} className="group flex items-center justify-between rounded-xl border border-border/50 p-3 transition-all duration-200 hover:border-indigo-200 hover:shadow-md hover:bg-indigo-50/30">
+                      <Link key={campaign.id} href={`/client/campaigns/${campaign.id}`} className="group flex items-center justify-between rounded-xl border border-border/50 p-3 transition-all duration-200 hover:border-[#1E8FE8]/20 hover:shadow-md hover:bg-[#1E8FE8]/5">
                         <div className="flex items-center gap-3">
-                          <div className="flex h-9 w-9 items-center justify-center rounded-lg text-sm font-bold text-white shrink-0" style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed)' }}>
+                          <div className="flex h-9 w-9 items-center justify-center rounded-lg text-sm font-bold text-white shrink-0" style={{ background: '#1E8FE8' }}>
                             {campaign.name.charAt(0)}
                           </div>
                           <div className="min-w-0">
@@ -246,7 +246,7 @@ export default function ClientDashboardPage() {
                           </div>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
-                          <Badge variant="secondary" className={`text-[10px] ${campaign.status === "active" ? "bg-emerald-100 text-emerald-800 border border-emerald-200" : "bg-gray-100 text-gray-600 border border-gray-200"}`}>
+                          <Badge variant="secondary" className={`text-[10px] ${campaign.status === "active" ? "badge-green" : "badge-slate"}`}>
                             {campaign.status}
                           </Badge>
                           <ArrowRight size={14} className="text-muted-foreground opacity-0 group-hover:opacity-100" />
@@ -265,8 +265,8 @@ export default function ClientDashboardPage() {
       {reports.length > 0 && (
         <Card className="border-border/50 shadow-sm">
           <CardHeader className="flex flex-row items-center gap-2 pb-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50">
-              <FileText size={16} className="text-indigo-500" />
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#1E8FE8]/10">
+              <FileText size={16} className="text-[#1E8FE8]" />
             </div>
             <CardTitle className="text-base">Report History</CardTitle>
           </CardHeader>
@@ -281,10 +281,10 @@ export default function ClientDashboardPage() {
                       <span className="text-xs font-semibold">
                         {new Date(period.start).toLocaleDateString("en-US", { month: "short", day: "numeric" })} — {new Date(period.end).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                       </span>
-                      {wasSent ? <Badge className="bg-emerald-100 text-emerald-700 border border-emerald-200 text-[10px]"><Mail size={10} className="mr-1" />Delivered</Badge> : <Badge className="bg-amber-100 text-amber-700 border border-amber-200 text-[10px]">Draft</Badge>}
+                      {wasSent ? <Badge className="badge-green text-[10px]"><Mail size={10} className="mr-1" />Delivered</Badge> : <Badge className="badge-amber text-[10px]">Draft</Badge>}
                     </div>
                     <div className="grid grid-cols-2 gap-2">
-                      <div className="text-center p-1.5 rounded bg-indigo-50/50"><p className="text-sm font-bold text-indigo-700">{totals.emails_sent.toLocaleString()}</p><p className="text-[10px] text-muted-foreground">Sent</p></div>
+                      <div className="text-center p-1.5 rounded bg-[#1E8FE8]/5"><p className="text-sm font-bold text-[#47A5ED]">{totals.emails_sent.toLocaleString()}</p><p className="text-[10px] text-muted-foreground">Sent</p></div>
                       <div className="text-center p-1.5 rounded bg-emerald-50/50"><p className="text-sm font-bold text-emerald-700">{totals.meetings_booked}</p><p className="text-[10px] text-muted-foreground">Positive</p></div>
                     </div>
                   </div>

@@ -14,17 +14,17 @@ interface StatCardProps {
  * Consistent stat card with vertically aligned layout.
  * Icon top-left, label below, value at bottom — always aligned across a row.
  */
-export function StatCard({ label, value, icon, iconBg = "bg-indigo-50", valueColor }: StatCardProps) {
+export function StatCard({ label, value, icon, iconBg, valueColor }: StatCardProps) {
   return (
-    <Card className="border-border/50 shadow-sm">
-      <CardContent className="pt-5 pb-4 px-5">
-        <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${iconBg} mb-3`}>
+    <Card className="stat-card stat-card-gold">
+      <CardContent className="pt-[18px] pb-[18px] px-5">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg mb-2">
           {icon}
         </div>
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">
+        <p className="text-[12px] font-semibold text-[#64748b] mt-1">
           {label}
         </p>
-        <p className={`text-2xl font-bold ${valueColor || "text-foreground"}`}>
+        <p className="text-[28px] font-bold leading-tight text-[#0f172a]" style={{ letterSpacing: '-0.01em' }}>
           {typeof value === "number" ? value.toLocaleString() : value}
         </p>
       </CardContent>

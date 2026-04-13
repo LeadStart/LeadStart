@@ -86,30 +86,31 @@ export function MonthlyPositiveChart({ snapshots, height = 220 }: MonthlyPositiv
       <CardContent>
         <ResponsiveContainer width="100%" height={height}>
           <BarChart data={data}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
+            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
             <XAxis
               dataKey="label"
               fontSize={12}
-              tick={{ fill: "#6b7280" }}
-              axisLine={{ stroke: "#e5e7eb" }}
+              tick={{ fill: "#64748b" }}
+              axisLine={{ stroke: "#e2e8f0" }}
               tickLine={false}
             />
             <YAxis
               fontSize={11}
-              tick={{ fill: "#9ca3af" }}
+              tick={{ fill: "#64748b" }}
               axisLine={false}
               tickLine={false}
               allowDecimals={false}
             />
             <Tooltip
               contentStyle={{
-                background: "white",
-                border: "1px solid #e5e7eb",
+                background: "#ffffff",
+                border: "1px solid #e2e8f0",
                 borderRadius: "8px",
-                boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+                boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
                 fontSize: "12px",
+                color: "#0f172a",
               }}
-              cursor={{ fill: "rgba(99, 102, 241, 0.06)" }}
+              cursor={{ fill: "rgba(201, 168, 76, 0.06)" }}
             />
             <Bar
               dataKey="Positive Responses"

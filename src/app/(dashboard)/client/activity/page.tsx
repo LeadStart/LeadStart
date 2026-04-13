@@ -9,15 +9,15 @@ import { Mail, MailOpen, AlertTriangle, CalendarCheck, Send, UserX, Activity } f
 import type { Client, Campaign, WebhookEvent } from "@/types/app";
 
 const EVENT_CONFIG: Record<string, { label: string; icon: React.ReactNode; color: string; badgeClass: string }> = {
-  email_sent: { label: "Email Sent", icon: <Send size={14} />, color: "text-gray-500", badgeClass: "bg-gray-100 text-gray-600 border border-gray-200" },
-  email_replied: { label: "Reply Received", icon: <MailOpen size={14} />, color: "text-blue-500", badgeClass: "bg-blue-100 text-blue-700 border border-blue-200" },
-  email_bounced: { label: "Bounced", icon: <AlertTriangle size={14} />, color: "text-red-500", badgeClass: "bg-red-100 text-red-700 border border-red-200" },
-  meeting_booked: { label: "Meeting Booked", icon: <CalendarCheck size={14} />, color: "text-emerald-500", badgeClass: "bg-emerald-100 text-emerald-700 border border-emerald-200" },
-  email_unsubscribed: { label: "Unsubscribed", icon: <UserX size={14} />, color: "text-amber-500", badgeClass: "bg-amber-100 text-amber-700 border border-amber-200" },
+  email_sent: { label: "Email Sent", icon: <Send size={14} />, color: "text-gray-500", badgeClass: "badge-slate" },
+  email_replied: { label: "Reply Received", icon: <MailOpen size={14} />, color: "text-blue-500", badgeClass: "badge-blue" },
+  email_bounced: { label: "Bounced", icon: <AlertTriangle size={14} />, color: "text-red-500", badgeClass: "badge-red" },
+  meeting_booked: { label: "Meeting Booked", icon: <CalendarCheck size={14} />, color: "text-emerald-500", badgeClass: "badge-green" },
+  email_unsubscribed: { label: "Unsubscribed", icon: <UserX size={14} />, color: "text-amber-500", badgeClass: "badge-amber" },
 };
 
 function getEventConfig(eventType: string) {
-  return EVENT_CONFIG[eventType] || { label: eventType.replace(/_/g, " "), icon: <Mail size={14} />, color: "text-gray-500", badgeClass: "bg-gray-100 text-gray-600 border border-gray-200" };
+  return EVENT_CONFIG[eventType] || { label: eventType.replace(/_/g, " "), icon: <Mail size={14} />, color: "text-gray-500", badgeClass: "badge-slate" };
 }
 
 function getRelativeTime(dateStr: string): string {
@@ -74,25 +74,25 @@ export default function ClientActivityPage() {
 
   return (
     <div className="space-y-6">
-      <div className="relative overflow-hidden rounded-xl p-6 text-white" style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed, #6366f1)', boxShadow: '0 10px 30px -5px rgba(99, 102, 241, 0.2)' }}>
+      <div className="relative overflow-hidden rounded-[20px] p-7 text-[#0f172a]" style={{ background: 'linear-gradient(135deg, #EBF5FE 0%, #D6ECFB 50%, #fff 100%)', border: '1px solid rgba(30,143,232,0.2)', borderTop: '1px solid rgba(30,143,232,0.3)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.9), 0 4px 14px rgba(30,143,232,0.1)' }}>
         <div className="relative z-10">
-          <p className="text-sm font-medium text-white/70">Real-Time Updates</p>
-          <h1 className="text-2xl font-bold mt-1">Activity Feed</h1>
-          <p className="text-sm text-white/60 mt-1">{events.length} events across your campaigns</p>
+          <p className="text-xs font-medium text-[#64748b]">Real-Time Updates</p>
+          <h1 className="text-[22px] font-bold mt-1" style={{ color: '#0f172a', letterSpacing: '-0.01em' }}>Activity Feed</h1>
+          <p className="text-sm text-[#0f172a]/60 mt-1">{events.length} events across your campaigns</p>
         </div>
-        <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-white/5" />
+        <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-[rgba(71,165,237,0.06)]" />
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
         <StatCard label="Replies" value={replies} icon={<MailOpen size={16} className="text-blue-500" />} iconBg="bg-blue-50" />
         <StatCard label="Positive Responses" value={meetings} icon={<CalendarCheck size={16} className="text-emerald-500" />} iconBg="bg-emerald-50" />
-        <StatCard label="Total" value={events.length} icon={<Activity size={16} className="text-indigo-500" />} iconBg="bg-indigo-50" />
+        <StatCard label="Total" value={events.length} icon={<Activity size={16} className="text-[#1E8FE8]" />} iconBg="bg-[#1E8FE8]/10" />
       </div>
 
       {events.length === 0 ? (
         <Card className="border-border/50 shadow-sm">
           <CardContent className="py-12 text-center">
-            <div className="flex justify-center mb-3"><div className="h-12 w-12 rounded-full bg-indigo-50 flex items-center justify-center"><Activity size={24} className="text-indigo-400" /></div></div>
+            <div className="flex justify-center mb-3"><div className="h-12 w-12 rounded-full bg-[#1E8FE8]/10 flex items-center justify-center"><Activity size={24} className="text-[#1878C8]" /></div></div>
             <p className="text-muted-foreground font-medium">No activity yet</p>
             <p className="text-sm text-muted-foreground">Events will appear here as your campaigns run.</p>
           </CardContent>

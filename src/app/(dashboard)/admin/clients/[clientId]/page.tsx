@@ -112,12 +112,12 @@ export default function ClientDetailPage({
           <ArrowLeft size={14} />
           Back to Overview
         </Link>
-        <div className="relative overflow-hidden rounded-xl p-6 text-white mt-3" style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed, #6366f1)', boxShadow: '0 10px 30px -5px rgba(99, 102, 241, 0.2)' }}>
+        <div className="relative overflow-hidden rounded-[20px] p-7 text-[#0f172a] mt-3" style={{ background: 'linear-gradient(135deg, #EBF5FE 0%, #D6ECFB 50%, #fff 100%)', border: '1px solid rgba(30,143,232,0.2)', borderTop: '1px solid rgba(30,143,232,0.3)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.9), 0 4px 14px rgba(30,143,232,0.1)' }}>
           <div className="relative z-10">
             <div className="flex items-start justify-between">
               <div>
                 <h1 className="text-2xl font-bold">{typedClient.name}</h1>
-                <p className="text-xs text-white/50 mt-0.5">
+                <p className="text-xs text-[#0f172a]/50 mt-0.5">
                   {campaigns.length} campaign{campaigns.length !== 1 ? "s" : ""}
                 </p>
               </div>
@@ -128,7 +128,7 @@ export default function ClientDetailPage({
               }} />
             </div>
           </div>
-          <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-white/5" />
+          <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-[rgba(71,165,237,0.06)]" />
         </div>
       </div>
 
@@ -141,7 +141,7 @@ export default function ClientDetailPage({
             onClick={() => setPeriod(p)}
             className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
               period === p
-                ? "bg-indigo-100 text-indigo-700 border border-indigo-200"
+                ? "bg-[#1E8FE8]/20 text-[#47A5ED] border border-[#1E8FE8]/20"
                 : "bg-muted/50 text-muted-foreground hover:bg-muted"
             }`}
           >
@@ -189,8 +189,8 @@ export default function ClientDetailPage({
       {/* Per-Campaign Breakdown */}
       <Card className="border-border/50 shadow-sm">
         <CardHeader className="flex flex-row items-center gap-2 pb-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50">
-            <Mail size={16} className="text-indigo-500" />
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#1E8FE8]/10">
+            <Mail size={16} className="text-[#1E8FE8]" />
           </div>
           <CardTitle className="text-base">Campaigns ({campaigns.length})</CardTitle>
         </CardHeader>
@@ -209,11 +209,11 @@ export default function ClientDetailPage({
                   <Link
                     key={campaign.id}
                     href={`/admin/clients/${clientId}/campaigns/${campaign.id}`}
-                    className="group block rounded-xl border border-border/50 p-4 transition-all hover:border-indigo-200 hover:shadow-md"
+                    className="group block rounded-xl border border-border/50 p-4 transition-all hover:border-[#1E8FE8]/20 hover:shadow-md"
                   >
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-3">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold text-white shrink-0" style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed)' }}>
+                        <div className="flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold text-white shrink-0" style={{ background: '#1E8FE8' }}>
                           <Mail size={14} />
                         </div>
                         <div>
@@ -228,10 +228,10 @@ export default function ClientDetailPage({
                           variant="secondary"
                           className={
                             campaign.status === "active"
-                              ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                              ? "badge-green"
                               : campaign.status === "paused"
-                              ? "bg-amber-100 text-amber-800 border border-amber-200"
-                              : "bg-gray-100 text-gray-600 border border-gray-200"
+                              ? "badge-amber"
+                              : "badge-slate"
                           }
                         >
                           {campaign.status}
@@ -304,8 +304,8 @@ export default function ClientDetailPage({
       {/* Recent Feedback */}
       <Card className="border-border/50 shadow-sm">
         <CardHeader className="flex flex-row items-center gap-2 pb-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50">
-            <MessageSquare size={16} className="text-indigo-500" />
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#1E8FE8]/10">
+            <MessageSquare size={16} className="text-[#1E8FE8]" />
           </div>
           <CardTitle className="text-base">Recent Feedback</CardTitle>
         </CardHeader>
@@ -323,10 +323,10 @@ export default function ClientDetailPage({
                     variant="secondary"
                     className={
                       ["good_lead", "interested"].includes(f.status)
-                        ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                        ? "badge-green"
                         : ["bad_lead", "wrong_person", "not_interested"].includes(f.status)
-                        ? "bg-red-100 text-red-800 border border-red-200"
-                        : "bg-gray-100 text-gray-600 border border-gray-200"
+                        ? "badge-red"
+                        : "badge-slate"
                     }
                   >
                     {f.status.replace(/_/g, " ")}
