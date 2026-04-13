@@ -21,7 +21,7 @@ BEGIN
   event := jsonb_set(event, '{claims}', claims);
   RETURN event;
 END;
-$$ LANGUAGE plpgsql STABLE SECURITY DEFINER;
+$$ LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public;
 
 -- Grant permissions for auth system
 GRANT USAGE ON SCHEMA public TO supabase_auth_admin;

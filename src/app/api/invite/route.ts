@@ -24,25 +24,38 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { email, role: inviteRole, client_id } = body;
+  const { email, role: inviteRole, client_id, full_name } = body;
 
   if (!email || !inviteRole) {
     return NextResponse.json({ error: "Email and role required" }, { status: 400 });
   }
 
   const admin = createAdminClient();
-  const { error } = await admin.auth.admin.inviteUserByEmail(email, {
-    data: {
-      role: inviteRole,
-      organization_id: organizationId,
-      client_id: client_id || null,
+
+  // Use generateLink to create the user + get an invite link
+  // (Supabase's built-in email isn't configured, so inviteUserByEmail fails)
+  const { data, error } = await admin.auth.admin.generateLink({
+    type: "invite",
+    email,
+    options: {
+      data: {
+        full_name: full_name || "",
+        role: inviteRole,
+        organization_id: organizationId,
+        client_id: client_id || null,
+      },
+      redirectTo: `${request.nextUrl.origin}/auth/callback`,
     },
-    redirectTo: `${request.nextUrl.origin}/accept-invite`,
   });
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 400 });
   }
 
-  return NextResponse.json({ success: true });
+  // The action_link contains the verification token
+  // When Resend is configured, send a branded invite email here
+  // For now, return the link for the admin to share
+  const actionLink = data?.properties?.action_link;
+
+  return NextResponse.json({ success: true, invite_link: actionLink });
 }

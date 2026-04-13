@@ -51,7 +51,7 @@ BEGIN
 
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 -- 6. Enable RLS on client_users
 ALTER TABLE public.client_users ENABLE ROW LEVEL SECURITY;

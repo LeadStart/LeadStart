@@ -27,6 +27,7 @@ export function ClientUsersSection({
   const [inviting, setInviting] = useState(false);
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [inviteSuccess, setInviteSuccess] = useState(false);
+  const [inviteLink, setInviteLink] = useState<string | null>(null);
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [resettingId, setResettingId] = useState<string | null>(null);
   const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null);
@@ -49,12 +50,13 @@ export function ClientUsersSection({
         }),
       });
 
+      const data = await res.json();
       if (!res.ok) {
-        const data = await res.json();
         throw new Error(data.error || "Failed to send invite");
       }
 
       setInviteSuccess(true);
+      setInviteLink(data.invite_link || null);
       setInviteEmail("");
       onUsersChanged();
     } catch (err) {
@@ -207,7 +209,21 @@ export function ClientUsersSection({
           <p className="text-xs text-red-600 bg-red-50 rounded px-2 py-1">{inviteError}</p>
         )}
         {inviteSuccess && (
-          <p className="text-xs text-emerald-600 bg-emerald-50 rounded px-2 py-1">Invite sent!</p>
+          <div className="text-xs text-emerald-600 bg-emerald-50 rounded px-2 py-1 space-y-1">
+            <p>User created and linked!</p>
+            {inviteLink && (
+              <div className="flex items-center gap-2">
+                <span className="text-muted-foreground">Share this invite link:</span>
+                <button
+                  type="button"
+                  onClick={() => { navigator.clipboard.writeText(inviteLink); }}
+                  className="underline hover:no-underline text-[#1E8FE8]"
+                >
+                  Copy link
+                </button>
+              </div>
+            )}
+          </div>
         )}
       </CardContent>
     </Card>
