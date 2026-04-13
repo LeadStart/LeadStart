@@ -18,11 +18,19 @@ CREATE INDEX idx_client_users_client ON public.client_users(client_id);
 INSERT INTO public.client_users (client_id, user_id)
 SELECT id, user_id FROM public.clients WHERE user_id IS NOT NULL;
 
--- 3. Drop old column and index
+-- 3. Drop ALL dependent RLS policies BEFORE dropping the column
+DROP POLICY IF EXISTS "Client can view own record" ON public.clients;
+DROP POLICY IF EXISTS "Client can view own campaigns" ON public.campaigns;
+DROP POLICY IF EXISTS "Client can view own campaign snapshots" ON public.campaign_snapshots;
+DROP POLICY IF EXISTS "Client can insert feedback for their campaigns" ON public.lead_feedback;
+DROP POLICY IF EXISTS "Client can view own reports" ON public.kpi_reports;
+DROP POLICY IF EXISTS "Client can view own campaign events" ON public.webhook_events;
+
+-- 4. Now safe to drop old column and index
 DROP INDEX IF EXISTS idx_clients_user;
 ALTER TABLE public.clients DROP COLUMN user_id;
 
--- 4. Update handle_new_user() trigger to use client_users
+-- 5. Update handle_new_user() trigger to use client_users
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -45,7 +53,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- 5. Enable RLS on client_users
+-- 6. Enable RLS on client_users
 ALTER TABLE public.client_users ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Admin/VA can view client_users in org"
@@ -79,16 +87,12 @@ CREATE POLICY "Owner can delete client_users"
     AND public.get_my_role() = 'owner'
   );
 
--- 6. Replace RLS policies that referenced clients.user_id
+-- 7. Recreate all policies using client_users join table
 
--- clients: "Client can view own record"
-DROP POLICY IF EXISTS "Client can view own record" ON public.clients;
 CREATE POLICY "Client can view own record"
   ON public.clients FOR SELECT
   USING (id IN (SELECT client_id FROM public.client_users WHERE user_id = auth.uid()));
 
--- campaigns: "Client can view own campaigns"
-DROP POLICY IF EXISTS "Client can view own campaigns" ON public.campaigns;
 CREATE POLICY "Client can view own campaigns"
   ON public.campaigns FOR SELECT
   USING (
@@ -97,8 +101,6 @@ CREATE POLICY "Client can view own campaigns"
     )
   );
 
--- campaign_snapshots: "Client can view own campaign snapshots"
-DROP POLICY IF EXISTS "Client can view own campaign snapshots" ON public.campaign_snapshots;
 CREATE POLICY "Client can view own campaign snapshots"
   ON public.campaign_snapshots FOR SELECT
   USING (
@@ -109,8 +111,6 @@ CREATE POLICY "Client can view own campaign snapshots"
     )
   );
 
--- lead_feedback: "Client can insert feedback for their campaigns"
-DROP POLICY IF EXISTS "Client can insert feedback for their campaigns" ON public.lead_feedback;
 CREATE POLICY "Client can insert feedback for their campaigns"
   ON public.lead_feedback FOR INSERT
   WITH CHECK (
@@ -121,12 +121,20 @@ CREATE POLICY "Client can insert feedback for their campaigns"
     )
   );
 
--- kpi_reports: "Client can view own reports"
-DROP POLICY IF EXISTS "Client can view own reports" ON public.kpi_reports;
 CREATE POLICY "Client can view own reports"
   ON public.kpi_reports FOR SELECT
   USING (
     client_id IN (
       SELECT client_id FROM public.client_users WHERE user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "Client can view own campaign events"
+  ON public.webhook_events FOR SELECT
+  USING (
+    campaign_instantly_id IN (
+      SELECT ca.instantly_campaign_id FROM public.campaigns ca
+      JOIN public.client_users cu ON ca.client_id = cu.client_id
+      WHERE cu.user_id = auth.uid()
     )
   );
