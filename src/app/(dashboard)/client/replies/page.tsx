@@ -15,7 +15,7 @@ import {
   ChevronUp,
   MessageSquare,
   Loader2,
-  Trash2,
+  X,
 } from "lucide-react";
 import type { Client, Campaign, WebhookEvent } from "@/types/app";
 
@@ -211,24 +211,7 @@ function ThreadCard({
 
         {/* Lead info */}
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <p className="font-medium text-sm truncate">{thread.leadEmail}</p>
-            {thread.hasMeeting && (
-              <Badge variant="secondary" className="badge-green text-[10px]">
-                Meeting
-              </Badge>
-            )}
-            {thread.hasReply && !thread.hasMeeting && (
-              <Badge variant="secondary" className="badge-blue text-[10px]">
-                Replied
-              </Badge>
-            )}
-            {thread.notes.length > 0 && (
-              <Badge variant="secondary" className="badge-amber text-[10px]">
-                {thread.notes.length} note{thread.notes.length > 1 ? "s" : ""}
-              </Badge>
-            )}
-          </div>
+          <p className="font-medium text-sm truncate">{thread.leadEmail}</p>
           <p className="text-xs text-muted-foreground mt-0.5">
             {thread.leadName && <span className="font-medium text-foreground/70">{thread.leadName}</span>}
             {thread.leadName && thread.leadCompany && <span> · </span>}
@@ -238,11 +221,33 @@ function ThreadCard({
           </p>
         </div>
 
+        {/* Status column */}
+        <div className="w-24 shrink-0 text-center hidden sm:block">
+          {thread.hasMeeting ? (
+            <Badge variant="secondary" className="badge-green text-[10px]">Meeting</Badge>
+          ) : thread.hasReply ? (
+            <Badge variant="secondary" className="badge-blue text-[10px]">Replied</Badge>
+          ) : (
+            <span className="text-xs text-muted-foreground">—</span>
+          )}
+        </div>
+
+        {/* Notes column */}
+        <div className="w-20 shrink-0 text-center hidden sm:block">
+          {thread.notes.length > 0 ? (
+            <Badge variant="secondary" className="badge-amber text-[10px]">
+              {thread.notes.length} note{thread.notes.length > 1 ? "s" : ""}
+            </Badge>
+          ) : (
+            <span className="text-xs text-muted-foreground">—</span>
+          )}
+        </div>
+
         {/* Response time */}
         {thread.firstSent && thread.lastReply && (
-          <div className="hidden sm:flex items-center gap-1.5 text-xs text-muted-foreground shrink-0">
+          <div className="hidden lg:flex items-center gap-1.5 text-xs text-muted-foreground shrink-0">
             <Clock size={12} />
-            <span>{getTimeBetween(thread.firstSent, thread.lastReply)} to reply</span>
+            <span>{getTimeBetween(thread.firstSent, thread.lastReply)}</span>
           </div>
         )}
 
@@ -271,7 +276,7 @@ function ThreadCard({
             {thread.notes.length > 0 && (
               <div className="space-y-2 mb-3">
                 {thread.notes.map((note) => (
-                  <div key={note.id} className="flex items-start gap-2 group rounded-lg bg-card border border-amber-200 px-3 py-2 shadow-sm">
+                  <div key={note.id} className="flex items-center gap-3 rounded-lg bg-card border border-amber-200 px-3 py-2 shadow-sm">
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-foreground">{note.comment || <span className="italic text-muted-foreground">No text</span>}</p>
                       <p className="text-[10px] text-muted-foreground mt-0.5">{formatDateTime(note.created_at)}</p>
@@ -279,13 +284,13 @@ function ThreadCard({
                     <button
                       onClick={() => handleDeleteNote(note.id)}
                       disabled={deletingId === note.id}
-                      className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-red-500 cursor-pointer shrink-0 p-1 rounded hover:bg-red-50"
+                      className="flex items-center justify-center text-red-400 hover:text-red-600 cursor-pointer shrink-0 p-1.5 rounded-lg hover:bg-red-50 transition-colors"
                       title="Delete note"
                     >
                       {deletingId === note.id ? (
-                        <Loader2 size={13} className="animate-spin" />
+                        <Loader2 size={24} className="animate-spin" />
                       ) : (
-                        <Trash2 size={13} />
+                        <X size={24} />
                       )}
                     </button>
                   </div>
