@@ -1,19 +1,43 @@
 "use client";
 
-import { use } from "react";
+import { use, useState, useMemo } from "react";
 import useSWR from "swr";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import { KPICard } from "@/components/charts/kpi-card";
 import { DailyChart } from "@/components/charts/daily-chart";
 import { calculateMetrics } from "@/lib/kpi/calculator";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { FeedbackForm } from "./feedback-form";
-import { ArrowLeft, MessageSquare } from "lucide-react";
-import type { Campaign, CampaignSnapshot, LeadFeedback } from "@/types/app";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ArrowLeft, TrendingUp } from "lucide-react";
+import type { Campaign, CampaignSnapshot } from "@/types/app";
 
 const supabase = createClient();
+
+function getDateRange(preset: string): { start: string; end: string } {
+  const today = new Date();
+  const end = today.toISOString().split("T")[0];
+  let start: Date;
+  switch (preset) {
+    case "7d":
+      start = new Date(today); start.setDate(start.getDate() - 7); break;
+    case "30d":
+      start = new Date(today); start.setDate(start.getDate() - 30); break;
+    case "90d":
+      start = new Date(today); start.setDate(start.getDate() - 90); break;
+    case "mtd":
+      start = new Date(today.getFullYear(), today.getMonth(), 1); break;
+    case "last_month":
+      start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+      return { start: start.toISOString().split("T")[0], end: new Date(today.getFullYear(), today.getMonth(), 0).toISOString().split("T")[0] };
+    default:
+      start = new Date(today); start.setDate(start.getDate() - 30);
+  }
+  return { start: start.toISOString().split("T")[0], end };
+}
 
 async function fetchClientCampaign(campaignId: string) {
   const { data: campaign } = await supabase
@@ -24,23 +48,15 @@ async function fetchClientCampaign(campaignId: string) {
 
   if (!campaign) return null;
 
-  const [snapshotsRes, feedbackRes] = await Promise.all([
-    supabase
-      .from("campaign_snapshots")
-      .select("*")
-      .eq("campaign_id", campaignId)
-      .order("snapshot_date", { ascending: false }),
-    supabase
-      .from("lead_feedback")
-      .select("*")
-      .eq("campaign_id", campaignId)
-      .order("created_at", { ascending: false }),
-  ]);
+  const { data: snapshotsData } = await supabase
+    .from("campaign_snapshots")
+    .select("*")
+    .eq("campaign_id", campaignId)
+    .order("snapshot_date", { ascending: false });
 
   return {
     campaign: campaign as Campaign,
-    snapshots: (snapshotsRes.data || []) as CampaignSnapshot[],
-    feedback: (feedbackRes.data || []) as LeadFeedback[],
+    snapshots: (snapshotsData || []) as CampaignSnapshot[],
   };
 }
 
@@ -51,6 +67,25 @@ export default function ClientCampaignPage({
 }) {
   const { campaignId } = use(params);
   const { data } = useSWR(`client-campaign-${campaignId}`, () => fetchClientCampaign(campaignId));
+  const [datePreset, setDatePreset] = useState("30d");
+  const [startDate, setStartDate] = useState(() => getDateRange("30d").start);
+  const [endDate, setEndDate] = useState(() => getDateRange("30d").end);
+
+  function handlePresetChange(val: string | null) {
+    if (!val) return;
+    setDatePreset(val);
+    if (val !== "custom") {
+      const range = getDateRange(val);
+      setStartDate(range.start);
+      setEndDate(range.end);
+    }
+  }
+
+  // Filter snapshots by selected date range
+  const filteredSnapshots = useMemo(() => {
+    if (!data?.snapshots) return [];
+    return data.snapshots.filter((s) => s.snapshot_date >= startDate && s.snapshot_date <= endDate);
+  }, [data?.snapshots, startDate, endDate]);
 
   if (!data) {
     return (
@@ -75,8 +110,8 @@ export default function ClientCampaignPage({
     );
   }
 
-  const { campaign: typedCampaign, snapshots, feedback } = data;
-  const metrics = calculateMetrics(snapshots);
+  const { campaign: typedCampaign } = data;
+  const metrics = calculateMetrics(filteredSnapshots);
 
   return (
     <div className="space-y-6">
@@ -97,6 +132,47 @@ export default function ClientCampaignPage({
         </div>
       </div>
 
+      {/* Campaign Performance with date picker */}
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#1E8FE8]/10"><TrendingUp size={16} className="text-[#1E8FE8]" /></div>
+          <h2 className="text-[15px] font-semibold text-[#0f172a]">Campaign Performance</h2>
+        </div>
+        <div className="flex items-center gap-3">
+          {datePreset !== "custom" && (
+            <span className="text-xs text-muted-foreground">
+              {new Date(startDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })} — {new Date(endDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+            </span>
+          )}
+          <Select value={datePreset} onValueChange={handlePresetChange}>
+            <SelectTrigger className="h-8 w-[130px] border-border/50 text-xs font-medium"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="7d">Last 7 Days</SelectItem>
+              <SelectItem value="30d">Last 30 Days</SelectItem>
+              <SelectItem value="90d">Last 90 Days</SelectItem>
+              <SelectItem value="mtd">Month to Date</SelectItem>
+              <SelectItem value="last_month">Last Month</SelectItem>
+              <SelectItem value="custom">Custom</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {datePreset === "custom" && (
+        <Card className="border-border/50 shadow-sm overflow-hidden mb-4">
+          <div className="flex items-end gap-4 px-6 py-3 bg-[#1E8FE8]/5">
+            <div className="space-y-1 flex-1 min-w-0">
+              <Label className="text-xs font-medium text-[#1E8FE8]/70">From</Label>
+              <Input className="h-9 w-full text-sm" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+            </div>
+            <div className="space-y-1 flex-1 min-w-0">
+              <Label className="text-xs font-medium text-[#1E8FE8]/70">To</Label>
+              <Input className="h-9 w-full text-sm" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+            </div>
+          </div>
+        </Card>
+      )}
+
       {/* KPIs */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <KPICard label="Emails Sent" value={metrics.emails_sent} unit="count" />
@@ -104,56 +180,7 @@ export default function ClientCampaignPage({
       </div>
 
       {/* Chart */}
-      {snapshots.length > 0 && <DailyChart snapshots={snapshots} />}
-
-      {/* Submit Feedback */}
-      <FeedbackForm campaignId={campaignId} />
-
-      {/* Existing Feedback */}
-      <Card className="border-border/50 shadow-sm">
-        <CardHeader className="flex flex-row items-center gap-2 pb-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#1E8FE8]/10">
-            <MessageSquare size={16} className="text-[#1E8FE8]" />
-          </div>
-          <CardTitle className="text-base">Your Feedback ({feedback.length})</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {feedback.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No feedback submitted yet. Use the form above to rate lead quality.
-            </p>
-          ) : (
-            <div className="space-y-2">
-              {feedback.map((f) => (
-                <div
-                  key={f.id}
-                  className="flex items-center gap-3 rounded-xl border border-border/50 p-3 text-sm transition-colors hover:bg-muted/30"
-                >
-                  <Badge
-                    variant="secondary"
-                    className={
-                      ["good_lead", "interested"].includes(f.status)
-                        ? "badge-green"
-                        : ["bad_lead", "wrong_person", "not_interested"].includes(f.status)
-                        ? "badge-red"
-                        : "badge-slate"
-                    }
-                  >
-                    {f.status.replace(/_/g, " ")}
-                  </Badge>
-                  <span className="font-medium">{f.lead_email}</span>
-                  {f.comment && (
-                    <span className="text-muted-foreground truncate">{f.comment}</span>
-                  )}
-                  <span className="ml-auto text-xs text-muted-foreground whitespace-nowrap">
-                    {new Date(f.created_at).toLocaleDateString()}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      {filteredSnapshots.length > 0 && <DailyChart snapshots={filteredSnapshots} />}
     </div>
   );
 }

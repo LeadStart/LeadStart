@@ -11,8 +11,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import Link from "next/link";
-import { ArrowRight, TrendingUp, FileText, Mail, ChevronDown, ChevronUp } from "lucide-react";
-import type { CampaignSnapshot, KPIReport } from "@/types/app";
+import { ArrowRight, TrendingUp, ChevronDown, ChevronUp } from "lucide-react";
+import type { CampaignSnapshot } from "@/types/app";
 
 function getDateRange(preset: string): { start: string; end: string } {
   const today = new Date();
@@ -40,7 +40,6 @@ export default function ClientDashboardPage() {
   const { client, campaigns, loading: contextLoading, noClient } = useClientData();
   const [snapshots, setSnapshots] = useState<CampaignSnapshot[]>([]);
   const [allTimeSnapshots, setAllTimeSnapshots] = useState<CampaignSnapshot[]>([]);
-  const [reports, setReports] = useState<KPIReport[]>([]);
   const [excludedMeetings, setExcludedMeetings] = useState(0);
   const [datePreset, setDatePreset] = useState("30d");
   const [startDate, setStartDate] = useState(() => getDateRange("30d").start);
@@ -53,15 +52,11 @@ export default function ClientDashboardPage() {
     const supabase = createClient();
     const iIds = campaigns.map((c) => c.instantly_campaign_id);
 
-    Promise.all([
-      supabase.from("kpi_reports").select("*").eq("client_id", client.id).order("created_at", { ascending: false }).limit(5),
-      iIds.length > 0
-        ? supabase.from("webhook_events").select("*", { count: "exact", head: true }).in("campaign_instantly_id", iIds).eq("event_type", "meeting_booked").eq("excluded", true)
-        : Promise.resolve({ count: 0 } as { count: number }),
-    ]).then(([reportsRes, meetingsRes]) => {
-      setReports(((reportsRes as { data?: KPIReport[] }).data || []) as KPIReport[]);
-      setExcludedMeetings((meetingsRes as { count: number | null }).count || 0);
-    });
+    if (iIds.length > 0) {
+      supabase.from("webhook_events").select("*", { count: "exact", head: true })
+        .in("campaign_instantly_id", iIds).eq("event_type", "meeting_booked").eq("excluded", true)
+        .then(({ count }) => setExcludedMeetings(count || 0));
+    }
   }, [client, campaigns]);
 
   // Fetch snapshots when date range or campaigns change
@@ -240,39 +235,6 @@ export default function ClientDashboardPage() {
         </Card>
       </div>
 
-      {/* Row 3: Report History */}
-      {reports.length > 0 && (
-        <Card className="border-border/50 shadow-sm">
-          <CardHeader className="flex flex-row items-center gap-2 pb-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#1E8FE8]/10">
-              <FileText size={16} className="text-[#1E8FE8]" />
-            </div>
-            <CardTitle className="text-base">Report History</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {reports.map((report) => {
-                const { totals, period } = report.report_data;
-                const wasSent = !!report.sent_at;
-                return (
-                  <div key={report.id} className="rounded-lg border border-border/50 p-3">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-semibold">
-                        {new Date(period.start).toLocaleDateString("en-US", { month: "short", day: "numeric" })} — {new Date(period.end).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                      </span>
-                      {wasSent ? <Badge className="badge-green text-[10px]"><Mail size={10} className="mr-1" />Delivered</Badge> : <Badge className="badge-amber text-[10px]">Draft</Badge>}
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="text-center p-1.5 rounded bg-[#1E8FE8]/5"><p className="text-sm font-bold text-[#47A5ED]">{totals.emails_sent.toLocaleString()}</p><p className="text-[10px] text-muted-foreground">Sent</p></div>
-                      <div className="text-center p-1.5 rounded bg-emerald-50/50"><p className="text-sm font-bold text-emerald-700">{totals.meetings_booked}</p><p className="text-[10px] text-muted-foreground">Positive</p></div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
-      )}
     </div>
   );
 }
