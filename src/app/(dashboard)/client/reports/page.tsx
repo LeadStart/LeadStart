@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { useClientData } from "../client-data-context";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { FileText, TrendingUp, TrendingDown, Minus, Calendar, Mail } from "lucide-react";
-import type { KPIReport, Client } from "@/types/app";
+import type { KPIReport } from "@/types/app";
 
 function MetricRow({ label, value, unit, trend }: { label: string; value: number; unit: string; trend?: "up" | "down" | "flat" }) {
   return (
@@ -22,23 +23,21 @@ function MetricRow({ label, value, unit, trend }: { label: string; value: number
 }
 
 export default function ClientReportsPage() {
+  const { client, loading: contextLoading } = useClientData();
   const [reports, setReports] = useState<KPIReport[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (contextLoading || !client) return;
     const supabase = createClient();
-    supabase.auth.getUser().then(async ({ data: { user } }) => {
-      if (!user) return;
-      const { data: clientData } = await supabase.from("clients").select("*").eq("user_id", user.id).single();
-      if (!clientData) { setLoading(false); return; }
-      const client = clientData as Client;
-      const { data: reportsData } = await supabase.from("kpi_reports").select("*").eq("client_id", client.id).order("created_at", { ascending: false });
-      setReports((reportsData || []) as KPIReport[]);
-      setLoading(false);
-    });
-  }, []);
+    supabase.from("kpi_reports").select("*").eq("client_id", client.id).order("created_at", { ascending: false })
+      .then(({ data: reportsData }) => {
+        setReports((reportsData || []) as KPIReport[]);
+        setLoading(false);
+      });
+  }, [contextLoading, client]);
 
-  if (loading) {
+  if (contextLoading || loading) {
     return <div className="space-y-6 animate-pulse"><div className="rounded-xl h-36 bg-muted/50" /><div className="rounded-xl h-64 bg-muted/50" /></div>;
   }
 

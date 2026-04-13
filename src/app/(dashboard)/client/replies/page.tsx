@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { useClientData } from "../client-data-context";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { StatCard } from "@/components/charts/stat-card";
@@ -370,25 +371,15 @@ function ThreadCard({
 // ===== Main Page =====
 
 export default function ClientRepliesPage() {
+  const { userId: ctxUserId, client, campaigns, loading: contextLoading } = useClientData();
   const [threads, setThreads] = useState<LeadThread[]>([]);
   const [filter, setFilter] = useState<"all" | "replied" | "meetings">("all");
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState("");
 
   useEffect(() => {
-    const supabase = createClient();
-    supabase.auth.getUser().then(async ({ data: { user } }) => {
-      if (!user) return;
-      setUserId(user.id);
-
-      const { data: clientData } = await supabase.from("clients").select("*").eq("user_id", user.id).single();
-      if (!clientData) {
-        setLoading(false);
-        return;
-      }
-      const client = clientData as Client;
-      const { data: campaignsData } = await supabase.from("campaigns").select("*").eq("client_id", client.id);
-      const campaigns = (campaignsData || []) as Campaign[];
+    if (contextLoading || !client) return;
+    setUserId(ctxUserId);
 
       // Build maps: instantly_id → name, instantly_id → db UUID
       const campaignNameMap = new Map(campaigns.map((c) => [c.instantly_campaign_id, c.name]));
@@ -396,8 +387,9 @@ export default function ClientRepliesPage() {
       const ids = campaigns.map((c) => c.instantly_campaign_id);
       const dbIds = campaigns.map((c) => c.id);
 
+      const supabase = createClient();
       // Fetch events and existing notes in parallel
-      const [eventsResult, notesResult] = await Promise.all([
+      Promise.all([
         supabase
           .from("webhook_events")
           .select("*")
@@ -409,7 +401,7 @@ export default function ClientRepliesPage() {
           .select("id, campaign_id, lead_email, status, comment, created_at")
           .in("campaign_id", dbIds.length > 0 ? dbIds : ["00000000-0000-0000-0000-000000000000"])
           .order("created_at", { ascending: true }),
-      ]);
+      ]).then(([eventsResult, notesResult]) => {
 
       // Filter out excluded events (admin-excluded leads)
       const events = ((eventsResult.data || []) as WebhookEvent[]).filter((e) => !e.excluded);
@@ -478,7 +470,7 @@ export default function ClientRepliesPage() {
       setThreads(builtThreads);
       setLoading(false);
     });
-  }, []);
+  }, [contextLoading, client, campaigns, ctxUserId]);
 
   const handleNoteAdded = useCallback((threadKey: string, note: LeadNote) => {
     setThreads((prev) =>
@@ -504,7 +496,7 @@ export default function ClientRepliesPage() {
     );
   }, []);
 
-  if (loading) {
+  if (contextLoading || loading) {
     return (
       <div className="space-y-6 animate-pulse">
         <div className="rounded-xl h-36 bg-muted/50" />

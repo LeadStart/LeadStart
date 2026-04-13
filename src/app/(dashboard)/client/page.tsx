@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { useClientData } from "./client-data-context";
 import { MonthlyPositiveChart } from "@/components/charts/monthly-positive-chart";
 import { calculateMetrics } from "@/lib/kpi/calculator";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import Link from "next/link";
 import { ArrowRight, TrendingUp, FileText, Mail, ChevronDown, ChevronUp } from "lucide-react";
-import type { Campaign, CampaignSnapshot, Client, KPIReport } from "@/types/app";
+import type { CampaignSnapshot, KPIReport } from "@/types/app";
 
 function getDateRange(preset: string): { start: string; end: string } {
   const today = new Date();
@@ -36,58 +37,37 @@ function getDateRange(preset: string): { start: string; end: string } {
 }
 
 export default function ClientDashboardPage() {
-  const [client, setClient] = useState<Client | null>(null);
-  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const { client, campaigns, loading: contextLoading, noClient } = useClientData();
   const [snapshots, setSnapshots] = useState<CampaignSnapshot[]>([]);
   const [allTimeSnapshots, setAllTimeSnapshots] = useState<CampaignSnapshot[]>([]);
   const [reports, setReports] = useState<KPIReport[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [noClient, setNoClient] = useState(false);
+  const [excludedMeetings, setExcludedMeetings] = useState(0);
   const [datePreset, setDatePreset] = useState("30d");
   const [startDate, setStartDate] = useState(() => getDateRange("30d").start);
   const [endDate, setEndDate] = useState(() => getDateRange("30d").end);
-  const [campaignIds, setCampaignIds] = useState<string[]>([]);
-  const [instantlyIds, setInstantlyIds] = useState<string[]>([]);
-  const [excludedMeetings, setExcludedMeetings] = useState(0);
   const [campaignsExpanded, setCampaignsExpanded] = useState(true);
 
-  // Initial load — get client and campaigns
+  // Fetch reports and excluded meetings when client/campaigns become available
   useEffect(() => {
+    if (!client) return;
     const supabase = createClient();
-    supabase.auth.getUser().then(async ({ data: { user } }) => {
-      if (!user) return;
-      const { data: clientData } = await supabase.from("clients").select("*").eq("user_id", user.id).single();
-      if (!clientData) { setNoClient(true); setLoading(false); return; }
-      const c = clientData as Client;
-      setClient(c);
-      const [campsRes, reportsRes] = await Promise.all([
-        supabase.from("campaigns").select("*").eq("client_id", c.id),
-        supabase.from("kpi_reports").select("*").eq("client_id", c.id).order("created_at", { ascending: false }).limit(5),
-      ]);
-      const camps = (campsRes.data || []) as Campaign[];
-      setCampaigns(camps);
-      setCampaignIds(camps.map(x => x.id));
-      const iIds = camps.map(x => x.instantly_campaign_id);
-      setInstantlyIds(iIds);
-      setReports((reportsRes.data || []) as KPIReport[]);
+    const iIds = campaigns.map((c) => c.instantly_campaign_id);
 
-      // Count excluded meeting_booked events to subtract from snapshot totals
-      if (iIds.length > 0) {
-        const { count } = await supabase
-          .from("webhook_events")
-          .select("*", { count: "exact", head: true })
-          .in("campaign_instantly_id", iIds)
-          .eq("event_type", "meeting_booked")
-          .eq("excluded", true);
-        setExcludedMeetings(count || 0);
-      }
+    Promise.all([
+      supabase.from("kpi_reports").select("*").eq("client_id", client.id).order("created_at", { ascending: false }).limit(5),
+      iIds.length > 0
+        ? supabase.from("webhook_events").select("*", { count: "exact", head: true }).in("campaign_instantly_id", iIds).eq("event_type", "meeting_booked").eq("excluded", true)
+        : Promise.resolve({ count: 0 } as { count: number }),
+    ]).then(([reportsRes, meetingsRes]) => {
+      setReports(((reportsRes as { data?: KPIReport[] }).data || []) as KPIReport[]);
+      setExcludedMeetings((meetingsRes as { count: number | null }).count || 0);
     });
-  }, []);
+  }, [client, campaigns]);
 
   // Fetch snapshots when date range or campaigns change
+  const campaignIds = campaigns.map((c) => c.id);
   const fetchSnapshots = useCallback(async () => {
-    if (campaignIds.length === 0) { setLoading(false); return; }
-    setLoading(true);
+    if (campaignIds.length === 0) return;
     const supabase = createClient();
     const [filtered, allTime] = await Promise.all([
       supabase
@@ -103,8 +83,7 @@ export default function ClientDashboardPage() {
     ]);
     setSnapshots((filtered.data || []) as CampaignSnapshot[]);
     setAllTimeSnapshots((allTime.data || []) as CampaignSnapshot[]);
-    setLoading(false);
-  }, [campaignIds, startDate, endDate]);
+  }, [campaignIds.join(","), startDate, endDate]);
 
   useEffect(() => { fetchSnapshots(); }, [fetchSnapshots]);
 
@@ -118,7 +97,7 @@ export default function ClientDashboardPage() {
     }
   }
 
-  if (loading && !client) {
+  if (contextLoading) {
     return (
       <div className="space-y-6 animate-pulse">
         <div className="rounded-xl h-36 bg-muted/50" />

@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { useClientData } from "../client-data-context";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { StatCard } from "@/components/charts/stat-card";
 import { Mail, MailOpen, AlertTriangle, CalendarCheck, Send, UserX, Activity } from "lucide-react";
-import type { Client, Campaign, WebhookEvent } from "@/types/app";
+import type { WebhookEvent } from "@/types/app";
 
 const EVENT_CONFIG: Record<string, { label: string; icon: React.ReactNode; color: string; badgeClass: string }> = {
   email_sent: { label: "Email Sent", icon: <Send size={14} />, color: "text-gray-500", badgeClass: "badge-slate" },
@@ -33,30 +34,26 @@ function getRelativeTime(dateStr: string): string {
 }
 
 export default function ClientActivityPage() {
+  const { client, campaigns, loading: contextLoading } = useClientData();
   const [events, setEvents] = useState<WebhookEvent[]>([]);
   const [campaignNameMap, setCampaignNameMap] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (contextLoading || !client) return;
+    setCampaignNameMap(new Map(campaigns.map((c) => [c.instantly_campaign_id, c.name])));
+    const ids = campaigns.map((c) => c.instantly_campaign_id);
     const supabase = createClient();
-    supabase.auth.getUser().then(async ({ data: { user } }) => {
-      if (!user) return;
-      const { data: clientData } = await supabase.from("clients").select("*").eq("user_id", user.id).single();
-      if (!clientData) { setLoading(false); return; }
-      const client = clientData as Client;
-      const { data: campaignsData } = await supabase.from("campaigns").select("*").eq("client_id", client.id);
-      const campaigns = (campaignsData || []) as Campaign[];
-      setCampaignNameMap(new Map(campaigns.map((c) => [c.instantly_campaign_id, c.name])));
-      const ids = campaigns.map((c) => c.instantly_campaign_id);
-      const { data: eventsData } = await supabase.from("webhook_events").select("*")
-        .in("campaign_instantly_id", ids.length > 0 ? ids : ["none"])
-        .order("received_at", { ascending: false });
-      setEvents((eventsData || []) as WebhookEvent[]);
-      setLoading(false);
-    });
-  }, []);
+    supabase.from("webhook_events").select("*")
+      .in("campaign_instantly_id", ids.length > 0 ? ids : ["none"])
+      .order("received_at", { ascending: false })
+      .then(({ data: eventsData }) => {
+        setEvents((eventsData || []) as WebhookEvent[]);
+        setLoading(false);
+      });
+  }, [contextLoading, client, campaigns]);
 
-  if (loading) {
+  if (contextLoading || loading) {
     return <div className="space-y-6 animate-pulse"><div className="rounded-xl h-36 bg-muted/50" /><div className="grid grid-cols-4 gap-4">{[1,2,3,4].map(i => <div key={i} className="rounded-xl h-24 bg-muted/50" />)}</div><div className="rounded-xl h-64 bg-muted/50" /></div>;
   }
 
