@@ -48,9 +48,25 @@ export async function updateSession(request: NextRequest) {
     }
   }
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // PERFORMANCE: Read session from cookie (instant, no network call).
+  // Only call getUser() (network round-trip) when the token needs refreshing.
+  // This eliminates a ~1-2s Supabase API call on every tab switch.
+  const { data: { session } } = await supabase.auth.getSession();
+  let user = session?.user ?? null;
+
+  if (session && session.expires_at) {
+    const expiresAt = session.expires_at * 1000; // convert to ms
+    const REFRESH_THRESHOLD = 5 * 60 * 1000; // 5 minutes before expiry
+    if (Date.now() > expiresAt - REFRESH_THRESHOLD) {
+      // Token expired or expiring soon — refresh via network call
+      const { data } = await supabase.auth.getUser();
+      user = data.user;
+    }
+  } else if (!session) {
+    // No session at all — try getUser() to recover from refresh token
+    const { data } = await supabase.auth.getUser();
+    user = data.user;
+  }
 
   const pathname = request.nextUrl.pathname;
 
