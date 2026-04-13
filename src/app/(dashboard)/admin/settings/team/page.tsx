@@ -152,7 +152,7 @@ export default function TeamPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="relative overflow-hidden rounded-[20px] p-7 text-[#0f172a]" style={{ background: 'linear-gradient(135deg, #EBF5FE 0%, #D6ECFB 50%, #fff 100%)', border: '1px solid rgba(30,143,232,0.2)', borderTop: '1px solid rgba(30,143,232,0.3)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.9), 0 4px 14px rgba(30,143,232,0.1)' }}>
+      <div className="relative overflow-hidden rounded-[20px] p-7 text-[#0f172a]" style={{ background: 'linear-gradient(135deg, #EDEEFF 0%, #D1D3FF 50%, #fff 100%)', border: '1px solid rgba(46,55,254,0.2)', borderTop: '1px solid rgba(46,55,254,0.3)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.9), 0 4px 14px rgba(46,55,254,0.1)' }}>
         <div className="relative z-10">
           <p className="text-xs font-medium text-[#64748b]">Settings</p>
           <h1 className="text-[22px] font-bold mt-1" style={{ color: '#0f172a', letterSpacing: '-0.01em' }}>Team Management</h1>
@@ -160,14 +160,14 @@ export default function TeamPage() {
             {members.length} team member{members.length !== 1 ? "s" : ""}
           </p>
         </div>
-        <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-[rgba(71,165,237,0.06)]" />
+        <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-[rgba(107,114,255,0.06)]" />
       </div>
 
       {/* Invite Form */}
       <Card className="border-border/50 shadow-sm">
         <CardHeader className="flex flex-row items-center gap-2 pb-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#1E8FE8]/10">
-            <UserPlus size={16} className="text-[#1E8FE8]" />
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]/10">
+            <UserPlus size={16} className="text-[#2E37FE]" />
           </div>
           <CardTitle className="text-base">Invite Team Member</CardTitle>
         </CardHeader>
@@ -196,7 +196,7 @@ export default function TeamPage() {
                 </SelectContent>
               </Select>
             </div>
-            <Button type="submit" disabled={loading} style={{ background: '#1E8FE8' }}>
+            <Button type="submit" disabled={loading} style={{ background: '#2E37FE' }}>
               {loading ? "Sending..." : "Send Invite"}
             </Button>
           </form>
@@ -216,8 +216,8 @@ export default function TeamPage() {
       {/* Team Members */}
       <Card className="border-border/50 shadow-sm">
         <CardHeader className="flex flex-row items-center gap-2 pb-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#1E8FE8]/10">
-            <Building2 size={16} className="text-[#1E8FE8]" />
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]/10">
+            <Building2 size={16} className="text-[#2E37FE]" />
           </div>
           <CardTitle className="text-base">Team Members</CardTitle>
         </CardHeader>
@@ -234,7 +234,7 @@ export default function TeamPage() {
                   {editingId === member.id ? (
                     /* Edit mode */
                     <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-lg text-sm font-bold text-white shrink-0" style={{ background: '#1E8FE8' }}>
+                      <div className="flex h-10 w-10 items-center justify-center rounded-lg text-sm font-bold text-white shrink-0" style={{ background: '#2E37FE' }}>
                         {(member.full_name || member.email).charAt(0).toUpperCase()}
                       </div>
                       <div className="flex items-center gap-3 flex-1">
@@ -261,7 +261,7 @@ export default function TeamPage() {
                           onClick={handleSaveEdit}
                           disabled={editSaving}
                           className="h-8 text-xs"
-                          style={{ background: '#1E8FE8' }}
+                          style={{ background: '#2E37FE' }}
                         >
                           <Check size={12} className="mr-1" />
                           {editSaving ? "Saving..." : "Save"}
@@ -278,7 +278,7 @@ export default function TeamPage() {
                     /* View mode */
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-lg text-sm font-bold text-white shrink-0" style={{ background: '#1E8FE8' }}>
+                        <div className="flex h-10 w-10 items-center justify-center rounded-lg text-sm font-bold text-white shrink-0" style={{ background: '#2E37FE' }}>
                           {(member.full_name || member.email).charAt(0).toUpperCase()}
                         </div>
                         <div>
@@ -294,7 +294,7 @@ export default function TeamPage() {
                           variant="secondary"
                           className={
                             member.role === "owner"
-                              ? "bg-[#1E8FE8]/20 text-[#47A5ED] border border-[#1E8FE8]/20"
+                              ? "bg-[#2E37FE]/20 text-[#6B72FF] border border-[#2E37FE]/20"
                               : "badge-blue"
                           }
                         >

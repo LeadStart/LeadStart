@@ -46,7 +46,7 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-screen">
       {/* Left panel - branding */}
-      <div className="hidden lg:flex lg:w-1/2 items-center justify-center relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #EBF5FE 0%, #D6ECFB 50%, #fff 100%)' }}>
+      <div className="hidden lg:flex lg:w-1/2 items-center justify-center relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #EDEEFF 0%, #D1D3FF 50%, #fff 100%)' }}>
         <div className="relative z-10 max-w-md px-8 text-[#0f172a]">
           <div className="flex items-center gap-3 mb-8">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15 backdrop-blur-sm">
@@ -76,9 +76,9 @@ export default function LoginPage() {
           </div>
         </div>
         {/* Decorative elements */}
-        <div className="absolute -top-20 -right-20 h-64 w-64 rounded-full bg-[rgba(71,165,237,0.06)]" />
-        <div className="absolute -bottom-16 -left-16 h-48 w-48 rounded-full bg-[rgba(71,165,237,0.06)]" />
-        <div className="absolute top-1/3 right-1/4 h-32 w-32 rounded-full bg-[rgba(71,165,237,0.06)]" />
+        <div className="absolute -top-20 -right-20 h-64 w-64 rounded-full bg-[rgba(107,114,255,0.06)]" />
+        <div className="absolute -bottom-16 -left-16 h-48 w-48 rounded-full bg-[rgba(107,114,255,0.06)]" />
+        <div className="absolute top-1/3 right-1/4 h-32 w-32 rounded-full bg-[rgba(107,114,255,0.06)]" />
       </div>
 
       {/* Right panel - form */}
@@ -87,10 +87,10 @@ export default function LoginPage() {
           <CardHeader className="text-center pb-2">
             <div className="flex justify-center lg:hidden mb-4">
               <div className="flex items-center gap-2">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#1E8FE8]">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]">
                   <Mail size={16} className="text-white" />
                 </div>
-                <span className="text-xl font-bold text-[#1E8FE8] font-bold">LeadStart</span>
+                <span className="text-xl font-bold text-[#2E37FE] font-bold">LeadStart</span>
               </div>
             </div>
             <CardTitle className="text-2xl font-bold">Welcome back</CardTitle>
@@ -136,7 +136,7 @@ export default function LoginPage() {
               )}
               <Button
                 type="submit"
-                className="w-full bg-[#1E8FE8] text-white hover:bg-[#1878C8] transition-colors font-medium"
+                className="w-full bg-[#2E37FE] text-white hover:bg-[#1C24B8] transition-colors font-medium"
                 disabled={loading}
               >
                 {loading ? "Signing in..." : "Sign In"}
@@ -144,7 +144,7 @@ export default function LoginPage() {
               <div className="text-center">
                 <Link
                   href="/reset-password"
-                  className="text-sm text-[#1E8FE8] hover:text-[#47A5ED] transition-colors"
+                  className="text-sm text-[#2E37FE] hover:text-[#6B72FF] transition-colors"
                 >
                   Forgot your password?
                 </Link>

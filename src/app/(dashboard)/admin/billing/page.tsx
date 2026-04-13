@@ -66,7 +66,7 @@ export default function BillingPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="relative overflow-hidden rounded-[20px] p-7 text-[#0f172a]" style={{ background: 'linear-gradient(135deg, #EBF5FE 0%, #D6ECFB 50%, #fff 100%)', border: '1px solid rgba(30,143,232,0.2)', borderTop: '1px solid rgba(30,143,232,0.3)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.9), 0 4px 14px rgba(30,143,232,0.1)' }}>
+      <div className="relative overflow-hidden rounded-[20px] p-7 text-[#0f172a]" style={{ background: 'linear-gradient(135deg, #EDEEFF 0%, #D1D3FF 50%, #fff 100%)', border: '1px solid rgba(46,55,254,0.2)', borderTop: '1px solid rgba(46,55,254,0.3)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.9), 0 4px 14px rgba(46,55,254,0.1)' }}>
         <div className="relative z-10 flex items-center justify-between">
           <div>
             <p className="text-xs font-medium text-[#64748b]">Revenue & Billing</p>
@@ -76,7 +76,7 @@ export default function BillingPage() {
             Stripe: Placeholder
           </Badge>
         </div>
-        <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-[rgba(71,165,237,0.06)]" />
+        <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-[rgba(107,114,255,0.06)]" />
       </div>
 
       {/* Revenue Overview */}
@@ -91,8 +91,8 @@ export default function BillingPage() {
         <StatCard
           label="Active Subs"
           value={activeSubscriptions}
-          icon={<Users size={18} className="text-[#1E8FE8]" />}
-          iconBg="bg-[#1E8FE8]/10"
+          icon={<Users size={18} className="text-[#2E37FE]" />}
+          iconBg="bg-[#2E37FE]/10"
         />
         <StatCard
           label="In Trial"
@@ -112,8 +112,8 @@ export default function BillingPage() {
       {/* Pricing Plans */}
       <Card className="border-border/50 shadow-sm">
         <CardHeader className="flex flex-row items-center gap-2 pb-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#1E8FE8]/10">
-            <CreditCard size={16} className="text-[#1E8FE8]" />
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]/10">
+            <CreditCard size={16} className="text-[#2E37FE]" />
           </div>
           <CardTitle className="text-base">Plans</CardTitle>
         </CardHeader>
@@ -126,12 +126,12 @@ export default function BillingPage() {
               return (
                 <Card
                   key={plan.id}
-                  className="transition-all hover:border-[#1E8FE8]/30 hover:shadow-md"
+                  className="transition-all hover:border-[#2E37FE]/30 hover:shadow-md"
                 >
                 <CardContent className="p-5 space-y-3">
                   <div className="flex items-center justify-between">
                     <h3 className="font-semibold text-lg">{plan.name}</h3>
-                    <Badge variant="secondary" className="bg-[#1E8FE8]/20 text-[#47A5ED] border border-[#1E8FE8]/20">
+                    <Badge variant="secondary" className="bg-[#2E37FE]/20 text-[#6B72FF] border border-[#2E37FE]/20">
                       {subscriberCount} client{subscriberCount !== 1 ? "s" : ""}
                     </Badge>
                   </div>
@@ -157,8 +157,8 @@ export default function BillingPage() {
 
       {/* Client Subscriptions */}
       <div className="flex items-center gap-2 mb-3">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#1E8FE8]/10">
-          <Repeat size={16} className="text-[#1E8FE8]" />
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]/10">
+          <Repeat size={16} className="text-[#2E37FE]" />
         </div>
         <h2 className="text-[15px] font-semibold text-[#0f172a]">Client Subscriptions</h2>
       </div>
@@ -181,7 +181,7 @@ export default function BillingPage() {
                 <TableRow key={b.clientId} className="group">
                   <TableCell>
                     <div className="flex items-center gap-2">
-                      <div className="flex h-7 w-7 items-center justify-center rounded-md text-[10px] font-bold text-[#0f172a] shrink-0" style={{ background: '#1E8FE8' }}>
+                      <div className="flex h-7 w-7 items-center justify-center rounded-md text-[10px] font-bold text-[#0f172a] shrink-0" style={{ background: '#2E37FE' }}>
                         {b.clientName.charAt(0)}
                       </div>
                       <span className="font-medium">{b.clientName}</span>
@@ -223,7 +223,7 @@ export default function BillingPage() {
       {selectedBilling && (
         <>
         <div className="flex items-center gap-2 mb-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold text-white" style={{ background: '#1E8FE8' }}>
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold text-white" style={{ background: '#2E37FE' }}>
             {selectedBilling.clientName.charAt(0)}
           </div>
           <h2 className="text-[15px] font-semibold text-[#0f172a]">
@@ -279,20 +279,20 @@ export default function BillingPage() {
       {/* Stripe Integration Status */}
       <Card className="border-border/50 shadow-sm">
         <CardHeader className="flex flex-row items-center gap-2 pb-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#1E8FE8]/10">
-            <CreditCard size={16} className="text-[#1E8FE8]" />
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]/10">
+            <CreditCard size={16} className="text-[#2E37FE]" />
           </div>
           <CardTitle className="text-base">Stripe Integration</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="rounded-xl border border-dashed border-[#1E8FE8]/20 bg-[#1E8FE8]/5 p-6 text-center space-y-3">
+          <div className="rounded-xl border border-dashed border-[#2E37FE]/20 bg-[#2E37FE]/5 p-6 text-center space-y-3">
             <p className="text-sm text-muted-foreground">
               Stripe integration is in <strong>placeholder mode</strong>. When
               you&apos;re ready to go live, connect your Stripe account and billing
               data will sync automatically.
             </p>
             <div className="flex items-center justify-center gap-3 pt-1">
-              <Button disabled style={{ background: '#1E8FE8' }}>
+              <Button disabled style={{ background: '#2E37FE' }}>
                 Connect Stripe Account
               </Button>
               <Button variant="outline" disabled>

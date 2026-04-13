@@ -41,13 +41,13 @@ export default function AllCampaignsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="relative overflow-hidden rounded-[20px] p-7 text-[#0f172a]" style={{ background: 'linear-gradient(135deg, #EBF5FE 0%, #D6ECFB 50%, #fff 100%)', border: '1px solid rgba(30,143,232,0.2)', borderTop: '1px solid rgba(30,143,232,0.3)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.9), 0 4px 14px rgba(30,143,232,0.1)' }}>
+      <div className="relative overflow-hidden rounded-[20px] p-7 text-[#0f172a]" style={{ background: 'linear-gradient(135deg, #EDEEFF 0%, #D1D3FF 50%, #fff 100%)', border: '1px solid rgba(46,55,254,0.2)', borderTop: '1px solid rgba(46,55,254,0.3)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.9), 0 4px 14px rgba(46,55,254,0.1)' }}>
         <div className="relative z-10">
           <p className="text-xs font-medium text-[#64748b]">Campaign Management</p>
           <h1 className="text-[22px] font-bold mt-1" style={{ color: '#0f172a', letterSpacing: '-0.01em' }}>All Campaigns</h1>
           <p className="text-sm text-[#0f172a]/60 mt-1">{active} active &middot; {paused} paused &middot; {campaigns.length} total</p>
         </div>
-        <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-[rgba(71,165,237,0.06)]" />
+        <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-[rgba(107,114,255,0.06)]" />
       </div>
       <Card className="border-border/50 shadow-sm">
         <CardContent className="pt-6">
@@ -58,7 +58,7 @@ export default function AllCampaignsPage() {
                 {sorted.map((row) => {
                   return (
                     <TableRow key={row.id} className="group">
-                      <TableCell><div className="flex items-center gap-3"><div className="flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold text-white shrink-0" style={{ background: '#1E8FE8' }}><Mail size={14} /></div><Link href={`/admin/clients/${row.client_id}/campaigns/${row.id}`} className="font-medium text-foreground hover:text-[#1E8FE8] transition-colors">{row.name}</Link></div></TableCell>
+                      <TableCell><div className="flex items-center gap-3"><div className="flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold text-white shrink-0" style={{ background: '#2E37FE' }}><Mail size={14} /></div><Link href={`/admin/clients/${row.client_id}/campaigns/${row.id}`} className="font-medium text-foreground hover:text-[#2E37FE] transition-colors">{row.name}</Link></div></TableCell>
                       <TableCell><Link href={`/admin/clients/${row.client_id}`} className="text-muted-foreground hover:text-foreground transition-colors">{row.clientName || "—"}</Link></TableCell>
                       <TableCell><Badge variant="secondary" className={row.status === "active" ? "badge-green" : row.status === "paused" ? "badge-amber" : "badge-slate"}>{row.status}</Badge></TableCell>
                       <TableCell className="text-right font-medium">{row.metrics.emails_sent.toLocaleString()}</TableCell>

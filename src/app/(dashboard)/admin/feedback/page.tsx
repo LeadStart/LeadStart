@@ -37,17 +37,17 @@ export default function FeedbackPage() {
 
   return (
     <div className="space-y-6">
-      <div className="relative overflow-hidden rounded-[20px] p-7 text-[#0f172a]" style={{ background: 'linear-gradient(135deg, #EBF5FE 0%, #D6ECFB 50%, #fff 100%)', border: '1px solid rgba(30,143,232,0.2)', borderTop: '1px solid rgba(30,143,232,0.3)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.9), 0 4px 14px rgba(30,143,232,0.1)' }}>
+      <div className="relative overflow-hidden rounded-[20px] p-7 text-[#0f172a]" style={{ background: 'linear-gradient(135deg, #EDEEFF 0%, #D1D3FF 50%, #fff 100%)', border: '1px solid rgba(46,55,254,0.2)', borderTop: '1px solid rgba(46,55,254,0.3)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.9), 0 4px 14px rgba(46,55,254,0.1)' }}>
         <div className="relative z-10"><p className="text-xs font-medium text-[#64748b]">Client Submissions</p><h1 className="text-[22px] font-bold mt-1" style={{ color: '#0f172a', letterSpacing: '-0.01em' }}>Lead Feedback</h1><p className="text-sm text-[#0f172a]/60 mt-1">{total} total submissions from clients</p></div>
-        <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-[rgba(71,165,237,0.06)]" />
+        <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-[rgba(107,114,255,0.06)]" />
       </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <StatCard label="Total Feedback" value={total} icon={<MessageSquare size={18} className="text-[#1E8FE8]" />} iconBg="bg-[#1E8FE8]/10" />
+        <StatCard label="Total Feedback" value={total} icon={<MessageSquare size={18} className="text-[#2E37FE]" />} iconBg="bg-[#2E37FE]/10" />
         <StatCard label="Positive" value={good} icon={<ThumbsUp size={18} className="text-emerald-500" />} iconBg="bg-emerald-50" valueColor="text-emerald-600" />
         <StatCard label="Negative" value={bad} icon={<ThumbsDown size={18} className="text-red-500" />} iconBg="bg-red-50" valueColor="text-red-600" />
       </div>
       <div className="flex items-center gap-2 mb-3">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#1E8FE8]/10"><MessageSquare size={16} className="text-[#1E8FE8]" /></div>
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]/10"><MessageSquare size={16} className="text-[#2E37FE]" /></div>
         <h2 className="text-[15px] font-semibold text-[#0f172a]">All Feedback</h2>
       </div>
       <Card className="border-border/50 shadow-sm">

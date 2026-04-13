@@ -119,7 +119,7 @@ export default function CampaignDetailPage({
           <ArrowLeft size={14} />
           Back to Client
         </Link>
-        <div className="relative overflow-hidden rounded-[20px] p-7 text-[#0f172a] mt-3" style={{ background: 'linear-gradient(135deg, #EBF5FE 0%, #D6ECFB 50%, #fff 100%)', border: '1px solid rgba(30,143,232,0.2)', borderTop: '1px solid rgba(30,143,232,0.3)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.9), 0 4px 14px rgba(30,143,232,0.1)' }}>
+        <div className="relative overflow-hidden rounded-[20px] p-7 text-[#0f172a] mt-3" style={{ background: 'linear-gradient(135deg, #EDEEFF 0%, #D1D3FF 50%, #fff 100%)', border: '1px solid rgba(46,55,254,0.2)', borderTop: '1px solid rgba(46,55,254,0.3)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.9), 0 4px 14px rgba(46,55,254,0.1)' }}>
           <div className="relative z-10 flex items-start justify-between">
             <div>
               <h1 className="text-2xl font-bold">{typedCampaign.name}</h1>
@@ -140,7 +140,7 @@ export default function CampaignDetailPage({
               <RefreshButton campaignId={campaignId} />
             </div>
           </div>
-          <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-[rgba(71,165,237,0.06)]" />
+          <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-[rgba(107,114,255,0.06)]" />
         </div>
       </div>
 
@@ -202,8 +202,8 @@ export default function CampaignDetailPage({
       {/* Lead Feedback */}
       <Card className="border-border/50 shadow-sm">
         <CardHeader className="flex flex-row items-center gap-2 pb-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#1E8FE8]/10">
-            <MessageSquare size={16} className="text-[#1E8FE8]" />
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]/10">
+            <MessageSquare size={16} className="text-[#2E37FE]" />
           </div>
           <CardTitle className="text-base">Lead Feedback ({feedback.length})</CardTitle>
         </CardHeader>

@@ -78,7 +78,7 @@ export function SentVsPositiveChart({ snapshots, height = 220 }: SentVsPositiveC
             />
             <Bar
               dataKey="Emails Sent"
-              fill="#47A5ED"
+              fill="#6B72FF"
               radius={[3, 3, 0, 0]}
               maxBarSize={32}
             />

@@ -130,8 +130,8 @@ export function StepFunnel({ stepMetrics, alerts, campaignName }: StepFunnelProp
   return (
     <Card className="border-border/50 shadow-sm">
       <CardHeader className="flex flex-row items-center gap-2 pb-3">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#1E8FE8]/10">
-          <Activity size={16} className="text-[#1E8FE8]" />
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]/10">
+          <Activity size={16} className="text-[#2E37FE]" />
         </div>
         <div>
           <CardTitle className="text-base">Step Performance</CardTitle>
@@ -144,7 +144,7 @@ export function StepFunnel({ stepMetrics, alerts, campaignName }: StepFunnelProp
           {steps.map((s, i) => {
             const alert = alerts.find((a) => a.step === s.step);
             const isLast = i === steps.length - 1;
-            const sparkColor = s.trend === "down" ? "#ef4444" : s.trend === "up" ? "#10b981" : "#1E8FE8";
+            const sparkColor = s.trend === "down" ? "#ef4444" : s.trend === "up" ? "#10b981" : "#2E37FE";
 
             return (
               <div key={s.step}>
@@ -157,7 +157,7 @@ export function StepFunnel({ stepMetrics, alerts, campaignName }: StepFunnelProp
                         ? "bg-red-100 text-red-700 ring-2 ring-red-500/30"
                         : alert?.severity === "warning"
                         ? "bg-amber-100 text-amber-700 ring-2 ring-amber-500/30"
-                        : "bg-[#1E8FE8]/20 text-[#47A5ED]"
+                        : "bg-[#2E37FE]/20 text-[#6B72FF]"
                     }`}>
                       {s.step}
                     </div>

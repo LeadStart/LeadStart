@@ -41,7 +41,7 @@ import type { Prospect, ProspectStage } from "@/types/app";
 const STAGES: { value: ProspectStage; label: string; color: string; borderColor: string }[] = [
   { value: "lead", label: "Lead", color: "bg-[#e2e8f0] text-[#B8B5AE]", borderColor: "border-gray-200" },
   { value: "contacted", label: "Contacted", color: "badge-blue", borderColor: "border-blue-200" },
-  { value: "meeting", label: "Meeting", color: "bg-[#1E8FE8]/20 text-[#47A5ED]", borderColor: "border-[#1E8FE8]/20" },
+  { value: "meeting", label: "Meeting", color: "bg-[#2E37FE]/20 text-[#6B72FF]", borderColor: "border-[#2E37FE]/20" },
   { value: "proposal", label: "Proposal", color: "badge-amber", borderColor: "border-amber-200" },
   { value: "closed", label: "Closed Won", color: "badge-green", borderColor: "border-emerald-200" },
   { value: "lost", label: "Lost", color: "badge-red", borderColor: "border-red-200" },
@@ -58,12 +58,12 @@ function ProspectCard({ prospect, onSelect }: { prospect: Prospect; onSelect: ()
   return (
     <Card
       onClick={onSelect}
-      className="group cursor-pointer transition-all hover:border-[#1E8FE8]/30 hover:shadow-md"
+      className="group cursor-pointer transition-all hover:border-[#2E37FE]/30 hover:shadow-md"
     >
     <CardContent className="p-4">
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg text-sm font-bold text-white shrink-0" style={{ background: '#1E8FE8' }}>
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg text-sm font-bold text-white shrink-0" style={{ background: '#2E37FE' }}>
             {prospect.company_name.charAt(0)}
           </div>
           <div>
@@ -147,7 +147,7 @@ export default function ProspectsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="relative overflow-hidden rounded-[20px] p-7 text-[#0f172a]" style={{ background: 'linear-gradient(135deg, #EBF5FE 0%, #D6ECFB 50%, #fff 100%)', border: '1px solid rgba(30,143,232,0.2)', borderTop: '1px solid rgba(30,143,232,0.3)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.9), 0 4px 14px rgba(30,143,232,0.1)' }}>
+      <div className="relative overflow-hidden rounded-[20px] p-7 text-[#0f172a]" style={{ background: 'linear-gradient(135deg, #EDEEFF 0%, #D1D3FF 50%, #fff 100%)', border: '1px solid rgba(46,55,254,0.2)', borderTop: '1px solid rgba(46,55,254,0.3)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.9), 0 4px 14px rgba(46,55,254,0.1)' }}>
         <div className="relative z-10 flex items-start justify-between">
           <div>
             <p className="text-xs font-medium text-[#64748b]">Sales Pipeline</p>
@@ -164,7 +164,7 @@ export default function ProspectsPage() {
             Add Prospect
           </Button>
         </div>
-        <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-[rgba(71,165,237,0.06)]" />
+        <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-[rgba(107,114,255,0.06)]" />
       </div>
 
       {/* Quick stats */}
@@ -172,8 +172,8 @@ export default function ProspectsPage() {
         <StatCard
           label="Active Pipeline"
           value={activeProspects}
-          icon={<Target size={18} className="text-[#1E8FE8]" />}
-          iconBg="bg-[#1E8FE8]/10"
+          icon={<Target size={18} className="text-[#2E37FE]" />}
+          iconBg="bg-[#2E37FE]/10"
         />
         <StatCard
           label="Closed Won"
@@ -197,7 +197,7 @@ export default function ProspectsPage() {
           onClick={() => setFilter("all")}
           className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
             filter === "all"
-              ? "bg-[#1E8FE8] text-[#0f172a]"
+              ? "bg-[#2E37FE] text-[#0f172a]"
               : "bg-muted text-muted-foreground hover:bg-muted/80"
           }`}
         >
@@ -243,7 +243,7 @@ export default function ProspectsPage() {
           <DialogContent className="max-w-lg">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg text-sm font-bold text-[#0f172a]" style={{ background: '#1E8FE8' }}>
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg text-sm font-bold text-[#0f172a]" style={{ background: '#2E37FE' }}>
                   {selected.company_name.charAt(0)}
                 </div>
                 {selected.company_name}
@@ -350,7 +350,7 @@ export default function ProspectsPage() {
             </div>
             <Button
               className="w-full"
-              style={{ background: '#1E8FE8' }}
+              style={{ background: '#2E37FE' }}
               disabled={!newCompany.trim()}
               onClick={() => {
                 // In demo mode, just close — real mode would insert to Supabase

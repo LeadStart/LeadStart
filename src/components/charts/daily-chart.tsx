@@ -15,7 +15,7 @@ import type { CampaignSnapshot } from "@/types/app";
 type SeriesKey = "Sent" | "Replies" | "Bounces" | "Positive";
 
 const SERIES_CONFIG: Record<SeriesKey, { color: string; label: string }> = {
-  Sent: { color: "#47A5ED", label: "Sent" },
+  Sent: { color: "#6B72FF", label: "Sent" },
   Replies: { color: "#10b981", label: "Replies" },
   Bounces: { color: "#ef4444", label: "Bounces" },
   Positive: { color: "#f59e0b", label: "Positive Responses" },
@@ -69,8 +69,8 @@ export function DailyChart({
           <AreaChart data={data}>
             <defs>
               <linearGradient id="gradSent" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#47A5ED" stopOpacity={0.2} />
-                <stop offset="95%" stopColor="#47A5ED" stopOpacity={0} />
+                <stop offset="5%" stopColor="#6B72FF" stopOpacity={0.2} />
+                <stop offset="95%" stopColor="#6B72FF" stopOpacity={0} />
               </linearGradient>
               <linearGradient id="gradReplies" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor="#10b981" stopOpacity={0.2} />
@@ -91,7 +91,7 @@ export function DailyChart({
               }}
             />
             {activeSeries.includes("Sent") && (
-              <Area type="monotone" dataKey="Sent" stroke="#47A5ED" strokeWidth={2} fill="url(#gradSent)" dot={false} />
+              <Area type="monotone" dataKey="Sent" stroke="#6B72FF" strokeWidth={2} fill="url(#gradSent)" dot={false} />
             )}
             {activeSeries.includes("Replies") && (
               <Area type="monotone" dataKey="Replies" stroke="#10b981" strokeWidth={2} fill="url(#gradReplies)" dot={false} />

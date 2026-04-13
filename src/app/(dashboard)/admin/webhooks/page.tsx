@@ -52,9 +52,9 @@ export default function WebhooksPage() {
 
   return (
     <div className="space-y-6">
-      <div className="relative overflow-hidden rounded-[20px] p-7 text-[#0f172a]" style={{ background: 'linear-gradient(135deg, #EBF5FE 0%, #D6ECFB 50%, #fff 100%)', border: '1px solid rgba(30,143,232,0.2)', borderTop: '1px solid rgba(30,143,232,0.3)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.9), 0 4px 14px rgba(30,143,232,0.1)' }}>
+      <div className="relative overflow-hidden rounded-[20px] p-7 text-[#0f172a]" style={{ background: 'linear-gradient(135deg, #EDEEFF 0%, #D1D3FF 50%, #fff 100%)', border: '1px solid rgba(46,55,254,0.2)', borderTop: '1px solid rgba(46,55,254,0.3)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.9), 0 4px 14px rgba(46,55,254,0.1)' }}>
         <div className="relative z-10"><p className="text-xs font-medium text-[#64748b]">Instantly.ai Webhooks</p><h1 className="text-[22px] font-bold mt-1" style={{ color: '#0f172a', letterSpacing: '-0.01em' }}>Event Log</h1><p className="text-sm text-[#0f172a]/60 mt-1">{eventsList.length} events received{excludedCount > 0 ? ` · ${excludedCount} excluded` : ""}</p></div>
-        <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-[rgba(71,165,237,0.06)]" />
+        <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-[rgba(107,114,255,0.06)]" />
       </div>
       <div className="flex flex-wrap gap-2">
         {Object.entries(eventCounts).map(([type, count]) => {
@@ -63,7 +63,7 @@ export default function WebhooksPage() {
         })}
       </div>
       <div className="flex items-center gap-2 mb-3">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#1E8FE8]/10"><Bell size={16} className="text-[#1E8FE8]" /></div>
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]/10"><Bell size={16} className="text-[#2E37FE]" /></div>
         <h2 className="text-[15px] font-semibold text-[#0f172a]">Recent Events</h2>
       </div>
       <Card className="border-border/50 shadow-sm">

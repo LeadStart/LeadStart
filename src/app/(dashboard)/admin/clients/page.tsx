@@ -39,17 +39,17 @@ export default function ClientsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="relative overflow-hidden rounded-[20px] p-7 text-[#0f172a]" style={{ background: 'linear-gradient(135deg, #EBF5FE 0%, #D6ECFB 50%, #fff 100%)', border: '1px solid rgba(30,143,232,0.2)', borderTop: '1px solid rgba(30,143,232,0.3)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.9), 0 4px 14px rgba(30,143,232,0.1)' }}>
+      <div className="relative overflow-hidden rounded-[20px] p-7 text-[#0f172a]" style={{ background: 'linear-gradient(135deg, #EDEEFF 0%, #D1D3FF 50%, #fff 100%)', border: '1px solid rgba(46,55,254,0.2)', borderTop: '1px solid rgba(46,55,254,0.3)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.9), 0 4px 14px rgba(46,55,254,0.1)' }}>
         <div className="relative z-10">
           <p className="text-xs font-medium text-[#64748b]">Client Management</p>
           <h1 className="text-[22px] font-bold mt-1" style={{ color: '#0f172a', letterSpacing: '-0.01em' }}>Clients</h1>
           <p className="text-sm text-[#0f172a]/60 mt-1">{clients.length} client{clients.length !== 1 ? "s" : ""} &middot; {campaigns.filter(c => c.status === "active").length} active campaigns</p>
         </div>
-        <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-[rgba(71,165,237,0.06)]" />
+        <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-[rgba(107,114,255,0.06)]" />
       </div>
       <AddClientForm />
       <div className="flex items-center gap-2 mb-3">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#1E8FE8]/10"><Users size={16} className="text-[#1E8FE8]" /></div>
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]/10"><Users size={16} className="text-[#2E37FE]" /></div>
         <h2 className="text-[15px] font-semibold text-[#0f172a]">All Clients</h2>
       </div>
       <Card className="border-border/50 shadow-sm">
@@ -60,11 +60,11 @@ export default function ClientsPage() {
               <TableBody>
                 {sorted.map((row) => (
                     <TableRow key={row.id} className="group">
-                      <TableCell><div className="flex items-center gap-3"><div className="flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold text-white shrink-0" style={{ background: '#1E8FE8' }}>{row.name.charAt(0)}</div><Link href={`/admin/clients/${row.id}`} className="font-medium text-foreground hover:text-[#1E8FE8] transition-colors">{row.name}</Link></div></TableCell>
+                      <TableCell><div className="flex items-center gap-3"><div className="flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold text-white shrink-0" style={{ background: '#2E37FE' }}>{row.name.charAt(0)}</div><Link href={`/admin/clients/${row.id}`} className="font-medium text-foreground hover:text-[#2E37FE] transition-colors">{row.name}</Link></div></TableCell>
                       <TableCell className="text-muted-foreground">{row.contact_email || "—"}</TableCell>
                       <TableCell><span className="text-sm"><span className="font-medium">{row.activeCampaigns}</span><span className="text-muted-foreground"> active / {row.totalCampaigns} total</span></span></TableCell>
                       <TableCell><Badge variant="secondary" className={row.userCount > 0 ? "badge-green" : "badge-amber"}>{row.userCount > 0 ? `${row.userCount} user${row.userCount !== 1 ? "s" : ""}` : "Not invited"}</Badge></TableCell>
-                      <TableCell><Link href={`/admin/clients/${row.id}`} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-[#1E8FE8] transition-colors">View<ArrowRight size={13} className="opacity-0 group-hover:opacity-100 transition-opacity" /></Link></TableCell>
+                      <TableCell><Link href={`/admin/clients/${row.id}`} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-[#2E37FE] transition-colors">View<ArrowRight size={13} className="opacity-0 group-hover:opacity-100 transition-opacity" /></Link></TableCell>
                     </TableRow>
                 ))}
               </TableBody>

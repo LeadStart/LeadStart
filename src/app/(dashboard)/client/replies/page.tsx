@@ -319,13 +319,13 @@ function ThreadCard({
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !submitting && noteText.trim()) handleSubmitNote();
                 }}
-                className="flex-1 rounded-lg border border-border/60 bg-card px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1E8FE8]/30 placeholder:text-muted-foreground/50"
+                className="flex-1 rounded-lg border border-border/60 bg-card px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#2E37FE]/30 placeholder:text-muted-foreground/50"
               />
 
               <button
                 onClick={handleSubmitNote}
                 disabled={submitting || !noteText.trim()}
-                className="rounded-lg bg-[#1E8FE8] px-4 py-2 text-sm font-medium text-[#0f172a] hover:bg-[#1878C8] disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer shrink-0 flex items-center gap-1.5"
+                className="rounded-lg bg-[#2E37FE] px-4 py-2 text-sm font-medium text-[#0f172a] hover:bg-[#1C24B8] disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer shrink-0 flex items-center gap-1.5"
               >
                 {submitting ? <Loader2 size={14} className="animate-spin" /> : null}
                 {submitting ? "Saving..." : "Save"}
@@ -364,7 +364,7 @@ function ThreadCard({
                             <p className="text-xs font-semibold text-muted-foreground mb-1">Re: {replySubject}</p>
                           )}
                           <div
-                            className="text-sm text-foreground leading-relaxed max-w-none overflow-hidden [&_blockquote]:border-l-2 [&_blockquote]:border-gray-300 [&_blockquote]:pl-3 [&_blockquote]:ml-2 [&_blockquote]:text-muted-foreground [&_blockquote]:text-xs [&_img]:hidden [&_a]:text-[#1E8FE8] [&_a]:underline"
+                            className="text-sm text-foreground leading-relaxed max-w-none overflow-hidden [&_blockquote]:border-l-2 [&_blockquote]:border-gray-300 [&_blockquote]:pl-3 [&_blockquote]:ml-2 [&_blockquote]:text-muted-foreground [&_blockquote]:text-xs [&_img]:hidden [&_a]:text-[#2E37FE] [&_a]:underline"
                             dangerouslySetInnerHTML={{
                               __html: formatReplyHtml(replyBody || replyPreview || ""),
                             }}
@@ -545,10 +545,10 @@ export default function ClientRepliesPage() {
       <div
         className="relative overflow-hidden rounded-[20px] p-7 text-[#0f172a]"
         style={{
-          background: "linear-gradient(135deg, #EBF5FE 0%, #D6ECFB 50%, #fff 100%)",
-          border: '1px solid rgba(30,143,232,0.2)',
-          borderTop: '1px solid rgba(30,143,232,0.3)',
-          boxShadow: "inset 0 1px 0 rgba(255,255,255,0.9), 0 4px 14px rgba(30,143,232,0.1)",
+          background: "linear-gradient(135deg, #EDEEFF 0%, #D1D3FF 50%, #fff 100%)",
+          border: '1px solid rgba(46,55,254,0.2)',
+          borderTop: '1px solid rgba(46,55,254,0.3)',
+          boxShadow: "inset 0 1px 0 rgba(255,255,255,0.9), 0 4px 14px rgba(46,55,254,0.1)",
         }}
       >
         <div className="relative z-10">
@@ -556,12 +556,12 @@ export default function ClientRepliesPage() {
           <h1 className="text-[22px] font-bold mt-1" style={{ color: '#0f172a', letterSpacing: '-0.01em' }}>Replies</h1>
           <p className="text-sm text-[#0f172a]/60 mt-1">Track lead interactions and add notes for your team</p>
         </div>
-        <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-[rgba(71,165,237,0.06)]" />
+        <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-[rgba(107,114,255,0.06)]" />
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-        <StatCard label="Total Leads" value={threads.length} icon={<Send size={16} className="text-[#1E8FE8]" />} iconBg="bg-[#1E8FE8]/10" />
+        <StatCard label="Total Leads" value={threads.length} icon={<Send size={16} className="text-[#2E37FE]" />} iconBg="bg-[#2E37FE]/10" />
         <StatCard label="Replied" value={totalReplies} icon={<MailOpen size={16} className="text-blue-500" />} iconBg="bg-blue-50" />
         <StatCard label="Meetings Booked" value={totalMeetings} icon={<CalendarCheck size={16} className="text-emerald-500" />} iconBg="bg-emerald-50" />
       </div>
@@ -580,7 +580,7 @@ export default function ClientRepliesPage() {
             onClick={() => setFilter(tab.key)}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
               filter === tab.key
-                ? "bg-[#1E8FE8]/20 text-[#47A5ED] border border-[#1E8FE8]/20"
+                ? "bg-[#2E37FE]/20 text-[#6B72FF] border border-[#2E37FE]/20"
                 : "bg-muted/50 text-muted-foreground hover:bg-muted"
             }`}
           >
@@ -594,8 +594,8 @@ export default function ClientRepliesPage() {
         <Card className="border-border/50 shadow-sm">
           <CardContent className="py-12 text-center">
             <div className="flex justify-center mb-3">
-              <div className="h-12 w-12 rounded-full bg-[#1E8FE8]/10 flex items-center justify-center">
-                <MailOpen size={24} className="text-[#1878C8]" />
+              <div className="h-12 w-12 rounded-full bg-[#2E37FE]/10 flex items-center justify-center">
+                <MailOpen size={24} className="text-[#1C24B8]" />
               </div>
             </div>
             <p className="text-muted-foreground font-medium">No replies yet</p>

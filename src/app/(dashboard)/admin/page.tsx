@@ -110,27 +110,27 @@ export default function AdminOverviewPage() {
 
   return (
     <div className="space-y-6">
-      <div className="relative overflow-hidden rounded-[20px] p-7" style={{ background: 'linear-gradient(135deg, #EBF5FE 0%, #D6ECFB 50%, #fff 100%)', border: '1px solid rgba(30,143,232,0.2)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.9), 0 4px 14px rgba(30,143,232,0.1)' }}>
+      <div className="relative overflow-hidden rounded-[20px] p-7" style={{ background: 'linear-gradient(135deg, #EDEEFF 0%, #D1D3FF 50%, #fff 100%)', border: '1px solid rgba(46,55,254,0.2)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.9), 0 4px 14px rgba(46,55,254,0.1)' }}>
         <div className="relative z-10">
           <p className="text-xs font-medium text-[#64748b]">Welcome back, Daniel</p>
           <h1 className="text-[22px] font-bold mt-1 text-[#0f172a]" style={{ letterSpacing: '-0.01em' }}>Client Overview</h1>
           <div className="flex items-center gap-7 mt-4 flex-wrap">
-            <div className="text-center"><span className="text-[26px] font-bold text-[#125FA0]">{totalClients}</span><br/><span className="text-[10px] text-[#64748b]">Clients</span></div>
-            <div className="text-center"><span className="text-[26px] font-bold text-[#125FA0]">{totalActive}</span><br/><span className="text-[10px] text-[#64748b]">Active Campaigns</span></div>
-            <div className="text-center"><span className="text-[26px] font-bold text-[#125FA0]">{healthyCt}</span><br/><span className="text-[10px] text-[#64748b]">Healthy</span></div>
-            {warningCt > 0 && <div className="text-center"><span className="text-[26px] font-bold text-[#125FA0]">{warningCt}</span><br/><span className="text-[10px] text-[#64748b]">Warning</span></div>}
-            {badCt > 0 && <div className="text-center"><span className="text-[26px] font-bold text-[#125FA0]">{badCt}</span><br/><span className="text-[10px] text-[#64748b]">At Risk</span></div>}
+            <div className="text-center"><span className="text-[26px] font-bold text-[#0F1880]">{totalClients}</span><br/><span className="text-[10px] text-[#64748b]">Clients</span></div>
+            <div className="text-center"><span className="text-[26px] font-bold text-[#0F1880]">{totalActive}</span><br/><span className="text-[10px] text-[#64748b]">Active Campaigns</span></div>
+            <div className="text-center"><span className="text-[26px] font-bold text-[#0F1880]">{healthyCt}</span><br/><span className="text-[10px] text-[#64748b]">Healthy</span></div>
+            {warningCt > 0 && <div className="text-center"><span className="text-[26px] font-bold text-[#0F1880]">{warningCt}</span><br/><span className="text-[10px] text-[#64748b]">Warning</span></div>}
+            {badCt > 0 && <div className="text-center"><span className="text-[26px] font-bold text-[#0F1880]">{badCt}</span><br/><span className="text-[10px] text-[#64748b]">At Risk</span></div>}
           </div>
         </div>
-        <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full" style={{ background: 'radial-gradient(circle, rgba(71,165,237,0.18) 0%, transparent 70%)' }} />
-        <div className="absolute -bottom-6 -right-4 h-24 w-24 rounded-full bg-[rgba(71,165,237,0.06)]" />
+        <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full" style={{ background: 'radial-gradient(circle, rgba(107,114,255,0.18) 0%, transparent 70%)' }} />
+        <div className="absolute -bottom-6 -right-4 h-24 w-24 rounded-full bg-[rgba(107,114,255,0.06)]" />
       </div>
 
       {clientCards.length === 0 ? (
         <Card className="border-border/50 shadow-sm">
           <CardContent className="py-12 text-center">
             <p className="text-muted-foreground font-medium">No clients yet.</p>
-            <Link href="/admin/clients" className="text-sm text-[#1E8FE8] font-medium hover:underline mt-1 inline-block">Add your first client</Link>
+            <Link href="/admin/clients" className="text-sm text-[#2E37FE] font-medium hover:underline mt-1 inline-block">Add your first client</Link>
           </CardContent>
         </Card>
       ) : (
@@ -139,11 +139,11 @@ export default function AdminOverviewPage() {
             const healthLabel = getHealthLabel(health);
             return (
               <Link key={client.id} href={`/admin/clients/${client.id}`} className="group block">
-                <Card className="border-border/50 shadow-sm transition-all duration-200 hover:border-[#1E8FE8]/20 hover:shadow-md h-full">
+                <Card className="border-border/50 shadow-sm transition-all duration-200 hover:border-[#2E37FE]/20 hover:shadow-md h-full">
                   <CardContent className="pt-5 pb-4 px-5">
                     <div className="flex items-start justify-between mb-4">
                       <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-lg text-sm font-bold text-white shrink-0" style={{ background: '#1E8FE8' }}>{client.name.charAt(0)}</div>
+                        <div className="flex h-10 w-10 items-center justify-center rounded-lg text-sm font-bold text-white shrink-0" style={{ background: '#2E37FE' }}>{client.name.charAt(0)}</div>
                         <div>
                           <p className="font-semibold text-foreground">{client.name}</p>
                           <p className="text-xs text-muted-foreground">{activeCampaigns.length} active / {clientCampaigns.length} total</p>

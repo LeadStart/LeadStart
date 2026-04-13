@@ -107,8 +107,8 @@ export function ClientUsersSection({
   return (
     <Card className="border-border/50 shadow-sm">
       <CardHeader className="flex flex-row items-center gap-2 pb-3">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#1E8FE8]/10">
-          <Users size={16} className="text-[#1E8FE8]" />
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]/10">
+          <Users size={16} className="text-[#2E37FE]" />
         </div>
         <CardTitle className="text-base flex-1">
           Portal Users ({users.length})
@@ -128,7 +128,7 @@ export function ClientUsersSection({
                 className="flex items-center justify-between rounded-xl border border-border/50 p-3 transition-colors hover:bg-muted/30"
               >
                 <div className="flex items-center gap-3">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-lg text-sm font-bold text-white shrink-0" style={{ background: '#1E8FE8' }}>
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg text-sm font-bold text-white shrink-0" style={{ background: '#2E37FE' }}>
                     {(user.full_name || user.email).charAt(0).toUpperCase()}
                   </div>
                   <div>
@@ -199,7 +199,7 @@ export function ClientUsersSection({
             size="sm"
             disabled={inviting || !inviteEmail.trim()}
             className="h-8 text-xs"
-            style={{ background: '#1E8FE8' }}
+            style={{ background: '#2E37FE' }}
           >
             <Send size={12} className="mr-1" />
             {inviting ? "Sending..." : "Invite"}
@@ -217,7 +217,7 @@ export function ClientUsersSection({
                 <button
                   type="button"
                   onClick={() => { navigator.clipboard.writeText(inviteLink); }}
-                  className="underline hover:no-underline text-[#1E8FE8]"
+                  className="underline hover:no-underline text-[#2E37FE]"
                 >
                   Copy link
                 </button>

@@ -121,21 +121,21 @@ export default function ClientCampaignPage({
           <ArrowLeft size={14} />
           Back to Dashboard
         </Link>
-        <div className="relative overflow-hidden rounded-[20px] p-7 text-[#0f172a] mt-3" style={{ background: 'linear-gradient(135deg, #EBF5FE 0%, #D6ECFB 50%, #fff 100%)', border: '1px solid rgba(30,143,232,0.2)', borderTop: '1px solid rgba(30,143,232,0.3)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.9), 0 4px 14px rgba(30,143,232,0.1)' }}>
+        <div className="relative overflow-hidden rounded-[20px] p-7 text-[#0f172a] mt-3" style={{ background: 'linear-gradient(135deg, #EDEEFF 0%, #D1D3FF 50%, #fff 100%)', border: '1px solid rgba(46,55,254,0.2)', borderTop: '1px solid rgba(46,55,254,0.3)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.9), 0 4px 14px rgba(46,55,254,0.1)' }}>
           <div className="relative z-10">
             <Badge className="bg-white/15 text-[#0f172a] border-0 mb-2">
               {typedCampaign.status}
             </Badge>
             <h1 className="text-2xl font-bold">{typedCampaign.name}</h1>
           </div>
-          <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-[rgba(71,165,237,0.06)]" />
+          <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-[rgba(107,114,255,0.06)]" />
         </div>
       </div>
 
       {/* Campaign Performance with date picker */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#1E8FE8]/10"><TrendingUp size={16} className="text-[#1E8FE8]" /></div>
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]/10"><TrendingUp size={16} className="text-[#2E37FE]" /></div>
           <h2 className="text-[15px] font-semibold text-[#0f172a]">Campaign Performance</h2>
         </div>
         <div className="flex items-center gap-3">
@@ -160,13 +160,13 @@ export default function ClientCampaignPage({
 
       {datePreset === "custom" && (
         <Card className="border-border/50 shadow-sm overflow-hidden mb-4">
-          <div className="flex items-end gap-4 px-6 py-3 bg-[#1E8FE8]/5">
+          <div className="flex items-end gap-4 px-6 py-3 bg-[#2E37FE]/5">
             <div className="space-y-1 flex-1 min-w-0">
-              <Label className="text-xs font-medium text-[#1E8FE8]/70">From</Label>
+              <Label className="text-xs font-medium text-[#2E37FE]/70">From</Label>
               <Input className="h-9 w-full text-sm" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
             </div>
             <div className="space-y-1 flex-1 min-w-0">
-              <Label className="text-xs font-medium text-[#1E8FE8]/70">To</Label>
+              <Label className="text-xs font-medium text-[#2E37FE]/70">To</Label>
               <Input className="h-9 w-full text-sm" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
             </div>
           </div>

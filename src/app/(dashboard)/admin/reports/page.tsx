@@ -189,7 +189,7 @@ export default function ReportsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="relative overflow-hidden rounded-[20px] p-7 text-[#0f172a]" style={{ background: 'linear-gradient(135deg, #EBF5FE 0%, #D6ECFB 50%, #fff 100%)', border: '1px solid rgba(30,143,232,0.2)', borderTop: '1px solid rgba(30,143,232,0.3)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.9), 0 4px 14px rgba(30,143,232,0.1)' }}>
+      <div className="relative overflow-hidden rounded-[20px] p-7 text-[#0f172a]" style={{ background: 'linear-gradient(135deg, #EDEEFF 0%, #D1D3FF 50%, #fff 100%)', border: '1px solid rgba(46,55,254,0.2)', borderTop: '1px solid rgba(46,55,254,0.3)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.9), 0 4px 14px rgba(46,55,254,0.1)' }}>
         <div className="relative z-10">
           <p className="text-xs font-medium text-[#64748b]">Client Reporting</p>
           <h1 className="text-[22px] font-bold mt-1" style={{ color: '#0f172a', letterSpacing: '-0.01em' }}>KPI Reports</h1>
@@ -197,14 +197,14 @@ export default function ReportsPage() {
             {reports.length} total &middot; {sentCount} sent &middot; {draftCount} draft
           </p>
         </div>
-        <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-[rgba(71,165,237,0.06)]" />
+        <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-[rgba(107,114,255,0.06)]" />
       </div>
 
       {/* Report Builder */}
       <Card className="border-border/50">
         <CardHeader className="flex flex-row items-center gap-2 pb-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#1E8FE8]/10">
-            <Send size={16} className="text-[#1E8FE8]" />
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]/10">
+            <Send size={16} className="text-[#2E37FE]" />
           </div>
           <div>
             <CardTitle className="text-base">Generate Report</CardTitle>
@@ -312,7 +312,7 @@ export default function ReportsPage() {
                 return (
                   <div key={client.id} className="flex items-center justify-between rounded-xl border border-border/50 p-4 hover:bg-muted/20 transition-colors">
                     <div className="flex items-center gap-3">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold text-white shrink-0" style={{ background: '#1E8FE8' }}>
+                      <div className="flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold text-white shrink-0" style={{ background: '#2E37FE' }}>
                         {client.name.charAt(0)}
                       </div>
                       <div>
@@ -363,8 +363,8 @@ export default function ReportsPage() {
       {/* Report History */}
       <Card className="border-border/50">
         <CardHeader className="flex flex-row items-center gap-2 pb-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#1E8FE8]/10">
-            <FileText size={16} className="text-[#1E8FE8]" />
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]/10">
+            <FileText size={16} className="text-[#2E37FE]" />
           </div>
           <CardTitle className="text-base">Report History</CardTitle>
         </CardHeader>
@@ -381,10 +381,10 @@ export default function ReportsPage() {
                   <div
                     key={report.id}
                     onClick={() => setSelectedReport(report)}
-                    className="group cursor-pointer flex items-center justify-between rounded-xl border border-border/50 p-4 transition-all hover:border-[#1E8FE8]/20 hover:shadow-md"
+                    className="group cursor-pointer flex items-center justify-between rounded-xl border border-border/50 p-4 transition-all hover:border-[#2E37FE]/20 hover:shadow-md"
                   >
                     <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-lg text-sm font-bold text-white shrink-0" style={{ background: '#1E8FE8' }}>
+                      <div className="flex h-10 w-10 items-center justify-center rounded-lg text-sm font-bold text-white shrink-0" style={{ background: '#2E37FE' }}>
                         {client?.name?.charAt(0) || "?"}
                       </div>
                       <div>
@@ -447,7 +447,7 @@ export default function ReportsPage() {
           <DialogContent className="w-[85vw] max-w-5xl min-h-[75vh] max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg text-sm font-bold text-[#0f172a]" style={{ background: '#1E8FE8' }}>
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg text-sm font-bold text-[#0f172a]" style={{ background: '#2E37FE' }}>
                   {clientMap.get(selectedReport.client_id)?.name?.charAt(0) || "?"}
                 </div>
                 <div>
@@ -505,7 +505,7 @@ export default function ReportsPage() {
                     <Button
                       size="sm"
                       className="text-xs"
-                      style={{ background: '#1E8FE8' }}
+                      style={{ background: '#2E37FE' }}
                       onClick={() => handleSendReport(selectedReport)}
                       disabled={sending}
                     >
@@ -535,8 +535,8 @@ export default function ReportsPage() {
 
               {/* KPI Summary */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div className="text-center p-3 rounded-lg bg-[#1E8FE8]/5 border border-[#1E8FE8]/10">
-                  <p className="text-xl font-bold text-[#47A5ED]">{selectedReport.report_data.totals.emails_sent.toLocaleString()}</p>
+                <div className="text-center p-3 rounded-lg bg-[#2E37FE]/5 border border-[#2E37FE]/10">
+                  <p className="text-xl font-bold text-[#6B72FF]">{selectedReport.report_data.totals.emails_sent.toLocaleString()}</p>
                   <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Emails Sent</p>
                 </div>
                 <div className="text-center p-3 rounded-lg bg-emerald-50/50 border border-emerald-100">

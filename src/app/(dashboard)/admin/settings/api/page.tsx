@@ -190,7 +190,7 @@ export default function IntegrationsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="relative overflow-hidden rounded-[20px] p-7 text-[#0f172a]" style={{ background: 'linear-gradient(135deg, #EBF5FE 0%, #D6ECFB 50%, #fff 100%)', border: '1px solid rgba(30,143,232,0.2)', borderTop: '1px solid rgba(30,143,232,0.3)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.9), 0 4px 14px rgba(30,143,232,0.1)' }}>
+      <div className="relative overflow-hidden rounded-[20px] p-7 text-[#0f172a]" style={{ background: 'linear-gradient(135deg, #EDEEFF 0%, #D1D3FF 50%, #fff 100%)', border: '1px solid rgba(46,55,254,0.2)', borderTop: '1px solid rgba(46,55,254,0.3)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.9), 0 4px 14px rgba(46,55,254,0.1)' }}>
         <div className="relative z-10">
           <p className="text-xs font-medium text-[#64748b]">Settings</p>
           <h1 className="text-[22px] font-bold mt-1" style={{ color: '#0f172a', letterSpacing: '-0.01em' }}>Integrations</h1>
@@ -198,14 +198,14 @@ export default function IntegrationsPage() {
             Manage API connections, email, and sync schedules
           </p>
         </div>
-        <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-[rgba(71,165,237,0.06)]" />
+        <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-[rgba(107,114,255,0.06)]" />
       </div>
 
       {/* Instantly.ai API Key */}
       <Card className="border-border/50 shadow-sm">
         <CardHeader className="flex flex-row items-center gap-2 pb-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#1E8FE8]/10">
-            <Key size={16} className="text-[#1E8FE8]" />
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]/10">
+            <Key size={16} className="text-[#2E37FE]" />
           </div>
           <div>
             <CardTitle className="text-base">Instantly.ai</CardTitle>
@@ -224,7 +224,7 @@ export default function IntegrationsPage() {
             />
           </div>
           <div className="flex gap-2">
-            <Button onClick={handleSaveApiKey} disabled={saving} style={{ background: '#1E8FE8' }}>
+            <Button onClick={handleSaveApiKey} disabled={saving} style={{ background: '#2E37FE' }}>
               {saving ? "Saving..." : "Save Key"}
             </Button>
             <Button variant="outline" onClick={handleTest} disabled={testing || !apiKey}>
@@ -286,7 +286,7 @@ export default function IntegrationsPage() {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <Button onClick={handleSaveResend} disabled={savingResend} style={{ background: '#1E8FE8' }}>
+            <Button onClick={handleSaveResend} disabled={savingResend} style={{ background: '#2E37FE' }}>
               {savingResend ? "Saving..." : "Save Email Settings"}
             </Button>
             {resendSaved && (
@@ -349,7 +349,7 @@ export default function IntegrationsPage() {
           </div>
 
           <div className="flex items-center gap-3 pt-2">
-            <Button onClick={handleSaveSchedule} disabled={savingSchedule} style={{ background: '#1E8FE8' }}>
+            <Button onClick={handleSaveSchedule} disabled={savingSchedule} style={{ background: '#2E37FE' }}>
               {savingSchedule ? "Saving..." : "Save Schedule"}
             </Button>
             {scheduleSaved && (
@@ -364,8 +364,8 @@ export default function IntegrationsPage() {
       {/* Manual Sync */}
       <Card className="border-border/50 shadow-sm">
         <CardHeader className="flex flex-row items-center gap-2 pb-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#1E8FE8]/10">
-            <Zap size={16} className="text-[#1E8FE8]" />
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]/10">
+            <Zap size={16} className="text-[#2E37FE]" />
           </div>
           <CardTitle className="text-base">Manual Sync</CardTitle>
         </CardHeader>
@@ -378,9 +378,9 @@ export default function IntegrationsPage() {
             {syncing ? "Syncing..." : "Sync Now"}
           </Button>
           {syncResult && (
-            <div className="flex items-center gap-2 rounded-lg bg-[#1E8FE8]/10 border border-[#1E8FE8]/20 p-3">
-              <Zap size={16} className="text-[#1E8FE8]" />
-              <span className="text-sm font-medium text-[#47A5ED]">{syncResult}</span>
+            <div className="flex items-center gap-2 rounded-lg bg-[#2E37FE]/10 border border-[#2E37FE]/20 p-3">
+              <Zap size={16} className="text-[#2E37FE]" />
+              <span className="text-sm font-medium text-[#6B72FF]">{syncResult}</span>
             </div>
           )}
         </CardContent>

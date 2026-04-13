@@ -108,7 +108,7 @@ export default function InboxHealthPage() {
   if (error) {
     return (
       <div className="space-y-6">
-        <div className="relative overflow-hidden rounded-[20px] p-7 text-[#0f172a]" style={{ background: 'linear-gradient(135deg, #EBF5FE 0%, #D6ECFB 50%, #fff 100%)', border: '1px solid rgba(30,143,232,0.2)', borderTop: '1px solid rgba(30,143,232,0.3)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.9), 0 4px 14px rgba(30,143,232,0.1)' }}>
+        <div className="relative overflow-hidden rounded-[20px] p-7 text-[#0f172a]" style={{ background: 'linear-gradient(135deg, #EDEEFF 0%, #D1D3FF 50%, #fff 100%)', border: '1px solid rgba(46,55,254,0.2)', borderTop: '1px solid rgba(46,55,254,0.3)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.9), 0 4px 14px rgba(46,55,254,0.1)' }}>
           <div className="relative z-10">
             <p className="text-xs font-medium text-[#64748b]">Deliverability</p>
             <h1 className="text-[22px] font-bold mt-1" style={{ color: '#0f172a', letterSpacing: '-0.01em' }}>Inbox Health</h1>
@@ -118,7 +118,7 @@ export default function InboxHealthPage() {
           <CardContent className="py-8 text-center">
             <AlertTriangle size={32} className="text-red-700 mx-auto mb-3" />
             <p className="text-sm font-medium text-red-600">{error}</p>
-            <button onClick={fetchData} className="mt-3 text-sm text-[#1E8FE8] hover:underline">Retry</button>
+            <button onClick={fetchData} className="mt-3 text-sm text-[#2E37FE] hover:underline">Retry</button>
           </CardContent>
         </Card>
       </div>
@@ -130,7 +130,7 @@ export default function InboxHealthPage() {
 
   return (
     <div className="space-y-6">
-      <div className="relative overflow-hidden rounded-[20px] p-7 text-[#0f172a]" style={{ background: 'linear-gradient(135deg, #EBF5FE 0%, #D6ECFB 50%, #fff 100%)', border: '1px solid rgba(30,143,232,0.2)', borderTop: '1px solid rgba(30,143,232,0.3)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.9), 0 4px 14px rgba(30,143,232,0.1)' }}>
+      <div className="relative overflow-hidden rounded-[20px] p-7 text-[#0f172a]" style={{ background: 'linear-gradient(135deg, #EDEEFF 0%, #D1D3FF 50%, #fff 100%)', border: '1px solid rgba(46,55,254,0.2)', borderTop: '1px solid rgba(46,55,254,0.3)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.9), 0 4px 14px rgba(46,55,254,0.1)' }}>
         <div className="relative z-10 flex items-center justify-between">
           <div>
             <p className="text-xs font-medium text-[#64748b]">Deliverability</p>
@@ -142,21 +142,21 @@ export default function InboxHealthPage() {
             Refresh
           </button>
         </div>
-        <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-[rgba(71,165,237,0.06)]" />
+        <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-[rgba(107,114,255,0.06)]" />
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <StatCard label="Active Inboxes" value={summary.activeInboxes} icon={<Inbox size={18} className="text-[#1E8FE8]" />} iconBg="bg-[#1E8FE8]/10" />
+        <StatCard label="Active Inboxes" value={summary.activeInboxes} icon={<Inbox size={18} className="text-[#2E37FE]" />} iconBg="bg-[#2E37FE]/10" />
         <StatCard label="Avg Health Score" value={summary.avgHealthScore !== null ? `${summary.avgHealthScore}/100` : "N/A"} icon={<Shield size={18} className="text-emerald-500" />} iconBg="bg-emerald-50" valueColor={healthColor(summary.avgHealthScore)} />
         <StatCard label="Low Health Inboxes" value={lowHealthInboxes} icon={<AlertTriangle size={18} className="text-red-500" />} iconBg="bg-red-50" valueColor={lowHealthInboxes > 0 ? "text-red-600" : "text-emerald-600"} />
       </div>
 
       {/* View Toggle */}
       <div className="flex gap-2">
-        <button onClick={() => setView("domains")} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === "domains" ? "bg-[#1E8FE8]/20 text-[#47A5ED] border border-[#1E8FE8]/20" : "bg-muted/50 text-muted-foreground hover:bg-muted"}`}>
+        <button onClick={() => setView("domains")} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === "domains" ? "bg-[#2E37FE]/20 text-[#6B72FF] border border-[#2E37FE]/20" : "bg-muted/50 text-muted-foreground hover:bg-muted"}`}>
           <Globe size={14} /> By Domain
         </button>
-        <button onClick={() => setView("inboxes")} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === "inboxes" ? "bg-[#1E8FE8]/20 text-[#47A5ED] border border-[#1E8FE8]/20" : "bg-muted/50 text-muted-foreground hover:bg-muted"}`}>
+        <button onClick={() => setView("inboxes")} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === "inboxes" ? "bg-[#2E37FE]/20 text-[#6B72FF] border border-[#2E37FE]/20" : "bg-muted/50 text-muted-foreground hover:bg-muted"}`}>
           <Inbox size={14} /> By Inbox
         </button>
       </div>
@@ -164,7 +164,7 @@ export default function InboxHealthPage() {
       {view === "domains" ? (
         <>
         <div className="flex items-center gap-2 mb-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#1E8FE8]/10"><Globe size={16} className="text-[#1E8FE8]" /></div>
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]/10"><Globe size={16} className="text-[#2E37FE]" /></div>
           <h2 className="text-[15px] font-semibold text-[#0f172a]">Domain Health</h2>
         </div>
         <Card className="border-border/50 shadow-sm">
@@ -184,7 +184,7 @@ export default function InboxHealthPage() {
                   <TableRow key={d.domain}>
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        <div className="flex h-7 w-7 items-center justify-center rounded bg-[#1E8FE8]/10 text-[10px] font-bold text-[#1E8FE8]">{d.domain.charAt(0).toUpperCase()}</div>
+                        <div className="flex h-7 w-7 items-center justify-center rounded bg-[#2E37FE]/10 text-[10px] font-bold text-[#2E37FE]">{d.domain.charAt(0).toUpperCase()}</div>
                         <span className="font-medium">{d.domain}</span>
                       </div>
                     </TableCell>
@@ -202,7 +202,7 @@ export default function InboxHealthPage() {
       ) : (
         <>
         <div className="flex items-center gap-2 mb-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#1E8FE8]/10"><Inbox size={16} className="text-[#1E8FE8]" /></div>
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]/10"><Inbox size={16} className="text-[#2E37FE]" /></div>
           <h2 className="text-[15px] font-semibold text-[#0f172a]">All Inboxes</h2>
         </div>
         <Card className="border-border/50 shadow-sm">
@@ -241,7 +241,7 @@ export default function InboxHealthPage() {
                           <span className="text-xs text-muted-foreground">—</span>
                         ) : (
                           inbox.campaigns.slice(0, 3).map((c) => (
-                            <Badge key={c.id} variant="secondary" className="bg-[#1E8FE8]/10 text-[#47A5ED] border border-[#1E8FE8]/20 text-[10px]">
+                            <Badge key={c.id} variant="secondary" className="bg-[#2E37FE]/10 text-[#6B72FF] border border-[#2E37FE]/20 text-[10px]">
                               {c.name.length > 20 ? c.name.slice(0, 20) + "…" : c.name}
                             </Badge>
                           ))

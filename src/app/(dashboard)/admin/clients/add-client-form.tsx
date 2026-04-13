@@ -50,8 +50,8 @@ export function AddClientForm() {
   return (
     <Card className="border-border/50 shadow-sm">
       <CardHeader className="flex flex-row items-center gap-2 pb-3">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#1E8FE8]/10">
-          <UserPlus size={16} className="text-[#1E8FE8]" />
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]/10">
+          <UserPlus size={16} className="text-[#2E37FE]" />
         </div>
         <CardTitle className="text-base">Add Client</CardTitle>
       </CardHeader>
@@ -77,7 +77,7 @@ export function AddClientForm() {
               placeholder="client@company.com"
             />
           </div>
-          <Button type="submit" disabled={loading} style={{ background: '#1E8FE8' }}>
+          <Button type="submit" disabled={loading} style={{ background: '#2E37FE' }}>
             {loading ? "Adding..." : "Add Client"}
           </Button>
         </form>

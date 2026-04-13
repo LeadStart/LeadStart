@@ -58,13 +58,13 @@ export function Sidebar({ role }: { role: AppRole }) {
   const settingsNav = isAdmin ? adminSettingsNav : [];
 
   return (
-    <aside className="relative flex h-full w-64 flex-col overflow-visible border-r border-[#e2e8f0]" style={{ background: 'linear-gradient(180deg, #ffffff 0%, #47A5ED 100%)', boxShadow: '3px 0 12px rgba(15,23,42,0.06), 1px 0 3px rgba(15,23,42,0.03)' }}>
+    <aside className="relative flex h-full w-64 flex-col overflow-visible border-r border-[#e2e8f0]" style={{ background: 'linear-gradient(180deg, #ffffff 0%, #6B72FF 100%)', boxShadow: '3px 0 12px rgba(15,23,42,0.06), 1px 0 3px rgba(15,23,42,0.03)' }}>
       {/* Sidebar shadow cast into content area */}
-      <div className="absolute top-0 bottom-0 w-8 pointer-events-none z-0" style={{ right: '-32px', background: 'linear-gradient(90deg, rgba(15,23,42,0.12) 0%, rgba(24,120,200,0.03) 60%, transparent 100%)' }} />
+      <div className="absolute top-0 bottom-0 w-8 pointer-events-none z-0" style={{ right: '-32px', background: 'linear-gradient(90deg, rgba(15,23,42,0.12) 0%, rgba(28,36,184,0.03) 60%, transparent 100%)' }} />
 
       {/* Brand header */}
       <div className="flex h-16 items-center gap-3 px-6 border-b border-[#e2e8f0]">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold text-white" style={{ background: '#1E8FE8' }}>
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold text-white" style={{ background: '#2E37FE' }}>
           <Mail size={16} className="text-white" />
         </div>
         <Link href={isAdmin ? "/admin" : "/client"} className="text-lg font-bold text-[#0f172a] tracking-tight">
@@ -131,7 +131,7 @@ export function Sidebar({ role }: { role: AppRole }) {
       {/* Footer */}
       <div className="border-t border-white/25 p-4">
         <div className="flex items-center gap-2">
-          <div className="flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold text-white" style={{ background: '#1E8FE8' }}>
+          <div className="flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold text-white" style={{ background: '#2E37FE' }}>
             {role === "owner" ? "A" : role === "va" ? "V" : "C"}
           </div>
           <div>
