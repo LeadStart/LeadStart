@@ -158,33 +158,34 @@ export default function ClientDashboardPage() {
         <div className="absolute -bottom-6 -right-4 h-24 w-24 rounded-full bg-[rgba(71,165,237,0.06)]" />
       </div>
 
-      {/* Row 1: Combined KPI + Date Range Card (Option C) */}
-      <Card className="border-border/50 shadow-sm overflow-hidden">
-        {/* Gradient header bar */}
-        <div className="flex items-center justify-between px-6 py-3" style={{ background: 'linear-gradient(to right, rgba(30,143,232,0.85), rgba(71,165,237,0.5) 55%, rgba(235,245,254,0.3) 100%)' }}>
-          <span className="text-sm font-semibold text-[#0f172a]">Campaign Performance</span>
-          <div className="flex items-center gap-3">
-            {datePreset !== "custom" && (
-              <span className="text-xs text-[#47A5ED]/70">
-                {new Date(startDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })} — {new Date(endDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-              </span>
-            )}
-            <Select value={datePreset} onValueChange={handlePresetChange}>
-              <SelectTrigger className="h-8 w-[130px] bg-white/60 backdrop-blur-sm border-white/40 text-xs font-medium text-[#E8E6E1]"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="7d">Last 7 Days</SelectItem>
-                <SelectItem value="30d">Last 30 Days</SelectItem>
-                <SelectItem value="90d">Last 90 Days</SelectItem>
-                <SelectItem value="mtd">Month to Date</SelectItem>
-                <SelectItem value="last_month">Last Month</SelectItem>
-                <SelectItem value="custom">Custom</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+      {/* Row 1: Campaign Performance */}
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#1E8FE8]/10"><TrendingUp size={16} className="text-[#1E8FE8]" /></div>
+          <h2 className="text-[15px] font-semibold text-[#0f172a]">Campaign Performance</h2>
         </div>
-        {/* Custom date inputs (shown when Custom selected) */}
+        <div className="flex items-center gap-3">
+          {datePreset !== "custom" && (
+            <span className="text-xs text-muted-foreground">
+              {new Date(startDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })} — {new Date(endDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+            </span>
+          )}
+          <Select value={datePreset} onValueChange={handlePresetChange}>
+            <SelectTrigger className="h-8 w-[130px] border-border/50 text-xs font-medium"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="7d">Last 7 Days</SelectItem>
+              <SelectItem value="30d">Last 30 Days</SelectItem>
+              <SelectItem value="90d">Last 90 Days</SelectItem>
+              <SelectItem value="mtd">Month to Date</SelectItem>
+              <SelectItem value="last_month">Last Month</SelectItem>
+              <SelectItem value="custom">Custom</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      <Card className="border-border/50 shadow-sm overflow-hidden">
         {datePreset === "custom" && (
-          <div className="flex items-end gap-4 px-6 py-3 bg-[#1E8FE8]/5 border-b border-[#1E8FE8]/10/50">
+          <div className="flex items-end gap-4 px-6 py-3 bg-[#1E8FE8]/5 border-b border-border/30">
             <div className="space-y-1 flex-1 min-w-0">
               <Label className="text-xs font-medium text-[#1E8FE8]/70">From</Label>
               <Input className="h-9 w-full text-sm" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
@@ -195,7 +196,6 @@ export default function ClientDashboardPage() {
             </div>
           </div>
         )}
-        {/* KPI metrics row */}
         <div className="grid grid-cols-2 divide-x divide-border/50">
           <div className="px-6 py-5 text-center">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">Emails Sent</p>
