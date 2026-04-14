@@ -31,10 +31,10 @@ export async function updateSession(request: NextRequest) {
   if (code) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
-      // Check if there's a `next` param to redirect to (e.g. /update-password)
       const next = request.nextUrl.searchParams.get("next");
       const url = request.nextUrl.clone();
-      url.pathname = next || "/update-password";
+      // If there's a `next` param, redirect there; otherwise stay on current path
+      if (next) url.pathname = next;
       url.searchParams.delete("code");
       url.searchParams.delete("next");
       const redirectResponse = NextResponse.redirect(url);

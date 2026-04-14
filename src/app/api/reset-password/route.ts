@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
     type: "recovery",
     email,
     options: {
-      redirectTo: `${request.nextUrl.origin}/auth/callback?next=/update-password`,
+      redirectTo: `${request.nextUrl.origin}/update-password`,
     },
   });
 

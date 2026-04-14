@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
         organization_id: organizationId,
         client_id: client_id || null,
       },
-      redirectTo: `${request.nextUrl.origin}/auth/callback?next=/accept-invite`,
+      redirectTo: `${request.nextUrl.origin}/accept-invite`,
     },
   });
 
@@ -113,7 +113,7 @@ export async function POST(request: NextRequest) {
         type: "magiclink",
         email,
         options: {
-          redirectTo: `${request.nextUrl.origin}/auth/callback?next=/accept-invite`,
+          redirectTo: `${request.nextUrl.origin}/accept-invite`,
         },
       });
       actionLink = magicData?.properties?.action_link || null;
