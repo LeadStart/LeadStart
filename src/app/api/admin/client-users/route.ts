@@ -20,6 +20,8 @@ export async function DELETE(request: NextRequest) {
   }
 
   const admin = createAdminClient();
+
+  // Remove client_users link
   const { error } = await admin
     .from("client_users")
     .delete()
@@ -28,6 +30,18 @@ export async function DELETE(request: NextRequest) {
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  // Check if user is linked to any other clients
+  const { data: otherLinks } = await admin
+    .from("client_users")
+    .select("client_id")
+    .eq("user_id", user_id);
+
+  // If no other client links, fully delete the user from auth + profiles
+  if (!otherLinks || otherLinks.length === 0) {
+    await admin.from("profiles").delete().eq("id", user_id);
+    await admin.auth.admin.deleteUser(user_id);
   }
 
   return NextResponse.json({ success: true });

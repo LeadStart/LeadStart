@@ -62,6 +62,9 @@ export default function AcceptInvitePage() {
       return;
     }
 
+    // Mark invite as accepted
+    await fetch("/api/accept-invite", { method: "POST" });
+
     router.push("/");
     router.refresh();
   }

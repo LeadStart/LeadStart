@@ -47,6 +47,7 @@ export interface ClientUser {
   client_id: string;
   user_id: string;
   created_at: string;
+  invite_status: string;
 }
 
 export interface Campaign {

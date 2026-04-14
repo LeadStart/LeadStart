@@ -53,7 +53,7 @@ async function fetchClientDetail(clientId: string) {
   // Fetch linked users via client_users join table
   const { data: clientUsersData } = await supabase
     .from("client_users")
-    .select("user_id, created_at")
+    .select("user_id, created_at, invite_status")
     .eq("client_id", clientId);
 
   const userIds = (clientUsersData || []).map((cu: Record<string, unknown>) => cu.user_id as string);
@@ -68,6 +68,7 @@ async function fetchClientDetail(clientId: string) {
       email: (profile?.email as string) || "",
       full_name: (profile?.full_name as string) || null,
       created_at: cu.created_at as string,
+      invite_status: (cu.invite_status as string) || "active",
     };
   });
 

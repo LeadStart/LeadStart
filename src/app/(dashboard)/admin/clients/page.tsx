@@ -56,12 +56,11 @@ export default function ClientsPage() {
         <CardContent>
           {clients.length === 0 ? <p className="text-sm text-muted-foreground">No clients yet. Add one above.</p> : (
             <Table>
-              <TableHeader><TableRow><SortableHead sortKey="name" sortConfig={sortConfig} onSort={requestSort}>Name</SortableHead><SortableHead sortKey="contact_email" sortConfig={sortConfig} onSort={requestSort}>Email</SortableHead><SortableHead sortKey="activeCampaigns" sortConfig={sortConfig} onSort={requestSort}>Campaigns</SortableHead><SortableHead sortKey="userCount" sortConfig={sortConfig} onSort={requestSort}>Portal Access</SortableHead><TableHead></TableHead></TableRow></TableHeader>
+              <TableHeader><TableRow><SortableHead sortKey="name" sortConfig={sortConfig} onSort={requestSort}>Name</SortableHead><SortableHead sortKey="activeCampaigns" sortConfig={sortConfig} onSort={requestSort}>Campaigns</SortableHead><SortableHead sortKey="userCount" sortConfig={sortConfig} onSort={requestSort}>Portal Access</SortableHead><TableHead></TableHead></TableRow></TableHeader>
               <TableBody>
                 {sorted.map((row) => (
                     <TableRow key={row.id} className="group">
                       <TableCell><div className="flex items-center gap-3"><div className="flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold text-white shrink-0" style={{ background: '#2E37FE' }}>{row.name.charAt(0)}</div><Link href={`/admin/clients/${row.id}`} className="font-medium text-foreground hover:text-[#2E37FE] transition-colors">{row.name}</Link></div></TableCell>
-                      <TableCell className="text-muted-foreground">{row.contact_email || "—"}</TableCell>
                       <TableCell><span className="text-sm"><span className="font-medium">{row.activeCampaigns}</span><span className="text-muted-foreground"> active / {row.totalCampaigns} total</span></span></TableCell>
                       <TableCell><Badge variant="secondary" className={row.userCount > 0 ? "badge-green" : "badge-amber"}>{row.userCount > 0 ? `${row.userCount} user${row.userCount !== 1 ? "s" : ""}` : "Not invited"}</Badge></TableCell>
                       <TableCell><Link href={`/admin/clients/${row.id}`} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-[#2E37FE] transition-colors">View<ArrowRight size={13} className="opacity-0 group-hover:opacity-100 transition-opacity" /></Link></TableCell>
