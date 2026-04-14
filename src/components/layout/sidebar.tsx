@@ -88,7 +88,7 @@ export function Sidebar({ role }: { role: AppRole }) {
                   : "nav-notch-hover text-[#0f172a]"
               )}
             >
-              <span className={cn("relative z-[1]", isActive ? "text-white" : "text-[#64748b]")}>
+              <span className={cn("relative z-[1]", isActive ? "text-white" : "text-[#0f172a]")}>
                 {item.icon}
               </span>
               <span className="relative z-[1]">{item.label}</span>
@@ -116,7 +116,7 @@ export function Sidebar({ role }: { role: AppRole }) {
                       : "nav-notch-hover text-[#0f172a]"
                   )}
                 >
-                  <span className={cn("relative z-[1]", isActive ? "text-white" : "text-[#64748b]")}>
+                  <span className={cn("relative z-[1]", isActive ? "text-white" : "text-[#0f172a]")}>
                     {item.icon}
                   </span>
                   <span className="relative z-[1]">{item.label}</span>
