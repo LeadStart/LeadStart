@@ -31,6 +31,7 @@ import {
   ArrowLeft,
   CheckCircle,
   AlertCircle,
+  Users,
 } from "lucide-react";
 import { buildWeeklyReportEmail } from "@/lib/email/weekly-report";
 import { calculateMetrics } from "@/lib/kpi/calculator";
@@ -48,8 +49,52 @@ export default function ReportsPage() {
   const [showPreview, setShowPreview] = useState(false);
   const [sending, setSending] = useState(false);
   const [sendSuccess, setSendSuccess] = useState(false);
+  const [recipients, setRecipients] = useState<{ email: string; name: string; checked: boolean; source: string }[]>([]);
+  const [loadingRecipients, setLoadingRecipients] = useState(false);
+
+  async function loadRecipients(clientId: string) {
+    setLoadingRecipients(true);
+    const supabase = createClient();
+    const list: { email: string; name: string; checked: boolean; source: string }[] = [];
+
+    // Add contact_email from client record
+    const client = clients.find((c) => c.id === clientId);
+    if (client?.contact_email) {
+      list.push({ email: client.contact_email, name: client.name, checked: true, source: "Client Contact" });
+    }
+
+    // Add portal users from client_users → profiles
+    const { data: cuData } = await supabase
+      .from("client_users")
+      .select("user_id")
+      .eq("client_id", clientId);
+
+    if (cuData && cuData.length > 0) {
+      const userIds = cuData.map((cu: { user_id: string }) => cu.user_id);
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("id, email, full_name")
+        .in("id", userIds);
+
+      for (const p of (profiles || []) as { id: string; email: string; full_name: string | null }[]) {
+        // Don't duplicate if same as contact_email
+        if (!list.some((r) => r.email === p.email)) {
+          list.push({ email: p.email, name: p.full_name || p.email, checked: true, source: "Portal User" });
+        }
+      }
+    }
+
+    setRecipients(list);
+    setLoadingRecipients(false);
+  }
 
   async function handleSendReport(report: KPIReport) {
+    const checkedRecipients = recipients.filter((r) => r.checked).map((r) => r.email);
+    if (checkedRecipients.length === 0) {
+      setError("Select at least one recipient");
+      return;
+    }
+
     setSending(true);
     setSendSuccess(false);
     setError(null);
@@ -58,7 +103,7 @@ export default function ReportsPage() {
       const res = await fetch("/api/cron/send-reports", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reportId: report.id }),
+        body: JSON.stringify({ reportId: report.id, recipients: checkedRecipients }),
       });
 
       if (!res.ok) {
@@ -67,18 +112,16 @@ export default function ReportsPage() {
       }
 
       setSendSuccess(true);
-      // Update the report in the local list to show as sent
       setReports((prev) =>
         prev.map((r) =>
           r.id === report.id
-            ? { ...r, sent_at: new Date().toISOString(), sent_to: [clients.find(c => c.id === r.client_id)?.contact_email || ""] }
+            ? { ...r, sent_at: new Date().toISOString(), sent_to: checkedRecipients }
             : r
         )
       );
-      // Update selected report too
       setSelectedReport((prev) =>
         prev && prev.id === report.id
-          ? { ...prev, sent_at: new Date().toISOString() }
+          ? { ...prev, sent_at: new Date().toISOString(), sent_to: checkedRecipients }
           : prev
       );
     } catch (err) {
@@ -174,6 +217,7 @@ export default function ReportsPage() {
       setReports((prev) => [draftReport, ...prev]);
       setSelectedReport(draftReport);
       setShowPreview(false);
+      loadRecipients(selectedClient);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -380,7 +424,7 @@ export default function ReportsPage() {
                 return (
                   <div
                     key={report.id}
-                    onClick={() => setSelectedReport(report)}
+                    onClick={() => { setSelectedReport(report); loadRecipients(report.client_id); }}
                     className="group cursor-pointer flex items-center justify-between rounded-xl border border-border/50 p-4 transition-all hover:border-[#2E37FE]/20 hover:shadow-md"
                   >
                     <div className="flex items-center gap-3">
@@ -531,6 +575,51 @@ export default function ReportsPage() {
                     </span>
                   )}
                 </div>
+              </div>
+
+              {/* Recipients */}
+              <div className="rounded-xl border border-border/50 bg-muted/10 p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <Users size={14} className="text-[#2E37FE]" />
+                  <span className="text-sm font-semibold">Recipients</span>
+                  <span className="text-xs text-muted-foreground">
+                    ({recipients.filter((r) => r.checked).length} selected)
+                  </span>
+                </div>
+                {loadingRecipients ? (
+                  <p className="text-xs text-muted-foreground">Loading recipients...</p>
+                ) : recipients.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">No recipients found. Add a contact email or portal user to this client.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {recipients.map((r) => (
+                      <label key={r.email} className="flex items-center gap-3 cursor-pointer group">
+                        <input
+                          type="checkbox"
+                          checked={r.checked}
+                          onChange={() =>
+                            setRecipients((prev) =>
+                              prev.map((p) =>
+                                p.email === r.email ? { ...p, checked: !p.checked } : p
+                              )
+                            )
+                          }
+                          className="h-4 w-4 rounded border-border accent-[#2E37FE]"
+                        />
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          <div className="flex h-7 w-7 items-center justify-center rounded-md text-[10px] font-bold text-white shrink-0" style={{ background: '#2E37FE' }}>
+                            {r.name.charAt(0).toUpperCase()}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium truncate">{r.name}</p>
+                            <p className="text-xs text-muted-foreground truncate">{r.email}</p>
+                          </div>
+                        </div>
+                        <Badge variant="secondary" className="text-[9px] shrink-0">{r.source}</Badge>
+                      </label>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* KPI Summary */}

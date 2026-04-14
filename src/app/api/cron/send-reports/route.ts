@@ -46,16 +46,22 @@ export async function POST(request: NextRequest) {
 
     const report = reportData as unknown as KPIReport;
 
-    // Get the client's email
-    const { data: clientData } = await admin
-      .from("clients")
-      .select("*")
-      .eq("id", report.client_id)
-      .single();
+    // Determine recipients: use explicit list if provided, otherwise fall back to contact_email
+    let toEmails: string[] = [];
 
-    const client = clientData as unknown as Client | null;
-    if (!client?.contact_email) {
-      return NextResponse.json({ error: "Client has no contact email" }, { status: 400 });
+    if (body.recipients && Array.isArray(body.recipients) && body.recipients.length > 0) {
+      toEmails = body.recipients;
+    } else {
+      const { data: clientData } = await admin
+        .from("clients")
+        .select("*")
+        .eq("id", report.client_id)
+        .single();
+      const client = clientData as unknown as Client | null;
+      if (!client?.contact_email) {
+        return NextResponse.json({ error: "No recipients selected and client has no contact email" }, { status: 400 });
+      }
+      toEmails = [client.contact_email];
     }
 
     if (!process.env.RESEND_API_KEY) {
@@ -68,7 +74,7 @@ export async function POST(request: NextRequest) {
 
       await resend.emails.send({
         from: process.env.EMAIL_FROM || "LeadStart <onboarding@resend.dev>",
-        to: client.contact_email,
+        to: toEmails,
         subject: `Your Campaign Report — ${report.report_period_start} to ${report.report_period_end}`,
         html: buildWeeklyReportEmailHtml(report.report_data),
       });
@@ -78,11 +84,11 @@ export async function POST(request: NextRequest) {
         .from("kpi_reports")
         .update({
           sent_at: new Date().toISOString(),
-          sent_to: [client.contact_email],
+          sent_to: toEmails,
         })
         .eq("id", report.id);
 
-      return NextResponse.json({ success: true, sent_to: client.contact_email });
+      return NextResponse.json({ success: true, sent_to: toEmails });
     } catch (emailError) {
       console.error("Failed to send report:", emailError);
       return NextResponse.json({ error: "Failed to send email" }, { status: 500 });
