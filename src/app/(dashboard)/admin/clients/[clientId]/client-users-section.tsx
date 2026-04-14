@@ -210,10 +210,10 @@ export function ClientUsersSection({
         )}
         {inviteSuccess && (
           <div className="text-xs text-emerald-600 bg-emerald-50 rounded px-2 py-1 space-y-1">
-            <p>User created and linked!</p>
+            <p>Invite sent! User created and linked.</p>
             {inviteLink && (
               <div className="flex items-center gap-2">
-                <span className="text-muted-foreground">Share this invite link:</span>
+                <span className="text-muted-foreground">Backup link:</span>
                 <button
                   type="button"
                   onClick={() => { navigator.clipboard.writeText(inviteLink); }}
