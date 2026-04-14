@@ -194,23 +194,31 @@ export default function ReportsPage() {
 
       const totals = calculateMetrics(snapshots);
 
-      // Build the draft report
+      // Save draft to database so it gets a real ID
+      const reportData = {
+        client_name: client.name,
+        period: { start: startDate, end: endDate },
+        campaigns: campaignSummaries,
+        totals,
+      };
+
+      const { data: inserted, error: insertError } = await supabase
+        .from("kpi_reports")
+        .insert({
+          client_id: selectedClient,
+          organization_id: client.organization_id,
+          report_period_start: startDate,
+          report_period_end: endDate,
+          report_data: reportData,
+        })
+        .select()
+        .single();
+
+      if (insertError) throw new Error(insertError.message);
+
       const draftReport: KPIReport = {
-        id: `draft-${Date.now()}`,
-        client_id: selectedClient,
-        organization_id: client.organization_id,
-        report_period_start: startDate,
-        report_period_end: endDate,
-        report_data: {
-          client_name: client.name,
-          period: { start: startDate, end: endDate },
-          campaigns: campaignSummaries,
-          totals,
-        },
-        sent_at: null,
-        sent_to: null,
-        created_by: null,
-        created_at: new Date().toISOString(),
+        ...(inserted as unknown as KPIReport),
+        report_data: reportData,
       };
 
       // Add to reports list and immediately open preview
