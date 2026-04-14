@@ -39,6 +39,10 @@ export interface Client {
   name: string;
   contact_email: string | null;
   notes: string | null;
+  report_interval_days: number | null;
+  report_schedule_start: string | null;
+  report_last_sent_at: string | null;
+  report_recipients: string[] | null;
   created_at: string;
   updated_at: string;
 }

@@ -32,6 +32,8 @@ import {
   CheckCircle,
   AlertCircle,
   Users,
+  Settings2,
+  Save,
 } from "lucide-react";
 import { buildWeeklyReportEmail } from "@/lib/email/weekly-report";
 import { calculateMetrics } from "@/lib/kpi/calculator";
@@ -51,6 +53,119 @@ export default function ReportsPage() {
   const [sendSuccess, setSendSuccess] = useState(false);
   const [recipients, setRecipients] = useState<{ email: string; name: string; checked: boolean; source: string }[]>([]);
   const [loadingRecipients, setLoadingRecipients] = useState(false);
+
+  // Schedule editing state
+  const [editingScheduleClient, setEditingScheduleClient] = useState<Client | null>(null);
+  const [scheduleInterval, setScheduleInterval] = useState<string>("");
+  const [scheduleStart, setScheduleStart] = useState("");
+  const [scheduleRecipients, setScheduleRecipients] = useState<{ email: string; name: string; checked: boolean; source: string }[]>([]);
+  const [loadingScheduleRecipients, setLoadingScheduleRecipients] = useState(false);
+  const [savingSchedule, setSavingSchedule] = useState(false);
+
+  async function openScheduleEditor(client: Client) {
+    setEditingScheduleClient(client);
+    setScheduleInterval(client.report_interval_days ? String(client.report_interval_days) : "");
+    setScheduleStart(client.report_schedule_start || "");
+    // Load recipients for this client
+    setLoadingScheduleRecipients(true);
+    const supabase = createClient();
+    const list: typeof scheduleRecipients = [];
+
+    if (client.contact_email) {
+      list.push({
+        email: client.contact_email,
+        name: client.name,
+        checked: client.report_recipients?.includes(client.contact_email) ?? true,
+        source: "Client Contact",
+      });
+    }
+
+    const { data: cuData } = await supabase
+      .from("client_users")
+      .select("user_id")
+      .eq("client_id", client.id);
+
+    if (cuData && cuData.length > 0) {
+      const userIds = cuData.map((cu: { user_id: string }) => cu.user_id);
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("id, email, full_name")
+        .in("id", userIds);
+
+      for (const p of (profiles || []) as { id: string; email: string; full_name: string | null }[]) {
+        if (!list.some((r) => r.email === p.email)) {
+          list.push({
+            email: p.email,
+            name: p.full_name || p.email,
+            checked: client.report_recipients?.includes(p.email) ?? true,
+            source: "Portal User",
+          });
+        }
+      }
+    }
+
+    // If there are saved recipients not in the list, add them
+    if (client.report_recipients) {
+      for (const email of client.report_recipients) {
+        if (!list.some((r) => r.email === email)) {
+          list.push({ email, name: email, checked: true, source: "Saved" });
+        }
+      }
+    }
+
+    setScheduleRecipients(list);
+    setLoadingScheduleRecipients(false);
+  }
+
+  async function saveSchedule() {
+    if (!editingScheduleClient) return;
+    setSavingSchedule(true);
+
+    const selectedRecipients = scheduleRecipients
+      .filter((r) => r.checked)
+      .map((r) => r.email);
+
+    try {
+      const res = await fetch("/api/admin/report-schedule", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          client_id: editingScheduleClient.id,
+          interval_days: scheduleInterval && scheduleInterval !== "off" && scheduleInterval !== "custom"
+            ? parseInt(scheduleInterval)
+            : null,
+          schedule_start: scheduleStart || null,
+          recipients: selectedRecipients,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to save schedule");
+      }
+
+      // Update local state
+      setClients((prev) =>
+        prev.map((c) =>
+          c.id === editingScheduleClient.id
+            ? {
+                ...c,
+                report_interval_days: scheduleInterval && scheduleInterval !== "off" && scheduleInterval !== "custom"
+                  ? parseInt(scheduleInterval)
+                  : null,
+                report_schedule_start: scheduleStart || null,
+                report_recipients: selectedRecipients.length > 0 ? selectedRecipients : null,
+              }
+            : c
+        )
+      );
+      setEditingScheduleClient(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save");
+    } finally {
+      setSavingSchedule(false);
+    }
+  }
 
   async function loadRecipients(clientId: string) {
     setLoadingRecipients(true);
@@ -360,7 +475,20 @@ export default function ReportsPage() {
           ) : (
             <div className="space-y-3">
               {clients.map((client) => {
-                const reportCount = reports.filter((r) => r.client_id === client.id).length;
+                const reportCount = reports.filter((r) => r.client_id === client.id && r.sent_at).length;
+                const hasSchedule = !!client.report_interval_days;
+                const recipientCount = client.report_recipients?.length || 0;
+
+                const intervalLabel = client.report_interval_days
+                  ? client.report_interval_days === 7
+                    ? "Weekly"
+                    : client.report_interval_days === 14
+                      ? "Biweekly"
+                      : client.report_interval_days === 30
+                        ? "Monthly"
+                        : `Every ${client.report_interval_days}d`
+                  : null;
+
                 return (
                   <div key={client.id} className="flex items-center justify-between rounded-xl border border-border/50 p-4 hover:bg-muted/20 transition-colors">
                     <div className="flex items-center gap-3">
@@ -375,42 +503,181 @@ export default function ReportsPage() {
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
-                      <Select
-                        value=""
-                        onValueChange={(val) => {
-                          if (!val) return;
-                          // TODO: Save per-client schedule to database
-                          console.log(`Set ${client.name} schedule to ${val}`);
-                        }}
-                      >
-                        <SelectTrigger className="w-36 h-8 text-xs">
-                          <SelectValue placeholder="Not scheduled" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="weekly">Weekly (Mon)</SelectItem>
-                          <SelectItem value="biweekly">Biweekly</SelectItem>
-                          <SelectItem value="monthly">Monthly (1st)</SelectItem>
-                          <SelectItem value="off">Off</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      {!client.contact_email && (
-                        <Badge variant="secondary" className="badge-amber text-[10px]">
-                          No email
+                      {hasSchedule ? (
+                        <div className="flex items-center gap-2">
+                          <Badge className="badge-green text-[10px]">
+                            {intervalLabel}
+                          </Badge>
+                          {recipientCount > 0 && (
+                            <Badge variant="secondary" className="text-[10px]">
+                              <Mail size={9} className="mr-1" />{recipientCount}
+                            </Badge>
+                          )}
+                          {client.report_last_sent_at && (
+                            <span className="text-[10px] text-muted-foreground">
+                              Last: {new Date(client.report_last_sent_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <Badge variant="secondary" className="text-[10px] text-muted-foreground">
+                          Not scheduled
                         </Badge>
                       )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs px-2"
+                        onClick={() => openScheduleEditor(client)}
+                      >
+                        <Settings2 size={12} className="mr-1" />
+                        Configure
+                      </Button>
                     </div>
                   </div>
                 );
               })}
               <div className="rounded-lg bg-blue-50 border border-blue-200 p-3">
                 <p className="text-xs text-blue-700">
-                  Scheduled reports auto-generate and send KPI summaries for the configured period. Reports are sent at <strong>10:00 AM ET</strong> on the scheduled day.
+                  Scheduled reports auto-generate and send KPI summaries for the trailing interval. The cron runs daily at <strong>3:00 PM UTC</strong> and checks which clients are due.
                 </p>
               </div>
             </div>
           )}
         </CardContent>
       </Card>
+
+      {/* Schedule Editor Dialog */}
+      {editingScheduleClient && (
+        <Dialog open={!!editingScheduleClient} onOpenChange={() => setEditingScheduleClient(null)}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Settings2 size={18} className="text-[#2E37FE]" />
+                Schedule — {editingScheduleClient.name}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-5 mt-2">
+              {/* Interval */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Send Every</Label>
+                <Select value={scheduleInterval} onValueChange={setScheduleInterval}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Off — no auto-send" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="off">Off — no auto-send</SelectItem>
+                    <SelectItem value="7">Every 7 days (weekly)</SelectItem>
+                    <SelectItem value="14">Every 14 days (biweekly)</SelectItem>
+                    <SelectItem value="30">Every 30 days (monthly)</SelectItem>
+                    <SelectItem value="custom">Custom interval...</SelectItem>
+                  </SelectContent>
+                </Select>
+                {scheduleInterval === "custom" && (
+                  <div className="flex items-center gap-2 mt-2">
+                    <span className="text-sm text-muted-foreground">Every</span>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={365}
+                      className="w-20"
+                      placeholder="N"
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val && parseInt(val) > 0) {
+                          setScheduleInterval(val);
+                        }
+                      }}
+                    />
+                    <span className="text-sm text-muted-foreground">days</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Start Date */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Start Date</Label>
+                <p className="text-xs text-muted-foreground">
+                  Anchor date for the schedule. Reports cover the trailing interval from this date forward.
+                </p>
+                <Input
+                  type="date"
+                  value={scheduleStart}
+                  onChange={(e) => setScheduleStart(e.target.value)}
+                />
+              </div>
+
+              {/* Recipients */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Recipients</Label>
+                {loadingScheduleRecipients ? (
+                  <p className="text-xs text-muted-foreground">Loading...</p>
+                ) : scheduleRecipients.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    No recipients found. Add a contact email or invite portal users first.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {scheduleRecipients.map((r) => (
+                      <label key={r.email} className="flex items-center gap-3 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={r.checked}
+                          onChange={() =>
+                            setScheduleRecipients((prev) =>
+                              prev.map((p) =>
+                                p.email === r.email ? { ...p, checked: !p.checked } : p
+                              )
+                            )
+                          }
+                          className="h-4 w-4 rounded border-border accent-[#2E37FE]"
+                        />
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          <div className="flex h-6 w-6 items-center justify-center rounded-md text-[10px] font-bold text-white shrink-0" style={{ background: '#2E37FE' }}>
+                            {r.name.charAt(0).toUpperCase()}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm truncate">{r.name}</p>
+                            <p className="text-xs text-muted-foreground truncate">{r.email}</p>
+                          </div>
+                        </div>
+                        <Badge variant="secondary" className="text-[9px] shrink-0">{r.source}</Badge>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Summary */}
+              {scheduleInterval && scheduleInterval !== "off" && (
+                <div className="rounded-lg bg-blue-50 border border-blue-200 p-3">
+                  <p className="text-xs text-blue-700">
+                    Will send a report every <strong>{scheduleInterval} days</strong> to{" "}
+                    <strong>{scheduleRecipients.filter((r) => r.checked).length} recipient(s)</strong>
+                    {scheduleStart ? <> starting from <strong>{scheduleStart}</strong></> : null}.
+                    Each report covers the trailing {scheduleInterval}-day period.
+                  </p>
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setEditingScheduleClient(null)}>
+                  Cancel
+                </Button>
+                <Button
+                  onClick={saveSchedule}
+                  disabled={savingSchedule}
+                  style={{ background: '#2E37FE' }}
+                  className="text-white"
+                >
+                  <Save size={14} className="mr-1" />
+                  {savingSchedule ? "Saving..." : "Save Schedule"}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {/* Report History */}
       <Card className="border-border/50">
