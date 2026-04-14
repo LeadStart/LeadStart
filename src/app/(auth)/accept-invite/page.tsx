@@ -1,8 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
+import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,26 +12,36 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Mail, Lock, User } from "lucide-react";
+import { Mail, Lock, User, CheckCircle } from "lucide-react";
 
 export default function AcceptInvitePage() {
+  const searchParams = useSearchParams();
+  const token = searchParams.get("token");
+  const email = searchParams.get("email");
+
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [ready, setReady] = useState(false);
+  const [success, setSuccess] = useState(false);
   const router = useRouter();
 
-  useEffect(() => {
-    // The invite link redirects here with a session already established
-    const supabase = createClient();
-    supabase.auth.getUser().then(({ data: { user } }: { data: { user: unknown } }) => {
-      if (user) {
-        setReady(true);
-      }
-    });
-  }, []);
+  if (!token || !email) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <Card className="w-full max-w-md border-border/50 shadow-lg">
+          <CardContent className="pt-6">
+            <div className="rounded-lg bg-red-50 border border-red-200 p-4">
+              <p className="text-sm text-red-700">
+                Invalid invite link. Please ask your admin to send a new invitation.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   async function handleSetPassword(e: React.FormEvent) {
     e.preventDefault();
@@ -49,30 +58,50 @@ export default function AcceptInvitePage() {
     }
 
     setLoading(true);
-    const supabase = createClient();
 
-    const { error: updateError } = await supabase.auth.updateUser({
-      password,
-      data: { full_name: fullName },
-    });
+    try {
+      const res = await fetch("/api/accept-invite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, email, password, full_name: fullName }),
+      });
 
-    if (updateError) {
-      setError(updateError.message);
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to set password");
+      }
+
+      setSuccess(true);
+      setTimeout(() => {
+        router.push("/login");
+      }, 2000);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
       setLoading(false);
-      return;
     }
-
-    // Mark invite as accepted
-    await fetch("/api/accept-invite", { method: "POST" });
-
-    router.push("/");
-    router.refresh();
   }
 
-  if (!ready) {
+  if (success) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
-        <p className="text-[#7A7872]">Verifying your invitation...</p>
+        <Card className="w-full max-w-md border-border/50 shadow-lg">
+          <CardHeader className="text-center pb-2">
+            <CardTitle className="text-2xl font-bold">You're all set!</CardTitle>
+            <CardDescription>Redirecting to login...</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex justify-center">
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-50">
+                <CheckCircle size={32} className="text-emerald-500" />
+              </div>
+            </div>
+            <p className="text-sm text-center text-muted-foreground mt-4">
+              Your password has been set. You can now sign in with <strong>{email}</strong>.
+            </p>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -106,7 +135,7 @@ export default function AcceptInvitePage() {
             <div className="flex justify-center lg:hidden mb-4">
               <div className="flex items-center gap-2">
                 <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]">
-                  <Mail size={16} className="text-[#0f172a]" />
+                  <Mail size={16} className="text-white" />
                 </div>
                 <span className="text-xl font-bold text-[#2E37FE]">LeadStart</span>
               </div>
@@ -115,7 +144,7 @@ export default function AcceptInvitePage() {
               Welcome to LeadStart
             </CardTitle>
             <CardDescription className="text-muted-foreground">
-              Set up your account to get started
+              Set your password for <strong>{email}</strong>
             </CardDescription>
           </CardHeader>
           <CardContent>

@@ -1,8 +1,9 @@
+import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-function buildInviteHtml(actionLink: string) {
+function buildInviteHtml(inviteLink: string) {
   return `<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
@@ -24,9 +25,9 @@ function buildInviteHtml(actionLink: string) {
 <p style="margin:0 0 16px;font-size:15px;color:#1A1A2E;line-height:1.6;">You've been invited to join <strong>LeadStart</strong> — your campaign management portal where you can track performance, review reports, and submit feedback.</p>
 <p style="margin:0 0 28px;font-size:15px;color:#3D3D5C;line-height:1.6;">Click the button below to set your password and access your dashboard.</p>
 <table role="presentation" cellpadding="0" cellspacing="0" width="100%"><tr><td align="center">
-<a href="${actionLink}" style="display:inline-block;background:linear-gradient(135deg,#6B72FF,#2E37FE);color:#fff;text-decoration:none;padding:14px 36px;border-radius:10px;font-size:15px;font-weight:600;letter-spacing:-0.2px;">Accept Invite &amp; Set Password &#8594;</a>
+<a href="${inviteLink}" style="display:inline-block;background:linear-gradient(135deg,#6B72FF,#2E37FE);color:#fff;text-decoration:none;padding:14px 36px;border-radius:10px;font-size:15px;font-weight:600;letter-spacing:-0.2px;">Accept Invite &amp; Set Password &#8594;</a>
 </td></tr></table>
-<p style="margin:28px 0 0;font-size:13px;color:#6B6E8A;line-height:1.5;">This link expires in 24 hours. If you didn't expect this invitation, you can safely ignore this email.</p>
+<p style="margin:28px 0 0;font-size:13px;color:#6B6E8A;line-height:1.5;">If you didn't expect this invitation, you can safely ignore this email.</p>
 </td></tr>
 <tr><td style="background:#fff;border-radius:0 0 16px 16px;padding:20px 32px;border-top:1px solid #E2E3ED;">
 <p style="margin:0;font-size:12px;color:#6B6E8A;">Sent by <strong style="color:#1A1A2E;">LeadStart</strong> &middot; Campaign Management Platform</p>
@@ -34,24 +35,7 @@ function buildInviteHtml(actionLink: string) {
 </td></tr></table></td></tr></table></body></html>`;
 }
 
-async function sendInviteEmail(email: string, actionLink: string) {
-  if (!process.env.RESEND_API_KEY) return;
-  try {
-    const { Resend } = await import("resend");
-    const resend = new Resend(process.env.RESEND_API_KEY);
-    await resend.emails.send({
-      from: process.env.EMAIL_FROM || "LeadStart <info@no-reply.leadstart.io>",
-      to: email,
-      subject: "You're Invited to LeadStart",
-      html: buildInviteHtml(actionLink),
-    });
-  } catch (emailErr) {
-    console.error("Failed to send invite email:", emailErr);
-  }
-}
-
 export async function POST(request: NextRequest) {
-  // Verify caller is an owner
   const supabase = await createClient();
   const {
     data: { user },
@@ -60,9 +44,7 @@ export async function POST(request: NextRequest) {
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-
-  const role = user.app_metadata?.role;
-  if (role !== "owner") {
+  if (user.app_metadata?.role !== "owner") {
     return NextResponse.json({ error: "Only owners can send invites" }, { status: 403 });
   }
 
@@ -80,7 +62,9 @@ export async function POST(request: NextRequest) {
 
   const admin = createAdminClient();
 
-  // Try to create the user via generateLink
+  // Find or create the auth user
+  let userId: string | null = null;
+
   const { data, error } = await admin.auth.admin.generateLink({
     type: "invite",
     email,
@@ -91,15 +75,10 @@ export async function POST(request: NextRequest) {
         organization_id: organizationId,
         client_id: client_id || null,
       },
-      redirectTo: `${request.nextUrl.origin}/accept-invite`,
     },
   });
 
-  let userId: string | null = null;
-  let actionLink: string | null = null;
-
   if (error) {
-    // If user already exists, look them up and re-send the invite
     if (error.message.includes("already been registered") || error.message.includes("already exists")) {
       const { data: usersData } = await admin.auth.admin.listUsers();
       const existingUser = usersData?.users?.find((u) => u.email === email);
@@ -107,22 +86,11 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "User lookup failed" }, { status: 400 });
       }
       userId = existingUser.id;
-
-      // Generate a new invite link for re-send
-      const { data: magicData } = await admin.auth.admin.generateLink({
-        type: "magiclink",
-        email,
-        options: {
-          redirectTo: `${request.nextUrl.origin}/accept-invite`,
-        },
-      });
-      actionLink = magicData?.properties?.action_link || null;
     } else {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
   } else {
     userId = data?.user?.id || null;
-    actionLink = data?.properties?.action_link || null;
   }
 
   if (!userId) {
@@ -138,19 +106,38 @@ export async function POST(request: NextRequest) {
     organization_id: organizationId,
   }, { onConflict: "id" });
 
-  // Ensure client_users link exists with pending status
+  // Generate our own invite token (not a Supabase OTP — never expires prematurely)
+  const inviteToken = randomUUID();
+
+  // Ensure client_users link exists with pending status + token
   if (client_id) {
     await admin.from("client_users").upsert({
       client_id,
       user_id: userId,
       invite_status: "pending",
+      invite_token: inviteToken,
     }, { onConflict: "client_id,user_id" });
   }
 
+  // Build invite link that goes directly to our accept-invite page (no Supabase redirect)
+  const origin = request.nextUrl.origin;
+  const inviteLink = `${origin}/accept-invite?token=${inviteToken}&email=${encodeURIComponent(email)}`;
+
   // Send branded invite email via Resend
-  if (actionLink) {
-    await sendInviteEmail(email, actionLink);
+  if (process.env.RESEND_API_KEY) {
+    try {
+      const { Resend } = await import("resend");
+      const resend = new Resend(process.env.RESEND_API_KEY);
+      await resend.emails.send({
+        from: process.env.EMAIL_FROM || "LeadStart <info@no-reply.leadstart.io>",
+        to: email,
+        subject: "You're Invited to LeadStart",
+        html: buildInviteHtml(inviteLink),
+      });
+    } catch (emailErr) {
+      console.error("Failed to send invite email:", emailErr);
+    }
   }
 
-  return NextResponse.json({ success: true, invite_link: actionLink });
+  return NextResponse.json({ success: true, invite_link: inviteLink });
 }
