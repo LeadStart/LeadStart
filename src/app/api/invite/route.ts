@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
         organization_id: organizationId,
         client_id: client_id || null,
       },
-      redirectTo: `${request.nextUrl.origin}/auth/callback`,
+      redirectTo: `${request.nextUrl.origin}/auth/callback?next=/accept-invite`,
     },
   });
 
