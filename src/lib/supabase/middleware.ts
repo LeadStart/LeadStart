@@ -33,18 +33,16 @@ export async function updateSession(request: NextRequest) {
     if (!error) {
       // Check if there's a `next` param to redirect to (e.g. /update-password)
       const next = request.nextUrl.searchParams.get("next");
-      if (next) {
-        const url = request.nextUrl.clone();
-        url.pathname = next;
-        url.searchParams.delete("code");
-        url.searchParams.delete("next");
-        return NextResponse.redirect(url);
-      }
-      // Default: redirect to update-password for recovery flows
       const url = request.nextUrl.clone();
-      url.pathname = "/update-password";
+      url.pathname = next || "/update-password";
       url.searchParams.delete("code");
-      return NextResponse.redirect(url);
+      url.searchParams.delete("next");
+      const redirectResponse = NextResponse.redirect(url);
+      // Copy session cookies from the exchange onto the redirect response
+      supabaseResponse.cookies.getAll().forEach((cookie) => {
+        redirectResponse.cookies.set(cookie.name, cookie.value, cookie);
+      });
+      return redirectResponse;
     }
   }
 
