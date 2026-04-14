@@ -77,9 +77,9 @@ export const MOCK_CLIENTS: Client[] = [
 
 // ---------- Client Users (join table) ----------
 export const MOCK_CLIENT_USERS = [
-  { client_id: "client-001", user_id: "user-client-001", created_at: "2025-01-15T00:00:00Z" },
-  { client_id: "client-001", user_id: "user-client-001b", created_at: "2025-02-20T00:00:00Z" },
-  { client_id: "client-002", user_id: "user-client-002", created_at: "2025-02-01T00:00:00Z" },
+  { client_id: "client-001", user_id: "user-client-001", created_at: "2025-01-15T00:00:00Z", invite_status: "active" },
+  { client_id: "client-001", user_id: "user-client-001b", created_at: "2025-02-20T00:00:00Z", invite_status: "active" },
+  { client_id: "client-002", user_id: "user-client-002", created_at: "2025-02-01T00:00:00Z", invite_status: "active" },
 ];
 
 // ---------- Campaigns ----------
