@@ -20,7 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { createClient } from "@/lib/supabase/client";
-import { CheckSquare, ListTodo, Clock, CheckCircle2, Plus, Circle } from "lucide-react";
+import { CheckSquare, ListTodo, Clock, CheckCircle2, Plus, Circle, Trash2 } from "lucide-react";
 
 export type TaskStatus = "todo" | "in_progress" | "done";
 export type TaskPriority = "low" | "medium" | "high";
@@ -126,6 +126,13 @@ export default function TasksPage() {
     const supabase = createClient();
     const nextStatus = NEXT_STATUS[task.status];
     await supabase.from("tasks").update({ status: nextStatus }).eq("id", task.id);
+    refetch();
+  }
+
+  async function handleDeleteTask(task: Task) {
+    if (!confirm(`Delete task "${task.title}"? This cannot be undone.`)) return;
+    const supabase = createClient();
+    await supabase.from("tasks").delete().eq("id", task.id);
     refetch();
   }
 
@@ -294,6 +301,7 @@ export default function TasksPage() {
                   <SortableHead sortKey="category" sortConfig={sortConfig} onSort={requestSort}>Category</SortableHead>
                   <SortableHead sortKey="due_date" sortConfig={sortConfig} onSort={requestSort}>Due Date</SortableHead>
                   <SortableHead sortKey="created_at" sortConfig={sortConfig} onSort={requestSort}>Created</SortableHead>
+                  <TableHead className="w-12 text-right"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -328,6 +336,15 @@ export default function TasksPage() {
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {new Date(task.created_at).toLocaleDateString()}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <button
+                        onClick={() => handleDeleteTask(task)}
+                        className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-red-50 hover:text-red-600 transition-colors cursor-pointer"
+                        title="Delete task"
+                      >
+                        <Trash2 size={14} />
+                      </button>
                     </TableCell>
                   </TableRow>
                 ))}
