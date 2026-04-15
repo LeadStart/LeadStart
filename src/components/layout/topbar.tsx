@@ -109,7 +109,7 @@ export function Topbar({ userEmail, role, actualRole, onRoleSwitch }: TopbarProp
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-80 max-h-96 overflow-y-auto">
               <div className="flex items-center justify-between px-3 py-2">
-                <DropdownMenuLabel className="p-0 text-sm font-semibold">Notifications</DropdownMenuLabel>
+                <span className="text-sm font-semibold text-foreground">Notifications</span>
                 {unreadCount > 0 && (
                   <button
                     onClick={handleMarkAllRead}
