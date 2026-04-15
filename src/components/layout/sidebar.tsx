@@ -138,7 +138,7 @@ export function Sidebar({ role }: { role: AppRole }) {
             <p className="text-xs font-medium text-[#0f172a]">
               {role === "owner" ? "Admin" : role === "va" ? "VA" : "Client"}
             </p>
-            <p className="text-[10px] text-[#64748b]">LeadStart Agency</p>
+            <p className="text-[10px] text-black">LeadStart Agency</p>
           </div>
         </div>
       </div>
