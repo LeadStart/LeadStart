@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { Bell, Search, Settings, LogOut, ChevronDown, User, MessageSquare, Mail, FileText } from "lucide-react";
+import { Bell, Search, Settings, LogOut, ChevronDown, User, MessageSquare, Mail, FileText, Menu } from "lucide-react";
 import { useSupabaseQuery } from "@/hooks/use-supabase-query";
 import type { Notification } from "@/types/app";
 import {
@@ -41,9 +41,10 @@ interface TopbarProps {
   role: AppRole;
   actualRole?: AppRole;
   onRoleSwitch: (role: AppRole) => void;
+  onMenuClick?: () => void;
 }
 
-export function Topbar({ userEmail, role, actualRole, onRoleSwitch }: TopbarProps) {
+export function Topbar({ userEmail, role, actualRole, onRoleSwitch, onMenuClick }: TopbarProps) {
   const router = useRouter();
 
   async function handleSignOut() {
@@ -84,16 +85,24 @@ export function Topbar({ userEmail, role, actualRole, onRoleSwitch }: TopbarProp
   }
 
   return (
-    <header className="flex h-16 items-center justify-between border-b border-border/50 bg-white px-6">
-      {/* Search bar — admin only */}
-      {isActualAdmin ? (
-        <div className="flex items-center gap-2 rounded-lg border border-border/50 bg-[#f8fafc] px-3 py-2 text-sm text-muted-foreground w-72">
-          <Search size={14} />
-          <span>Search campaigns, clients...</span>
-        </div>
-      ) : (
-        <div />
-      )}
+    <header className="flex h-16 items-center justify-between border-b border-border/50 bg-white px-4 sm:px-6 gap-3">
+      <div className="flex items-center gap-3 min-w-0 flex-1">
+        {/* Mobile menu button */}
+        <button
+          onClick={onMenuClick}
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[#0f172a] hover:bg-muted/50 lg:hidden"
+          aria-label="Open menu"
+        >
+          <Menu size={20} />
+        </button>
+        {/* Search bar — admin only, desktop only */}
+        {isActualAdmin && (
+          <div className="hidden md:flex items-center gap-2 rounded-lg border border-border/50 bg-[#f8fafc] px-3 py-2 text-sm text-muted-foreground w-72">
+            <Search size={14} />
+            <span>Search campaigns, clients...</span>
+          </div>
+        )}
+      </div>
 
       <div className="flex items-center gap-3">
         {/* Notification bell — admin only */}

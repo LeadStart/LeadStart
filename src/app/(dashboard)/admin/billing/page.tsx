@@ -66,11 +66,11 @@ export default function BillingPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="relative overflow-hidden rounded-[20px] p-7 text-[#0f172a]" style={{ background: 'linear-gradient(135deg, #EDEEFF 0%, #D1D3FF 50%, #fff 100%)', border: '1px solid rgba(46,55,254,0.2)', borderTop: '1px solid rgba(46,55,254,0.3)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.9), 0 4px 14px rgba(46,55,254,0.1)' }}>
+      <div className="relative overflow-hidden rounded-[20px] p-5 sm:p-7 text-[#0f172a]" style={{ background: 'linear-gradient(135deg, #EDEEFF 0%, #D1D3FF 50%, #fff 100%)', border: '1px solid rgba(46,55,254,0.2)', borderTop: '1px solid rgba(46,55,254,0.3)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.9), 0 4px 14px rgba(46,55,254,0.1)' }}>
         <div className="relative z-10 flex items-center justify-between">
           <div>
             <p className="text-xs font-medium text-[#64748b]">Revenue & Billing</p>
-            <h1 className="text-[22px] font-bold mt-1" style={{ color: '#0f172a', letterSpacing: '-0.01em' }}>Billing & Subscriptions</h1>
+            <h1 className="text-[20px] sm:text-[22px] font-bold mt-1" style={{ color: '#0f172a', letterSpacing: '-0.01em' }}>Billing & Subscriptions</h1>
           </div>
           <Badge variant="secondary" className="bg-white/15 text-[#0f172a] border-0">
             Stripe: Placeholder
@@ -168,11 +168,11 @@ export default function BillingPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Client</TableHead>
-                <TableHead>Plan</TableHead>
-                <TableHead className="text-right">Monthly Rate</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Renews</TableHead>
-                <TableHead>Stripe ID</TableHead>
+                <TableHead className="hidden sm:table-cell">Plan</TableHead>
+                <TableHead className="text-right">Monthly</TableHead>
+                <TableHead className="hidden md:table-cell">Status</TableHead>
+                <TableHead className="hidden lg:table-cell">Renews</TableHead>
+                <TableHead className="hidden xl:table-cell">Stripe ID</TableHead>
                 <TableHead></TableHead>
               </TableRow>
             </TableHeader>
@@ -184,18 +184,21 @@ export default function BillingPage() {
                       <div className="flex h-7 w-7 items-center justify-center rounded-md text-[10px] font-bold text-[#0f172a] shrink-0" style={{ background: '#2E37FE' }}>
                         {b.clientName.charAt(0)}
                       </div>
-                      <span className="font-medium">{b.clientName}</span>
+                      <div className="min-w-0">
+                        <span className="font-medium block truncate">{b.clientName}</span>
+                        <span className="text-xs text-muted-foreground capitalize sm:hidden">{b.plan}</span>
+                      </div>
                     </div>
                   </TableCell>
-                  <TableCell className="capitalize">{b.plan}</TableCell>
+                  <TableCell className="capitalize hidden sm:table-cell">{b.plan}</TableCell>
                   <TableCell className="text-right font-medium">${b.monthlyRate}</TableCell>
-                  <TableCell>
+                  <TableCell className="hidden md:table-cell">
                     <StatusBadge status={b.status} />
                   </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
+                  <TableCell className="text-sm text-muted-foreground hidden lg:table-cell">
                     {new Date(b.currentPeriodEnd).toLocaleDateString()}
                   </TableCell>
-                  <TableCell className="text-xs text-muted-foreground font-mono">
+                  <TableCell className="text-xs text-muted-foreground font-mono hidden xl:table-cell">
                     {b.stripeCustomerId || "—"}
                   </TableCell>
                   <TableCell>

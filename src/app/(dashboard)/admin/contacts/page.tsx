@@ -188,7 +188,7 @@ export default function ContactsPage() {
     <div className="space-y-6">
       {/* Header */}
       <div
-        className="relative overflow-hidden rounded-[20px] p-7 text-[#0f172a]"
+        className="relative overflow-hidden rounded-[20px] p-5 sm:p-7 text-[#0f172a]"
         style={{
           background: "linear-gradient(135deg, #EDEEFF 0%, #D1D3FF 50%, #fff 100%)",
           border: '1px solid rgba(46,55,254,0.2)',
@@ -199,7 +199,7 @@ export default function ContactsPage() {
         <div className="relative z-10 flex items-start justify-between">
           <div>
             <p className="text-xs font-medium text-[#64748b]">Campaign Leads</p>
-            <h1 className="text-[22px] font-bold mt-1" style={{ color: '#0f172a', letterSpacing: '-0.01em' }}>Contacts</h1>
+            <h1 className="text-[20px] sm:text-[22px] font-bold mt-1" style={{ color: '#0f172a', letterSpacing: '-0.01em' }}>Contacts</h1>
             <p className="text-sm text-[#0f172a]/60 mt-1">
               {totalContacts} total &middot; {enrichedCount} enriched &middot;{" "}
               {uploadedCount} uploaded

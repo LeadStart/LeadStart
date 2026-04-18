@@ -19,6 +19,7 @@ import {
   ContactRound,
   CheckSquare,
   Inbox,
+  X,
 } from "lucide-react";
 
 interface NavItem {
@@ -51,16 +52,31 @@ const clientNav: NavItem[] = [
   { href: "/client/replies", label: "Replies", icon: <Inbox size={18} /> },
 ];
 
-export function Sidebar({ role }: { role: AppRole }) {
+export function Sidebar({ role, open = false, onClose }: { role: AppRole; open?: boolean; onClose?: () => void }) {
   const pathname = usePathname();
   const isAdmin = role === "owner" || role === "va";
   const nav = isAdmin ? adminNav : clientNav;
   const settingsNav = isAdmin ? adminSettingsNav : [];
 
   return (
-    <aside className="relative flex h-full w-64 flex-col overflow-visible border-r border-[#e2e8f0]" style={{ background: 'linear-gradient(180deg, #ffffff 0%, #6B72FF 100%)', boxShadow: '3px 0 12px rgba(15,23,42,0.06), 1px 0 3px rgba(15,23,42,0.03)' }}>
-      {/* Sidebar shadow cast into content area */}
-      <div className="absolute top-0 bottom-0 w-8 pointer-events-none z-0" style={{ right: '-32px', background: 'linear-gradient(90deg, rgba(15,23,42,0.12) 0%, rgba(28,36,184,0.03) 60%, transparent 100%)' }} />
+    <>
+      {/* Mobile backdrop */}
+      {open && (
+        <div
+          onClick={onClose}
+          className="fixed inset-0 z-40 bg-black/50 lg:hidden"
+          aria-hidden="true"
+        />
+      )}
+      <aside
+        className={cn(
+          "fixed inset-y-0 left-0 z-50 flex h-full w-64 flex-col overflow-hidden border-r border-[#e2e8f0] transition-transform duration-300 lg:static lg:translate-x-0 lg:transition-none lg:overflow-visible",
+          open ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+        )}
+        style={{ background: 'linear-gradient(180deg, #ffffff 0%, #6B72FF 100%)', boxShadow: '3px 0 12px rgba(15,23,42,0.06), 1px 0 3px rgba(15,23,42,0.03)' }}
+      >
+      {/* Sidebar shadow cast into content area (desktop only) */}
+      <div className="absolute top-0 bottom-0 w-8 pointer-events-none z-0 hidden lg:block" style={{ right: '-32px', background: 'linear-gradient(90deg, rgba(15,23,42,0.12) 0%, rgba(28,36,184,0.03) 60%, transparent 100%)' }} />
 
       {/* Brand header */}
       <div className="flex h-16 items-center gap-3 px-6 border-b border-[#e2e8f0]">
@@ -70,6 +86,14 @@ export function Sidebar({ role }: { role: AppRole }) {
         <Link href={isAdmin ? "/admin" : "/client"} className="text-lg font-bold text-[#0f172a] tracking-tight">
           LeadStart
         </Link>
+        {/* Close button (mobile only) */}
+        <button
+          onClick={onClose}
+          className="ml-auto flex h-8 w-8 items-center justify-center rounded-lg text-[#0f172a] hover:bg-black/5 lg:hidden"
+          aria-label="Close menu"
+        >
+          <X size={18} />
+        </button>
       </div>
 
       {/* Navigation */}
@@ -142,6 +166,7 @@ export function Sidebar({ role }: { role: AppRole }) {
           </div>
         </div>
       </div>
-    </aside>
+      </aside>
+    </>
   );
 }

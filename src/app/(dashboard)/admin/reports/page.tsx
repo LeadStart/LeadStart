@@ -356,10 +356,10 @@ export default function ReportsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="relative overflow-hidden rounded-[20px] p-7 text-[#0f172a]" style={{ background: 'linear-gradient(135deg, #EDEEFF 0%, #D1D3FF 50%, #fff 100%)', border: '1px solid rgba(46,55,254,0.2)', borderTop: '1px solid rgba(46,55,254,0.3)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.9), 0 4px 14px rgba(46,55,254,0.1)' }}>
+      <div className="relative overflow-hidden rounded-[20px] p-5 sm:p-7 text-[#0f172a]" style={{ background: 'linear-gradient(135deg, #EDEEFF 0%, #D1D3FF 50%, #fff 100%)', border: '1px solid rgba(46,55,254,0.2)', borderTop: '1px solid rgba(46,55,254,0.3)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.9), 0 4px 14px rgba(46,55,254,0.1)' }}>
         <div className="relative z-10">
           <p className="text-xs font-medium text-[#64748b]">Client Reporting</p>
-          <h1 className="text-[22px] font-bold mt-1" style={{ color: '#0f172a', letterSpacing: '-0.01em' }}>KPI Reports</h1>
+          <h1 className="text-[20px] sm:text-[22px] font-bold mt-1" style={{ color: '#0f172a', letterSpacing: '-0.01em' }}>KPI Reports</h1>
           <p className="text-sm text-[#0f172a]/60 mt-1">
             {reports.length} total &middot; {sentCount} sent &middot; {draftCount} draft
           </p>
@@ -379,76 +379,85 @@ export default function ReportsPage() {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-1.5" style={{ gridTemplateColumns: '200px 180px 160px 160px auto' }}>
-            <Label className="text-sm font-medium">Client</Label>
-            <Label className="text-sm font-medium">Quick Select</Label>
-            <Label className="text-sm font-medium">Start Date</Label>
-            <Label className="text-sm font-medium">End Date</Label>
-            <div />
-            <Select value={selectedClient} onValueChange={(val) => setSelectedClient(val ?? "")}>
-              <SelectTrigger className="w-full" style={{ height: '36px' }}>
-                <SelectValue placeholder="Select client" />
-              </SelectTrigger>
-              <SelectContent>
-                {clients.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select
-              value=""
-              onValueChange={(val) => {
-                const today = new Date();
-                let start: Date;
-                let end: Date;
-                if (val === "7d") {
-                  end = today;
-                  start = new Date(today);
-                  start.setDate(start.getDate() - 7);
-                } else if (val === "last_month") {
-                  start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-                  end = new Date(today.getFullYear(), today.getMonth(), 0);
-                } else if (val === "mtd") {
-                  start = new Date(today.getFullYear(), today.getMonth(), 1);
-                  end = today;
-                } else if (val === "30d") {
-                  end = today;
-                  start = new Date(today);
-                  start.setDate(start.getDate() - 30);
-                } else {
-                  return;
-                }
-                setStartDate(start.toISOString().split("T")[0]);
-                setEndDate(end.toISOString().split("T")[0]);
-              }}
-            >
-              <SelectTrigger className="w-full" style={{ height: '36px' }}>
-                <SelectValue placeholder="Choose range..." />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="7d">Last 7 Days</SelectItem>
-                <SelectItem value="last_month">Last Calendar Month</SelectItem>
-                <SelectItem value="mtd">Month to Date</SelectItem>
-                <SelectItem value="30d">Last 30 Days</SelectItem>
-              </SelectContent>
-            </Select>
-            <Input
-              style={{ height: '36px' }}
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-            />
-            <Input
-              style={{ height: '36px' }}
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-            />
-            <Button style={{ height: '36px' }} onClick={handleGenerate} disabled={generating} variant="outline">
-              {generating ? "Generating..." : "Generate Draft"}
-            </Button>
+          <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-[minmax(0,200px)_minmax(0,180px)_minmax(0,160px)_minmax(0,160px)_auto]">
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium">Client</Label>
+              <Select value={selectedClient} onValueChange={(val) => setSelectedClient(val ?? "")}>
+                <SelectTrigger className="w-full" style={{ height: '36px' }}>
+                  <SelectValue placeholder="Select client" />
+                </SelectTrigger>
+                <SelectContent>
+                  {clients.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium">Quick Select</Label>
+              <Select
+                value=""
+                onValueChange={(val) => {
+                  const today = new Date();
+                  let start: Date;
+                  let end: Date;
+                  if (val === "7d") {
+                    end = today;
+                    start = new Date(today);
+                    start.setDate(start.getDate() - 7);
+                  } else if (val === "last_month") {
+                    start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+                    end = new Date(today.getFullYear(), today.getMonth(), 0);
+                  } else if (val === "mtd") {
+                    start = new Date(today.getFullYear(), today.getMonth(), 1);
+                    end = today;
+                  } else if (val === "30d") {
+                    end = today;
+                    start = new Date(today);
+                    start.setDate(start.getDate() - 30);
+                  } else {
+                    return;
+                  }
+                  setStartDate(start.toISOString().split("T")[0]);
+                  setEndDate(end.toISOString().split("T")[0]);
+                }}
+              >
+                <SelectTrigger className="w-full" style={{ height: '36px' }}>
+                  <SelectValue placeholder="Choose range..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="7d">Last 7 Days</SelectItem>
+                  <SelectItem value="last_month">Last Calendar Month</SelectItem>
+                  <SelectItem value="mtd">Month to Date</SelectItem>
+                  <SelectItem value="30d">Last 30 Days</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium">Start Date</Label>
+              <Input
+                style={{ height: '36px' }}
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium">End Date</Label>
+              <Input
+                style={{ height: '36px' }}
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+              />
+            </div>
+            <div className="flex items-end sm:col-span-2 lg:col-span-1">
+              <Button className="w-full" style={{ height: '36px' }} onClick={handleGenerate} disabled={generating} variant="outline">
+                {generating ? "Generating..." : "Generate Draft"}
+              </Button>
+            </div>
           </div>
           {error && (
             <div className="mt-3 rounded-lg bg-red-50 border border-red-200 p-3">
@@ -490,21 +499,21 @@ export default function ReportsPage() {
                   : null;
 
                 return (
-                  <div key={client.id} className="flex items-center justify-between rounded-xl border border-border/50 p-4 hover:bg-muted/20 transition-colors">
-                    <div className="flex items-center gap-3">
+                  <div key={client.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-xl border border-border/50 p-4 hover:bg-muted/20 transition-colors">
+                    <div className="flex items-center gap-3 min-w-0">
                       <div className="flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold text-white shrink-0" style={{ background: '#2E37FE' }}>
                         {client.name.charAt(0)}
                       </div>
-                      <div>
-                        <p className="text-sm font-medium">{client.name}</p>
-                        <p className="text-xs text-muted-foreground">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate">{client.name}</p>
+                        <p className="text-xs text-muted-foreground truncate">
                           {client.contact_email || "No email"} &middot; {reportCount} report{reportCount !== 1 ? "s" : ""} sent
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
                       {hasSchedule ? (
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <Badge className="badge-green text-[10px]">
                             {intervalLabel}
                           </Badge>
@@ -527,7 +536,7 @@ export default function ReportsPage() {
                       <Button
                         variant="outline"
                         size="sm"
-                        className="h-7 text-xs px-2"
+                        className="h-7 text-xs px-2 ml-auto sm:ml-0"
                         onClick={() => openScheduleEditor(client)}
                       >
                         <Settings2 size={12} className="mr-1" />
