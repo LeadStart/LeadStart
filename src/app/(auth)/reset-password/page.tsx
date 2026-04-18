@@ -68,7 +68,7 @@ export default function ResetPasswordPage() {
       </div>
 
       {/* Right panel - form */}
-      <div className="flex w-full lg:w-1/2 items-center justify-center bg-background px-4">
+      <div className="flex w-full lg:w-[42%] items-center justify-center bg-background px-4">
         <Card className="w-full max-w-md border-border/50 shadow-lg">
           <CardHeader className="text-center pb-2">
             <div className="flex justify-center lg:hidden mb-4">

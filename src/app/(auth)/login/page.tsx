@@ -48,7 +48,7 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-screen">
       {/* Left panel - branding */}
-      <div className="hidden lg:flex lg:w-1/2 items-center justify-center relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #EDEEFF 0%, #D1D3FF 50%, #fff 100%)' }}>
+      <div className="hidden lg:flex lg:w-[58%] items-center justify-center relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #EDEEFF 0%, #D1D3FF 50%, #fff 100%)', WebkitMaskImage: 'linear-gradient(to right, #000 60%, transparent 100%)', maskImage: 'linear-gradient(to right, #000 60%, transparent 100%)' }}>
         <div className="relative z-10 max-w-md px-8 text-[#0f172a]">
           <div className="flex justify-center mb-8">
             <Image src={leadstartLogo} alt="LeadStart" priority className="h-80 w-auto" />
@@ -81,7 +81,7 @@ export default function LoginPage() {
       </div>
 
       {/* Right panel - form */}
-      <div className="flex w-full lg:w-1/2 items-center justify-center bg-background px-4">
+      <div className="flex w-full lg:w-[42%] items-center justify-center bg-background px-4">
         <Card className="w-full max-w-md border-border/50 shadow-lg">
           <CardHeader className="text-center pb-2">
             <div className="flex justify-center lg:hidden mb-4">
