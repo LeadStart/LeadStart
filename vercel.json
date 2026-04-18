@@ -2,11 +2,11 @@
   "framework": "nextjs",
   "crons": [
     {
-      "path": "/api/cron/sync-analytics",
+      "path": "/app/api/cron/sync-analytics",
       "schedule": "0 11 * * *"
     },
     {
-      "path": "/api/cron/send-reports",
+      "path": "/app/api/cron/send-reports",
       "schedule": "0 15 * * *"
     }
   ]
