@@ -13,6 +13,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Mail, ArrowLeft, CheckCircle } from "lucide-react";
+import Image from "next/image";
+import leadstartLogo from "../../../../public/leadstart-logo.png";
 
 export default function ResetPasswordPage() {
   const [email, setEmail] = useState("");
@@ -50,11 +52,8 @@ export default function ResetPasswordPage() {
       {/* Left panel - branding */}
       <div className="hidden lg:flex lg:w-1/2 items-center justify-center relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #EDEEFF 0%, #D1D3FF 50%, #fff 100%)' }}>
         <div className="relative z-10 max-w-md px-8 text-[#0f172a]">
-          <div className="flex items-center gap-3 mb-8">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15 backdrop-blur-sm">
-              <Mail size={20} className="text-[#0f172a]" />
-            </div>
-            <span className="text-2xl font-bold tracking-tight">LeadStart</span>
+          <div className="mb-8">
+            <Image src={leadstartLogo} alt="LeadStart" priority className="h-16 w-auto" />
           </div>
           <h2 className="text-3xl font-bold leading-tight">
             Reset your password
@@ -72,12 +71,7 @@ export default function ResetPasswordPage() {
         <Card className="w-full max-w-md border-border/50 shadow-lg">
           <CardHeader className="text-center pb-2">
             <div className="flex justify-center lg:hidden mb-4">
-              <div className="flex items-center gap-2">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]">
-                  <Mail size={16} className="text-[#0f172a]" />
-                </div>
-                <span className="text-xl font-bold text-[#2E37FE]">LeadStart</span>
-              </div>
+              <Image src={leadstartLogo} alt="LeadStart" priority className="h-12 w-auto" />
             </div>
             <CardTitle className="text-2xl font-bold">
               {sent ? "Check your email" : "Forgot password?"}

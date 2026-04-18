@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
+import leadstartLogo from "../../../public/leadstart-logo.png";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import type { AppRole } from "@/types/app";
@@ -79,17 +81,14 @@ export function Sidebar({ role, open = false, onClose }: { role: AppRole; open?:
       <div className="absolute top-0 bottom-0 w-8 pointer-events-none z-0 hidden lg:block" style={{ right: '-32px', background: 'linear-gradient(90deg, rgba(15,23,42,0.12) 0%, rgba(28,36,184,0.03) 60%, transparent 100%)' }} />
 
       {/* Brand header */}
-      <div className="flex h-16 items-center gap-3 px-6 border-b border-[#e2e8f0]">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold text-white" style={{ background: '#2E37FE' }}>
-          <Mail size={16} className="text-white" />
-        </div>
-        <Link href={isAdmin ? "/admin" : "/client"} className="text-lg font-bold text-[#0f172a] tracking-tight">
-          LeadStart
+      <div className="relative flex h-24 items-center justify-center px-6 border-b border-[#e2e8f0]">
+        <Link href={isAdmin ? "/admin" : "/client"} className="flex items-center">
+          <Image src={leadstartLogo} alt="LeadStart" priority className="h-20 w-auto" />
         </Link>
         {/* Close button (mobile only) */}
         <button
           onClick={onClose}
-          className="ml-auto flex h-8 w-8 items-center justify-center rounded-lg text-[#0f172a] hover:bg-black/5 lg:hidden"
+          className="absolute right-4 top-1/2 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-lg text-[#0f172a] hover:bg-black/5 lg:hidden"
           aria-label="Close menu"
         >
           <X size={18} />
