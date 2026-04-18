@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Pencil, X, Send, KeyRound, Mail } from "lucide-react";
 import type { Client } from "@/types/app";
+import { appUrl } from "@/lib/api-url";
 
 export function ClientActions({
   client,
@@ -63,7 +64,7 @@ export function ClientActions({
       await saveEmail(email.trim());
 
       // Then send invite
-      const res = await fetch("/api/invite", {
+      const res = await fetch(appUrl("/api/invite"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -92,7 +93,7 @@ export function ClientActions({
     setError(null);
 
     try {
-      const res = await fetch("/api/invite", {
+      const res = await fetch(appUrl("/api/invite"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -120,7 +121,7 @@ export function ClientActions({
     setError(null);
 
     try {
-      const res = await fetch("/api/reset-password", {
+      const res = await fetch(appUrl("/api/reset-password"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: savedEmail }),

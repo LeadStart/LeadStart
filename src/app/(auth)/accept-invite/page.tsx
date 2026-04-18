@@ -15,6 +15,7 @@ import {
 import { Mail, Lock, User, CheckCircle } from "lucide-react";
 import Image from "next/image";
 import leadstartLogo from "../../../../public/leadstart-logo.png";
+import { appUrl } from "@/lib/api-url";
 
 export default function AcceptInvitePage() {
   return (
@@ -70,7 +71,7 @@ function AcceptInviteForm() {
     setLoading(true);
 
     try {
-      const res = await fetch("/api/accept-invite", {
+      const res = await fetch(appUrl("/api/accept-invite"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token, email, password, full_name: fullName }),

@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { appUrl } from "@/lib/api-url";
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
@@ -70,7 +71,7 @@ export async function POST(request: NextRequest) {
   });
 
   const origin = request.nextUrl.origin;
-  const resetLink = `${origin}/update-password?token=${resetToken}&email=${encodeURIComponent(email)}`;
+  const resetLink = `${origin}${appUrl("/update-password")}?token=${resetToken}&email=${encodeURIComponent(email)}`;
 
   // Send branded recovery email via Resend
   if (process.env.RESEND_API_KEY) {

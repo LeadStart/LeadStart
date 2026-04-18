@@ -18,6 +18,7 @@ import {
   X,
 } from "lucide-react";
 import type { Client, Campaign, WebhookEvent } from "@/types/app";
+import { appUrl } from "@/lib/api-url";
 
 // ===== Types =====
 
@@ -177,7 +178,7 @@ function ThreadCard({
   async function handleDeleteNote(noteId: string) {
     setDeletingId(noteId);
     try {
-      const res = await fetch("/api/feedback/delete", {
+      const res = await fetch(appUrl("/api/feedback/delete"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ noteId }),

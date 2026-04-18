@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Users, UserPlus, Send, KeyRound, Trash2, X, RefreshCw } from "lucide-react";
+import { appUrl } from "@/lib/api-url";
 
 interface LinkedUser {
   user_id: string;
@@ -42,7 +43,7 @@ export function ClientUsersSection({
     setInviteSuccess(false);
 
     try {
-      const res = await fetch("/api/invite", {
+      const res = await fetch(appUrl("/api/invite"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -71,7 +72,7 @@ export function ClientUsersSection({
   async function handleRemove(userId: string) {
     setRemovingId(userId);
     try {
-      const res = await fetch("/api/admin/client-users", {
+      const res = await fetch(appUrl("/api/admin/client-users"), {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ client_id: clientId, user_id: userId }),
@@ -94,7 +95,7 @@ export function ClientUsersSection({
   async function handleResetPassword(email: string, userId: string) {
     setResettingId(userId);
     try {
-      await fetch("/api/reset-password", {
+      await fetch(appUrl("/api/reset-password"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
@@ -109,7 +110,7 @@ export function ClientUsersSection({
   async function handleResendInvite(email: string, userId: string) {
     setResendingId(userId);
     try {
-      await fetch("/api/invite", {
+      await fetch(appUrl("/api/invite"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

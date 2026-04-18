@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { appUrl } from "@/lib/api-url";
 
 export function InviteClientButton({
   clientId,
@@ -19,7 +20,7 @@ export function InviteClientButton({
     setError(null);
 
     try {
-      const res = await fetch("/api/invite", {
+      const res = await fetch(appUrl("/api/invite"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

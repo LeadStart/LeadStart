@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { appUrl } from "@/lib/api-url";
 
 /**
  * Auth callback route for Supabase PKCE flow.
@@ -20,10 +21,10 @@ export async function GET(request: NextRequest) {
     if (!error) {
       // For password recovery, redirect to the update-password page
       const redirectTo = next === "/" ? "/update-password" : next;
-      return NextResponse.redirect(`${origin}${redirectTo}`);
+      return NextResponse.redirect(`${origin}${appUrl(redirectTo)}`);
     }
   }
 
   // If code exchange fails, redirect to an error or reset page
-  return NextResponse.redirect(`${origin}/reset-password?error=invalid_link`);
+  return NextResponse.redirect(`${origin}${appUrl("/reset-password")}?error=invalid_link`);
 }

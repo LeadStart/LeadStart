@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { appUrl } from "@/lib/api-url";
 
 function buildInviteHtml(inviteLink: string) {
   return `<!DOCTYPE html>
@@ -121,7 +122,7 @@ export async function POST(request: NextRequest) {
 
   // Build invite link that goes directly to our accept-invite page (no Supabase redirect)
   const origin = request.nextUrl.origin;
-  const inviteLink = `${origin}/accept-invite?token=${inviteToken}&email=${encodeURIComponent(email)}`;
+  const inviteLink = `${origin}${appUrl("/accept-invite")}?token=${inviteToken}&email=${encodeURIComponent(email)}`;
 
   // Send branded invite email via Resend
   if (process.env.RESEND_API_KEY) {

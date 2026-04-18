@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { SortableHead } from "@/components/ui/sortable-head";
 import { Bell, Mail, MailOpen, AlertTriangle, CalendarCheck, CheckCircle, Ban, Undo2, Loader2 } from "lucide-react";
 import type { WebhookEvent } from "@/types/app";
+import { appUrl } from "@/lib/api-url";
 
 const EVENT_STYLES: Record<string, { class: string; icon: React.ReactNode }> = {
   email_sent: { class: "badge-slate", icon: <Mail size={11} className="mr-1" /> },
@@ -34,7 +35,7 @@ export default function WebhooksPage() {
     setTogglingId(event.id);
     const newExcluded = !event.excluded;
 
-    const res = await fetch("/api/admin/exclude-lead", {
+    const res = await fetch(appUrl("/api/admin/exclude-lead"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ eventId: event.id, excluded: newExcluded }),

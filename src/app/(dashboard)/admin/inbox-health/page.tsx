@@ -8,6 +8,7 @@ import { StatCard } from "@/components/charts/stat-card";
 import { useSort } from "@/hooks/use-sort";
 import { SortableHead } from "@/components/ui/sortable-head";
 import { Inbox, Globe, Activity, AlertTriangle, Shield, RefreshCw } from "lucide-react";
+import { appUrl } from "@/lib/api-url";
 
 interface InboxData {
   email: string;
@@ -75,7 +76,7 @@ export default function InboxHealthPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/instantly/inbox-health");
+      const res = await fetch(appUrl("/api/instantly/inbox-health"));
       if (!res.ok) {
         const body = await res.json();
         throw new Error(body.error || "Failed to fetch");

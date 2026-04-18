@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { appUrl } from "@/lib/api-url";
 
 export function RefreshButton({ campaignId }: { campaignId: string }) {
   const [loading, setLoading] = useState(false);
@@ -11,7 +12,7 @@ export function RefreshButton({ campaignId }: { campaignId: string }) {
   async function handleRefresh() {
     setLoading(true);
     try {
-      const res = await fetch(`/api/cron/sync-analytics?campaign_id=${campaignId}`, {
+      const res = await fetch(appUrl(`/api/cron/sync-analytics?campaign_id=${campaignId}`), {
         method: "POST",
       });
       if (res.ok) {

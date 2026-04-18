@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/select";
 import { Building2, UserPlus, Shield, User, Pencil, Trash2, Ban, Check, X } from "lucide-react";
 import type { Profile } from "@/types/app";
+import { appUrl } from "@/lib/api-url";
 
 export default function TeamPage() {
   const [members, setMembers] = useState<Profile[]>([]);
@@ -65,7 +66,7 @@ export default function TeamPage() {
     setSuccess(false);
 
     try {
-      const res = await fetch("/api/invite", {
+      const res = await fetch(appUrl("/api/invite"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, role }),
@@ -96,7 +97,7 @@ export default function TeamPage() {
     if (!editingId) return;
     setEditSaving(true);
     try {
-      const res = await fetch("/api/admin/team", {
+      const res = await fetch(appUrl("/api/admin/team"), {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ user_id: editingId, full_name: editName, role: editRole }),
@@ -117,7 +118,7 @@ export default function TeamPage() {
   async function handleToggleActive(memberId: string, currentlyActive: boolean) {
     setTogglingId(memberId);
     try {
-      const res = await fetch("/api/admin/team", {
+      const res = await fetch(appUrl("/api/admin/team"), {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ user_id: memberId, is_active: !currentlyActive }),
@@ -133,7 +134,7 @@ export default function TeamPage() {
   async function handleRemove(memberId: string) {
     setRemovingId(memberId);
     try {
-      const res = await fetch("/api/admin/team", {
+      const res = await fetch(appUrl("/api/admin/team"), {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ user_id: memberId }),

@@ -27,6 +27,7 @@ import {
   Settings2,
 } from "lucide-react";
 import type { Organization } from "@/types/app";
+import { appUrl } from "@/lib/api-url";
 
 // Generate hour options 1-12 for AM/PM display
 const HOUR_OPTIONS = Array.from({ length: 12 }, (_, i) => ({
@@ -123,7 +124,7 @@ export default function IntegrationsPage() {
     setTestResult(null);
 
     try {
-      const res = await fetch("/api/instantly/test", {
+      const res = await fetch(appUrl("/api/instantly/test"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ api_key: apiKey }),
@@ -141,7 +142,7 @@ export default function IntegrationsPage() {
     setSyncResult(null);
 
     try {
-      const res = await fetch("/api/cron/sync-analytics", { method: "POST" });
+      const res = await fetch(appUrl("/api/cron/sync-analytics"), { method: "POST" });
       const data = await res.json();
       setSyncResult(res.ok ? `Synced ${data.synced || 0} campaigns` : "Sync failed");
     } catch {

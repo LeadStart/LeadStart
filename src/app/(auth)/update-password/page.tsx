@@ -15,6 +15,7 @@ import {
 import { Mail, Lock, CheckCircle } from "lucide-react";
 import Image from "next/image";
 import leadstartLogo from "../../../../public/leadstart-logo.png";
+import { appUrl } from "@/lib/api-url";
 
 export default function UpdatePasswordPage() {
   return (
@@ -77,7 +78,7 @@ function UpdatePasswordForm() {
 
     setLoading(true);
     try {
-      const res = await fetch("/api/reset-password", {
+      const res = await fetch(appUrl("/api/reset-password"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token, password }),

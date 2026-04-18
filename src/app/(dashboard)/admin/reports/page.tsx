@@ -38,6 +38,7 @@ import {
 import { buildWeeklyReportEmail } from "@/lib/email/weekly-report";
 import { calculateMetrics } from "@/lib/kpi/calculator";
 import type { Client, Campaign, CampaignSnapshot, KPIReport } from "@/types/app";
+import { appUrl } from "@/lib/api-url";
 
 export default function ReportsPage() {
   const [clients, setClients] = useState<Client[]>([]);
@@ -126,7 +127,7 @@ export default function ReportsPage() {
       .map((r) => r.email);
 
     try {
-      const res = await fetch("/api/admin/report-schedule", {
+      const res = await fetch(appUrl("/api/admin/report-schedule"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -215,7 +216,7 @@ export default function ReportsPage() {
     setError(null);
 
     try {
-      const res = await fetch("/api/cron/send-reports", {
+      const res = await fetch(appUrl("/api/cron/send-reports"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ reportId: report.id, recipients: checkedRecipients }),
