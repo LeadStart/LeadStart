@@ -1,10 +1,31 @@
 # LeadStart — Project Status
 
-> Last updated: 2026-03-24
+> Last updated: 2026-04-18
 
 ## Current State: Local Demo (Not Deployed)
 
 Everything runs locally on mock data. No live database, no API connections, no deployment yet. The app is fully functional for previewing and iterating on design/features.
+
+---
+
+## Current Initiative: AI Lead-Reply Classification & Routing
+
+**Status:** Plan approved, not yet implemented. Paused — resume when ready.
+
+**What it does:** Classifies inbound replies using Instantly's native AI tags, drafts a response with Claude Sonnet for hot leads, pushes to the owner's phone via Pushover, and on one-tap sends the reply through Instantly with the client CC'd.
+
+**Full plan:** [`docs/plans/ai-reply-routing.md`](docs/plans/ai-reply-routing.md) — read the "Resume Brief" section first.
+
+**Next action when resuming:** commit #1 of the rollout order (migration + types + demo mock data). No API keys needed for that first commit.
+
+**Decisions already locked in:**
+- Use Instantly's native classifications (no separate Claude classifier)
+- Claude Sonnet 4.6 for drafting only
+- Pushover for mobile notifications
+- 1-tap approve via mobile page with inline editing
+- CC client on `lead_interested` + `lead_meeting_booked` only
+
+**Security follow-up:** rotate hardcoded Instantly API key at `scripts/backfill-emails.mjs:9` after this work ships.
 
 ---
 
@@ -149,3 +170,9 @@ On any machine with Claude Code or Claude Desktop:
 2. `cd leadstart && npm install && npm run dev`
 3. Tell Claude: "I'm continuing work on the LeadStart project. Read CLAUDE.md and PROJECT_STATUS.md to get up to speed."
 4. Claude will read these files and know exactly where things stand.
+
+### To resume a specific in-flight initiative
+
+If there's a "Current Initiative" section above, Claude should also read the linked plan file under `docs/plans/` — specifically the **Resume Brief** at the top, which captures decisions made, what's next, and what the owner needs to provide.
+
+Example: *"Pick up where we left off on the AI reply routing plan"* → Claude reads `docs/plans/ai-reply-routing.md` → has full context including which commit to start with.
