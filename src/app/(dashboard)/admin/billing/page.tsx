@@ -56,8 +56,20 @@ import {
   Pencil,
   Plus,
   X,
+  MoreHorizontal,
+  Pause,
+  Play,
+  RotateCcw,
+  Ban,
 } from "lucide-react";
 import { StatCard } from "@/components/charts/stat-card";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 // ---------- helpers ----------
 function formatCents(cents: number): string {
@@ -704,6 +716,9 @@ export default function BillingPage() {
   const [subscriptions, setSubscriptions] = useState<ClientSubscription[]>([]);
   const [invoices, setInvoices] = useState<BillingInvoice[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
+  const [stripeMode, setStripeMode] = useState<"demo" | "live" | "test">(
+    "demo",
+  );
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -713,9 +728,18 @@ export default function BillingPage() {
   const [cancelingSub, setCancelingSub] = useState<ClientSubscription | null>(
     null,
   );
+  const [cancelNowSub, setCancelNowSub] = useState<ClientSubscription | null>(
+    null,
+  );
   const [cancelSubmitting, setCancelSubmitting] = useState(false);
+  const [rowActionLoading, setRowActionLoading] = useState<string | null>(null);
   const [portalSentFor, setPortalSentFor] = useState<string | null>(null);
   const [portalSending, setPortalSending] = useState<string | null>(null);
+  const [portalUrlDialog, setPortalUrlDialog] = useState<{
+    clientName: string;
+    url: string;
+    reason: "no_email" | "manual_copy";
+  } | null>(null);
   const [selectedTab, setSelectedTab] = useState<string>("subscriptions");
 
   useEffect(() => {
@@ -735,6 +759,7 @@ export default function BillingPage() {
           subscriptions: ClientSubscription[];
           invoices: BillingInvoice[];
           clients: Client[];
+          stripe_mode?: "demo" | "live" | "test";
         };
         if (canceled) return;
         setPlans(data.plans);
@@ -742,6 +767,7 @@ export default function BillingPage() {
         setSubscriptions(data.subscriptions);
         setInvoices(data.invoices);
         setClients(data.clients);
+        if (data.stripe_mode) setStripeMode(data.stripe_mode);
       } catch (err) {
         if (canceled) return;
         setLoadError(err instanceof Error ? err.message : "Failed to load");
@@ -788,13 +814,13 @@ export default function BillingPage() {
     setCreatingPlan(false);
   }
 
-  async function handleSendPortal(clientId: string) {
+  async function handleSendPortal(clientId: string, emailIt: boolean) {
     setPortalSending(clientId);
     try {
       const res = await fetch(appUrl("/api/billing/portal"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ client_id: clientId, email: true }),
+        body: JSON.stringify({ client_id: clientId, email: emailIt }),
       });
       if (!res.ok) {
         const { error } = await res
@@ -802,8 +828,20 @@ export default function BillingPage() {
           .catch(() => ({ error: "Portal failed" }));
         throw new Error(error);
       }
-      setPortalSentFor(clientId);
-      setTimeout(() => setPortalSentFor(null), 2500);
+      const { portal_url: portalUrl, emailed } = (await res.json()) as {
+        portal_url: string;
+        emailed: boolean;
+      };
+      if (emailed) {
+        setPortalSentFor(clientId);
+        setTimeout(() => setPortalSentFor(null), 2500);
+      } else {
+        setPortalUrlDialog({
+          clientName: clientName(clientId, clients),
+          url: portalUrl,
+          reason: emailIt ? "no_email" : "manual_copy",
+        });
+      }
     } finally {
       setPortalSending(null);
     }
@@ -831,6 +869,95 @@ export default function BillingPage() {
       setCancelingSub(null);
     } finally {
       setCancelSubmitting(false);
+    }
+  }
+
+  async function handleUncancelSub(subId: string) {
+    setRowActionLoading(subId);
+    try {
+      const res = await fetch(
+        appUrl(`/api/billing/subscriptions/${subId}/uncancel`),
+        { method: "POST" },
+      );
+      if (!res.ok) {
+        const { error } = await res
+          .json()
+          .catch(() => ({ error: "un-cancel failed" }));
+        alert(`Could not un-cancel: ${error}`);
+        return;
+      }
+      setSubscriptions((prev) =>
+        prev.map((s) =>
+          s.id === subId ? { ...s, cancel_at_period_end: false } : s,
+        ),
+      );
+    } finally {
+      setRowActionLoading(null);
+    }
+  }
+
+  async function handleCancelNow(subId: string) {
+    setCancelSubmitting(true);
+    try {
+      const res = await fetch(
+        appUrl(`/api/billing/subscriptions/${subId}/cancel-now`),
+        { method: "POST" },
+      );
+      if (!res.ok) {
+        const { error } = await res
+          .json()
+          .catch(() => ({ error: "cancel failed" }));
+        alert(`Could not cancel: ${error}`);
+        return;
+      }
+      setSubscriptions((prev) =>
+        prev.map((s) =>
+          s.id === subId
+            ? {
+                ...s,
+                status: "canceled",
+                cancel_at_period_end: false,
+                canceled_at: new Date().toISOString(),
+              }
+            : s,
+        ),
+      );
+      setCancelNowSub(null);
+    } finally {
+      setCancelSubmitting(false);
+    }
+  }
+
+  async function handlePauseResume(
+    subId: string,
+    action: "pause" | "resume",
+  ) {
+    setRowActionLoading(subId);
+    try {
+      const res = await fetch(
+        appUrl(`/api/billing/subscriptions/${subId}/pause`),
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action }),
+        },
+      );
+      if (!res.ok) {
+        const { error } = await res
+          .json()
+          .catch(() => ({ error: `${action} failed` }));
+        alert(`Could not ${action}: ${error}`);
+        return;
+      }
+      setSubscriptions((prev) =>
+        prev.map((s) =>
+          s.id === subId
+            ? { ...s, status: action === "pause" ? "paused" : "active" }
+            : s,
+        ),
+      );
+    } finally {
+      setRowActionLoading(null);
     }
   }
 
@@ -901,9 +1028,19 @@ export default function BillingPage() {
           </div>
           <Badge
             variant="secondary"
-            className="bg-white/15 text-[#0f172a] border-0"
+            className={
+              stripeMode === "live"
+                ? "bg-emerald-100 text-emerald-700 border-0"
+                : stripeMode === "test"
+                  ? "bg-amber-100 text-amber-700 border-0"
+                  : "bg-white/15 text-[#0f172a] border-0"
+            }
           >
-            Stripe: Test mode
+            {stripeMode === "live"
+              ? "Stripe: Live"
+              : stripeMode === "test"
+                ? "Stripe: Test"
+                : "Stripe: Demo"}
           </Badge>
         </div>
         <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-[rgba(107,114,255,0.06)]" />
@@ -1265,43 +1402,103 @@ export default function BillingPage() {
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-1">
-                            {s.status !== "canceled" && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="text-xs"
-                                disabled={portalSending === s.client_id}
-                                onClick={() => handleSendPortal(s.client_id)}
-                              >
-                                {portalSentFor === s.client_id
-                                  ? "Sent ✓"
-                                  : portalSending === s.client_id
-                                    ? "Sending…"
-                                    : "Portal"}
-                              </Button>
-                            )}
                             {s.status === "canceled" ? (
                               <span className="text-xs text-muted-foreground">
                                 Canceled
                               </span>
-                            ) : s.cancel_at_period_end ? (
-                              <span className="text-xs text-amber-600">
-                                Ends{" "}
-                                {s.current_period_end
-                                  ? new Date(
-                                      s.current_period_end,
-                                    ).toLocaleDateString()
-                                  : "period end"}
-                              </span>
                             ) : (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="text-xs text-red-600 hover:bg-red-50 hover:text-red-700"
-                                onClick={() => setCancelingSub(s)}
-                              >
-                                Cancel
-                              </Button>
+                              <>
+                                {s.cancel_at_period_end && (
+                                  <span className="text-xs text-amber-600 hidden md:inline">
+                                    Ends{" "}
+                                    {s.current_period_end
+                                      ? new Date(
+                                          s.current_period_end,
+                                        ).toLocaleDateString()
+                                      : "period end"}
+                                  </span>
+                                )}
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger
+                                    className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors outline-none cursor-pointer disabled:opacity-50"
+                                    disabled={rowActionLoading === s.id}
+                                    aria-label="Subscription actions"
+                                  >
+                                    <MoreHorizontal size={16} />
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end" className="w-64">
+                                    <DropdownMenuItem
+                                      disabled={portalSending === s.client_id}
+                                      onClick={() =>
+                                        handleSendPortal(s.client_id, false)
+                                      }
+                                    >
+                                      <ExternalLink size={14} />
+                                      Copy billing portal URL
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      disabled={portalSending === s.client_id}
+                                      onClick={() =>
+                                        handleSendPortal(s.client_id, true)
+                                      }
+                                    >
+                                      <CreditCard size={14} />
+                                      {portalSentFor === s.client_id
+                                        ? "Emailed ✓"
+                                        : portalSending === s.client_id
+                                          ? "Sending…"
+                                          : "Email portal link to client"}
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                    {s.cancel_at_period_end && (
+                                      <DropdownMenuItem
+                                        onClick={() => handleUncancelSub(s.id)}
+                                      >
+                                        <RotateCcw size={14} />
+                                        Un-cancel (keep active)
+                                      </DropdownMenuItem>
+                                    )}
+                                    {s.status === "paused" ? (
+                                      <DropdownMenuItem
+                                        onClick={() =>
+                                          handlePauseResume(s.id, "resume")
+                                        }
+                                      >
+                                        <Play size={14} />
+                                        Resume billing
+                                      </DropdownMenuItem>
+                                    ) : (
+                                      <DropdownMenuItem
+                                        onClick={() =>
+                                          handlePauseResume(s.id, "pause")
+                                        }
+                                      >
+                                        <Pause size={14} />
+                                        Pause billing
+                                      </DropdownMenuItem>
+                                    )}
+                                    {!s.cancel_at_period_end && (
+                                      <>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem
+                                          variant="destructive"
+                                          onClick={() => setCancelingSub(s)}
+                                        >
+                                          <X size={14} />
+                                          Cancel at period end
+                                        </DropdownMenuItem>
+                                      </>
+                                    )}
+                                    <DropdownMenuItem
+                                      variant="destructive"
+                                      onClick={() => setCancelNowSub(s)}
+                                    >
+                                      <Ban size={14} />
+                                      Cancel immediately
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </>
                             )}
                           </div>
                         </TableCell>
@@ -1405,20 +1602,40 @@ export default function BillingPage() {
           <CardTitle className="text-base">Stripe Integration</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="rounded-xl border border-dashed border-[#2E37FE]/20 bg-[#2E37FE]/5 p-6 text-center space-y-3">
-            <p className="text-sm text-muted-foreground">
-              Billing schema is in place; Stripe API wiring lands in the next
-              commits. Plans and data shown are mock until keys are added and
-              the webhook endpoint is live.
-            </p>
-            <div className="flex items-center justify-center gap-3 pt-1">
-              <Button disabled style={{ background: "#2E37FE" }}>
-                Connect Stripe (test)
-              </Button>
-              <Button variant="outline" disabled>
-                Configure Webhook
-              </Button>
+          <div
+            className={
+              "rounded-xl border p-5 space-y-2 " +
+              (stripeMode === "live"
+                ? "border-emerald-200 bg-emerald-50"
+                : stripeMode === "test"
+                  ? "border-amber-200 bg-amber-50"
+                  : "border-dashed border-[#2E37FE]/20 bg-[#2E37FE]/5")
+            }
+          >
+            <div className="flex items-center gap-2">
+              <span
+                className={
+                  "inline-flex h-2 w-2 rounded-full " +
+                  (stripeMode === "live"
+                    ? "bg-emerald-500"
+                    : stripeMode === "test"
+                      ? "bg-amber-500"
+                      : "bg-slate-400")
+                }
+              />
+              <p className="text-sm font-semibold">
+                {stripeMode === "live"
+                  ? "Connected — Live mode"
+                  : stripeMode === "test"
+                    ? "Connected — Test mode"
+                    : "Demo mode (no Stripe key configured)"}
+              </p>
             </div>
+            <p className="text-xs text-muted-foreground">
+              {stripeMode === "demo"
+                ? "Set STRIPE_SECRET_KEY in Vercel to connect. Plans and data shown here are local mocks."
+                : "Webhook events route to /api/webhooks/stripe. Subscriptions and invoices populate automatically as Stripe fires events."}
+            </p>
           </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 text-sm">
             <div className="rounded-xl border border-border/50 p-4 space-y-1">
@@ -1468,6 +1685,106 @@ export default function BillingPage() {
         clients={clients}
         plans={plans}
       />
+      <Dialog
+        open={portalUrlDialog !== null}
+        onOpenChange={(o) => !o && setPortalUrlDialog(null)}
+      >
+        <DialogContent className="w-[95vw] max-w-lg p-4 sm:p-6">
+          <DialogHeader>
+            <DialogTitle>Stripe Billing Portal link</DialogTitle>
+            <DialogDescription>
+              {portalUrlDialog?.reason === "no_email" ? (
+                <>
+                  <strong>{portalUrlDialog.clientName}</strong> has no{" "}
+                  <code>contact_email</code> on file, so the email wasn&apos;t
+                  sent. Copy this one-time URL and share it with them directly
+                  (it expires after a short time if unused).
+                </>
+              ) : (
+                <>
+                  Copy this one-time URL for{" "}
+                  <strong>{portalUrlDialog?.clientName}</strong>. Stripe expires
+                  the link after a short time if unused.
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Input
+                readOnly
+                value={portalUrlDialog?.url ?? ""}
+                className="font-mono text-xs"
+                onFocus={(e) => e.currentTarget.select()}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  if (portalUrlDialog)
+                    navigator.clipboard.writeText(portalUrlDialog.url);
+                }}
+              >
+                Copy
+              </Button>
+            </div>
+            {portalUrlDialog && (
+              <a
+                href={portalUrlDialog.url}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 text-xs text-[#2E37FE] hover:underline"
+              >
+                <ExternalLink size={12} />
+                Open in new tab
+              </a>
+            )}
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setPortalUrlDialog(null)}>Done</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={cancelNowSub !== null}
+        onOpenChange={(o) => !o && !cancelSubmitting && setCancelNowSub(null)}
+      >
+        <DialogContent className="w-[95vw] max-w-md p-4 sm:p-6">
+          <DialogHeader>
+            <DialogTitle>Cancel immediately?</DialogTitle>
+            <DialogDescription>
+              {cancelNowSub && (
+                <>
+                  <strong>{clientName(cancelNowSub.client_id, clients)}</strong>
+                  {" "}
+                  will be canceled <strong>right now</strong> — no more charges
+                  and access ends immediately. There is no pro-ration refund.
+                  This cannot be reversed.
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 flex-col sm:flex-row">
+            <Button
+              variant="outline"
+              onClick={() => setCancelNowSub(null)}
+              disabled={cancelSubmitting}
+              className="w-full sm:w-auto"
+            >
+              Keep active
+            </Button>
+            <Button
+              onClick={() =>
+                cancelNowSub && handleCancelNow(cancelNowSub.id)
+              }
+              disabled={cancelSubmitting}
+              className="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white"
+            >
+              {cancelSubmitting ? "Canceling…" : "Cancel immediately"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <Dialog
         open={cancelingSub !== null}
         onOpenChange={(o) => !o && !cancelSubmitting && setCancelingSub(null)}

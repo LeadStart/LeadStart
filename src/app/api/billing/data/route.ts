@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { isStripeDemoMode, isStripeLiveMode } from "@/lib/stripe/client";
 import type {
   BillingInvoice,
   Client,
@@ -70,6 +71,12 @@ export async function GET() {
         .order("name", { ascending: true }),
     ]);
 
+  const stripeMode: "demo" | "live" | "test" = isStripeDemoMode()
+    ? "demo"
+    : isStripeLiveMode()
+      ? "live"
+      : "test";
+
   return NextResponse.json({
     plans: (plansRes.data as unknown as PricingPlan[] | null) ?? [],
     quotes: (quotesRes.data as unknown as Quote[] | null) ?? [],
@@ -77,5 +84,6 @@ export async function GET() {
       (subsRes.data as unknown as ClientSubscription[] | null) ?? [],
     invoices: (invoicesRes.data as unknown as BillingInvoice[] | null) ?? [],
     clients: (clientsRes.data as unknown as Client[] | null) ?? [],
+    stripe_mode: stripeMode,
   });
 }

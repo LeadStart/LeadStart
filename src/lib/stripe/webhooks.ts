@@ -203,10 +203,14 @@ async function handleSubscriptionUpdated(
     ? new Date(sub.trial_end * 1000).toISOString()
     : null;
 
+  // Stripe keeps sub.status = "active" while pause_collection is set, so
+  // reflect the pause explicitly on our mirror.
+  const mirroredStatus = sub.pause_collection ? "paused" : sub.status;
+
   await supabase
     .from("client_subscriptions")
     .update({
-      status: sub.status,
+      status: mirroredStatus,
       current_period_start: periodStart,
       current_period_end: periodEnd,
       trial_end: trialEnd,
