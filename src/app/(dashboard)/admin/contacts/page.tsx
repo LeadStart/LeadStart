@@ -69,16 +69,6 @@ const VISIBLE_STATUSES: ContactStatus[] = [
   "replied",
 ];
 
-const STATUS_COLORS: Record<ContactStatus, string> = {
-  new: "bg-[#e2e8f0] text-[#475569]",
-  enriched: "badge-blue",
-  uploaded: "bg-[#2E37FE]/20 text-[#6B72FF]",
-  active: "badge-green",
-  bounced: "badge-red",
-  replied: "badge-amber",
-  unsubscribed: "bg-gray-100 text-gray-500",
-};
-
 function statusLabel(s: ContactStatus) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
@@ -396,13 +386,11 @@ export default function ContactsPage() {
                   <SortableHead sortKey="company_name" sortConfig={sortConfig} onSort={requestSort}>
                     Company
                   </SortableHead>
-                  <SortableHead sortKey="status" sortConfig={sortConfig} onSort={requestSort}>
-                    Status
-                  </SortableHead>
+                  <TableHead>Tags</TableHead>
                   <SortableHead sortKey="created_at" sortConfig={sortConfig} onSort={requestSort}>
                     Created
                   </SortableHead>
-                  <TableHead className="text-right w-[120px]">Pipeline</TableHead>
+                  <TableHead className="text-right w-[150px]">Pipeline Stage</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -420,12 +408,21 @@ export default function ContactsPage() {
                         {row.company_name || "—"}
                       </TableCell>
                       <TableCell>
-                        <Badge
-                          variant="secondary"
-                          className={`${STATUS_COLORS[row.status]} min-w-[92px] justify-center`}
-                        >
-                          {statusLabel(row.status)}
-                        </Badge>
+                        {row.tags && row.tags.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {row.tags.map((tag) => (
+                              <Badge
+                                key={tag}
+                                variant="secondary"
+                                className="badge-green"
+                              >
+                                {tag}
+                              </Badge>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
                       </TableCell>
                       <TableCell className="text-muted-foreground">
                         {new Date(row.created_at).toLocaleDateString("en-US", {
