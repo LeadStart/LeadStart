@@ -150,6 +150,7 @@ export default function ClientDetailPage({
       <ClientUsersSection
         clientId={clientId}
         users={linkedUsers}
+        reportRecipients={typedClient.report_recipients}
         onUsersChanged={() => {
           // SWR mutate to refetch
           window.location.reload();

@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Users, UserPlus, Send, KeyRound, Trash2, X, RefreshCw } from "lucide-react";
+import { Users, UserPlus, Send, KeyRound, Trash2, X, RefreshCw, Mail } from "lucide-react";
 import { appUrl } from "@/lib/api-url";
 
 interface LinkedUser {
@@ -19,12 +20,62 @@ interface LinkedUser {
 export function ClientUsersSection({
   clientId,
   users,
+  reportRecipients,
   onUsersChanged,
 }: {
   clientId: string;
   users: LinkedUser[];
+  // null means "no override set" — every portal user receives reports by default
+  // (matches the convention in /admin/reports, where unset recipients = all checked).
+  reportRecipients: string[] | null;
   onUsersChanged: () => void;
 }) {
+  // Local mirror so toggling is instant and doesn't require a full page reload.
+  const [localRecipients, setLocalRecipients] = useState<string[] | null>(reportRecipients);
+  const [togglingEmail, setTogglingEmail] = useState<string | null>(null);
+
+  // If the parent re-fetches and the prop changes (e.g. edits elsewhere), re-sync.
+  useEffect(() => {
+    setLocalRecipients(reportRecipients);
+  }, [reportRecipients]);
+
+  function receives(email: string): boolean {
+    // null = "all users receive by default" (matches admin/reports UI)
+    if (localRecipients === null) return true;
+    return localRecipients.includes(email);
+  }
+
+  async function handleToggleReports(email: string, next: boolean) {
+    if (!email) return;
+    // Materialize current list (all currently-checked emails) before mutating
+    const currentEmails = new Set(
+      localRecipients === null ? users.map((u) => u.email).filter(Boolean) : localRecipients,
+    );
+    if (next) currentEmails.add(email);
+    else currentEmails.delete(email);
+
+    const updated = [...currentEmails];
+    const prev = localRecipients;
+    setLocalRecipients(updated); // optimistic
+    setTogglingEmail(email);
+
+    try {
+      const res = await fetch(appUrl("/api/admin/report-schedule"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ client_id: clientId, recipients: updated }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to update recipients");
+      }
+    } catch (err) {
+      setLocalRecipients(prev); // revert
+      alert(`Couldn't update report recipients: ${(err as Error).message}`);
+    } finally {
+      setTogglingEmail(null);
+    }
+  }
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviting, setInviting] = useState(false);
   const [inviteError, setInviteError] = useState<string | null>(null);
@@ -135,6 +186,13 @@ export function ClientUsersSection({
         <CardTitle className="text-base flex-1">
           Portal Users ({users.length})
         </CardTitle>
+        <Link
+          href="/admin/reports"
+          className="text-xs font-medium text-[#2E37FE] hover:underline flex items-center gap-1"
+        >
+          <Mail size={12} />
+          Manage in Reports
+        </Link>
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Existing users */}
@@ -165,7 +223,25 @@ export function ClientUsersSection({
                     <p className="text-xs text-muted-foreground">{user.email}</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-3">
+                  <label
+                    className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none hover:text-foreground transition-colors"
+                    title={
+                      receives(user.email)
+                        ? "This user will receive scheduled KPI reports. Click to opt them out."
+                        : "This user will NOT receive scheduled KPI reports. Click to opt them in."
+                    }
+                  >
+                    <input
+                      type="checkbox"
+                      checked={receives(user.email)}
+                      disabled={togglingEmail === user.email}
+                      onChange={(e) => handleToggleReports(user.email, e.target.checked)}
+                      className="h-3.5 w-3.5 rounded border-border cursor-pointer accent-[#2E37FE]"
+                    />
+                    <Mail size={11} />
+                    Reports
+                  </label>
                   {user.invite_status === "pending" ? (
                     <Button
                       size="sm"

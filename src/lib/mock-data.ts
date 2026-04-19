@@ -47,6 +47,36 @@ export const MOCK_PROFILES: Profile[] = [
     created_at: "2025-02-01T00:00:00Z",
     updated_at: "2025-02-01T00:00:00Z",
   },
+  {
+    id: "user-client-001",
+    email: "john@acmecorp.com",
+    full_name: "John (Acme)",
+    role: "client",
+    organization_id: MOCK_ORG.id,
+    is_active: true,
+    created_at: "2025-01-15T00:00:00Z",
+    updated_at: "2025-01-15T00:00:00Z",
+  },
+  {
+    id: "user-client-001b",
+    email: "ops@acmecorp.com",
+    full_name: "Priya (Acme Ops)",
+    role: "client",
+    organization_id: MOCK_ORG.id,
+    is_active: true,
+    created_at: "2025-02-20T00:00:00Z",
+    updated_at: "2025-02-20T00:00:00Z",
+  },
+  {
+    id: "user-client-002",
+    email: "lisa@techstartup.io",
+    full_name: "Lisa (TechStartup)",
+    role: "client",
+    organization_id: MOCK_ORG.id,
+    is_active: true,
+    created_at: "2025-02-01T00:00:00Z",
+    updated_at: "2025-02-01T00:00:00Z",
+  },
 ];
 
 // ---------- Clients ----------
