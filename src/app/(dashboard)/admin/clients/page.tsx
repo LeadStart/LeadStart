@@ -79,7 +79,7 @@ export default function ClientsPage() {
       <AddClientForm />
       <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
         <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]/10"><Users size={16} className="text-[#2E37FE]" /></div>
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]"><Users size={16} className="text-white" /></div>
           <h2 className="text-[15px] font-semibold text-[#0f172a]">
             {statusFilter === "active" ? "Active Clients" : "Former Clients"}
           </h2>

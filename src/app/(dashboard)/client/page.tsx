@@ -107,8 +107,8 @@ export default function ClientDashboardPage() {
       <div className="flex items-center justify-center h-64">
         <div className="text-center space-y-2">
           <div className="flex justify-center">
-            <div className="h-12 w-12 rounded-full bg-[#2E37FE]/10 flex items-center justify-center">
-              <TrendingUp size={24} className="text-[#1C24B8]" />
+            <div className="h-12 w-12 rounded-full bg-[#2E37FE] flex items-center justify-center">
+              <TrendingUp size={24} className="text-white" />
             </div>
           </div>
           <p className="text-muted-foreground font-medium">Your account is being set up.</p>
@@ -135,7 +135,7 @@ export default function ClientDashboardPage() {
       {/* Row 1: Campaign Performance */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]/10"><TrendingUp size={16} className="text-[#2E37FE]" /></div>
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]"><TrendingUp size={16} className="text-white" /></div>
           <h2 className="text-[15px] font-semibold text-[#0f172a]">Campaign Performance</h2>
         </div>
         <div className="flex items-center gap-3">
@@ -191,8 +191,8 @@ export default function ClientDashboardPage() {
             className="flex flex-row items-center gap-2 pb-3 cursor-pointer select-none"
             onClick={() => setCampaignsExpanded((v) => !v)}
           >
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]/10">
-              <TrendingUp size={16} className="text-[#2E37FE]" />
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]">
+              <TrendingUp size={16} className="text-white" />
             </div>
             <CardTitle className="text-base flex-1">Your Campaigns</CardTitle>
             <span className="text-muted-foreground">

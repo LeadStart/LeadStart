@@ -50,7 +50,7 @@ export default function ClientFeedbackPage() {
       {feedback.length > 0 && (
         <>
         <div className="flex items-center gap-2 mb-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]/10"><MessageSquare size={16} className="text-[#2E37FE]" /></div>
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]"><MessageSquare size={16} className="text-white" /></div>
           <h2 className="text-[15px] font-semibold text-[#0f172a]">Response Breakdown</h2>
         </div>
         <Card className="border-border/50 shadow-sm">
@@ -62,7 +62,7 @@ export default function ClientFeedbackPage() {
       )}
 
       <div className="flex items-center gap-2 mb-3">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]/10"><MessageSquare size={16} className="text-[#2E37FE]" /></div>
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]"><MessageSquare size={16} className="text-white" /></div>
         <h2 className="text-[15px] font-semibold text-[#0f172a]">Feedback History</h2>
       </div>
       <Card className="border-border/50 shadow-sm">

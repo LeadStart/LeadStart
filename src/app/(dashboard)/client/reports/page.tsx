@@ -55,7 +55,7 @@ export default function ClientReportsPage() {
       {reports.length === 0 ? (
         <Card className="border-border/50 shadow-sm">
           <CardContent className="py-12 text-center space-y-2">
-            <div className="flex justify-center"><div className="h-12 w-12 rounded-full bg-[#2E37FE]/10 flex items-center justify-center"><FileText size={24} className="text-[#1C24B8]" /></div></div>
+            <div className="flex justify-center"><div className="h-12 w-12 rounded-full bg-[#2E37FE] flex items-center justify-center"><FileText size={24} className="text-white" /></div></div>
             <p className="text-muted-foreground font-medium">No reports yet</p>
             <p className="text-sm text-muted-foreground">Your first KPI report will appear here once generated.</p>
           </CardContent>
@@ -69,7 +69,7 @@ export default function ClientReportsPage() {
               <Card key={report.id} className="border-border/50 shadow-sm overflow-hidden">
                 <div className="flex items-center justify-between px-6 py-3 bg-muted/30 border-b border-border/30">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]/10"><FileText size={16} className="text-[#2E37FE]" /></div>
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]"><FileText size={16} className="text-white" /></div>
                     <div>
                       <p className="text-sm font-semibold">{new Date(period.start).toLocaleDateString("en-US", { month: "short", day: "numeric" })} — {new Date(period.end).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</p>
                       <p className="text-xs text-muted-foreground">{campaigns.length} campaign{campaigns.length !== 1 ? "s" : ""} included</p>

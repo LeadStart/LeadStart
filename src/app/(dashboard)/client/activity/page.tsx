@@ -89,7 +89,7 @@ export default function ClientActivityPage() {
       {events.length === 0 ? (
         <Card className="border-border/50 shadow-sm">
           <CardContent className="py-12 text-center">
-            <div className="flex justify-center mb-3"><div className="h-12 w-12 rounded-full bg-[#2E37FE]/10 flex items-center justify-center"><Activity size={24} className="text-[#1C24B8]" /></div></div>
+            <div className="flex justify-center mb-3"><div className="h-12 w-12 rounded-full bg-[#2E37FE] flex items-center justify-center"><Activity size={24} className="text-white" /></div></div>
             <p className="text-muted-foreground font-medium">No activity yet</p>
             <p className="text-sm text-muted-foreground">Events will appear here as your campaigns run.</p>
           </CardContent>

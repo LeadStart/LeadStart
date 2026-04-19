@@ -202,8 +202,8 @@ export default function CampaignDetailPage({
       {/* Lead Feedback */}
       <Card className="border-border/50 shadow-sm">
         <CardHeader className="flex flex-row items-center gap-2 pb-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]/10">
-            <MessageSquare size={16} className="text-[#2E37FE]" />
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]">
+            <MessageSquare size={16} className="text-white" />
           </div>
           <CardTitle className="text-base">Lead Feedback ({feedback.length})</CardTitle>
         </CardHeader>

@@ -165,7 +165,7 @@ export default function InboxHealthPage() {
       {view === "domains" ? (
         <>
         <div className="flex items-center gap-2 mb-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]/10"><Globe size={16} className="text-[#2E37FE]" /></div>
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]"><Globe size={16} className="text-white" /></div>
           <h2 className="text-[15px] font-semibold text-[#0f172a]">Domain Health</h2>
         </div>
         <Card className="border-border/50 shadow-sm">
@@ -185,7 +185,7 @@ export default function InboxHealthPage() {
                   <TableRow key={d.domain}>
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        <div className="flex h-7 w-7 items-center justify-center rounded bg-[#2E37FE]/10 text-[10px] font-bold text-[#2E37FE]">{d.domain.charAt(0).toUpperCase()}</div>
+                        <div className="flex h-7 w-7 items-center justify-center rounded bg-[#2E37FE] text-[10px] font-bold text-white">{d.domain.charAt(0).toUpperCase()}</div>
                         <span className="font-medium">{d.domain}</span>
                       </div>
                     </TableCell>
@@ -203,7 +203,7 @@ export default function InboxHealthPage() {
       ) : (
         <>
         <div className="flex items-center gap-2 mb-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]/10"><Inbox size={16} className="text-[#2E37FE]" /></div>
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]"><Inbox size={16} className="text-white" /></div>
           <h2 className="text-[15px] font-semibold text-[#0f172a]">All Inboxes</h2>
         </div>
         <Card className="border-border/50 shadow-sm">

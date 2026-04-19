@@ -371,8 +371,8 @@ export default function ReportsPage() {
       {/* Report Builder */}
       <Card className="border-border/50">
         <CardHeader className="flex flex-row items-center gap-2 pb-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]/10">
-            <Send size={16} className="text-[#2E37FE]" />
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]">
+            <Send size={16} className="text-white" />
           </div>
           <div>
             <CardTitle className="text-base">Generate Report</CardTitle>
@@ -692,8 +692,8 @@ export default function ReportsPage() {
       {/* Report History */}
       <Card className="border-border/50">
         <CardHeader className="flex flex-row items-center gap-2 pb-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]/10">
-            <FileText size={16} className="text-[#2E37FE]" />
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]">
+            <FileText size={16} className="text-white" />
           </div>
           <CardTitle className="text-base">Report History</CardTitle>
         </CardHeader>

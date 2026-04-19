@@ -184,8 +184,8 @@ export default function TeamPage() {
       {/* Invite Form */}
       <Card className="border-border/50 shadow-sm">
         <CardHeader className="flex flex-row items-center gap-2 pb-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]/10">
-            <UserPlus size={16} className="text-[#2E37FE]" />
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]">
+            <UserPlus size={16} className="text-white" />
           </div>
           <CardTitle className="text-base">Invite Team Member</CardTitle>
         </CardHeader>
@@ -234,8 +234,8 @@ export default function TeamPage() {
       {/* Team Members */}
       <Card className="border-border/50 shadow-sm">
         <CardHeader className="flex flex-row items-center gap-2 pb-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]/10">
-            <Building2 size={16} className="text-[#2E37FE]" />
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]">
+            <Building2 size={16} className="text-white" />
           </div>
           <CardTitle className="text-base">Team Members</CardTitle>
         </CardHeader>

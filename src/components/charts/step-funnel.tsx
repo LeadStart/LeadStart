@@ -130,8 +130,8 @@ export function StepFunnel({ stepMetrics, alerts, campaignName }: StepFunnelProp
   return (
     <Card className="border-border/50 shadow-sm">
       <CardHeader className="flex flex-row items-center gap-2 pb-3">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]/10">
-          <Activity size={16} className="text-[#2E37FE]" />
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]">
+          <Activity size={16} className="text-white" />
         </div>
         <div>
           <CardTitle className="text-base">Step Performance</CardTitle>

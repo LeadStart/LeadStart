@@ -64,7 +64,7 @@ export default function WebhooksPage() {
         })}
       </div>
       <div className="flex items-center gap-2 mb-3">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]/10"><Bell size={16} className="text-[#2E37FE]" /></div>
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]"><Bell size={16} className="text-white" /></div>
         <h2 className="text-[15px] font-semibold text-[#0f172a]">Recent Events</h2>
       </div>
       <Card className="border-border/50 shadow-sm">

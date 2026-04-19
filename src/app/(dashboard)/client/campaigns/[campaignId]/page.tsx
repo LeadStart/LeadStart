@@ -135,7 +135,7 @@ export default function ClientCampaignPage({
       {/* Campaign Performance with date picker */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]/10"><TrendingUp size={16} className="text-[#2E37FE]" /></div>
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]"><TrendingUp size={16} className="text-white" /></div>
           <h2 className="text-[15px] font-semibold text-[#0f172a]">Campaign Performance</h2>
         </div>
         <div className="flex items-center gap-3">
