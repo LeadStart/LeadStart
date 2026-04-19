@@ -1,26 +1,21 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import Link from "next/link";
+import { useMemo, useState } from "react";
+import { useUser } from "@/hooks/use-user";
+import { useSupabaseQuery } from "@/hooks/use-supabase-query";
 import { createClient } from "@/lib/supabase/client";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { StatCard } from "@/components/charts/stat-card";
 import {
@@ -30,130 +25,462 @@ import {
   Mail,
   Globe,
   Calendar,
-  Building2,
   Users,
   CheckCircle,
-  XCircle,
-  ArrowRight,
+  Trash2,
+  ExternalLink,
+  Lock,
+  UserPlus,
+  Search,
 } from "lucide-react";
-import type { Prospect, ProspectStage } from "@/types/app";
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  closestCorners,
+  useDroppable,
+  type DragEndEvent,
+  type DragStartEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+  arrayMove,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import type { Contact, ProspectStage } from "@/types/app";
 
-const STAGES: { value: ProspectStage; label: string; color: string; borderColor: string }[] = [
-  { value: "lead", label: "Lead", color: "bg-[#e2e8f0] text-[#B8B5AE]", borderColor: "border-gray-200" },
-  { value: "contacted", label: "Contacted", color: "badge-blue", borderColor: "border-blue-200" },
-  { value: "meeting", label: "Meeting", color: "bg-[#2E37FE]/20 text-[#6B72FF]", borderColor: "border-[#2E37FE]/20" },
-  { value: "proposal", label: "Proposal", color: "badge-amber", borderColor: "border-amber-200" },
-  { value: "closed", label: "Closed Won", color: "badge-green", borderColor: "border-emerald-200" },
-  { value: "lost", label: "Lost", color: "badge-red", borderColor: "border-red-200" },
+type StageDef = {
+  value: ProspectStage;
+  label: string;
+  badge: string;
+  badgeBorder: string;
+  columnBar: string;
+  headerTint: string;
+};
+
+const STAGES: StageDef[] = [
+  { value: "lead", label: "Lead", badge: "bg-[#e2e8f0] text-[#475569]", badgeBorder: "border-slate-200", columnBar: "bg-slate-400", headerTint: "bg-slate-50" },
+  { value: "contacted", label: "Contacted", badge: "badge-blue", badgeBorder: "border-blue-200", columnBar: "bg-blue-500", headerTint: "bg-blue-50" },
+  { value: "meeting", label: "Meeting", badge: "bg-[#2E37FE]/15 text-[#2E37FE]", badgeBorder: "border-[#2E37FE]/20", columnBar: "bg-[#2E37FE]", headerTint: "bg-[#EDEEFF]" },
+  { value: "proposal", label: "Proposal", badge: "badge-amber", badgeBorder: "border-amber-200", columnBar: "bg-amber-500", headerTint: "bg-amber-50" },
+  { value: "closed", label: "Closed Won", badge: "badge-green", badgeBorder: "border-emerald-200", columnBar: "bg-emerald-500", headerTint: "bg-emerald-50" },
+  { value: "lost", label: "Lost", badge: "badge-red", badgeBorder: "border-red-200", columnBar: "bg-red-400", headerTint: "bg-red-50" },
 ];
 
-function getStageConfig(stage: ProspectStage) {
-  return STAGES.find((s) => s.value === stage) || STAGES[0];
+function stageDef(stage: ProspectStage): StageDef {
+  return STAGES.find((s) => s.value === stage) ?? STAGES[0];
 }
 
-function ProspectCard({ prospect, onSelect }: { prospect: Prospect; onSelect: () => void }) {
-  const stage = getStageConfig(prospect.stage);
-  const isOverdue = prospect.follow_up_date && new Date(prospect.follow_up_date) < new Date() && !["closed", "lost"].includes(prospect.stage);
+function displayName(c: Contact): string {
+  const n = [c.first_name, c.last_name].filter(Boolean).join(" ");
+  return n || c.email;
+}
+
+function industryOf(c: Contact): string | null {
+  const v = (c.enrichment_data as Record<string, unknown> | null)?.["industry"];
+  return typeof v === "string" ? v : null;
+}
+
+function websiteOf(c: Contact): string | null {
+  const v = (c.enrichment_data as Record<string, unknown> | null)?.["website"];
+  return typeof v === "string" ? v : null;
+}
+
+function ProspectCardInner({
+  contact,
+  onSelect,
+  dragging,
+}: {
+  contact: Contact;
+  onSelect?: () => void;
+  dragging?: boolean;
+}) {
+  const stage = contact.pipeline_stage;
+  const isOverdue =
+    !!contact.pipeline_follow_up_date &&
+    new Date(contact.pipeline_follow_up_date) < new Date() &&
+    stage !== null &&
+    !["closed", "lost"].includes(stage);
+  const companyInitial = (contact.company_name || contact.email).charAt(0).toUpperCase();
+  const name = displayName(contact);
+  const industry = industryOf(contact);
 
   return (
     <Card
       onClick={onSelect}
-      className="group cursor-pointer transition-all hover:border-[#2E37FE]/30 hover:shadow-md"
+      className={`group cursor-pointer transition-all hover:border-[#2E37FE]/30 hover:shadow-md ${dragging ? "shadow-lg ring-2 ring-[#2E37FE]/30" : ""}`}
     >
-    <CardContent className="p-4">
-      <div className="flex items-start justify-between mb-3">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg text-sm font-bold text-white shrink-0" style={{ background: '#2E37FE' }}>
-            {prospect.company_name.charAt(0)}
+      <CardContent className="p-3">
+        <div className="flex items-start gap-2.5 mb-2">
+          <div
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold text-white shrink-0"
+            style={{ background: "#2E37FE" }}
+          >
+            {companyInitial}
           </div>
-          <div>
-            <p className="font-semibold text-foreground">{prospect.company_name}</p>
-            <p className="text-xs text-muted-foreground">{prospect.contact_name || "No contact"}</p>
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold text-sm text-foreground truncate">
+              {contact.company_name || name}
+            </p>
+            <p className="text-xs text-muted-foreground truncate">{name}</p>
           </div>
         </div>
-        <ArrowRight size={14} className="text-muted-foreground mt-1 opacity-0 group-hover:opacity-100 transition-opacity" />
-      </div>
 
-      <div className="flex items-center gap-2 mb-3">
-        <Badge variant="secondary" className={`text-xs border ${stage.color} ${stage.borderColor}`}>
-          {stage.label}
-        </Badge>
-        {prospect.industry && (
-          <Badge variant="outline" className="text-xs text-muted-foreground">
-            {prospect.industry}
-          </Badge>
+        {(industry || isOverdue) && (
+          <div className="flex items-center gap-1.5 flex-wrap mb-2">
+            {industry && (
+              <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                {industry}
+              </Badge>
+            )}
+            {isOverdue && (
+              <Badge variant="secondary" className="text-[10px] badge-red">
+                Overdue
+              </Badge>
+            )}
+          </div>
         )}
-        {isOverdue && (
-          <Badge variant="secondary" className="text-xs badge-red">
-            Overdue
-          </Badge>
-        )}
-      </div>
 
-      {prospect.deal_notes && (
-        <p className="text-xs text-muted-foreground line-clamp-2 mb-2">{prospect.deal_notes}</p>
-      )}
+        {contact.pipeline_notes && (
+          <p className="text-xs text-muted-foreground line-clamp-2 mb-2">{contact.pipeline_notes}</p>
+        )}
 
-      <div className="flex items-center gap-4 pt-2 border-t border-border/30 text-xs text-muted-foreground">
-        {prospect.contact_email && (
-          <span className="flex items-center gap-1">
-            <Mail size={11} /> {prospect.contact_email}
-          </span>
+        {(contact.email || contact.pipeline_follow_up_date) && (
+          <div className="flex items-center gap-3 pt-2 border-t border-border/30 text-[11px] text-muted-foreground">
+            {contact.email && (
+              <span className="flex items-center gap-1 truncate">
+                <Mail size={10} className="shrink-0" />
+                <span className="truncate">{contact.email}</span>
+              </span>
+            )}
+            {contact.pipeline_follow_up_date && (
+              <span className="flex items-center gap-1 ml-auto shrink-0">
+                <Calendar size={10} />
+                {new Date(contact.pipeline_follow_up_date).toLocaleDateString("en-US", {
+                  month: "short",
+                  day: "numeric",
+                })}
+              </span>
+            )}
+          </div>
         )}
-        {prospect.follow_up_date && (
-          <span className="flex items-center gap-1 ml-auto">
-            <Calendar size={11} />
-            {new Date(prospect.follow_up_date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-          </span>
-        )}
-      </div>
-    </CardContent>
+      </CardContent>
     </Card>
   );
 }
 
+function SortableProspect({
+  contact,
+  onSelect,
+}: {
+  contact: Contact;
+  onSelect: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: contact.id,
+    data: { stage: contact.pipeline_stage },
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : 1,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
+      <ProspectCardInner contact={contact} onSelect={onSelect} />
+    </div>
+  );
+}
+
+function KanbanColumn({
+  stage,
+  contacts,
+  onSelect,
+}: {
+  stage: StageDef;
+  contacts: Contact[];
+  onSelect: (c: Contact) => void;
+}) {
+  const { setNodeRef, isOver } = useDroppable({
+    id: `column-${stage.value}`,
+    data: { stage: stage.value, type: "column" },
+  });
+
+  return (
+    <div className="flex flex-col w-[280px] shrink-0 rounded-xl border border-border/50 bg-background/40 overflow-hidden">
+      <div className={`flex items-center justify-between px-3 py-2.5 ${stage.headerTint} border-b border-border/50`}>
+        <div className="flex items-center gap-2">
+          <span className={`h-2 w-2 rounded-full ${stage.columnBar}`} />
+          <span className="text-sm font-semibold text-[#0f172a]">{stage.label}</span>
+          <span className="text-xs font-medium text-muted-foreground">{contacts.length}</span>
+        </div>
+      </div>
+      <SortableContext items={contacts.map((c) => c.id)} strategy={verticalListSortingStrategy}>
+        <div
+          ref={setNodeRef}
+          className={`flex-1 min-h-[300px] p-2.5 space-y-2 transition-colors ${isOver ? "bg-[#2E37FE]/5" : ""}`}
+        >
+          {contacts.length === 0 ? (
+            <div className={`h-24 rounded-lg border-2 border-dashed flex items-center justify-center text-xs text-muted-foreground ${isOver ? "border-[#2E37FE]/40" : "border-border/50"}`}>
+              Drop here
+            </div>
+          ) : (
+            contacts.map((c) => (
+              <SortableProspect key={c.id} contact={c} onSelect={() => onSelect(c)} />
+            ))
+          )}
+        </div>
+      </SortableContext>
+    </div>
+  );
+}
+
 export default function ProspectsPage() {
-  const [prospects, setProspects] = useState<Prospect[]>([]);
-  const [filter, setFilter] = useState<ProspectStage | "all">("all");
-  const [selected, setSelected] = useState<Prospect | null>(null);
+  const { organizationId } = useUser();
+  const [selected, setSelected] = useState<Contact | null>(null);
   const [showAdd, setShowAdd] = useState(false);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [contactSearch, setContactSearch] = useState("");
+  const [savingEdits, setSavingEdits] = useState(false);
+  const [editNotes, setEditNotes] = useState("");
+  const [editFollowUp, setEditFollowUp] = useState<string>("");
 
-  // Add form state
-  const [newCompany, setNewCompany] = useState("");
-  const [newContact, setNewContact] = useState("");
-  const [newEmail, setNewEmail] = useState("");
-  const [newPhone, setNewPhone] = useState("");
-  const [newIndustry, setNewIndustry] = useState("");
-  const [newNotes, setNewNotes] = useState("");
+  const { data, loading, setData, refetch } = useSupabaseQuery(
+    "admin-contacts-with-pipeline",
+    async (supabase) => {
+      const res = await supabase.from("contacts").select("*");
+      return ((res.data || []) as Contact[]).slice().sort((a, b) => {
+        if (a.pipeline_sort_order !== b.pipeline_sort_order)
+          return a.pipeline_sort_order - b.pipeline_sort_order;
+        return (b.updated_at || "").localeCompare(a.updated_at || "");
+      });
+    },
+  );
 
-  useEffect(() => {
+  const allContacts = useMemo(() => data ?? [], [data]);
+  const inPipeline = useMemo(
+    () => allContacts.filter((c): c is Contact & { pipeline_stage: ProspectStage } => c.pipeline_stage !== null),
+    [allContacts],
+  );
+
+  const byStage = useMemo(() => {
+    const map: Record<ProspectStage, Contact[]> = {
+      lead: [], contacted: [], meeting: [], proposal: [], closed: [], lost: [],
+    };
+    for (const c of inPipeline) map[c.pipeline_stage as ProspectStage]?.push(c);
+    return map;
+  }, [inPipeline]);
+
+  const addableContacts = useMemo(() => {
+    const term = contactSearch.trim().toLowerCase();
+    return allContacts
+      .filter((c) => c.pipeline_stage === null)
+      .filter((c) => {
+        if (!term) return true;
+        const hay = [
+          c.first_name, c.last_name, c.email, c.company_name, c.title, industryOf(c),
+        ].filter(Boolean).join(" ").toLowerCase();
+        return hay.includes(term);
+      })
+      .sort((a, b) => (b.updated_at || "").localeCompare(a.updated_at || ""));
+  }, [allContacts, contactSearch]);
+
+  const activeCount = inPipeline.filter((c) => !["closed", "lost"].includes(c.pipeline_stage)).length;
+  const closedWon = inPipeline.filter((c) => c.pipeline_stage === "closed").length;
+  const overdue = inPipeline.filter(
+    (c) =>
+      c.pipeline_follow_up_date &&
+      new Date(c.pipeline_follow_up_date) < new Date() &&
+      !["closed", "lost"].includes(c.pipeline_stage),
+  ).length;
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+  );
+
+  function handleDragStart(e: DragStartEvent) {
+    setActiveId(String(e.active.id));
+  }
+
+  async function handleDragEnd(e: DragEndEvent) {
+    const { active, over } = e;
+    setActiveId(null);
+    if (!over) return;
+
+    const activeContact = inPipeline.find((c) => c.id === active.id);
+    if (!activeContact) return;
+
+    const overId = String(over.id);
+    let targetStage: ProspectStage;
+    if (overId.startsWith("column-")) {
+      targetStage = overId.replace("column-", "") as ProspectStage;
+    } else {
+      const overContact = inPipeline.find((c) => c.id === overId);
+      if (!overContact) return;
+      targetStage = overContact.pipeline_stage;
+    }
+
+    const sourceStage = activeContact.pipeline_stage;
+
+    const next = allContacts.slice();
+    const fromIdx = next.findIndex((c) => c.id === active.id);
+    if (fromIdx < 0) return;
+
+    if (sourceStage === targetStage) {
+      const overIdx = next.findIndex((c) => c.id === overId);
+      if (overIdx < 0 || fromIdx === overIdx) return;
+      const reordered = arrayMove(next, fromIdx, overIdx);
+      setData(() => reordered);
+      await persistStageAndOrder(reordered, targetStage);
+      return;
+    }
+
+    const [moving] = next.splice(fromIdx, 1);
+    moving.pipeline_stage = targetStage;
+
+    let insertIdx: number;
+    if (overId.startsWith("column-")) {
+      insertIdx = next.findLastIndex((c) => c.pipeline_stage === targetStage) + 1;
+      if (insertIdx === 0) insertIdx = next.length;
+    } else {
+      insertIdx = next.findIndex((c) => c.id === overId);
+      if (insertIdx < 0) insertIdx = next.length;
+    }
+
+    next.splice(insertIdx, 0, moving);
+    setData(() => next);
+    await persistStageAndOrder(next, targetStage, sourceStage);
+  }
+
+  async function persistStageAndOrder(
+    list: Contact[],
+    targetStage: ProspectStage,
+    sourceStage?: ProspectStage,
+  ) {
     const supabase = createClient();
-    supabase.from("prospects").select("*").order("updated_at", { ascending: false }).then(({ data }: { data: unknown }) => {
-      setProspects((data || []) as Prospect[]);
-    });
-  }, []);
+    const stagesToUpdate = new Set<ProspectStage>([targetStage]);
+    if (sourceStage) stagesToUpdate.add(sourceStage);
 
-  const filtered = filter === "all" ? prospects : prospects.filter((p) => p.stage === filter);
+    for (const stage of stagesToUpdate) {
+      const items = list.filter((c) => c.pipeline_stage === stage);
+      for (let i = 0; i < items.length; i++) {
+        const { error } = await supabase
+          .from("contacts")
+          .update({ pipeline_stage: stage, pipeline_sort_order: i })
+          .eq("id", items[i].id);
+        if (error) {
+          alert(`Failed to save pipeline change: ${error.message}`);
+          void refetch();
+          return;
+        }
+      }
+    }
+  }
 
-  const stageCounts = STAGES.reduce<Record<string, number>>((acc, s) => {
-    acc[s.value] = prospects.filter((p) => p.stage === s.value).length;
-    return acc;
-  }, {});
+  async function addContactToPipeline(contact: Contact) {
+    if (!organizationId) {
+      alert("Could not determine organization. Please sign in again.");
+      return;
+    }
+    const supabase = createClient();
+    const leadCount = byStage.lead.length;
+    const { error } = await supabase
+      .from("contacts")
+      .update({
+        pipeline_stage: "lead",
+        pipeline_sort_order: leadCount,
+        pipeline_added_at: new Date().toISOString(),
+      })
+      .eq("id", contact.id);
+    if (error) {
+      alert(`Failed to add to pipeline: ${error.message}`);
+      return;
+    }
+    setShowAdd(false);
+    setContactSearch("");
+    void refetch();
+  }
 
-  const activeProspects = prospects.filter((p) => !["closed", "lost"].includes(p.stage)).length;
-  const closedWon = prospects.filter((p) => p.stage === "closed").length;
-  const overdue = prospects.filter((p) => p.follow_up_date && new Date(p.follow_up_date) < new Date() && !["closed", "lost"].includes(p.stage)).length;
+  function openDetail(c: Contact) {
+    setSelected(c);
+    setEditNotes(c.pipeline_notes ?? "");
+    setEditFollowUp(c.pipeline_follow_up_date ?? "");
+  }
+
+  async function handleSaveProspectEdits() {
+    if (!selected) return;
+    setSavingEdits(true);
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("contacts")
+      .update({
+        pipeline_notes: editNotes.trim() || null,
+        pipeline_follow_up_date: editFollowUp || null,
+      })
+      .eq("id", selected.id);
+    setSavingEdits(false);
+    if (error) {
+      alert(`Failed to save: ${error.message}`);
+      return;
+    }
+    setSelected(null);
+    void refetch();
+  }
+
+  async function handleRemoveFromPipeline(c: Contact) {
+    if (
+      !confirm(
+        `Remove ${c.company_name || displayName(c)} from the pipeline? The contact will remain in Contacts.`,
+      )
+    )
+      return;
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("contacts")
+      .update({
+        pipeline_stage: null,
+        pipeline_sort_order: 0,
+        pipeline_notes: null,
+        pipeline_follow_up_date: null,
+        pipeline_added_at: null,
+      })
+      .eq("id", c.id);
+    if (error) {
+      alert(`Failed to remove: ${error.message}`);
+      return;
+    }
+    setSelected(null);
+    void refetch();
+  }
+
+  const draggingContact = activeId ? inPipeline.find((c) => c.id === activeId) : null;
+  const hasAnyContacts = allContacts.length > 0;
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="relative overflow-hidden rounded-[20px] p-5 sm:p-7 text-[#0f172a]" style={{ background: 'linear-gradient(135deg, #EDEEFF 0%, #D1D3FF 50%, #fff 100%)', border: '1px solid rgba(46,55,254,0.2)', borderTop: '1px solid rgba(46,55,254,0.3)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.9), 0 4px 14px rgba(46,55,254,0.1)' }}>
+      <div
+        className="relative overflow-hidden rounded-[20px] p-5 sm:p-7 text-[#0f172a]"
+        style={{
+          background: "linear-gradient(135deg, #EDEEFF 0%, #D1D3FF 50%, #fff 100%)",
+          border: "1px solid rgba(46,55,254,0.2)",
+          borderTop: "1px solid rgba(46,55,254,0.3)",
+          boxShadow: "inset 0 1px 0 rgba(255,255,255,0.9), 0 4px 14px rgba(46,55,254,0.1)",
+        }}
+      >
         <div className="relative z-10 flex items-start justify-between">
           <div>
             <p className="text-xs font-medium text-[#64748b]">Sales Pipeline</p>
-            <h1 className="text-[20px] sm:text-[22px] font-bold mt-1" style={{ color: '#0f172a', letterSpacing: '-0.01em' }}>Prospects</h1>
+            <h1 className="text-[20px] sm:text-[22px] font-bold mt-1" style={{ color: "#0f172a", letterSpacing: "-0.01em" }}>
+              Prospects
+            </h1>
             <p className="text-sm text-[#0f172a]/60 mt-1">
-              {prospects.length} total &middot; {activeProspects} active &middot; {closedWon} won
+              {inPipeline.length} in pipeline · {activeCount} active · {closedWon} won
             </p>
           </div>
           <Button
@@ -161,17 +488,16 @@ export default function ProspectsPage() {
             className="bg-white/15 hover:bg-white/25 text-[#0f172a] border-0"
           >
             <Plus size={16} className="mr-1" />
-            Add Prospect
+            Add to Pipeline
           </Button>
         </div>
         <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-[rgba(107,114,255,0.06)]" />
       </div>
 
-      {/* Quick stats */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <StatCard
           label="Active Pipeline"
-          value={activeProspects}
+          value={activeCount}
           icon={<Target size={18} className="text-[#2E37FE]" />}
           iconBg="bg-[#2E37FE]/10"
         />
@@ -191,180 +517,263 @@ export default function ProspectsPage() {
         />
       </div>
 
-      {/* Stage filter pills */}
-      <div className="flex flex-wrap gap-2">
-        <button
-          onClick={() => setFilter("all")}
-          className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
-            filter === "all"
-              ? "bg-[#2E37FE] text-[#0f172a]"
-              : "bg-muted text-muted-foreground hover:bg-muted/80"
-          }`}
-        >
-          All ({prospects.length})
-        </button>
-        {STAGES.map((s) => (
-          <button
-            key={s.value}
-            onClick={() => setFilter(s.value)}
-            className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors border ${
-              filter === s.value
-                ? `${s.color} ${s.borderColor}`
-                : "bg-muted text-muted-foreground hover:bg-muted/80 border-transparent"
-            }`}
-          >
-            {s.label} ({stageCounts[s.value] || 0})
-          </button>
-        ))}
-      </div>
-
-      {/* Prospect cards grid */}
-      {filtered.length === 0 ? (
-        <Card className="border-border/50 shadow-sm">
-          <CardContent className="py-12 text-center">
-            <p className="text-muted-foreground font-medium">No prospects in this stage</p>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {filtered.map((prospect) => (
-            <ProspectCard
-              key={prospect.id}
-              prospect={prospect}
-              onSelect={() => setSelected(prospect)}
-            />
+      {loading ? (
+        <div className="flex gap-4 overflow-x-auto pb-2">
+          {STAGES.map((s) => (
+            <div key={s.value} className="w-[280px] shrink-0 rounded-xl bg-muted/40 h-80 animate-pulse" />
           ))}
         </div>
+      ) : (
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCorners}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+        >
+          <div className="flex gap-4 overflow-x-auto pb-4">
+            {STAGES.map((stage) => (
+              <KanbanColumn
+                key={stage.value}
+                stage={stage}
+                contacts={byStage[stage.value]}
+                onSelect={openDetail}
+              />
+            ))}
+          </div>
+          <DragOverlay>
+            {draggingContact ? (
+              <div className="w-[260px]">
+                <ProspectCardInner contact={draggingContact} dragging />
+              </div>
+            ) : null}
+          </DragOverlay>
+        </DndContext>
       )}
 
-      {/* Prospect Detail Dialog */}
+      {/* Detail dialog — pipeline-only edits; contact info read-only */}
       {selected && (
         <Dialog open={!!selected} onOpenChange={() => setSelected(null)}>
           <DialogContent className="max-w-lg">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg text-sm font-bold text-[#0f172a]" style={{ background: '#2E37FE' }}>
-                  {selected.company_name.charAt(0)}
+                <div
+                  className="flex h-10 w-10 items-center justify-center rounded-lg text-sm font-bold text-white"
+                  style={{ background: "#2E37FE" }}
+                >
+                  {(selected.company_name || selected.email).charAt(0).toUpperCase()}
                 </div>
-                {selected.company_name}
+                <div className="min-w-0">
+                  <div className="truncate">{selected.company_name || displayName(selected)}</div>
+                  <div className="text-xs font-normal text-muted-foreground truncate">
+                    {displayName(selected)}
+                  </div>
+                </div>
               </DialogTitle>
             </DialogHeader>
-            <div className="space-y-4 mt-2">
-              {/* Stage */}
-              <div className="flex items-center gap-2">
-                <Badge variant="secondary" className={`border ${getStageConfig(selected.stage).color} ${getStageConfig(selected.stage).borderColor}`}>
-                  {getStageConfig(selected.stage).label}
-                </Badge>
-                {selected.industry && (
-                  <Badge variant="outline" className="text-muted-foreground">{selected.industry}</Badge>
-                )}
-              </div>
 
-              {/* Contact info */}
-              <div className="space-y-2 rounded-xl border border-border/50 p-4">
-                {selected.contact_name && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <Users size={14} className="text-muted-foreground" />
-                    <span className="font-medium">{selected.contact_name}</span>
-                  </div>
-                )}
-                {selected.contact_email && (
+            <div className="space-y-4 mt-2">
+              {selected.pipeline_stage && (
+                <div className="flex items-center gap-2">
+                  <Badge
+                    variant="secondary"
+                    className={`border ${stageDef(selected.pipeline_stage).badge} ${stageDef(selected.pipeline_stage).badgeBorder}`}
+                  >
+                    {stageDef(selected.pipeline_stage).label}
+                  </Badge>
+                  {industryOf(selected) && (
+                    <Badge variant="outline" className="text-muted-foreground">
+                      {industryOf(selected)}
+                    </Badge>
+                  )}
+                </div>
+              )}
+
+              <div className="rounded-xl border border-border/50 p-4 space-y-2 bg-muted/20">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                    <Lock size={11} /> Contact info (read-only)
+                  </p>
+                  <Link
+                    href="/admin/contacts"
+                    className="text-xs font-medium text-[#2E37FE] hover:underline flex items-center gap-1"
+                  >
+                    View contact <ExternalLink size={11} />
+                  </Link>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <Users size={14} className="text-muted-foreground" />
+                  <span className="font-medium">{displayName(selected)}</span>
+                  {selected.title && (
+                    <span className="text-xs text-muted-foreground">· {selected.title}</span>
+                  )}
+                </div>
+                {selected.email && (
                   <div className="flex items-center gap-2 text-sm">
                     <Mail size={14} className="text-muted-foreground" />
-                    <span>{selected.contact_email}</span>
+                    <span>{selected.email}</span>
                   </div>
                 )}
-                {selected.contact_phone && (
+                {selected.phone && (
                   <div className="flex items-center gap-2 text-sm">
                     <Phone size={14} className="text-muted-foreground" />
-                    <span>{selected.contact_phone}</span>
+                    <span>{selected.phone}</span>
                   </div>
                 )}
-                {selected.website && (
+                {websiteOf(selected) && (
                   <div className="flex items-center gap-2 text-sm">
                     <Globe size={14} className="text-muted-foreground" />
-                    <span>{selected.website}</span>
+                    <span>{websiteOf(selected)}</span>
                   </div>
                 )}
+                <p className="text-[11px] text-muted-foreground pt-1">
+                  To change name, email, company, or phone, edit the contact profile.
+                </p>
               </div>
 
-              {/* Notes */}
-              {selected.deal_notes && (
+              <div className="space-y-3">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Deal details
+                </p>
                 <div className="space-y-1">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Notes</p>
-                  <p className="text-sm text-foreground bg-muted/30 rounded-lg p-3">{selected.deal_notes}</p>
+                  <Label className="text-sm">Deal notes</Label>
+                  <Textarea
+                    value={editNotes}
+                    onChange={(e) => setEditNotes(e.target.value)}
+                    rows={3}
+                    placeholder="Notes about this deal..."
+                  />
                 </div>
-              )}
-
-              {/* Follow-up */}
-              {selected.follow_up_date && (
-                <div className="flex items-center gap-2 text-sm">
-                  <Calendar size={14} className="text-muted-foreground" />
-                  <span>Follow-up: {new Date(selected.follow_up_date).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</span>
+                <div className="space-y-1">
+                  <Label className="text-sm">Follow-up date</Label>
+                  <Input
+                    type="date"
+                    value={editFollowUp}
+                    onChange={(e) => setEditFollowUp(e.target.value)}
+                  />
                 </div>
-              )}
+              </div>
 
-              {/* Timestamps */}
-              <div className="text-xs text-muted-foreground pt-2 border-t border-border/30">
-                Created {new Date(selected.created_at).toLocaleDateString()} &middot; Updated {new Date(selected.updated_at).toLocaleDateString()}
+              <div className="flex items-center justify-between pt-2 border-t border-border/30">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                  onClick={() => handleRemoveFromPipeline(selected)}
+                >
+                  <Trash2 size={14} className="mr-1" />
+                  Remove from pipeline
+                </Button>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setSelected(null)}>
+                    Cancel
+                  </Button>
+                  <Button
+                    size="sm"
+                    style={{ background: "#2E37FE" }}
+                    disabled={savingEdits}
+                    onClick={handleSaveProspectEdits}
+                  >
+                    {savingEdits ? "Saving..." : "Save changes"}
+                  </Button>
+                </div>
               </div>
             </div>
           </DialogContent>
         </Dialog>
       )}
 
-      {/* Add Prospect Dialog */}
-      <Dialog open={showAdd} onOpenChange={setShowAdd}>
+      {/* Add-to-pipeline dialog */}
+      <Dialog open={showAdd} onOpenChange={(v) => { setShowAdd(v); if (!v) setContactSearch(""); }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Add Prospect</DialogTitle>
+            <DialogTitle>Add contact to pipeline</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 mt-2">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <Label className="text-sm font-medium">Company Name *</Label>
-                <Input value={newCompany} onChange={(e) => setNewCompany(e.target.value)} placeholder="Company name" />
+          <div className="space-y-3 mt-2">
+            {!hasAnyContacts ? (
+              <div className="rounded-xl border border-dashed border-border p-6 text-center space-y-3">
+                <UserPlus size={28} className="mx-auto text-muted-foreground" />
+                <div>
+                  <p className="text-sm font-medium">No contacts yet</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Create a contact first — they&apos;re the source of truth for name, email, and company.
+                  </p>
+                </div>
+                <Link href="/admin/contacts">
+                  <Button style={{ background: "#2E37FE" }} onClick={() => setShowAdd(false)}>
+                    Go to Contacts
+                  </Button>
+                </Link>
               </div>
-              <div className="space-y-1">
-                <Label className="text-sm font-medium">Contact Name</Label>
-                <Input value={newContact} onChange={(e) => setNewContact(e.target.value)} placeholder="Full name" />
+            ) : addableContacts.length === 0 && contactSearch.trim() === "" ? (
+              <div className="rounded-xl border border-dashed border-border p-6 text-center space-y-3">
+                <CheckCircle size={28} className="mx-auto text-emerald-500" />
+                <div>
+                  <p className="text-sm font-medium">Every contact is already in the pipeline</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Add a new contact in Contacts first, then come back here.
+                  </p>
+                </div>
+                <Link href="/admin/contacts">
+                  <Button variant="outline" onClick={() => setShowAdd(false)}>
+                    Go to Contacts
+                  </Button>
+                </Link>
               </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <Label className="text-sm font-medium">Email</Label>
-                <Input type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} placeholder="email@company.com" />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-sm font-medium">Phone</Label>
-                <Input value={newPhone} onChange={(e) => setNewPhone(e.target.value)} placeholder="(555) 000-0000" />
-              </div>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-sm font-medium">Industry</Label>
-              <Input value={newIndustry} onChange={(e) => setNewIndustry(e.target.value)} placeholder="e.g. Real Estate, SaaS, Legal" />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-sm font-medium">Notes</Label>
-              <Textarea value={newNotes} onChange={(e) => setNewNotes(e.target.value)} placeholder="How did you find them? What do they need?" rows={3} />
-            </div>
-            <Button
-              className="w-full"
-              style={{ background: '#2E37FE' }}
-              disabled={!newCompany.trim()}
-              onClick={() => {
-                // In demo mode, just close — real mode would insert to Supabase
-                setShowAdd(false);
-                setNewCompany("");
-                setNewContact("");
-                setNewEmail("");
-                setNewPhone("");
-                setNewIndustry("");
-                setNewNotes("");
-              }}
-            >
-              Add Prospect
-            </Button>
+            ) : (
+              <>
+                <div className="relative">
+                  <Search
+                    size={14}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
+                  />
+                  <Input
+                    className="pl-9"
+                    placeholder="Search contacts by name, email, or company..."
+                    value={contactSearch}
+                    onChange={(e) => setContactSearch(e.target.value)}
+                    autoFocus
+                  />
+                </div>
+                <div className="max-h-[360px] overflow-y-auto rounded-xl border border-border/50 divide-y divide-border/50">
+                  {addableContacts.length === 0 ? (
+                    <p className="p-4 text-sm text-muted-foreground text-center">
+                      No matching contacts.
+                    </p>
+                  ) : (
+                    addableContacts.map((c) => (
+                      <button
+                        key={c.id}
+                        onClick={() => addContactToPipeline(c)}
+                        className="w-full flex items-center gap-3 p-3 hover:bg-muted/40 transition-colors text-left"
+                      >
+                        <div
+                          className="flex h-9 w-9 items-center justify-center rounded-lg text-xs font-bold text-white shrink-0"
+                          style={{ background: "#2E37FE" }}
+                        >
+                          {(c.company_name || c.email).charAt(0).toUpperCase()}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium truncate">
+                            {c.company_name || displayName(c)}
+                          </p>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {displayName(c)} · {c.email}
+                          </p>
+                        </div>
+                        <Plus size={16} className="text-[#2E37FE] shrink-0" />
+                      </button>
+                    ))
+                  )}
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Don&apos;t see them?{" "}
+                  <Link href="/admin/contacts" className="text-[#2E37FE] hover:underline">
+                    Create a contact
+                  </Link>{" "}
+                  first.
+                </p>
+              </>
+            )}
           </div>
         </DialogContent>
       </Dialog>

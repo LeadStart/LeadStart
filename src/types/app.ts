@@ -173,24 +173,9 @@ export interface StepHealthAlert {
   severity: "warning" | "critical";
 }
 
-// CRM / Prospects
+// CRM / Pipeline stages — pipeline state lives on `contacts` (no separate prospects table).
+// A contact is "in the pipeline" when pipeline_stage is non-null.
 export type ProspectStage = "lead" | "contacted" | "meeting" | "proposal" | "closed" | "lost";
-
-export interface Prospect {
-  id: string;
-  organization_id: string;
-  company_name: string;
-  contact_name: string | null;
-  contact_email: string | null;
-  contact_phone: string | null;
-  website: string | null;
-  industry: string | null;
-  stage: ProspectStage;
-  deal_notes: string | null;
-  follow_up_date: string | null;
-  created_at: string;
-  updated_at: string;
-}
 
 export interface WebhookEvent {
   id: string;
@@ -225,6 +210,12 @@ export interface Contact {
   status: ContactStatus;
   source: string | null;
   notes: string | null;
+  // Pipeline state — null means "not in the pipeline"
+  pipeline_stage: ProspectStage | null;
+  pipeline_sort_order: number;
+  pipeline_notes: string | null;
+  pipeline_follow_up_date: string | null;
+  pipeline_added_at: string | null;
   created_at: string;
   updated_at: string;
 }
