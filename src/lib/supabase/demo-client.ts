@@ -16,6 +16,11 @@ import {
   MOCK_PROSPECTS,
   MOCK_STEP_METRICS,
   MOCK_CLIENT_USERS,
+  MOCK_PRICING_PLANS,
+  MOCK_QUOTES,
+  MOCK_CLIENT_SUBSCRIPTIONS,
+  MOCK_BILLING_INVOICES,
+  MOCK_PAYMENT_LINKS,
 } from "@/lib/mock-data";
 
 type MockRow = Record<string, unknown>;
@@ -32,13 +37,24 @@ const TABLES: Record<string, MockRow[]> = {
   prospects: MOCK_PROSPECTS as unknown as MockRow[],
   campaign_step_metrics: MOCK_STEP_METRICS as unknown as MockRow[],
   client_users: MOCK_CLIENT_USERS as unknown as MockRow[],
+  pricing_plans: MOCK_PRICING_PLANS as unknown as MockRow[],
+  quotes: MOCK_QUOTES as unknown as MockRow[],
+  client_subscriptions: MOCK_CLIENT_SUBSCRIPTIONS as unknown as MockRow[],
+  billing_invoices: MOCK_BILLING_INVOICES as unknown as MockRow[],
+  payment_links: MOCK_PAYMENT_LINKS as unknown as MockRow[],
+  stripe_events: [],
 };
 
 type QueryResult = { data: MockRow[]; error: null };
+type Operation = "select" | "insert" | "upsert" | "update" | "delete";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 interface QueryBuilder {
   select: (columns?: string) => QueryBuilder;
+  insert: (row: MockRow | MockRow[]) => QueryBuilder;
+  upsert: (row: MockRow | MockRow[], opts?: { onConflict?: string }) => QueryBuilder;
+  update: (updates: Partial<MockRow>) => QueryBuilder;
+  delete: () => QueryBuilder;
   eq: (col: string, val: unknown) => QueryBuilder;
   in: (col: string, vals: unknown[]) => QueryBuilder;
   gte: (col: string, val: unknown) => QueryBuilder;
@@ -53,14 +69,99 @@ interface QueryBuilder {
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
 function createQueryBuilder(tableName: string): QueryBuilder {
-  let rows = [...(TABLES[tableName] || [])];
   const filters: Array<(r: MockRow[]) => MockRow[]> = [];
   let limitN: number | null = null;
   let orderCol: string | null = null;
   let orderAsc = true;
+  let op: Operation = "select";
+  let insertPayload: MockRow[] = [];
+  let updatePayload: Partial<MockRow> = {};
+  let upsertConflictKey: string = "id";
+
+  function resolveResult(): MockRow[] {
+    if (!TABLES[tableName]) TABLES[tableName] = [];
+    const table = TABLES[tableName];
+
+    if (op === "insert") {
+      table.push(...insertPayload);
+      return [...insertPayload];
+    }
+
+    if (op === "upsert") {
+      const results: MockRow[] = [];
+      for (const row of insertPayload) {
+        const conflictVal = row[upsertConflictKey];
+        const existingIdx = table.findIndex(
+          (r) => r[upsertConflictKey] === conflictVal,
+        );
+        if (existingIdx >= 0) {
+          Object.assign(table[existingIdx], row, {
+            updated_at: new Date().toISOString(),
+          });
+          results.push(table[existingIdx]);
+        } else {
+          table.push(row);
+          results.push(row);
+        }
+      }
+      return results;
+    }
+
+    if (op === "update") {
+      let matches = [...table];
+      for (const fn of filters) matches = fn(matches);
+      for (const row of matches) {
+        Object.assign(row, updatePayload, { updated_at: new Date().toISOString() });
+      }
+      return matches;
+    }
+
+    if (op === "delete") {
+      let matches = [...table];
+      for (const fn of filters) matches = fn(matches);
+      const ids = new Set(matches.map((r) => r.id));
+      TABLES[tableName] = table.filter((r) => !ids.has(r.id));
+      return matches;
+    }
+
+    // select
+    let result = [...table];
+    for (const fn of filters) result = fn(result);
+    if (orderCol) {
+      const col = orderCol;
+      const asc = orderAsc;
+      result.sort((a, b) => {
+        const av = a[col] as string;
+        const bv = b[col] as string;
+        return asc ? (av < bv ? -1 : 1) : av > bv ? -1 : 1;
+      });
+    }
+    if (limitN !== null) result = result.slice(0, limitN);
+    return result;
+  }
 
   const builder: QueryBuilder = {
     select() {
+      return builder;
+    },
+    insert(row: MockRow | MockRow[]) {
+      op = "insert";
+      insertPayload = Array.isArray(row) ? [...row] : [row];
+      return builder;
+    },
+    upsert(row: MockRow | MockRow[], opts?: { onConflict?: string }) {
+      op = "upsert";
+      insertPayload = Array.isArray(row) ? [...row] : [row];
+      upsertConflictKey = opts?.onConflict || "id";
+      return builder;
+    },
+    update(updates: Partial<MockRow>) {
+      op = "update";
+      updatePayload = updates;
+      return builder;
+    },
+    delete() {
+      op = "delete";
       return builder;
     },
     eq(col: string, val: unknown) {
@@ -89,25 +190,12 @@ function createQueryBuilder(tableName: string): QueryBuilder {
       return builder;
     },
     async single() {
-      let result = [...rows];
-      for (const fn of filters) result = fn(result);
+      const result = resolveResult();
       return { data: result[0] || null, error: null };
     },
     [Symbol.toStringTag]: "QueryBuilder" as const,
     then(onfulfilled?: (value: QueryResult) => unknown) {
-      let result = [...rows];
-      for (const fn of filters) result = fn(result);
-      if (orderCol) {
-        const col = orderCol;
-        const asc = orderAsc;
-        result.sort((a, b) => {
-          const av = a[col] as string;
-          const bv = b[col] as string;
-          return asc ? (av < bv ? -1 : 1) : av > bv ? -1 : 1;
-        });
-      }
-      if (limitN !== null) result = result.slice(0, limitN);
-      const value: QueryResult = { data: result, error: null };
+      const value: QueryResult = { data: resolveResult(), error: null };
       return Promise.resolve(onfulfilled ? onfulfilled(value) : value);
     },
     catch() {

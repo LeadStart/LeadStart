@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,274 +12,1259 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
-  MOCK_BILLING,
-  BILLING_PLANS,
-  type BillingClient,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  MOCK_PRICING_PLANS,
+  MOCK_QUOTES,
+  MOCK_CLIENT_SUBSCRIPTIONS,
+  MOCK_BILLING_INVOICES,
+  MOCK_CLIENTS,
 } from "@/lib/mock-data";
-import { CreditCard, DollarSign, Users, TrendingUp, CheckCircle, Link as LinkIcon, Repeat } from "lucide-react";
+import { appUrl } from "@/lib/api-url";
+import { QuoteLayout } from "@/components/billing/quote-layout";
+import type {
+  PricingPlan,
+  Quote,
+  QuoteStatus,
+  SubscriptionStatus,
+  InvoiceStatus,
+  Client,
+  ClientSubscription,
+} from "@/types/app";
+import {
+  CreditCard,
+  DollarSign,
+  Users,
+  TrendingUp,
+  CheckCircle,
+  FileText,
+  Receipt,
+  Layers,
+  ExternalLink,
+  Pencil,
+  Plus,
+  X,
+} from "lucide-react";
 import { StatCard } from "@/components/charts/stat-card";
 
-function StatusBadge({ status }: { status: BillingClient["status"] }) {
-  const styles: Record<string, string> = {
+// ---------- helpers ----------
+function formatCents(cents: number): string {
+  const dollars = cents / 100;
+  return dollars % 1 === 0
+    ? `$${dollars.toLocaleString()}`
+    : `$${dollars.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function centsToDollarInput(cents: number): string {
+  return (cents / 100).toString();
+}
+
+function dollarInputToCents(input: string): number {
+  const n = parseFloat(input);
+  if (!Number.isFinite(n) || n < 0) return 0;
+  return Math.round(n * 100);
+}
+
+function clientName(clientId: string, clients: Client[]): string {
+  return clients.find((c) => c.id === clientId)?.name ?? "Unknown";
+}
+
+function planName(planId: string | null, plans: PricingPlan[]): string {
+  if (!planId) return "Custom";
+  return plans.find((p) => p.id === planId)?.name ?? "Unknown";
+}
+
+// ---------- status badges ----------
+function SubStatusBadge({ status }: { status: SubscriptionStatus }) {
+  const styles: Record<SubscriptionStatus, string> = {
     active: "badge-green",
     trialing: "badge-blue",
     past_due: "badge-red",
     canceled: "badge-slate",
+    incomplete: "badge-amber",
+    paused: "badge-slate",
+  };
+  const labels: Record<SubscriptionStatus, string> = {
+    active: "active",
+    trialing: "warming",
+    past_due: "past due",
+    canceled: "canceled",
+    incomplete: "incomplete",
+    paused: "paused",
   };
   return (
     <Badge variant="secondary" className={styles[status] || ""}>
-      {status.replace("_", " ")}
+      {labels[status] || status.replace("_", " ")}
     </Badge>
   );
 }
 
-function InvoiceStatusBadge({ status }: { status: string }) {
-  const styles: Record<string, string> = {
+function InvoiceStatusBadge({ status }: { status: InvoiceStatus }) {
+  const styles: Record<InvoiceStatus, string> = {
     paid: "badge-green",
     open: "badge-amber",
-    past_due: "badge-red",
+    uncollectible: "badge-red",
     void: "badge-slate",
+    draft: "badge-slate",
   };
   return (
     <Badge variant="secondary" className={styles[status] || ""}>
-      {status.replace("_", " ")}
+      {status}
     </Badge>
   );
 }
 
+function QuoteStatusBadge({ status }: { status: QuoteStatus }) {
+  const styles: Record<QuoteStatus, string> = {
+    accepted: "badge-green",
+    sent: "badge-blue",
+    viewed: "badge-blue",
+    draft: "badge-slate",
+    declined: "badge-red",
+    expired: "badge-slate",
+    canceled: "badge-slate",
+  };
+  return (
+    <Badge variant="secondary" className={styles[status] || ""}>
+      {status}
+    </Badge>
+  );
+}
+
+// ---------- Plan edit dialog ----------
+function PlanEditDialog({
+  plan,
+  open,
+  onOpenChange,
+  onSave,
+}: {
+  plan: PricingPlan | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSave: (id: string, updates: Partial<PricingPlan>) => Promise<void>;
+}) {
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [monthlyDollars, setMonthlyDollars] = useState("0");
+  const [features, setFeatures] = useState<string[]>([]);
+  const [scopeTemplate, setScopeTemplate] = useState("");
+  const [active, setActive] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (plan) {
+      setName(plan.name);
+      setDescription(plan.description ?? "");
+      setMonthlyDollars(centsToDollarInput(plan.monthly_price_cents));
+      setFeatures([...plan.features]);
+      setScopeTemplate(plan.scope_template ?? "");
+      setActive(plan.active);
+    }
+  }, [plan]);
+
+  async function handleSave() {
+    if (!plan) return;
+    setSaving(true);
+    try {
+      await onSave(plan.id, {
+        name,
+        description: description || null,
+        monthly_price_cents: dollarInputToCents(monthlyDollars),
+        features: features.filter((f) => f.trim().length > 0),
+        scope_template: scopeTemplate || null,
+        active,
+      });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!plan) return null;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="w-[92vw] max-w-xl max-h-[88vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Edit plan: {plan.name}</DialogTitle>
+          <DialogDescription>
+            Changes save to the database now. Stripe Product/Price records will
+            be created or updated once Stripe is wired in commit #3.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 pb-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="plan-name">Name</Label>
+              <Input
+                id="plan-name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="plan-price">Monthly price (USD)</Label>
+              <div className="relative">
+                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                  $
+                </span>
+                <Input
+                  id="plan-price"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  className="pl-6"
+                  value={monthlyDollars}
+                  onChange={(e) => setMonthlyDollars(e.target.value)}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="plan-desc">Short description</Label>
+            <Input
+              id="plan-desc"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Shown below the plan name in the client quote."
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <Label>Features</Label>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="text-xs"
+                onClick={() => setFeatures([...features, ""])}
+              >
+                <Plus size={12} className="mr-1" />
+                Add feature
+              </Button>
+            </div>
+            <div className="space-y-2">
+              {features.length === 0 && (
+                <p className="text-xs text-muted-foreground">
+                  No features yet. Click <strong>Add feature</strong>.
+                </p>
+              )}
+              {features.map((feat, idx) => (
+                <div key={idx} className="flex items-center gap-2">
+                  <Input
+                    value={feat}
+                    onChange={(e) => {
+                      const next = [...features];
+                      next[idx] = e.target.value;
+                      setFeatures(next);
+                    }}
+                    placeholder={`Feature ${idx + 1}`}
+                  />
+                  <Button
+                    type="button"
+                    size="icon-sm"
+                    variant="ghost"
+                    onClick={() =>
+                      setFeatures(features.filter((_, i) => i !== idx))
+                    }
+                  >
+                    <X size={14} />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="plan-scope">Scope template (pre-fills new quotes)</Label>
+            <Textarea
+              id="plan-scope"
+              value={scopeTemplate}
+              onChange={(e) => setScopeTemplate(e.target.value)}
+              rows={4}
+              placeholder="One scope item per line. Used as the default Scope of Work on new quotes."
+            />
+          </div>
+
+          <div className="flex items-center gap-2">
+            <input
+              id="plan-active"
+              type="checkbox"
+              checked={active}
+              onChange={(e) => setActive(e.target.checked)}
+              className="h-4 w-4 rounded border-input accent-[#2E37FE]"
+            />
+            <Label htmlFor="plan-active" className="cursor-pointer">
+              Active (available on new quotes)
+            </Label>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={saving}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleSave}
+            disabled={saving || !name.trim()}
+            style={{ background: "#2E37FE" }}
+          >
+            {saving ? "Saving…" : "Save changes"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ---------- New quote dialog ----------
+type QuoteDraft = {
+  client_id: string;
+  plan_id: string | null;
+  plan_name_snapshot: string;
+  monthly_price_cents: number;
+  setup_fee_cents: number;
+  currency: string;
+  scope_of_work: string;
+  terms: string;
+  sent_to_email: string;
+  expires_at: string;
+};
+
+const DEFAULT_TERMS =
+  "Auto-charged monthly via Stripe after the 14-day warming period. Net 0.";
+
+function defaultExpiry(): string {
+  return new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+    .toISOString()
+    .split("T")[0];
+}
+
+// ---------- New quote dialog ----------
+function NewQuoteDialog({
+  open,
+  onOpenChange,
+  onCreate,
+  clients,
+  plans,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onCreate: (draft: QuoteDraft, sendNow: boolean) => Promise<void>;
+  clients: Client[];
+  plans: PricingPlan[];
+}) {
+  const [contactId, setContactId] = useState<string>("");
+  const [planId, setPlanId] = useState<string>("custom");
+  const [planNameSnapshot, setPlanNameSnapshot] = useState("");
+  const [monthlyDollars, setMonthlyDollars] = useState("0");
+  const [setupDollars, setSetupDollars] = useState("0");
+  const [scope, setScope] = useState("");
+  const [terms, setTerms] = useState(DEFAULT_TERMS);
+  const [recipientEmail, setRecipientEmail] = useState("");
+  const [expiresAt, setExpiresAt] = useState(defaultExpiry());
+  const [submitting, setSubmitting] = useState(false);
+  const [previewMode, setPreviewMode] = useState(false);
+
+  // Reset form when dialog opens
+  useEffect(() => {
+    if (open) {
+      setContactId("");
+      setPlanId("custom");
+      setPlanNameSnapshot("Custom");
+      setMonthlyDollars("0");
+      setSetupDollars("0");
+      setScope("");
+      setTerms(DEFAULT_TERMS);
+      setRecipientEmail("");
+      setExpiresAt(defaultExpiry());
+      setPreviewMode(false);
+    }
+  }, [open]);
+
+  function handleContactChange(id: string) {
+    setContactId(id);
+    const c = clients.find((cl) => cl.id === id);
+    if (c?.contact_email) setRecipientEmail(c.contact_email);
+  }
+
+  function handlePlanChange(id: string) {
+    setPlanId(id);
+    if (id === "custom") {
+      setPlanNameSnapshot("Custom");
+      return;
+    }
+    const p = plans.find((pl) => pl.id === id);
+    if (p) {
+      setPlanNameSnapshot(p.name);
+      setMonthlyDollars(centsToDollarInput(p.monthly_price_cents));
+      if (p.scope_template) setScope(p.scope_template);
+    }
+  }
+
+  async function handleSubmit(sendNow: boolean) {
+    if (!contactId) return;
+    setSubmitting(true);
+    try {
+      await onCreate(
+        {
+          client_id: contactId,
+          plan_id: planId === "custom" ? null : planId,
+          plan_name_snapshot: planNameSnapshot || "Custom",
+          monthly_price_cents: dollarInputToCents(monthlyDollars),
+          setup_fee_cents: dollarInputToCents(setupDollars),
+          currency: "usd",
+          scope_of_work: scope,
+          terms: terms,
+          sent_to_email: recipientEmail,
+          expires_at: new Date(expiresAt).toISOString(),
+        },
+        sendNow,
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  const canSubmit = contactId.length > 0 && planNameSnapshot.trim().length > 0;
+  const canSend = canSubmit && recipientEmail.trim().length > 0;
+  const selectedContact = clients.find((c) => c.id === contactId);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="w-[95vw] sm:w-[92vw] max-w-2xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
+        <DialogHeader>
+          <DialogTitle>
+            {previewMode ? "Preview quote" : "New quote"}
+          </DialogTitle>
+          <DialogDescription>
+            {previewMode
+              ? "This is exactly what the recipient will see at their signed URL."
+              : "Formal proposal for a contact. Save as a draft to keep editing, or send to email the signed URL."}
+          </DialogDescription>
+        </DialogHeader>
+
+        {previewMode ? (
+          <QuoteLayout
+            quoteNumber={`Q-${new Date().getFullYear()}-NEW`}
+            isDraft
+            contactName={selectedContact?.name || "(no contact selected)"}
+            contactEmail={recipientEmail}
+            planNameSnapshot={planNameSnapshot}
+            monthlyCents={dollarInputToCents(monthlyDollars)}
+            setupCents={dollarInputToCents(setupDollars)}
+            scope={scope}
+            terms={terms}
+            expiresAt={expiresAt}
+            trailingSlot={
+              <div className="rounded-xl border border-dashed border-[#2E37FE]/30 bg-[#2E37FE]/5 p-4 text-xs text-muted-foreground">
+                Once sent, the recipient sees this exact layout at a signed URL
+                with an <strong>Accept &amp; pay</strong> button that opens
+                Stripe Checkout.
+              </div>
+            }
+          />
+        ) : (
+          <div className="space-y-4 pb-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Contact</Label>
+                <Select value={contactId} onValueChange={handleContactChange}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Pick a contact" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {clients.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Plan</Label>
+                <Select value={planId} onValueChange={handlePlanChange}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Pick a plan" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {plans
+                      .filter((p) => p.active)
+                      .map((p) => (
+                        <SelectItem key={p.id} value={p.id}>
+                          {p.name} — {formatCents(p.monthly_price_cents)}/mo
+                        </SelectItem>
+                      ))}
+                    <SelectItem value="custom">Custom (no template)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="q-plan-name">Plan name on quote</Label>
+              <Input
+                id="q-plan-name"
+                value={planNameSnapshot}
+                onChange={(e) => setPlanNameSnapshot(e.target.value)}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="q-monthly">Monthly (USD)</Label>
+                <div className="relative">
+                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                    $
+                  </span>
+                  <Input
+                    id="q-monthly"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    className="pl-6"
+                    value={monthlyDollars}
+                    onChange={(e) => setMonthlyDollars(e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="q-setup">Setup fee (USD)</Label>
+                <div className="relative">
+                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                    $
+                  </span>
+                  <Input
+                    id="q-setup"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    className="pl-6"
+                    value={setupDollars}
+                    onChange={(e) => setSetupDollars(e.target.value)}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="q-scope">Scope of work</Label>
+              <Textarea
+                id="q-scope"
+                value={scope}
+                onChange={(e) => setScope(e.target.value)}
+                rows={4}
+                placeholder="One scope item per line."
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="q-terms">Terms</Label>
+              <Textarea
+                id="q-terms"
+                value={terms}
+                onChange={(e) => setTerms(e.target.value)}
+                rows={2}
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="q-email">Send to email</Label>
+                <Input
+                  id="q-email"
+                  type="email"
+                  value={recipientEmail}
+                  onChange={(e) => setRecipientEmail(e.target.value)}
+                  placeholder="Auto-fills from selected contact"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="q-expires">Quote expires</Label>
+                <Input
+                  id="q-expires"
+                  type="date"
+                  value={expiresAt}
+                  onChange={(e) => setExpiresAt(e.target.value)}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        <DialogFooter className="gap-2 flex-col sm:flex-row">
+          {previewMode ? (
+            <Button
+              variant="outline"
+              onClick={() => setPreviewMode(false)}
+              disabled={submitting}
+              className="w-full sm:w-auto"
+            >
+              ← Back to edit
+            </Button>
+          ) : (
+            <>
+              <Button
+                variant="outline"
+                onClick={() => onOpenChange(false)}
+                disabled={submitting}
+                className="w-full sm:w-auto"
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setPreviewMode(true)}
+                disabled={!canSubmit}
+                className="w-full sm:w-auto"
+              >
+                View draft
+              </Button>
+            </>
+          )}
+          <Button
+            variant="outline"
+            onClick={() => handleSubmit(false)}
+            disabled={submitting || !canSubmit}
+            className="w-full sm:w-auto"
+          >
+            Save as draft
+          </Button>
+          <Button
+            onClick={() => handleSubmit(true)}
+            disabled={submitting || !canSend}
+            style={{ background: "#2E37FE" }}
+            className="w-full sm:w-auto"
+          >
+            {submitting ? "Sending…" : "Send now"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ---------- Page ----------
 export default function BillingPage() {
-  const [selectedClient, setSelectedClient] = useState<string | null>(null);
-  const billing = MOCK_BILLING;
+  const [plans, setPlans] = useState<PricingPlan[]>(MOCK_PRICING_PLANS);
+  const [quotes, setQuotes] = useState<Quote[]>(MOCK_QUOTES);
+  const [subscriptions, setSubscriptions] = useState<ClientSubscription[]>(
+    MOCK_CLIENT_SUBSCRIPTIONS,
+  );
+  const invoices = MOCK_BILLING_INVOICES;
+  const clients = MOCK_CLIENTS;
 
-  const totalMRR = billing
-    .filter((b) => b.status === "active" || b.status === "trialing")
-    .reduce((sum, b) => sum + b.monthlyRate, 0);
-  const activeSubscriptions = billing.filter((b) => b.status === "active").length;
-  const trialCount = billing.filter((b) => b.status === "trialing").length;
-  const totalCollected = billing.flatMap((b) => b.invoices).filter((i) => i.status === "paid").reduce((sum, i) => sum + i.amount, 0);
+  const [editingPlan, setEditingPlan] = useState<PricingPlan | null>(null);
+  const [newQuoteOpen, setNewQuoteOpen] = useState(false);
+  const [cancelingSub, setCancelingSub] = useState<ClientSubscription | null>(
+    null,
+  );
+  const [cancelSubmitting, setCancelSubmitting] = useState(false);
+  const [portalSentFor, setPortalSentFor] = useState<string | null>(null);
+  const [portalSending, setPortalSending] = useState<string | null>(null);
+  const [selectedTab, setSelectedTab] = useState<string>("subscriptions");
 
-  const selectedBilling = selectedClient
-    ? billing.find((b) => b.clientId === selectedClient)
-    : null;
+  async function savePlan(id: string, updates: Partial<PricingPlan>) {
+    const res = await fetch(appUrl(`/api/billing/plans/${id}`), {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(updates),
+    });
+    if (!res.ok) {
+      const { error } = await res.json().catch(() => ({ error: "save failed" }));
+      throw new Error(error);
+    }
+    const { plan: updated } = (await res.json()) as { plan: PricingPlan };
+    setPlans((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, ...updated } : p)),
+    );
+    setEditingPlan(null);
+  }
+
+  async function handleSendPortal(clientId: string) {
+    setPortalSending(clientId);
+    try {
+      const res = await fetch(appUrl("/api/billing/portal"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ client_id: clientId, email: true }),
+      });
+      if (!res.ok) {
+        const { error } = await res
+          .json()
+          .catch(() => ({ error: "Portal failed" }));
+        throw new Error(error);
+      }
+      setPortalSentFor(clientId);
+      setTimeout(() => setPortalSentFor(null), 2500);
+    } finally {
+      setPortalSending(null);
+    }
+  }
+
+  async function handleCancelSub(subId: string) {
+    setCancelSubmitting(true);
+    try {
+      const res = await fetch(
+        appUrl(`/api/billing/subscriptions/${subId}/cancel`),
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+      if (!res.ok) {
+        const { error } = await res.json().catch(() => ({ error: "cancel failed" }));
+        throw new Error(error);
+      }
+      setSubscriptions((prev) =>
+        prev.map((s) =>
+          s.id === subId ? { ...s, cancel_at_period_end: true } : s,
+        ),
+      );
+      setCancelingSub(null);
+    } finally {
+      setCancelSubmitting(false);
+    }
+  }
+
+  async function createQuote(draft: QuoteDraft, sendNow: boolean) {
+    const res = await fetch(appUrl("/api/billing/quotes"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...draft,
+        send_now: sendNow,
+      }),
+    });
+    if (!res.ok) {
+      const { error } = await res.json().catch(() => ({ error: "save failed" }));
+      throw new Error(error);
+    }
+    const { quote } = (await res.json()) as { quote: Quote };
+    setQuotes((prev) => [quote, ...prev]);
+    setNewQuoteOpen(false);
+    setSelectedTab("quotes");
+  }
+
+  // KPIs
+  const mrrCents = subscriptions
+    .filter((s) => s.status === "active" || s.status === "trialing")
+    .reduce((sum, s) => {
+      const plan = plans.find((p) => p.id === s.plan_id);
+      return sum + (plan?.monthly_price_cents ?? 0);
+    }, 0);
+
+  const activeCount = subscriptions.filter((s) => s.status === "active").length;
+  const warmingCount = subscriptions.filter(
+    (s) => s.status === "trialing",
+  ).length;
+  const totalCollectedCents = invoices
+    .filter((i) => i.status === "paid")
+    .reduce((sum, i) => sum + i.amount_paid_cents, 0);
+
+  const pendingQuotesCount = quotes.filter(
+    (q) => q.status === "sent" || q.status === "viewed",
+  ).length;
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="relative overflow-hidden rounded-[20px] p-5 sm:p-7 text-[#0f172a]" style={{ background: 'linear-gradient(135deg, #EDEEFF 0%, #D1D3FF 50%, #fff 100%)', border: '1px solid rgba(46,55,254,0.2)', borderTop: '1px solid rgba(46,55,254,0.3)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.9), 0 4px 14px rgba(46,55,254,0.1)' }}>
+      <div
+        className="relative overflow-hidden rounded-[20px] p-5 sm:p-7 text-[#0f172a]"
+        style={{
+          background:
+            "linear-gradient(135deg, #EDEEFF 0%, #D1D3FF 50%, #fff 100%)",
+          border: "1px solid rgba(46,55,254,0.2)",
+          borderTop: "1px solid rgba(46,55,254,0.3)",
+          boxShadow:
+            "inset 0 1px 0 rgba(255,255,255,0.9), 0 4px 14px rgba(46,55,254,0.1)",
+        }}
+      >
         <div className="relative z-10 flex items-center justify-between">
           <div>
-            <p className="text-xs font-medium text-[#64748b]">Revenue & Billing</p>
-            <h1 className="text-[20px] sm:text-[22px] font-bold mt-1" style={{ color: '#0f172a', letterSpacing: '-0.01em' }}>Billing & Subscriptions</h1>
+            <p className="text-xs font-medium text-[#64748b]">
+              Revenue & Billing
+            </p>
+            <h1
+              className="text-[20px] sm:text-[22px] font-bold mt-1"
+              style={{ color: "#0f172a", letterSpacing: "-0.01em" }}
+            >
+              Billing & Subscriptions
+            </h1>
           </div>
-          <Badge variant="secondary" className="bg-white/15 text-[#0f172a] border-0">
-            Stripe: Placeholder
+          <Badge
+            variant="secondary"
+            className="bg-white/15 text-[#0f172a] border-0"
+          >
+            Stripe: Test mode
           </Badge>
         </div>
         <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-[rgba(107,114,255,0.06)]" />
       </div>
 
-      {/* Revenue Overview */}
+      {/* KPIs */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           label="Monthly Revenue"
-          value={`$${totalMRR.toLocaleString()}`}
+          value={formatCents(mrrCents)}
           icon={<DollarSign size={18} className="text-emerald-500" />}
           iconBg="bg-emerald-50"
           valueColor="text-emerald-600"
         />
         <StatCard
           label="Active Subs"
-          value={activeSubscriptions}
+          value={activeCount}
           icon={<Users size={18} className="text-[#2E37FE]" />}
           iconBg="bg-[#2E37FE]/10"
         />
         <StatCard
-          label="In Trial"
-          value={trialCount}
+          label="Warming"
+          value={warmingCount}
           icon={<TrendingUp size={18} className="text-blue-500" />}
           iconBg="bg-blue-50"
           valueColor="text-blue-600"
         />
         <StatCard
           label="Total Collected"
-          value={`$${totalCollected.toLocaleString()}`}
+          value={formatCents(totalCollectedCents)}
           icon={<CreditCard size={18} className="text-amber-500" />}
           iconBg="bg-amber-50"
         />
       </div>
 
-      {/* Pricing Plans */}
-      <Card className="border-border/50 shadow-sm">
-        <CardHeader className="flex flex-row items-center gap-2 pb-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]/10">
-            <CreditCard size={16} className="text-[#2E37FE]" />
+      {/* Tabs */}
+      <Tabs value={selectedTab} onValueChange={setSelectedTab}>
+        <TabsList>
+          <TabsTrigger value="plans">
+            <Layers size={14} />
+            Plans
+            <span className="ml-1 text-xs text-muted-foreground">
+              ({plans.length})
+            </span>
+          </TabsTrigger>
+          <TabsTrigger value="quotes">
+            <FileText size={14} />
+            Quotes
+            {pendingQuotesCount > 0 && (
+              <span className="ml-1 text-xs text-[#2E37FE]">
+                ({pendingQuotesCount} pending)
+              </span>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="subscriptions">
+            <Users size={14} />
+            Subscriptions
+            <span className="ml-1 text-xs text-muted-foreground">
+              ({subscriptions.length})
+            </span>
+          </TabsTrigger>
+          <TabsTrigger value="invoices">
+            <Receipt size={14} />
+            Invoices
+            <span className="ml-1 text-xs text-muted-foreground">
+              ({invoices.length})
+            </span>
+          </TabsTrigger>
+        </TabsList>
+
+        {/* Plans */}
+        <TabsContent value="plans" className="space-y-4">
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-muted-foreground">
+              Click a plan card to edit. Changes sync to Stripe once wired.
+            </p>
+            <Button size="sm" disabled style={{ background: "#2E37FE" }}>
+              <Plus size={14} className="mr-1" />
+              New plan
+            </Button>
           </div>
-          <CardTitle className="text-base">Plans</CardTitle>
-        </CardHeader>
-        <CardContent>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            {BILLING_PLANS.map((plan) => {
-              const subscriberCount = billing.filter(
-                (b) => b.plan === plan.id
+            {plans.map((plan) => {
+              const subCount = subscriptions.filter(
+                (s) => s.plan_id === plan.id,
               ).length;
               return (
-                <Card
+                <button
                   key={plan.id}
-                  className="transition-all hover:border-[#2E37FE]/30 hover:shadow-md"
+                  type="button"
+                  onClick={() => setEditingPlan(plan)}
+                  className="text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2E37FE] rounded-xl"
                 >
-                <CardContent className="p-5 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h3 className="font-semibold text-lg">{plan.name}</h3>
-                    <Badge variant="secondary" className="bg-[#2E37FE]/20 text-[#6B72FF] border border-[#2E37FE]/20">
-                      {subscriberCount} client{subscriberCount !== 1 ? "s" : ""}
-                    </Badge>
-                  </div>
-                  <p className="text-3xl font-bold">
-                    ${plan.price}
-                    <span className="text-sm font-normal text-muted-foreground">/mo</span>
-                  </p>
-                  <ul className="space-y-1.5">
-                    {plan.features.map((f) => (
-                      <li key={f} className="text-sm text-muted-foreground flex items-center gap-2">
-                        <CheckCircle size={13} className="text-emerald-500 shrink-0" />
-                        {f}
-                      </li>
-                    ))}
-                  </ul>
-                </CardContent>
-                </Card>
+                  <Card
+                    className={`group transition-all hover:border-[#2E37FE]/40 hover:shadow-md cursor-pointer ${!plan.active ? "opacity-60" : ""}`}
+                  >
+                    <CardContent className="p-5 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-semibold text-lg">{plan.name}</h3>
+                          <Pencil
+                            size={13}
+                            className="text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
+                          />
+                        </div>
+                        <Badge
+                          variant="secondary"
+                          className="bg-[#2E37FE]/20 text-[#6B72FF] border border-[#2E37FE]/20"
+                        >
+                          {subCount} client{subCount !== 1 ? "s" : ""}
+                        </Badge>
+                      </div>
+                      {plan.description && (
+                        <p className="text-xs text-muted-foreground">
+                          {plan.description}
+                        </p>
+                      )}
+                      <p className="text-3xl font-bold">
+                        {formatCents(plan.monthly_price_cents)}
+                        <span className="text-sm font-normal text-muted-foreground">
+                          /mo
+                        </span>
+                      </p>
+                      <ul className="space-y-1.5">
+                        {plan.features.map((f, i) => (
+                          <li
+                            key={`${plan.id}-${i}`}
+                            className="text-sm text-muted-foreground flex items-center gap-2"
+                          >
+                            <CheckCircle
+                              size={13}
+                              className="text-emerald-500 shrink-0"
+                            />
+                            {f}
+                          </li>
+                        ))}
+                      </ul>
+                      {!plan.active && (
+                        <Badge variant="secondary" className="badge-slate">
+                          Archived
+                        </Badge>
+                      )}
+                    </CardContent>
+                  </Card>
+                </button>
               );
             })}
           </div>
-        </CardContent>
-      </Card>
+        </TabsContent>
 
-      {/* Client Subscriptions */}
-      <div className="flex items-center gap-2 mb-3">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]/10">
-          <Repeat size={16} className="text-[#2E37FE]" />
-        </div>
-        <h2 className="text-[15px] font-semibold text-[#0f172a]">Client Subscriptions</h2>
-      </div>
-      <Card className="border-border/50 shadow-sm">
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Client</TableHead>
-                <TableHead className="hidden sm:table-cell">Plan</TableHead>
-                <TableHead className="text-right">Monthly</TableHead>
-                <TableHead className="hidden md:table-cell">Status</TableHead>
-                <TableHead className="hidden lg:table-cell">Renews</TableHead>
-                <TableHead className="hidden xl:table-cell">Stripe ID</TableHead>
-                <TableHead></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {billing.map((b) => (
-                <TableRow key={b.clientId} className="group">
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <div className="flex h-7 w-7 items-center justify-center rounded-md text-[10px] font-bold text-[#0f172a] shrink-0" style={{ background: '#2E37FE' }}>
-                        {b.clientName.charAt(0)}
-                      </div>
-                      <div className="min-w-0">
-                        <span className="font-medium block truncate">{b.clientName}</span>
-                        <span className="text-xs text-muted-foreground capitalize sm:hidden">{b.plan}</span>
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell className="capitalize hidden sm:table-cell">{b.plan}</TableCell>
-                  <TableCell className="text-right font-medium">${b.monthlyRate}</TableCell>
-                  <TableCell className="hidden md:table-cell">
-                    <StatusBadge status={b.status} />
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground hidden lg:table-cell">
-                    {new Date(b.currentPeriodEnd).toLocaleDateString()}
-                  </TableCell>
-                  <TableCell className="text-xs text-muted-foreground font-mono hidden xl:table-cell">
-                    {b.stripeCustomerId || "—"}
-                  </TableCell>
-                  <TableCell>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="text-xs"
-                      onClick={() =>
-                        setSelectedClient(
-                          selectedClient === b.clientId ? null : b.clientId
-                        )
-                      }
-                    >
-                      {selectedClient === b.clientId ? "Hide" : "Invoices"}
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-
-      {/* Invoice Detail */}
-      {selectedBilling && (
-        <>
-        <div className="flex items-center gap-2 mb-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold text-white" style={{ background: '#2E37FE' }}>
-            {selectedBilling.clientName.charAt(0)}
+        {/* Quotes */}
+        <TabsContent value="quotes" className="space-y-4">
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-muted-foreground">
+              Formal proposals sent to clients. Accept &amp; pay triggers a
+              Stripe Checkout.
+            </p>
+            <Button
+              size="sm"
+              style={{ background: "#2E37FE" }}
+              onClick={() => setNewQuoteOpen(true)}
+            >
+              <FileText size={14} className="mr-1" />
+              New quote
+            </Button>
           </div>
-          <h2 className="text-[15px] font-semibold text-[#0f172a]">
-            Invoices — {selectedBilling.clientName}
-          </h2>
-        </div>
-        <Card className="border-border/50 shadow-sm">
-          <CardContent>
-            {selectedBilling.invoices.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No invoices yet (client is in trial).
-              </p>
-            ) : (
+          <Card className="border-border/50 shadow-sm">
+            <CardContent>
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Invoice</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead className="text-right">Amount</TableHead>
+                    <TableHead>Quote</TableHead>
+                    <TableHead>Client</TableHead>
+                    <TableHead className="hidden sm:table-cell">Plan</TableHead>
+                    <TableHead className="text-right">Monthly</TableHead>
+                    <TableHead className="text-right hidden md:table-cell">
+                      Setup
+                    </TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead className="hidden lg:table-cell">Sent</TableHead>
                     <TableHead></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {selectedBilling.invoices.map((inv) => (
-                    <TableRow key={inv.id}>
-                      <TableCell className="font-mono text-sm">
-                        {inv.id}
+                  {quotes.length === 0 && (
+                    <TableRow>
+                      <TableCell
+                        colSpan={8}
+                        className="text-center text-sm text-muted-foreground py-8"
+                      >
+                        No quotes yet. Click <strong>New quote</strong> to draft
+                        one.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  {quotes.map((q) => (
+                    <TableRow key={q.id} className="group">
+                      <TableCell className="font-mono text-xs">
+                        {q.quote_number}
                       </TableCell>
                       <TableCell>
-                        {new Date(inv.date).toLocaleDateString()}
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="flex h-6 w-6 items-center justify-center rounded-md text-[10px] font-bold text-white shrink-0"
+                            style={{ background: "#2E37FE" }}
+                          >
+                            {clientName(q.client_id, clients).charAt(0)}
+                          </div>
+                          <span className="text-sm">
+                            {clientName(q.client_id, clients)}
+                          </span>
+                        </div>
                       </TableCell>
-                      <TableCell className="text-right font-medium">${inv.amount}</TableCell>
-                      <TableCell>
-                        <InvoiceStatusBadge status={inv.status} />
+                      <TableCell className="hidden sm:table-cell text-sm">
+                        {q.plan_name_snapshot || planName(q.plan_id, plans)}
+                      </TableCell>
+                      <TableCell className="text-right font-medium">
+                        {formatCents(q.monthly_price_cents)}
+                      </TableCell>
+                      <TableCell className="text-right hidden md:table-cell text-sm">
+                        {q.setup_fee_cents > 0
+                          ? formatCents(q.setup_fee_cents)
+                          : "—"}
                       </TableCell>
                       <TableCell>
-                        <Button variant="ghost" size="sm" disabled className="text-xs text-muted-foreground">
-                          <LinkIcon size={12} className="mr-1" />
-                          View in Stripe
+                        <QuoteStatusBadge status={q.status} />
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground hidden lg:table-cell">
+                        {q.sent_at
+                          ? new Date(q.sent_at).toLocaleDateString()
+                          : "—"}
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled
+                          className="text-xs opacity-60"
+                        >
+                          View
                         </Button>
                       </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
-            )}
-          </CardContent>
-        </Card>
-        </>
-      )}
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-      {/* Stripe Integration Status */}
+        {/* Subscriptions */}
+        <TabsContent value="subscriptions" className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Live subscription state mirrored from Stripe.
+          </p>
+          <Card className="border-border/50 shadow-sm">
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Client</TableHead>
+                    <TableHead className="hidden sm:table-cell">Plan</TableHead>
+                    <TableHead className="text-right">Monthly</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="hidden md:table-cell">
+                      Next bill
+                    </TableHead>
+                    <TableHead className="hidden lg:table-cell">
+                      Warming ends
+                    </TableHead>
+                    <TableHead className="hidden xl:table-cell font-mono text-xs">
+                      Stripe ID
+                    </TableHead>
+                    <TableHead></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {subscriptions.map((s) => {
+                    const plan = plans.find((p) => p.id === s.plan_id);
+                    return (
+                      <TableRow key={s.id}>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <div
+                              className="flex h-7 w-7 items-center justify-center rounded-md text-[10px] font-bold text-white shrink-0"
+                              style={{ background: "#2E37FE" }}
+                            >
+                              {clientName(s.client_id, clients).charAt(0)}
+                            </div>
+                            <div className="min-w-0">
+                              <span className="font-medium block truncate">
+                                {clientName(s.client_id, clients)}
+                              </span>
+                              <span className="text-xs text-muted-foreground sm:hidden">
+                                {plan?.name}
+                              </span>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="hidden sm:table-cell text-sm">
+                          {plan?.name ?? "—"}
+                        </TableCell>
+                        <TableCell className="text-right font-medium">
+                          {plan ? formatCents(plan.monthly_price_cents) : "—"}
+                        </TableCell>
+                        <TableCell>
+                          <SubStatusBadge status={s.status} />
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground hidden md:table-cell">
+                          {s.current_period_end
+                            ? new Date(s.current_period_end).toLocaleDateString()
+                            : "—"}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground hidden lg:table-cell">
+                          {s.status === "trialing" && s.trial_end
+                            ? new Date(s.trial_end).toLocaleDateString()
+                            : "—"}
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground font-mono hidden xl:table-cell">
+                          {s.stripe_subscription_id || "—"}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            {s.status !== "canceled" && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-xs"
+                                disabled={portalSending === s.client_id}
+                                onClick={() => handleSendPortal(s.client_id)}
+                              >
+                                {portalSentFor === s.client_id
+                                  ? "Sent ✓"
+                                  : portalSending === s.client_id
+                                    ? "Sending…"
+                                    : "Portal"}
+                              </Button>
+                            )}
+                            {s.status === "canceled" ? (
+                              <span className="text-xs text-muted-foreground">
+                                Canceled
+                              </span>
+                            ) : s.cancel_at_period_end ? (
+                              <span className="text-xs text-amber-600">
+                                Ends{" "}
+                                {s.current_period_end
+                                  ? new Date(
+                                      s.current_period_end,
+                                    ).toLocaleDateString()
+                                  : "period end"}
+                              </span>
+                            ) : (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-xs text-red-600 hover:bg-red-50 hover:text-red-700"
+                                onClick={() => setCancelingSub(s)}
+                              >
+                                Cancel
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Invoices */}
+        <TabsContent value="invoices" className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            All invoices from Stripe, including paid, open, and past-due.
+          </p>
+          <Card className="border-border/50 shadow-sm">
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Invoice</TableHead>
+                    <TableHead>Client</TableHead>
+                    <TableHead className="hidden md:table-cell">Period</TableHead>
+                    <TableHead className="text-right">Amount</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="hidden lg:table-cell">Paid</TableHead>
+                    <TableHead></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {invoices.map((inv) => (
+                    <TableRow key={inv.id}>
+                      <TableCell className="font-mono text-xs">
+                        {inv.stripe_invoice_number || inv.id}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {clientName(inv.client_id, clients)}
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground hidden md:table-cell">
+                        {inv.period_start
+                          ? `${new Date(inv.period_start).toLocaleDateString()} – ${inv.period_end ? new Date(inv.period_end).toLocaleDateString() : "—"}`
+                          : "—"}
+                      </TableCell>
+                      <TableCell className="text-right font-medium">
+                        {formatCents(inv.amount_cents)}
+                      </TableCell>
+                      <TableCell>
+                        <InvoiceStatusBadge status={inv.status} />
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground hidden lg:table-cell">
+                        {inv.paid_at
+                          ? new Date(inv.paid_at).toLocaleDateString()
+                          : "—"}
+                      </TableCell>
+                      <TableCell>
+                        {inv.hosted_invoice_url ? (
+                          <a
+                            href={inv.hosted_invoice_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1 text-xs text-[#2E37FE] hover:underline"
+                          >
+                            <ExternalLink size={12} />
+                            View
+                          </a>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">
+                            —
+                          </span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+
+      {/* Stripe integration footer */}
       <Card className="border-border/50 shadow-sm">
         <CardHeader className="flex flex-row items-center gap-2 pb-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]/10">
@@ -290,41 +1275,106 @@ export default function BillingPage() {
         <CardContent className="space-y-4">
           <div className="rounded-xl border border-dashed border-[#2E37FE]/20 bg-[#2E37FE]/5 p-6 text-center space-y-3">
             <p className="text-sm text-muted-foreground">
-              Stripe integration is in <strong>placeholder mode</strong>. When
-              you&apos;re ready to go live, connect your Stripe account and billing
-              data will sync automatically.
+              Billing schema is in place; Stripe API wiring lands in the next
+              commits. Plans and data shown are mock until keys are added and
+              the webhook endpoint is live.
             </p>
             <div className="flex items-center justify-center gap-3 pt-1">
-              <Button disabled style={{ background: '#2E37FE' }}>
-                Connect Stripe Account
+              <Button disabled style={{ background: "#2E37FE" }}>
+                Connect Stripe (test)
               </Button>
               <Button variant="outline" disabled>
-                Configure Webhooks
+                Configure Webhook
               </Button>
             </div>
           </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 text-sm">
             <div className="rounded-xl border border-border/50 p-4 space-y-1">
-              <p className="font-semibold">Auto-invoicing</p>
+              <p className="font-semibold">Quote → Checkout</p>
               <p className="text-muted-foreground text-xs">
-                Clients are billed automatically on renewal date
-              </p>
-            </div>
-            <div className="rounded-xl border border-border/50 p-4 space-y-1">
-              <p className="font-semibold">Payment Links</p>
-              <p className="text-muted-foreground text-xs">
-                Send branded checkout links to new clients
+                Accept button on a quote opens a Stripe Checkout session that
+                charges the setup fee now and delays the first monthly charge
+                for the 14-day warming window.
               </p>
             </div>
             <div className="rounded-xl border border-border/50 p-4 space-y-1">
               <p className="font-semibold">Dunning</p>
               <p className="text-muted-foreground text-xs">
-                Automatic retry for failed payments
+                Stripe retries failed payments; we send a branded nudge via
+                Resend.
+              </p>
+            </div>
+            <div className="rounded-xl border border-border/50 p-4 space-y-1">
+              <p className="font-semibold">Customer Portal</p>
+              <p className="text-muted-foreground text-xs">
+                Admin emails a one-time link so the client can update card or
+                view invoices. Cancel is admin-only.
               </p>
             </div>
           </div>
         </CardContent>
       </Card>
+
+      {/* Dialogs */}
+      <PlanEditDialog
+        plan={editingPlan}
+        open={editingPlan !== null}
+        onOpenChange={(o) => !o && setEditingPlan(null)}
+        onSave={savePlan}
+      />
+      <NewQuoteDialog
+        open={newQuoteOpen}
+        onOpenChange={setNewQuoteOpen}
+        onCreate={createQuote}
+        clients={clients}
+        plans={plans}
+      />
+      <Dialog
+        open={cancelingSub !== null}
+        onOpenChange={(o) => !o && !cancelSubmitting && setCancelingSub(null)}
+      >
+        <DialogContent className="w-[95vw] max-w-md p-4 sm:p-6">
+          <DialogHeader>
+            <DialogTitle>Cancel subscription?</DialogTitle>
+            <DialogDescription>
+              {cancelingSub && (
+                <>
+                  <strong>{clientName(cancelingSub.client_id, clients)}</strong>{" "}
+                  will keep access through{" "}
+                  <strong>
+                    {cancelingSub.current_period_end
+                      ? new Date(
+                          cancelingSub.current_period_end,
+                        ).toLocaleDateString()
+                      : "the end of the current period"}
+                  </strong>
+                  . No further charges, no pro-ration refund. You can un-cancel
+                  from the Stripe dashboard before the period ends.
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 flex-col sm:flex-row">
+            <Button
+              variant="outline"
+              onClick={() => setCancelingSub(null)}
+              disabled={cancelSubmitting}
+              className="w-full sm:w-auto"
+            >
+              Keep active
+            </Button>
+            <Button
+              onClick={() =>
+                cancelingSub && handleCancelSub(cancelingSub.id)
+              }
+              disabled={cancelSubmitting}
+              className="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white"
+            >
+              {cancelSubmitting ? "Canceling…" : "Cancel at period end"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

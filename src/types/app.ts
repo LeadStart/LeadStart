@@ -44,6 +44,7 @@ export interface Client {
   report_schedule_start: string | null;
   report_last_sent_at: string | null;
   report_recipients: string[] | null;
+  stripe_customer_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -257,4 +258,129 @@ export interface Task {
   created_by: string | null;
   created_at: string;
   updated_at: string;
+}
+
+// ---------- Billing ----------
+export interface PricingPlan {
+  id: string;
+  organization_id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  features: string[];
+  monthly_price_cents: number;
+  currency: string;
+  stripe_product_id: string | null;
+  stripe_monthly_price_id: string | null;
+  scope_template: string | null;
+  active: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export type QuoteStatus =
+  | "draft"
+  | "sent"
+  | "viewed"
+  | "accepted"
+  | "declined"
+  | "expired"
+  | "canceled";
+
+export interface Quote {
+  id: string;
+  organization_id: string;
+  client_id: string;
+  quote_number: string;
+  plan_id: string | null;
+  plan_name_snapshot: string | null;
+  monthly_price_cents: number;
+  setup_fee_cents: number;
+  currency: string;
+  scope_of_work: string | null;
+  terms: string | null;
+  signed_url_hash: string;
+  status: QuoteStatus;
+  expires_at: string | null;
+  sent_at: string | null;
+  viewed_at: string | null;
+  accepted_at: string | null;
+  declined_at: string | null;
+  sent_to_email: string | null;
+  sent_by: string | null;
+  accepted_by_email: string | null;
+  accepted_ip: string | null;
+  accepted_user_agent: string | null;
+  stripe_checkout_session_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type SubscriptionStatus =
+  | "incomplete"
+  | "trialing"
+  | "active"
+  | "past_due"
+  | "canceled"
+  | "paused";
+
+export interface ClientSubscription {
+  id: string;
+  organization_id: string;
+  client_id: string;
+  plan_id: string | null;
+  quote_id: string | null;
+  stripe_customer_id: string;
+  stripe_subscription_id: string | null;
+  status: SubscriptionStatus;
+  trial_end: string | null;
+  current_period_start: string | null;
+  current_period_end: string | null;
+  cancel_at_period_end: boolean;
+  canceled_at: string | null;
+  setup_fee_cents: number | null;
+  setup_fee_paid_at: string | null;
+  warming_days_at_signup: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export type InvoiceStatus = "draft" | "open" | "paid" | "uncollectible" | "void";
+
+export interface BillingInvoice {
+  id: string; // Stripe invoice id (in_...)
+  organization_id: string;
+  client_id: string;
+  stripe_customer_id: string | null;
+  stripe_subscription_id: string | null;
+  stripe_invoice_number: string | null;
+  amount_cents: number;
+  amount_paid_cents: number;
+  amount_due_cents: number;
+  currency: string;
+  status: InvoiceStatus;
+  period_start: string | null;
+  period_end: string | null;
+  hosted_invoice_url: string | null;
+  invoice_pdf_url: string | null;
+  issued_at: string | null;
+  paid_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type PaymentLinkStatus = "pending" | "completed" | "expired" | "canceled";
+
+export interface PaymentLink {
+  id: string;
+  organization_id: string;
+  client_id: string;
+  quote_id: string | null;
+  stripe_checkout_session_id: string;
+  stripe_checkout_url: string | null;
+  status: PaymentLinkStatus;
+  created_at: string;
+  expires_at: string | null;
+  completed_at: string | null;
 }
