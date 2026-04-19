@@ -31,13 +31,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  MOCK_PRICING_PLANS,
-  MOCK_QUOTES,
-  MOCK_CLIENT_SUBSCRIPTIONS,
-  MOCK_BILLING_INVOICES,
-  MOCK_CLIENTS,
-} from "@/lib/mock-data";
 import { appUrl } from "@/lib/api-url";
 import { QuoteLayout } from "@/components/billing/quote-layout";
 import type {
@@ -48,6 +41,7 @@ import type {
   InvoiceStatus,
   Client,
   ClientSubscription,
+  BillingInvoice,
 } from "@/types/app";
 import {
   CreditCard,
@@ -149,17 +143,30 @@ function QuoteStatusBadge({ status }: { status: QuoteStatus }) {
   );
 }
 
-// ---------- Plan edit dialog ----------
+// ---------- Plan edit/create dialog ----------
+export interface PlanFormInput {
+  name: string;
+  description: string | null;
+  monthly_price_cents: number;
+  features: string[];
+  scope_template: string | null;
+  active: boolean;
+}
+
 function PlanEditDialog({
   plan,
   open,
+  mode,
   onOpenChange,
   onSave,
+  onCreate,
 }: {
   plan: PricingPlan | null;
   open: boolean;
+  mode: "edit" | "create";
   onOpenChange: (open: boolean) => void;
   onSave: (id: string, updates: Partial<PricingPlan>) => Promise<void>;
+  onCreate: (input: PlanFormInput) => Promise<void>;
 }) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -170,43 +177,60 @@ function PlanEditDialog({
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (plan) {
+    if (!open) return;
+    if (mode === "edit" && plan) {
       setName(plan.name);
       setDescription(plan.description ?? "");
       setMonthlyDollars(centsToDollarInput(plan.monthly_price_cents));
       setFeatures([...plan.features]);
       setScopeTemplate(plan.scope_template ?? "");
       setActive(plan.active);
+    } else if (mode === "create") {
+      setName("");
+      setDescription("");
+      setMonthlyDollars("0");
+      setFeatures([]);
+      setScopeTemplate("");
+      setActive(true);
     }
-  }, [plan]);
+  }, [plan, mode, open]);
 
   async function handleSave() {
-    if (!plan) return;
+    const payload: PlanFormInput = {
+      name,
+      description: description || null,
+      monthly_price_cents: dollarInputToCents(monthlyDollars),
+      features: features.filter((f) => f.trim().length > 0),
+      scope_template: scopeTemplate || null,
+      active,
+    };
     setSaving(true);
     try {
-      await onSave(plan.id, {
-        name,
-        description: description || null,
-        monthly_price_cents: dollarInputToCents(monthlyDollars),
-        features: features.filter((f) => f.trim().length > 0),
-        scope_template: scopeTemplate || null,
-        active,
-      });
+      if (mode === "edit" && plan) {
+        await onSave(plan.id, payload);
+      } else {
+        await onCreate(payload);
+      }
     } finally {
       setSaving(false);
     }
   }
 
-  if (!plan) return null;
+  if (mode === "edit" && !plan) return null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[92vw] max-w-xl max-h-[88vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Edit plan: {plan.name}</DialogTitle>
+          <DialogTitle>
+            {mode === "edit" && plan
+              ? `Edit plan: ${plan.name}`
+              : "New plan"}
+          </DialogTitle>
           <DialogDescription>
-            Changes save to the database now. Stripe Product/Price records will
-            be created or updated once Stripe is wired in commit #3.
+            {mode === "edit"
+              ? "Changes save to the database and sync to Stripe as an updated Product + Price."
+              : "Creates a new plan and a matching Stripe Product + recurring Price on save."}
           </DialogDescription>
         </DialogHeader>
 
@@ -333,7 +357,11 @@ function PlanEditDialog({
             disabled={saving || !name.trim()}
             style={{ background: "#2E37FE" }}
           >
-            {saving ? "Saving…" : "Save changes"}
+            {saving
+              ? "Saving…"
+              : mode === "edit"
+                ? "Save changes"
+                : "Create plan"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -671,15 +699,16 @@ function NewQuoteDialog({
 
 // ---------- Page ----------
 export default function BillingPage() {
-  const [plans, setPlans] = useState<PricingPlan[]>(MOCK_PRICING_PLANS);
-  const [quotes, setQuotes] = useState<Quote[]>(MOCK_QUOTES);
-  const [subscriptions, setSubscriptions] = useState<ClientSubscription[]>(
-    MOCK_CLIENT_SUBSCRIPTIONS,
-  );
-  const invoices = MOCK_BILLING_INVOICES;
-  const clients = MOCK_CLIENTS;
+  const [plans, setPlans] = useState<PricingPlan[]>([]);
+  const [quotes, setQuotes] = useState<Quote[]>([]);
+  const [subscriptions, setSubscriptions] = useState<ClientSubscription[]>([]);
+  const [invoices, setInvoices] = useState<BillingInvoice[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const [editingPlan, setEditingPlan] = useState<PricingPlan | null>(null);
+  const [creatingPlan, setCreatingPlan] = useState(false);
   const [newQuoteOpen, setNewQuoteOpen] = useState(false);
   const [cancelingSub, setCancelingSub] = useState<ClientSubscription | null>(
     null,
@@ -688,6 +717,42 @@ export default function BillingPage() {
   const [portalSentFor, setPortalSentFor] = useState<string | null>(null);
   const [portalSending, setPortalSending] = useState<string | null>(null);
   const [selectedTab, setSelectedTab] = useState<string>("subscriptions");
+
+  useEffect(() => {
+    let canceled = false;
+    (async () => {
+      try {
+        const res = await fetch(appUrl("/api/billing/data"));
+        if (!res.ok) {
+          const { error } = await res
+            .json()
+            .catch(() => ({ error: `HTTP ${res.status}` }));
+          throw new Error(error || `HTTP ${res.status}`);
+        }
+        const data = (await res.json()) as {
+          plans: PricingPlan[];
+          quotes: Quote[];
+          subscriptions: ClientSubscription[];
+          invoices: BillingInvoice[];
+          clients: Client[];
+        };
+        if (canceled) return;
+        setPlans(data.plans);
+        setQuotes(data.quotes);
+        setSubscriptions(data.subscriptions);
+        setInvoices(data.invoices);
+        setClients(data.clients);
+      } catch (err) {
+        if (canceled) return;
+        setLoadError(err instanceof Error ? err.message : "Failed to load");
+      } finally {
+        if (!canceled) setLoading(false);
+      }
+    })();
+    return () => {
+      canceled = true;
+    };
+  }, []);
 
   async function savePlan(id: string, updates: Partial<PricingPlan>) {
     const res = await fetch(appUrl(`/api/billing/plans/${id}`), {
@@ -704,6 +769,23 @@ export default function BillingPage() {
       prev.map((p) => (p.id === id ? { ...p, ...updated } : p)),
     );
     setEditingPlan(null);
+  }
+
+  async function createPlan(input: PlanFormInput) {
+    const res = await fetch(appUrl("/api/billing/plans"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    });
+    if (!res.ok) {
+      const { error } = await res
+        .json()
+        .catch(() => ({ error: "create failed" }));
+      throw new Error(error);
+    }
+    const { plan: created } = (await res.json()) as { plan: PricingPlan };
+    setPlans((prev) => [...prev, created]);
+    setCreatingPlan(false);
   }
 
   async function handleSendPortal(clientId: string) {
@@ -827,6 +909,15 @@ export default function BillingPage() {
         <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-[rgba(107,114,255,0.06)]" />
       </div>
 
+      {loading && (
+        <p className="text-sm text-muted-foreground">Loading billing data…</p>
+      )}
+      {loadError && (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          Failed to load billing data: {loadError}
+        </div>
+      )}
+
       {/* KPIs */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
@@ -898,11 +989,22 @@ export default function BillingPage() {
             <p className="text-sm text-muted-foreground">
               Click a plan card to edit. Changes sync to Stripe once wired.
             </p>
-            <Button size="sm" disabled style={{ background: "#2E37FE" }}>
+            <Button
+              size="sm"
+              style={{ background: "#2E37FE" }}
+              onClick={() => setCreatingPlan(true)}
+            >
               <Plus size={14} className="mr-1" />
               New plan
             </Button>
           </div>
+          {plans.length === 0 && (
+            <div className="rounded-xl border border-dashed border-border/60 p-8 text-center text-sm text-muted-foreground">
+              {loading
+                ? "Loading plans…"
+                : "No plans yet. Click New plan to create your first one — it'll sync to Stripe as a Product + Price on save."}
+            </div>
+          )}
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             {plans.map((plan) => {
               const subCount = subscriptions.filter(
@@ -1012,8 +1114,14 @@ export default function BillingPage() {
                         colSpan={8}
                         className="text-center text-sm text-muted-foreground py-8"
                       >
-                        No quotes yet. Click <strong>New quote</strong> to draft
-                        one.
+                        {loading ? (
+                          "Loading…"
+                        ) : (
+                          <>
+                            No quotes yet. Click <strong>New quote</strong> to
+                            draft one.
+                          </>
+                        )}
                       </TableCell>
                     </TableRow>
                   )}
@@ -1099,6 +1207,18 @@ export default function BillingPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
+                  {subscriptions.length === 0 && (
+                    <TableRow>
+                      <TableCell
+                        colSpan={8}
+                        className="text-center text-sm text-muted-foreground py-8"
+                      >
+                        {loading
+                          ? "Loading…"
+                          : "No subscriptions yet. They appear here once a client accepts a quote and pays."}
+                      </TableCell>
+                    </TableRow>
+                  )}
                   {subscriptions.map((s) => {
                     const plan = plans.find((p) => p.id === s.plan_id);
                     return (
@@ -1214,6 +1334,18 @@ export default function BillingPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
+                  {invoices.length === 0 && (
+                    <TableRow>
+                      <TableCell
+                        colSpan={7}
+                        className="text-center text-sm text-muted-foreground py-8"
+                      >
+                        {loading
+                          ? "Loading…"
+                          : "No invoices yet. They appear here after the first charge."}
+                      </TableCell>
+                    </TableRow>
+                  )}
                   {invoices.map((inv) => (
                     <TableRow key={inv.id}>
                       <TableCell className="font-mono text-xs">
@@ -1318,9 +1450,16 @@ export default function BillingPage() {
       {/* Dialogs */}
       <PlanEditDialog
         plan={editingPlan}
-        open={editingPlan !== null}
-        onOpenChange={(o) => !o && setEditingPlan(null)}
+        open={editingPlan !== null || creatingPlan}
+        mode={editingPlan !== null ? "edit" : "create"}
+        onOpenChange={(o) => {
+          if (!o) {
+            setEditingPlan(null);
+            setCreatingPlan(false);
+          }
+        }}
         onSave={savePlan}
+        onCreate={createPlan}
       />
       <NewQuoteDialog
         open={newQuoteOpen}
