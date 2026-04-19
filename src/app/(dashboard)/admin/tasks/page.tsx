@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useSupabaseQuery } from "@/hooks/use-supabase-query";
 import { useSort } from "@/hooks/use-sort";
+import { useUser } from "@/hooks/use-user";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -63,6 +64,7 @@ const NEXT_STATUS: Record<TaskStatus, TaskStatus> = {
 };
 
 export default function TasksPage() {
+  const { user, organizationId } = useUser();
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [priorityFilter, setPriorityFilter] = useState<string>("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
@@ -102,37 +104,59 @@ export default function TasksPage() {
 
   async function handleAddTask() {
     if (!newTitle.trim()) return;
+    if (!organizationId) {
+      alert("Could not determine organization. Please sign in again.");
+      return;
+    }
     setSaving(true);
     const supabase = createClient();
-    await supabase.from("tasks").insert({
+    const now = new Date().toISOString();
+    const { error } = await supabase.from("tasks").insert({
+      id: crypto.randomUUID(),
+      organization_id: organizationId,
+      created_by: user?.id ?? null,
       title: newTitle.trim(),
       description: newDescription.trim() || null,
       priority: newPriority,
       category: newCategory.trim() || null,
       due_date: newDueDate || null,
       status: "todo" as TaskStatus,
+      created_at: now,
+      updated_at: now,
     });
+    setSaving(false);
+    if (error) {
+      alert(`Failed to add task: ${error.message}`);
+      return;
+    }
     setNewTitle("");
     setNewDescription("");
     setNewPriority("medium");
     setNewCategory("");
     setNewDueDate("");
     setShowAddForm(false);
-    setSaving(false);
     refetch();
   }
 
   async function handleToggleStatus(task: Task) {
     const supabase = createClient();
     const nextStatus = NEXT_STATUS[task.status];
-    await supabase.from("tasks").update({ status: nextStatus }).eq("id", task.id);
+    const { error } = await supabase.from("tasks").update({ status: nextStatus }).eq("id", task.id);
+    if (error) {
+      alert(`Failed to update task: ${error.message}`);
+      return;
+    }
     refetch();
   }
 
   async function handleDeleteTask(task: Task) {
     if (!confirm(`Delete task "${task.title}"? This cannot be undone.`)) return;
     const supabase = createClient();
-    await supabase.from("tasks").delete().eq("id", task.id);
+    const { error } = await supabase.from("tasks").delete().eq("id", task.id);
+    if (error) {
+      alert(`Failed to delete task: ${error.message}`);
+      return;
+    }
     refetch();
   }
 
