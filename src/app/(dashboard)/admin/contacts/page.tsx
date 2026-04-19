@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useSWRConfig } from "swr";
 import { useSupabaseQuery } from "@/hooks/use-supabase-query";
 import { useSort } from "@/hooks/use-sort";
@@ -191,8 +192,15 @@ function contactToForm(c: Contact): FormState {
 export default function ContactsPage() {
   const { organizationId } = useUser();
   const { mutate: swrMutate } = useSWRConfig();
+  const searchParams = useSearchParams();
   const [ownerView, setOwnerView] = useState<OwnerView>("leadstart");
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(() => searchParams.get("q") ?? "");
+
+  // Sync search input when arriving via topbar global search (?q=...).
+  useEffect(() => {
+    const q = searchParams.get("q");
+    if (q !== null) setSearch(q);
+  }, [searchParams]);
   const [statusFilter, setStatusFilter] = useState<ContactStatus | "all">("all");
   const [clientFilter, setClientFilter] = useState<string>("all");
 

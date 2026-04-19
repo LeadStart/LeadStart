@@ -2,8 +2,9 @@
 
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { Bell, Search, Settings, LogOut, ChevronDown, User, MessageSquare, Mail, FileText, Menu } from "lucide-react";
+import { Bell, Settings, LogOut, ChevronDown, User, MessageSquare, Mail, FileText, Menu } from "lucide-react";
 import { useSupabaseQuery } from "@/hooks/use-supabase-query";
+import { GlobalSearch } from "@/components/layout/global-search";
 import type { Notification } from "@/types/app";
 import {
   DropdownMenu,
@@ -96,12 +97,7 @@ export function Topbar({ userEmail, role, actualRole, onRoleSwitch, onMenuClick 
           <Menu size={20} />
         </button>
         {/* Search bar — admin only, desktop only */}
-        {isActualAdmin && (
-          <div className="hidden md:flex items-center gap-2 rounded-lg border border-border/50 bg-[#f8fafc] px-3 py-2 text-sm text-muted-foreground w-72">
-            <Search size={14} />
-            <span>Search campaigns, clients...</span>
-          </div>
-        )}
+        {isActualAdmin && <GlobalSearch />}
       </div>
 
       <div className="flex items-center gap-3">
