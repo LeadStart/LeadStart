@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useSWRConfig } from "swr";
 import { useSupabaseQuery } from "@/hooks/use-supabase-query";
 import { useSort } from "@/hooks/use-sort";
 import { useUser } from "@/hooks/use-user";
@@ -41,8 +42,10 @@ import {
   Upload,
   AlertCircle,
   TrendingUp,
+  ChevronDown,
 } from "lucide-react";
 import type { Contact, ContactStatus, ProspectStage } from "@/types/app";
+import { ImportContactsDialog } from "./import-dialog";
 
 const PIPELINE_STAGES: { value: ProspectStage; label: string }[] = [
   { value: "lead", label: "Lead" },
@@ -55,6 +58,69 @@ const PIPELINE_STAGES: { value: ProspectStage; label: string }[] = [
 
 function pipelineStageLabel(s: ProspectStage): string {
   return PIPELINE_STAGES.find((p) => p.value === s)?.label ?? s;
+}
+
+// Tags cell that keeps rows at a single-row height by default and reveals
+// the full list on click. Chevron only appears when tags actually overflow.
+function TagsCell({ tags }: { tags: string[] }) {
+  const [expanded, setExpanded] = useState(false);
+  const [overflowing, setOverflowing] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const check = () => {
+      const first = el.firstElementChild as HTMLElement | null;
+      const last = el.lastElementChild as HTMLElement | null;
+      if (!first || !last || first === last) {
+        setOverflowing(false);
+        return;
+      }
+      setOverflowing(last.offsetTop > first.offsetTop);
+    };
+    check();
+    const ro = new ResizeObserver(check);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [tags]);
+
+  if (!tags || tags.length === 0) {
+    return <span className="text-xs text-muted-foreground">—</span>;
+  }
+
+  return (
+    <div className="flex items-start gap-1.5">
+      <div
+        ref={ref}
+        className={`flex flex-wrap gap-1 flex-1 ${
+          expanded ? "" : "max-h-[26px] overflow-hidden"
+        }`}
+      >
+        {tags.map((tag) => (
+          <Badge key={tag} variant="secondary" className="badge-green">
+            {tag}
+          </Badge>
+        ))}
+      </div>
+      {overflowing && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setExpanded((v) => !v);
+          }}
+          aria-label={expanded ? "Collapse tags" : "Expand tags"}
+          className="shrink-0 flex items-center justify-center h-6 w-6 rounded-md text-muted-foreground hover:bg-muted/60 hover:text-foreground cursor-pointer transition-colors"
+        >
+          <ChevronDown
+            size={14}
+            className={`transition-transform ${expanded ? "rotate-180" : ""}`}
+          />
+        </button>
+      )}
+    </div>
+  );
 }
 
 // Visible statuses — user-selectable in filter + form.
@@ -73,6 +139,8 @@ function statusLabel(s: ContactStatus) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+type OwnerView = "leadstart" | "client";
+
 type FormState = {
   firstName: string;
   lastName: string;
@@ -85,6 +153,7 @@ type FormState = {
   notes: string;
   pipelineStage: ProspectStage | "none";
   clientId: string;
+  owner: OwnerView;
 };
 
 const EMPTY_FORM: FormState = {
@@ -99,6 +168,7 @@ const EMPTY_FORM: FormState = {
   notes: "",
   pipelineStage: "none",
   clientId: "",
+  owner: "leadstart",
 };
 
 function contactToForm(c: Contact): FormState {
@@ -114,11 +184,14 @@ function contactToForm(c: Contact): FormState {
     notes: c.notes ?? "",
     pipelineStage: c.pipeline_stage ?? "none",
     clientId: c.client_id ?? "",
+    owner: c.client_id ? "client" : "leadstart",
   };
 }
 
 export default function ContactsPage() {
   const { organizationId } = useUser();
+  const { mutate: swrMutate } = useSWRConfig();
+  const [ownerView, setOwnerView] = useState<OwnerView>("leadstart");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<ContactStatus | "all">("all");
   const [clientFilter, setClientFilter] = useState<string>("all");
@@ -127,6 +200,7 @@ export default function ContactsPage() {
   const [dialogMode, setDialogMode] = useState<"add" | Contact | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
 
   const { data, loading, refetch } = useSupabaseQuery(
     "admin-contacts",
@@ -142,9 +216,16 @@ export default function ContactsPage() {
     },
   );
 
-  const contacts = data?.contacts ?? [];
+  const allContacts = data?.contacts ?? [];
   const clients = data?.clients ?? [];
   const clientMap = new Map(clients.map((c) => [c.id, c.name]));
+
+  // Split by owner. LeadStart contacts (client_id IS NULL) are the agency's
+  // own prospects — they're the only ones eligible for the Prospects kanban.
+  // Client contacts belong to a client's campaign recipient list.
+  const contacts = allContacts.filter((c) =>
+    ownerView === "leadstart" ? c.client_id === null : c.client_id !== null,
+  );
 
   const totalContacts = contacts.length;
   const enrichedCount = contacts.filter((c) => c.status === "enriched").length;
@@ -159,7 +240,8 @@ export default function ContactsPage() {
       c.email.toLowerCase().includes(search.toLowerCase()) ||
       (c.company_name || "").toLowerCase().includes(search.toLowerCase());
     const matchesStatus = statusFilter === "all" || c.status === statusFilter;
-    const matchesClient = clientFilter === "all" || c.client_id === clientFilter;
+    const matchesClient =
+      ownerView === "leadstart" || clientFilter === "all" || c.client_id === clientFilter;
     return matchesSearch && matchesStatus && matchesClient;
   });
 
@@ -185,7 +267,7 @@ export default function ContactsPage() {
   }
 
   function openForAdd() {
-    setForm(EMPTY_FORM);
+    setForm({ ...EMPTY_FORM, owner: ownerView });
     setDialogMode("add");
   }
 
@@ -204,6 +286,10 @@ export default function ContactsPage() {
 
   async function handleSubmit() {
     if (!form.email.trim()) return;
+    if (form.owner === "client" && !form.clientId) {
+      alert("Client contacts must be assigned to a client.");
+      return;
+    }
     if (!organizationId) {
       alert("Could not determine organization. Please sign in again.");
       return;
@@ -213,8 +299,18 @@ export default function ContactsPage() {
       const supabase = createClient();
       const tags = form.tags.split(",").map((t) => t.trim()).filter(Boolean);
       const now = new Date().toISOString();
+
+      // Owner enforcement: LeadStart contacts never have client_id; Client
+      // contacts never have pipeline_stage. The Prospects kanban additionally
+      // filters on client_id IS NULL so client contacts can't leak in.
+      const resolvedClientId =
+        form.owner === "leadstart" ? null : form.clientId || null;
       const nextStage: ProspectStage | null =
-        form.pipelineStage === "none" ? null : form.pipelineStage;
+        form.owner === "client"
+          ? null
+          : form.pipelineStage === "none"
+            ? null
+            : form.pipelineStage;
       const prevStage: ProspectStage | null = editing?.pipeline_stage ?? null;
 
       // Pipeline state transitions. Null means "not in the pipeline".
@@ -226,7 +322,7 @@ export default function ContactsPage() {
         pipeline_added_at?: string | null;
       } = { pipeline_stage: nextStage };
       if (nextStage && !prevStage) {
-        pipelinePatch.pipeline_sort_order = contacts.filter(
+        pipelinePatch.pipeline_sort_order = allContacts.filter(
           (c) => c.pipeline_stage === nextStage,
         ).length;
         pipelinePatch.pipeline_added_at = now;
@@ -244,7 +340,7 @@ export default function ContactsPage() {
         linkedin_url: form.linkedin.trim() || null,
         tags,
         notes: form.notes.trim() || null,
-        client_id: form.clientId || null,
+        client_id: resolvedClientId,
         updated_at: now,
       };
 
@@ -295,7 +391,11 @@ export default function ContactsPage() {
       >
         <div className="relative z-10 flex items-start justify-between">
           <div>
-            <p className="text-xs font-medium text-[#64748b]">Campaign Leads</p>
+            <p className="text-xs font-medium text-[#64748b]">
+              {ownerView === "leadstart"
+                ? "Agency Prospects"
+                : "Client Campaign Recipients"}
+            </p>
             <h1
               className="text-[20px] sm:text-[22px] font-bold mt-1"
               style={{ color: "#0f172a", letterSpacing: "-0.01em" }}
@@ -306,15 +406,57 @@ export default function ContactsPage() {
               {totalContacts} total · {enrichedCount} enriched · {uploadedCount} uploaded
             </p>
           </div>
-          <Button
-            onClick={openForAdd}
-            className="bg-white/15 hover:bg-white/25 text-[#0f172a] border-0"
-          >
-            <Plus size={16} className="mr-1" />
-            Add Contact
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={() => setImportOpen(true)}
+              variant="outline"
+              className="bg-white/40 hover:bg-white/60 text-[#0f172a] border-[#2E37FE]/20"
+            >
+              <Upload size={16} className="mr-1" />
+              Import CSV
+            </Button>
+            <Button
+              onClick={openForAdd}
+              className="bg-white/15 hover:bg-white/25 text-[#0f172a] border-0"
+            >
+              <Plus size={16} className="mr-1" />
+              Add Contact
+            </Button>
+          </div>
         </div>
         <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-[rgba(107,114,255,0.06)]" />
+      </div>
+
+      {/* Owner toggle — separates LeadStart's own prospects from client
+          campaign recipient lists. Only LeadStart contacts pipe into the
+          Prospects kanban (enforced on the Prospects page query too). */}
+      <div
+        className="inline-flex items-center gap-1 rounded-full border border-border/50 bg-muted/40 p-1 shadow-sm"
+        role="tablist"
+      >
+        {([
+          { value: "leadstart", label: "LeadStart" },
+          { value: "client", label: "Client" },
+        ] as { value: OwnerView; label: string }[]).map((opt) => {
+          const active = ownerView === opt.value;
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              onClick={() => setOwnerView(opt.value)}
+              className={`cursor-pointer rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
+                active
+                  ? "bg-white text-[#0f172a] shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+              style={active ? { color: "#2E37FE" } : undefined}
+            >
+              {opt.label}
+            </button>
+          );
+        })}
       </div>
 
       {/* Stat cards */}
@@ -350,22 +492,24 @@ export default function ContactsPage() {
             ))}
           </SelectContent>
         </Select>
-        <Select
-          value={clientFilter}
-          onValueChange={(v) => setClientFilter(v ?? "all")}
-        >
-          <SelectTrigger className="w-[180px]" style={{ height: "36px" }}>
-            <SelectValue placeholder="Client" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Clients</SelectItem>
-            {clients.map((c) => (
-              <SelectItem key={c.id} value={c.id}>
-                {c.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        {ownerView === "client" ? (
+          <Select
+            value={clientFilter}
+            onValueChange={(v) => setClientFilter(v ?? "all")}
+          >
+            <SelectTrigger className="w-[180px]" style={{ height: "36px" }}>
+              <SelectValue placeholder="Client" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Clients</SelectItem>
+              {clients.map((c) => (
+                <SelectItem key={c.id} value={c.id}>
+                  {c.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : null}
       </div>
 
       {/* Contacts table — row click opens edit dialog */}
@@ -408,21 +552,7 @@ export default function ContactsPage() {
                         {row.company_name || "—"}
                       </TableCell>
                       <TableCell>
-                        {row.tags && row.tags.length > 0 ? (
-                          <div className="flex flex-wrap gap-1">
-                            {row.tags.map((tag) => (
-                              <Badge
-                                key={tag}
-                                variant="secondary"
-                                className="badge-green"
-                              >
-                                {tag}
-                              </Badge>
-                            ))}
-                          </div>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
-                        )}
+                        <TagsCell tags={row.tags ?? []} />
                       </TableCell>
                       <TableCell className="text-muted-foreground">
                         {new Date(row.created_at).toLocaleDateString("en-US", {
@@ -457,7 +587,10 @@ export default function ContactsPage() {
       <Dialog open={isDialogOpen} onOpenChange={(v) => { if (!v) closeDialog(); }}>
         <DialogContent className="max-w-lg max-h-[90vh] p-0 gap-0 flex flex-col">
           <DialogHeader className="px-6 pt-6 pb-3 border-b border-border/50 shrink-0">
-            <DialogTitle>{editing ? "Edit Contact" : "Add Contact"}</DialogTitle>
+            <DialogTitle>
+              {editing ? "Edit" : "Add"}{" "}
+              {form.owner === "leadstart" ? "LeadStart" : "Client"} Contact
+            </DialogTitle>
           </DialogHeader>
 
           <div className="space-y-4 overflow-y-auto px-6 pt-4 pb-6 flex-1 min-h-0">
@@ -549,7 +682,10 @@ export default function ContactsPage() {
                 rows={2}
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            {/* Owner-specific field: LeadStart contacts get a Pipeline Stage
+                selector; Client contacts get a required Client selector. The
+                split is enforced in handleSubmit so the DB stays clean. */}
+            {form.owner === "leadstart" ? (
               <div className="space-y-1">
                 <Label className="text-sm font-medium">Pipeline Stage</Label>
                 <Select
@@ -580,34 +716,49 @@ export default function ContactsPage() {
                     ))}
                   </SelectContent>
                 </Select>
+                <p className="text-xs text-muted-foreground">
+                  Setting a stage puts this contact in the Prospects kanban.
+                </p>
               </div>
+            ) : (
               <div className="space-y-1">
-                <Label className="text-sm font-medium">Client</Label>
+                <Label className="text-sm font-medium">Client *</Label>
                 <Select
-                  value={form.clientId ? form.clientId : "none"}
-                  onValueChange={(v) => setForm({ ...form, clientId: !v || v === "none" ? "" : v })}
+                  value={form.clientId || ""}
+                  onValueChange={(v) =>
+                    setForm({ ...form, clientId: v ?? "" })
+                  }
                 >
                   <SelectTrigger className="w-full" style={{ height: "36px" }}>
-                    <SelectValue placeholder="No client">
+                    <SelectValue placeholder="Select a client">
                       {form.clientId
-                        ? clients.find((c) => c.id === form.clientId)?.name ?? "No client"
-                        : "No client"}
+                        ? clients.find((c) => c.id === form.clientId)?.name ??
+                          "Select a client"
+                        : "Select a client"}
                     </SelectValue>
                   </SelectTrigger>
                   <SelectContent
                     className="min-w-[220px]"
                     alignItemWithTrigger={false}
                   >
-                    <SelectItem value="none">No client</SelectItem>
-                    {clients.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.name}
-                      </SelectItem>
-                    ))}
+                    {clients.length === 0 ? (
+                      <div className="px-3 py-2 text-sm text-muted-foreground">
+                        No clients yet.
+                      </div>
+                    ) : (
+                      clients.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name}
+                        </SelectItem>
+                      ))
+                    )}
                   </SelectContent>
                 </Select>
+                <p className="text-xs text-muted-foreground">
+                  Recipient on this client&apos;s cold email campaigns.
+                </p>
               </div>
-            </div>
+            )}
 
             <div className="flex gap-2 pt-2">
               <Button variant="outline" className="flex-1" onClick={closeDialog}>
@@ -616,7 +767,11 @@ export default function ContactsPage() {
               <Button
                 className="flex-1"
                 style={{ background: "#2E37FE" }}
-                disabled={!form.email.trim() || saving}
+                disabled={
+                  !form.email.trim() ||
+                  saving ||
+                  (form.owner === "client" && !form.clientId)
+                }
                 onClick={handleSubmit}
               >
                 {saving ? "Saving..." : editing ? "Save changes" : "Add Contact"}
@@ -625,6 +780,23 @@ export default function ContactsPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <ImportContactsDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        ownerView={ownerView}
+        organizationId={organizationId ?? null}
+        clients={clients}
+        existingContactCount={(stage) =>
+          allContacts.filter((c) => c.pipeline_stage === stage).length
+        }
+        onImported={async () => {
+          await refetch();
+          // Bulk imports with pipeline_stage need to reach the Prospects
+          // kanban too — invalidate its specific cache key.
+          await swrMutate("admin-contacts-with-pipeline");
+        }}
+      />
     </div>
   );
 }

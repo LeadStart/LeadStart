@@ -1,0 +1,4 @@
+first_name,last_name,email,company_name,title,phone,linkedin_url,tags,intro_line,notes
+Dana,Ortiz,dana.ortiz@pinecrestdev.com,Pinecrest Development,Director of Acquisitions,(555) 777-3100,https://linkedin.com/in/danaortiz,commercial-re;acquisitions,"Saw Pinecrest's recent Midtown acquisition — huge move.",Apollo export.
+Brian,Falk,brian@harborstonepm.com,Harborstone Property Mgmt,Managing Director,,,property-mgmt,"Noticed Harborstone just added 12 new buildings to the portfolio.",
+Priya,Ganesh,priya.g@lumenlabs.ai,Lumen Labs,CTO,,https://linkedin.com/in/priyaganesh,cto;saas,"Loved your talk on platform engineering at Re:Invent.",

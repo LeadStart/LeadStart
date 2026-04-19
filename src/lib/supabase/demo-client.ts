@@ -56,6 +56,8 @@ interface QueryBuilder {
   update: (updates: Partial<MockRow>) => QueryBuilder;
   delete: () => QueryBuilder;
   eq: (col: string, val: unknown) => QueryBuilder;
+  is: (col: string, val: null | boolean) => QueryBuilder;
+  not: (col: string, op: string, val: unknown) => QueryBuilder;
   in: (col: string, vals: unknown[]) => QueryBuilder;
   gte: (col: string, val: unknown) => QueryBuilder;
   lte: (col: string, val: unknown) => QueryBuilder;
@@ -166,6 +168,27 @@ function createQueryBuilder(tableName: string): QueryBuilder {
     },
     eq(col: string, val: unknown) {
       filters.push((r) => r.filter((row) => row[col] === val));
+      return builder;
+    },
+    is(col: string, val: null | boolean) {
+      filters.push((r) =>
+        r.filter((row) => {
+          const cell = row[col];
+          if (val === null) return cell === null || cell === undefined;
+          return cell === val;
+        }),
+      );
+      return builder;
+    },
+    not(col: string, op: string, val: unknown) {
+      filters.push((r) =>
+        r.filter((row) => {
+          const cell = row[col];
+          if (op === "is" && val === null)
+            return cell !== null && cell !== undefined;
+          return cell !== val;
+        }),
+      );
       return builder;
     },
     in(col: string, vals: unknown[]) {

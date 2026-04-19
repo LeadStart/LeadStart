@@ -254,7 +254,10 @@ export default function ProspectsPage() {
   const { data, loading, setData, refetch } = useSupabaseQuery(
     "admin-contacts-with-pipeline",
     async (supabase) => {
-      const res = await supabase.from("contacts").select("*");
+      // Prospects kanban is LeadStart's own sales funnel — exclude contacts
+      // that belong to a client (those are campaign recipients, not leads
+      // we are selling to).
+      const res = await supabase.from("contacts").select("*").is("client_id", null);
       return ((res.data || []) as Contact[]).slice().sort((a, b) => {
         if (a.pipeline_sort_order !== b.pipeline_sort_order)
           return a.pipeline_sort_order - b.pipeline_sort_order;

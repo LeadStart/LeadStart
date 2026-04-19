@@ -1,0 +1,4 @@
+first_name,last_name,email,company_name,title,phone,linkedin_url,tags,notes,pipeline_stage
+Jane,Doe,jane@acmeco.com,Acme Co,VP Marketing,(555) 123-4567,https://linkedin.com/in/janedoe,saas;decision-maker,Met at SaaStr. Interested in Q3.,lead
+John,Smith,john@betainc.com,Beta Inc,CEO,,https://linkedin.com/in/johnsmith,b2b;ceo,Warm intro from Rachel.,contacted
+Ella,Zhang,ella@gammalabs.io,Gamma Labs,Head of Growth,(555) 987-6543,,growth;fintech,,
