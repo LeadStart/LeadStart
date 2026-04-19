@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { headers } from "next/headers";
 import { DashboardShell } from "./dashboard-shell";
 import type { AppRole } from "@/types/app";
 
@@ -8,24 +8,19 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const supabase = await createClient();
-
-  // Use getSession() instead of getUser() — reads from cookie locally
-  // without a network round-trip. The middleware already validated
-  // the user with getUser(), so we just need the session data here.
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-
-  if (!session?.user) {
+  // Middleware resolved the user and forwarded identity via request headers,
+  // so we don't need to spin up a Supabase SSR client here again.
+  const h = await headers();
+  const userId = h.get("x-user-id");
+  if (!userId) {
     redirect("/login");
   }
 
-  const user = session.user;
-  const role = ((user as { app_metadata?: { role?: string } }).app_metadata?.role || "client") as AppRole;
+  const role = (h.get("x-user-role") as AppRole | null) ?? "client";
+  const userEmail = h.get("x-user-email") ?? "demo@leadstart.com";
 
   return (
-    <DashboardShell role={role} actualRole={role} userEmail={(user as { email?: string }).email || "demo@leadstart.com"}>
+    <DashboardShell role={role} actualRole={role} userEmail={userEmail}>
       {children}
     </DashboardShell>
   );

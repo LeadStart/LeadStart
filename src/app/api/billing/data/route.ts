@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { isStripeDemoMode, isStripeLiveMode } from "@/lib/stripe/client";
 import type {
@@ -19,28 +20,27 @@ import type {
  * DB → empty tabs, no ghost mock rows).
  */
 export async function GET() {
-  const supabase = await createClient();
+  // Middleware already resolved identity and forwarded it via headers, so we
+  // skip the second Supabase auth round-trip that used to live here.
+  const h = await headers();
+  const userId = h.get("x-user-id");
+  const role = h.get("x-user-role");
+  const organizationId = h.get("x-user-org");
 
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (!session?.user) {
+  if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const role = (session.user as { app_metadata?: { role?: string } })
-    .app_metadata?.role;
   if (role !== "owner" && role !== "va") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const organizationId = (
-    session.user as { app_metadata?: { organization_id?: string } }
-  ).app_metadata?.organization_id;
   if (!organizationId) {
     return NextResponse.json(
       { error: "Missing organization on session" },
       { status: 400 },
     );
   }
+
+  const supabase = await createClient();
 
   const [plansRes, quotesRes, subsRes, invoicesRes, clientsRes] =
     await Promise.all([

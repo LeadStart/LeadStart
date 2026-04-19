@@ -17,9 +17,28 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(url);
     }
 
-    // Allow /login page to render (don't redirect in demo mode)
-    // Pass pathname header so layout can detect client vs admin
-    const response = NextResponse.next();
+    // Inject demo user headers so downstream server components (layout, API
+    // routes) don't need to create a Supabase client just to resolve identity.
+    // Role is derived from URL so /client/* gets the client demo user, and
+    // /admin/* gets the owner demo user — matches demo-client.ts.
+    const isClientPath = pathname.startsWith("/client");
+    const requestHeaders = new Headers(request.headers);
+    requestHeaders.delete("x-user-id");
+    requestHeaders.delete("x-user-email");
+    requestHeaders.delete("x-user-role");
+    requestHeaders.delete("x-user-org");
+    requestHeaders.set(
+      "x-user-id",
+      isClientPath ? "user-client-001" : "user-owner-001",
+    );
+    requestHeaders.set(
+      "x-user-email",
+      isClientPath ? "john@acmecorp.com" : "admin@leadstart.com",
+    );
+    requestHeaders.set("x-user-role", isClientPath ? "client" : "owner");
+    requestHeaders.set("x-user-org", "00000000-0000-0000-0000-000000000001");
+
+    const response = NextResponse.next({ request: { headers: requestHeaders } });
     response.headers.set("x-pathname", pathname);
     return response;
   }

@@ -68,15 +68,45 @@ export async function updateSession(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname;
 
+  // Build a response that forwards the resolved user to downstream handlers
+  // (layout, API routes) via request headers. Reading headers is free; creating
+  // another Supabase SSR client + getSession() is not.
+  const forwardResponse = () => {
+    if (!user) return supabaseResponse;
+    const requestHeaders = new Headers(request.headers);
+    // Strip incoming forged values before we set trusted ones.
+    requestHeaders.delete("x-user-id");
+    requestHeaders.delete("x-user-email");
+    requestHeaders.delete("x-user-role");
+    requestHeaders.delete("x-user-org");
+    requestHeaders.set("x-user-id", user.id);
+    if (user.email) requestHeaders.set("x-user-email", user.email);
+    const role = (user.app_metadata?.role as string) || "client";
+    requestHeaders.set("x-user-role", role);
+    const orgId = (user.app_metadata as { organization_id?: string } | undefined)
+      ?.organization_id;
+    if (orgId) requestHeaders.set("x-user-org", orgId);
+
+    const response = NextResponse.next({
+      request: { headers: requestHeaders },
+    });
+    supabaseResponse.cookies.getAll().forEach((cookie) => {
+      response.cookies.set(cookie.name, cookie.value, cookie);
+    });
+    return response;
+  };
+
   // Public routes that don't require auth
   const publicRoutes = ["/login", "/accept-invite", "/reset-password", "/update-password", "/auth/callback", "/quote", "/billing/welcome"];
   const isPublicRoute = publicRoutes.some((route) =>
     pathname.startsWith(route)
   );
 
-  // API routes handle their own auth (cron secrets, webhook secrets, etc.)
+  // API routes still handle their own authorization logic (cron secrets,
+  // webhook secrets, role checks) — but we forward user headers so they
+  // don't have to rebuild a Supabase SSR client just to read identity.
   if (pathname.startsWith("/api/")) {
-    return supabaseResponse;
+    return forwardResponse();
   }
 
   // If not logged in and trying to access protected route
@@ -119,5 +149,5 @@ export async function updateSession(request: NextRequest) {
     }
   }
 
-  return supabaseResponse;
+  return forwardResponse();
 }
