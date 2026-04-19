@@ -38,7 +38,7 @@ An automated pipeline that classifies inbound replies to cold-email campaigns, d
 - 5 pre-existing webhooks on the Instantly account (Make.com + LeadConnector) — user confirmed these are deprecated. Do not need to delete them; they don't conflict.
 
 ### Next step when resuming
-**Commit #1 of the rollout order**: migration `00020_create_reply_pipeline.sql` + types + demo mock data. This lets the `/admin/inbox` page render against mock replies locally with zero external services needed. No API keys required. Safe opener.
+**Commit #1 of the rollout order**: migration `00022_create_reply_pipeline.sql` + types + demo mock data. This lets the `/admin/inbox` page render against mock replies locally with zero external services needed. No API keys required. Safe opener.
 
 ---
 
@@ -111,7 +111,7 @@ Per-client override lives on `clients.auto_forward_categories` — default `{lea
 
 ---
 
-## Data model (single migration: `supabase/migrations/00020_create_reply_pipeline.sql`)
+## Data model (single migration: `supabase/migrations/00022_create_reply_pipeline.sql`)
 
 ### New enum: `reply_status`
 `pending, approved, sending, sent, rejected, saved_later, expired, failed`
@@ -185,7 +185,7 @@ After Send: ephemeral "Sent ✓" page. Single-use HMAC token is invalidated.
 - `.env.example` — add `ANTHROPIC_API_KEY`, `PUSHOVER_APP_TOKEN`, `URL_SIGNING_SECRET`
 
 ### New files
-- `supabase/migrations/00020_create_reply_pipeline.sql` — full migration
+- `supabase/migrations/00022_create_reply_pipeline.sql` — full migration
 - `src/lib/replies/ingest.ts` — enrich via `GET /emails`, normalize, dedupe
 - `src/lib/replies/tag.ts` — correlate `lead_*` events to rows
 - `src/lib/replies/pipeline.ts` — orchestrate draft + notify when both signals present

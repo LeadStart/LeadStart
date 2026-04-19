@@ -21,12 +21,13 @@ CREATE TABLE IF NOT EXISTS campaign_step_metrics (
 );
 
 -- Index for fast lookups by campaign + step
-CREATE INDEX idx_step_metrics_campaign_step ON campaign_step_metrics(campaign_id, step);
-CREATE INDEX idx_step_metrics_period ON campaign_step_metrics(period_start, period_end);
+CREATE INDEX IF NOT EXISTS idx_step_metrics_campaign_step ON campaign_step_metrics(campaign_id, step);
+CREATE INDEX IF NOT EXISTS idx_step_metrics_period ON campaign_step_metrics(period_start, period_end);
 
 -- RLS: only org members can see step metrics
 ALTER TABLE campaign_step_metrics ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Step metrics viewable by org members" ON campaign_step_metrics;
 CREATE POLICY "Step metrics viewable by org members"
   ON campaign_step_metrics FOR SELECT
   USING (
