@@ -48,8 +48,8 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-screen justify-center bg-background px-4 pt-4 pb-8">
       <div className="w-full max-w-md flex flex-col items-center">
-        <div className="flex justify-center -mb-20">
-          <Image src={leadstartLogo} alt="LeadStart" priority className="h-96 w-auto" />
+        <div className="flex justify-center -mb-16">
+          <Image src={leadstartLogo} alt="LeadStart" priority className="h-72 w-auto" />
         </div>
         <Card className="w-full border-border/50 shadow-lg">
           <CardHeader className="text-center pb-2">
