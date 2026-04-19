@@ -34,6 +34,8 @@ export interface Profile {
   updated_at: string;
 }
 
+export type ClientStatus = "active" | "former";
+
 export interface Client {
   id: string;
   organization_id: string;
@@ -45,6 +47,7 @@ export interface Client {
   report_last_sent_at: string | null;
   report_recipients: string[] | null;
   stripe_customer_id: string | null;
+  status: ClientStatus;
   created_at: string;
   updated_at: string;
 }

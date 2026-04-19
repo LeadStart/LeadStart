@@ -9,9 +9,10 @@ import { DailyChart } from "@/components/charts/daily-chart";
 import { calculateMetrics } from "@/lib/kpi/calculator";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { ClientUsersSection } from "./client-users-section";
-import { ArrowLeft, ArrowRight, Mail, MessageSquare, Calendar } from "lucide-react";
-import type { Client, Campaign, CampaignSnapshot, LeadFeedback, Profile } from "@/types/app";
+import { ArrowLeft, ArrowRight, Mail, MessageSquare, Calendar, Archive, ArchiveRestore } from "lucide-react";
+import type { Client, Campaign, CampaignSnapshot, LeadFeedback, Profile, ClientStatus } from "@/types/app";
 
 const supabase = createClient();
 
@@ -96,8 +97,24 @@ export default function ClientDetailPage({
   params: Promise<{ clientId: string }>;
 }) {
   const { clientId } = use(params);
-  const { data } = useSWR(`client-detail-${clientId}`, () => fetchClientDetail(clientId));
+  const { data, mutate } = useSWR(`client-detail-${clientId}`, () => fetchClientDetail(clientId));
   const [period, setPeriod] = useState<Period>("30d");
+  const [statusUpdating, setStatusUpdating] = useState(false);
+
+  async function toggleClientStatus(current: ClientStatus) {
+    const next: ClientStatus = current === "active" ? "former" : "active";
+    setStatusUpdating(true);
+    const { error } = await supabase
+      .from("clients")
+      .update({ status: next })
+      .eq("id", clientId);
+    setStatusUpdating(false);
+    if (error) {
+      alert(`Could not update client: ${error.message}`);
+      return;
+    }
+    mutate();
+  }
 
   if (!data) {
     return (
@@ -136,11 +153,31 @@ export default function ClientDetailPage({
           Back to Overview
         </Link>
         <div className="relative overflow-hidden rounded-[20px] p-5 sm:p-7 text-[#0f172a] mt-3" style={{ background: 'linear-gradient(135deg, #EDEEFF 0%, #D1D3FF 50%, #fff 100%)', border: '1px solid rgba(46,55,254,0.2)', borderTop: '1px solid rgba(46,55,254,0.3)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.9), 0 4px 14px rgba(46,55,254,0.1)' }}>
-          <div className="relative z-10">
-            <h1 className="text-2xl font-bold">{typedClient.name}</h1>
-            <p className="text-xs text-[#0f172a]/50 mt-0.5">
-              {campaigns.length} campaign{campaigns.length !== 1 ? "s" : ""} &middot; {linkedUsers.length} portal user{linkedUsers.length !== 1 ? "s" : ""}
-            </p>
+          <div className="relative z-10 flex items-start justify-between gap-4 flex-wrap">
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-2xl font-bold">{typedClient.name}</h1>
+                <Badge variant="secondary" className={(typedClient.status ?? "active") === "active" ? "badge-green" : "badge-amber"}>
+                  {(typedClient.status ?? "active") === "active" ? "Active" : "Former"}
+                </Badge>
+              </div>
+              <p className="text-xs text-[#0f172a]/50 mt-0.5">
+                {campaigns.length} campaign{campaigns.length !== 1 ? "s" : ""} &middot; {linkedUsers.length} portal user{linkedUsers.length !== 1 ? "s" : ""}
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={statusUpdating}
+              onClick={() => toggleClientStatus((typedClient.status ?? "active") as ClientStatus)}
+              className="bg-white/70 hover:bg-white gap-1.5"
+            >
+              {(typedClient.status ?? "active") === "active" ? (
+                <><Archive size={14} /> Archive Client</>
+              ) : (
+                <><ArchiveRestore size={14} /> Restore to Active</>
+              )}
+            </Button>
           </div>
           <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-[rgba(107,114,255,0.06)]" />
         </div>
