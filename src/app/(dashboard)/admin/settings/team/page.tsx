@@ -14,7 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Building2, UserPlus, Shield, User, Pencil, Trash2, Ban, Check, X } from "lucide-react";
+import { Building2, UserPlus, Shield, User, Pencil, Trash2, Ban, Check, X, Bell, BellOff } from "lucide-react";
 import type { Profile } from "@/types/app";
 import { appUrl } from "@/lib/api-url";
 
@@ -37,6 +37,7 @@ export default function TeamPage() {
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null);
   const [removingId, setRemovingId] = useState<string | null>(null);
+  const [notifyTogglingId, setNotifyTogglingId] = useState<string | null>(null);
 
   const fetchMembers = useCallback(() => {
     const supabase = createClient();
@@ -128,6 +129,22 @@ export default function TeamPage() {
       // silently fail
     } finally {
       setTogglingId(null);
+    }
+  }
+
+  async function handleToggleNotifications(memberId: string, enabled: boolean) {
+    setNotifyTogglingId(memberId);
+    try {
+      const res = await fetch(appUrl("/api/admin/team"), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: memberId, receives_contact_notifications: enabled }),
+      });
+      if (res.ok) fetchMembers();
+    } catch {
+      // silently fail
+    } finally {
+      setNotifyTogglingId(null);
     }
   }
 
@@ -308,6 +325,28 @@ export default function TeamPage() {
                         >
                           {member.is_active ? "Active" : "Inactive"}
                         </Badge>
+
+                        {member.role === "owner" && (
+                          <button
+                            onClick={() =>
+                              handleToggleNotifications(member.id, !member.receives_contact_notifications)
+                            }
+                            disabled={notifyTogglingId === member.id}
+                            className={`flex items-center gap-1 px-2 h-6 rounded-md text-xs font-medium transition-colors ${
+                              member.receives_contact_notifications
+                                ? "bg-[#2E37FE]/15 text-[#2E37FE] hover:bg-[#2E37FE]/25"
+                                : "bg-muted text-muted-foreground hover:bg-muted/80"
+                            }`}
+                            title={
+                              member.receives_contact_notifications
+                                ? "Receives contact form emails — click to mute"
+                                : "Muted — click to receive contact form emails"
+                            }
+                          >
+                            {member.receives_contact_notifications ? <Bell size={11} /> : <BellOff size={11} />}
+                            {member.receives_contact_notifications ? "Contact emails" : "Muted"}
+                          </button>
+                        )}
 
                         {/* Action buttons */}
                         <div className="flex items-center gap-1 ml-2">

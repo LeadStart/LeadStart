@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 interface ContactBody {
   firstName?: string;
@@ -88,13 +89,39 @@ export async function POST(request: NextRequest) {
 
   const fullName = `${firstName} ${lastName}`;
 
-  const toAddresses = (process.env.CONTACT_EMAIL_TO || "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
+  // Recipient list is managed in-app via Admin → Settings → Team
+  // (profiles.receives_contact_notifications toggle). Env var is a
+  // grace-period fallback only and can be removed once the team page is
+  // configured.
+  let toAddresses: string[] = [];
+  try {
+    const admin = createAdminClient();
+    const { data: recipients, error } = await admin
+      .from("profiles")
+      .select("email")
+      .eq("receives_contact_notifications", true)
+      .eq("is_active", true)
+      .eq("role", "owner");
+
+    if (error) {
+      console.error("[contact] Supabase query failed:", error);
+    } else if (recipients && recipients.length > 0) {
+      toAddresses = recipients.map((r) => r.email).filter(Boolean);
+    }
+  } catch (err) {
+    console.error("[contact] Failed to load recipients from DB:", err);
+  }
+
+  // Fallback to env var if the DB has no configured recipients
+  if (toAddresses.length === 0) {
+    toAddresses = (process.env.CONTACT_EMAIL_TO || "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
 
   if (toAddresses.length === 0) {
-    console.error("[contact] CONTACT_EMAIL_TO is not configured");
+    console.error("[contact] No recipients configured in DB or env");
     return NextResponse.json(
       { error: "Contact form is not configured. Please email us directly." },
       { status: 500 },

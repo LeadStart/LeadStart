@@ -17,7 +17,7 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
   }
 
-  const { user_id, full_name, role } = await request.json();
+  const { user_id, full_name, role, receives_contact_notifications } = await request.json();
   if (!user_id) {
     return NextResponse.json({ error: "user_id required" }, { status: 400 });
   }
@@ -32,6 +32,9 @@ export async function PATCH(request: NextRequest) {
   const updates: Record<string, unknown> = {};
   if (full_name !== undefined) updates.full_name = full_name;
   if (role !== undefined) updates.role = role;
+  if (receives_contact_notifications !== undefined) {
+    updates.receives_contact_notifications = !!receives_contact_notifications;
+  }
 
   if (Object.keys(updates).length > 0) {
     const { error } = await admin.from("profiles").update(updates).eq("id", user_id);

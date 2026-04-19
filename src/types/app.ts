@@ -29,6 +29,7 @@ export interface Profile {
   role: AppRole;
   organization_id: string;
   is_active: boolean;
+  receives_contact_notifications: boolean;
   created_at: string;
   updated_at: string;
 }
