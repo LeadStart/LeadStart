@@ -458,12 +458,12 @@ export default function ContactsPage() {
 
       {/* Unified Contact dialog — Add mode (blank) or Edit mode (pre-filled) */}
       <Dialog open={isDialogOpen} onOpenChange={(v) => { if (!v) closeDialog(); }}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className="max-w-lg max-h-[90vh] p-0 gap-0 flex flex-col">
+          <DialogHeader className="px-6 pt-6 pb-3 border-b border-border/50 shrink-0">
             <DialogTitle>{editing ? "Edit Contact" : "Add Contact"}</DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-4 mt-2">
+          <div className="space-y-4 overflow-y-auto px-6 pt-4 pb-6 flex-1 min-h-0">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
                 <Label className="text-sm font-medium">First Name</Label>
