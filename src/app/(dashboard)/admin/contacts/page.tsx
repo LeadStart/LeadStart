@@ -571,7 +571,10 @@ export default function ContactsPage() {
                         : pipelineStageLabel(form.pipelineStage)}
                     </SelectValue>
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent
+                    className="min-w-[220px]"
+                    alignItemWithTrigger={false}
+                  >
                     <SelectItem value="none">Not in pipeline</SelectItem>
                     {PIPELINE_STAGES.map((s) => (
                       <SelectItem key={s.value} value={s.value}>
@@ -594,7 +597,10 @@ export default function ContactsPage() {
                         : "No client"}
                     </SelectValue>
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent
+                    className="min-w-[220px]"
+                    alignItemWithTrigger={false}
+                  >
                     <SelectItem value="none">No client</SelectItem>
                     {clients.map((c) => (
                       <SelectItem key={c.id} value={c.id}>
