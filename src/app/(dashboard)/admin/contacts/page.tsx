@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
 import { useSupabaseQuery } from "@/hooks/use-supabase-query";
 import { useSort } from "@/hooks/use-sort";
@@ -42,9 +41,21 @@ import {
   Upload,
   AlertCircle,
   TrendingUp,
-  ExternalLink,
 } from "lucide-react";
-import type { Contact, ContactStatus } from "@/types/app";
+import type { Contact, ContactStatus, ProspectStage } from "@/types/app";
+
+const PIPELINE_STAGES: { value: ProspectStage; label: string }[] = [
+  { value: "lead", label: "Lead" },
+  { value: "contacted", label: "Contacted" },
+  { value: "meeting", label: "Meeting" },
+  { value: "proposal", label: "Proposal" },
+  { value: "closed", label: "Closed Won" },
+  { value: "lost", label: "Lost" },
+];
+
+function pipelineStageLabel(s: ProspectStage): string {
+  return PIPELINE_STAGES.find((p) => p.value === s)?.label ?? s;
+}
 
 // Visible statuses — user-selectable in filter + form.
 // Note: "unsubscribed" remains in the DB enum (set by webhooks) but isn't
@@ -80,10 +91,9 @@ type FormState = {
   title: string;
   phone: string;
   linkedin: string;
-  introLine: string;
   tags: string;
   notes: string;
-  status: ContactStatus;
+  pipelineStage: ProspectStage | "none";
   clientId: string;
 };
 
@@ -95,10 +105,9 @@ const EMPTY_FORM: FormState = {
   title: "",
   phone: "",
   linkedin: "",
-  introLine: "",
   tags: "",
   notes: "",
-  status: "new",
+  pipelineStage: "none",
   clientId: "",
 };
 
@@ -111,10 +120,9 @@ function contactToForm(c: Contact): FormState {
     title: c.title ?? "",
     phone: c.phone ?? "",
     linkedin: c.linkedin_url ?? "",
-    introLine: c.intro_line ?? "",
     tags: (c.tags ?? []).join(", "),
     notes: c.notes ?? "",
-    status: c.status,
+    pipelineStage: c.pipeline_stage ?? "none",
     clientId: c.client_id ?? "",
   };
 }
@@ -129,7 +137,6 @@ export default function ContactsPage() {
   const [dialogMode, setDialogMode] = useState<"add" | Contact | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
-  const [addingToPipeline, setAddingToPipeline] = useState(false);
 
   const { data, loading, refetch } = useSupabaseQuery(
     "admin-contacts",
@@ -204,9 +211,6 @@ export default function ContactsPage() {
 
   const editing = dialogMode && dialogMode !== "add" ? dialogMode : null;
   const isDialogOpen = dialogMode !== null;
-  const dialogPipelineStage = editing
-    ? contacts.find((c) => c.id === editing.id)?.pipeline_stage ?? null
-    : null;
 
   async function handleSubmit() {
     if (!form.email.trim()) return;
@@ -219,7 +223,28 @@ export default function ContactsPage() {
       const supabase = createClient();
       const tags = form.tags.split(",").map((t) => t.trim()).filter(Boolean);
       const now = new Date().toISOString();
-      const payload = {
+      const nextStage: ProspectStage | null =
+        form.pipelineStage === "none" ? null : form.pipelineStage;
+      const prevStage: ProspectStage | null = editing?.pipeline_stage ?? null;
+
+      // Pipeline state transitions. Null means "not in the pipeline".
+      // Entering the pipeline sets sort order (bottom of the target column)
+      // and added_at; leaving clears them.
+      const pipelinePatch: {
+        pipeline_stage: ProspectStage | null;
+        pipeline_sort_order?: number;
+        pipeline_added_at?: string | null;
+      } = { pipeline_stage: nextStage };
+      if (nextStage && !prevStage) {
+        pipelinePatch.pipeline_sort_order = contacts.filter(
+          (c) => c.pipeline_stage === nextStage,
+        ).length;
+        pipelinePatch.pipeline_added_at = now;
+      } else if (!nextStage && prevStage) {
+        pipelinePatch.pipeline_added_at = null;
+      }
+
+      const basePayload = {
         first_name: form.firstName.trim() || null,
         last_name: form.lastName.trim() || null,
         email: form.email.trim(),
@@ -227,28 +252,31 @@ export default function ContactsPage() {
         title: form.title.trim() || null,
         phone: form.phone.trim() || null,
         linkedin_url: form.linkedin.trim() || null,
-        intro_line: form.introLine.trim() || null,
         tags,
         notes: form.notes.trim() || null,
-        status: form.status,
         client_id: form.clientId || null,
         updated_at: now,
       };
 
       if (editing) {
-        const { error } = await supabase.from("contacts").update(payload).eq("id", editing.id);
+        const { error } = await supabase
+          .from("contacts")
+          .update({ ...basePayload, ...pipelinePatch })
+          .eq("id", editing.id);
         if (error) {
           alert(`Failed to save contact: ${error.message}`);
           return;
         }
       } else {
         const { error } = await supabase.from("contacts").insert({
-          ...payload,
+          ...basePayload,
+          ...pipelinePatch,
           id: crypto.randomUUID(),
           organization_id: organizationId,
           enrichment_data: {},
           source: null,
           campaign_id: null,
+          status: "new",
           created_at: now,
         });
         if (error) {
@@ -260,34 +288,6 @@ export default function ContactsPage() {
       closeDialog();
     } finally {
       setSaving(false);
-    }
-  }
-
-  async function handleAddEditingToPipeline() {
-    if (!editing) return;
-    if (!organizationId) {
-      alert("Could not determine organization. Please sign in again.");
-      return;
-    }
-    setAddingToPipeline(true);
-    try {
-      const supabase = createClient();
-      const leadCount = contacts.filter((c) => c.pipeline_stage === "lead").length;
-      const { error } = await supabase
-        .from("contacts")
-        .update({
-          pipeline_stage: "lead",
-          pipeline_sort_order: leadCount,
-          pipeline_added_at: new Date().toISOString(),
-        })
-        .eq("id", editing.id);
-      if (error) {
-        alert(`Failed to add to pipeline: ${error.message}`);
-        return;
-      }
-      await refetch();
-    } finally {
-      setAddingToPipeline(false);
     }
   }
 
@@ -464,44 +464,6 @@ export default function ContactsPage() {
           </DialogHeader>
 
           <div className="space-y-4 mt-2">
-            {/* Pipeline section — only in edit mode */}
-            {editing && (
-              <div className="rounded-xl border border-border/50 p-3 flex items-center justify-between gap-3 bg-muted/20">
-                <div className="min-w-0">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    Pipeline
-                  </p>
-                  {dialogPipelineStage ? (
-                    <p className="text-sm mt-0.5 flex items-center gap-1.5">
-                      <TrendingUp size={13} className="text-[#2E37FE]" />
-                      In pipeline · <span className="font-medium">{dialogPipelineStage}</span>
-                    </p>
-                  ) : (
-                    <p className="text-sm mt-0.5 text-muted-foreground">Not in pipeline yet</p>
-                  )}
-                </div>
-                {dialogPipelineStage ? (
-                  <Link href="/admin/prospects" onClick={closeDialog}>
-                    <Button size="sm" variant="outline" className="shrink-0">
-                      View in pipeline
-                      <ExternalLink size={12} className="ml-1" />
-                    </Button>
-                  </Link>
-                ) : (
-                  <Button
-                    size="sm"
-                    className="shrink-0"
-                    style={{ background: "#2E37FE" }}
-                    disabled={addingToPipeline}
-                    onClick={handleAddEditingToPipeline}
-                  >
-                    <Plus size={13} className="mr-1" />
-                    {addingToPipeline ? "Adding..." : "Add to pipeline"}
-                  </Button>
-                )}
-              </div>
-            )}
-
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
                 <Label className="text-sm font-medium">First Name</Label>
@@ -573,15 +535,6 @@ export default function ContactsPage() {
               </div>
             </div>
             <div className="space-y-1">
-              <Label className="text-sm font-medium">Intro Line</Label>
-              <Textarea
-                value={form.introLine}
-                onChange={(e) => setForm({ ...form, introLine: e.target.value })}
-                placeholder="Personalized intro line for cold email..."
-                rows={2}
-              />
-            </div>
-            <div className="space-y-1">
               <Label className="text-sm font-medium">Tags (comma-separated)</Label>
               <Input
                 value={form.tags}
@@ -601,18 +554,28 @@ export default function ContactsPage() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
-                <Label className="text-sm font-medium">Status</Label>
+                <Label className="text-sm font-medium">Pipeline Stage</Label>
                 <Select
-                  value={form.status}
-                  onValueChange={(v) => setForm({ ...form, status: (v ?? "new") as ContactStatus })}
+                  value={form.pipelineStage}
+                  onValueChange={(v) =>
+                    setForm({
+                      ...form,
+                      pipelineStage: (v ?? "none") as ProspectStage | "none",
+                    })
+                  }
                 >
-                  <SelectTrigger style={{ height: "36px" }}>
-                    <SelectValue placeholder="Status">{statusLabel(form.status)}</SelectValue>
+                  <SelectTrigger className="w-full" style={{ height: "36px" }}>
+                    <SelectValue placeholder="Not in pipeline">
+                      {form.pipelineStage === "none"
+                        ? "Not in pipeline"
+                        : pipelineStageLabel(form.pipelineStage)}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
-                    {VISIBLE_STATUSES.map((s) => (
-                      <SelectItem key={s} value={s}>
-                        {statusLabel(s)}
+                    <SelectItem value="none">Not in pipeline</SelectItem>
+                    {PIPELINE_STAGES.map((s) => (
+                      <SelectItem key={s.value} value={s.value}>
+                        {s.label}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -624,7 +587,7 @@ export default function ContactsPage() {
                   value={form.clientId ? form.clientId : "none"}
                   onValueChange={(v) => setForm({ ...form, clientId: !v || v === "none" ? "" : v })}
                 >
-                  <SelectTrigger style={{ height: "36px" }}>
+                  <SelectTrigger className="w-full" style={{ height: "36px" }}>
                     <SelectValue placeholder="No client">
                       {form.clientId
                         ? clients.find((c) => c.id === form.clientId)?.name ?? "No client"
