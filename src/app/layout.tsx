@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Poppins, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
+import { PostLoginOverlay } from "@/components/layout/post-login-overlay";
 
 const poppins = Poppins({
   variable: "--font-sans",
@@ -36,7 +37,10 @@ export default function RootLayout({
       lang="en"
       className={`${poppins.variable} ${jetbrainsMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col font-sans">{children}</body>
+      <body className="min-h-full flex flex-col font-sans">
+        <PostLoginOverlay />
+        {children}
+      </body>
     </html>
   );
 }

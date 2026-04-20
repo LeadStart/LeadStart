@@ -43,6 +43,9 @@ export default function LoginPage() {
       return;
     }
 
+    try {
+      sessionStorage.setItem("ls-post-login", "1");
+    } catch {}
     router.refresh();
   }
 
