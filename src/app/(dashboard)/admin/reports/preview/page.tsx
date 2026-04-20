@@ -1,18 +1,57 @@
 "use client";
 
 import { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Eye, Monitor, Smartphone } from "lucide-react";
 import { buildWeeklyReportEmail } from "@/lib/email/weekly-report";
-import { MOCK_REPORTS } from "@/lib/mock-data";
+
+// Inline sample data so the preview renders without having to send a real
+// report. Kept minimal — just enough to exercise every section of the email
+// template (single campaign row + totals).
+const SAMPLE_REPORT_DATA = {
+  client_name: "Acme Corp",
+  period: { start: "2025-03-01", end: "2025-03-15" },
+  campaigns: [
+    {
+      campaign_name: "Acme — Commercial RE Investors Q1",
+      campaign_id: "sample-camp-001",
+      metrics: {
+        emails_sent: 680,
+        replies: 41,
+        unique_replies: 38,
+        positive_replies: 15,
+        bounces: 12,
+        unsubscribes: 2,
+        meetings_booked: 6,
+        reply_rate: 5.59,
+        positive_reply_rate: 39.47,
+        bounce_rate: 1.76,
+        unsubscribe_rate: 0.29,
+        reply_to_meeting_rate: 15.79,
+      },
+    },
+  ],
+  totals: {
+    emails_sent: 680,
+    replies: 41,
+    unique_replies: 38,
+    positive_replies: 15,
+    bounces: 12,
+    unsubscribes: 2,
+    meetings_booked: 6,
+    reply_rate: 5.59,
+    positive_reply_rate: 39.47,
+    bounce_rate: 1.76,
+    unsubscribe_rate: 0.29,
+    reply_to_meeting_rate: 15.79,
+  },
+};
 
 export default function ReportPreviewPage() {
   const [viewport, setViewport] = useState<"desktop" | "mobile">("desktop");
 
-  // Use the first mock report's data for preview
-  const reportData = MOCK_REPORTS[0].report_data;
+  const reportData = SAMPLE_REPORT_DATA;
   const emailHtml = buildWeeklyReportEmail(reportData, "https://app.leadstart.com/client");
 
   return (
@@ -37,7 +76,7 @@ export default function ReportPreviewPage() {
             Preview Mode
           </Badge>
           <span className="text-sm text-muted-foreground">
-            Using sample data from: <strong>{reportData.client_name}</strong>
+            Using sample data for: <strong>{reportData.client_name}</strong>
           </span>
         </div>
         <div className="flex items-center gap-1 rounded-lg border border-border/50 p-1">

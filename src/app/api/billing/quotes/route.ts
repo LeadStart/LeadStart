@@ -128,7 +128,6 @@ export async function POST(req: NextRequest) {
 
   // Send proposal email when status is "sent".
   const canSendEmail =
-    process.env.DEMO_MODE !== "true" &&
     !!process.env.RESEND_API_KEY &&
     process.env.RESEND_API_KEY.startsWith("re_");
   if (sendNow && body.sent_to_email && canSendEmail) {

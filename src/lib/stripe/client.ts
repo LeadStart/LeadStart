@@ -6,14 +6,12 @@ import Stripe from "stripe";
 const STRIPE_API_VERSION = "2026-03-25.dahlia" as const;
 
 /**
- * True when we should skip real Stripe API calls and return deterministic
- * fakes. Mirrors the Supabase demo-mode pattern in `src/lib/supabase/server.ts`.
- * Any billing helper that would hit Stripe must guard on this first.
+ * True when Stripe is unconfigured (no secret key). Billing helpers that would
+ * hit Stripe must guard on this and return graceful fakes, since calling
+ * getStripe() in this state throws.
  */
 export function isStripeDemoMode(): boolean {
-  if (process.env.DEMO_MODE === "true") return true;
-  if (!process.env.STRIPE_SECRET_KEY) return true;
-  return false;
+  return !process.env.STRIPE_SECRET_KEY;
 }
 
 /**
@@ -35,8 +33,8 @@ let cached: Stripe | null = null;
 export function getStripe(): Stripe {
   if (isStripeDemoMode()) {
     throw new Error(
-      "getStripe() called while DEMO_MODE=true or STRIPE_SECRET_KEY unset. " +
-        "Guard with isStripeDemoMode() before calling, or route through the demo helpers.",
+      "getStripe() called with STRIPE_SECRET_KEY unset. " +
+        "Guard with isStripeDemoMode() before calling.",
     );
   }
   if (!cached) {

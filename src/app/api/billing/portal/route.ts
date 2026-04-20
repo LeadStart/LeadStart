@@ -85,7 +85,6 @@ export async function POST(req: NextRequest) {
 
   let emailed = false;
   const canSendEmail =
-    process.env.DEMO_MODE !== "true" &&
     !!process.env.RESEND_API_KEY &&
     process.env.RESEND_API_KEY.startsWith("re_");
   if (body.email && client.contact_email && canSendEmail) {

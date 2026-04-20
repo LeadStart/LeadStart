@@ -14,10 +14,6 @@ import type {
  * Hydrates the admin billing page with everything it needs in one round-trip:
  * plans, quotes, subscriptions, invoices, clients. All scoped to the caller's
  * organization_id.
- *
- * In demo mode this routes through the demo Supabase client, which serves the
- * MOCK_* arrays — so the page behaves identically locally and in prod (empty
- * DB → empty tabs, no ghost mock rows).
  */
 export async function GET() {
   // Middleware already resolved identity and forwarded it via headers, so we

@@ -1,18 +1,7 @@
-import { createDemoClient } from "./demo-client";
-
-const isDemoMode =
-  process.env.DEMO_MODE === "true" ||
-  !process.env.NEXT_PUBLIC_SUPABASE_URL ||
-  process.env.NEXT_PUBLIC_SUPABASE_URL === "http://localhost:54321";
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
 
 export async function createClient() {
-  if (isDemoMode) {
-    return createDemoClient() as ReturnType<typeof createDemoClient>;
-  }
-
-  // Real Supabase — dynamic import to avoid errors when env vars are missing
-  const { createServerClient } = await import("@supabase/ssr");
-  const { cookies } = await import("next/headers");
   const cookieStore = await cookies();
 
   return createServerClient(

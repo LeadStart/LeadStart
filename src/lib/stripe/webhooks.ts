@@ -8,7 +8,6 @@ type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
 
 function canSendEmail(): boolean {
   return (
-    process.env.DEMO_MODE !== "true" &&
     !!process.env.RESEND_API_KEY &&
     process.env.RESEND_API_KEY.startsWith("re_")
   );

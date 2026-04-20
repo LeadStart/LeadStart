@@ -23,12 +23,11 @@ A Next.js 16 app for managing cold email campaigns via Instantly.ai. Two dashboa
 ```bash
 npm install
 npm run dev
-# Opens at localhost:3000 — runs in demo mode with mock data, no Supabase needed
+# Opens at localhost:3000 — requires real Supabase env vars in .env.local
 ```
 
 ## Key Architecture Decisions
-- **Demo mode**: When no Supabase URL is set, the app uses `src/lib/supabase/demo-client.ts` which returns mock data from `src/lib/mock-data.ts`. This lets everything work locally without a database.
-- **Role switching**: In demo mode, a toggle in the topbar lets you switch between admin and client views. The demo client swaps the returned user based on the URL path (`/client/*` returns a client user, `/admin/*` returns an owner user).
+- **Supabase-only**: No demo/mock mode. `.env.local` must point at the real Supabase project (`NEXT_PUBLIC_SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_ANON_KEY`). If you need to work on the UI offline, branch off and stub data locally — don't reintroduce the demo-client / mock-data paths.
 - **Styling**: Bold & branded theme — indigo/violet gradient sidebar, color-coded KPI cards (green=good, amber=warning, red=bad), area charts with gradient fills. All interactive elements use pointer cursor.
 - **UI Components**: shadcn/ui (Base UI primitives) + Tailwind CSS v4 + Lucide icons. Custom gradient utilities use inline styles (Tailwind v4 @layer utilities don't reliably generate custom gradient classes).
 
