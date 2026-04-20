@@ -17,6 +17,7 @@ import { Mail, Lock } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import leadstartLogo from "../../../../public/leadstart-logo.png";
+import { BounceLoader } from "@/components/ui/bounce-loader";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -47,6 +48,11 @@ export default function LoginPage() {
 
   return (
     <div className="flex min-h-screen justify-center bg-background px-4 pt-4 pb-8">
+      {loading && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/95 backdrop-blur-sm">
+          <BounceLoader caption="Signing you in" />
+        </div>
+      )}
       <div className="w-full max-w-md flex flex-col items-center">
         <div className="flex justify-center -mb-3">
           <Image src={leadstartLogo} alt="LeadStart" priority className="h-72 w-auto" />

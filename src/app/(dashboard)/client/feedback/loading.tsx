@@ -1,5 +1,5 @@
 import { BounceLoader } from "@/components/ui/bounce-loader";
 
-export default function FeedbackLoading() {
+export default function ClientFeedbackLoading() {
   return <BounceLoader caption="Loading feedback" />;
 }
