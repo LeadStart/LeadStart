@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useSupabaseQuery } from "@/hooks/use-supabase-query";
 import { useSort } from "@/hooks/use-sort";
 import { createClient } from "@/lib/supabase/client";
+import { ADMIN_CLIENTS_KEY, fetchAdminClients } from "@/lib/admin-queries";
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -13,24 +14,16 @@ import { SortableHead } from "@/components/ui/sortable-head";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AddClientForm } from "./add-client-form";
 import { Users, ArrowRight, Archive, ArchiveRestore } from "lucide-react";
-import type { Client, Campaign, ClientUser, ClientStatus } from "@/types/app";
+import type { ClientStatus } from "@/types/app";
 
 export default function ClientsPage() {
   const [statusFilter, setStatusFilter] = useState<ClientStatus>("active");
   const [pendingId, setPendingId] = useState<string | null>(null);
 
-  const { data, loading, refetch } = useSupabaseQuery("admin-clients", async (supabase) => {
-    const [clientsRes, campaignsRes, clientUsersRes] = await Promise.all([
-      supabase.from("clients").select("*").order("name"),
-      supabase.from("campaigns").select("*"),
-      supabase.from("client_users").select("*"),
-    ]);
-    return {
-      clients: (clientsRes.data || []) as Client[],
-      campaigns: (campaignsRes.data || []) as Campaign[],
-      clientUsers: (clientUsersRes.data || []) as ClientUser[],
-    };
-  });
+  const { data, loading, refetch } = useSupabaseQuery(
+    ADMIN_CLIENTS_KEY,
+    fetchAdminClients,
+  );
 
   const { clients, campaigns, clientUsers } = data || { clients: [], campaigns: [], clientUsers: [] };
 

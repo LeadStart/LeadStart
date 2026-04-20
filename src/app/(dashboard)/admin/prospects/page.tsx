@@ -4,6 +4,10 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useUser } from "@/hooks/use-user";
 import { useSupabaseQuery } from "@/hooks/use-supabase-query";
+import {
+  ADMIN_CONTACTS_PIPELINE_KEY,
+  fetchAdminContactsPipeline,
+} from "@/lib/admin-queries";
 import { createClient } from "@/lib/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -252,18 +256,8 @@ export default function ProspectsPage() {
   const [editFollowUp, setEditFollowUp] = useState<string>("");
 
   const { data, loading, setData, refetch } = useSupabaseQuery(
-    "admin-contacts-with-pipeline",
-    async (supabase) => {
-      // Prospects kanban is LeadStart's own sales funnel — exclude contacts
-      // that belong to a client (those are campaign recipients, not leads
-      // we are selling to).
-      const res = await supabase.from("contacts").select("*").is("client_id", null);
-      return ((res.data || []) as Contact[]).slice().sort((a, b) => {
-        if (a.pipeline_sort_order !== b.pipeline_sort_order)
-          return a.pipeline_sort_order - b.pipeline_sort_order;
-        return (b.updated_at || "").localeCompare(a.updated_at || "");
-      });
-    },
+    ADMIN_CONTACTS_PIPELINE_KEY,
+    fetchAdminContactsPipeline,
   );
 
   const allContacts = useMemo(() => data ?? [], [data]);

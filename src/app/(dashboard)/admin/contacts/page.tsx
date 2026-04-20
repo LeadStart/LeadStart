@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useSWRConfig } from "swr";
 import { useSupabaseQuery } from "@/hooks/use-supabase-query";
+import { ADMIN_CONTACTS_KEY, fetchAdminContacts } from "@/lib/admin-queries";
 import { useSort } from "@/hooks/use-sort";
 import { useUser } from "@/hooks/use-user";
 import { SortableHead } from "@/components/ui/sortable-head";
@@ -211,17 +212,8 @@ export default function ContactsPage() {
   const [importOpen, setImportOpen] = useState(false);
 
   const { data, loading, refetch } = useSupabaseQuery(
-    "admin-contacts",
-    async (supabase) => {
-      const [contactsRes, clientsRes] = await Promise.all([
-        supabase.from("contacts").select("*").order("created_at", { ascending: false }),
-        supabase.from("clients").select("id, name"),
-      ]);
-      return {
-        contacts: (contactsRes.data || []) as Contact[],
-        clients: (clientsRes.data || []) as { id: string; name: string }[],
-      };
-    },
+    ADMIN_CONTACTS_KEY,
+    fetchAdminContacts,
   );
 
   const allContacts = data?.contacts ?? [];

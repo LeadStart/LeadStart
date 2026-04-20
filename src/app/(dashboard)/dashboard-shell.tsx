@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Topbar } from "@/components/layout/topbar";
+import { AdminPrefetcher } from "@/components/layout/admin-prefetcher";
 import type { AppRole } from "@/types/app";
 
 export function DashboardShell({
@@ -35,8 +36,11 @@ export function DashboardShell({
     }
   }
 
+  const isAdmin = role === "owner" || role === "va";
+
   return (
     <div className="flex h-screen overflow-hidden bg-background">
+      {isAdmin && <AdminPrefetcher />}
       <Sidebar role={role} open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <div className="flex flex-1 flex-col overflow-hidden min-w-0">
         <Topbar

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useSupabaseQuery } from "@/hooks/use-supabase-query";
+import { ADMIN_TASKS_KEY, fetchAdminTasks } from "@/lib/admin-queries";
 import { useSort } from "@/hooks/use-sort";
 import { useUser } from "@/hooks/use-user";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -78,10 +79,10 @@ export default function TasksPage() {
   const [newCategory, setNewCategory] = useState("");
   const [newDueDate, setNewDueDate] = useState("");
 
-  const { data, loading, refetch } = useSupabaseQuery("admin-tasks", async (supabase) => {
-    const res = await supabase.from("tasks").select("*").order("created_at", { ascending: false });
-    return (res.data || []) as Task[];
-  });
+  const { data, loading, refetch } = useSupabaseQuery(
+    ADMIN_TASKS_KEY,
+    fetchAdminTasks,
+  );
 
   const tasks = data || [];
   const total = tasks.length;

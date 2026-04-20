@@ -1,6 +1,7 @@
 "use client";
 
 import { useSupabaseQuery } from "@/hooks/use-supabase-query";
+import { ADMIN_CAMPAIGNS_KEY, fetchAdminCampaigns } from "@/lib/admin-queries";
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -9,21 +10,12 @@ import { calculateMetrics } from "@/lib/kpi/calculator";
 import { Mail, ArrowRight } from "lucide-react";
 import { useSort } from "@/hooks/use-sort";
 import { SortableHead } from "@/components/ui/sortable-head";
-import type { Campaign, Client, CampaignSnapshot } from "@/types/app";
 
 export default function AllCampaignsPage() {
-  const { data, loading } = useSupabaseQuery("admin-campaigns", async (supabase) => {
-    const [campaignsRes, clientsRes, snapshotsRes] = await Promise.all([
-      supabase.from("campaigns").select("*").order("created_at", { ascending: false }),
-      supabase.from("clients").select("*"),
-      supabase.from("campaign_snapshots").select("*").gte("snapshot_date", new Date(Date.now() - 30 * 86400000).toISOString().split("T")[0]),
-    ]);
-    return {
-      campaigns: (campaignsRes.data || []) as Campaign[],
-      clients: (clientsRes.data || []) as Client[],
-      snapshots: (snapshotsRes.data || []) as CampaignSnapshot[],
-    };
-  });
+  const { data, loading } = useSupabaseQuery(
+    ADMIN_CAMPAIGNS_KEY,
+    fetchAdminCampaigns,
+  );
 
   const { campaigns, clients, snapshots } = data || { campaigns: [], clients: [], snapshots: [] };
   const clientMap = new Map(clients.map((c) => [c.id, c]));

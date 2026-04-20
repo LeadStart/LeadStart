@@ -1,6 +1,7 @@
 "use client";
 
 import { useSupabaseQuery } from "@/hooks/use-supabase-query";
+import { ADMIN_FEEDBACK_KEY, fetchAdminFeedback } from "@/lib/admin-queries";
 import { useSort } from "@/hooks/use-sort";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -8,19 +9,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { SortableHead } from "@/components/ui/sortable-head";
 import { StatCard } from "@/components/charts/stat-card";
 import { MessageSquare, ThumbsUp, ThumbsDown } from "lucide-react";
-import type { LeadFeedback, Campaign } from "@/types/app";
 
 export default function FeedbackPage() {
-  const { data, loading } = useSupabaseQuery("admin-feedback", async (supabase) => {
-    const [feedbackRes, campaignsRes] = await Promise.all([
-      supabase.from("lead_feedback").select("*").order("created_at", { ascending: false }).limit(100),
-      supabase.from("campaigns").select("id, name"),
-    ]);
-    return {
-      feedback: (feedbackRes.data || []) as LeadFeedback[],
-      campaigns: (campaignsRes.data || []) as Pick<Campaign, "id" | "name">[],
-    };
-  });
+  const { data, loading } = useSupabaseQuery(
+    ADMIN_FEEDBACK_KEY,
+    fetchAdminFeedback,
+  );
 
   const { feedback, campaigns } = data || { feedback: [], campaigns: [] };
   const campaignMap = new Map(campaigns.map((c) => [c.id, c.name]));

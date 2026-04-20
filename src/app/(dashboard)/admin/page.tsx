@@ -1,13 +1,11 @@
 "use client";
 
 import { useSupabaseQuery } from "@/hooks/use-supabase-query";
-import { calculateMetrics } from "@/lib/kpi/calculator";
-import { analyzeStepHealth, getCampaignStepHealth } from "@/lib/kpi/step-health";
+import { ADMIN_OVERVIEW_KEY, fetchAdminOverview } from "@/lib/admin-queries";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
-import type { CampaignSnapshot, Campaign, Client, KPIMetrics, CampaignStepMetric, StepHealthAlert } from "@/types/app";
 
 function HealthDot({ health }: { health: "good" | "warning" | "bad" | "none" }) {
   const colors = { good: "bg-emerald-500", warning: "bg-amber-500", bad: "bg-red-500", none: "bg-gray-300" };
@@ -33,62 +31,11 @@ function getHealthLabel(health: "good" | "warning" | "bad" | "none") {
   }[health];
 }
 
-type ClientCard = { client: Client; clientCampaigns: Campaign[]; activeCampaigns: Campaign[]; metrics: KPIMetrics; health: "good" | "warning" | "bad" | "none"; stepAlerts: StepHealthAlert[] };
-
 export default function AdminOverviewPage() {
-  const { data, loading } = useSupabaseQuery("admin-overview", async (supabase) => {
-    const [clientsRes, campaignsRes, snapshotsRes, stepMetricsRes] = await Promise.all([
-      supabase.from("clients").select("*").order("name"),
-      supabase.from("campaigns").select("*"),
-      supabase.from("campaign_snapshots").select("*")
-        .gte("snapshot_date", new Date(Date.now() - 30 * 86400000).toISOString().split("T")[0])
-        .order("snapshot_date", { ascending: false }),
-      supabase.from("campaign_step_metrics").select("*")
-        .order("period_start", { ascending: true }),
-    ]);
-    const clients = (clientsRes.data || []) as Client[];
-    const campaigns = (campaignsRes.data || []) as Campaign[];
-    const snapshots = (snapshotsRes.data || []) as CampaignSnapshot[];
-    const stepMetrics = (stepMetricsRes.data || []) as CampaignStepMetric[];
-
-    const campaignInfoMap = new Map<string, { id: string; name: string; client_name: string }>();
-    for (const camp of campaigns) {
-      const client = clients.find((c) => c.id === camp.client_id);
-      campaignInfoMap.set(camp.id, {
-        id: camp.id,
-        name: camp.name,
-        client_name: client?.name || "Unknown",
-      });
-    }
-
-    const allStepAlerts = analyzeStepHealth(stepMetrics, campaignInfoMap);
-
-    const cards: ClientCard[] = clients.map((client) => {
-      const clientCampaigns = campaigns.filter((c) => c.client_id === client.id);
-      const activeCampaigns = clientCampaigns.filter((c) => c.status === "active");
-      const campaignIds = clientCampaigns.map((c) => c.id);
-      const clientSnapshots = snapshots.filter((s) => campaignIds.includes(s.campaign_id));
-      const metrics = calculateMetrics(clientSnapshots);
-
-      const clientStepAlerts = allStepAlerts.filter((a) => campaignIds.includes(a.campaign_id));
-
-      let health: "good" | "warning" | "bad" | "none";
-      if (metrics.emails_sent === 0) {
-        health = "none";
-      } else if (clientStepAlerts.some((a) => a.severity === "critical")) {
-        health = "bad";
-      } else if (clientStepAlerts.length > 0) {
-        health = "warning";
-      } else {
-        health = "good";
-      }
-
-      return { client, clientCampaigns, activeCampaigns, metrics, health, stepAlerts: clientStepAlerts };
-    });
-    const healthOrder = { bad: 0, warning: 1, good: 2, none: 3 };
-    cards.sort((a, b) => healthOrder[a.health] - healthOrder[b.health]);
-    return { cards, totalActive: campaigns.filter((c) => c.status === "active").length, allStepAlerts };
-  });
+  const { data, loading } = useSupabaseQuery(
+    ADMIN_OVERVIEW_KEY,
+    fetchAdminOverview,
+  );
 
   const clientCards = data?.cards ?? [];
   const totalActive = data?.totalActive ?? 0;

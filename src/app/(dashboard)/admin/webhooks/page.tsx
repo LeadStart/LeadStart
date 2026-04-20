@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useSupabaseQuery } from "@/hooks/use-supabase-query";
+import { ADMIN_WEBHOOKS_KEY, fetchAdminWebhooks } from "@/lib/admin-queries";
 import { useSort } from "@/hooks/use-sort";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -19,10 +20,10 @@ const EVENT_STYLES: Record<string, { class: string; icon: React.ReactNode }> = {
 };
 
 export default function WebhooksPage() {
-  const { data: events, loading, setData } = useSupabaseQuery("admin-webhooks", async (supabase) => {
-    const { data } = await supabase.from("webhook_events").select("*").order("received_at", { ascending: false }).limit(100);
-    return (data || []) as WebhookEvent[];
-  });
+  const { data: events, loading, setData } = useSupabaseQuery(
+    ADMIN_WEBHOOKS_KEY,
+    fetchAdminWebhooks,
+  );
 
   const [togglingId, setTogglingId] = useState<string | null>(null);
 
