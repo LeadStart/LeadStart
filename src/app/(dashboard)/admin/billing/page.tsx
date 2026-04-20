@@ -32,6 +32,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { appUrl } from "@/lib/api-url";
+import { useApiQuery } from "@/hooks/use-api-query";
+import { API_BILLING_DATA_PATH } from "@/lib/admin-queries";
 import { QuoteLayout } from "@/components/billing/quote-layout";
 import type {
   PricingPlan,
@@ -742,43 +744,40 @@ export default function BillingPage() {
   } | null>(null);
   const [selectedTab, setSelectedTab] = useState<string>("subscriptions");
 
+  // Initial hydrate goes through SWR so the admin prefetcher warms this
+  // cache slot on dashboard mount — re-visits render instantly from cache.
+  // Local useState above is still the source of truth for optimistic updates
+  // (canceling subs, editing plans, etc.); we just seed it from SWR data.
+  const {
+    data: billingData,
+    loading: billingLoading,
+    error: billingError,
+  } = useApiQuery<{
+    plans: PricingPlan[];
+    quotes: Quote[];
+    subscriptions: ClientSubscription[];
+    invoices: BillingInvoice[];
+    clients: Client[];
+    stripe_mode?: "demo" | "live" | "test";
+  }>(API_BILLING_DATA_PATH);
+
   useEffect(() => {
-    let canceled = false;
-    (async () => {
-      try {
-        const res = await fetch(appUrl("/api/billing/data"));
-        if (!res.ok) {
-          const { error } = await res
-            .json()
-            .catch(() => ({ error: `HTTP ${res.status}` }));
-          throw new Error(error || `HTTP ${res.status}`);
-        }
-        const data = (await res.json()) as {
-          plans: PricingPlan[];
-          quotes: Quote[];
-          subscriptions: ClientSubscription[];
-          invoices: BillingInvoice[];
-          clients: Client[];
-          stripe_mode?: "demo" | "live" | "test";
-        };
-        if (canceled) return;
-        setPlans(data.plans);
-        setQuotes(data.quotes);
-        setSubscriptions(data.subscriptions);
-        setInvoices(data.invoices);
-        setClients(data.clients);
-        if (data.stripe_mode) setStripeMode(data.stripe_mode);
-      } catch (err) {
-        if (canceled) return;
-        setLoadError(err instanceof Error ? err.message : "Failed to load");
-      } finally {
-        if (!canceled) setLoading(false);
-      }
-    })();
-    return () => {
-      canceled = true;
-    };
-  }, []);
+    if (!billingData) return;
+    setPlans(billingData.plans);
+    setQuotes(billingData.quotes);
+    setSubscriptions(billingData.subscriptions);
+    setInvoices(billingData.invoices);
+    setClients(billingData.clients);
+    if (billingData.stripe_mode) setStripeMode(billingData.stripe_mode);
+  }, [billingData]);
+
+  useEffect(() => {
+    setLoading(billingLoading);
+  }, [billingLoading]);
+
+  useEffect(() => {
+    setLoadError(billingError);
+  }, [billingError]);
 
   async function savePlan(id: string, updates: Partial<PricingPlan>) {
     const res = await fetch(appUrl(`/api/billing/plans/${id}`), {

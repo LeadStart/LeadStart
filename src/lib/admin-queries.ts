@@ -225,6 +225,12 @@ export async function fetchAdminTasks(supabase: SupabaseClient) {
   return (res.data || []) as Task[];
 }
 
+// ---------- API-route-backed pages ----------
+// Keys used by useApiQuery (SWR key == URL path) so the prefetcher and the
+// page share the same cache slot.
+export const API_INBOX_HEALTH_PATH = "/api/instantly/inbox-health";
+export const API_BILLING_DATA_PATH = "/api/billing/data";
+
 // ---------- Prospects (contacts + pipeline) ----------
 export const ADMIN_CONTACTS_PIPELINE_KEY = "admin-contacts-with-pipeline";
 

@@ -1,14 +1,15 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { StatCard } from "@/components/charts/stat-card";
 import { useSort } from "@/hooks/use-sort";
+import { useApiQuery } from "@/hooks/use-api-query";
+import { API_INBOX_HEALTH_PATH } from "@/lib/admin-queries";
 import { SortableHead } from "@/components/ui/sortable-head";
 import { Inbox, Globe, Activity, AlertTriangle, Shield, RefreshCw } from "lucide-react";
-import { appUrl } from "@/lib/api-url";
 
 interface InboxData {
   email: string;
@@ -67,29 +68,13 @@ function inboxRateBadge(rate: number | null) {
 }
 
 export default function InboxHealthPage() {
-  const [data, setData] = useState<InboxHealthResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<"inboxes" | "domains">("domains");
-
-  async function fetchData() {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(appUrl("/api/instantly/inbox-health"));
-      if (!res.ok) {
-        const body = await res.json();
-        throw new Error(body.error || "Failed to fetch");
-      }
-      setData(await res.json());
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to fetch inbox health");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => { fetchData(); }, []);
+  const { data, loading, error, refetch } = useApiQuery<InboxHealthResponse>(
+    API_INBOX_HEALTH_PATH,
+  );
+  const fetchData = () => {
+    void refetch();
+  };
 
   const inboxRows = data?.inboxes || [];
   const domainRows = data?.domains || [];
