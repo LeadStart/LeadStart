@@ -44,7 +44,10 @@ export function PostLoginOverlay() {
   if (!visible) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-background/95 backdrop-blur-sm">
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center"
+      style={{ background: "#f8fafc" }}
+    >
       <BounceLoader caption="Loading your dashboard" />
     </div>
   );

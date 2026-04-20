@@ -52,7 +52,10 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-screen justify-center bg-background px-4 pt-4 pb-8">
       {loading && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/95 backdrop-blur-sm">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center"
+          style={{ background: "#f8fafc" }}
+        >
           <BounceLoader caption="Signing you in" />
         </div>
       )}
