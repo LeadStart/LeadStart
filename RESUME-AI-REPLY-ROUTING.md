@@ -1,10 +1,14 @@
 # RESUME: AI Reply Routing — Commits 5–12
 
-> **Status as of last push:** commit `3074f48` on `master`.
-> **What's done:** commits 1–4 of the plan at [`docs/plans/ai-reply-routing.md`](docs/plans/ai-reply-routing.md).
-> **What's left:** the 8 commits below.
+> **Status as of last push:** commit `b4a9858` on `master`.
+> **What's done:** commits 1–7 (code-complete; not yet activated in production).
+> **What's left:** commits #8–12 + the one-time "Register webhook" click, deferred until a safe test setup exists.
 >
 > **⚠️ DELETE THIS FILE when commit #12 is merged.** Instructions at the bottom.
+>
+> ### 🛑 Activation is NOT live yet
+>
+> Commit #7 shipped the **Register webhook** button, but it has NOT been clicked. The pipeline will not fire on any real Instantly events until an owner clicks that button in production. Do not click it on David Cabrera's active campaign — see ["Activation — do not run yet"](#activation--do-not-run-yet-post-7-todo) below for the specific plan.
 
 This document lets a fresh session pick up the reply-routing build without re-reading the whole plan. Each commit below is scoped to a single, testable unit of work. The full architectural context is still in [`docs/plans/ai-reply-routing.md`](docs/plans/ai-reply-routing.md) — read that first; read this to know *what to build next*.
 
@@ -93,6 +97,29 @@ This document lets a fresh session pick up the reply-routing build without re-re
 
 ---
 
+## Activation — do not run yet (post-#7 TODO)
+
+Commit #7 is code-complete but the button has **not** been clicked. Clicking it once would subscribe Instantly's webhook firehose to our handler, which would immediately start classifying replies and (for clients with `notification_email` set + hot classes in `auto_notify_classes`) firing Resend emails.
+
+**We are NOT going to run this on David Cabrera's production campaign.** The risk is:
+- Misclassifications go to a real client's inbox.
+- Persona mismatch (David's campaign uses a fake persona; the dossier assumes Path 1 real-person continuity).
+- Any pipeline bug becomes a live-customer incident.
+
+**Activation checklist — work through all before clicking "Register webhook":**
+
+- [ ] **Create a dedicated test client + campaign in Instantly.** A separate Instantly campaign we control end-to-end, with a hosted mailbox we own, sending to a short list of test prospects (team members, aliases, or a seed tool). Not David's campaign.
+- [ ] **Seed the corresponding LeadStart client row** with `notification_email` pointing at the owner's inbox (daniel@leadstart.io or similar). `phone_number` + `persona_*` populated per Path 1.
+- [ ] **Link the test campaign to this client** (`campaigns.instantly_campaign_id` = the test Instantly campaign id).
+- [ ] **Verify `clients.auto_notify_classes`** — default includes the hot classes; confirm it's what we want for the test.
+- [ ] **Only then** click **Register webhook** on `/app/admin/settings/api`.
+- [ ] Reply to a seeded test prospect → confirm dossier email lands → confirm `/admin/inbox` shows the row.
+- [ ] If anything misbehaves: unregister via Instantly's UI, clear `organizations.instantly_webhook_id`, fix, repeat.
+
+**David's campaign migration (Path 1) is a separate, downstream action** — see commit #12's pre-requisites. It stays on manual reply handling until the test campaign has fully proven out the pipeline.
+
+---
+
 ## Commit #8 — On-demand drafter + reply-via-portal send path
 
 **Scope:** The fallback flow. Phone-first is primary; but the client might still want to send an email reply through the portal. This commit wires that end-to-end: open composer → Claude drafts a reply → client edits → send through Instantly with `eaccount` + CC.
@@ -167,6 +194,7 @@ This document lets a fresh session pick up the reply-routing build without re-re
 **Scope:** No new code. Full end-to-end verification against real Instantly + real client onboarding.
 
 **Pre-requisites:**
+- The test campaign from the ["Activation" section](#activation--do-not-run-yet-post-7-todo) has been running clean for long enough to trust the pipeline end-to-end (at minimum: one hot reply classified correctly + one unsubscribe silenced + one referral extracted).
 - David Cabrera's campaign has been migrated to Path 1 (real persona name in Instantly, real signature). **Owner to do manually in the Instantly UI before this commit.**
 - All fields from commit #11 are populated for David's client.
 
