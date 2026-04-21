@@ -485,15 +485,7 @@ export interface LeadReply {
   outcome_logged_at: string | null;
   outcome_logged_by: string | null;
 
-  // Drafter
-  draft_body: string | null;
-  draft_subject: string | null;
-  draft_model: string | null;
-  draft_token_usage: Record<string, unknown> | null;
-  draft_generated_at: string | null;
-  draft_regenerations: number;
-
-  // Send
+  // Send (manual reply composed by the client via /api/replies/[id]/send)
   status: ReplyStatus;
   final_body_text: string | null;
   final_body_html: string | null;

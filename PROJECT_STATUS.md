@@ -1,6 +1,6 @@
 # LeadStart — Project Status
 
-> Last updated: 2026-04-18
+> Last updated: 2026-04-21
 
 ## Current State: Local Demo (Not Deployed)
 
@@ -10,20 +10,20 @@ Everything runs locally on mock data. No live database, no API connections, no d
 
 ## Current Initiative: AI Lead-Reply Classification & Routing
 
-**Status:** Plan approved, not yet implemented. Paused — resume when ready.
+**Status:** Commits 1–8 shipped (code-complete, not yet activated). The Instantly webhook is not registered in production, so the pipeline isn't firing on live events yet. Commits 9–12 + activation are next.
 
-**What it does:** Classifies inbound replies using Instantly's native AI tags, drafts a response with Claude Sonnet for hot leads, pushes to the owner's phone via Pushover, and on one-tap sends the reply through Instantly with the client CC'd.
+**What it does:** Instantly's native AI tags + a keyword prefilter + a Claude Haiku verifier classify every inbound reply. When a hot class lands (configurable via `clients.auto_notify_classes`), the client gets a Resend email with a signed-URL deep-link to a mobile dossier showing the prospect's phone number and a `tel:` button. Primary action: phone call within 5 minutes. Fallback: a manual composer in the portal to send an email reply through Instantly with the client's inbox CC'd. **No AI drafting** — the client writes the reply themselves.
 
-**Full plan:** [`docs/plans/ai-reply-routing.md`](docs/plans/ai-reply-routing.md) — read the "Resume Brief" section first.
+**Full plan:** [`docs/plans/ai-reply-routing.md`](docs/plans/ai-reply-routing.md). Current shipped state + next commits: [`RESUME-AI-REPLY-ROUTING.md`](RESUME-AI-REPLY-ROUTING.md).
 
-**Next action when resuming:** commit #1 of the rollout order (migration + types + demo mock data). No API keys needed for that first commit.
+**Next action when resuming:** commit #9 — outcome-capture + admin-reclassify API routes.
 
-**Decisions already locked in:**
-- Use Instantly's native classifications (no separate Claude classifier)
-- Claude Sonnet 4.6 for drafting only
-- Pushover for mobile notifications
-- 1-tap approve via mobile page with inline editing
-- CC client on `lead_interested` + `lead_meeting_booked` only
+**Decisions locked in (current):**
+- Client (not owner) gets the notification; phone call is the primary CTA.
+- Claude Haiku 4.5 for classification only; **no Sonnet drafter** (removed 2026-04-21).
+- Resend for client notifications; no Pushover.
+- Path 1 persona model: real person on alias domain, mandatory for every client pre-launch.
+- No auto-reply, ever. Portal composer sends only when the client clicks Send.
 
 **Security follow-up:** rotate hardcoded Instantly API key at `scripts/backfill-emails.mjs:9` after this work ships.
 

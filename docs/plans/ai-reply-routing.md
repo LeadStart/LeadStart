@@ -1,8 +1,10 @@
 # AI Lead-Reply Classification & Routing — Plan (v2)
 
 > **Status:** Approved, not yet implemented. Ready to start commit #1.
-> **Last updated:** 2026-04-20
+> **Last updated:** 2026-04-21
 > **Supersedes:** the v1 plan at this path — v1 assumed the agency owner handled replies with Pushover. v2 puts the client on the phone instead. Git history preserves v1.
+>
+> **🛑 PLAN CHANGE (2026-04-21):** the Sonnet 4.6 drafter was **removed from scope** after commit #8. Reply-via-portal is now a manual composer — the client writes their own reply. Claude is used for **classification only** (Haiku). Mentions of "drafter", "Sonnet", `draft_*` columns, and "Generate draft" below are historical — disregard for current state. See `RESUME-AI-REPLY-ROUTING.md` § Commit #8 for the current shipped shape.
 
 ---
 
@@ -33,8 +35,7 @@ The client can optionally send an email reply via the portal as a fallback; that
 | **No auto-send** | Ever | Holding replies are spam; this is a signal-and-dispatch system, never an auto-reply bot. |
 | **Notification channel (v1)** | Single preferred email per client | Client handles their own forwarding rules. Web push + SMS deferred to v2. |
 | **Quiet hours** | None | "Be ready by the phone" is the product; accepted at onboarding. |
-| **Drafter scope** | Fires on demand when client opens the reply composer, not on every hot reply | Most hot replies get a phone call, not an email. Defer Sonnet cost to when it's actually used. |
-| **AI providers** | Claude Haiku (classifier, every hot candidate); Claude Sonnet 4.6 (drafter, on-demand only) | ~$4-7/mo total |
+| **AI providers** | Claude Haiku (classifier, every hot candidate). **Drafter removed 2026-04-21** — portal reply is a manual composer. | ~$1-2/mo (classifier only) |
 
 ### What the owner will need to provide (when ready to go live)
 

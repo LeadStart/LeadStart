@@ -127,24 +127,23 @@ Commit #7 is code-complete but the button has **not** been clicked. Clicking it 
 
 ---
 
-## Commit #8 — On-demand drafter + reply-via-portal send path
+## Commit #8 — Reply-via-portal send path (manual, no AI drafting)
 
-> ✅ **SHIPPED in `921bea9`** (2026-04-21). Section preserved for reference; skip to commit #9.
+> ✅ **SHIPPED in `921bea9`** then **pared back** (2026-04-21). Original scope included a Sonnet drafter; owner decided against auto-drafting. Composer is now a manual textarea — the client writes their own reply from scratch. Final shape below.
 
-**Scope:** The fallback flow. Phone-first is primary; but the client might still want to send an email reply through the portal. This commit wires that end-to-end: open composer → Claude drafts a reply → client edits → send through Instantly with `eaccount` + CC.
+**Plan change (2026-04-21):** The "Generate draft" button + Sonnet 4.6 drafter were removed after shipping. Rationale: the product stance is "signal and dispatch" — classify replies, alert the client, let the human respond on their own. Any AI-pre-fill on the outbound side risks feeling like an auto-reply bot, even when gated behind an edit step. Claude is used for classification only.
 
-**New files:**
-- `src/lib/ai/prompts/drafter-system.ts` — Sonnet 4.6 system prompt. Takes `persona_name`, `persona_title`, `brand_voice`, `signature_block` as dynamic inputs (kept in the user message, not the cached system prompt).
-- `src/lib/ai/drafter.ts` — Sonnet 4.6 call with `max_tokens: 800`. Returns `{ subject, body_text }`.
-- `src/app/api/replies/[id]/draft/route.ts` — POST, generates-or-regenerates draft. Caps at 5 regenerations (`draft_regenerations`).
-- `src/app/api/replies/[id]/send/route.ts` — POST. Atomic `UPDATE ... WHERE status IN ('new','classified') RETURNING *`; calls `buildReplyRequest` (already exists); calls `InstantlyClient.replyViaEmailsApi` (already exists); writes `status='sent'` + `sent_at` + `sent_instantly_email_id`.
+**Shipped files (current):**
+- `src/app/api/replies/[id]/send/route.ts` — POST. Atomic `UPDATE ... WHERE status IN ('new','classified')` to prevent double-send; calls `buildReplyRequest` + `InstantlyClient.replyViaEmailsApi`; CCs `clients.notification_email`; writes `status='sent'` + `sent_at` + `sent_instantly_email_id`. Rolls back status + records `error` on Instantly failure so the client can retry with the same body.
+- `src/app/(dashboard)/client/inbox/[id]/page.tsx` — "Reply via portal" button opens a composer with a pre-filled `Re:` subject and a blank body textarea. Client types their reply and clicks Send.
 
-**Edits:**
-- `src/app/(dashboard)/client/inbox/[id]/page.tsx` — replace the stubbed "Reply via portal" button with a real composer: Generate draft → textarea → Send button.
+**Removed after ship (do NOT re-add without a plan change):**
+- `src/lib/ai/drafter.ts`, `src/lib/ai/prompts/drafter-system.ts`, `src/app/api/replies/[id]/draft/route.ts` — all deleted.
+- `LeadReply.draft_*` fields removed from `src/types/app.ts`. The corresponding DB columns in migration `00025_create_reply_pipeline.sql` are now unused (safe to leave; ship a follow-up `DROP COLUMN` migration if you want to reclaim them).
 
 **Verification:**
-- Open a seeded reply as the client, click "Reply via portal" → draft arrives within ~3s → edit textarea → click Send → real Instantly reply API call succeeds, CC'd to `clients.notification_email`, `lead_replies.status = 'sent'`.
-- Failure modes: throw `MissingReplyFieldError` if `eaccount` or `instantly_email_id` is null (should never happen post-#6 but defense in depth).
+- Open a seeded reply as the client, click "Reply via portal" → composer opens with `Re: <original subject>` pre-filled and an empty body → type a reply → click Send → real Instantly reply API call succeeds, CC'd to `clients.notification_email`, `lead_replies.status = 'sent'`.
+- Failure modes: `MissingReplyFieldError` if `eaccount` or `instantly_email_id` is null (should never happen post-#6 but defense in depth).
 
 ---
 
