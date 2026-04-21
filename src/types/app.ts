@@ -18,6 +18,10 @@ export interface Organization {
   name: string;
   instantly_api_key: string | null;
   instantly_workspace_id: string | null;
+  // Instantly webhook ID returned from POST /api/v2/webhooks. Populated by
+  // the register-webhook admin button (commit #7). Null until one-time
+  // setup runs.
+  instantly_webhook_id: string | null;
   created_at: string;
   updated_at: string;
 }

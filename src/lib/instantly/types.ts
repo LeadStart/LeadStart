@@ -172,6 +172,30 @@ export interface InstantlyReplyRequest {
   assigned_to?: string;
 }
 
+// ===== WEBHOOK REGISTRATION =====
+
+// POST /api/v2/webhooks — subscribes the given URL to Instantly's event
+// firehose. event_type "all_events" covers reply_received + lead_* + the
+// rest; we handle unknown events gracefully in the webhook handler so
+// there's no downside to the broad subscription.
+export interface InstantlyWebhookCreate {
+  event_type: string;  // use "all_events" for a single catch-all subscription
+  url: string;         // must be publicly reachable; Instantly POSTs to this
+  secret?: string;     // appended as ?secret=... on the URL; we set this
+                       // to WEBHOOK_SECRET so the handler can authenticate
+                       // inbound payloads
+  name?: string;       // optional label shown in the Instantly UI
+}
+
+export interface InstantlyWebhookResponse {
+  id: string;
+  event_type: string;
+  url: string;
+  name?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface InstantlyEmailListResponse {
   items: InstantlyEmail[];
   next_starting_after?: string;

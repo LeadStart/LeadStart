@@ -15,6 +15,8 @@ import type {
   InstantlyEmail,
   InstantlyEmailListResponse,
   InstantlyReplyRequest,
+  InstantlyWebhookCreate,
+  InstantlyWebhookResponse,
 } from "./types";
 
 const BASE_URL = "https://api.instantly.ai/api/v2";
@@ -266,6 +268,25 @@ export class InstantlyClient {
   // The response is the created Email object (has id, thread_id, message_id).
   async replyViaEmailsApi(request: InstantlyReplyRequest): Promise<InstantlyEmail> {
     return this.request<InstantlyEmail>("/emails/reply", {
+      method: "POST",
+      body: JSON.stringify(request),
+    });
+  }
+
+  // ===== WEBHOOKS =====
+
+  // Register the given URL to receive Instantly webhook events.
+  //
+  // POST /api/v2/webhooks  — see
+  // https://developer.instantly.ai/api-reference/webhook/create-a-webhook
+  //
+  // We subscribe once per organization with event_type="all_events" and
+  // store the returned id on organizations.instantly_webhook_id. Re-calling
+  // with the same URL just creates a duplicate subscription on Instantly's
+  // side — the admin UI guards against that by disabling the button when
+  // we already have a webhook id.
+  async createWebhook(request: InstantlyWebhookCreate): Promise<InstantlyWebhookResponse> {
+    return this.request<InstantlyWebhookResponse>("/webhooks", {
       method: "POST",
       body: JSON.stringify(request),
     });

@@ -25,9 +25,11 @@ import {
   Mail,
   CreditCard,
   Settings2,
+  Webhook,
 } from "lucide-react";
 import type { Organization } from "@/types/app";
 import { appUrl } from "@/lib/api-url";
+import { RegisterWebhookButton } from "./register-webhook-button";
 
 // Generate hour options 1-12 for AM/PM display
 const HOUR_OPTIONS = Array.from({ length: 12 }, (_, i) => ({
@@ -249,6 +251,27 @@ export default function IntegrationsPage() {
               <p className="text-sm text-red-700">{error}</p>
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Reply-routing webhook */}
+      <Card className="border-border/50 shadow-sm">
+        <CardHeader className="flex flex-row items-center gap-2 pb-3">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#6B72FF]">
+            <Webhook size={16} className="text-white" />
+          </div>
+          <div>
+            <CardTitle className="text-base">Reply-routing webhook</CardTitle>
+            <p className="text-xs text-muted-foreground">
+              Subscribe Instantly to reply + tag events so hot leads land in the inbox
+            </p>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <RegisterWebhookButton
+            initialWebhookId={org?.instantly_webhook_id ?? null}
+            hasApiKey={Boolean(apiKey)}
+          />
         </CardContent>
       </Card>
 
