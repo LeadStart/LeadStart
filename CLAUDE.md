@@ -1,5 +1,6 @@
 @AGENTS.md
 @PROJECT_STATUS.md
+@memory/MEMORY.md
 
 # IMPORTANT: Session Start Protocol
 **Every new session MUST verify the local clone is in sync with GitHub before reading or editing any local files.** The codebase is actively developed across multiple machines and Claude sessions. GitHub is the single source of truth — never assume local files are current.

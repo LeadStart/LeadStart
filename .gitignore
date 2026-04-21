@@ -44,3 +44,6 @@ supabase/.temp/
 instantly_campaigns.json
 .env*.local
 leads*.json
+
+# Claude Code personal overrides (team-wide config lives in .claude/settings.json)
+.claude/settings.local.json
