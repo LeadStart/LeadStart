@@ -1,214 +1,327 @@
-# AI Lead-Reply Classification & Routing — Plan
+# AI Lead-Reply Classification & Routing — Plan (v2)
 
 > **Status:** Approved, not yet implemented. Ready to start commit #1.
-> **Last updated:** 2026-04-18
+> **Last updated:** 2026-04-20
+> **Supersedes:** the v1 plan at this path — v1 assumed the agency owner handled replies with Pushover. v2 puts the client on the phone instead. Git history preserves v1.
 
 ---
 
 ## Resume Brief (read this first)
 
 ### What this is
-An automated pipeline that classifies inbound replies to cold-email campaigns, drafts a human-sounding response with Claude, pushes the draft to the owner's phone via Pushover, and — on a one-tap approval — sends the reply through Instantly with the client CC'd.
+
+An automated pipeline that classifies inbound replies to cold-email campaigns and — when a reply is genuinely hot — immediately notifies the **client** (not the agency owner) with the prospect's phone number front and center. The winning move is a phone call within 5 minutes; the portal is a ringing bell and dossier, not a mail client.
+
+The client can optionally send an email reply via the portal as a fallback; that goes out through Instantly's native reply API (no OAuth, no Gmail handoff), with the client's notification email auto-CC'd so the thread lives in their inbox.
 
 ### State of the plan
-- **Planning complete.** The implementation plan (below) is approved.
-- **API capabilities verified against Instantly's live OpenAPI spec.** Reply endpoint exists, CC field is natively supported (`cc_address_email_list`, comma-separated string), webhook events confirmed.
-- **Probe script exists** at `scripts/probe-instantly-reply-cc.mjs` (uncommitted) — used during planning to confirm endpoints. Can be kept as a reference or deleted.
-- **No code written yet.** Next action is commit #1 of the rollout order.
+
+- **Planning complete.** v2 approved after exploring client-direct-response vs agency-bottleneck model.
+- **Instantly API capabilities verified** against OpenAPI spec. Reply endpoint, CC field, webhook events confirmed.
+- **Probe script** at `scripts/probe-instantly-reply-cc.mjs` — reference only, can be deleted.
+- **No code written yet.** Next action is commit #1.
 
 ### Key decisions locked in
 
 | Decision | Choice | Why |
 |---|---|---|
-| Classification source | Instantly's native AI auto-tagging (via `lead_interested` / `lead_out_of_office` / etc. webhook events) | Free, already running, saves ~half the Claude cost vs building our own classifier |
-| Send mode | Draft + review + 1-tap send via mobile-optimized page | AI never auto-sends; owner can always edit before sending |
-| Mobile channel | Pushover | Reliable push to iOS/Android, supports URL action, $5 one-time |
-| CC trigger categories | `lead_interested` + `lead_meeting_booked` only | Per-client override field exists for future expansion |
-| AI provider | Claude Sonnet 4.6 (drafting only) | Quality matters most on the draft; caching keeps cost ~$3-5/mo |
-| Path for CC | Native `cc_address_email_list` on `POST /api/v2/emails/reply` | Verified in OpenAPI; fallback to `/emails/forward` if it silently drops |
+| **Who responds** | The **client**, not the agency | Speed-to-lead + client's real name in the call beats the agency bottleneck. Unlocks the product moat. |
+| **Primary action** | Phone call via `tel:` link | "Call within 5 min" is what wins; email dialogue is secondary. |
+| **Email reply (fallback)** | Sent via Instantly `/api/v2/emails/reply` with client CC'd | No OAuth; reuses existing sending infrastructure. |
+| **Persona model** | **Path 1 only**: real person on alias domain | Clean continuity when client picks up the phone or takes over the thread. New-client onboarding requirement. |
+| **Classification** | Instantly's tag + keyword prefilter + Claude Haiku verifier | Instantly alone has false positives on wrong-contact-with-referral. |
+| **No auto-send** | Ever | Holding replies are spam; this is a signal-and-dispatch system, never an auto-reply bot. |
+| **Notification channel (v1)** | Single preferred email per client | Client handles their own forwarding rules. Web push + SMS deferred to v2. |
+| **Quiet hours** | None | "Be ready by the phone" is the product; accepted at onboarding. |
+| **Drafter scope** | Fires on demand when client opens the reply composer, not on every hot reply | Most hot replies get a phone call, not an email. Defer Sonnet cost to when it's actually used. |
+| **AI providers** | Claude Haiku (classifier, every hot candidate); Claude Sonnet 4.6 (drafter, on-demand only) | ~$4-7/mo total |
 
 ### What the owner will need to provide (when ready to go live)
-1. **Pushover setup:** register "LeadStart" as an app at pushover.net → copy the API token. Install Pushover app on phone → copy the user key.
-2. **Generate a URL signing secret** (any 32+ random chars).
-3. **Click "Register webhook"** in the admin UI once to subscribe our endpoint to Instantly.
-4. **Per-client configuration:** CC recipients (names + emails), a paragraph of brand voice, a signature block.
+
+1. **Anthropic API key**.
+2. **URL signing secret** (32+ random chars).
+3. **Path 1 migration of the active campaign** — pick the real person on the client's team, swap the persona in Instantly, update signature, confirm written permission to use their name.
+4. **Per-client configuration** (onboarding form): named outreach persona, real name + title + LinkedIn photo, notification email, phone number they'll answer on, brand voice paragraph, signature block.
+5. **Click "Register webhook"** in admin UI once.
+
+### Onboarding implications — mandatory for every new client
+
+The sales and onboarding process now collects, **before** campaign launch:
+
+- Named outreach persona: a real person on the client's team.
+- That person's written permission to use their name on the alias domain.
+- Their LinkedIn photo and title for email signatures and the portal dossier.
+- **Their phone number**. "Be ready by the phone during your sales hours" is a literal product requirement, communicated to the client in plain English at sign-up.
+
+No client onboards without these. Legacy fake-persona campaigns continue operating on manual reply handling — not routed through this pipeline.
 
 ### Security to-dos flagged during planning
+
 - **Rotate the hardcoded Instantly API key** at [scripts/backfill-emails.mjs:9](../../scripts/backfill-emails.mjs) — it's committed to the repo.
-- 5 pre-existing webhooks on the Instantly account (Make.com + LeadConnector) — user confirmed these are deprecated. Do not need to delete them; they don't conflict.
+- 5 pre-existing webhooks on Instantly (Make.com + LeadConnector) — user confirmed deprecated, safe to coexist.
 
 ### Next step when resuming
-**Commit #1 of the rollout order**: migration `00022_create_reply_pipeline.sql` + types + demo mock data. This lets the `/admin/inbox` page render against mock replies locally with zero external services needed. No API keys required. Safe opener.
+
+**Commit #1**: migration `00025_create_reply_pipeline.sql` + types + seed data. Against the real Supabase project (no demo mode per CLAUDE.md). Opens the `/client/inbox` page rendering against empty-or-seeded data. No API keys needed for this commit.
 
 ---
 
 ## Context
 
-LeadStart's core value is fast human follow-up on hot inbound replies, with the client CC'd so they see the win land. Today every reply goes to Instantly's unibox and the owner has to manually triage, write a response, and remember to loop the client in — that's slow, error-prone, and doesn't scale past a handful of active clients.
+LeadStart's core value is fast human follow-up on hot inbound replies. Every other cold-email agency on the market operates the same way: *agency* runs the campaign, *agency* handles replies, *client* sees a monthly report. Prospect talks to "some guy at the agency" by proxy.
 
-This change adds an automated pipeline: Instantly fires webhook events when replies arrive (including its own AI-generated `lead_interested` / `lead_not_interested` / `lead_out_of_office` / etc. classifications) → for hot categories we draft a reply with Claude → Pushover pushes the draft to the owner's phone → one tap opens a mobile page where the owner reviews, edits, and sends the reply through Instantly with the client on CC. All traffic is visualized in a new admin **Inbox** page.
+The v2 model inverts this. When a reply is classified as a real buying signal, the client's phone rings in their portal **within seconds**. The conversation moves to a phone call from the actual decision-maker at the client's company. The agency is a signal-routing platform, not a reply bottleneck.
+
+This requires three things working together:
+1. **Accurate classification** — Instantly's native tags alone aren't reliable (false positives on wrong-person-with-referral). Belt-and-suspenders with keyword prefilter + Claude verifier.
+2. **Persona continuity** — the outreach must already look like it's from the real decision-maker, so the phone pickup feels natural. Path 1 (real person on alias domain) from day one.
+3. **Portal as ringing bell** — email notification to the client's preferred address, deep-link to a mobile-friendly dossier with the prospect's phone number and a one-tap `tel:` button.
 
 ### Empirical API confirmations (verified against Instantly's OpenAPI + live probes)
-- Reply endpoint: `POST /api/v2/emails/reply` — required: `eaccount`, `reply_to_uuid`, `subject`, `body`. Optional: **`cc_address_email_list`** (comma-separated string). **Confirmed via live probe: route returns 400 for empty body.**
+
+- Reply endpoint: `POST /api/v2/emails/reply` — required: `eaccount`, `reply_to_uuid`, `subject`, `body`. Optional: `cc_address_email_list` (comma-separated string).
 - Forward endpoint: `POST /api/v2/emails/forward` — same shape, fallback if CC misbehaves.
 - Webhook register: `POST /api/v2/webhooks` — subscribe via `event_type: "all_events"`.
-- Canonical reply event: `reply_received` (not `email_replied` as this repo previously used).
+- Canonical reply event: `reply_received`.
+- **Phone number is in the webhook payload** on the lead record — no extraction heuristics needed.
 - Native AI event types: `lead_interested`, `lead_not_interested`, `lead_neutral`, `lead_meeting_booked`, `lead_meeting_completed`, `lead_no_show`, `lead_closed`, `lead_out_of_office`, `lead_wrong_person`, `lead_unsubscribed`.
-- Five pre-existing webhooks on account (Make.com + LeadConnector) — user confirmed deprecated.
 
 ---
 
 ## Architecture at a glance
 
 ```
-Instantly
-  └─ POST /api/webhooks/instantly  (existing, extended)
-       ├─ webhook_events insert (unchanged)
-       ├─ if reply_received → ingestReply() (enriches via GET /emails)
-       └─ if lead_* event → tagReply() (sets category on matching row)
-                                                  │
-                              category hot? ──────┘
-                                    │
-                                    ▼
-                          drafter.ts (Sonnet 4.6)
-                                    │
-                          lead_replies row updated
-                                    │
-                             pushover.ts → phone
-                                    │
-                    owner taps → /admin/inbox/[id]/quick?token=<hmac>
-                                    │
-                            [ review / edit / send ]
-                                    │
-                        POST /api/replies/:id/approve
-                                    │
-                  InstantlyClient.replyViaEmailsApi({
-                    eaccount, reply_to_uuid, subject, body,
-                    cc_address_email_list: "client@x.com,client2@x.com"
-                  })
+Instantly webhook: reply_received + lead_* tags
+  │
+  ▼
+/api/webhooks/instantly
+  │
+  ├─ webhook_events insert (audit trail, unchanged)
+  ├─ reply_received → ingestReply() — enrich via GET /emails, dedupe, insert lead_replies(status='new')
+  └─ lead_* tag → tagReply() — writes instantly_category on the row
+  │
+  ▼
+Classifier pipeline (once both content + tag present)
+  │
+  ├─ keyword_prefilter.ts — wrong-person markers, embedded emails for referral, unsubscribe phrases
+  ├─ claude_classifier.ts (Haiku) — final class + confidence + referral_contact extraction
+  └─ decide: hot / silent / needs_human_review
+  │
+  ▼
+If hot (true_interest / referral / qualifying_question / meeting_booked):
+  │
+  ├─ Email to clients.notification_email via Resend
+  │   • Subject: "🔔 {lead_name} @ {company} — {class}"
+  │   • Body: reply snippet + prospect phone + deep link
+  │   • Deep link: /client/inbox/[id]?token=<hmac>  (4h TTL, single-use session-bump)
+  │
+  └─ In-app notification row (for desktop portal users already signed in)
+  │
+  ▼
+Client taps notification → /client/inbox/[id]
+  │
+  ├─ Dossier: lead name, company, title, phone, original reply text
+  ├─ Primary CTA: 📞 Call {phone}  (tel: link)
+  ├─ Secondary CTA: ✉ Reply via portal  (opens drafter)
+  └─ After: outcome capture prompt (called_booked / called_vm / called_no_answer / emailed / no_contact)
+  │
+  ▼ (if client chose "Reply via portal")
+  Drafter (Sonnet) generates initial draft → textarea → edit → Send
+  │
+  ▼
+POST /api/replies/:id/send
+  │
+  InstantlyClient.replyViaEmailsApi({
+    eaccount, reply_to_uuid, subject, body,
+    cc_address_email_list: clients.notification_email
+  })
+  │
+  ▼
+lead_replies.status = 'sent', sent_at recorded.
+Thread continues in client's inbox from here (client CC is on it).
 ```
 
 ---
 
-## Classification → Inbox bucket mapping
+## Classification taxonomy
 
-We use Instantly's event names directly; no new enum required.
+`lead_replies.final_class` — derived from Instantly's tag + keyword prefilter + Claude verifier:
 
-| Instantly event | Bucket | Badge | Draft? | CC client? | Notify? |
+| final_class | Source triggers | Bucket | Notify client? | Prompt call? | Draft on demand? |
 |---|---|---|---|---|---|
-| `lead_interested` | Interested | green | Yes | Yes | High priority |
-| `lead_meeting_booked` | Meeting booked | green | Yes (confirmation) | Yes | High priority |
-| `lead_neutral` | Neutral | amber | No (v1) | No | Normal |
-| `lead_out_of_office` | OOO | slate | No | No | Silent |
-| `lead_wrong_person` | Wrong person | slate | No | No | Silent |
-| `lead_not_interested` | Not interested | red | No | No | Silent |
-| `lead_unsubscribed` | Unsubscribed | red | No | No | Silent |
-| `lead_meeting_completed` | Meeting done | green | No | No | Silent (log) |
-| `lead_closed` | Closed | slate | No | No | Silent |
-| `reply_received` (no tag yet) | Unclassified | slate | No | No | Silent (until lead_* event catches up) |
+| `true_interest` | Instantly `lead_interested` + Claude confirms | Hot | Yes | Yes, priority | Yes |
+| `meeting_booked` | Instantly `lead_meeting_booked` | Hot | Yes | Yes, priority | Yes (confirmation tone) |
+| `qualifying_question` | Claude reclassifies from `lead_interested` | Hot | Yes | Yes | Yes |
+| `objection_price` | Claude reclassifies | Warm | Yes | Optional | Yes |
+| `objection_timing` | Claude reclassifies | Warm | Yes | Optional | Yes |
+| `referral_forward` | Keyword prefilter OR Claude detects new contact in body | Referral | Yes | **Depends on prospect's role** — call if decision-influencer, otherwise log new lead | Yes (intro to new contact) |
+| `wrong_person_no_referral` | Claude reclassifies `lead_wrong_person` | Silent | No | — | No |
+| `ooo` | Instantly `lead_out_of_office` | Silent | No (log return date → reminder) | — | No |
+| `not_interested` | Instantly `lead_not_interested` + Claude confirms | Silent | No | — | No |
+| `unsubscribe` | Instantly `lead_unsubscribed` | Silent | No (honor) | — | No |
+| `needs_review` | Claude confidence < 0.7, or classifier disagrees with Instantly | Review | No (agency owner only) | — | No |
 
-Per-client override lives on `clients.auto_forward_categories` — default `{lead_interested, lead_meeting_booked}`.
+Per-client override: `clients.auto_notify_classes text[]` — default `{true_interest, meeting_booked, qualifying_question, referral_forward}`.
 
 ---
 
-## Data model (single migration: `supabase/migrations/00022_create_reply_pipeline.sql`)
+## Data model
+
+Single migration: `supabase/migrations/00025_create_reply_pipeline.sql`.
 
 ### New enum: `reply_status`
-`pending, approved, sending, sent, rejected, saved_later, expired, failed`
+
+`new` → `classified` → `sent` (if email reply) / `resolved` (if call only) / `rejected` / `expired`
 
 ### New table: `lead_replies`
 
-Separate from `lead_feedback` (different cardinality, different writer, different visibility).
+Separate from `lead_feedback` (different writer, different visibility, different cardinality).
 
-- **Identity:** `id`, `organization_id` (FK), `client_id`, `campaign_id`, `instantly_email_id`, `instantly_message_id`, `thread_id`, `instantly_campaign_id`.
-- **Lead/content:** `lead_email`, `lead_name`, `lead_company`, `from_address`, `to_address`, `subject`, `body_text`, `body_html`, `received_at`, `raw_payload jsonb`.
-- **Category:** `category text` (Instantly event name), `instantly_interest_status integer`, `categorized_at timestamptz`.
-- **Draft:** `draft_subject`, `draft_body`, `draft_model`, `draft_token_usage jsonb`, `draft_generated_at`, `draft_regenerations integer default 0`.
-- **Approval/send:** `status reply_status default 'pending'`, `pushover_sent_at`, `pushover_receipt`, `approval_token_hash`, `approved_at`, `approved_by`, `body_edited boolean`, `final_body_text`, `final_body_html`, `cc_addresses text[]`, `sent_at`, `sent_instantly_email_id`, `rejected_at`, `rejected_reason`, `error`.
+**Identity:** `id`, `organization_id` (FK), `client_id`, `campaign_id`, `instantly_email_id`, `instantly_message_id`, `thread_id`, `instantly_campaign_id`.
 
-**Indexes:** unique `(organization_id, instantly_message_id)` for dedupe; `(organization_id, status, received_at DESC)`; `(organization_id, category, received_at DESC)`; `(thread_id)`; partial `status='pending'`.
+**Lead/content:** `lead_email`, `lead_name`, `lead_company`, `lead_title`, `lead_phone_e164`, `lead_linkedin_url`, `from_address`, `to_address`, `subject`, `body_text`, `body_html`, `received_at`, `raw_payload jsonb`.
 
-**RLS:** owners/VAs SELECT/UPDATE in their own org. Webhook + approve routes use `createAdminClient()` to bypass.
+**Classification:**
+- `instantly_category text` — raw from Instantly
+- `keyword_flags text[]` — wrong-person markers, embedded emails, etc., from prefilter
+- `claude_class text` — classifier output (see taxonomy)
+- `claude_confidence numeric(3,2)`
+- `claude_reason text` — one-line explanation
+- `referral_contact jsonb` — `{email, name, title}` when `claude_class = 'referral_forward'`
+- `final_class text` NOT NULL — the decision used for routing
+- `classified_at timestamptz`
+
+**Notification:**
+- `notified_at timestamptz`
+- `notification_token_hash text` — HMAC for signed portal deep-link
+- `notification_email_id text` — Resend message id
+
+**Outcome (post-contact disposition):**
+- `outcome text` — `called_booked` / `called_vm` / `called_no_answer` / `emailed` / `no_contact`
+- `outcome_notes text`
+- `outcome_logged_at timestamptz`
+- `outcome_logged_by uuid`
+
+**Draft (only if client opens composer):**
+- `draft_body`, `draft_subject`, `draft_model`, `draft_token_usage jsonb`, `draft_generated_at`, `draft_regenerations int default 0`
+
+**Send (only if client chose email reply):**
+- `status reply_status default 'new'`
+- `final_body_text`, `final_body_html`, `sent_at`, `sent_instantly_email_id`, `error`
+
+**Indexes:**
+- unique `(organization_id, instantly_message_id)` — webhook dedupe
+- `(client_id, final_class, received_at DESC)` — client portal inbox
+- `(organization_id, final_class, received_at DESC)` — admin oversight
+- `(thread_id)` — thread linking
+- partial `final_class IN (...hot list...)` for fast unresolved queue
+- `(organization_id, status) WHERE status = 'new'`
+
+**RLS:**
+- Clients SELECT on `client_id = auth_user_client_id()`, UPDATE only on `outcome_*` and `status`.
+- Owners/VAs full SELECT/UPDATE in their org.
+- Webhook + drafter + classifier routes use `createAdminClient()` to bypass.
 
 ### Column additions
-- `clients`: `notification_emails jsonb default '[]'` (array of `{name,email}`), `auto_forward_categories text[] default '{lead_interested,lead_meeting_booked}'`, `brand_voice text`, `signature_block text`.
-- `organizations`: `instantly_webhook_id text`, `pushover_app_token text` (nullable).
-- `webhook_events`: add index on `(payload->>'message_id')`.
 
-### New table: `user_notification_prefs`
-Per-user. Columns: `user_id PK`, `organization_id`, `pushover_user_key text`, `channels_enabled jsonb` default `{"pushover":true,"categories":["lead_interested","lead_meeting_booked"]}`. RLS: user rw own row only.
+- `clients`:
+  - `notification_email text` — single preferred address
+  - `phone_number text` — the line they'll answer on (for display only)
+  - `auto_notify_classes text[] default '{true_interest, meeting_booked, qualifying_question, referral_forward}'`
+  - `persona_name text`, `persona_title text`, `persona_linkedin_url text`, `persona_photo_url text` — Path 1 onboarding fields
+  - `brand_voice text`, `signature_block text`
+- `organizations`:
+  - `instantly_webhook_id text`
+- `webhook_events`:
+  - add index on `(payload->>'message_id')`
 
 ---
 
-## Mobile approval UX
+## Client portal UX
 
-Main user-facing surface of the feature.
+The primary user surface of this feature.
 
-### Push notification (Pushover)
-- **Title:** `{emoji} {Category} — {Lead name} @ {Company}`
-- **Message** (HTML, ~800 chars): prospect's reply snippet + `Draft:` + first chunk of Sonnet's draft
-- **URL:** `https://leadstart-ebon.vercel.app/app/admin/inbox/{id}/quick?token={hmac}`
-- **URL title:** `Review & Send`
-- **Priority:** 1 for hot; 0 for normal; −1 for silent
-- **Sound:** `pushover` for normal; `magic` for hot
+### Email notification (Resend)
 
-Pushover supports one URL per notification. The tap opens a mobile page for edit capability.
+Sent to `clients.notification_email` on every hot reply. Mobile-readable:
 
-### Mobile review page (`/admin/inbox/[id]/quick`)
+- **Subject:** `🔔 {lead_name} @ {company} — {class_label}`
+- **Body:**
+  - One-line hook: "A hot lead just replied. Call them now."
+  - Prospect's full reply (quoted)
+  - Phone number in large text with `tel:` link
+  - Prospect name, company, title
+  - Primary button: "Open in portal" → deep link with signed token
 
-Server-rendered, phone-optimized (max-width 640px, large tap targets, no sidebar chrome):
-1. **Thread header** — lead name, company, campaign, time since received
-2. **Their message card** — full text, read-only
-3. **Draft textarea** — editable, prefilled, auto-grows
-4. **Regenerate button** — tiny prompt → re-draft → new text in textarea (cap 5 regens)
-5. **CC recipients** — editable list
-6. **Primary: `[ Send reply ]`**
-7. **Secondary: `[ Reject ]` `[ Save for later ]`**
+### Client Inbox page — `/client/inbox`
 
-After Send: ephemeral "Sent ✓" page. Single-use HMAC token is invalidated.
+Desktop + mobile. Lists hot replies in reverse-chron. Columns: prospect, company, class badge, received time, outcome badge, phone.
 
-### Auth model
-- **From push link:** HMAC-signed URL (4h TTL, single-use). No login needed.
-- **From desktop Inbox:** Supabase session auth.
+Tapping a row → `/client/inbox/[id]`.
+
+### Reply dossier — `/client/inbox/[id]`
+
+Phone-optimized at mobile widths. Above the fold on any device:
+
+1. **Urgency banner** — "Received X min ago. Every minute matters."
+2. **Prospect card** — name, company, title, LinkedIn link, full reply text.
+3. **📞 Call now: {phone}** — huge primary button, `tel:` link.
+4. **After-call prompt** (revealed after tap or on return to the page): segmented control for outcome + optional notes textarea.
+5. **✉ Reply via portal** — secondary button, expands the drafter (Sonnet generates on first click; textarea + "Send" + "Regenerate"). Sent via Instantly reply API with `cc_address_email_list` = `clients.notification_email`.
+
+Signed deep-link from email: HMAC-SHA256, 4h TTL, single-use (bumps them into a session if not already signed in).
+
+---
+
+## Admin oversight — `/admin/inbox`
+
+Not the primary surface anymore. Read-only observer view:
+
+- All replies across all clients in the organization
+- Filter by client, class, outcome
+- Same classification data visible
+- Admin can reclassify `needs_review` items, edit brand voice, flag persona issues
+- No send button — sending only happens via client portal
+
+Purpose: quality control, coaching, identifying clients who aren't picking up the phone, training Claude's prompt from misclassifications.
 
 ---
 
 ## File-by-file change list
 
 ### Extend existing
-- `src/app/api/webhooks/instantly/route.ts` — branch on `reply_received` → `ingestReply` + `after(runReplyPipeline)`; `lead_*` → `tagReply`
-- `src/lib/instantly/client.ts` — add `replyViaEmailsApi`, `forwardViaEmailsApi`, `createWebhook`
-- `src/lib/instantly/types.ts` — add `InstantlyReplyRequest`, `InstantlyForwardRequest`, `InstantlyWebhookCreate`
-- `src/components/layout/sidebar.tsx` — add `Inbox` entry above Inbox Health; change Inbox Health icon
-- `src/lib/supabase/demo-client.ts` — register new tables in `TABLES`
-- `src/lib/mock-data.ts` — `MOCK_LEAD_REPLIES` (~12 rows), extended `MOCK_CLIENTS`
-- `.env.example` — add `ANTHROPIC_API_KEY`, `PUSHOVER_APP_TOKEN`, `URL_SIGNING_SECRET`
+- `src/app/api/webhooks/instantly/route.ts` — branch on `reply_received` → `ingestReply`; `lead_*` → `tagReply`; after both signals present → `runClassifier` + `notifyClient`
+- `src/lib/instantly/client.ts` — add `replyViaEmailsApi`, `createWebhook`
+- `src/lib/instantly/types.ts` — `InstantlyReplyRequest`, `InstantlyWebhookCreate`, phone field on lead type
+- `src/components/layout/sidebar.tsx` — add `Inbox` entry to client-portal nav (new) + admin-nav oversight view
+- `.env.example` — add `ANTHROPIC_API_KEY`, `URL_SIGNING_SECRET`
 
 ### New files
-- `supabase/migrations/00022_create_reply_pipeline.sql` — full migration
+- `supabase/migrations/00025_create_reply_pipeline.sql` — full migration
 - `src/lib/replies/ingest.ts` — enrich via `GET /emails`, normalize, dedupe
-- `src/lib/replies/tag.ts` — correlate `lead_*` events to rows
-- `src/lib/replies/pipeline.ts` — orchestrate draft + notify when both signals present
+- `src/lib/replies/tag.ts` — correlate `lead_*` events
+- `src/lib/replies/keyword-prefilter.ts` — wrong-person regexes, email extraction
+- `src/lib/replies/classifier.ts` — Claude Haiku structured classification
+- `src/lib/replies/decide.ts` — merge Instantly tag + prefilter + Claude into `final_class`
 - `src/lib/ai/client.ts` — Anthropic SDK singleton
-- `src/lib/ai/prompts/drafter-system.ts` — cached system prompt
-- `src/lib/ai/drafter.ts` — Sonnet 4.6, `max_tokens: 800`
-- `src/lib/ai/demo-responses.ts` — deterministic demo drafts
-- `src/lib/notifications/pushover.ts` — POST to `api.pushover.net`
-- `src/lib/notifications/in-app.ts` — writes to existing `notifications` table
-- `src/lib/security/signed-urls.ts` — HMAC-SHA256, 4h TTL
-- `src/app/api/replies/[id]/approve/route.ts` — atomic send w/ CC
-- `src/app/api/replies/[id]/reject/route.ts`
-- `src/app/api/replies/[id]/save-later/route.ts`
-- `src/app/api/replies/[id]/regenerate/route.ts`
-- `src/app/api/replies/route.ts` — listing
-- `src/app/api/cron/digest-replies/route.ts` — 4h digest
+- `src/lib/ai/prompts/classifier-system.ts` — cached Haiku system prompt
+- `src/lib/ai/prompts/drafter-system.ts` — cached Sonnet system prompt
+- `src/lib/ai/drafter.ts` — Sonnet, on-demand, `max_tokens: 800`
+- `src/lib/notifications/client-email.ts` — Resend template + send
+- `src/lib/security/signed-urls.ts` — HMAC-SHA256, 4h TTL, single-use
+- `src/app/api/replies/[id]/draft/route.ts` — POST generates draft (lazy)
+- `src/app/api/replies/[id]/regenerate/route.ts` — cap 5
+- `src/app/api/replies/[id]/send/route.ts` — atomic send through Instantly, CC injected
+- `src/app/api/replies/[id]/outcome/route.ts` — record outcome + notes
+- `src/app/api/replies/route.ts` — listing for both client and admin
+- `src/app/api/cron/expire-replies/route.ts` — mark `new` > 48h as `expired`
 - `src/app/api/instantly/register-webhook/route.ts` — one-time bootstrap
-- `src/app/(dashboard)/admin/inbox/page.tsx` — desktop Inbox
-- `src/app/(dashboard)/admin/inbox/[id]/page.tsx` — desktop detail
-- `src/app/(dashboard)/admin/inbox/[id]/quick/page.tsx` — mobile quick-approve
-- `src/app/(dashboard)/admin/settings/notifications/page.tsx` — Pushover key + test
-- Extend `src/app/(dashboard)/admin/clients/[clientId]/page.tsx` — notification recipients + brand voice
-- `scripts/fixtures/webhook-*.json` — synthetic events per category
+- `src/app/(dashboard)/client/inbox/page.tsx` — client list view
+- `src/app/(dashboard)/client/inbox/[id]/page.tsx` — dossier + actions
+- `src/app/(dashboard)/admin/inbox/page.tsx` — admin observer list
+- `src/app/(dashboard)/admin/inbox/[id]/page.tsx` — admin observer detail
+- Extend `src/app/(dashboard)/admin/clients/[clientId]/page.tsx` — persona, notification email, phone, brand voice, signature, auto-notify classes
+- `scripts/fixtures/webhook-*.json` — synthetic events per class
 
 ### Dependencies
 - `@anthropic-ai/sdk`
@@ -218,82 +331,107 @@ After Send: ephemeral "Sent ✓" page. Single-use HMAC token is invalidated.
 ## End-to-end flow
 
 1. Webhook arrives → `/api/webhooks/instantly?secret=...` inserts into `webhook_events` (existing), branches on event type.
-2. `reply_received` → `ingestReply` enriches via `GET /emails`, inserts `lead_replies(status='pending', category=null)`. Dedupe on `(org_id, message_id)`.
-3. `lead_*` event → `tagReply` sets `category` on matching row. Creates placeholder if row not yet present.
-4. When both content + category present AND `category ∈ auto_forward_categories`: `runReplyPipeline` calls Sonnet for draft.
-5. Notify via Pushover with HMAC-signed URL (4h TTL).
-6. Owner taps push → `/admin/inbox/[id]/quick?token=...`. HMAC verify → mobile review page.
-7. Owner edits + hits Send → POST `/api/replies/[id]/approve` with override `{body_text, body_html, cc_addresses}`. Atomic `UPDATE ... WHERE status='pending'`. Calls `replyViaEmailsApi` with CC. Marks `status='sent'`. Returns "Sent ✓".
-8. Desktop Inbox at `/admin/inbox` mirrors queue; session auth instead of HMAC.
-9. Cron every 4h: `/api/cron/digest-replies` emails a digest of `pending > 4h`, marks them `expired`.
+2. `reply_received` → `ingestReply` enriches via `GET /emails`, inserts `lead_replies(status='new', final_class=null)`. Dedupes on `(org_id, message_id)`.
+3. `lead_*` tag → `tagReply` sets `instantly_category`. Creates placeholder row if not yet present.
+4. Once both content + tag present → `runClassifier` in `after()`:
+   - Keyword prefilter scans body for wrong-person markers and embedded emails.
+   - Claude Haiku classifier returns structured output.
+   - `decide.ts` merges all three signals into `final_class` + `claude_reason`.
+5. If `final_class ∈ clients.auto_notify_classes`:
+   - Resend email to `clients.notification_email` with deep-link.
+   - In-app notification row.
+6. Client taps email / in-app notification → `/client/inbox/[id]?token=...`.
+   - HMAC verify → bumps into session if not already logged in.
+   - Dossier page renders with phone number and `tel:` button.
+7. Client calls. Returns to portal, logs outcome.
+8. **OR** client taps "Reply via portal":
+   - Drafter fires Sonnet (first open only, cached thereafter).
+   - Client edits textarea, hits Send.
+   - `POST /api/replies/:id/send` atomic `UPDATE ... WHERE status IN ('new','classified')` → calls Instantly reply API with CC.
+   - Returns "Sent ✓", status becomes `sent`.
+9. Cron every 6h: `/api/cron/expire-replies` marks `new` > 48h as `expired` (they never got opened).
 
 ---
 
-## Env vars (to add to `.env.example`)
+## Env vars
 
-- `ANTHROPIC_API_KEY` — Claude Sonnet for drafting
-- `PUSHOVER_APP_TOKEN` — LeadStart's Pushover app token
-- `URL_SIGNING_SECRET` — HMAC key (rotate → invalidates outstanding links)
+- `ANTHROPIC_API_KEY` — classifier (Haiku) + drafter (Sonnet)
+- `URL_SIGNING_SECRET` — HMAC key for portal deep-links (rotate → invalidates outstanding links)
 - (Existing, unchanged) `INSTANTLY_API_KEY`, `RESEND_API_KEY`, `EMAIL_FROM`, `WEBHOOK_SECRET`, `CRON_SECRET`, Supabase keys
-
----
-
-## Demo mode parity
-
-Everything must no-op cleanly under `DEMO_MODE=true`:
-- Anthropic → `demo-responses.ts` template drafts
-- Pushover → log payload, return mock receipt
-- Instantly reply → skip API, set `sent_at`, toast "Demo mode"
-- Register webhook → no-op
-- Mock data populates Inbox on first load
 
 ---
 
 ## Idempotency, reliability, cost
 
-- **Webhook dedupe** — unique `(org_id, message_id)` makes Instantly retries inert
-- **Approve idempotency** — atomic `UPDATE ... WHERE status='pending' RETURNING *`; zero rows → "Already handled" page
-- **Race handling** — `lead_*` before/after `reply_received`; placeholder-row creation either way
-- **Regeneration cap** — 5 per reply
-- **Empty-body guard** — skip drafting if `GET /emails` returns no body
-- **Timeouts** — drafter 20s, Pushover 10s, Instantly 10s, GET-emails 10s
-- **Cost envelope** — Sonnet only, ~200 drafts/mo, cached prompts → **$3-5/month**
+- **Webhook dedupe** — unique `(org_id, message_id)` makes Instantly retries inert.
+- **Send idempotency** — atomic `UPDATE ... WHERE status IN ('new','classified') RETURNING *`; zero rows → "Already handled" page.
+- **Classifier idempotency** — only runs when both `body_text` and `instantly_category` are populated and `final_class` is null. Webhook ordering races are handled by the placeholder-row pattern.
+- **Regeneration cap** — 5 drafts per reply.
+- **Empty-body guard** — skip classification if `GET /emails` returns no body; mark `needs_review`.
+- **Timeouts** — Haiku classifier 8s, Sonnet drafter 20s, Instantly send 10s, `GET /emails` 10s, Resend 10s.
+- **Cost envelope** (at ~200 hot replies/mo):
+  - Haiku classifier: ~$0.10/mo (runs on every candidate, ~400/mo including non-hot)
+  - Sonnet drafter (on-demand only, ~20% of hot replies): ~$2/mo
+  - Total AI: **$2-3/mo**. Way under v1's estimate because most hot replies never trigger the drafter — client just calls.
 
 ---
 
 ## Verification plan
 
-**Local demo mode:**
-1. `DEMO_MODE=true npm run dev`
-2. `curl -X POST 'http://localhost:3000/api/webhooks/instantly?secret=dev' -H 'Content-Type: application/json' -d @scripts/fixtures/webhook-lead-interested.json`
-3. `/admin/inbox` shows row in correct category with draft
-4. `/admin/inbox/[id]/quick` at phone width — edit draft, Send → demo toast
-5. `/admin/settings/notifications` → "Send test" → console logs
+### Local dev (against real Supabase)
+1. `npm run dev`
+2. Apply `00025` migration to local branch of Supabase project.
+3. `curl -X POST 'http://localhost:3000/api/webhooks/instantly?secret=dev' -H 'Content-Type: application/json' -d @scripts/fixtures/webhook-lead-interested.json`
+4. Within ~1s: `/client/inbox` shows new row, `final_class` correctly `true_interest`.
+5. Open `/client/inbox/[id]` → dossier shows phone + prominent `tel:` button.
+6. Tap "Reply via portal" → draft generates (Sonnet call logged), textarea populates.
+7. Send → log shows Instantly reply API call with CC populated.
+8. Log outcome → outcome columns populated.
+9. Fire `webhook-lead-wrong-person-with-referral.json` → `final_class = 'referral_forward'`, `referral_contact` populated, no notification to client unless they have `referral_forward` in their `auto_notify_classes`.
 
-**Staging with real services:**
-1. Real keys configured, Pushover installed on phone
-2. Register webhook via admin UI button
-3. Reply to sandbox campaign: "Sounds interesting, what's the cost?"
-4. Within ~15s: phone buzzes
-5. Tap push → mobile page → edit word → Send
-6. Verify prospect received reply AND test CC received copy AND Gmail threads it
-7. Reply "Not interested" → confirm silent, row in Inbox as `lead_not_interested`
+### Staging / production with real services
+1. API keys configured.
+2. Migrate active campaign to Path 1: real persona in Instantly, signature updated.
+3. Client onboarded through new form: notification email, phone, persona details.
+4. Register webhook via admin UI button.
+5. Reply to sandbox campaign: "Sounds interesting, what's the cost?"
+6. Within ~15s: client's notification email arrives with phone number + deep link.
+7. Tap deep link → dossier renders → tap "Call" → confirm `tel:` opens dialer.
+8. Log outcome.
+9. Reply "I'm not the right person, please contact Mike at mike@..." → `final_class = 'referral_forward'`, `referral_contact.email = 'mike@...'` extracted.
+10. Reply "Not interested" → silent (no notification email), row tagged in admin inbox.
 
-**Regression:** every non-reply webhook still hits `webhook_events` unchanged; bounce metrics unchanged; `/admin/feedback` unaffected.
+### Regression
+- Every non-reply webhook still hits `webhook_events` unchanged.
+- Bounce metrics unchanged.
+- `/admin/feedback` unaffected.
+- Existing manual reply handling for legacy fake-persona campaigns unaffected (those campaigns aren't in the `auto_notify_classes` pipeline since they have no configured `persona_name`).
 
 ---
 
 ## Risks & mitigations
 
-1. **Webhook payload completeness** — real `reply_received` payload fields not precisely documented. Mitigation: enrich via `GET /emails` (pattern already established in `scripts/backfill-emails.mjs`).
-2. **CC field silent-drop** — documented but unverified empirically. Mitigation: first real reply surfaces it. Fallback: `POST /api/v2/emails/forward` right after reply.
-3. **HMAC token leak** — 4h TTL + single-use enforcement.
-4. **Next.js 16 `after()` API** — verify shape at implementation time. Fallback: internal fetch.
-5. **Classification event race** — placeholder rows + 15-min correlation window.
-6. **RLS on unauthenticated routes** — explicit `createAdminClient()` in webhook + HMAC approve. Enforce at code review.
-7. **Pre-existing webhooks** — user confirmed Make.com + LeadConnector are deprecated; safe to coexist.
-8. **Pushover rate limits** — 10k/mo free; at ~200 hot leads/mo we're 2%.
-9. **Demo-mode bleed** — every external call needs `isDemoMode()` guard.
+1. **Client doesn't answer the phone** — The entire product thesis depends on it. Onboarding is explicit: "Be ready by the phone during sales hours." Admin oversight flags clients whose outcome log shows `called_no_answer` repeatedly. Outcome tracking on every reply creates the data to coach clients or drop them from the hot-routing pipeline.
+
+2. **Classification accuracy** — Three-layer defense (Instantly tag + keyword prefilter + Claude verifier). `needs_review` bucket catches low-confidence cases for admin triage. Log every classification and outcome; once we have ~100 labeled pairs we can tune prompts or fine-tune.
+
+3. **Persona mismatch** — If the active campaign still has a fake persona when this ships, the whole flow breaks (prospect sees Sarah emailing but Mike calling). **Mitigation:** v1 hard-requires `persona_name` to be populated for a client to be in the pipeline. Legacy campaigns get no-ops'd with a clear admin warning.
+
+4. **Webhook payload completeness** — real `reply_received` payload fields not precisely documented. Mitigation: enrich via `GET /emails` (pattern established in `scripts/backfill-emails.mjs`).
+
+5. **CC field silent-drop on Instantly side** — documented but unverified empirically. Mitigation: first real send surfaces it. Fallback: `POST /api/v2/emails/forward`.
+
+6. **HMAC token leak** — 4h TTL + single-use enforcement + session bump rather than direct access.
+
+7. **Next.js 16 `after()` API** — verify shape at implementation time. Fallback: queue row + cron worker.
+
+8. **Classification event race** — `reply_received` and `lead_*` can arrive in either order. Placeholder-row pattern handles both.
+
+9. **RLS on unauthenticated routes** — webhook + HMAC approve use `createAdminClient()`. Enforce at code review.
+
+10. **Pre-existing webhooks** — user confirmed Make.com + LeadConnector are deprecated. Safe.
+
+11. **Regulatory / CAN-SPAM** — replies sent via Instantly reply API from the alias domain are still subject to the existing sender's compliance posture (unchanged). No new CAN-SPAM exposure because the portal isn't sending on new senders — it's continuing an existing thread.
 
 ---
 
@@ -301,13 +439,15 @@ Everything must no-op cleanly under `DEMO_MODE=true`:
 
 Each commit leaves the app runnable:
 
-1. **Migration + types + demo mock data** — Inbox visible against mock data
-2. **Admin Inbox desktop pages** — read-only against mock
-3. **Mobile quick-approve page** — stubbed approve/reject calls
-4. **`@anthropic-ai/sdk` + drafter** — demo stubs
-5. **Pushover client + signed URLs + real approve/reject/regenerate/save-later routes**
-6. **Extend webhook handler → ingest + tag + pipeline**
-7. **Instantly client additions (`replyViaEmailsApi`, `forwardViaEmailsApi`, `createWebhook`) + register-webhook bootstrap**
-8. **Settings pages** — notifications + per-client editor
-9. **Cron digest-replies + digest email template**
-10. **Staging smoke test against real Instantly, then push to master**
+1. **Migration + types + seed data** — `/client/inbox` renders against seeded hot replies
+2. **Client inbox list + dossier page** — read-only against seeded data, phone button works (`tel:` link), outcome capture wired to API stub
+3. **Admin observer view** — `/admin/inbox` read-only
+4. **`@anthropic-ai/sdk` + classifier + prefilter + decide merger** — classifier callable in-process, unit tests against fixture payloads
+5. **Resend client-notification email + signed-URL security**
+6. **Extend webhook handler → ingest + tag + classify + notify pipeline**
+7. **Instantly client additions (`replyViaEmailsApi`, `createWebhook`) + register-webhook bootstrap**
+8. **On-demand drafter + reply-via-portal send path** — the fallback flow
+9. **Outcome capture UI polish + admin reclassify for `needs_review`**
+10. **Cron `expire-replies`** — 48h expiry sweeper
+11. **Settings pages** — per-client persona + notification email + brand voice + signature + auto-notify classes
+12. **Staging smoke test** against real Instantly + real client onboarding Path 1 flow, then merge to master

@@ -21,6 +21,7 @@ import {
   ContactRound,
   CheckSquare,
   Inbox,
+  Phone,
   X,
 } from "lucide-react";
 
@@ -35,6 +36,7 @@ const adminNav: NavItem[] = [
   { href: "/admin/clients", label: "Clients", icon: <Users size={18} /> },
   { href: "/admin/campaigns", label: "Campaigns", icon: <Mail size={18} /> },
   { href: "/admin/contacts", label: "Contacts", icon: <ContactRound size={18} /> },
+  { href: "/admin/inbox", label: "Inbox", icon: <Phone size={18} /> },
   { href: "/admin/feedback", label: "Feedback", icon: <MessageSquare size={18} /> },
   { href: "/admin/reports", label: "Reports", icon: <FileText size={18} /> },
   { href: "/admin/prospects", label: "Prospects", icon: <Target size={18} /> },
@@ -51,6 +53,7 @@ const adminSettingsNav: NavItem[] = [
 
 const clientNav: NavItem[] = [
   { href: "/client", label: "Dashboard", icon: <LayoutDashboard size={18} /> },
+  { href: "/client/inbox", label: "Inbox", icon: <Phone size={18} /> },
   { href: "/client/replies", label: "Replies", icon: <Inbox size={18} /> },
 ];
 

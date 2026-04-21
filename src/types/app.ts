@@ -48,6 +48,16 @@ export interface Client {
   report_recipients: string[] | null;
   stripe_customer_id: string | null;
   status: ClientStatus;
+  // Reply routing pipeline (migration 00025) — populated during onboarding
+  notification_email: string | null;     // single address for hot-reply notifications
+  phone_number: string | null;            // for display in the dossier
+  auto_notify_classes: ReplyClass[];      // default: hot classes only
+  persona_name: string | null;            // real person on alias domain (Path 1)
+  persona_title: string | null;
+  persona_linkedin_url: string | null;
+  persona_photo_url: string | null;
+  brand_voice: string | null;
+  signature_block: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -378,3 +388,118 @@ export interface PaymentLink {
   expires_at: string | null;
   completed_at: string | null;
 }
+
+// ---------- Reply routing pipeline (migration 00025) ----------
+
+export type ReplyStatus =
+  | "new"          // ingested, classifier hasn't run yet
+  | "classified"   // classifier ran, waiting for client action (hot classes only)
+  | "sent"         // client sent email reply via portal
+  | "resolved"     // client handled offline (phone call, etc.)
+  | "rejected"     // client explicitly dismissed
+  | "expired";     // auto-expired after 48h of no action
+
+// Classifier output. Matches final_class text column. See plan taxonomy.
+export type ReplyClass =
+  | "true_interest"
+  | "meeting_booked"
+  | "qualifying_question"
+  | "objection_price"
+  | "objection_timing"
+  | "referral_forward"
+  | "wrong_person_no_referral"
+  | "ooo"
+  | "not_interested"
+  | "unsubscribe"
+  | "needs_review";
+
+export type ReplyOutcome =
+  | "called_booked"
+  | "called_vm"
+  | "called_no_answer"
+  | "emailed"
+  | "no_contact";
+
+export interface ReplyReferralContact {
+  email: string;
+  name: string | null;
+  title: string | null;
+}
+
+export interface LeadReply {
+  id: string;
+  organization_id: string;
+  client_id: string;
+  campaign_id: string | null;
+
+  // Instantly references
+  instantly_email_id: string | null;
+  instantly_message_id: string | null;
+  thread_id: string | null;
+  instantly_campaign_id: string | null;
+
+  // Lead identity
+  lead_email: string;
+  lead_name: string | null;
+  lead_company: string | null;
+  lead_title: string | null;
+  lead_phone_e164: string | null;
+  lead_linkedin_url: string | null;
+
+  // Reply content
+  from_address: string | null;
+  to_address: string | null;
+  subject: string | null;
+  body_text: string | null;
+  body_html: string | null;
+  received_at: string;
+  raw_payload: Record<string, unknown> | null;
+
+  // Classification
+  instantly_category: string | null;
+  keyword_flags: string[];
+  claude_class: ReplyClass | null;
+  claude_confidence: number | null;
+  claude_reason: string | null;
+  referral_contact: ReplyReferralContact | null;
+  final_class: ReplyClass | null;
+  classified_at: string | null;
+
+  // Notification
+  notified_at: string | null;
+  notification_token_hash: string | null;
+  notification_email_id: string | null;
+
+  // Outcome
+  outcome: ReplyOutcome | null;
+  outcome_notes: string | null;
+  outcome_logged_at: string | null;
+  outcome_logged_by: string | null;
+
+  // Drafter
+  draft_body: string | null;
+  draft_subject: string | null;
+  draft_model: string | null;
+  draft_token_usage: Record<string, unknown> | null;
+  draft_generated_at: string | null;
+  draft_regenerations: number;
+
+  // Send
+  status: ReplyStatus;
+  final_body_text: string | null;
+  final_body_html: string | null;
+  sent_at: string | null;
+  sent_instantly_email_id: string | null;
+  error: string | null;
+
+  created_at: string;
+  updated_at: string;
+}
+
+// Classes that trigger client notification by default.
+export const HOT_REPLY_CLASSES: ReplyClass[] = [
+  "true_interest",
+  "meeting_booked",
+  "qualifying_question",
+  "referral_forward",
+];
