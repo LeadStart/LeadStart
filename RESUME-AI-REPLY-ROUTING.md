@@ -1,8 +1,9 @@
 # RESUME: AI Reply Routing — Commits 5–12
 
-> **Status as of last push:** commit `b4a9858` on `master`.
-> **What's done:** commits 1–7 (code-complete; not yet activated in production).
+> **Status as of last push:** see `git log --oneline -1` — latest code commit is commit #7 (`b4a9858`).
+> **What's done:** commits 1–7 (code-complete; not yet activated in production). ✅ markers on each commit section below.
 > **What's left:** commits #8–12 + the one-time "Register webhook" click, deferred until a safe test setup exists.
+> **Start here:** scroll to [Commit #8](#commit-8--on-demand-drafter--reply-via-portal-send-path) — commits 5–7 are preserved above it for reference only.
 >
 > **⚠️ DELETE THIS FILE when commit #12 is merged.** Instructions at the bottom.
 >
@@ -37,6 +38,8 @@ This document lets a fresh session pick up the reply-routing build without re-re
 
 ## Commit #5 — Resend client-notification email + signed-URL security
 
+> ✅ **SHIPPED in `4f59e4b`** (2026-04-21). Section preserved for reference; skip to commit #8.
+
 **Scope:** Build the "hot lead just landed, call them" email. Plus the HMAC signed-URL helper that makes the email's deep link safe to click without a session.
 
 **New files:**
@@ -55,6 +58,8 @@ This document lets a fresh session pick up the reply-routing build without re-re
 ---
 
 ## Commit #6 — Webhook handler: ingest + tag + classify + notify
+
+> ✅ **SHIPPED in `aa32b60`** (2026-04-21). Section preserved for reference; skip to commit #8.
 
 **Scope:** Wire everything built in commits 3–5 into the live `/api/webhooks/instantly` route. This is the commit where it goes from "all dressed up offline" to "actually running when Instantly fires a webhook."
 
@@ -79,6 +84,8 @@ This document lets a fresh session pick up the reply-routing build without re-re
 ---
 
 ## Commit #7 — Register-webhook bootstrap + createWebhook method
+
+> ✅ **CODE SHIPPED in `b4a9858`** (2026-04-21) — but the button has NOT been clicked. See ["Activation — do not run yet"](#activation--do-not-run-yet-post-7-todo) below before touching it. Skip to commit #8 for the next code work.
 
 **Scope:** One-time setup so Instantly actually delivers webhooks to our handler. Admin clicks a button; we POST to `/api/v2/webhooks`; store the returned webhook ID on `organizations.instantly_webhook_id`.
 
