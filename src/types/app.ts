@@ -472,6 +472,7 @@ export interface LeadReply {
   // Notification
   notified_at: string | null;
   notification_token_hash: string | null;
+  notification_token_consumed_at: string | null;
   notification_email_id: string | null;
 
   // Outcome
