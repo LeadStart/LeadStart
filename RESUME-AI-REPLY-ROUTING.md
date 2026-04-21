@@ -22,8 +22,8 @@ This document lets a fresh session pick up the reply-routing build without re-re
 
 ## Pre-requisites (one-time, check before starting #5)
 
-- [ ] `ANTHROPIC_API_KEY` in `.env.local` and Vercel → **already present locally; sync to Vercel before #6 ships.**
-- [ ] `URL_SIGNING_SECRET` in both envs → **not yet created; needed for #5.** Generate: `openssl rand -hex 32`.
+- [x] `ANTHROPIC_API_KEY` in `.env.local` and Vercel → done 2026-04-21.
+- [x] `URL_SIGNING_SECRET` in both envs → done 2026-04-21. See [src/lib/security/signed-urls.ts](src/lib/security/signed-urls.ts) for purpose + token shape.
 - [ ] `RESEND_API_KEY` in both envs → already used elsewhere in the app; verify with `grep RESEND_API_KEY .env.local`.
 - [ ] `INSTANTLY_API_KEY` in both envs → already present.
 - [ ] Migration 00026 applied to Supabase → already applied (check with `node scripts/supabase-sql.mjs "SELECT column_name FROM information_schema.columns WHERE table_name='lead_replies' AND column_name='eaccount'"` — should return one row).
