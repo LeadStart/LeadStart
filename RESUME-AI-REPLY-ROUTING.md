@@ -1,9 +1,11 @@
 # RESUME: AI Reply Routing — Commits 5–12
 
-> **Status as of last push:** see `git log --oneline -1` — latest code commit is commit #8 (`921bea9`).
-> **What's done:** commits 1–8 (code-complete; not yet activated in production). ✅ markers on each commit section below.
-> **What's left:** commits #9–12 + the one-time "Register webhook" click, deferred until a safe test setup exists.
-> **Start here:** scroll to [Commit #9](#commit-9--outcome-capture-api-polish--admin-reclassify-for-needs_review) — commits 5–8 are preserved above it for reference only.
+> **Status as of last push:** see `git log --oneline -1` — latest code commit is commit #9 (pending push).
+> **What's done:** commits 1–9 (code-complete; not yet activated in production). ✅ markers on each commit section below.
+> **What's left:** commits #10–12 + the one-time "Register webhook" click, deferred until a safe test setup exists.
+> **Start here:** scroll to [Commit #10](#commit-10--cron-expire-replies) — commits 5–9 are preserved above it for reference only.
+>
+> **⚠️ Migration 00028 needs to be applied to Supabase before `/api/replies/[id]/reclassify` will succeed in production.** Run it via `node scripts/supabase-sql.mjs` or the Supabase dashboard. Local dev needs it too if the column writes aren't silently dropped by RLS.
 >
 > **⚠️ DELETE THIS FILE when commit #12 is merged.** Instructions at the bottom.
 >
@@ -148,6 +150,10 @@ Commit #7 is code-complete but the button has **not** been clicked. Clicking it 
 ---
 
 ## Commit #9 — Outcome capture API polish + admin reclassify for needs_review
+
+> ✅ **SHIPPED** (2026-04-21). Section preserved for reference; skip to commit #10.
+>
+> **Migration 00028 must be applied before the reclassify route works** — it adds `reclassified_by`, `reclassified_at`, `reclassified_from` columns.
 
 **Scope:** Replace the direct RLS `UPDATE` in the current dossier with proper API endpoints. Gives us audit logging + server-side validation.
 

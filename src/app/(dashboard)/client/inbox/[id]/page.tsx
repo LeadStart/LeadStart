@@ -134,28 +134,33 @@ export default function ReplyDossierPage() {
     if (!reply || !outcomeValue) return;
     setSavingOutcome(true);
     setOutcomeSaved(false);
-    // Stub: writes directly via RLS-permitted UPDATE. Commit #9 swaps this
-    // for a POST to /api/replies/[id]/outcome which does audit logging.
-    const supabase = createClient();
-    const { error } = await supabase
-      .from("lead_replies")
-      .update({
-        outcome: outcomeValue,
-        outcome_notes: outcomeNotes || null,
-        outcome_logged_at: new Date().toISOString(),
-        status: outcomeValue === "emailed" ? reply.status : "resolved",
-      })
-      .eq("id", reply.id);
-    setSavingOutcome(false);
-    if (!error) {
-      setOutcomeSaved(true);
-      setReply((prev) => prev && {
-        ...prev,
-        outcome: outcomeValue,
-        outcome_notes: outcomeNotes || null,
-        outcome_logged_at: new Date().toISOString(),
+    try {
+      const res = await fetch(`/api/replies/${reply.id}/outcome`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          outcome: outcomeValue,
+          outcome_notes: outcomeNotes || null,
+        }),
       });
-      setTimeout(() => setOutcomeSaved(false), 2000);
+      const data = await res.json();
+      if (res.ok) {
+        setOutcomeSaved(true);
+        setReply((prev) =>
+          prev && {
+            ...prev,
+            outcome: outcomeValue,
+            outcome_notes: outcomeNotes || null,
+            outcome_logged_at: data.outcome_logged_at,
+            status: data.status ?? prev.status,
+          }
+        );
+        setTimeout(() => setOutcomeSaved(false), 2000);
+      } else {
+        console.error("[outcome] save failed:", data);
+      }
+    } finally {
+      setSavingOutcome(false);
     }
   }
 

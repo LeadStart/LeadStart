@@ -485,6 +485,11 @@ export interface LeadReply {
   outcome_logged_at: string | null;
   outcome_logged_by: string | null;
 
+  // Reclassify audit (populated by POST /api/replies/[id]/reclassify, migration 00028)
+  reclassified_by: string | null;
+  reclassified_at: string | null;
+  reclassified_from: ReplyClass | null;
+
   // Send (manual reply composed by the client via /api/replies/[id]/send)
   status: ReplyStatus;
   final_body_text: string | null;

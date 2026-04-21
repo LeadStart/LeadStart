@@ -80,21 +80,31 @@ export default function AdminReplyDetailPage() {
     if (!reply || !newClass || newClass === reply.final_class) return;
     setSaving(true);
     setSaved(false);
-    const supabase = createClient();
-    const { error } = await supabase
-      .from("lead_replies")
-      .update({
-        final_class: newClass,
-        // Admin override: mark as classified if it was needs_review
-        status: reply.status === "new" ? "classified" : reply.status,
-      })
-      .eq("id", reply.id);
-    setSaving(false);
-    if (!error) {
-      setSaved(true);
-      setReply((prev) => prev && { ...prev, final_class: newClass });
-      setNewClass("");
-      setTimeout(() => setSaved(false), 2000);
+    try {
+      const res = await fetch(`/api/replies/${reply.id}/reclassify`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ final_class: newClass }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setSaved(true);
+        setReply((prev) =>
+          prev && {
+            ...prev,
+            final_class: newClass,
+            status: data.status ?? prev.status,
+            reclassified_from: data.reclassified_from ?? prev.reclassified_from,
+            reclassified_at: data.reclassified_at ?? prev.reclassified_at,
+          }
+        );
+        setNewClass("");
+        setTimeout(() => setSaved(false), 2000);
+      } else {
+        console.error("[reclassify] save failed:", data);
+      }
+    } finally {
+      setSaving(false);
     }
   }
 
