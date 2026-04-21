@@ -1,9 +1,9 @@
 # RESUME: AI Reply Routing — Commits 5–12
 
-> **Status as of last push:** see `git log --oneline -1` — latest code commit is commit #7 (`b4a9858`).
-> **What's done:** commits 1–7 (code-complete; not yet activated in production). ✅ markers on each commit section below.
-> **What's left:** commits #8–12 + the one-time "Register webhook" click, deferred until a safe test setup exists.
-> **Start here:** scroll to [Commit #8](#commit-8--on-demand-drafter--reply-via-portal-send-path) — commits 5–7 are preserved above it for reference only.
+> **Status as of last push:** see `git log --oneline -1` — latest code commit is commit #8 (`921bea9`).
+> **What's done:** commits 1–8 (code-complete; not yet activated in production). ✅ markers on each commit section below.
+> **What's left:** commits #9–12 + the one-time "Register webhook" click, deferred until a safe test setup exists.
+> **Start here:** scroll to [Commit #9](#commit-9--outcome-capture-api-polish--admin-reclassify-for-needs_review) — commits 5–8 are preserved above it for reference only.
 >
 > **⚠️ DELETE THIS FILE when commit #12 is merged.** Instructions at the bottom.
 >
@@ -128,6 +128,8 @@ Commit #7 is code-complete but the button has **not** been clicked. Clicking it 
 ---
 
 ## Commit #8 — On-demand drafter + reply-via-portal send path
+
+> ✅ **SHIPPED in `921bea9`** (2026-04-21). Section preserved for reference; skip to commit #9.
 
 **Scope:** The fallback flow. Phone-first is primary; but the client might still want to send an email reply through the portal. This commit wires that end-to-end: open composer → Claude drafts a reply → client edits → send through Instantly with `eaccount` + CC.
 
