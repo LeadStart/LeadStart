@@ -1,0 +1,23 @@
+{
+  "event_type": "lead_interested",
+  "timestamp": "2026-04-21T09:14:22.000Z",
+  "campaign_id": "bba218f5-1970-499c-aae7-560a41a78d8d",
+  "campaign_name": "David Cabrera - 2025 Builders Agents",
+  "workspace_id": "wk_demo_01",
+  "email": "sarah.chen@vantage-analytics.example",
+  "lead_email": "sarah.chen@vantage-analytics.example",
+  "first_name": "Sarah",
+  "last_name": "Chen",
+  "company_name": "Vantage Analytics",
+  "title": "VP of Revenue Operations",
+  "phone": "+14155550131",
+  "linkedin_url": "https://www.linkedin.com/in/sarahchen-demo",
+  "website": "https://vantage-analytics.example",
+  "step": 2,
+  "reply_subject": "Re: Quick question about your outbound",
+  "reply_body": "Hi Mike,\n\nThis caught my eye — we've been trying to figure out a better way to run outbound at scale. What's the pricing like, and do you have time this week for a quick 15-min call? My afternoons Tue–Thu are usually open.\n\nThanks,\nSarah",
+  "instantly_email_id": "e1111111-aaaa-4aaa-aaaa-111111111111",
+  "message_id": "<msg-sarah-001@mail.example>",
+  "thread_id": "thr-sarah-001",
+  "eaccount": "mike-outreach@cabrera-alias.pro"
+}

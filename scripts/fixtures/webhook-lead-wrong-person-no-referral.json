@@ -1,0 +1,19 @@
+{
+  "event_type": "lead_wrong_person",
+  "timestamp": "2026-04-21T03:22:44.000Z",
+  "campaign_id": "bba218f5-1970-499c-aae7-560a41a78d8d",
+  "campaign_name": "David Cabrera - 2025 Builders Agents",
+  "workspace_id": "wk_demo_01",
+  "email": "taylor@summit-dynamics.example",
+  "lead_email": "taylor@summit-dynamics.example",
+  "first_name": "Taylor",
+  "last_name": "Brooks",
+  "company_name": "Summit Dynamics",
+  "step": 3,
+  "reply_subject": "Re: outbound at Summit",
+  "reply_body": "Wrong person — I don't handle this. Thanks.",
+  "instantly_email_id": "e3333333-cccc-4ccc-cccc-333333333333",
+  "message_id": "<msg-taylor-001@mail.example>",
+  "thread_id": "thr-taylor-001",
+  "eaccount": "mike-outreach@cabrera-alias.pro"
+}

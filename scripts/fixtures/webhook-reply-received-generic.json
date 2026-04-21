@@ -1,0 +1,21 @@
+{
+  "event_type": "reply_received",
+  "timestamp": "2026-04-21T09:00:00.000Z",
+  "campaign_id": "bba218f5-1970-499c-aae7-560a41a78d8d",
+  "campaign_name": "David Cabrera - 2025 Builders Agents",
+  "workspace_id": "wk_demo_01",
+  "email": "alex@ridgeline-capital.example",
+  "lead_email": "alex@ridgeline-capital.example",
+  "first_name": "Alex",
+  "last_name": "Winters",
+  "company_name": "Ridgeline Capital",
+  "title": "Partner",
+  "phone": "+12125550177",
+  "step": 1,
+  "reply_subject": "Re: how we help hedge funds",
+  "reply_body": "Interesting — a few questions before I'd take a meeting. How do you handle compliance review of outbound messaging? We're regulated and can't just let anyone send emails on our behalf. Also — can you share a rough sense of pricing per seat?",
+  "instantly_email_id": "e6666666-ffff-4fff-ffff-666666666666",
+  "message_id": "<msg-alex-001@mail.example>",
+  "thread_id": "thr-alex-001",
+  "eaccount": "mike-outreach@cabrera-alias.pro"
+}

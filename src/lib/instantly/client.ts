@@ -14,6 +14,7 @@ import type {
   InstantlyStepAnalytics,
   InstantlyEmail,
   InstantlyEmailListResponse,
+  InstantlyReplyRequest,
 } from "./types";
 
 const BASE_URL = "https://api.instantly.ai/api/v2";
@@ -247,6 +248,27 @@ export class InstantlyClient {
       cursor = response.next_starting_after;
     } while (cursor);
     return all;
+  }
+
+  // Fetch a single email by id. Used by the webhook handler to enrich the
+  // `reply_received` event (the webhook body is sparse; the /emails/{id}
+  // response has 41 fields including `eaccount`, `thread_id`, body, etc.).
+  async getEmail(emailId: string): Promise<InstantlyEmail> {
+    return this.request<InstantlyEmail>(`/emails/${emailId}`);
+  }
+
+  // Send a reply through Instantly's native reply endpoint.
+  //
+  // POST /api/v2/emails/reply  — see
+  // https://developer.instantly.ai/api-reference/email/reply-to-an-email
+  //
+  // Required body fields: eaccount, reply_to_uuid, subject, body.
+  // The response is the created Email object (has id, thread_id, message_id).
+  async replyViaEmailsApi(request: InstantlyReplyRequest): Promise<InstantlyEmail> {
+    return this.request<InstantlyEmail>("/emails/reply", {
+      method: "POST",
+      body: JSON.stringify(request),
+    });
   }
 
   // ===== CONNECTION TEST =====

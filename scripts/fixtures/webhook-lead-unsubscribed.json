@@ -1,0 +1,19 @@
+{
+  "event_type": "lead_unsubscribed",
+  "timestamp": "2026-04-21T06:00:00.000Z",
+  "campaign_id": "bba218f5-1970-499c-aae7-560a41a78d8d",
+  "campaign_name": "David Cabrera - 2025 Builders Agents",
+  "workspace_id": "wk_demo_01",
+  "email": "dana@east-ridge-holdings.example",
+  "lead_email": "dana@east-ridge-holdings.example",
+  "first_name": "Dana",
+  "last_name": "Foster",
+  "company_name": "East Ridge Holdings",
+  "step": 4,
+  "reply_subject": "Re: follow up",
+  "reply_body": "Please unsubscribe me. Do not email me again.",
+  "instantly_email_id": "e5555555-eeee-4eee-eeee-555555555555",
+  "message_id": "<msg-dana-001@mail.example>",
+  "thread_id": "thr-dana-001",
+  "eaccount": "mike-outreach@cabrera-alias.pro"
+}

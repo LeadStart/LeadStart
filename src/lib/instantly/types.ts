@@ -139,13 +139,37 @@ export interface InstantlyEmail {
   content_preview?: string;
   from_address_email: string;
   to_address_email_list?: string[];
+  cc_address_email_list?: string[];
+  bcc_address_email_list?: string[];
+  // The hosted mailbox that sent/received this email. For a received
+  // reply this identifies which client-side inbox the prospect replied
+  // to — which we then pass back as `eaccount` on POST
+  // /api/v2/emails/reply. First-class field in Instantly's API.
+  eaccount?: string;
   campaign_id?: string;
   lead?: string;
+  lead_id?: string;
   ue_type?: number;
   step?: number;
   is_unread?: boolean;
+  is_auto_reply?: boolean;
   ai_interest_value?: number;
+  i_status?: number;            // Instantly's integer lead_interest_status
   thread_id?: string;
+  organization_id?: string;
+}
+
+// Request body for POST /api/v2/emails/reply.
+// See https://developer.instantly.ai/api-reference/email/reply-to-an-email
+export interface InstantlyReplyRequest {
+  eaccount: string;             // hosted mailbox we're sending FROM
+  reply_to_uuid: string;        // id of the email being replied to
+  subject: string;
+  body: { text?: string; html?: string };
+  cc_address_email_list?: string;  // comma-separated, per docs
+  bcc_address_email_list?: string;
+  reminder_ts?: string;
+  assigned_to?: string;
 }
 
 export interface InstantlyEmailListResponse {

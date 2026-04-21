@@ -1,0 +1,22 @@
+{
+  "event_type": "lead_interested",
+  "timestamp": "2026-04-21T08:47:10.000Z",
+  "campaign_id": "bba218f5-1970-499c-aae7-560a41a78d8d",
+  "campaign_name": "David Cabrera - 2025 Builders Agents",
+  "workspace_id": "wk_demo_01",
+  "email": "jordan.park@meridian-systems.example",
+  "lead_email": "jordan.park@meridian-systems.example",
+  "first_name": "Jordan",
+  "last_name": "Park",
+  "company_name": "Meridian Systems",
+  "title": "Marketing Manager",
+  "phone": "+16175550142",
+  "website": "https://meridian-systems.example",
+  "step": 1,
+  "reply_subject": "Re: worth a look?",
+  "reply_body": "Hey — I'm not the right person for this, but I'm going to loop in Priya Sharma (priya.sharma@meridian-systems.example), our VP of Sales. She handles outbound tooling evaluations. Good luck!",
+  "instantly_email_id": "e2222222-bbbb-4bbb-bbbb-222222222222",
+  "message_id": "<msg-jordan-001@mail.example>",
+  "thread_id": "thr-jordan-001",
+  "eaccount": "mike-outreach@cabrera-alias.pro"
+}

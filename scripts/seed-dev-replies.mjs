@@ -210,6 +210,10 @@ const rows = [
   },
 ];
 
+// Fake hosted mailbox for seed data. Real rows will pull this straight
+// from Instantly's Email.eaccount at ingest time (commit #6).
+const SEED_EACCOUNT = "persona@alias-domain.test";
+
 let inserted = 0;
 for (const row of rows) {
   const { error } = await supabase.from("lead_replies").insert({
@@ -218,8 +222,9 @@ for (const row of rows) {
     campaign_id: targetCampaign.id,
     instantly_campaign_id: targetCampaign.instantly_campaign_id,
     instantly_message_id: `seed-${row.lead_email}-${row.received_at}`,
+    eaccount: SEED_EACCOUNT,
     from_address: row.lead_email,
-    to_address: "persona@alias-domain.test",
+    to_address: SEED_EACCOUNT,
     lead_email: row.lead_email,
     lead_name: row.lead_name,
     lead_company: row.lead_company,

@@ -421,7 +421,7 @@ export type ReplyOutcome =
   | "no_contact";
 
 export interface ReplyReferralContact {
-  email: string;
+  email: string | null;          // null when a name was given but no email address
   name: string | null;
   title: string | null;
 }
@@ -437,6 +437,10 @@ export interface LeadReply {
   instantly_message_id: string | null;
   thread_id: string | null;
   instantly_campaign_id: string | null;
+  // Hosted Instantly mailbox that received the reply. Passed back to
+  // POST /api/v2/emails/reply as `eaccount` when the client sends a
+  // reply through the portal. (Migration 00026.)
+  eaccount: string | null;
 
   // Lead identity
   lead_email: string;

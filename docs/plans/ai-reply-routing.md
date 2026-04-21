@@ -435,19 +435,44 @@ Purpose: quality control, coaching, identifying clients who aren't picking up th
 
 ---
 
+## The eaccount roundtrip (critical path)
+
+Every reply ingested has a specific hosted mailbox it was sent TO. When the
+client later responds through the portal, we MUST send from that same
+mailbox (Instantly's reply API requires `eaccount` as a top-level body
+field — not inferable from `reply_to_uuid` alone). This thread crosses
+multiple commits and is easy to lose track of:
+
+| Commit | Touches eaccount? | What it does |
+|---|---|---|
+| #1 | migration | creates lead_replies (eaccount column added in #3's follow-up migration 00026) |
+| #3 | migration + ingest + send helpers + fixtures + smoke test | adds `eaccount` column, `InstantlyClient.replyViaEmailsApi`, and pure helpers `normalizeReplyFromInstantlyEmail` (writes it in) and `buildReplyRequest` (reads it out). Smoke test at `scripts/test-reply-pipeline.mjs` asserts the roundtrip holds across all fixture scenarios. |
+| #6 | webhook handler | calls `InstantlyClient.getEmail(id)` to fetch the full Email object, passes it to `normalizeReplyFromInstantlyEmail` → row lands with `eaccount` populated. |
+| #7 | register-webhook route | unchanged path for eaccount; this commit only adds `createWebhook`. |
+| #8 | portal send route | reads `lead_replies.eaccount` + `instantly_email_id` from the DB, calls `buildReplyRequest` → `InstantlyClient.replyViaEmailsApi`. CC is injected from `clients.notification_email`. |
+
+Admin oversight page (`/admin/inbox/[id]`) displays `eaccount` alongside
+the other classification data — useful for debugging and for admins to
+see which mailbox is getting the most hot replies.
+
+---
+
 ## Rollout order (single feature branch, multiple commits)
 
 Each commit leaves the app runnable:
 
-1. **Migration + types + seed data** — `/client/inbox` renders against seeded hot replies
-2. **Client inbox list + dossier page** — read-only against seeded data, phone button works (`tel:` link), outcome capture wired to API stub
-3. **Admin observer view** — `/admin/inbox` read-only
-4. **`@anthropic-ai/sdk` + classifier + prefilter + decide merger** — classifier callable in-process, unit tests against fixture payloads
+**Done:**
+1. ✅ **Migration + types + seed data** — `lead_replies`, `clients` additions, 7 seed rows for David Cabrera (commit `0dbbfe8`)
+2. ✅ **Client inbox + dossier + admin observer view** — `/client/inbox` + `/admin/inbox` pages, sidebar entries, shared UI helpers (commit `0dbbfe8`)
+3. ✅ **Eaccount roundtrip foundation** — migration 00026 + keyword prefilter + ingest/send helpers + `InstantlyClient.replyViaEmailsApi/getEmail` + fixtures + smoke test. All offline; no API keys.
+
+**Remaining:**
+4. **Claude Haiku classifier + decide merger** — `@anthropic-ai/sdk`, needs `ANTHROPIC_API_KEY`; decide merges Instantly tag + prefilter + Claude into `final_class`
 5. **Resend client-notification email + signed-URL security**
-6. **Extend webhook handler → ingest + tag + classify + notify pipeline**
-7. **Instantly client additions (`replyViaEmailsApi`, `createWebhook`) + register-webhook bootstrap**
-8. **On-demand drafter + reply-via-portal send path** — the fallback flow
-9. **Outcome capture UI polish + admin reclassify for `needs_review`**
+6. **Extend webhook handler** → `getEmail` enrich + ingest (passes `eaccount` through) + tag + classify + notify
+7. **Register-webhook bootstrap route** — one-time subscription to Instantly's webhook firehose
+8. **On-demand drafter + reply-via-portal send path** — the fallback flow; reads `eaccount` back out and hands it to `replyViaEmailsApi`
+9. **Outcome capture API polish + admin reclassify for `needs_review`**
 10. **Cron `expire-replies`** — 48h expiry sweeper
 11. **Settings pages** — per-client persona + notification email + brand voice + signature + auto-notify classes
 12. **Staging smoke test** against real Instantly + real client onboarding Path 1 flow, then merge to master

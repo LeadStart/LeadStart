@@ -1,0 +1,19 @@
+{
+  "event_type": "lead_out_of_office",
+  "timestamp": "2026-04-21T07:10:00.000Z",
+  "campaign_id": "bba218f5-1970-499c-aae7-560a41a78d8d",
+  "campaign_name": "David Cabrera - 2025 Builders Agents",
+  "workspace_id": "wk_demo_01",
+  "email": "chris.hale@northfield-labs.example",
+  "lead_email": "chris.hale@northfield-labs.example",
+  "first_name": "Chris",
+  "last_name": "Hale",
+  "company_name": "Northfield Labs",
+  "step": 2,
+  "reply_subject": "Out of office until April 26",
+  "reply_body": "I'm out of office through April 26 with limited email access. I'll reply when I return. — Chris",
+  "instantly_email_id": "e4444444-dddd-4ddd-dddd-444444444444",
+  "message_id": "<msg-chris-001@mail.example>",
+  "thread_id": "thr-chris-001",
+  "eaccount": "mike-outreach@cabrera-alias.pro"
+}
