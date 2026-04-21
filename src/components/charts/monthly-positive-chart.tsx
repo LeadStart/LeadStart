@@ -117,6 +117,7 @@ export function MonthlyPositiveChart({ snapshots, height = 220 }: MonthlyPositiv
               fill="#10b981"
               radius={[4, 4, 0, 0]}
               maxBarSize={48}
+              isAnimationActive={false}
             />
           </BarChart>
         </ResponsiveContainer>

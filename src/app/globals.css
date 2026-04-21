@@ -221,6 +221,7 @@
    ============================================================ */
 
 /* --- Card surface — blue tint gradient, blue inner glow, 20px radius --- */
+/* No hover state — cards are static containers. */
 [data-slot="card"] {
   position: relative;
   border-radius: 20px !important;
@@ -231,16 +232,6 @@
     inset 0 0 0 1px rgba(46,55,254,0.18),
     0 4px 14px rgba(46,55,254,0.12) !important;
   overflow: hidden;
-  transition: box-shadow 0.2s, border-color 0.2s, transform 0.2s;
-}
-/* No hairline on blue theme cards — swatchboard uses gradient bg + inner glow only */
-[data-slot="card"]:hover {
-  border-color: rgba(46,55,254,0.35) !important;
-  box-shadow:
-    inset 0 1px 0 rgba(255,255,255,0.95),
-    inset 0 0 0 1px rgba(46,55,254,0.28),
-    0 8px 22px rgba(46,55,254,0.18) !important;
-  transform: translateY(-1px);
 }
 
 /* Card title — dash-card-title: uppercase, letter-spaced, divider */
@@ -256,18 +247,34 @@
 }
 
 /* --- Primary button — blue gradient + glow + white text --------------- */
+/* Base shadow is static; hover glow rides on ::after opacity so the compositor
+   handles the fade instead of repainting a multi-layer shadow stack. */
 .btn-blue {
+  position: relative;
+  isolation: isolate;
   background: linear-gradient(135deg, #6B72FF 0%, #1C24B8 100%) !important;
   color: #fff !important;
   border: none !important;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.25), 0 0 22px rgba(46,55,254,0.35), 0 4px 14px rgba(28,36,184,0.28) !important;
+  box-shadow: 0 4px 14px rgba(28,36,184,0.28) !important;
   border-radius: 10px !important;
+  transition: transform 0.2s, filter 0.2s;
+}
+.btn-blue::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 10px;
+  box-shadow: 0 0 28px rgba(46,55,254,0.45), 0 6px 18px rgba(28,36,184,0.35);
+  opacity: 0;
+  transition: opacity 0.2s;
+  pointer-events: none;
+  z-index: -1;
 }
 .btn-blue:hover {
-  background: linear-gradient(135deg, #2E37FE 0%, #0F1880 100%) !important;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.3), 0 0 28px rgba(46,55,254,0.45), 0 6px 18px rgba(28,36,184,0.35) !important;
+  filter: brightness(1.08);
   transform: translateY(-1px);
 }
+.btn-blue:hover::after { opacity: 1; }
 .btn-blue:active { transform: translateY(0); }
 
 /* Secondary button — white neumorphic */
@@ -286,17 +293,31 @@
 
 /* Keep old class names as aliases for bulk compatibility */
 .btn-gold {
+  position: relative;
+  isolation: isolate;
   background: linear-gradient(135deg, #6B72FF 0%, #1C24B8 100%) !important;
   color: #fff !important;
   border: none !important;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.25), 0 0 22px rgba(46,55,254,0.35), 0 4px 14px rgba(28,36,184,0.28) !important;
+  box-shadow: 0 4px 14px rgba(28,36,184,0.28) !important;
   border-radius: 10px !important;
+  transition: transform 0.2s, filter 0.2s;
+}
+.btn-gold::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 10px;
+  box-shadow: 0 0 28px rgba(46,55,254,0.45), 0 6px 18px rgba(28,36,184,0.35);
+  opacity: 0;
+  transition: opacity 0.2s;
+  pointer-events: none;
+  z-index: -1;
 }
 .btn-gold:hover {
-  background: linear-gradient(135deg, #2E37FE 0%, #0F1880 100%) !important;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.3), 0 0 28px rgba(46,55,254,0.45), 0 6px 18px rgba(28,36,184,0.35) !important;
+  filter: brightness(1.08);
   transform: translateY(-1px);
 }
+.btn-gold:hover::after { opacity: 1; }
 .btn-dark {
   background: #ffffff !important;
   border: 1px solid #e2e8f0 !important;

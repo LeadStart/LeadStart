@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LeadStart — UI Performance Audit</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #f8f9fb;
+    color: #1a1a2e;
+    padding: 24px;
+    padding-top: 100px;
+  }
+
+  /* ---------- Header + FPS meter ---------- */
+  header {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 100;
+    background: rgba(255,255,255,0.95);
+    border-bottom: 1px solid #e2e8f0;
+    padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  header h1 { font-size: 16px; font-weight: 700; }
+  header h1 span { color: #6B72FF; }
+  .fps-box {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-family: 'SF Mono', Menlo, monospace;
+    font-size: 13px;
+  }
+  .fps-value {
+    min-width: 60px;
+    text-align: right;
+    font-weight: 700;
+    font-size: 18px;
+  }
+  .fps-good { color: #059669; }
+  .fps-warn { color: #d97706; }
+  .fps-bad  { color: #dc2626; }
+  .fps-bar {
+    width: 120px; height: 6px; background: #e2e8f0; border-radius: 3px; overflow: hidden;
+  }
+  .fps-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #dc2626 0%, #d97706 50%, #059669 100%);
+    transform-origin: left;
+    transition: transform 0.1s linear;
+  }
+
+  /* ---------- TOC ---------- */
+  nav.toc {
+    max-width: 1200px; margin: 0 auto 32px;
+    display: flex; flex-wrap: wrap; gap: 8px;
+    padding: 16px; background: white; border: 1px solid #e2e8f0; border-radius: 12px;
+  }
+  nav.toc a {
+    padding: 6px 12px; border-radius: 8px; text-decoration: none;
+    color: #334155; font-size: 13px; font-weight: 500;
+    background: #f1f5f9; transition: background 0.15s;
+  }
+  nav.toc a:hover { background: #e2e8f0; }
+
+  /* ---------- Section layout ---------- */
+  section {
+    max-width: 1200px; margin: 0 auto 48px;
+    background: white; border: 1px solid #e2e8f0; border-radius: 16px;
+    padding: 28px;
+  }
+  section h2 {
+    font-size: 20px; margin-bottom: 6px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .badge-cost {
+    font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
+    padding: 3px 8px; border-radius: 4px;
+  }
+  .cost-high { background: #fee2e2; color: #991b1b; }
+  .cost-med  { background: #fef3c7; color: #92400e; }
+  .cost-low  { background: #d1fae5; color: #065f46; }
+  .finding {
+    color: #475569; font-size: 13px; line-height: 1.6; margin-bottom: 20px;
+    padding: 12px 14px; background: #f8fafc; border-left: 3px solid #6B72FF; border-radius: 6px;
+  }
+  .finding code {
+    font-family: 'SF Mono', Menlo, monospace; font-size: 12px;
+    background: #e2e8f0; padding: 1px 5px; border-radius: 3px;
+  }
+  .compare {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 20px;
+    margin-bottom: 16px;
+  }
+  .compare-col h3 {
+    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;
+    margin-bottom: 12px; color: #64748b;
+  }
+  .compare-col.current h3 { color: #dc2626; }
+  .compare-col.optimized h3 { color: #059669; }
+  .demo-area {
+    padding: 20px; background: #f8fafc; border-radius: 10px;
+    min-height: 140px; display: flex; align-items: center; justify-content: center;
+    flex-wrap: wrap; gap: 12px;
+  }
+  .code-box {
+    margin-top: 8px; padding: 10px 12px; background: #0f172a; color: #cbd5e1;
+    border-radius: 8px; font-family: 'SF Mono', Menlo, monospace;
+    font-size: 11px; line-height: 1.6; white-space: pre;
+    overflow-x: auto;
+  }
+  .code-box .key { color: #93c5fd; }
+  .code-box .val { color: #fca5a5; }
+  .code-box .good { color: #86efac; }
+
+  /* ---------- Stress test controls ---------- */
+  .controls {
+    display: flex; gap: 10px; align-items: center; margin-top: 16px;
+    padding-top: 16px; border-top: 1px solid #e2e8f0;
+    flex-wrap: wrap;
+  }
+  .controls button {
+    padding: 8px 14px; border-radius: 8px; border: 1px solid #cbd5e1;
+    background: white; font-size: 13px; font-weight: 500; cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .controls button:hover { background: #f1f5f9; border-color: #94a3b8; }
+  .controls button.primary {
+    background: linear-gradient(135deg, #6B72FF 0%, #1C24B8 100%);
+    color: white; border: none;
+  }
+  .controls button.primary:hover { filter: brightness(1.08); }
+  .controls .stress-count {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 13px; color: #64748b;
+  }
+  .controls .stress-count input {
+    width: 70px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 6px;
+    font-size: 13px;
+  }
+  .stress-area {
+    margin-top: 16px; padding: 16px;
+    background: repeating-linear-gradient(45deg, #f8fafc, #f8fafc 10px, #f1f5f9 10px, #f1f5f9 20px);
+    border-radius: 10px; min-height: 80px;
+    display: grid; gap: 10px;
+  }
+  .stress-hint {
+    text-align: center; color: #94a3b8; font-size: 12px; padding: 20px;
+  }
+
+  /* =============================================================
+     SECTION 1: Card hover shadow
+     ============================================================= */
+  /* Replica of [data-slot="card"] from globals.css:224-244 */
+  .card-current {
+    position: relative;
+    width: 220px; height: 100px;
+    padding: 16px;
+    border-radius: 20px;
+    border: 1px solid #e2e8f0;
+    background: linear-gradient(180deg, #EDEEFF 0%, #fff 40%);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.9),
+      inset 0 0 0 1px rgba(46,55,254,0.18),
+      0 4px 14px rgba(46,55,254,0.12);
+    transition: box-shadow 0.2s, border-color 0.2s, transform 0.2s;
+    cursor: pointer;
+  }
+  .card-current:hover {
+    border-color: rgba(46,55,254,0.35);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.95),
+      inset 0 0 0 1px rgba(46,55,254,0.28),
+      0 8px 22px rgba(46,55,254,0.18);
+    transform: translateY(-1px);
+  }
+
+  /* Optimized: pseudo-element opacity fade — browser rasterizes shadow once */
+  .card-optimized {
+    position: relative;
+    width: 220px; height: 100px;
+    padding: 16px;
+    border-radius: 20px;
+    border: 1px solid #e2e8f0;
+    background: linear-gradient(180deg, #EDEEFF 0%, #fff 40%);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.9),
+      inset 0 0 0 1px rgba(46,55,254,0.18),
+      0 4px 14px rgba(46,55,254,0.12);
+    transition: transform 0.2s;
+    cursor: pointer;
+    isolation: isolate;
+  }
+  .card-optimized::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 20px;
+    box-shadow: 0 8px 22px rgba(46,55,254,0.28);
+    opacity: 0;
+    transition: opacity 0.2s;
+    pointer-events: none;
+    z-index: -1;
+  }
+  .card-optimized:hover { transform: translateY(-1px); }
+  .card-optimized:hover::after { opacity: 1; }
+
+  .card-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: #64748b; }
+  .card-value { font-size: 24px; font-weight: 700; color: #0f172a; margin-top: 4px; }
+  .card-trend { font-size: 11px; color: #059669; margin-top: 2px; }
+
+  /* =============================================================
+     SECTION 2: Chart animation
+     ============================================================= */
+  .fake-chart {
+    width: 100%; height: 160px; position: relative;
+    background: linear-gradient(180deg, rgba(107,114,255,0.05) 0%, rgba(107,114,255,0) 100%);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .fake-chart svg { width: 100%; height: 100%; }
+  .fake-chart path {
+    fill: url(#chartGradient);
+    stroke: #6B72FF;
+    stroke-width: 2;
+  }
+  .chart-current .fake-chart path.line {
+    stroke-dasharray: 1000;
+    stroke-dashoffset: 1000;
+    animation: drawLine 1.2s ease-out forwards;
+  }
+  .chart-current .fake-chart path.area {
+    opacity: 0;
+    animation: fadeArea 1.2s ease-out forwards;
+    animation-delay: 0.2s;
+  }
+  .chart-optimized .fake-chart path.line { stroke-dashoffset: 0; }
+  .chart-optimized .fake-chart path.area { opacity: 1; }
+  @keyframes drawLine { to { stroke-dashoffset: 0; } }
+  @keyframes fadeArea { to { opacity: 1; } }
+
+  /* =============================================================
+     SECTION 3: Button glow
+     ============================================================= */
+  /* Replica of .btn-blue from globals.css:259-271 */
+  .btn-current {
+    padding: 10px 18px;
+    background: linear-gradient(135deg, #6B72FF 0%, #1C24B8 100%);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    font-size: 13px; font-weight: 600; cursor: pointer;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.25),
+      0 0 22px rgba(46,55,254,0.35),
+      0 4px 14px rgba(28,36,184,0.28);
+    transition: box-shadow 0.2s, transform 0.2s, background 0.2s;
+  }
+  .btn-current:hover {
+    background: linear-gradient(135deg, #2E37FE 0%, #0F1880 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.3),
+      0 0 28px rgba(46,55,254,0.45),
+      0 6px 18px rgba(28,36,184,0.35);
+    transform: translateY(-1px);
+  }
+
+  .btn-optimized {
+    padding: 10px 18px;
+    background: linear-gradient(135deg, #6B72FF 0%, #1C24B8 100%);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    font-size: 13px; font-weight: 600; cursor: pointer;
+    box-shadow: 0 4px 14px rgba(28,36,184,0.32);
+    transition: transform 0.2s, filter 0.2s;
+    position: relative;
+    isolation: isolate;
+  }
+  .btn-optimized::after {
+    content: '';
+    position: absolute; inset: 0;
+    border-radius: 10px;
+    box-shadow: 0 6px 20px rgba(46,55,254,0.42);
+    opacity: 0;
+    transition: opacity 0.2s;
+    z-index: -1;
+  }
+  .btn-optimized:hover { transform: translateY(-1px); filter: brightness(1.1); }
+  .btn-optimized:hover::after { opacity: 1; }
+
+  /* =============================================================
+     SECTION 4: Nav active item (drop-shadow vs box-shadow)
+     ============================================================= */
+  .nav-demo {
+    width: 220px;
+    background: linear-gradient(180deg, #ffffff 0%, #6B72FF 100%);
+    padding: 20px 0 60px;
+    border-radius: 12px;
+    overflow: hidden;
+    position: relative;
+  }
+  .nav-item {
+    padding: 10px 20px;
+    color: rgba(255,255,255,0.85);
+    font-size: 13px; font-weight: 500;
+    cursor: pointer;
+    position: relative;
+  }
+
+  /* Current — filter: drop-shadow (double-stacked) */
+  .nav-demo.current .nav-active {
+    color: #fff; font-weight: 600;
+    filter: drop-shadow(0 0 10px rgba(107,114,255,0.5)) drop-shadow(0 3px 10px rgba(28,36,184,0.35));
+  }
+  .nav-demo.current .nav-active::before {
+    content: '';
+    position: absolute;
+    left: 0; right: -19px; top: 0; bottom: 0;
+    background: linear-gradient(180deg, #6B72FF 0%, #1C24B8 100%);
+    z-index: -1;
+    border-radius: 10px 0 0 10px;
+  }
+
+  /* Optimized — box-shadow on the pseudo-element */
+  .nav-demo.optimized .nav-active {
+    color: #fff; font-weight: 600;
+  }
+  .nav-demo.optimized .nav-active::before {
+    content: '';
+    position: absolute;
+    left: 0; right: -19px; top: 0; bottom: 0;
+    background: linear-gradient(180deg, #6B72FF 0%, #1C24B8 100%);
+    z-index: -1;
+    border-radius: 10px 0 0 10px;
+    box-shadow: 0 0 10px rgba(107,114,255,0.5), 0 3px 10px rgba(28,36,184,0.35);
+  }
+
+  /* =============================================================
+     SECTION 5: Avatar mix-blend-mode
+     ============================================================= */
+  .avatar-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, 40px); gap: 10px;
+    max-width: 280px; margin: 0 auto;
+  }
+  .avatar {
+    position: relative;
+    width: 40px; height: 40px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    color: white; font-weight: 700; font-size: 13px;
+    flex-shrink: 0;
+  }
+  .avatar-current::after {
+    content: '';
+    position: absolute; inset: 0;
+    border-radius: 50%;
+    border: 1px solid #cbd5e1;
+    mix-blend-mode: darken;
+    pointer-events: none;
+  }
+  .avatar-optimized {
+    border: 1px solid rgba(15, 23, 42, 0.12);
+  }
+
+  /* =============================================================
+     SECTION 6: ResponsiveContainer / ResizeObserver
+     ============================================================= */
+  .observer-demo {
+    display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;
+    width: 100%;
+  }
+  .observer-chart {
+    padding: 12px; background: white; border: 1px solid #e2e8f0; border-radius: 8px;
+    font-size: 12px; color: #64748b;
+  }
+  .observer-count {
+    display: inline-block; padding: 2px 8px; border-radius: 4px;
+    background: #fee2e2; color: #991b1b; font-weight: 600;
+    font-family: 'SF Mono', Menlo, monospace; font-size: 11px;
+  }
+  .observer-count.good { background: #d1fae5; color: #065f46; }
+
+  /* =============================================================
+     SECTION 7: Gradients (not a concern)
+     ============================================================= */
+  .gradient-demo {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
+    width: 100%;
+  }
+  .gradient-swatch {
+    height: 80px; border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    color: white; font-weight: 600; font-size: 13px;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+  }
+  .g1 { background: linear-gradient(135deg, #6B72FF 0%, #1C24B8 100%); }
+  .g2 { background: linear-gradient(180deg, #ffffff 0%, #6B72FF 100%); color: #1e293b; text-shadow: none; }
+  .g3 { background: linear-gradient(135deg, #EDEEFF 0%, #D1D3FF 50%, #ffffff 100%); color: #1e293b; text-shadow: none; }
+
+  /* Summary section */
+  .summary {
+    max-width: 1200px; margin: 0 auto 48px;
+  }
+  .summary-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px;
+  }
+  .summary-card {
+    padding: 16px; border-radius: 12px; background: white;
+    border: 1px solid #e2e8f0;
+  }
+  .summary-card h4 { font-size: 13px; margin-bottom: 6px; display: flex; gap: 8px; align-items: center; }
+  .summary-card p { font-size: 12px; color: #64748b; line-height: 1.5; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1><span>LeadStart</span> — UI Performance Audit</h1>
+  <div class="fps-box">
+    <span>Live FPS:</span>
+    <div class="fps-bar"><div class="fps-bar-fill" id="fpsBar"></div></div>
+    <span class="fps-value fps-good" id="fpsValue">60</span>
+  </div>
+</header>
+
+<nav class="toc">
+  <a href="#cards">1. Card shadow hover</a>
+  <a href="#charts">2. Chart animation</a>
+  <a href="#buttons">3. Button glow stack</a>
+  <a href="#nav">4. Drop-shadow filter</a>
+  <a href="#avatars">5. Avatar mix-blend</a>
+  <a href="#observers">6. ResizeObservers</a>
+  <a href="#gradients">7. Gradients (OK)</a>
+  <a href="#summary">Summary</a>
+</nav>
+
+<!-- ============ SECTION 1: CARD HOVER SHADOW ============ -->
+<section id="cards">
+  <h2>1. Card hover shadow stack <span class="badge-cost cost-high">Highest impact</span></h2>
+  <div class="finding">
+    Every <code>[data-slot="card"]</code> has a 3-layer box-shadow and transitions <strong>the entire shadow stack</strong> on hover — that's a repaint of all three shadows each frame of the 200ms transition. Dashboards render 10-30+ cards; hovering through them forces repaint cascades.
+    <br><br>
+    <strong>Fix:</strong> paint the hover shadow on a <code>::after</code> pseudo-element and animate <code>opacity</code>. Browser rasterizes the shadow once, then composites — GPU-only, no repaint.
+  </div>
+  <div class="compare">
+    <div class="compare-col current">
+      <h3>◆ Current (globals.css:229)</h3>
+      <div class="demo-area" id="card-current-demo">
+        <div class="card-current"><div class="card-label">Sent</div><div class="card-value">12,340</div><div class="card-trend">▲ 8.2%</div></div>
+        <div class="card-current"><div class="card-label">Replies</div><div class="card-value">1,820</div><div class="card-trend">▲ 4.1%</div></div>
+      </div>
+      <div class="code-box"><span class="key">transition</span>: <span class="val">box-shadow 0.2s</span>, border-color 0.2s, transform 0.2s;
+<span class="key">box-shadow</span>: <span class="val">inset</span> 0 1px 0 #fff,
+  <span class="val">inset</span> 0 0 0 1px rgba(46,55,254,.18),
+  0 4px 14px rgba(46,55,254,.12);
+<span class="key">&:hover</span> {
+  <span class="key">box-shadow</span>: /* 3 new layers — full repaint */
+}</div>
+    </div>
+    <div class="compare-col optimized">
+      <h3>◆ Optimized (pseudo-element opacity)</h3>
+      <div class="demo-area" id="card-opt-demo">
+        <div class="card-optimized"><div class="card-label">Sent</div><div class="card-value">12,340</div><div class="card-trend">▲ 8.2%</div></div>
+        <div class="card-optimized"><div class="card-label">Replies</div><div class="card-value">1,820</div><div class="card-trend">▲ 4.1%</div></div>
+      </div>
+      <div class="code-box"><span class="key">transition</span>: <span class="good">transform 0.2s</span>;
+<span class="key">&::after</span> {
+  <span class="key">box-shadow</span>: 0 8px 22px rgba(46,55,254,.28);
+  <span class="key">opacity</span>: 0;
+  <span class="key">transition</span>: <span class="good">opacity 0.2s</span>; /* GPU-only */
+}
+<span class="key">&:hover::after</span> { <span class="key">opacity</span>: 1; }</div>
+    </div>
+  </div>
+  <div class="controls">
+    <span class="stress-count">Stress: <input type="number" id="card-count" value="100" min="10" max="500"> cards</span>
+    <button class="primary" onclick="stressCards()">Render + hover-sweep</button>
+    <button onclick="clearStress('cards-stress')">Clear</button>
+    <span style="font-size:12px;color:#64748b;">Watch FPS meter during hover-sweep</span>
+  </div>
+  <div class="stress-area" id="cards-stress"><div class="stress-hint">Click "Render + hover-sweep" to mount 100 cards and sweep hover across them.</div></div>
+</section>
+
+<!-- ============ SECTION 2: CHART ANIMATION ============ -->
+<section id="charts">
+  <h2>2. Recharts entrance animation on every re-render <span class="badge-cost cost-high">High impact</span></h2>
+  <div class="finding">
+    Recharts <code>isAnimationActive</code> defaults to <code>true</code>. Every data change replays the 1.5s entrance animation — and with your SWR prefetch/warm-cache flow, charts can re-animate 2-3× per page load. Not just visually distracting: re-animation forces SVG path interpolation + repaints for the duration.
+    <br><br>
+    <strong>Fix:</strong> add <code>isAnimationActive={false}</code> to each <code>&lt;Area&gt;</code>, <code>&lt;Line&gt;</code>, <code>&lt;Bar&gt;</code>, <code>&lt;Pie&gt;</code>.
+  </div>
+  <div class="compare">
+    <div class="compare-col current">
+      <h3>◆ Current (replays on every fetch)</h3>
+      <div class="demo-area">
+        <div class="chart-current" id="chart-current-wrap">
+          <div class="fake-chart" id="chart-current">
+            <svg viewBox="0 0 400 160" preserveAspectRatio="none">
+              <defs>
+                <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#6B72FF" stop-opacity="0.4"/>
+                  <stop offset="100%" stop-color="#6B72FF" stop-opacity="0"/>
+                </linearGradient>
+              </defs>
+              <path class="area" d="M0,120 L50,80 L100,100 L150,60 L200,90 L250,40 L300,70 L350,30 L400,60 L400,160 L0,160 Z" fill="url(#chartGradient)" stroke="none"/>
+              <path class="line" d="M0,120 L50,80 L100,100 L150,60 L200,90 L250,40 L300,70 L350,30 L400,60" fill="none"/>
+            </svg>
+          </div>
+        </div>
+      </div>
+      <div class="code-box"><span class="val">&lt;Area</span>
+  type=<span class="val">"monotone"</span>
+  dataKey=<span class="val">"sent"</span>
+  <span class="val">/&gt;</span>  <span style="color:#94a3b8;">// isAnimationActive defaults true</span></div>
+    </div>
+    <div class="compare-col optimized">
+      <h3>◆ Optimized (instant paint)</h3>
+      <div class="demo-area">
+        <div class="chart-optimized">
+          <div class="fake-chart">
+            <svg viewBox="0 0 400 160" preserveAspectRatio="none">
+              <path class="area" d="M0,120 L50,80 L100,100 L150,60 L200,90 L250,40 L300,70 L350,30 L400,60 L400,160 L0,160 Z" fill="url(#chartGradient)" stroke="none"/>
+              <path class="line" d="M0,120 L50,80 L100,100 L150,60 L200,90 L250,40 L300,70 L350,30 L400,60" fill="none"/>
+            </svg>
+          </div>
+        </div>
+      </div>
+      <div class="code-box"><span class="val">&lt;Area</span>
+  type=<span class="val">"monotone"</span>
+  dataKey=<span class="val">"sent"</span>
+  <span class="good">isAnimationActive={false}</span>
+  <span class="val">/&gt;</span></div>
+    </div>
+  </div>
+  <div class="controls">
+    <button class="primary" onclick="replayChart()">Simulate SWR refetch (replay animation)</button>
+    <span style="font-size:12px;color:#64748b;">Click rapidly — watch left chart re-animate every time</span>
+  </div>
+</section>
+
+<!-- ============ SECTION 3: BUTTON GLOW ============ -->
+<section id="buttons">
+  <h2>3. Button glow — multi-layer shadow + hover transition <span class="badge-cost cost-med">Medium impact</span></h2>
+  <div class="finding">
+    <code>.btn-blue</code> / <code>.btn-gold</code> stack three shadow layers including a <code>0 0 22px</code> glow, and the whole stack transitions on hover. On rows with many action buttons (contacts, clients, campaigns tables), hover-sweep triggers repaints.
+    <br><br>
+    <strong>Fix:</strong> single shadow layer + pseudo-element for the hover glow + <code>filter: brightness()</code> for the color shift. Same look, GPU compositing only.
+  </div>
+  <div class="compare">
+    <div class="compare-col current">
+      <h3>◆ Current (globals.css:259)</h3>
+      <div class="demo-area">
+        <button class="btn-current">Send Report</button>
+        <button class="btn-current">Save</button>
+        <button class="btn-current">Invite</button>
+      </div>
+      <div class="code-box"><span class="key">box-shadow</span>:
+  <span class="val">inset</span> 0 1px 0 rgba(255,255,255,.25),
+  0 0 22px rgba(46,55,254,.35),
+  0 4px 14px rgba(28,36,184,.28);
+<span class="key">transition</span>: <span class="val">box-shadow 0.2s</span>, transform 0.2s;</div>
+    </div>
+    <div class="compare-col optimized">
+      <h3>◆ Optimized (single shadow + glow pseudo)</h3>
+      <div class="demo-area">
+        <button class="btn-optimized">Send Report</button>
+        <button class="btn-optimized">Save</button>
+        <button class="btn-optimized">Invite</button>
+      </div>
+      <div class="code-box"><span class="key">box-shadow</span>: 0 4px 14px rgba(28,36,184,.32);
+<span class="key">transition</span>: <span class="good">transform 0.2s, filter 0.2s</span>;
+<span class="key">&::after</span> { <span class="key">box-shadow</span>: 0 6px 20px rgba(46,55,254,.42); <span class="key">opacity</span>: 0; }
+<span class="key">&:hover::after</span> { <span class="key">opacity</span>: 1; }
+<span class="key">&:hover</span> { <span class="good">filter: brightness(1.1)</span>; }</div>
+    </div>
+  </div>
+  <div class="controls">
+    <span class="stress-count">Stress: <input type="number" id="btn-count" value="60" min="10" max="300"> buttons</span>
+    <button class="primary" onclick="stressButtons()">Render + hover-sweep</button>
+    <button onclick="clearStress('btn-stress')">Clear</button>
+  </div>
+  <div class="stress-area" id="btn-stress"><div class="stress-hint">Click to mount buttons in both styles and sweep hover across them.</div></div>
+</section>
+
+<!-- ============ SECTION 4: NAV DROP-SHADOW ============ -->
+<section id="nav">
+  <h2>4. Nav active item uses <code>filter: drop-shadow</code> (2×) <span class="badge-cost cost-low">Low impact — easy win</span></h2>
+  <div class="finding">
+    <code>filter: drop-shadow()</code> is the most expensive CSS filter: it rasterizes the element's alpha mask and blurs it each frame. Only one nav item is active at a time, so total cost is low — but <code>box-shadow</code> on the existing <code>::before</code> pseudo-element gives identical visuals for zero filter overhead.
+  </div>
+  <div class="compare">
+    <div class="compare-col current">
+      <h3>◆ Current (globals.css:490)</h3>
+      <div class="demo-area" style="background:#f1f5f9;">
+        <div class="nav-demo current">
+          <div class="nav-item">Overview</div>
+          <div class="nav-item">Clients</div>
+          <div class="nav-item nav-active">Campaigns</div>
+          <div class="nav-item">Billing</div>
+        </div>
+      </div>
+      <div class="code-box"><span class="key">filter</span>: <span class="val">drop-shadow</span>(0 0 10px rgba(107,114,255,.5))
+        <span class="val">drop-shadow</span>(0 3px 10px rgba(28,36,184,.35));</div>
+    </div>
+    <div class="compare-col optimized">
+      <h3>◆ Optimized (box-shadow on ::before)</h3>
+      <div class="demo-area" style="background:#f1f5f9;">
+        <div class="nav-demo optimized">
+          <div class="nav-item">Overview</div>
+          <div class="nav-item">Clients</div>
+          <div class="nav-item nav-active">Campaigns</div>
+          <div class="nav-item">Billing</div>
+        </div>
+      </div>
+      <div class="code-box"><span class="key">&::before</span> {
+  <span class="good">box-shadow</span>:
+    0 0 10px rgba(107,114,255,.5),
+    0 3px 10px rgba(28,36,184,.35);
+}</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SECTION 5: AVATAR mix-blend ============ -->
+<section id="avatars">
+  <h2>5. Avatar <code>::after</code> uses <code>mix-blend-mode</code> <span class="badge-cost cost-med">Medium impact</span></h2>
+  <div class="finding">
+    <code>mix-blend-darken</code> on every avatar's border pseudo-element forces a new stacking context + extra compositing pass per avatar. On team/contacts/clients pages with dozens of avatars, this accumulates. Low per-instance; real in aggregate.
+    <br><br>
+    <strong>Fix:</strong> use a solid semi-transparent border color. Visually indistinguishable at typical avatar sizes.
+  </div>
+  <div class="compare">
+    <div class="compare-col current">
+      <h3>◆ Current (avatar.tsx:20)</h3>
+      <div class="demo-area">
+        <div class="avatar-grid" id="avatar-current-grid"></div>
+      </div>
+      <div class="code-box"><span class="key">&::after</span> {
+  <span class="key">border</span>: 1px solid var(--border);
+  <span class="val">mix-blend-mode</span>: darken; <span style="color:#94a3b8;">/* new stacking context */</span>
+}</div>
+    </div>
+    <div class="compare-col optimized">
+      <h3>◆ Optimized (semi-transparent border)</h3>
+      <div class="demo-area">
+        <div class="avatar-grid" id="avatar-opt-grid"></div>
+      </div>
+      <div class="code-box"><span class="key">border</span>: <span class="good">1px solid rgba(15, 23, 42, 0.12)</span>; <span style="color:#94a3b8;">/* no new context */</span></div>
+    </div>
+  </div>
+  <div class="controls">
+    <span class="stress-count">Stress: <input type="number" id="avatar-count" value="200" min="20" max="1000"> avatars</span>
+    <button class="primary" onclick="stressAvatars()">Render both</button>
+    <button onclick="clearStress('avatar-stress')">Clear</button>
+  </div>
+  <div class="stress-area" id="avatar-stress"><div class="stress-hint">Mount N avatars in each style and scroll to compare.</div></div>
+</section>
+
+<!-- ============ SECTION 6: ResponsiveContainer ============ -->
+<section id="observers">
+  <h2>6. Every chart mounts its own ResizeObserver <span class="badge-cost cost-low">Low impact — architectural</span></h2>
+  <div class="finding">
+    Recharts' <code>&lt;ResponsiveContainer&gt;</code> creates one <code>ResizeObserver</code> per chart. Pages with 4+ charts (client/reports, client/activity) stack observers firing on every layout shift. Not catastrophic, but wasteful.
+    <br><br>
+    <strong>Fix:</strong> share a single observer via a <code>useResizeObserver</code> hook at the parent, or use fixed-width charts when possible. Lowest priority unless a page mounts many charts.
+  </div>
+  <div class="compare">
+    <div class="compare-col current">
+      <h3>◆ Current — one observer per chart</h3>
+      <div class="demo-area" style="flex-direction:column;align-items:stretch;">
+        <div class="observer-demo">
+          <div class="observer-chart">📈 Chart 1 <span class="observer-count">+1 observer</span></div>
+          <div class="observer-chart">📈 Chart 2 <span class="observer-count">+1 observer</span></div>
+          <div class="observer-chart">📈 Chart 3 <span class="observer-count">+1 observer</span></div>
+          <div class="observer-chart">📈 Chart 4 <span class="observer-count">+1 observer</span></div>
+        </div>
+        <div style="text-align:center;margin-top:10px;font-size:12px;color:#991b1b;font-weight:600;">Total: 4 observers firing independently</div>
+      </div>
+    </div>
+    <div class="compare-col optimized">
+      <h3>◆ Optimized — shared observer</h3>
+      <div class="demo-area" style="flex-direction:column;align-items:stretch;">
+        <div class="observer-demo">
+          <div class="observer-chart">📈 Chart 1 <span class="observer-count good">shared</span></div>
+          <div class="observer-chart">📈 Chart 2 <span class="observer-count good">shared</span></div>
+          <div class="observer-chart">📈 Chart 3 <span class="observer-count good">shared</span></div>
+          <div class="observer-chart">📈 Chart 4 <span class="observer-count good">shared</span></div>
+        </div>
+        <div style="text-align:center;margin-top:10px;font-size:12px;color:#065f46;font-weight:600;">Total: 1 observer at parent</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SECTION 7: GRADIENTS (OK) ============ -->
+<section id="gradients">
+  <h2>7. Gradients — not a concern <span class="badge-cost cost-low">No impact</span></h2>
+  <div class="finding">
+    Linear and radial gradients are GPU-rasterized once per element and cached. Sidebar gradient, button gradient, card gradient — all essentially free. Don't optimize these.
+  </div>
+  <div class="demo-area">
+    <div class="gradient-demo">
+      <div class="gradient-swatch g1">Button gradient</div>
+      <div class="gradient-swatch g2">Sidebar gradient</div>
+      <div class="gradient-swatch g3">Hero gradient</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SUMMARY ============ -->
+<section id="summary" class="summary" style="padding-top:28px;">
+  <h2 style="margin-bottom:16px;">Recommended order</h2>
+  <div class="summary-grid">
+    <div class="summary-card">
+      <h4>1️ <span>Chart animation</span> <span class="badge-cost cost-high">HIGH</span></h4>
+      <p>One-line fix per chart: <code>isAnimationActive={false}</code>. Eliminates SWR re-animation cascade. Biggest perceptible win.</p>
+    </div>
+    <div class="summary-card">
+      <h4>2️ <span>Card hover shadow</span> <span class="badge-cost cost-high">HIGH</span></h4>
+      <p>Migrate to pseudo-element opacity fade in <code>globals.css:229</code>. Affects every card on every page.</p>
+    </div>
+    <div class="summary-card">
+      <h4>3️ <span>Button glow stack</span> <span class="badge-cost cost-med">MED</span></h4>
+      <p>Same pseudo-element pattern for <code>.btn-blue</code> / <code>.btn-gold</code>. Helps on tables with many action buttons.</p>
+    </div>
+    <div class="summary-card">
+      <h4>4️ <span>Avatar mix-blend</span> <span class="badge-cost cost-med">MED</span></h4>
+      <p>Swap <code>mix-blend-darken</code> for a rgba border. One-line change in <code>avatar.tsx:20</code>.</p>
+    </div>
+    <div class="summary-card">
+      <h4>5️ <span>Nav drop-shadow</span> <span class="badge-cost cost-low">LOW</span></h4>
+      <p>Move the two drop-shadows to <code>box-shadow</code> on the existing <code>::before</code>. Free visual equivalence.</p>
+    </div>
+    <div class="summary-card">
+      <h4>6️ <span>Chart observers</span> <span class="badge-cost cost-low">LOW</span></h4>
+      <p>Only worth doing if a single page renders many charts. Architectural, defer unless measured.</p>
+    </div>
+  </div>
+</section>
+
+<script>
+  // ---------- FPS meter ----------
+  const fpsValue = document.getElementById('fpsValue');
+  const fpsBar   = document.getElementById('fpsBar');
+  let frames = 0, lastTime = performance.now();
+  function tick(now) {
+    frames++;
+    if (now - lastTime >= 500) {
+      const fps = Math.round((frames * 1000) / (now - lastTime));
+      fpsValue.textContent = fps;
+      fpsValue.className = 'fps-value ' + (fps >= 50 ? 'fps-good' : fps >= 30 ? 'fps-warn' : 'fps-bad');
+      fpsBar.style.transform = `scaleX(${Math.min(fps / 60, 1)})`;
+      frames = 0;
+      lastTime = now;
+    }
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+
+  // ---------- Stress helpers ----------
+  function clearStress(id) {
+    const el = document.getElementById(id);
+    el.innerHTML = '<div class="stress-hint">Cleared.</div>';
+    el.style.gridTemplateColumns = '';
+  }
+
+  function hoverSweep(container, selector) {
+    const items = container.querySelectorAll(selector);
+    if (!items.length) return;
+    let i = 0;
+    const interval = setInterval(() => {
+      if (i >= items.length) { clearInterval(interval); return; }
+      // trigger pseudo-hover via focus (hover can't be synthesized from JS)
+      // Actually just dispatch mouseover events
+      items[i]?.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+      items[i]?.classList.add('hover-sim');
+      if (i > 0) {
+        items[i-1]?.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true }));
+        items[i-1]?.classList.remove('hover-sim');
+      }
+      i++;
+    }, 30);
+  }
+
+  // CSS hover only fires on actual cursor hover — so we add a .hover-sim class
+  // and replicate the hover styles on it
+  const hoverStyleSheet = document.createElement('style');
+  hoverStyleSheet.textContent = `
+    .card-current.hover-sim {
+      border-color: rgba(46,55,254,0.35);
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.95),
+        inset 0 0 0 1px rgba(46,55,254,0.28),
+        0 8px 22px rgba(46,55,254,0.18);
+      transform: translateY(-1px);
+    }
+    .card-optimized.hover-sim { transform: translateY(-1px); }
+    .card-optimized.hover-sim::after { opacity: 1; }
+    .btn-current.hover-sim {
+      background: linear-gradient(135deg, #2E37FE 0%, #0F1880 100%);
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.3),
+        0 0 28px rgba(46,55,254,0.45),
+        0 6px 18px rgba(28,36,184,0.35);
+      transform: translateY(-1px);
+    }
+    .btn-optimized.hover-sim { transform: translateY(-1px); filter: brightness(1.1); }
+    .btn-optimized.hover-sim::after { opacity: 1; }
+  `;
+  document.head.appendChild(hoverStyleSheet);
+
+  // ---------- Cards ----------
+  function stressCards() {
+    const n = parseInt(document.getElementById('card-count').value) || 100;
+    const el = document.getElementById('cards-stress');
+    el.style.gridTemplateColumns = 'repeat(2, 1fr)';
+    let html = '';
+    const half = Math.ceil(n / 2);
+    html += '<div><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#dc2626;margin-bottom:8px;">CURRENT — ' + half + ' cards</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;">';
+    for (let i = 0; i < half; i++) {
+      html += '<div class="card-current" style="width:auto;height:80px;padding:10px;"><div class="card-label">Metric ' + (i+1) + '</div><div class="card-value" style="font-size:16px;">' + Math.floor(Math.random() * 9999) + '</div></div>';
+    }
+    html += '</div></div>';
+    html += '<div><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#059669;margin-bottom:8px;">OPTIMIZED — ' + half + ' cards</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;">';
+    for (let i = 0; i < half; i++) {
+      html += '<div class="card-optimized" style="width:auto;height:80px;padding:10px;"><div class="card-label">Metric ' + (i+1) + '</div><div class="card-value" style="font-size:16px;">' + Math.floor(Math.random() * 9999) + '</div></div>';
+    }
+    html += '</div></div>';
+    el.innerHTML = html;
+    // Sweep hover
+    setTimeout(() => {
+      hoverSweep(el.querySelector('div:nth-child(1)'), '.card-current');
+      hoverSweep(el.querySelector('div:nth-child(2)'), '.card-optimized');
+    }, 100);
+  }
+
+  // ---------- Chart replay ----------
+  function replayChart() {
+    const wrap = document.getElementById('chart-current-wrap');
+    wrap.classList.remove('chart-current');
+    void wrap.offsetWidth; // force reflow
+    wrap.classList.add('chart-current');
+  }
+
+  // ---------- Buttons ----------
+  function stressButtons() {
+    const n = parseInt(document.getElementById('btn-count').value) || 60;
+    const el = document.getElementById('btn-stress');
+    el.style.gridTemplateColumns = 'repeat(2, 1fr)';
+    const half = Math.ceil(n / 2);
+    let html = '';
+    html += '<div><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#dc2626;margin-bottom:8px;">CURRENT — ' + half + ' buttons</div><div style="display:flex;flex-wrap:wrap;gap:6px;">';
+    for (let i = 0; i < half; i++) html += '<button class="btn-current" style="padding:6px 12px;font-size:12px;">Action ' + (i+1) + '</button>';
+    html += '</div></div>';
+    html += '<div><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#059669;margin-bottom:8px;">OPTIMIZED — ' + half + ' buttons</div><div style="display:flex;flex-wrap:wrap;gap:6px;">';
+    for (let i = 0; i < half; i++) html += '<button class="btn-optimized" style="padding:6px 12px;font-size:12px;">Action ' + (i+1) + '</button>';
+    html += '</div></div>';
+    el.innerHTML = html;
+    setTimeout(() => {
+      hoverSweep(el.querySelector('div:nth-child(1)'), '.btn-current');
+      hoverSweep(el.querySelector('div:nth-child(2)'), '.btn-optimized');
+    }, 100);
+  }
+
+  // ---------- Avatars ----------
+  const avatarColors = ['#6B72FF', '#EF4444', '#F59E0B', '#10B981', '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16'];
+  const avatarInitials = ['JD', 'MK', 'RS', 'AB', 'PL', 'TN', 'VH', 'CO', 'WE', 'XR', 'YZ', 'QU'];
+  function makeAvatar(i, cls) {
+    const color = avatarColors[i % avatarColors.length];
+    const initials = avatarInitials[i % avatarInitials.length];
+    return `<div class="avatar ${cls}" style="background:${color}">${initials}</div>`;
+  }
+  function fillAvatarGrid(id, cls, count) {
+    const el = document.getElementById(id);
+    let html = '';
+    for (let i = 0; i < count; i++) html += makeAvatar(i, cls);
+    el.innerHTML = html;
+  }
+  // Seed the demo grids
+  fillAvatarGrid('avatar-current-grid', 'avatar-current', 18);
+  fillAvatarGrid('avatar-opt-grid', 'avatar-optimized', 18);
+
+  function stressAvatars() {
+    const n = parseInt(document.getElementById('avatar-count').value) || 200;
+    const el = document.getElementById('avatar-stress');
+    el.style.gridTemplateColumns = 'repeat(2, 1fr)';
+    const half = Math.ceil(n / 2);
+    let html = '';
+    html += '<div><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#dc2626;margin-bottom:8px;">CURRENT — ' + half + ' avatars</div><div style="display:grid;grid-template-columns:repeat(auto-fill,28px);gap:4px;">';
+    for (let i = 0; i < half; i++) html += `<div class="avatar avatar-current" style="width:28px;height:28px;font-size:10px;background:${avatarColors[i % avatarColors.length]}">${avatarInitials[i % avatarInitials.length]}</div>`;
+    html += '</div></div>';
+    html += '<div><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#059669;margin-bottom:8px;">OPTIMIZED — ' + half + ' avatars</div><div style="display:grid;grid-template-columns:repeat(auto-fill,28px);gap:4px;">';
+    for (let i = 0; i < half; i++) html += `<div class="avatar avatar-optimized" style="width:28px;height:28px;font-size:10px;background:${avatarColors[i % avatarColors.length]}">${avatarInitials[i % avatarInitials.length]}</div>`;
+    html += '</div></div>';
+    el.innerHTML = html;
+  }
+</script>
+
+</body>
+</html>

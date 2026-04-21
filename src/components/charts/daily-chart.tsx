@@ -91,16 +91,16 @@ export function DailyChart({
               }}
             />
             {activeSeries.includes("Sent") && (
-              <Area type="monotone" dataKey="Sent" stroke="#6B72FF" strokeWidth={2} fill="url(#gradSent)" dot={false} />
+              <Area type="monotone" dataKey="Sent" stroke="#6B72FF" strokeWidth={2} fill="url(#gradSent)" dot={false} isAnimationActive={false} />
             )}
             {activeSeries.includes("Replies") && (
-              <Area type="monotone" dataKey="Replies" stroke="#10b981" strokeWidth={2} fill="url(#gradReplies)" dot={false} />
+              <Area type="monotone" dataKey="Replies" stroke="#10b981" strokeWidth={2} fill="url(#gradReplies)" dot={false} isAnimationActive={false} />
             )}
             {activeSeries.includes("Bounces") && (
-              <Area type="monotone" dataKey="Bounces" stroke="#ef4444" strokeWidth={1.5} fill="transparent" dot={false} strokeDasharray="4 2" />
+              <Area type="monotone" dataKey="Bounces" stroke="#ef4444" strokeWidth={1.5} fill="transparent" dot={false} strokeDasharray="4 2" isAnimationActive={false} />
             )}
             {activeSeries.includes("Positive") && (
-              <Area type="monotone" dataKey="Positive" stroke="#f59e0b" strokeWidth={2} fill="transparent" dot={{ r: 3, fill: "#f59e0b", stroke: "#f59e0b" }} />
+              <Area type="monotone" dataKey="Positive" stroke="#f59e0b" strokeWidth={2} fill="transparent" dot={{ r: 3, fill: "#f59e0b", stroke: "#f59e0b" }} isAnimationActive={false} />
             )}
           </AreaChart>
         </ResponsiveContainer>

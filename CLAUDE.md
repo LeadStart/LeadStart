@@ -2,7 +2,16 @@
 @PROJECT_STATUS.md
 
 # IMPORTANT: Session Start Protocol
-**Every new session MUST run `git pull origin master` before reading or editing any local files.** The codebase is actively developed across multiple machines and Claude sessions. GitHub is the single source of truth — never assume local files are current. Also run `npm install` if package.json changed.
+**Every new session MUST verify the local clone is in sync with GitHub before reading or editing any local files.** The codebase is actively developed across multiple machines and Claude sessions. GitHub is the single source of truth — never assume local files are current.
+
+Run these commands first, every time, and report the result to the user:
+1. `git pull origin master` — pull latest
+2. `git status` — confirm working tree matches `origin/master` (expect "Your branch is up to date with 'origin/master'")
+3. `git log --oneline -5` — show the latest commits so the user can confirm the head is what they expect
+
+Also run `npm install` if `package.json` changed in the pull.
+
+Do not skip this even if the session appears to be a continuation — a different machine or session may have pushed since.
 
 # CRITICAL: Deployment
 - **Production URL**: https://leadstart-ebon.vercel.app (LeadStart Vercel account)

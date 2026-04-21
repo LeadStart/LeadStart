@@ -54,6 +54,7 @@ export function FeedbackDonut({ feedback }: FeedbackDonutProps) {
               paddingAngle={2}
               dataKey="value"
               stroke="none"
+              isAnimationActive={false}
             >
               {data.map((entry, i) => (
                 <Cell key={i} fill={entry.color} />

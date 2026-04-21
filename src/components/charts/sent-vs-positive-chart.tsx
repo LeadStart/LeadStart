@@ -81,12 +81,14 @@ export function SentVsPositiveChart({ snapshots, height = 220 }: SentVsPositiveC
               fill="#6B72FF"
               radius={[3, 3, 0, 0]}
               maxBarSize={32}
+              isAnimationActive={false}
             />
             <Bar
               dataKey="Positive Responses"
               fill="#10b981"
               radius={[3, 3, 0, 0]}
               maxBarSize={32}
+              isAnimationActive={false}
             />
           </BarChart>
         </ResponsiveContainer>
