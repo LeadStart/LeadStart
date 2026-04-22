@@ -63,15 +63,23 @@ export async function runReplyPipeline(
   }
 
   // --- 2. Fetch the client (needed for persona + notify prefs) ---
-  const { data: clientData, error: clientError } = await admin
-    .from("clients")
-    .select("*")
-    .eq("id", reply.client_id)
-    .maybeSingle();
-  if (clientError || !clientData) {
-    return { skipped: true, skippedReason: "client_not_found" };
+  // Orphan replies (client_id IS NULL) skip this step and land on the
+  // "classify but don't notify" path at step 5. The webhook-time lazy-
+  // create of an orphan campaign (B2) produces these rows; B3's link UI
+  // will later populate client_id and kick off notification via the retry
+  // cron.
+  let client: Client | null = null;
+  if (reply.client_id) {
+    const { data: clientData, error: clientError } = await admin
+      .from("clients")
+      .select("*")
+      .eq("id", reply.client_id)
+      .maybeSingle();
+    if (clientError || !clientData) {
+      return { skipped: true, skippedReason: "client_not_found" };
+    }
+    client = clientData as unknown as Client;
   }
-  const client = clientData as unknown as Client;
 
   // --- 3. Three-layer classification ---
   const prefilter = runKeywordPrefilter(reply.body_text, reply.from_address);
@@ -84,7 +92,7 @@ export async function runReplyPipeline(
       body: reply.body_text,
       instantly_category: reply.instantly_category,
       prefilter,
-      persona_name: client.persona_name,
+      persona_name: client?.persona_name ?? null,
     });
   } catch (err) {
     if (err instanceof MissingAnthropicKeyError) {
@@ -121,6 +129,19 @@ export async function runReplyPipeline(
   }
 
   // --- 5. Notify if hot ---
+  // Orphan replies can't be notified because we don't know which client
+  // to send to. They sit with notification_status='pending' (the default
+  // from migration 00032) + client_id IS NULL, which is the orphan signal
+  // B3's link UI uses to pick them up after the campaign gets a client.
+  if (!client) {
+    return {
+      skipped: false,
+      finalClass: decision.final_class,
+      notified: false,
+      notifySkippedReason: "orphan_client",
+    };
+  }
+
   const autoNotify = client.auto_notify_classes || [];
   const shouldNotify = autoNotify.includes(decision.final_class);
 

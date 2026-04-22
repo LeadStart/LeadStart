@@ -45,10 +45,13 @@ export default function AdminInboxPage() {
       });
   }, []);
 
-  // Derive the client dropdown from whatever clients have replies
+  // Derive the client dropdown from whatever clients have replies.
+  // Orphan replies (client_id IS NULL) don't contribute a dropdown entry —
+  // they surface under the "all" filter and in B3's triage UI.
   const clientOptions = useMemo(() => {
     const seen = new Map<string, string>();
     for (const r of replies) {
+      if (!r.client_id) continue;
       if (!seen.has(r.client_id) && r.client?.name) {
         seen.set(r.client_id, r.client.name);
       }

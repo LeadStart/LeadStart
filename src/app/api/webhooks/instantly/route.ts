@@ -25,9 +25,12 @@ export async function POST(request: NextRequest) {
   const admin = createAdminClient();
 
   // Resolve organization + client + campaign via the Instantly campaign_id
-  // on the payload. Only lead_replies-bound flows require client_id;
-  // everything else (bounce tracking, raw event logging) works with just
-  // organization_id as before.
+  // on the payload. When the campaign_id references a campaign we haven't
+  // imported yet (or haven't linked to a LeadStart client), we lazy-create
+  // an orphan campaign row so the reply isn't dropped. Instantly does not
+  // fire a campaign_created webhook event (verified against their docs —
+  // only campaign_completed exists), so lazy-create-on-reply is the only
+  // onboarding path besides the sync cron / admin button.
   let organizationId: string | null = null;
   let clientId: string | null = null;
   let campaignId: string | null = null;       // our DB campaign id
@@ -39,18 +42,18 @@ export async function POST(request: NextRequest) {
       .select("id, client_id, organization_id")
       .eq("instantly_campaign_id", payload.campaign_id)
       .limit(1)
-      .single();
+      .maybeSingle();
 
     if (campaign) {
       organizationId = (campaign as { organization_id: string }).organization_id;
-      clientId = (campaign as { client_id: string }).client_id;
+      clientId = (campaign as { client_id: string | null }).client_id;
       campaignId = (campaign as { id: string }).id;
     }
   }
 
   // Fallback to first org for events without a matchable campaign (keeps
-  // existing behavior for single-org setups). client_id stays null, which
-  // means reply-pipeline side effects are skipped for this event.
+  // existing behavior for single-org setups). Also serves as the
+  // attribution fallback for lazy-create below.
   if (!organizationId) {
     const { data: orgs } = await admin
       .from("organizations")
@@ -72,6 +75,51 @@ export async function POST(request: NextRequest) {
 
   if (!organizationId) {
     return NextResponse.json({ error: "No organization found" }, { status: 400 });
+  }
+
+  // Lazy-create orphan campaign when we have an Instantly campaign_id but
+  // no matching row. client_id stays NULL — owner links it to a LeadStart
+  // client later via the B3 triage UI. Status defaults to 'draft' so the
+  // row doesn't immediately get swept into the analytics-active-campaigns
+  // loop in src/app/api/cron/sync-analytics/route.ts.
+  if (!campaignId && payload.campaign_id) {
+    const campaignName =
+      (typeof payload.campaign_name === "string" && payload.campaign_name.trim()) ||
+      `Unknown campaign (${payload.campaign_id})`;
+    const { data: created, error: createError } = await admin
+      .from("campaigns")
+      .insert({
+        organization_id: organizationId,
+        instantly_campaign_id: payload.campaign_id,
+        client_id: null,
+        name: campaignName,
+        status: "draft",
+      })
+      .select("id")
+      .single();
+    if (created && !createError) {
+      campaignId = (created as { id: string }).id;
+    } else {
+      // Unique-constraint race — another concurrent webhook / sync just
+      // created the row. Re-query so we still have the id.
+      const { data: raced } = await admin
+        .from("campaigns")
+        .select("id, client_id, organization_id")
+        .eq("instantly_campaign_id", payload.campaign_id)
+        .limit(1)
+        .maybeSingle();
+      if (raced) {
+        const row = raced as { id: string; client_id: string | null; organization_id: string };
+        campaignId = row.id;
+        clientId = row.client_id;
+        organizationId = row.organization_id;
+      } else {
+        console.error(
+          `[webhook] Failed to lazy-create campaign for instantly_campaign_id=${payload.campaign_id}:`,
+          createError
+        );
+      }
+    }
   }
 
   // Audit trail (unchanged)
@@ -130,9 +178,12 @@ export async function POST(request: NextRequest) {
     (typeof payloadRecord.instantly_email_id === "string" && payloadRecord.instantly_email_id) ||
     null;
 
+  // Gate on campaignId, not clientId — orphan campaigns (client_id IS NULL)
+  // still get their replies ingested and classified; only the notification
+  // step is deferred until an owner links the campaign via B3.
   let pipelineReplyId: string | null = null;
 
-  if (eventType === "reply_received" && clientId) {
+  if (eventType === "reply_received" && campaignId) {
     pipelineReplyId = await handleReplyReceived({
       admin,
       payload: payloadRecord,
@@ -143,7 +194,7 @@ export async function POST(request: NextRequest) {
       instantlyEmailId: instantlyEmailIdFromPayload,
       instantlyApiKey,
     });
-  } else if (eventType.startsWith("lead_") && clientId) {
+  } else if (eventType.startsWith("lead_") && campaignId) {
     const result = await correlateTag(
       payloadRecord,
       {
@@ -193,7 +244,8 @@ async function handleReplyReceived({
   admin: ReturnType<typeof createAdminClient>;
   payload: Record<string, unknown>;
   organizationId: string;
-  clientId: string;
+  // Null for orphan replies; the pipeline classifies but skips notification.
+  clientId: string | null;
   campaignId: string | null;
   instantlyCampaignId: string | null;
   instantlyEmailId: string | null;

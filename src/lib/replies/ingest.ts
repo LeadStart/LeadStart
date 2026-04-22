@@ -13,7 +13,10 @@ import { runKeywordPrefilter, type PrefilterResult } from "./keyword-prefilter";
 
 export interface IngestContext {
   organization_id: string;
-  client_id: string;
+  // NULL for orphan replies (webhook fired for a campaign we hadn't yet
+  // linked to a LeadStart client). The pipeline classifies the reply but
+  // skips notification until B3 links the campaign.
+  client_id: string | null;
   // DB campaign id (not Instantly's). Nullable because we might receive a
   // webhook for a campaign we haven't linked yet.
   campaign_id: string | null;
