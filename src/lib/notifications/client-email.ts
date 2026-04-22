@@ -96,7 +96,7 @@ export function buildClientNotificationEmail(
               <td style="padding: 24px 32px 0;">
                 <div style="background: #FEF3C7; border: 1px solid #FCD34D; border-radius: 10px; padding: 14px 16px;">
                   <p style="margin: 0; font-size: 13px; color: #92400E;">
-                    No phone number on file — open the dossier to reply via email.
+                    No phone number on file — view the full reply to respond by email.
                   </p>
                 </div>
               </td>
@@ -152,7 +152,7 @@ ${escapeHtml(data.replyBodyPreview)}
           <tr>
             <td style="background: #ffffff; padding: 20px 32px 28px; text-align: center;">
               <a href="${data.dossierUrl}" style="display: inline-block; background: linear-gradient(135deg, #6B72FF, #2E37FE); color: #ffffff; text-decoration: none; padding: 14px 36px; border-radius: 10px; font-size: 14px; font-weight: 600; letter-spacing: -0.2px;">
-                Open in portal &#8594;
+                View Full Reply &#8594;
               </a>
               <p style="margin: 12px 0 0; font-size: 12px; color: #6B6E8A;">
                 Single-use link · expires in 4 hours
