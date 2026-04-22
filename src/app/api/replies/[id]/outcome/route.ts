@@ -1,5 +1,5 @@
 // POST /api/replies/[id]/outcome — log the post-contact disposition on a
-// reply (called_booked, called_vm, called_no_answer, emailed, no_contact).
+// reply (called, emailed, no_contact).
 //
 // Replaces the direct RLS UPDATE that the client dossier used to do. Going
 // through an API route gives us server-side validation, audit stamping
@@ -16,13 +16,7 @@ import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { LeadReply, ReplyOutcome } from "@/types/app";
 
-const VALID_OUTCOMES: ReplyOutcome[] = [
-  "called_booked",
-  "called_vm",
-  "called_no_answer",
-  "emailed",
-  "no_contact",
-];
+const VALID_OUTCOMES: ReplyOutcome[] = ["called", "emailed", "no_contact"];
 
 interface RouteParams {
   params: Promise<{ id: string }>;

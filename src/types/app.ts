@@ -423,9 +423,7 @@ export type ReplyClass =
   | "needs_review";
 
 export type ReplyOutcome =
-  | "called_booked"
-  | "called_vm"
-  | "called_no_answer"
+  | "called"
   | "emailed"
   | "no_contact";
 
@@ -438,7 +436,11 @@ export interface ReplyReferralContact {
 export interface LeadReply {
   id: string;
   organization_id: string;
-  client_id: string;
+  // NULL for orphan replies — replies captured by the webhook handler
+  // when the campaign wasn't yet linked to a LeadStart client. The
+  // classifier still runs; notification is skipped until B3 links the
+  // campaign and a follow-up UPDATE populates client_id.
+  client_id: string | null;
   campaign_id: string | null;
 
   // Instantly references

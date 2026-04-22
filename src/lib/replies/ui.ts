@@ -31,11 +31,9 @@ export interface OutcomeOption {
 }
 
 export const OUTCOME_OPTIONS: OutcomeOption[] = [
-  { value: "called_booked",    label: "Called — booked",      badge: "badge-green" },
-  { value: "called_vm",        label: "Called — left VM",     badge: "badge-amber" },
-  { value: "called_no_answer", label: "Called — no answer",   badge: "badge-amber" },
-  { value: "emailed",          label: "Emailed instead",      badge: "badge-blue" },
-  { value: "no_contact",       label: "No contact",           badge: "badge-slate" },
+  { value: "called",     label: "Called",          badge: "badge-green" },
+  { value: "emailed",    label: "Emailed instead", badge: "badge-blue"  },
+  { value: "no_contact", label: "No contact",      badge: "badge-slate" },
 ];
 
 export const OUTCOME_META: Record<ReplyOutcome, OutcomeOption> = OUTCOME_OPTIONS.reduce(
