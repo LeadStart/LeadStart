@@ -20,8 +20,10 @@
 // to drop events than to trust unverified webhook input.
 
 import { NextRequest, NextResponse } from "next/server";
+import { after } from "next/server";
 import crypto from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { recordWebhookAuthFailure } from "@/lib/notifications/webhook-auth-alerts";
 
 const REPLAY_WINDOW_MS = 5 * 60 * 1000;
 
@@ -107,6 +109,24 @@ export async function POST(request: NextRequest) {
     secret,
   });
   if (!valid) {
+    // D1: log + alert on sustained invalid-signature bursts. Missing-env
+    // 401 above intentionally does NOT log (operator config error would
+    // flood the table; handled inline with 401 + no side effects).
+    after(async () => {
+      try {
+        await recordWebhookAuthFailure({
+          admin: createAdminClient(),
+          endpoint: "/api/webhooks/resend",
+          reason: "invalid_signature",
+          request,
+        });
+      } catch (err) {
+        console.error(
+          "[webhooks/resend] recordWebhookAuthFailure threw:",
+          err,
+        );
+      }
+    });
     return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
   }
 

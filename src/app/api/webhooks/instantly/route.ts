@@ -6,12 +6,30 @@ import { InstantlyClient } from "@/lib/instantly/client";
 import { normalizeReplyFromInstantlyEmail } from "@/lib/replies/ingest";
 import { correlateTag } from "@/lib/replies/tag";
 import { runReplyPipeline } from "@/lib/replies/pipeline";
+import { recordWebhookAuthFailure } from "@/lib/notifications/webhook-auth-alerts";
 
 export async function POST(request: NextRequest) {
   // Verify webhook secret (optional security via query param)
   const secret = request.nextUrl.searchParams.get("secret");
   const expectedSecret = process.env.WEBHOOK_SECRET;
   if (expectedSecret && secret !== expectedSecret) {
+    // D1: log + alert on sustained bad-secret bursts. Deferred via after()
+    // so the 401 response returns without waiting on the insert+count+send.
+    after(async () => {
+      try {
+        await recordWebhookAuthFailure({
+          admin: createAdminClient(),
+          endpoint: "/api/webhooks/instantly",
+          reason: "bad_secret",
+          request,
+        });
+      } catch (err) {
+        console.error(
+          "[webhooks/instantly] recordWebhookAuthFailure threw:",
+          err,
+        );
+      }
+    });
     return NextResponse.json({ error: "Invalid secret" }, { status: 401 });
   }
 
