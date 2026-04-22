@@ -13,7 +13,8 @@ export interface ClientNotificationEmailData {
   leadPhone: string | null;       // already-formatted E.164 or pretty; we display as-is
   classLabel: string;              // human-readable from classLabelFor(final_class)
   replyBodyPreview: string;        // truncated to ~400 chars in orchestrator
-  dossierUrl: string;              // absolute URL with ?token=...
+  dossierUrl: string;              // absolute URL with ?token=... — single-use, 4h TTL
+  portalUrl: string;               // absolute URL, no token — permanent, requires login
   receivedAt: string;              // ISO — rendered as "just now" / "X min ago" by reader's client; we display formatted
 }
 
@@ -156,8 +157,23 @@ ${escapeHtml(data.replyBodyPreview)}
               <a href="${data.dossierUrl}" style="display: inline-block; background: linear-gradient(135deg, #6B72FF, #2E37FE); color: #ffffff; text-decoration: none; padding: 14px 36px; border-radius: 10px; font-size: 14px; font-weight: 600; letter-spacing: -0.2px;">
                 View Full Reply &#8594;
               </a>
-              <p style="margin: 12px 0 0; font-size: 12px; color: #6B6E8A;">
-                Single-use link · expires in 4 hours
+
+              <!-- "or" divider -->
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin: 20px auto 0; max-width: 320px;">
+                <tr>
+                  <td width="130" style="border-bottom: 1px solid #E2E3ED; line-height: 1px; font-size: 1px;">&nbsp;</td>
+                  <td style="padding: 0 14px; font-size: 11px; color: #9194AD; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 600; white-space: nowrap;">
+                    or
+                  </td>
+                  <td width="130" style="border-bottom: 1px solid #E2E3ED; line-height: 1px; font-size: 1px;">&nbsp;</td>
+                </tr>
+              </table>
+
+              <a href="${data.portalUrl}" style="display: inline-block; margin-top: 18px; background: #ffffff; color: #2E37FE; text-decoration: none; padding: 12px 32px; border-radius: 10px; font-size: 14px; font-weight: 600; letter-spacing: -0.2px; border: 1.5px solid #D4D7E9;">
+                Open in Portal
+              </a>
+              <p style="margin: 14px 0 0; font-size: 12px; color: #6B6E8A;">
+                Fast link expires in 4 hours — portal link never expires
               </p>
             </td>
           </tr>

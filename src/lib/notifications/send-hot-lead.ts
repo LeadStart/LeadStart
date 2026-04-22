@@ -95,10 +95,16 @@ export async function sendHotLeadNotification(
   // 1. Sign. Token + hash are bound to this reply.id for the next 4h.
   const { token, hash } = signReplyUrl(reply.id);
 
-  // 2. Build the URL. NEXT_PUBLIC_APP_URL already includes the /app basePath
+  // 2. Build the URLs. NEXT_PUBLIC_APP_URL already includes the /app basePath
   //    (see .env.example), so we append the client route directly.
+  //    - dossierUrl: short-lived signed URL, works without login (mobile tap)
+  //    - portalUrl:  same route minus the token — permanent, requires login.
+  //      Middleware redirects unauthenticated hits to /login?next=… so the
+  //      client lands on this reply after signing in.
   const baseUrl = requireAppUrl();
-  const dossierUrl = `${baseUrl}/client/inbox/${reply.id}?token=${encodeURIComponent(token)}`;
+  const replyPath = `/client/inbox/${reply.id}`;
+  const dossierUrl = `${baseUrl}${replyPath}?token=${encodeURIComponent(token)}`;
+  const portalUrl = `${baseUrl}${replyPath}`;
 
   // 3. Build the email.
   const { subject, html } = buildClientNotificationEmail({
@@ -108,6 +114,7 @@ export async function sendHotLeadNotification(
     classLabel: classLabelFor(reply.final_class),
     replyBodyPreview: truncateForPreview(reply.body_text),
     dossierUrl,
+    portalUrl,
     receivedAt: reply.received_at,
   });
 

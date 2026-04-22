@@ -113,19 +113,43 @@ export async function updateSession(request: NextRequest) {
   if (!user && !isPublicRoute && pathname !== "/") {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
+    // Preserve the intended destination so post-login routing can honor it.
+    // Used by the "Open in Portal" link in hot-lead notification emails — a
+    // logged-out client clicking that link should land on the specific reply
+    // after signing in, not the generic /client home.
+    const nextTarget = pathname + (request.nextUrl.search || "");
+    url.searchParams.set("next", nextTarget);
     return NextResponse.redirect(url);
   }
 
-  // If logged in, route based on role
+  // If logged in, route based on role — but honor a safe `?next=` first.
   if (user && (pathname === "/" || pathname === "/login")) {
-    const role = user.app_metadata?.role;
+    const role = (user.app_metadata?.role as string) || "client";
     const url = request.nextUrl.clone();
+
+    // Honor ?next= only when the destination matches the user's role, to
+    // prevent using this as an open-redirect across role boundaries.
+    const nextRaw = request.nextUrl.searchParams.get("next");
+    if (nextRaw && nextRaw.startsWith("/") && !nextRaw.startsWith("//")) {
+      const nextPath = nextRaw.split("?")[0];
+      const nextQuery = nextRaw.includes("?") ? nextRaw.slice(nextRaw.indexOf("?")) : "";
+      const isClientDest = nextPath.startsWith("/client/") || nextPath === "/client";
+      const isAdminDest = nextPath.startsWith("/admin/") || nextPath === "/admin";
+      const roleAllowsClient = role === "client";
+      const roleAllowsAdmin = role === "owner" || role === "va";
+      if ((isClientDest && roleAllowsClient) || (isAdminDest && roleAllowsAdmin)) {
+        url.pathname = nextPath;
+        url.search = nextQuery;
+        return NextResponse.redirect(url);
+      }
+    }
 
     if (role === "client") {
       url.pathname = "/client";
     } else {
       url.pathname = "/admin";
     }
+    url.searchParams.delete("next");
     return NextResponse.redirect(url);
   }
 
