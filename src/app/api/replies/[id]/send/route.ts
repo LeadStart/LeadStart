@@ -20,7 +20,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { InstantlyClient } from "@/lib/instantly/client";
-import { buildReplyRequest, MissingReplyFieldError } from "@/lib/replies/send";
+import {
+  buildReplyRequest,
+  computeIdempotencyKey,
+  MissingReplyFieldError,
+} from "@/lib/replies/send";
 import type { LeadReply } from "@/types/app";
 
 interface RouteParams {
@@ -152,7 +156,13 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   }
 
   // --- Atomic claim: only one send wins ---
+  // Also stamp a deterministic idempotency_key derived from (reply.id,
+  // body_text). Instantly doesn't honor an Idempotency-Key header, so the
+  // key is purely local state for D2 — persists through error rollbacks
+  // so a future commit can add an active pre-check against repeated sends
+  // of the same body after a timeout.
   const sentAt = new Date().toISOString();
+  const idempotencyKey = computeIdempotencyKey(id, body_text);
   const { data: claimedRow, error: claimErr } = await admin
     .from("lead_replies")
     .update({
@@ -161,6 +171,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       final_body_text: body_text,
       final_body_html: body_html ?? null,
       error: null,
+      idempotency_key: idempotencyKey,
     })
     .eq("id", id)
     .in("status", ["new", "classified"])

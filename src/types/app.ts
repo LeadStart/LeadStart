@@ -517,6 +517,9 @@ export interface LeadReply {
   sent_at: string | null;
   sent_instantly_email_id: string | null;
   error: string | null;
+  // D2 idempotency tombstone — sha256(reply.id + body_text).slice(0, 16).
+  // Stamped on atomic claim; persists through error rollbacks.
+  idempotency_key: string | null;
 
   created_at: string;
   updated_at: string;

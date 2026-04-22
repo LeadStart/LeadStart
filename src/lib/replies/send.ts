@@ -6,8 +6,26 @@
 //
 // Pure function. The HTTP call lives on InstantlyClient.replyViaEmailsApi.
 
+import crypto from "node:crypto";
 import type { LeadReply } from "@/types/app";
 import type { InstantlyReplyRequest } from "@/lib/instantly/types";
+
+/**
+ * D2 idempotency key derivation. Deterministic: sha256(reply.id + body_text)
+ * truncated to the first 16 hex chars. Instantly's v2 API has no documented
+ * Idempotency-Key header (checked 2026-04-22), so the key is stored on
+ * lead_replies.idempotency_key rather than sent over the wire. A future
+ * commit can wire an active pre-check against this column to close the
+ * timeout-rollback-retry window; the atomic status claim on
+ * /api/replies/[id]/send is the primary dedup today.
+ */
+export function computeIdempotencyKey(replyId: string, bodyText: string): string {
+  return crypto
+    .createHash("sha256")
+    .update(`${replyId}${bodyText}`)
+    .digest("hex")
+    .slice(0, 16);
+}
 
 export interface BuildReplyInput {
   // The stored reply we're responding to
