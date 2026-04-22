@@ -75,7 +75,9 @@ export function buildClientNotificationEmail(
   const leadCompany = data.leadCompany?.trim() || "";
   const companyFragment = leadCompany ? ` @ ${leadCompany}` : "";
 
-  const subject = `🔔 ${leadName}${companyFragment} — ${data.classLabel}`;
+  // Generic subject — class-specific labels live on the row + UI badge for
+  // organization, but the email itself stays uniform per owner request.
+  const subject = `🔔 New hot lead reply — ${leadName}${companyFragment}`;
 
   const phoneBlock = data.leadPhone
     ? `
@@ -122,7 +124,7 @@ export function buildClientNotificationEmail(
           <tr>
             <td style="background: linear-gradient(135deg, #6B72FF 0%, #2E37FE 30%, #1C24B8 65%, #0F1880 100%); border-radius: 16px 16px 0 0; padding: 28px 32px;">
               <p style="margin: 0; color: rgba(255,255,255,0.75); font-size: 12px; text-transform: uppercase; letter-spacing: 1.2px; font-weight: 600;">
-                🔔 Hot lead · ${escapeHtml(data.classLabel)}
+                🔔 Hot lead
               </p>
               <h1 style="margin: 8px 0 4px; color: #ffffff; font-size: 24px; font-weight: 700; letter-spacing: -0.4px;">
                 ${escapeHtml(leadName)}${leadCompany ? ` <span style="color: rgba(255,255,255,0.7); font-weight: 500;">@ ${escapeHtml(leadCompany)}</span>` : ""}
