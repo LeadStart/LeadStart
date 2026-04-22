@@ -1,10 +1,10 @@
 # SAFETY-TODO: Reply-chain hardening + campaign onboarding
 
-> **Status (2026-04-22):** Phases A, B, and C are complete and deployed. Phase D (observability) is the only remaining work. See ["Start here for Phase D"](#start-here-for-phase-d) below.
+> **Status (2026-04-22):** All four phases complete and deployed. See [`docs/reliability.md`](docs/reliability.md) for the product-facing summary of every shipped control.
 >
 > **Goal:** close every silent-failure path between "prospect replies to Instantly" and "client sends a portal reply," and give us a proper onboarding flow for new campaigns.
 >
-> **Estimated total effort:** ~14h split across 11 commits, 4 phases. ~10.75h shipped, ~3.75h remaining.
+> **Estimated total effort:** ~14h split across 11 commits, 4 phases. All shipped.
 >
 > **Order matters:** Phase A (schema) unlocks everything downstream. Phases B/C/D can be partially parallelized, but don't skip dependencies.
 >
@@ -24,9 +24,7 @@
 
 ---
 
-## Start here for Phase D
-
-**What's shipped so far (commits on `master`):**
+## Ship log
 
 | Phase | Commit | Summary |
 |-------|--------|---------|
@@ -37,20 +35,17 @@
 | C1    | `7676bf0` | Resend throttle + retry queue for hot-lead notifications |
 | C2    | `fd0fb83` | Enrichment retry queue + pending_enrichment status |
 | C3    | `16d838f` | Resend delivery webhook — stamps delivered/bounced on lead_replies |
+| D1    | `3f0468c` | 401 burst alerting on both webhook endpoints |
+| D3    | `e94f916` | 90-day retention cron for `webhook_events` |
+| D2    | `43a3dbd` | Idempotency key tombstone on portal reply sends |
+| D4    | `fded425` | `/admin/pipeline-health` dashboard |
 
-**What's left:** D1–D4 (observability). Build order: **D1 → D3 → D2 → D4**. Reasoning: D1 is the highest safety win and smallest (~45min); D3 removes a growing-forever table; D2 is defence-in-depth; D4 (dashboard) reads state the earlier commits populate so it goes last.
-
-**Pre-work before starting D1:**
-- `OWNER_ALERT_EMAIL=daniel.tuccillo92@gmail.com` must be in `.env.local` + Vercel env (Production + Preview). Owner to confirm it's set before D1 ships — the code without this env falls back to "log to console, don't email," which defeats the purpose.
-
-**Decisions locked in for Phase D:**
-- **D1 threshold:** ≥5 failures in 10min triggers an email; 1h no-alert cooldown between alerts (prevents flood). Alerts go to `OWNER_ALERT_EMAIL` via the throttled Resend wrapper shipped in C1.
-- **D1 covers both webhooks:** `/api/webhooks/instantly` (401 on bad WEBHOOK_SECRET) and `/api/webhooks/resend` (401 on bad signature). Both log to `webhook_auth_failures` (table exists from A1, migration 00033).
-- **D3 retention:** 90 days. Keep rows with `processed=false` regardless of age (those are forensic gold). Cron daily at 4am UTC.
-- **D2 idempotency key shape:** `sha256(reply.id + body_text).slice(0,16)`. Check Instantly docs first — if their API supports `Idempotency-Key` header, pass it; if not, rely on the atomic status-claim in `/api/replies/[id]/send/route.ts` that already deduplicates most cases, and store the key on `lead_replies.idempotency_key` for future-proofing.
-- **D4 scope:** single read-only admin page at `/admin/pipeline-health`. No new writes, no schema changes beyond optional indexes if queries are slow. Pulls every card from state the earlier commits populate. Add to sidebar under Events.
-
-**First action when resuming:** Read this block + the two memory files (`memory/feedback_local_only_dev.md` and `memory/feedback_no_ai_drafting.md`), run the session-start protocol (`git pull`, `git status`, `git log --oneline -5`), confirm HEAD is at or after `16d838f`, then open D1's section below and build.
+Phase D decisions (retained for audit):
+- **D1 threshold:** ≥5 failures in 10min triggers an email; 1h no-alert cooldown. Alerts route through the C1 throttled Resend wrapper; skip the retry queue (dropped alerts re-trigger on the next failure).
+- **D1 logs only real auth failures** — `bad_secret` on Instantly and `invalid_signature` on Resend. Missing-env 401s (operator config errors) go to console to avoid table-flooding.
+- **D2 idempotency key shape:** `sha256(reply.id + body_text).slice(0, 16)`. Instantly has no documented `Idempotency-Key` header, so the key is stored on `lead_replies.idempotency_key` and the atomic status claim handles most dedup today; the column persists through rollback for a future active pre-check.
+- **D3 retention:** 90 days, keep unprocessed rows indefinitely. Cron daily at 04:00 UTC.
+- **D4 scope:** single read-only admin page at `/admin/pipeline-health`. Pulls every card from state earlier phases populate. Linked into sidebar after Events and wired into `AdminPrefetcher`.
 
 ---
 
@@ -203,7 +198,7 @@ Solves: silent notification drops + rate-limit vulnerabilities.
 
 Solves: invisible failures + operational blindness.
 
-### [ ] D1 — 401 alerting on webhook endpoints
+### [x] D1 — 401 alerting on webhook endpoints
 
 **Scope:** Every time Instantly (or anyone) hits `/api/webhooks/instantly` with a bad secret, log to `webhook_auth_failures`. When ≥5 failures in 10 minutes, fire an email alert to the owner so a wrong-secret deploy is caught immediately.
 
@@ -216,7 +211,7 @@ Solves: invisible failures + operational blindness.
 
 **Effort:** ~45min.
 
-### [ ] D2 — Idempotency key on portal reply send
+### [x] D2 — Idempotency key on portal reply send
 
 **Scope:** Prevent duplicate sends if our request to Instantly times out after Instantly accepted it. Add a hash-based idempotency key derived from `(reply.id, body_text)`.
 
@@ -229,7 +224,7 @@ Solves: invisible failures + operational blindness.
 
 **Effort:** ~30min (more if Instantly doesn't support it and we do our own).
 
-### [ ] D3 — webhook_events retention cron
+### [x] D3 — webhook_events retention cron
 
 **Scope:** Keep `webhook_events` from growing indefinitely. Delete rows older than 90 days — except ones we'd want for incident response (failed/unprocessed).
 
@@ -242,7 +237,7 @@ Solves: invisible failures + operational blindness.
 
 **Effort:** ~30min.
 
-### [ ] D4 — Pipeline health dashboard
+### [x] D4 — Pipeline health dashboard
 
 **Scope:** One admin page that answers "is the pipeline healthy right now?" in a glance.
 
