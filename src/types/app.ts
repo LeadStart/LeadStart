@@ -401,12 +401,14 @@ export interface PaymentLink {
 // ---------- Reply routing pipeline (migration 00025) ----------
 
 export type ReplyStatus =
-  | "new"          // ingested, classifier hasn't run yet
-  | "classified"   // classifier ran, waiting for client action (hot classes only)
-  | "sent"         // client sent email reply via portal
-  | "resolved"     // client handled offline (phone call, etc.)
-  | "rejected"     // client explicitly dismissed
-  | "expired";     // auto-expired after 48h of no action
+  | "new"                 // ingested, classifier hasn't run yet
+  | "classified"          // classifier ran, waiting for client action (hot classes only)
+  | "sent"                // client sent email reply via portal
+  | "resolved"            // client handled offline (phone call, etc.)
+  | "rejected"            // client explicitly dismissed
+  | "expired"             // auto-expired after 48h of no action
+  | "pending_enrichment"  // webhook's getEmail call failed; retry cron will attempt enrichment
+  | "enrichment_failed";  // enrichment retries exhausted — terminal state, no auto-processing
 
 // Classifier output. Matches final_class text column. See plan taxonomy.
 export type ReplyClass =
@@ -492,6 +494,10 @@ export interface LeadReply {
   notification_last_error: string | null;
   notification_delivered_at: string | null;
   notification_bounced_at: string | null;
+  // Enrichment retry (migration 00037) — populated when webhook's getEmail
+  // fails and the row is parked as status='pending_enrichment'.
+  enrichment_retry_count: number;
+  enrichment_last_attempt_at: string | null;
 
   // Outcome
   outcome: ReplyOutcome | null;

@@ -267,10 +267,70 @@ async function handleReplyReceived({
     const instantly = new InstantlyClient(instantlyApiKey);
     email = await instantly.getEmail(instantlyEmailId);
   } catch (err) {
+    // C2 safety net — rather than dropping the reply, park a minimal row
+    // with status='pending_enrichment'. The retry-enrichment cron
+    // (src/app/api/cron/retry-enrichment/route.ts) promotes the row to
+    // 'new' once getEmail returns, then the pipeline runs normally.
     console.error(
-      `[webhook] getEmail(${instantlyEmailId}) failed — ingest aborted:`,
-      err
+      `[webhook] getEmail(${instantlyEmailId}) failed — parking for retry:`,
+      err,
     );
+    const leadEmail =
+      (typeof payload.lead_email === "string" && payload.lead_email) ||
+      (typeof payload.email === "string" && payload.email) ||
+      null;
+    if (!leadEmail) {
+      // Absolute minimum for a lead_replies row is lead_email (NOT NULL
+      // in the schema). Without it we really do have to drop.
+      console.warn(
+        `[webhook] reply_received ${instantlyEmailId} has no lead_email; cannot park for retry`,
+      );
+      return null;
+    }
+    // Dedupe against a prior park — if a retry already queued this
+    // same instantly_email_id, don't insert a duplicate.
+    const { data: existing } = await admin
+      .from("lead_replies")
+      .select("id")
+      .eq("organization_id", organizationId)
+      .eq("instantly_email_id", instantlyEmailId)
+      .maybeSingle();
+    if (existing) {
+      return (existing as { id: string }).id;
+    }
+    const { data: parked, error: parkError } = await admin
+      .from("lead_replies")
+      .insert({
+        organization_id: organizationId,
+        client_id: clientId,
+        campaign_id: campaignId,
+        instantly_email_id: instantlyEmailId,
+        instantly_campaign_id: instantlyCampaignId,
+        lead_email: leadEmail,
+        lead_name:
+          [payload.first_name, payload.last_name]
+            .filter((p) => typeof p === "string" && p)
+            .join(" ")
+            .trim() || null,
+        lead_company:
+          typeof payload.company_name === "string" && payload.company_name
+            ? payload.company_name
+            : null,
+        received_at: new Date().toISOString(),
+        status: "pending_enrichment",
+        raw_payload: payload as unknown as Record<string, unknown>,
+      })
+      .select("id")
+      .single();
+    if (parkError || !parked) {
+      console.error(
+        `[webhook] Failed to park pending_enrichment row for ${instantlyEmailId}:`,
+        parkError,
+      );
+      return null;
+    }
+    // Do NOT schedule the pipeline — no body_text to classify. The retry
+    // cron will schedule it once enrichment succeeds.
     return null;
   }
 

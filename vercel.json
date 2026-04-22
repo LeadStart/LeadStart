@@ -16,6 +16,10 @@
     {
       "path": "/app/api/cron/retry-notifications",
       "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/app/api/cron/retry-enrichment",
+      "schedule": "*/5 * * * *"
     }
   ]
 }
