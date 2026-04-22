@@ -114,6 +114,13 @@ export function normalizeReplyFromInstantlyEmail(
   const { text: body_text, html: body_html } = splitBody(email.body);
   const leadFields = extractLeadFieldsFromPayload(webhookPayload);
 
+  // Webhook payload usually lacks first/last name; pull the display name
+  // off the email's from_address_json as a fallback so the dossier subject
+  // and header don't render as "A new lead".
+  if (!leadFields.lead_name && email.from_address_json?.[0]?.name) {
+    leadFields.lead_name = email.from_address_json[0].name;
+  }
+
   // Run prefilter at ingest so keyword_flags is populated even before
   // Claude runs. Commit #4's decide.ts layer will merge this with the
   // Claude classifier result.

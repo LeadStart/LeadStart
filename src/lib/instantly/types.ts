@@ -138,6 +138,10 @@ export interface InstantlyEmail {
   body?: { text?: string; html?: string } | string;
   content_preview?: string;
   from_address_email: string;
+  // Display-name + address for the sender. reply_received's webhook payload
+  // doesn't include first/last name fields, so this is our only source for
+  // a human-readable lead name on inbound replies.
+  from_address_json?: Array<{ address: string; name?: string }>;
   to_address_email_list?: string[];
   cc_address_email_list?: string[];
   bcc_address_email_list?: string[];
