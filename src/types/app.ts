@@ -485,6 +485,13 @@ export interface LeadReply {
   notification_token_hash: string | null;
   notification_token_consumed_at: string | null;
   notification_email_id: string | null;
+  // Notification reliability (migration 00032) — retry-queue state
+  notification_status: "pending" | "sent" | "failed" | "retrying";
+  notification_retry_count: number;
+  notification_last_attempt_at: string | null;
+  notification_last_error: string | null;
+  notification_delivered_at: string | null;
+  notification_bounced_at: string | null;
 
   // Outcome
   outcome: ReplyOutcome | null;

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { calculateMetrics } from "@/lib/kpi/calculator";
 import { buildWeeklyReportEmail as buildReportHtml } from "@/lib/email/weekly-report";
+import { sendViaResend } from "@/lib/notifications/resend-client";
 import type { CampaignSnapshot, Client, Campaign, KPIReportData, KPIReport } from "@/types/app";
 
 /** Shared helper: generate report data for a client + date range */
@@ -47,7 +48,7 @@ async function generateReportData(
   };
 }
 
-/** Send an email report via Resend */
+/** Send an email report via the throttled Resend wrapper. */
 async function sendReportEmail(
   reportData: KPIReportData,
   toEmails: string[],
@@ -56,10 +57,11 @@ async function sendReportEmail(
 ): Promise<void> {
   if (!process.env.RESEND_API_KEY || toEmails.length === 0) return;
 
-  const { Resend } = await import("resend");
-  const resend = new Resend(process.env.RESEND_API_KEY);
-
-  await resend.emails.send({
+  // Weekly KPI reports don't use the hot-lead retry queue — a failed report
+  // is low-urgency and the daily cron rerun catches most transient drops.
+  // The throttle is still valuable to avoid bursts when a scheduled run
+  // sends to many clients at once.
+  await sendViaResend({
     from: process.env.EMAIL_FROM || "LeadStart <info@no-reply.leadstart.io>",
     to: toEmails,
     subject: `Your Campaign Report — ${startDate} to ${endDate}`,

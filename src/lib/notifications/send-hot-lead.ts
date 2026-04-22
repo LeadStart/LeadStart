@@ -19,6 +19,18 @@ import {
   buildClientNotificationEmail,
   classLabelFor,
 } from "./client-email";
+import {
+  sendViaResend,
+  MissingResendKeyError as ResendKeyMissingError,
+  RateLimitedError,
+  TransientResendError,
+  PermanentResendError,
+} from "./resend-client";
+
+// retry_count sentinel that parks a row permanently — above the retry cron's
+// MAX_RETRIES threshold (5), so it stays visible to admins but isn't picked
+// up for another attempt.
+const PERMANENT_FAIL_RETRY_COUNT = 99;
 
 // Truncate the reply body for the email preview. Long chains with quoted
 // history would explode the email; this keeps it scannable.
@@ -41,12 +53,10 @@ function requireAppUrl(): string {
   return url.replace(/\/$/, "");
 }
 
-export class MissingResendKeyError extends Error {
-  constructor() {
-    super("RESEND_API_KEY is not set. Cannot send hot-lead notification.");
-    this.name = "MissingResendKeyError";
-  }
-}
+// Preserved so downstream imports keep working. The wrapper's own
+// MissingResendKeyError is what we actually throw now; this alias exists
+// purely to avoid churning callers.
+export { ResendKeyMissingError as MissingResendKeyError };
 
 export interface HotLeadNotificationContext {
   /** The full lead_replies row we just classified. */
@@ -88,10 +98,6 @@ export async function sendHotLeadNotification(
     return { resendId: null, tokenHash: reply.notification_token_hash, skipped: true };
   }
 
-  if (!process.env.RESEND_API_KEY) {
-    throw new MissingResendKeyError();
-  }
-
   // 1. Sign. Token + hash are bound to this reply.id for the next 4h.
   const { token, hash } = signReplyUrl(reply.id);
 
@@ -118,45 +124,89 @@ export async function sendHotLeadNotification(
     receivedAt: reply.received_at,
   });
 
-  // 4. Send via Resend. Dynamic import matches the pattern in
-  //    src/app/api/cron/send-reports/route.ts.
-  const { Resend } = await import("resend");
-  const resend = new Resend(process.env.RESEND_API_KEY);
+  const attemptAt = new Date().toISOString();
 
-  const { data, error } = await resend.emails.send({
-    from: process.env.EMAIL_FROM || "LeadStart <info@no-reply.leadstart.io>",
-    to: clientNotificationEmail,
-    cc: ccDedup.length > 0 ? ccDedup : undefined,
-    subject,
-    html,
-  });
+  // 4. Send via the throttled wrapper. On typed error, stamp retry state
+  //    and rethrow so the caller can log / decide. On success, stamp the
+  //    notified_* fields + mark status='sent' so the retry cron skips.
+  try {
+    const { id: resendId } = await sendViaResend({
+      from: process.env.EMAIL_FROM || "LeadStart <info@no-reply.leadstart.io>",
+      to: clientNotificationEmail,
+      cc: ccDedup.length > 0 ? ccDedup : undefined,
+      subject,
+      html,
+    });
 
-  if (error) {
-    throw new Error(`Resend failed: ${error.message || JSON.stringify(error)}`);
+    // 5. Stamp the row. If this write fails, the email is already out, but
+    //    the row won't reflect it — next run will detect notified_at is null
+    //    and may re-send. Acceptable because duplicates land at the same
+    //    inbox, not at a prospect.
+    const { error: updateError } = await admin
+      .from("lead_replies")
+      .update({
+        notified_at: attemptAt,
+        notification_status: "sent",
+        notification_last_attempt_at: attemptAt,
+        notification_last_error: null,
+        notification_token_hash: hash,
+        notification_email_id: resendId,
+      })
+      .eq("id", reply.id);
+
+    if (updateError) {
+      // Surface so the caller logs it — email went out, row didn't record.
+      console.error(
+        `[send-hot-lead] Email sent (${resendId}) but DB stamp failed for reply ${reply.id}:`,
+        updateError,
+      );
+    }
+
+    return { resendId, tokenHash: hash, skipped: false };
+  } catch (err) {
+    // Typed errors from the wrapper map onto retry state. Anything else
+    // (including non-Error throws) we treat as transient — retrying is
+    // safer than silently dropping a hot-lead email.
+    const isPermanent = err instanceof PermanentResendError;
+    const isRateLimited = err instanceof RateLimitedError;
+    const isTransient = err instanceof TransientResendError || isRateLimited;
+    const isKnown = isPermanent || isTransient;
+
+    if (err instanceof ResendKeyMissingError) {
+      // Don't stamp retry state; missing key is a config error, not a
+      // per-row failure. Callers should fix env and redeploy.
+      throw err;
+    }
+
+    const currentRetryCount = reply.notification_retry_count ?? 0;
+    const nextRetryCount = isPermanent
+      ? PERMANENT_FAIL_RETRY_COUNT
+      : currentRetryCount + 1;
+    const errorMessage = err instanceof Error ? err.message : String(err);
+
+    const { error: stampError } = await admin
+      .from("lead_replies")
+      .update({
+        notification_status: "failed",
+        notification_retry_count: nextRetryCount,
+        notification_last_attempt_at: attemptAt,
+        notification_last_error: errorMessage.slice(0, 1000),
+      })
+      .eq("id", reply.id);
+
+    if (stampError) {
+      console.error(
+        `[send-hot-lead] Failed to stamp retry state on reply ${reply.id}:`,
+        stampError,
+      );
+    }
+
+    if (!isKnown) {
+      // Wrap so upstream callers can still distinguish retryable from not.
+      // Default to treating as transient because the wrapper already bucketed
+      // unknown SDK errors that way — we shouldn't be stricter here.
+      throw new TransientResendError(errorMessage);
+    }
+    throw err;
   }
-
-  const resendId = data?.id ?? null;
-
-  // 5. Stamp the row. If this write fails, the email is already out, but
-  //    the row won't reflect it — next run will detect notified_at is null
-  //    and may re-send. Acceptable because duplicates land at the same
-  //    inbox, not at a prospect.
-  const { error: updateError } = await admin
-    .from("lead_replies")
-    .update({
-      notified_at: new Date().toISOString(),
-      notification_token_hash: hash,
-      notification_email_id: resendId,
-    })
-    .eq("id", reply.id);
-
-  if (updateError) {
-    // Surface so the caller logs it — email went out, row didn't record.
-    console.error(
-      `[send-hot-lead] Email sent (${resendId}) but DB stamp failed for reply ${reply.id}:`,
-      updateError
-    );
-  }
-
-  return { resendId, tokenHash: hash, skipped: false };
 }
