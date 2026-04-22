@@ -43,7 +43,18 @@ export default function AllCampaignsPage() {
             <h1 className="text-[20px] sm:text-[22px] font-bold mt-1" style={{ color: '#0f172a', letterSpacing: '-0.01em' }}>All Campaigns</h1>
             <p className="text-sm text-[#0f172a]/60 mt-1">
               {active} active &middot; {paused} paused &middot; {campaigns.length} total
-              {unlinked > 0 && <> &middot; <span className="text-amber-700 font-medium">{unlinked} unlinked</span></>}
+              {unlinked > 0 && (
+                <>
+                  {" "}
+                  &middot;{" "}
+                  <Link
+                    href="/admin/campaigns/unlinked"
+                    className="text-amber-700 font-medium hover:underline"
+                  >
+                    {unlinked} unlinked
+                  </Link>
+                </>
+              )}
             </p>
           </div>
           <SyncFromInstantlyButton onDone={refetch} />

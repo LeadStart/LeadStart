@@ -6,6 +6,7 @@ import {
   ADMIN_OVERVIEW_KEY,
   ADMIN_CLIENTS_KEY,
   ADMIN_CAMPAIGNS_KEY,
+  ADMIN_UNLINKED_CAMPAIGNS_KEY,
   ADMIN_CONTACTS_KEY,
   ADMIN_FEEDBACK_KEY,
   ADMIN_WEBHOOKS_KEY,
@@ -16,6 +17,7 @@ import {
   fetchAdminOverview,
   fetchAdminClients,
   fetchAdminCampaigns,
+  fetchAdminUnlinkedCampaigns,
   fetchAdminContacts,
   fetchAdminFeedback,
   fetchAdminWebhooks,
@@ -38,6 +40,7 @@ export function AdminPrefetcher() {
   useSupabaseQuery(ADMIN_OVERVIEW_KEY, fetchAdminOverview);
   useSupabaseQuery(ADMIN_CLIENTS_KEY, fetchAdminClients);
   useSupabaseQuery(ADMIN_CAMPAIGNS_KEY, fetchAdminCampaigns);
+  useSupabaseQuery(ADMIN_UNLINKED_CAMPAIGNS_KEY, fetchAdminUnlinkedCampaigns);
   useSupabaseQuery(ADMIN_CONTACTS_KEY, fetchAdminContacts);
   useSupabaseQuery(ADMIN_FEEDBACK_KEY, fetchAdminFeedback);
   useSupabaseQuery(ADMIN_WEBHOOKS_KEY, fetchAdminWebhooks);

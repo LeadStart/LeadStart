@@ -23,8 +23,10 @@ import {
   Inbox,
   Phone,
   Settings,
+  Unlink,
   X,
 } from "lucide-react";
+import { useOrphanCampaignCount } from "@/hooks/use-orphan-campaign-count";
 
 interface NavItem {
   href: string;
@@ -36,6 +38,7 @@ const adminNav: NavItem[] = [
   { href: "/admin", label: "Overview", icon: <BarChart3 size={18} /> },
   { href: "/admin/clients", label: "Clients", icon: <Users size={18} /> },
   { href: "/admin/campaigns", label: "Campaigns", icon: <Mail size={18} /> },
+  { href: "/admin/campaigns/unlinked", label: "Unlinked", icon: <Unlink size={18} /> },
   { href: "/admin/contacts", label: "Contacts", icon: <ContactRound size={18} /> },
   { href: "/admin/inbox", label: "Inbox", icon: <Phone size={18} /> },
   { href: "/admin/feedback", label: "Feedback", icon: <MessageSquare size={18} /> },
@@ -63,6 +66,7 @@ export function Sidebar({ role, open = false, onClose }: { role: AppRole; open?:
   const isAdmin = role === "owner" || role === "va";
   const nav = isAdmin ? adminNav : clientNav;
   const settingsNav = isAdmin ? adminSettingsNav : [];
+  const orphanCount = useOrphanCampaignCount(role);
 
   return (
     <>
@@ -104,6 +108,8 @@ export function Sidebar({ role, open = false, onClose }: { role: AppRole; open?:
         <div style={{ direction: 'ltr' }}>
         {nav.map((item) => {
           const isActive = pathname === item.href;
+          const showOrphanBadge =
+            item.href === "/admin/campaigns/unlinked" && orphanCount > 0;
           return (
             <Link
               key={item.href}
@@ -119,6 +125,14 @@ export function Sidebar({ role, open = false, onClose }: { role: AppRole; open?:
                 {item.icon}
               </span>
               <span className="relative z-[1]">{item.label}</span>
+              {showOrphanBadge && (
+                <span
+                  className="relative z-[1] ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-semibold bg-amber-500 text-white"
+                  aria-label={`${orphanCount} unlinked campaigns`}
+                >
+                  {orphanCount}
+                </span>
+              )}
             </Link>
           );
         })}

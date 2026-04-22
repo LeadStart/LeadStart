@@ -167,6 +167,87 @@ export async function fetchAdminCampaigns(supabase: SupabaseClient) {
   };
 }
 
+// ---------- Unlinked campaigns (B3 triage) ----------
+export const ADMIN_UNLINKED_CAMPAIGNS_KEY = "admin-unlinked-campaigns";
+
+export interface UnlinkedCampaignRow {
+  campaign: Campaign;
+  // Replies that WILL fire a notification the moment a client is linked:
+  // classified (final_class set) and still waiting on notification_status.
+  pending_notifications: number;
+  // Every orphan reply for this campaign (classified or not). Surfaces when
+  // the total diverges from pending_notifications so the owner sees there's
+  // additional activity beyond the immediately-notifiable set.
+  total_orphan_replies: number;
+}
+
+export interface AdminUnlinkedCampaignsData {
+  rows: UnlinkedCampaignRow[];
+  // All clients the user can legitimately target with a link action. The
+  // picker in the UI filters per-row by `organization_id`; the PATCH route
+  // re-checks server-side.
+  clients: Client[];
+}
+
+export async function fetchAdminUnlinkedCampaigns(
+  supabase: SupabaseClient,
+): Promise<AdminUnlinkedCampaignsData> {
+  const campaignsRes = await supabase
+    .from("campaigns")
+    .select("*")
+    .is("client_id", null)
+    .order("created_at", { ascending: false });
+  const campaigns = (campaignsRes.data || []) as Campaign[];
+
+  // One round-trip to aggregate counts for every orphan campaign instead of
+  // a count query per row. Orphan-reply volume is low (hundreds at most per
+  // orphan) so pulling flag columns client-side is cheaper than N queries.
+  const ids = campaigns.map((c) => c.id);
+  const stats = new Map<string, { pending: number; total: number }>();
+  if (ids.length > 0) {
+    const { data: orphanReplies } = await supabase
+      .from("lead_replies")
+      .select("campaign_id, notification_status, final_class")
+      .in("campaign_id", ids)
+      .is("client_id", null);
+    for (const row of orphanReplies || []) {
+      const cid = (row as { campaign_id: string | null }).campaign_id;
+      if (!cid) continue;
+      const stat = stats.get(cid) ?? { pending: 0, total: 0 };
+      stat.total++;
+      const r = row as {
+        notification_status: string | null;
+        final_class: string | null;
+      };
+      if (r.notification_status === "pending" && r.final_class) stat.pending++;
+      stats.set(cid, stat);
+    }
+  }
+
+  const rows: UnlinkedCampaignRow[] = campaigns.map((c) => ({
+    campaign: c,
+    pending_notifications: stats.get(c.id)?.pending ?? 0,
+    total_orphan_replies: stats.get(c.id)?.total ?? 0,
+  }));
+
+  // RLS already scopes clients to the user's org, but scoping by the orphan
+  // campaigns' org_ids keeps the picker honest if a multi-org owner ever
+  // exists. Empty orphans = empty picker; short-circuit the query.
+  const orgIds = Array.from(new Set(campaigns.map((c) => c.organization_id)));
+  let clients: Client[] = [];
+  if (orgIds.length > 0) {
+    const clientsRes = await supabase
+      .from("clients")
+      .select("*")
+      .in("organization_id", orgIds)
+      .eq("status", "active")
+      .order("name");
+    clients = (clientsRes.data || []) as Client[];
+  }
+
+  return { rows, clients };
+}
+
 // ---------- Contacts (admin list) ----------
 export const ADMIN_CONTACTS_KEY = "admin-contacts";
 
