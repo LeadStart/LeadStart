@@ -17,7 +17,7 @@ export default function ClientInboxPage() {
   const { client, loading: contextLoading, noClient } = useClientData();
   const [replies, setReplies] = useState<LeadReply[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<"urgent" | "all">("urgent");
+  const [filter, setFilter] = useState<"urgent" | "all" | "resolved">("urgent");
 
   useEffect(() => {
     if (contextLoading || !client) return;
@@ -63,7 +63,6 @@ export default function ClientInboxPage() {
   }
 
   const urgentReplies = replies.filter(isReplyActionable);
-  const totalHot = replies.filter((r) => r.final_class && CLASS_META[r.final_class]?.urgent).length;
   const resolvedToday = replies.filter((r) => {
     if (!r.outcome_logged_at) return false;
     const diff = Date.now() - new Date(r.outcome_logged_at).getTime();
@@ -74,7 +73,23 @@ export default function ClientInboxPage() {
   ).length;
   // (urgentReplies already filters out sent/expired/outcome-logged via isReplyActionable)
 
-  const shown = filter === "urgent" ? urgentReplies : replies;
+  // Resolved = explicitly handled (outcome logged) OR moved out of the
+  // actionable states by sending or aging. Mirror the inverse of
+  // isReplyActionable so "All replies = Needs action + Resolved" is exact.
+  const resolvedReplies = replies.filter(
+    (r) =>
+      r.outcome ||
+      r.status === "sent" ||
+      r.status === "expired" ||
+      r.status === "resolved" ||
+      r.status === "rejected"
+  );
+  const shown =
+    filter === "urgent"
+      ? urgentReplies
+      : filter === "resolved"
+        ? resolvedReplies
+        : replies;
 
   return (
     <div className="space-y-6">
@@ -123,10 +138,11 @@ export default function ClientInboxPage() {
       </div>
 
       {/* Filter tabs */}
-      <div className="flex gap-2">
+      <div className="flex gap-2 flex-wrap">
         {([
           { key: "urgent", label: "Needs action", count: urgentReplies.length },
-          { key: "all", label: "All", count: replies.length },
+          { key: "all", label: "All replies", count: replies.length },
+          { key: "resolved", label: "Resolved", count: resolvedReplies.length },
         ] as const).map((tab) => (
           <button
             key={tab.key}

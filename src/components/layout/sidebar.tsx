@@ -54,7 +54,6 @@ const adminSettingsNav: NavItem[] = [
 const clientNav: NavItem[] = [
   { href: "/client", label: "Dashboard", icon: <LayoutDashboard size={18} /> },
   { href: "/client/inbox", label: "Inbox", icon: <Phone size={18} /> },
-  { href: "/client/replies", label: "Replies", icon: <Inbox size={18} /> },
 ];
 
 export function Sidebar({ role, open = false, onClose }: { role: AppRole; open?: boolean; onClose?: () => void }) {
