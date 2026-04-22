@@ -248,19 +248,18 @@ async function handleReplyReceived({
       .maybeSingle();
 
     if (byEmailId) {
-      const row = byEmailId as { id: string; instantly_category: string | null };
+      const row = byEmailId as { id: string };
       await admin.from("lead_replies").update(normalized).eq("id", row.id);
-      return row.instantly_category ? row.id : null;
+      return row.id;
     }
 
     const { data } = await admin
       .from("lead_replies")
       .insert(normalized)
-      .select("id, instantly_category")
+      .select("id")
       .single();
     if (!data) return null;
-    const inserted = data as { id: string; instantly_category: string | null };
-    return inserted.instantly_category ? inserted.id : null;
+    return (data as { id: string }).id;
   }
 
   const { data: upserted, error: upsertError } = await admin
@@ -269,7 +268,7 @@ async function handleReplyReceived({
       onConflict: "organization_id,instantly_message_id",
       ignoreDuplicates: false,
     })
-    .select("id, instantly_category")
+    .select("id")
     .single();
 
   if (upsertError || !upserted) {
@@ -277,9 +276,10 @@ async function handleReplyReceived({
     return null;
   }
 
-  const row = upserted as { id: string; instantly_category: string | null };
-  // Only schedule the pipeline if a prior lead_* tag has already landed.
-  // If the tag arrives later, its correlateTag call will pick up the
-  // now-populated body and schedule the pipeline itself.
-  return row.instantly_category ? row.id : null;
+  // Always schedule the pipeline once we have content. Claude is the
+  // primary classifier; the Instantly tag (instantly_category) is just a
+  // hint that decide.ts merges if present. Waiting for the tag broke the
+  // smoke test — the lead_* payload doesn't carry the join keys our
+  // correlateTag relies on, so the tag never linked back to this row.
+  return (upserted as { id: string }).id;
 }
