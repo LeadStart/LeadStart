@@ -8,6 +8,10 @@
     {
       "path": "/app/api/cron/send-reports",
       "schedule": "0 15 * * *"
+    },
+    {
+      "path": "/app/api/cron/expire-replies",
+      "schedule": "0 */6 * * *"
     }
   ]
 }
