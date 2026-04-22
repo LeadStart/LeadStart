@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { appUrl } from "@/lib/api-url";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -81,7 +82,7 @@ export default function AdminReplyDetailPage() {
     setSaving(true);
     setSaved(false);
     try {
-      const res = await fetch(`/api/replies/${reply.id}/reclassify`, {
+      const res = await fetch(appUrl(`/api/replies/${reply.id}/reclassify`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ final_class: newClass }),

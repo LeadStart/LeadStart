@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { appUrl } from "@/lib/api-url";
 import { useClientData } from "../../client-data-context";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -101,7 +102,7 @@ export default function ReplyDossierPage() {
     setSending(true);
     setSendError(null);
     try {
-      const res = await fetch(`/api/replies/${reply.id}/send`, {
+      const res = await fetch(appUrl(`/api/replies/${reply.id}/send`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -135,7 +136,7 @@ export default function ReplyDossierPage() {
     setSavingOutcome(true);
     setOutcomeSaved(false);
     try {
-      const res = await fetch(`/api/replies/${reply.id}/outcome`, {
+      const res = await fetch(appUrl(`/api/replies/${reply.id}/outcome`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
