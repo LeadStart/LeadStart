@@ -122,10 +122,13 @@ export async function POST(request: NextRequest) {
   // Everything else: already logged to webhook_events, nothing further.
   const eventType = payload.event_type || "";
   const payloadRecord = payload as unknown as Record<string, unknown>;
+  // Instantly's actual field name is `email_id` on reply_received payloads.
+  // Fall back to `instantly_email_id` in case other event types use the
+  // longer name (haven't observed it, but cheap defensive read).
   const instantlyEmailIdFromPayload =
-    typeof payloadRecord.instantly_email_id === "string"
-      ? payloadRecord.instantly_email_id
-      : null;
+    (typeof payloadRecord.email_id === "string" && payloadRecord.email_id) ||
+    (typeof payloadRecord.instantly_email_id === "string" && payloadRecord.instantly_email_id) ||
+    null;
 
   let pipelineReplyId: string | null = null;
 
