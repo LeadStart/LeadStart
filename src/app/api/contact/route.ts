@@ -7,9 +7,24 @@ interface ContactBody {
   company?: string;
   email?: string;
   phone?: string;
+  contactPreference?: string;
   metro?: string;
   volume?: string;
   message?: string;
+}
+
+type ContactPreference = "call" | "text";
+
+function normalizePreference(raw: string): ContactPreference | "" {
+  const v = raw.toLowerCase();
+  if (v === "call" || v === "text") return v;
+  return "";
+}
+
+function formatPreference(pref: ContactPreference | ""): string {
+  if (pref === "call") return "Phone call";
+  if (pref === "text") return "Text message";
+  return "";
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -21,12 +36,13 @@ function escapeHtml(s: string): string {
   );
 }
 
-function buildHtml(data: Required<Pick<ContactBody, "company" | "email">> & Omit<ContactBody, "company" | "email"> & { fullName: string }) {
+function buildHtml(data: Required<Pick<ContactBody, "company" | "email">> & Omit<ContactBody, "company" | "email"> & { fullName: string; contactPreferenceLabel: string }) {
   const rowsSrc: [string, string | undefined][] = [
     ["Name", data.fullName],
     ["Company", data.company],
     ["Email", data.email],
     ["Phone", data.phone],
+    ["Prefers", data.contactPreferenceLabel],
     ["Metro / Service Area", data.metro],
     ["New contracts/mo", data.volume],
     ["Message", data.message],
@@ -70,6 +86,7 @@ export async function POST(request: NextRequest) {
   const company = body.company?.trim() || "";
   const email = body.email?.trim() || "";
   const phone = body.phone?.trim() || "";
+  const contactPreference = normalizePreference(body.contactPreference?.trim() || "");
   const metro = body.metro?.trim() || "";
   const volume = body.volume?.trim() || "";
   const message = body.message?.trim() || "";
@@ -83,11 +100,18 @@ export async function POST(request: NextRequest) {
   if (!EMAIL_RE.test(email)) {
     return NextResponse.json({ error: "Please enter a valid email address." }, { status: 400 });
   }
+  if (contactPreference === "text" && !phone) {
+    return NextResponse.json(
+      { error: "A phone number is required when you prefer to be contacted by text." },
+      { status: 400 },
+    );
+  }
   if (message.length > 5000 || company.length > 200 || firstName.length > 100 || lastName.length > 100) {
     return NextResponse.json({ error: "One of the fields is too long." }, { status: 400 });
   }
 
   const fullName = `${firstName} ${lastName}`;
+  const contactPreferenceLabel = formatPreference(contactPreference);
 
   // Recipient list is managed in-app via Admin → Settings → Team
   // (profiles.receives_contact_notifications toggle). Env var is a
@@ -140,12 +164,13 @@ export async function POST(request: NextRequest) {
     const { Resend } = await import("resend");
     const resend = new Resend(process.env.RESEND_API_KEY);
 
+    const prefTag = contactPreferenceLabel ? ` — prefers ${contactPreferenceLabel.toLowerCase()}` : "";
     await resend.emails.send({
       from: process.env.EMAIL_FROM || "LeadStart <info@no-reply.leadstart.io>",
       to: toAddresses,
       replyTo: email,
-      subject: `New intro request — ${fullName} (${company})`,
-      html: buildHtml({ fullName, company, email, phone, metro, volume, message }),
+      subject: `New intro request — ${fullName} (${company})${prefTag}`,
+      html: buildHtml({ fullName, company, email, phone, contactPreferenceLabel, metro, volume, message }),
     });
   } catch (err) {
     console.error("[contact] Failed to send email:", err);
