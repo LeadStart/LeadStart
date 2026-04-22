@@ -27,6 +27,7 @@ const ALL_CLASSES: ReplyClass[] = [
 
 type FormState = {
   notification_email: string;
+  notification_cc_emails: string[];
   phone_number: string;
   persona_name: string;
   persona_title: string;
@@ -40,6 +41,7 @@ type FormState = {
 function clientToForm(client: Client): FormState {
   return {
     notification_email: client.notification_email ?? "",
+    notification_cc_emails: client.notification_cc_emails ?? [],
     phone_number: client.phone_number ?? "",
     persona_name: client.persona_name ?? "",
     persona_title: client.persona_title ?? "",
@@ -164,6 +166,29 @@ export function ReplyRoutingSection({
                 Shown in the dossier for the client to dial.
               </p>
             </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Teammate CC emails</Label>
+            {form.notification_cc_emails.length === 0 ? (
+              <p className="text-xs text-muted-foreground italic">
+                None — client has not added any teammate CCs yet.
+              </p>
+            ) : (
+              <div className="flex flex-wrap gap-1.5">
+                {form.notification_cc_emails.map((email) => (
+                  <span
+                    key={email}
+                    className="inline-flex items-center rounded-full bg-[#2E37FE]/10 px-2.5 py-0.5 text-xs text-[#2E37FE]"
+                  >
+                    {email}
+                  </span>
+                ))}
+              </div>
+            )}
+            <p className="text-[11px] text-muted-foreground">
+              Managed by the client from their portal. CC&apos;d on hot-lead notifications + portal replies.
+            </p>
           </div>
 
           <div className="space-y-3">

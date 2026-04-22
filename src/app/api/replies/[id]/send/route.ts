@@ -77,7 +77,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   const { data: preRow, error: preLoadErr } = await admin
     .from("lead_replies")
     .select(
-      "id, organization_id, client_id, status, eaccount, instantly_email_id, client:client_id(notification_email)"
+      "id, organization_id, client_id, status, eaccount, instantly_email_id, client:client_id(notification_email, notification_cc_emails)"
     )
     .eq("id", id)
     .maybeSingle();
@@ -98,7 +98,10 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     status: LeadReply["status"];
     eaccount: string | null;
     instantly_email_id: string | null;
-    client: { notification_email: string | null } | null;
+    client: {
+      notification_email: string | null;
+      notification_cc_emails: string[] | null;
+    } | null;
   };
 
   // --- Access check ---
@@ -183,9 +186,17 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   >;
 
   // --- Build Instantly request ---
-  const cc = pre.client?.notification_email
-    ? [pre.client.notification_email]
-    : undefined;
+  // CC the client's primary notification inbox + any teammates they added.
+  // Lowercased + deduped so one stray duplicate doesn't cause Instantly to
+  // reject the send.
+  const ccSet = new Set<string>();
+  if (pre.client?.notification_email) {
+    ccSet.add(pre.client.notification_email.trim().toLowerCase());
+  }
+  for (const addr of pre.client?.notification_cc_emails ?? []) {
+    if (addr && addr.trim()) ccSet.add(addr.trim().toLowerCase());
+  }
+  const cc = ccSet.size > 0 ? Array.from(ccSet) : undefined;
 
   let request;
   try {

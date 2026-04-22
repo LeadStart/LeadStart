@@ -53,6 +53,8 @@ export interface HotLeadNotificationContext {
   reply: LeadReply;
   /** From clients.notification_email — the address we're emailing. */
   clientNotificationEmail: string;
+  /** From clients.notification_cc_emails — extra teammates to keep in the loop. */
+  clientNotificationCcEmails?: string[];
 }
 
 export interface HotLeadNotificationResult {
@@ -74,7 +76,13 @@ export async function sendHotLeadNotification(
   ctx: HotLeadNotificationContext,
   admin: ReturnType<typeof createAdminClient>
 ): Promise<HotLeadNotificationResult> {
-  const { reply, clientNotificationEmail } = ctx;
+  const { reply, clientNotificationEmail, clientNotificationCcEmails } = ctx;
+  // Filter out empty / duplicate / equal-to-primary CC entries so Resend
+  // doesn't reject and we don't double-deliver to the primary recipient.
+  const ccList = (clientNotificationCcEmails ?? [])
+    .map((e) => e.trim().toLowerCase())
+    .filter((e) => e && e !== clientNotificationEmail.trim().toLowerCase());
+  const ccDedup = Array.from(new Set(ccList));
 
   if (reply.notified_at) {
     return { resendId: null, tokenHash: reply.notification_token_hash, skipped: true };
@@ -111,6 +119,7 @@ export async function sendHotLeadNotification(
   const { data, error } = await resend.emails.send({
     from: process.env.EMAIL_FROM || "LeadStart <info@no-reply.leadstart.io>",
     to: clientNotificationEmail,
+    cc: ccDedup.length > 0 ? ccDedup : undefined,
     subject,
     html,
   });

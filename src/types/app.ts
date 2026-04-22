@@ -54,6 +54,7 @@ export interface Client {
   status: ClientStatus;
   // Reply routing pipeline (migration 00025) — populated during onboarding
   notification_email: string | null;     // single address for hot-reply notifications
+  notification_cc_emails: string[];       // extra teammates CC'd on notifications + portal sends (migration 00030)
   phone_number: string | null;            // for display in the dossier
   auto_notify_classes: ReplyClass[];      // default: hot classes only
   persona_name: string | null;            // real person on alias domain (Path 1)

@@ -164,6 +164,7 @@ export async function runReplyPipeline(
       {
         reply: classifiedData as unknown as LeadReply,
         clientNotificationEmail: client.notification_email,
+        clientNotificationCcEmails: client.notification_cc_emails ?? [],
       },
       admin
     );

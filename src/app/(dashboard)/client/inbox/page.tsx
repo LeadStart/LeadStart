@@ -7,7 +7,7 @@ import { useClientData } from "../client-data-context";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { StatCard } from "@/components/charts/stat-card";
-import { Inbox as InboxIcon, Phone, Clock, ArrowRight, AlertCircle } from "lucide-react";
+import { Inbox as InboxIcon, Phone, Clock, ArrowRight, AlertCircle, CheckCircle2 } from "lucide-react";
 import type { LeadReply } from "@/types/app";
 import { CLASS_META, isReplyActionable, timeSince } from "@/lib/replies/ui";
 
@@ -184,6 +184,13 @@ export default function ClientInboxPage() {
             const isOverHour =
               isReplyActionable(reply) &&
               Date.now() - new Date(reply.received_at).getTime() > 60 * 60 * 1000;
+            const isReplied = reply.status === "sent" || !!reply.outcome;
+            const repliedTitle =
+              reply.status === "sent"
+                ? `Email reply sent${reply.sent_at ? ` ${timeSince(reply.sent_at)}` : ""}`
+                : reply.outcome_logged_at
+                  ? `Outcome logged ${timeSince(reply.outcome_logged_at)}`
+                  : "Outcome logged";
 
             return (
               <Link
@@ -192,7 +199,7 @@ export default function ClientInboxPage() {
                 className="block group"
               >
                 <Card className="border-border/50 shadow-sm transition-all group-hover:border-[#2E37FE]/30">
-                  <CardContent className="flex items-center gap-4 px-5 py-4">
+                  <CardContent className="flex items-start gap-4 px-5 py-4">
                     {/* Class indicator */}
                     <div
                       className={`flex h-10 w-10 items-center justify-center rounded-full shrink-0 ${
@@ -204,7 +211,7 @@ export default function ClientInboxPage() {
 
                     {/* Lead info */}
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <p className="font-medium text-sm truncate">
                           {reply.lead_name || reply.lead_email}
                         </p>
@@ -214,35 +221,44 @@ export default function ClientInboxPage() {
                           </Badge>
                         )}
                       </div>
-                      <p className="text-xs text-muted-foreground mt-0.5 truncate">
-                        {reply.lead_company}
-                        {reply.lead_title && <span> · {reply.lead_title}</span>}
+                      {(reply.lead_company || reply.lead_title) && (
+                        <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                          {reply.lead_company}
+                          {reply.lead_title && <span> · {reply.lead_title}</span>}
+                        </p>
+                      )}
+                      <p
+                        className="mt-1 inline-flex items-center gap-1 text-[11px] text-muted-foreground/80 whitespace-nowrap"
+                        title={`Reply received ${new Date(reply.received_at).toLocaleString()}`}
+                      >
+                        <Clock size={11} />
+                        <span>Received {timeSince(reply.received_at)}</span>
                       </p>
                     </div>
 
-                    {/* Class badge */}
-                    <div className="shrink-0 hidden sm:block">
+                    {/* Class badge + replied indicator */}
+                    <div className="shrink-0 flex flex-col items-end gap-2 pt-0.5">
                       {meta && (
-                        <Badge variant="secondary" className={`${meta.badge} text-[10px]`}>
+                        <Badge
+                          variant="secondary"
+                          className={`${meta.badge} text-[10px] hidden sm:inline-flex`}
+                        >
                           {meta.label}
                         </Badge>
                       )}
-                    </div>
-
-                    {/* Time */}
-                    <div className="shrink-0 flex items-center gap-1 text-xs text-muted-foreground w-20 justify-end">
-                      <Clock size={12} />
-                      <span>{timeSince(reply.received_at)}</span>
-                    </div>
-
-                    {/* Outcome / arrow */}
-                    <div className="shrink-0 w-6 flex justify-end">
-                      {reply.outcome ? (
-                        <Badge variant="secondary" className="badge-slate text-[9px]">
-                          ✓
+                      {isReplied ? (
+                        <Badge
+                          variant="secondary"
+                          className="badge-green text-[10px] inline-flex items-center gap-1"
+                          title={repliedTitle}
+                        >
+                          <CheckCircle2 size={10} /> Replied
                         </Badge>
                       ) : (
-                        <ArrowRight size={14} className="text-muted-foreground opacity-0 group-hover:opacity-100" />
+                        <ArrowRight
+                          size={14}
+                          className="text-muted-foreground opacity-0 group-hover:opacity-100"
+                        />
                       )}
                     </div>
                   </CardContent>

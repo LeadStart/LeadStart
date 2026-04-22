@@ -177,16 +177,14 @@ export function Topbar({ userEmail, role, actualRole, onRoleSwitch, onMenuClick 
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuItem onClick={() => router.push(isAdmin ? "/admin/settings/team" : "/client")}>
+              <DropdownMenuItem onClick={() => router.push(isAdmin ? "/admin/settings/team" : "/client/settings")}>
                 <User size={14} className="mr-2" />
                 Profile
               </DropdownMenuItem>
-              {isActualAdmin && (
-                <DropdownMenuItem onClick={() => router.push("/admin/settings/api")}>
-                  <Settings size={14} className="mr-2" />
-                  Settings
-                </DropdownMenuItem>
-              )}
+              <DropdownMenuItem onClick={() => router.push(isActualAdmin ? "/admin/settings/api" : "/client/settings")}>
+                <Settings size={14} className="mr-2" />
+                Settings
+              </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>

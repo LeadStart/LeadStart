@@ -22,6 +22,7 @@ import {
   CheckSquare,
   Inbox,
   Phone,
+  Settings,
   X,
 } from "lucide-react";
 
@@ -53,7 +54,8 @@ const adminSettingsNav: NavItem[] = [
 
 const clientNav: NavItem[] = [
   { href: "/client", label: "Dashboard", icon: <LayoutDashboard size={18} /> },
-  { href: "/client/inbox", label: "Inbox", icon: <Phone size={18} /> },
+  { href: "/client/inbox", label: "Inbox", icon: <Mail size={18} /> },
+  { href: "/client/settings", label: "Settings", icon: <Settings size={18} /> },
 ];
 
 export function Sidebar({ role, open = false, onClose }: { role: AppRole; open?: boolean; onClose?: () => void }) {
