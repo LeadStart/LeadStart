@@ -10,18 +10,19 @@
 import type { createClient } from "@/lib/supabase/client";
 import { analyzeStepHealth } from "@/lib/kpi/step-health";
 import { calculateMetrics } from "@/lib/kpi/calculator";
-import type {
-  Campaign,
-  Client,
-  ClientUser,
-  CampaignSnapshot,
-  CampaignStepMetric,
-  KPIMetrics,
-  StepHealthAlert,
-  Contact,
-  LeadFeedback,
-  WebhookEvent,
-  Task,
+import {
+  HOT_REPLY_CLASSES,
+  type Campaign,
+  type Client,
+  type ClientUser,
+  type CampaignSnapshot,
+  type CampaignStepMetric,
+  type KPIMetrics,
+  type StepHealthAlert,
+  type Contact,
+  type LeadFeedback,
+  type WebhookEvent,
+  type Task,
 } from "@/types/app";
 
 type SupabaseClient = ReturnType<typeof createClient>;
@@ -304,6 +305,155 @@ export async function fetchAdminTasks(supabase: SupabaseClient) {
     .select("*")
     .order("created_at", { ascending: false });
   return (res.data || []) as Task[];
+}
+
+// ---------- Pipeline health (D4) ----------
+// Read-only "is the reply-chain alive right now?" snapshot. Pulls every card
+// from state the earlier SAFETY-TODO commits already populate — no new
+// writes, no schema changes. Cards answer:
+//   - events flowing in?       webhookEvents.total24h + lastReceivedAt
+//   - replies being classified? replies24h (hot / non-hot)
+//   - notifications landing?   notifications (pending/sent/failed/retrying/bounced)
+//   - anything stuck?          orphanCampaigns + pendingEnrichment
+//   - anyone probing?          authFailures24h
+export const ADMIN_PIPELINE_HEALTH_KEY = "admin-pipeline-health";
+
+export interface PipelineHealthData {
+  webhookEvents: {
+    total24h: number;
+    byType: Array<{ event_type: string; count: number }>; // top 5
+    lastReceivedAt: string | null;
+  };
+  replies24h: {
+    classifiedTotal: number;
+    hot: number;
+    nonHot: number;
+  };
+  // notification_status counts across the last 7 days of replies — recent
+  // enough to reflect the current pipeline state, long enough to show
+  // stuck-but-non-zero buckets. `bounced` is derived from
+  // notification_bounced_at (populated by the C3 Resend delivery webhook).
+  notifications: {
+    pending: number;
+    sent: number;
+    failed: number;
+    retrying: number;
+    bounced: number;
+  };
+  orphanCampaigns: number;
+  pendingEnrichment: number;
+  authFailures24h: number;
+}
+
+export async function fetchAdminPipelineHealth(
+  supabase: SupabaseClient,
+): Promise<PipelineHealthData> {
+  const now = Date.now();
+  const twentyFourHoursAgoIso = new Date(now - 24 * 60 * 60 * 1000).toISOString();
+  const sevenDaysAgoIso = new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+  const [
+    webhooksRes,
+    lastWebhookRes,
+    repliesRes,
+    notifStatusRes,
+    bouncedRes,
+    orphanRes,
+    pendingEnrichRes,
+    authFailRes,
+  ] = await Promise.all([
+    supabase
+      .from("webhook_events")
+      .select("event_type")
+      .gte("received_at", twentyFourHoursAgoIso),
+    supabase
+      .from("webhook_events")
+      .select("received_at")
+      .order("received_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase
+      .from("lead_replies")
+      .select("final_class")
+      .gte("classified_at", twentyFourHoursAgoIso),
+    supabase
+      .from("lead_replies")
+      .select("notification_status")
+      .gte("received_at", sevenDaysAgoIso),
+    supabase
+      .from("lead_replies")
+      .select("id", { count: "exact", head: true })
+      .not("notification_bounced_at", "is", null)
+      .gte("received_at", sevenDaysAgoIso),
+    supabase
+      .from("campaigns")
+      .select("id", { count: "exact", head: true })
+      .is("client_id", null),
+    supabase
+      .from("lead_replies")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "pending_enrichment"),
+    supabase
+      .from("webhook_auth_failures")
+      .select("id", { count: "exact", head: true })
+      .gte("created_at", twentyFourHoursAgoIso),
+  ]);
+
+  const eventTypeCounts = new Map<string, number>();
+  for (const row of webhooksRes.data || []) {
+    const t = (row as { event_type: string }).event_type || "unknown";
+    eventTypeCounts.set(t, (eventTypeCounts.get(t) || 0) + 1);
+  }
+  const byType = [...eventTypeCounts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([event_type, count]) => ({ event_type, count }));
+
+  const hotSet = new Set<string>(HOT_REPLY_CLASSES as unknown as string[]);
+  let hot = 0;
+  let nonHot = 0;
+  let classifiedTotal = 0;
+  for (const row of repliesRes.data || []) {
+    const cls = (row as { final_class: string | null }).final_class;
+    if (!cls) continue;
+    classifiedTotal++;
+    if (hotSet.has(cls)) hot++;
+    else nonHot++;
+  }
+
+  const notifications = {
+    pending: 0,
+    sent: 0,
+    failed: 0,
+    retrying: 0,
+    bounced: bouncedRes.count ?? 0,
+  };
+  for (const row of notifStatusRes.data || []) {
+    const s = (row as { notification_status: string }).notification_status;
+    if (s === "pending") notifications.pending++;
+    else if (s === "sent") notifications.sent++;
+    else if (s === "failed") notifications.failed++;
+    else if (s === "retrying") notifications.retrying++;
+  }
+
+  return {
+    webhookEvents: {
+      total24h: webhooksRes.data?.length ?? 0,
+      byType,
+      lastReceivedAt:
+        (lastWebhookRes.data as { received_at: string } | null)?.received_at ??
+        null,
+    },
+    replies24h: {
+      classifiedTotal,
+      hot,
+      nonHot,
+    },
+    notifications,
+    orphanCampaigns: orphanRes.count ?? 0,
+    pendingEnrichment: pendingEnrichRes.count ?? 0,
+    authFailures24h: authFailRes.count ?? 0,
+  };
 }
 
 // ---------- API-route-backed pages ----------

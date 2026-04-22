@@ -12,6 +12,7 @@ import {
   ADMIN_WEBHOOKS_KEY,
   ADMIN_TASKS_KEY,
   ADMIN_CONTACTS_PIPELINE_KEY,
+  ADMIN_PIPELINE_HEALTH_KEY,
   API_INBOX_HEALTH_PATH,
   API_BILLING_DATA_PATH,
   fetchAdminOverview,
@@ -23,6 +24,7 @@ import {
   fetchAdminWebhooks,
   fetchAdminTasks,
   fetchAdminContactsPipeline,
+  fetchAdminPipelineHealth,
 } from "@/lib/admin-queries";
 
 /**
@@ -46,6 +48,7 @@ export function AdminPrefetcher() {
   useSupabaseQuery(ADMIN_WEBHOOKS_KEY, fetchAdminWebhooks);
   useSupabaseQuery(ADMIN_TASKS_KEY, fetchAdminTasks);
   useSupabaseQuery(ADMIN_CONTACTS_PIPELINE_KEY, fetchAdminContactsPipeline);
+  useSupabaseQuery(ADMIN_PIPELINE_HEALTH_KEY, fetchAdminPipelineHealth);
 
   // API-route-backed pages (Inbox Health hits Instantly.ai; Billing pulls
   // plans+quotes+subs+invoices+clients in one round-trip). Both are slow

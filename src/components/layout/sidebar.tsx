@@ -24,6 +24,7 @@ import {
   Phone,
   Settings,
   Unlink,
+  Activity,
   X,
 } from "lucide-react";
 import { useOrphanCampaignCount } from "@/hooks/use-orphan-campaign-count";
@@ -47,6 +48,7 @@ const adminNav: NavItem[] = [
   { href: "/admin/inbox-health", label: "Inbox Health", icon: <Inbox size={18} /> },
   { href: "/admin/billing", label: "Billing", icon: <CreditCard size={18} /> },
   { href: "/admin/webhooks", label: "Events", icon: <Bell size={18} /> },
+  { href: "/admin/pipeline-health", label: "Pipeline Health", icon: <Activity size={18} /> },
 ];
 
 const adminSettingsNav: NavItem[] = [
