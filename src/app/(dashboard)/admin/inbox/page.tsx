@@ -16,7 +16,7 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import type { LeadReply, ReplyClass } from "@/types/app";
-import { CLASS_META, timeSinceShort } from "@/lib/replies/ui";
+import { CLASS_META, isReplyActionable, timeSinceShort } from "@/lib/replies/ui";
 
 // Joined shape: lead_replies.* + { client: { name } }
 interface AdminReply extends LeadReply {
@@ -81,10 +81,8 @@ export default function AdminInboxPage() {
   ).length;
   const needsReview = replies.filter((r) => r.final_class === "needs_review").length;
   const unresolved1h = replies.filter((r) => {
-    const meta = r.final_class ? CLASS_META[r.final_class] : null;
     return (
-      meta?.urgent &&
-      !r.outcome &&
+      isReplyActionable(r) &&
       Date.now() - new Date(r.received_at).getTime() > 60 * 60 * 1000
     );
   }).length;
@@ -218,7 +216,7 @@ export default function AdminInboxPage() {
             const minutesOld = Math.floor(
               (Date.now() - new Date(reply.received_at).getTime()) / 60000
             );
-            const isStale = meta?.urgent && !reply.outcome && minutesOld > 60;
+            const isStale = isReplyActionable(reply) && minutesOld > 60;
 
             return (
               <Link key={reply.id} href={`/admin/inbox/${reply.id}`} className="block group">

@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { StatCard } from "@/components/charts/stat-card";
 import { Inbox as InboxIcon, Phone, Clock, ArrowRight, AlertCircle } from "lucide-react";
 import type { LeadReply } from "@/types/app";
-import { CLASS_META, timeSince } from "@/lib/replies/ui";
+import { CLASS_META, isReplyActionable, timeSince } from "@/lib/replies/ui";
 
 // ===== Page =====
 
@@ -62,9 +62,7 @@ export default function ClientInboxPage() {
     );
   }
 
-  const urgentReplies = replies.filter(
-    (r) => r.final_class && CLASS_META[r.final_class]?.urgent && !r.outcome
-  );
+  const urgentReplies = replies.filter(isReplyActionable);
   const totalHot = replies.filter((r) => r.final_class && CLASS_META[r.final_class]?.urgent).length;
   const resolvedToday = replies.filter((r) => {
     if (!r.outcome_logged_at) return false;
@@ -74,6 +72,7 @@ export default function ClientInboxPage() {
   const unresolvedOverHour = urgentReplies.filter(
     (r) => Date.now() - new Date(r.received_at).getTime() > 60 * 60 * 1000
   ).length;
+  // (urgentReplies already filters out sent/expired/outcome-logged via isReplyActionable)
 
   const shown = filter === "urgent" ? urgentReplies : replies;
 
@@ -167,8 +166,7 @@ export default function ClientInboxPage() {
           {shown.map((reply) => {
             const meta = reply.final_class ? CLASS_META[reply.final_class] : null;
             const isOverHour =
-              meta?.urgent &&
-              !reply.outcome &&
+              isReplyActionable(reply) &&
               Date.now() - new Date(reply.received_at).getTime() > 60 * 60 * 1000;
 
             return (

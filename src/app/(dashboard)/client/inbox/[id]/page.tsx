@@ -24,6 +24,7 @@ import type { LeadReply, ReplyClass, ReplyOutcome } from "@/types/app";
 import {
   CLASS_META,
   OUTCOME_OPTIONS,
+  isReplyActionable,
   timeSince,
   telHref,
   formatBody,
@@ -209,7 +210,7 @@ export default function ReplyDossierPage() {
       </button>
 
       {/* Urgency banner */}
-      {meta?.urgent && !reply.outcome && (
+      {isReplyActionable(reply) && (
         <div
           className="flex items-center gap-3 rounded-xl px-4 py-3"
           style={{

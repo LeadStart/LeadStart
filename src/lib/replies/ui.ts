@@ -2,7 +2,7 @@
 // surfaces (client portal + admin oversight). Keep presentation here so the
 // two surfaces can't drift.
 
-import type { ReplyClass, ReplyOutcome } from "@/types/app";
+import type { ReplyClass, ReplyOutcome, ReplyStatus } from "@/types/app";
 
 export interface ReplyClassMeta {
   label: string;
@@ -85,6 +85,23 @@ export function formatBody(text: string | null): string {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/\n/g, "<br>");
+}
+
+/**
+ * "Needs action" / urgency check. True when the reply is in a hot class,
+ * hasn't been outcome-logged, AND hasn't been resolved by sending a portal
+ * reply or aging out. Centralized here so the client inbox, dossier, and
+ * admin oversight all agree on what counts as outstanding work.
+ */
+export function isReplyActionable(reply: {
+  final_class: ReplyClass | null;
+  outcome: ReplyOutcome | null;
+  status: ReplyStatus;
+}): boolean {
+  if (!reply.final_class) return false;
+  if (!CLASS_META[reply.final_class]?.urgent) return false;
+  if (reply.outcome) return false;
+  return reply.status === "new" || reply.status === "classified";
 }
 
 // Urgency color ramp for the dossier banner — green < 15min, amber < 1h, red after.
