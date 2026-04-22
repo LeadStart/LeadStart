@@ -76,7 +76,11 @@ export interface ClientUser {
 
 export interface Campaign {
   id: string;
-  client_id: string;
+  // NULL for "orphan" campaigns — rows imported from Instantly by the sync
+  // cron/button before an owner has linked them to a LeadStart client. The
+  // B3 triage UI surfaces them; existing admin surfaces filter or degrade
+  // gracefully when client_id is NULL.
+  client_id: string | null;
   organization_id: string;
   instantly_campaign_id: string;
   name: string;

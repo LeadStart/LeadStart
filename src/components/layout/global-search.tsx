@@ -71,13 +71,15 @@ export function GlobalSearch() {
 
     const clientNameById = new Map(data.clients.map((c) => [c.id, c.name]));
     const campaignResults: SearchResult[] = data.campaigns
-      .filter((c) => c.name.toLowerCase().includes(q))
+      // Orphan campaigns (client_id === null) don't have a linkable client URL
+      // yet; they surface in the B3 triage page instead of global search.
+      .filter((c) => c.client_id !== null && c.name.toLowerCase().includes(q))
       .slice(0, MAX_PER_GROUP)
       .map((c) => ({
         kind: "campaign",
         id: c.id,
         label: c.name,
-        sublabel: clientNameById.get(c.client_id) || undefined,
+        sublabel: clientNameById.get(c.client_id as string) || undefined,
         href: `/admin/clients/${c.client_id}/campaigns/${c.id}`,
       }));
 

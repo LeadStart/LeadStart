@@ -3,7 +3,10 @@
 export interface InstantlyCampaign {
   id: string;
   name: string;
-  status: string;
+  // Instantly returns status as a small integer: 0=draft, 1=active,
+  // 2=paused, 3=completed. See src/lib/campaigns/sync.ts for the mapping
+  // into our own string-valued campaigns.status column.
+  status: number;
   created_at: string;
   updated_at: string;
 }
