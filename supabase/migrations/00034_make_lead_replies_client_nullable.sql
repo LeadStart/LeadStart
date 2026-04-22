@@ -1,0 +1,25 @@
+-- =============================================
+-- Migration 00034: Make lead_replies.client_id nullable
+--
+-- Pairs with 00031 (nullable campaigns.client_id). B2's webhook-time
+-- orphan-capture path needs to insert a lead_replies row for a reply that
+-- landed against a campaign we haven't linked yet. The orphan reply has no
+-- known client, so client_id must accept NULL.
+--
+-- Orphan signal: (notification_status = 'pending' AND client_id IS NULL).
+-- When B3 links the campaign to a client, a follow-up UPDATE populates
+-- client_id on all pending replies for that campaign, and C1's retry cron
+-- picks them up.
+--
+-- RLS impact reviewed (same logic as 00031):
+--   - Admin SELECT / UPDATE on lead_replies scopes by organization_id →
+--     orphan replies remain visible to admin.
+--   - Client SELECT / UPDATE scopes by client_id IN (...) → NULL never
+--     matches, so orphans are hidden from clients until linked.
+--
+-- ON DELETE CASCADE on clients(id) is intentionally unchanged. Non-null rows
+-- still cascade when a client is deleted; orphans are unaffected because
+-- they don't reference any client.
+-- =============================================
+
+ALTER TABLE public.lead_replies ALTER COLUMN client_id DROP NOT NULL;

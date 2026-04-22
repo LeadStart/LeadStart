@@ -1,0 +1,28 @@
+-- =============================================
+-- Migration 00031: Make campaigns.client_id nullable
+--
+-- Unlocks the "orphan campaign" state: a campaign row exists in our DB but
+-- hasn't yet been linked to a LeadStart client. This is required for:
+--   - B1: cron + on-demand sync that imports new Instantly campaigns without
+--     a client assignment
+--   - B2: webhook-time lazy-create when a reply arrives for an unknown
+--     campaign_id
+--   - B3 (future): admin UI to triage and link orphan campaigns
+--
+-- Invariant preserved: one campaign → one client, enforced by the single FK
+-- and UNIQUE (organization_id, instantly_campaign_id). This change only
+-- allows client_id to be NULL while "awaiting assignment"; it does not
+-- allow a campaign to belong to multiple clients.
+--
+-- ON DELETE CASCADE behavior is intentionally unchanged. Non-null rows still
+-- cascade when a client is deleted; orphan rows (client_id IS NULL) don't
+-- reference any client so are unaffected. Changing to SET NULL was considered
+-- and rejected as scope creep — kept for a future dedicated discussion.
+--
+-- RLS impact reviewed:
+--   - Admin SELECT on campaigns scopes by organization_id → orphans visible.
+--   - Client SELECT on campaigns scopes by client_id IN (...) → NULL never
+--     matches, so orphans are correctly hidden from clients.
+-- =============================================
+
+ALTER TABLE public.campaigns ALTER COLUMN client_id DROP NOT NULL;
