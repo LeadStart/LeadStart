@@ -13,6 +13,7 @@ import { Mail, ArrowRight, RefreshCcw } from "lucide-react";
 import { useSort } from "@/hooks/use-sort";
 import { SortableHead } from "@/components/ui/sortable-head";
 import { PaginationControls } from "@/components/ui/pagination-controls";
+import { CampaignRowActions } from "./campaign-row-actions";
 
 const CAMPAIGNS_PAGE_SIZE = 10;
 
@@ -92,7 +93,25 @@ export default function AllCampaignsPage() {
                       <TableCell className="text-right"><span className={row.metrics.reply_rate >= 5 ? "text-emerald-600 font-medium" : "text-amber-600"}>{row.metrics.reply_rate}%</span></TableCell>
                       <TableCell className="text-right"><span className={row.metrics.bounce_rate <= 2 ? "text-emerald-600" : "text-red-600 font-medium"}>{row.metrics.bounce_rate}%</span></TableCell>
                       <TableCell className="text-right font-medium">{row.metrics.meetings_booked}</TableCell>
-                      <TableCell>{campaignHref && <Link href={campaignHref}><ArrowRight size={14} className="text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" /></Link>}</TableCell>
+                      <TableCell className="w-[80px]">
+                        <div className="flex items-center justify-end gap-1">
+                          {campaignHref && (
+                            <Link
+                              href={campaignHref}
+                              aria-label="Open campaign"
+                              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity hover:bg-muted/50 hover:text-foreground"
+                            >
+                              <ArrowRight size={14} />
+                            </Link>
+                          )}
+                          <CampaignRowActions
+                            campaignId={row.id}
+                            campaignName={row.name}
+                            status={row.status as "active" | "paused" | "draft" | "completed" | null}
+                            onChanged={refetch}
+                          />
+                        </div>
+                      </TableCell>
                     </TableRow>
                   );
                 })}

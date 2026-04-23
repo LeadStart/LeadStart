@@ -98,6 +98,33 @@ export class InstantlyClient {
     return all;
   }
 
+  // POST /api/v2/campaigns/{id}/pause — requires campaigns:update scope.
+  async pauseCampaign(campaignId: string): Promise<InstantlyCampaign> {
+    return this.request<InstantlyCampaign>(
+      `/campaigns/${encodeURIComponent(campaignId)}/pause`,
+      { method: "POST" },
+    );
+  }
+
+  // POST /api/v2/campaigns/{id}/activate — covers both start and resume
+  // per Instantly's docs.
+  async activateCampaign(campaignId: string): Promise<InstantlyCampaign> {
+    return this.request<InstantlyCampaign>(
+      `/campaigns/${encodeURIComponent(campaignId)}/activate`,
+      { method: "POST" },
+    );
+  }
+
+  // DELETE /api/v2/campaigns/{id} — requires campaigns:delete scope. This
+  // is permanent on Instantly's side. Caller is responsible for the UX
+  // confirm flow.
+  async deleteCampaign(campaignId: string): Promise<void> {
+    await this.request<unknown>(
+      `/campaigns/${encodeURIComponent(campaignId)}`,
+      { method: "DELETE" },
+    );
+  }
+
   // ===== ANALYTICS =====
 
   async getCampaignAnalytics(
