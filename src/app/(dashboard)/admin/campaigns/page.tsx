@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useSupabaseQuery } from "@/hooks/use-supabase-query";
 import { ADMIN_CAMPAIGNS_KEY, fetchAdminCampaigns } from "@/lib/admin-queries";
 import Link from "next/link";
@@ -12,6 +12,9 @@ import { calculateMetrics } from "@/lib/kpi/calculator";
 import { Mail, ArrowRight, RefreshCcw } from "lucide-react";
 import { useSort } from "@/hooks/use-sort";
 import { SortableHead } from "@/components/ui/sortable-head";
+import { PaginationControls } from "@/components/ui/pagination-controls";
+
+const CAMPAIGNS_PAGE_SIZE = 10;
 
 export default function AllCampaignsPage() {
   const { data, loading, refetch } = useSupabaseQuery(
@@ -31,6 +34,14 @@ export default function AllCampaignsPage() {
     return { ...campaign, clientName: client?.name || "", metrics };
   });
   const { sorted, sortConfig, requestSort } = useSort(rows, "name", "asc");
+  const [page, setPage] = useState(1);
+  useEffect(() => {
+    setPage(1);
+  }, [sortConfig?.key, sortConfig?.direction]);
+  const totalPages = Math.max(1, Math.ceil(sorted.length / CAMPAIGNS_PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pageStart = (safePage - 1) * CAMPAIGNS_PAGE_SIZE;
+  const pageRows = sorted.slice(pageStart, pageStart + CAMPAIGNS_PAGE_SIZE);
 
   if (loading) return <div className="space-y-6 animate-pulse"><div className="rounded-xl h-36 bg-muted/50" /><div className="rounded-xl h-64 bg-muted/50" /></div>;
 
@@ -64,10 +75,11 @@ export default function AllCampaignsPage() {
       <Card className="border-border/50 shadow-sm">
         <CardContent className="pt-6">
           {campaigns.length === 0 ? <p className="text-sm text-muted-foreground">No campaigns yet.</p> : (
+            <>
             <Table>
               <TableHeader><TableRow><SortableHead sortKey="name" sortConfig={sortConfig} onSort={requestSort}>Campaign</SortableHead><SortableHead sortKey="clientName" sortConfig={sortConfig} onSort={requestSort}>Client</SortableHead><SortableHead sortKey="status" sortConfig={sortConfig} onSort={requestSort}>Status</SortableHead><SortableHead sortKey="metrics.emails_sent" sortConfig={sortConfig} onSort={requestSort} className="text-right">Sent (30d)</SortableHead><SortableHead sortKey="metrics.reply_rate" sortConfig={sortConfig} onSort={requestSort} className="text-right">Reply Rate</SortableHead><SortableHead sortKey="metrics.bounce_rate" sortConfig={sortConfig} onSort={requestSort} className="text-right">Bounce Rate</SortableHead><SortableHead sortKey="metrics.meetings_booked" sortConfig={sortConfig} onSort={requestSort} className="text-right">Positive</SortableHead><TableHead></TableHead></TableRow></TableHeader>
               <TableBody>
-                {sorted.map((row) => {
+                {pageRows.map((row) => {
                   const isOrphan = row.client_id === null;
                   const campaignHref = isOrphan ? null : `/admin/clients/${row.client_id}/campaigns/${row.id}`;
                   const clientHref = isOrphan ? null : `/admin/clients/${row.client_id}`;
@@ -86,6 +98,13 @@ export default function AllCampaignsPage() {
                 })}
               </TableBody>
             </Table>
+            <PaginationControls
+              currentPage={safePage}
+              totalItems={sorted.length}
+              pageSize={CAMPAIGNS_PAGE_SIZE}
+              onPageChange={setPage}
+            />
+            </>
           )}
         </CardContent>
       </Card>

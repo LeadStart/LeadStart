@@ -5,14 +5,17 @@
 // commits already populate (webhook_events, lead_replies.notification_status,
 // campaigns.client_id, webhook_auth_failures). No writes, no schema changes.
 
+import { useState } from "react";
 import { useSupabaseQuery } from "@/hooks/use-supabase-query";
 import {
   ADMIN_PIPELINE_HEALTH_KEY,
   fetchAdminPipelineHealth,
+  type PipelineHealthRecentEvent,
 } from "@/lib/admin-queries";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { StatCard } from "@/components/charts/stat-card";
+import { PaginationControls } from "@/components/ui/pagination-controls";
 import {
   Activity,
   Bell,
@@ -27,7 +30,10 @@ import {
   CheckCircle2,
   XCircle,
   Clock,
+  Radio,
 } from "lucide-react";
+
+const RECENT_EVENTS_PAGE_SIZE = 10;
 
 const PULSE_AMBER_MS = 1 * 60 * 60 * 1000; // 1h
 const PULSE_RED_MS = 4 * 60 * 60 * 1000; // 4h
@@ -395,7 +401,106 @@ export default function PipelineHealthPage() {
           </CardContent>
         </Card>
       </div>
+
+      <RecentEventsCard events={pipeline.webhookEvents.recent} />
     </div>
+  );
+}
+
+function RecentEventsCard({ events }: { events: PipelineHealthRecentEvent[] }) {
+  const [page, setPage] = useState(1);
+  const total = events.length;
+  const totalPages = Math.max(1, Math.ceil(total / RECENT_EVENTS_PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pageStart = (safePage - 1) * RECENT_EVENTS_PAGE_SIZE;
+  const pageEvents = events.slice(pageStart, pageStart + RECENT_EVENTS_PAGE_SIZE);
+
+  return (
+    <Card className="border-border/50 shadow-sm">
+      <CardContent className="pt-6 space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]">
+              <Radio size={16} className="text-white" />
+            </div>
+            <div>
+              <h2 className="text-[15px] font-semibold text-[#0f172a]">
+                Recent webhook events
+              </h2>
+              <p className="text-[11px] text-[#64748b]">
+                {total === 0
+                  ? "No events on record yet."
+                  : `Latest ${total} events, newest first.`}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {total === 0 ? (
+          <div className="rounded-lg border border-dashed border-border/60 bg-muted/20 px-4 py-6 text-center text-xs text-muted-foreground">
+            Events will appear here once Instantly starts sending webhooks.
+          </div>
+        ) : (
+          <>
+            <div className="overflow-hidden rounded-lg border border-border/50">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/40">
+                  <tr className="text-[11px] font-semibold uppercase tracking-wider text-[#64748b]">
+                    <th className="px-3 py-2 text-left">When</th>
+                    <th className="px-3 py-2 text-left">Event</th>
+                    <th className="px-3 py-2 text-left">Lead</th>
+                    <th className="px-3 py-2 text-right">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pageEvents.map((e) => (
+                    <tr
+                      key={e.id}
+                      className="border-t border-border/50 text-[13px] text-[#0f172a]"
+                    >
+                      <td className="px-3 py-2 text-[#0f172a]/80">
+                        <span title={new Date(e.received_at).toLocaleString()}>
+                          {formatAge(e.received_at)}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2">
+                        <span className="font-mono text-[12px] text-[#0f172a]/80">
+                          {e.event_type}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-[#0f172a]/70 truncate max-w-[220px]">
+                        {e.lead_email ?? "—"}
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        {e.excluded ? (
+                          <Badge className="badge-slate text-[10px]">
+                            Excluded
+                          </Badge>
+                        ) : e.processed ? (
+                          <Badge className="badge-green text-[10px]">
+                            Processed
+                          </Badge>
+                        ) : (
+                          <Badge className="badge-amber text-[10px]">
+                            Pending
+                          </Badge>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <PaginationControls
+              currentPage={safePage}
+              totalItems={total}
+              pageSize={RECENT_EVENTS_PAGE_SIZE}
+              onPageChange={setPage}
+            />
+          </>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

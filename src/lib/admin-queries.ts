@@ -318,11 +318,21 @@ export async function fetchAdminTasks(supabase: SupabaseClient) {
 //   - anyone probing?          authFailures24h
 export const ADMIN_PIPELINE_HEALTH_KEY = "admin-pipeline-health";
 
+export interface PipelineHealthRecentEvent {
+  id: string;
+  event_type: string;
+  lead_email: string | null;
+  received_at: string;
+  processed: boolean;
+  excluded: boolean;
+}
+
 export interface PipelineHealthData {
   webhookEvents: {
     total24h: number;
     byType: Array<{ event_type: string; count: number }>; // top 5
     lastReceivedAt: string | null;
+    recent: PipelineHealthRecentEvent[]; // last 50 for the paginated feed
   };
   replies24h: {
     classifiedTotal: number;
@@ -355,6 +365,7 @@ export async function fetchAdminPipelineHealth(
   const [
     webhooksRes,
     lastWebhookRes,
+    recentWebhooksRes,
     repliesRes,
     notifStatusRes,
     bouncedRes,
@@ -372,6 +383,11 @@ export async function fetchAdminPipelineHealth(
       .order("received_at", { ascending: false })
       .limit(1)
       .maybeSingle(),
+    supabase
+      .from("webhook_events")
+      .select("id, event_type, lead_email, received_at, processed, excluded")
+      .order("received_at", { ascending: false })
+      .limit(50),
     supabase
       .from("lead_replies")
       .select("final_class")
@@ -443,6 +459,7 @@ export async function fetchAdminPipelineHealth(
       lastReceivedAt:
         (lastWebhookRes.data as { received_at: string } | null)?.received_at ??
         null,
+      recent: (recentWebhooksRes.data ?? []) as PipelineHealthRecentEvent[],
     },
     replies24h: {
       classifiedTotal,
