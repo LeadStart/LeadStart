@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useSupabaseQuery } from "@/hooks/use-supabase-query";
 import { ADMIN_WEBHOOKS_KEY, fetchAdminWebhooks } from "@/lib/admin-queries";
 import { useSort } from "@/hooks/use-sort";
@@ -8,9 +8,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { SortableHead } from "@/components/ui/sortable-head";
+import { PaginationControls } from "@/components/ui/pagination-controls";
 import { Bell, Mail, MailOpen, AlertTriangle, CalendarCheck, CheckCircle, Ban, Undo2, Loader2 } from "lucide-react";
 import type { WebhookEvent } from "@/types/app";
 import { appUrl } from "@/lib/api-url";
+
+const WEBHOOKS_PAGE_SIZE = 10;
 
 const EVENT_STYLES: Record<string, { class: string; icon: React.ReactNode }> = {
   email_sent: { class: "badge-slate", icon: <Mail size={11} className="mr-1" /> },
@@ -31,6 +34,14 @@ export default function WebhooksPage() {
   const { sorted, sortConfig, requestSort } = useSort(eventsList);
   const eventCounts = eventsList.reduce<Record<string, number>>((acc, e) => { acc[e.event_type] = (acc[e.event_type] || 0) + 1; return acc; }, {});
   const excludedCount = eventsList.filter((e) => e.excluded).length;
+  const [page, setPage] = useState(1);
+  useEffect(() => {
+    setPage(1);
+  }, [sortConfig?.key, sortConfig?.direction]);
+  const totalPages = Math.max(1, Math.ceil(sorted.length / WEBHOOKS_PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pageStart = (safePage - 1) * WEBHOOKS_PAGE_SIZE;
+  const pageEvents = sorted.slice(pageStart, pageStart + WEBHOOKS_PAGE_SIZE);
 
   async function toggleExclude(event: WebhookEvent) {
     setTogglingId(event.id);
@@ -71,10 +82,11 @@ export default function WebhooksPage() {
       <Card className="border-border/50 shadow-sm">
         <CardContent>
           {eventsList.length === 0 ? <p className="text-sm text-muted-foreground">No webhook events received yet.</p> : (
+            <>
             <Table>
               <TableHeader><TableRow><SortableHead sortKey="event_type" sortConfig={sortConfig} onSort={requestSort}>Type</SortableHead><SortableHead sortKey="lead_email" sortConfig={sortConfig} onSort={requestSort}>Lead</SortableHead><SortableHead sortKey="campaign_instantly_id" sortConfig={sortConfig} onSort={requestSort}>Campaign ID</SortableHead><SortableHead sortKey="processed" sortConfig={sortConfig} onSort={requestSort}>Processed</SortableHead><SortableHead sortKey="received_at" sortConfig={sortConfig} onSort={requestSort}>Received</SortableHead><TableHead className="w-[100px]">Actions</TableHead></TableRow></TableHeader>
               <TableBody>
-                {sorted.map((event) => {
+                {pageEvents.map((event) => {
                   const style = EVENT_STYLES[event.event_type];
                   const isExcludable = event.event_type === "meeting_booked" || event.event_type === "email_replied";
                   return (
@@ -116,6 +128,13 @@ export default function WebhooksPage() {
                 })}
               </TableBody>
             </Table>
+            <PaginationControls
+              currentPage={safePage}
+              totalItems={sorted.length}
+              pageSize={WEBHOOKS_PAGE_SIZE}
+              onPageChange={setPage}
+            />
+            </>
           )}
         </CardContent>
       </Card>
