@@ -25,8 +25,8 @@ export function PaginationControls({
   if (totalItems <= pageSize) return null;
 
   return (
-    <div className="flex items-center justify-between gap-3 pt-3 text-xs text-[#64748b]">
-      <p>
+    <div className="flex items-center justify-between gap-3 px-2 pt-3 pb-1 text-xs text-[#64748b]">
+      <p className="whitespace-nowrap">
         <span className="font-medium text-[#0f172a]">{start}–{end}</span>{" "}
         of <span className="font-medium text-[#0f172a]">{totalItems.toLocaleString()}</span>
       </p>
