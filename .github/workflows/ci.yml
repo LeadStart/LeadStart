@@ -1,0 +1,53 @@
+name: CI
+
+# Runs on every push to any branch + every PR. Catches the class of problem
+# that let 10 commits stack up undeployed in April 2026 (broken vercel.json
+# silently rejected by Vercel). Keep this fast — the value is in running on
+# every push, not in being thorough.
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+# Cancel in-progress runs on the same ref when a newer push arrives.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20.x"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Lint + Typecheck both have pre-existing baseline errors as of
+      # commit 02fdead (26 lint errors, 12 TS errors across billing /
+      # clients / inbox-health / reports / tasks / use-user / use-sort /
+      # instantly client / topbar). Left non-blocking so CI can land
+      # without a drive-by cleanup — each step still runs and surfaces
+      # issues in its log, so regressions are visible. Flip
+      # `continue-on-error` to `false` on each step once the baseline
+      # hits zero so new breakage starts blocking merges.
+      - name: Lint
+        run: npm run lint
+        continue-on-error: true
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+        continue-on-error: true
+
+      # vercel.json shape check — catches JSON parse errors, missing fields,
+      # and schedules that aren't valid cron strings. Blocks merges that
+      # would break production deploys the way 7676bf0 did.
+      - name: Validate vercel.json
+        run: node .github/scripts/validate-vercel-json.mjs
