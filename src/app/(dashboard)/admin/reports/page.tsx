@@ -37,7 +37,13 @@ import {
 } from "lucide-react";
 import { buildWeeklyReportEmail } from "@/lib/email/weekly-report";
 import { calculateMetrics } from "@/lib/kpi/calculator";
-import type { Client, Campaign, CampaignSnapshot, KPIReport } from "@/types/app";
+import type { Client, Campaign, CampaignSnapshot, KPIReport, ReportFrequency } from "@/types/app";
+import {
+  WEEKDAY_LABELS,
+  COMMON_TIMEZONES,
+  describeSchedule,
+  frequencyBadgeLabel,
+} from "@/lib/kpi/schedule";
 import { appUrl } from "@/lib/api-url";
 
 export default function ReportsPage() {
@@ -57,16 +63,27 @@ export default function ReportsPage() {
 
   // Schedule editing state
   const [editingScheduleClient, setEditingScheduleClient] = useState<Client | null>(null);
-  const [scheduleInterval, setScheduleInterval] = useState<string>("");
-  const [scheduleStart, setScheduleStart] = useState("");
+  const [scheduleFrequency, setScheduleFrequency] = useState<"off" | ReportFrequency>("off");
+  const [scheduleDayOfWeek, setScheduleDayOfWeek] = useState<number>(5); // Friday default
+  const [scheduleDayOfMonth, setScheduleDayOfMonth] = useState<number>(1);
+  const [scheduleTimeOfDay, setScheduleTimeOfDay] = useState<string>("10:00");
+  const [scheduleTimezone, setScheduleTimezone] = useState<string>("America/New_York");
   const [scheduleRecipients, setScheduleRecipients] = useState<{ email: string; name: string; checked: boolean; source: string }[]>([]);
   const [loadingScheduleRecipients, setLoadingScheduleRecipients] = useState(false);
   const [savingSchedule, setSavingSchedule] = useState(false);
 
   async function openScheduleEditor(client: Client) {
     setEditingScheduleClient(client);
-    setScheduleInterval(client.report_interval_days ? String(client.report_interval_days) : "");
-    setScheduleStart(client.report_schedule_start || "");
+    setScheduleFrequency(client.report_frequency ?? "off");
+    setScheduleDayOfWeek(client.report_day_of_week ?? 5);
+    setScheduleDayOfMonth(client.report_day_of_month ?? 1);
+    setScheduleTimeOfDay(client.report_time_of_day ?? "10:00");
+    setScheduleTimezone(
+      client.report_timezone ??
+        (typeof Intl !== "undefined"
+          ? Intl.DateTimeFormat().resolvedOptions().timeZone || "America/New_York"
+          : "America/New_York")
+    );
     // Load recipients for this client
     setLoadingScheduleRecipients(true);
     const supabase = createClient();
@@ -126,18 +143,38 @@ export default function ReportsPage() {
       .filter((r) => r.checked)
       .map((r) => r.email);
 
+    const isOff = scheduleFrequency === "off";
+    const payload: Record<string, unknown> = {
+      client_id: editingScheduleClient.id,
+      frequency: isOff ? null : scheduleFrequency,
+      recipients: selectedRecipients,
+    };
+
+    if (!isOff) {
+      payload.time_of_day = scheduleTimeOfDay;
+      payload.timezone = scheduleTimezone;
+      if (scheduleFrequency === "weekly" || scheduleFrequency === "biweekly") {
+        payload.day_of_week = scheduleDayOfWeek;
+        payload.day_of_month = null;
+      } else if (scheduleFrequency === "monthly") {
+        payload.day_of_month = scheduleDayOfMonth;
+        payload.day_of_week = null;
+      }
+      // For biweekly, stamp today as the anchor if one isn't already set so
+      // the on/off-week cadence is deterministic from here forward.
+      if (
+        scheduleFrequency === "biweekly" &&
+        !editingScheduleClient.report_schedule_start
+      ) {
+        payload.schedule_start = new Date().toISOString().split("T")[0];
+      }
+    }
+
     try {
       const res = await fetch(appUrl("/api/admin/report-schedule"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          client_id: editingScheduleClient.id,
-          interval_days: scheduleInterval && scheduleInterval !== "off" && scheduleInterval !== "custom"
-            ? parseInt(scheduleInterval)
-            : null,
-          schedule_start: scheduleStart || null,
-          recipients: selectedRecipients,
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
@@ -151,10 +188,25 @@ export default function ReportsPage() {
           c.id === editingScheduleClient.id
             ? {
                 ...c,
-                report_interval_days: scheduleInterval && scheduleInterval !== "off" && scheduleInterval !== "custom"
-                  ? parseInt(scheduleInterval)
-                  : null,
-                report_schedule_start: scheduleStart || null,
+                report_frequency: isOff ? null : scheduleFrequency,
+                report_day_of_week: isOff
+                  ? null
+                  : scheduleFrequency === "monthly"
+                    ? null
+                    : scheduleDayOfWeek,
+                report_day_of_month: isOff
+                  ? null
+                  : scheduleFrequency === "monthly"
+                    ? scheduleDayOfMonth
+                    : null,
+                report_time_of_day: isOff ? null : scheduleTimeOfDay,
+                report_timezone: isOff ? null : scheduleTimezone,
+                report_schedule_start:
+                  !isOff &&
+                  scheduleFrequency === "biweekly" &&
+                  !c.report_schedule_start
+                    ? (payload.schedule_start as string)
+                    : c.report_schedule_start,
                 report_recipients: selectedRecipients.length > 0 ? selectedRecipients : null,
               }
             : c
@@ -486,18 +538,9 @@ export default function ReportsPage() {
             <div className="space-y-3">
               {clients.map((client) => {
                 const reportCount = reports.filter((r) => r.client_id === client.id && r.sent_at).length;
-                const hasSchedule = !!client.report_interval_days;
+                const hasSchedule = !!client.report_frequency;
                 const recipientCount = client.report_recipients?.length || 0;
-
-                const intervalLabel = client.report_interval_days
-                  ? client.report_interval_days === 7
-                    ? "Weekly"
-                    : client.report_interval_days === 14
-                      ? "Biweekly"
-                      : client.report_interval_days === 30
-                        ? "Monthly"
-                        : `Every ${client.report_interval_days}d`
-                  : null;
+                const scheduleSummary = describeSchedule(client);
 
                 return (
                   <div key={client.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-xl border border-border/50 p-4 hover:bg-muted/20 transition-colors">
@@ -510,13 +553,18 @@ export default function ReportsPage() {
                         <p className="text-xs text-muted-foreground truncate">
                           {client.contact_email || "No email"} &middot; {reportCount} report{reportCount !== 1 ? "s" : ""} sent
                         </p>
+                        {scheduleSummary && (
+                          <p className="text-[11px] text-muted-foreground truncate mt-0.5">
+                            {scheduleSummary}
+                          </p>
+                        )}
                       </div>
                     </div>
                     <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
                       {hasSchedule ? (
                         <div className="flex items-center gap-2 flex-wrap">
                           <Badge className="badge-green text-[10px]">
-                            {intervalLabel}
+                            {frequencyBadgeLabel(client.report_frequency!)}
                           </Badge>
                           {recipientCount > 0 && (
                             <Badge variant="secondary" className="text-[10px]">
@@ -549,7 +597,7 @@ export default function ReportsPage() {
               })}
               <div className="rounded-lg bg-blue-50 border border-blue-200 p-3">
                 <p className="text-xs text-blue-700">
-                  Scheduled reports auto-generate and send KPI summaries for the trailing interval. The cron runs daily at <strong>3:00 PM UTC</strong> and checks which clients are due.
+                  Scheduled reports auto-generate and send KPI summaries for the trailing period. The cron runs <strong>every hour</strong> and fires for each client when the current hour + day matches their configured schedule in their timezone.
                 </p>
               </div>
             </div>
@@ -568,54 +616,106 @@ export default function ReportsPage() {
               </DialogTitle>
             </DialogHeader>
             <div className="space-y-5 mt-2">
-              {/* Interval */}
+              {/* Frequency */}
               <div className="space-y-2">
-                <Label className="text-sm font-medium">Send Every</Label>
-                <Select value={scheduleInterval} onValueChange={setScheduleInterval}>
+                <Label className="text-sm font-medium">Frequency</Label>
+                <Select
+                  value={scheduleFrequency}
+                  onValueChange={(val) => setScheduleFrequency((val ?? "off") as "off" | ReportFrequency)}
+                >
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Off — no auto-send" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="off">Off — no auto-send</SelectItem>
-                    <SelectItem value="7">Every 7 days (weekly)</SelectItem>
-                    <SelectItem value="14">Every 14 days (biweekly)</SelectItem>
-                    <SelectItem value="30">Every 30 days (monthly)</SelectItem>
-                    <SelectItem value="custom">Custom interval...</SelectItem>
+                    <SelectItem value="weekly">Weekly</SelectItem>
+                    <SelectItem value="biweekly">Biweekly (every other week)</SelectItem>
+                    <SelectItem value="monthly">Monthly</SelectItem>
                   </SelectContent>
                 </Select>
-                {scheduleInterval === "custom" && (
-                  <div className="flex items-center gap-2 mt-2">
-                    <span className="text-sm text-muted-foreground">Every</span>
-                    <Input
-                      type="number"
-                      min={1}
-                      max={365}
-                      className="w-20"
-                      placeholder="N"
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        if (val && parseInt(val) > 0) {
-                          setScheduleInterval(val);
-                        }
-                      }}
-                    />
-                    <span className="text-sm text-muted-foreground">days</span>
-                  </div>
-                )}
               </div>
 
-              {/* Start Date */}
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Start Date</Label>
-                <p className="text-xs text-muted-foreground">
-                  Anchor date for the schedule. Reports cover the trailing interval from this date forward.
-                </p>
-                <Input
-                  type="date"
-                  value={scheduleStart}
-                  onChange={(e) => setScheduleStart(e.target.value)}
-                />
-              </div>
+              {/* Day picker — weekly/biweekly */}
+              {(scheduleFrequency === "weekly" || scheduleFrequency === "biweekly") && (
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Day of Week</Label>
+                  <Select
+                    value={String(scheduleDayOfWeek)}
+                    onValueChange={(val) => {
+                      if (val != null) setScheduleDayOfWeek(parseInt(val, 10));
+                    }}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {WEEKDAY_LABELS.map((d) => (
+                        <SelectItem key={d.value} value={String(d.value)}>
+                          {d.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {/* Day picker — monthly */}
+              {scheduleFrequency === "monthly" && (
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Day of Month</Label>
+                  <Select
+                    value={String(scheduleDayOfMonth)}
+                    onValueChange={(val) => {
+                      if (val != null) setScheduleDayOfMonth(parseInt(val, 10));
+                    }}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-[300px]">
+                      {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => (
+                        <SelectItem key={d} value={String(d)}>
+                          {d}
+                        </SelectItem>
+                      ))}
+                      <SelectItem value="-1">Last day of month</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[11px] text-muted-foreground">
+                    Capped at 28 so every month is guaranteed to fire — use &quot;Last day&quot; for end-of-month cadence.
+                  </p>
+                </div>
+              )}
+
+              {/* Time of day + Timezone */}
+              {scheduleFrequency !== "off" && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Time of Day</Label>
+                    <Input
+                      type="time"
+                      step={900}
+                      value={scheduleTimeOfDay}
+                      onChange={(e) => setScheduleTimeOfDay(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Timezone</Label>
+                    <Select value={scheduleTimezone} onValueChange={(val) => setScheduleTimezone(val ?? "UTC")}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-[300px]">
+                        {COMMON_TIMEZONES.map((tz) => (
+                          <SelectItem key={tz.value} value={tz.value}>
+                            {tz.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              )}
 
               {/* Recipients */}
               <div className="space-y-2">
@@ -659,16 +759,29 @@ export default function ReportsPage() {
               </div>
 
               {/* Summary */}
-              {scheduleInterval && scheduleInterval !== "off" && (
-                <div className="rounded-lg bg-blue-50 border border-blue-200 p-3">
-                  <p className="text-xs text-blue-700">
-                    Will send a report every <strong>{scheduleInterval} days</strong> to{" "}
-                    <strong>{scheduleRecipients.filter((r) => r.checked).length} recipient(s)</strong>
-                    {scheduleStart ? <> starting from <strong>{scheduleStart}</strong></> : null}.
-                    Each report covers the trailing {scheduleInterval}-day period.
-                  </p>
-                </div>
-              )}
+              {scheduleFrequency !== "off" && (() => {
+                const summary = describeSchedule({
+                  report_frequency: scheduleFrequency,
+                  report_day_of_week:
+                    scheduleFrequency === "monthly" ? null : scheduleDayOfWeek,
+                  report_day_of_month:
+                    scheduleFrequency === "monthly" ? scheduleDayOfMonth : null,
+                  report_time_of_day: scheduleTimeOfDay,
+                  report_timezone: scheduleTimezone,
+                });
+                const selectedCount = scheduleRecipients.filter((r) => r.checked).length;
+                const periodLabel =
+                  scheduleFrequency === "weekly" ? "7-day"
+                    : scheduleFrequency === "biweekly" ? "14-day"
+                      : "30-day";
+                return (
+                  <div className="rounded-lg bg-blue-50 border border-blue-200 p-3">
+                    <p className="text-xs text-blue-700">
+                      {summary ?? "Incomplete schedule"} — sends to <strong>{selectedCount} recipient(s)</strong>. Each report covers the trailing {periodLabel} period.
+                    </p>
+                  </div>
+                );
+              })()}
 
               <div className="flex justify-end gap-2">
                 <Button variant="outline" onClick={() => setEditingScheduleClient(null)}>

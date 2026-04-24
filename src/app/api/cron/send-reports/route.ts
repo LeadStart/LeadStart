@@ -3,7 +3,15 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { calculateMetrics } from "@/lib/kpi/calculator";
 import { buildWeeklyReportEmail as buildReportHtml } from "@/lib/email/weekly-report";
 import { sendViaResend } from "@/lib/notifications/resend-client";
+import { isClientDueNow } from "@/lib/kpi/schedule";
 import type { CampaignSnapshot, Client, Campaign, KPIReportData, KPIReport } from "@/types/app";
+
+// Map frequency → period covered by the emailed report
+function reportPeriodDays(frequency: Client["report_frequency"]): number {
+  if (frequency === "biweekly") return 14;
+  if (frequency === "monthly") return 30;
+  return 7;
+}
 
 /** Shared helper: generate report data for a client + date range */
 async function generateReportData(
@@ -48,17 +56,24 @@ async function generateReportData(
   };
 }
 
-/** Send an email report via the throttled Resend wrapper. */
+/** Send an email report via the throttled Resend wrapper.
+ *  Throws on missing API key so the caller's catch block records a real error
+ *  (prevents the "ghost sent" case where sent_at was stamped but nothing shipped). */
 async function sendReportEmail(
   reportData: KPIReportData,
   toEmails: string[],
   startDate: string,
   endDate: string
 ): Promise<void> {
-  if (!process.env.RESEND_API_KEY || toEmails.length === 0) return;
+  if (toEmails.length === 0) {
+    throw new Error("No recipients provided");
+  }
+  if (!process.env.RESEND_API_KEY) {
+    throw new Error("RESEND_API_KEY is not set — cannot send report email");
+  }
 
   // Weekly KPI reports don't use the hot-lead retry queue — a failed report
-  // is low-urgency and the daily cron rerun catches most transient drops.
+  // is low-urgency and the next-hour cron rerun catches most transient drops.
   // The throttle is still valuable to avoid bursts when a scheduled run
   // sends to many clients at once.
   await sendViaResend({
@@ -69,9 +84,11 @@ async function sendReportEmail(
   });
 }
 
-// ── GET: Vercel Cron (fires daily) ──────────────────────────────────────
-// Checks each client's schedule. If due, generates a report for the
-// trailing interval and sends to saved recipients.
+// ── GET: Vercel Cron (fires hourly) ─────────────────────────────────────
+// Checks each client's fixed day/time schedule in their configured timezone.
+// If the current hour matches AND the current day matches per frequency rule
+// (weekly / biweekly / monthly), generates a trailing-period report and sends
+// to saved recipients.
 export async function GET(request: NextRequest) {
   if (
     process.env.CRON_SECRET &&
@@ -82,47 +99,23 @@ export async function GET(request: NextRequest) {
 
   const admin = createAdminClient();
   const now = new Date();
-  const results: { client: string; status: string }[] = [];
+  const results: { client: string; status: string; reason?: string }[] = [];
 
-  // Get all clients with an active schedule
+  // Get all clients with an active fixed schedule
   const { data: clientsData } = await admin
     .from("clients")
     .select("*")
-    .not("report_interval_days", "is", null)
-    .gt("report_interval_days", 0);
+    .not("report_frequency", "is", null);
 
   const clients = (clientsData || []) as unknown as Client[];
 
   for (const client of clients) {
-    const intervalDays = client.report_interval_days!;
-    const scheduleStart = client.report_schedule_start
-      ? new Date(client.report_schedule_start)
-      : null;
-
-    // Determine if this client is due for a report
-    let isDue = false;
-
-    if (client.report_last_sent_at) {
-      // Check if enough time has passed since last send
-      const lastSent = new Date(client.report_last_sent_at);
-      const daysSinceLast = (now.getTime() - lastSent.getTime()) / (1000 * 60 * 60 * 24);
-      isDue = daysSinceLast >= intervalDays;
-    } else if (scheduleStart) {
-      // Never sent before — check if we've passed the start date
-      // and the current date aligns with the interval cadence
-      const daysSinceStart = (now.getTime() - scheduleStart.getTime()) / (1000 * 60 * 60 * 24);
-      isDue = daysSinceStart >= 0 && daysSinceStart % intervalDays < 1;
-    } else {
-      // Has interval but no start date and never sent — send now
-      isDue = true;
-    }
-
-    if (!isDue) {
-      results.push({ client: client.name, status: "not_due" });
+    const check = isClientDueNow(client, now);
+    if (!check.isDue) {
+      results.push({ client: client.name, status: "not_due", reason: check.reason });
       continue;
     }
 
-    // Determine recipients
     const recipients = client.report_recipients && client.report_recipients.length > 0
       ? client.report_recipients
       : client.contact_email
@@ -134,9 +127,10 @@ export async function GET(request: NextRequest) {
       continue;
     }
 
-    // Report covers the trailing interval
+    // Report covers the trailing period matching the frequency
+    const periodDays = reportPeriodDays(client.report_frequency);
     const endDate = now.toISOString().split("T")[0];
-    const startMs = now.getTime() - intervalDays * 24 * 60 * 60 * 1000;
+    const startMs = now.getTime() - periodDays * 24 * 60 * 60 * 1000;
     const startDate = new Date(startMs).toISOString().split("T")[0];
 
     try {
@@ -147,7 +141,6 @@ export async function GET(request: NextRequest) {
         continue;
       }
 
-      // Save report to DB
       const { data: report } = await admin
         .from("kpi_reports")
         .insert({
@@ -160,10 +153,12 @@ export async function GET(request: NextRequest) {
         .select()
         .single();
 
-      // Send email
+      // If sendReportEmail throws (Resend rejection, bad key, etc.) we fall
+      // through to the catch block and DO NOT stamp sent_at / last_sent_at.
+      // That's what makes a next-hour retry possible and keeps the client's
+      // schedule unblocked.
       await sendReportEmail(reportData, recipients, startDate, endDate);
 
-      // Mark report as sent
       if (report) {
         await admin
           .from("kpi_reports")
@@ -171,7 +166,6 @@ export async function GET(request: NextRequest) {
           .eq("id", (report as Record<string, unknown>).id);
       }
 
-      // Update last sent timestamp on client
       await admin
         .from("clients")
         .update({ report_last_sent_at: now.toISOString() })
@@ -180,7 +174,11 @@ export async function GET(request: NextRequest) {
       results.push({ client: client.name, status: "sent" });
     } catch (err) {
       console.error(`Failed to send report for ${client.name}:`, err);
-      results.push({ client: client.name, status: "error" });
+      results.push({
+        client: client.name,
+        status: "error",
+        reason: err instanceof Error ? err.message : String(err),
+      });
     }
   }
 

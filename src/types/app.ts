@@ -40,12 +40,21 @@ export interface Profile {
 
 export type ClientStatus = "active" | "former";
 
+export type ReportFrequency = "weekly" | "biweekly" | "monthly";
+
 export interface Client {
   id: string;
   organization_id: string;
   name: string;
   contact_email: string | null;
   notes: string | null;
+  // Fixed day/time schedule (migration 00040) — preferred
+  report_frequency: ReportFrequency | null;
+  report_day_of_week: number | null;   // 0-6, Sunday=0 (weekly/biweekly)
+  report_day_of_month: number | null;  // 1-28 or -1 for "last day" (monthly)
+  report_time_of_day: string | null;   // 'HH:MM' 24h, evaluated in report_timezone
+  report_timezone: string | null;      // IANA tz (e.g., America/New_York)
+  // Legacy elapsed-time schedule — retained for back-compat, not read by cron
   report_interval_days: number | null;
   report_schedule_start: string | null;
   report_last_sent_at: string | null;
