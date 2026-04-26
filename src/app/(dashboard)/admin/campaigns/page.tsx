@@ -14,6 +14,7 @@ import { useSort } from "@/hooks/use-sort";
 import { SortableHead } from "@/components/ui/sortable-head";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { CampaignRowActions } from "./campaign-row-actions";
+import { appUrl } from "@/lib/api-url";
 
 const CAMPAIGNS_PAGE_SIZE = 10;
 
@@ -141,7 +142,7 @@ function SyncFromInstantlyButton({ onDone }: { onDone: () => void }) {
     setResult(null);
     setIsError(false);
     try {
-      const res = await fetch("/api/admin/sync-campaigns", { method: "POST" });
+      const res = await fetch(appUrl("/api/admin/sync-campaigns"), { method: "POST" });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || `Sync failed (${res.status})`);
       setResult(`+${json.created} new · ${json.updated} updated · ${json.orphan_count} unlinked`);
