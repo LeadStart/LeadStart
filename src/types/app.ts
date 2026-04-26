@@ -22,6 +22,9 @@ export interface Organization {
   // the register-webhook admin button (commit #7). Null until one-time
   // setup runs.
   instantly_webhook_id: string | null;
+  scrapio_api_key: string | null;
+  scrapio_credits_balance: number | null;
+  scrapio_last_credit_check_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -236,7 +239,7 @@ export interface Contact {
   campaign_id: string | null;
   first_name: string | null;
   last_name: string | null;
-  email: string;
+  email: string | null;
   company_name: string | null;
   title: string | null;
   phone: string | null;
@@ -547,3 +550,51 @@ export const HOT_REPLY_CLASSES: ReplyClass[] = [
   "qualifying_question",
   "referral_forward",
 ];
+
+// Prospecting (Scrap.io lead enrichment)
+
+// Flattened business row stored in prospect_searches.results and shown in
+// the Prospecting table. Mirrors what the Replit reference build emitted —
+// purposely matches the shape of contacts (name, email, phone, etc.) so
+// the save-to-contacts mapping stays one-to-one.
+export interface ScrapioBusiness {
+  name: string;
+  google_id: string;
+  types: string;
+  website: string;
+  email: string;
+  phone: string;
+  phone_international: string;
+  full_address: string;
+  street: string;
+  city: string;
+  state: string;
+  postal_code: string;
+  latitude: string | number;
+  longitude: string | number;
+  reviews_count: number;
+  reviews_rating: string | number;
+  is_closed: boolean;
+  link: string;
+  facebook: string;
+  instagram: string;
+  linkedin: string;
+  twitter: string;
+  youtube: string;
+}
+
+// Cached search audit row. Lives 30 days, then expires_at is the cron's
+// cleanup signal.
+export interface ProspectSearch {
+  id: string;
+  organization_id: string;
+  created_by: string;
+  query: Record<string, unknown>;
+  results: ScrapioBusiness[];
+  result_count: number;
+  pages_fetched: number;
+  truncated: boolean;
+  saved_count: number;
+  expires_at: string;
+  created_at: string;
+}

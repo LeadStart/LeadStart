@@ -237,7 +237,7 @@ export default function ContactsPage() {
       !search ||
       (c.first_name || "").toLowerCase().includes(search.toLowerCase()) ||
       (c.last_name || "").toLowerCase().includes(search.toLowerCase()) ||
-      c.email.toLowerCase().includes(search.toLowerCase()) ||
+      (c.email || "").toLowerCase().includes(search.toLowerCase()) ||
       (c.company_name || "").toLowerCase().includes(search.toLowerCase());
     const matchesStatus = statusFilter === "all" || c.status === statusFilter;
     const matchesClient =

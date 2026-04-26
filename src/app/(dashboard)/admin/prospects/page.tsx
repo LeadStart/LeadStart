@@ -109,7 +109,7 @@ function ProspectCardInner({
     new Date(contact.pipeline_follow_up_date) < new Date() &&
     stage !== null &&
     !["closed", "lost"].includes(stage);
-  const companyInitial = (contact.company_name || contact.email).charAt(0).toUpperCase();
+  const companyInitial = (contact.company_name || contact.email || "?").charAt(0).toUpperCase();
   const name = displayName(contact);
   const industry = industryOf(contact);
 

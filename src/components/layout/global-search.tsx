@@ -88,7 +88,7 @@ export function GlobalSearch() {
         const name = `${c.first_name || ""} ${c.last_name || ""}`.toLowerCase();
         return (
           name.includes(q) ||
-          c.email.toLowerCase().includes(q) ||
+          (c.email || "").toLowerCase().includes(q) ||
           (c.company_name || "").toLowerCase().includes(q)
         );
       })

@@ -26,6 +26,7 @@ import {
   CreditCard,
   Settings2,
   Webhook,
+  Search,
 } from "lucide-react";
 import type { Organization } from "@/types/app";
 import { appUrl } from "@/lib/api-url";
@@ -65,18 +66,27 @@ export default function IntegrationsPage() {
   const [apiKey, setApiKey] = useState("");
   const [resendKey, setResendKey] = useState("");
   const [emailFrom, setEmailFrom] = useState("");
+  const [scrapioKey, setScrapioKey] = useState("");
   const [syncHour12, setSyncHour12] = useState("6");
   const [syncAmPm, setSyncAmPm] = useState("AM");
   const [saving, setSaving] = useState(false);
   const [savingSchedule, setSavingSchedule] = useState(false);
   const [savingResend, setSavingResend] = useState(false);
+  const [savingScrapio, setSavingScrapio] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<"success" | "fail" | null>(null);
+  const [testingScrapio, setTestingScrapio] = useState(false);
+  const [scrapioTestResult, setScrapioTestResult] = useState<
+    | { kind: "success"; subscription: Record<string, unknown> }
+    | { kind: "fail"; message: string }
+    | null
+  >(null);
   const [error, setError] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<string | null>(null);
   const [scheduleSaved, setScheduleSaved] = useState(false);
   const [resendSaved, setResendSaved] = useState(false);
+  const [scrapioSaved, setScrapioSaved] = useState(false);
 
   useEffect(() => {
     if (!organizationId) return;
@@ -102,9 +112,51 @@ export default function IntegrationsPage() {
           }
           if (typedOrg.resend_api_key) setResendKey(typedOrg.resend_api_key);
           if (typedOrg.email_from) setEmailFrom(typedOrg.email_from);
+          if (typedOrg.scrapio_api_key) setScrapioKey(typedOrg.scrapio_api_key);
         }
       });
   }, [organizationId]);
+
+  async function handleSaveScrapioKey() {
+    if (!organizationId) return;
+    setSavingScrapio(true);
+    setScrapioSaved(false);
+
+    const supabase = createClient();
+    await supabase
+      .from("organizations")
+      .update({ scrapio_api_key: scrapioKey || null })
+      .eq("id", organizationId);
+
+    setScrapioSaved(true);
+    setSavingScrapio(false);
+    setTimeout(() => setScrapioSaved(false), 3000);
+  }
+
+  async function handleTestScrapio() {
+    setTestingScrapio(true);
+    setScrapioTestResult(null);
+    try {
+      const res = await fetch(appUrl("/api/admin/prospecting/validate-key"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ api_key: scrapioKey }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setScrapioTestResult({ kind: "success", subscription: data.subscription ?? {} });
+      } else {
+        setScrapioTestResult({ kind: "fail", message: data.error ?? "Connection failed" });
+      }
+    } catch (err) {
+      setScrapioTestResult({
+        kind: "fail",
+        message: err instanceof Error ? err.message : "Connection failed",
+      });
+    } finally {
+      setTestingScrapio(false);
+    }
+  }
 
   async function handleSaveApiKey() {
     if (!organizationId) return;
@@ -275,6 +327,62 @@ export default function IntegrationsPage() {
         </CardContent>
       </Card>
 
+      {/* Scrap.io API Key (Prospecting tab) */}
+      <Card className="border-border/50 shadow-sm">
+        <CardHeader className="flex flex-row items-center gap-2 pb-3">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-500">
+            <Search size={16} className="text-white" />
+          </div>
+          <div>
+            <CardTitle className="text-base">Scrap.io</CardTitle>
+            <p className="text-xs text-muted-foreground">Lead enrichment for the Prospecting tab</p>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-1">
+            <Label htmlFor="scrapioKey" className="text-sm font-medium">API Key</Label>
+            <Input
+              id="scrapioKey"
+              type="password"
+              value={scrapioKey}
+              onChange={(e) => setScrapioKey(e.target.value)}
+              placeholder="Enter your Scrap.io API key"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Find your key at <span className="font-mono">scrap.io/account/api</span>. Searches consume credits from your Scrap.io plan.
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Button onClick={handleSaveScrapioKey} disabled={savingScrapio} style={{ background: '#2E37FE' }}>
+              {savingScrapio ? "Saving..." : "Save Key"}
+            </Button>
+            <Button variant="outline" onClick={handleTestScrapio} disabled={testingScrapio || !scrapioKey}>
+              {testingScrapio ? "Testing..." : "Test Connection"}
+            </Button>
+            {scrapioSaved && (
+              <span className="text-sm text-emerald-600 flex items-center gap-1">
+                <CheckCircle size={14} /> Saved
+              </span>
+            )}
+          </div>
+          {scrapioTestResult?.kind === "success" && (
+            <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-3 space-y-1">
+              <div className="flex items-center gap-2">
+                <CheckCircle size={16} className="text-emerald-500" />
+                <span className="text-sm font-medium text-emerald-700">Connection successful</span>
+              </div>
+              <ScrapioSubscriptionSummary subscription={scrapioTestResult.subscription} />
+            </div>
+          )}
+          {scrapioTestResult?.kind === "fail" && (
+            <div className="flex items-center gap-2 rounded-lg bg-red-50 border border-red-200 p-3">
+              <XCircle size={16} className="text-red-500" />
+              <span className="text-sm font-medium text-red-700">{scrapioTestResult.message}</span>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Resend (Email) */}
       <Card className="border-border/50 shadow-sm">
         <CardHeader className="flex flex-row items-center gap-2 pb-3">
@@ -433,6 +541,36 @@ export default function IntegrationsPage() {
           </div>
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+function ScrapioSubscriptionSummary({ subscription }: { subscription: Record<string, unknown> }) {
+  // Scrap.io's /subscription response shape isn't formally documented.
+  // Surface plan + credits when present and skip otherwise so the UI
+  // doesn't show "undefined" for an unknown account tier.
+  const plan = typeof subscription.plan === "string" ? subscription.plan : null;
+  const remaining =
+    typeof subscription.credits_remaining === "number"
+      ? subscription.credits_remaining
+      : typeof subscription.credits === "number"
+        ? subscription.credits
+        : null;
+
+  if (!plan && remaining === null) return null;
+
+  return (
+    <div className="text-xs text-emerald-700/90 flex flex-wrap gap-x-4 gap-y-1 pl-6">
+      {plan && (
+        <span>
+          Plan: <span className="font-medium">{plan}</span>
+        </span>
+      )}
+      {remaining !== null && (
+        <span>
+          Credits: <span className="font-medium">{remaining.toLocaleString()}</span>
+        </span>
+      )}
     </div>
   );
 }
