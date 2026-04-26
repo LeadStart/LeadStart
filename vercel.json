@@ -28,6 +28,10 @@
     {
       "path": "/app/api/cron/dispatch-owner-alerts",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/app/api/cron/owner-heartbeat",
+      "schedule": "0 13 * * *"
     }
   ]
 }
