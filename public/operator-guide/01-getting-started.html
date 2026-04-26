@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Getting Started — LeadStart Operator Guide</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #0F172A; --ink-2: #334155;
+    --muted: #64748B; --faint: #94A3B8;
+    --bg: #F8FAFC; --surface: #FFFFFF;
+    --border: #E2E8F0; --border-strong: #CBD5E1;
+    --brand-50:#EDEEFF; --brand-100:#D1D3FF; --brand-200:#A3A8FF;
+    --brand-300:#6B72FF; --brand-400:#2E37FE; --brand-500:#1C24B8; --brand-600:#0F1880;
+    --sidebar:#1E293B; --sidebar-2:#0F172A;
+    --success:#059669; --success-light:#ECFDF5;
+    --warning:#B45309; --warning-light:#FFFBEB;
+    --danger:#B91C1C;  --danger-light:#FEF2F2;
+    --info:#1C24B8;    --info-light:#EDEEFF;
+    --grad-brand: linear-gradient(135deg,#6B72FF 0%,#1C24B8 100%);
+    --grad-sidebar: linear-gradient(180deg,#1E293B 0%,#0F172A 100%);
+    --shadow-sm:0 1px 2px rgba(15,23,42,.06);
+    --shadow-md:0 4px 14px rgba(15,23,42,.08);
+    --shadow-lg:0 10px 30px rgba(15,23,42,.10);
+    --shadow-brand:0 8px 24px rgba(28,36,184,.22);
+    --radius-sm:.5rem; --radius:.75rem; --radius-md:1rem; --radius-lg:1.25rem;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    font-family:'Poppins',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+    background:var(--bg);color:var(--ink);line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+  a{color:inherit;text-decoration:none}
+  code,kbd{font-family:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.92em;background:var(--brand-50);color:var(--brand-500);padding:1px 6px;border-radius:6px;border:1px solid var(--brand-100)}
+  kbd{background:var(--bg);color:var(--ink);border:1px solid var(--border-strong);box-shadow:0 1px 0 var(--border-strong);padding:1px 6px;font-weight:500}
+
+  /* === Top bar === */
+  .topbar{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.85);backdrop-filter:saturate(180%) blur(12px);-webkit-backdrop-filter:saturate(180%) blur(12px);border-bottom:1px solid var(--border)}
+  .topbar-inner{max-width:920px;margin:0 auto;padding:14px 24px;display:flex;align-items:center;gap:16px}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:700}
+  .brand-mark{width:28px;height:28px;border-radius:8px;background:var(--grad-brand);box-shadow:var(--shadow-brand);display:grid;place-items:center;color:#fff;font-weight:800;font-size:14px}
+  .brand-name{font-size:15px}
+  .brand-name span{color:var(--muted);font-weight:400;margin-left:6px}
+  .topbar .right{margin-left:auto;display:flex;gap:8px;align-items:center}
+  .topbar a.back{font-size:13px;color:var(--muted);display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:8px;border:1px solid transparent}
+  .topbar a.back:hover{background:var(--bg);border-color:var(--border);color:var(--ink)}
+
+  /* === Article === */
+  article{max-width:920px;margin:0 auto;padding:48px 24px 80px}
+  .crumbs{font-size:13px;color:var(--muted);margin-bottom:14px;display:flex;align-items:center;gap:8px}
+  .crumbs a{color:var(--brand-500)}
+  .crumbs span{color:var(--faint)}
+  .eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--brand-500);background:var(--brand-50);padding:6px 12px;border-radius:999px}
+  .eyebrow::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--brand-400)}
+  h1{font-size:clamp(30px,4vw,42px);line-height:1.1;font-weight:700;letter-spacing:-.02em;margin:14px 0 16px}
+  .lede{font-size:18px;color:var(--ink-2);max-width:760px}
+  .meta{display:flex;flex-wrap:wrap;gap:8px 22px;margin:24px 0 8px;color:var(--muted);font-size:13px}
+  .meta div{display:flex;align-items:center;gap:6px}
+  .meta svg{width:14px;height:14px;color:var(--brand-400)}
+
+  /* === Section dividers === */
+  h2{font-size:24px;font-weight:700;letter-spacing:-.01em;margin:56px 0 12px;display:flex;align-items:baseline;gap:14px}
+  h2 .num{font-size:13px;font-weight:600;color:var(--brand-500);background:var(--brand-50);padding:4px 10px;border-radius:8px;border:1px solid var(--brand-100);font-variant-numeric:tabular-nums}
+  h3{font-size:18px;font-weight:600;margin:28px 0 8px}
+  p{margin:8px 0;color:var(--ink-2)}
+  p strong{color:var(--ink);font-weight:600}
+  ul,ol{margin:8px 0 8px 22px;color:var(--ink-2)}
+  ul li, ol li{margin:6px 0}
+
+  /* === Step block === */
+  .step{display:grid;grid-template-columns:48px 1fr;gap:18px;margin:24px 0;align-items:start}
+  .step-num{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;background:var(--brand-50);color:var(--brand-500);font-weight:700;font-size:14px;border:1px solid var(--brand-100);flex-shrink:0}
+  .step-body{padding-top:4px}
+  .step h3{margin-top:0}
+
+  /* === Mockup frames === */
+  .mockup{margin:18px 0;background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow-md);overflow:hidden;position:relative}
+  .mockup-bar{padding:9px 14px;border-bottom:1px solid var(--border);background:#FAFBFD;display:flex;align-items:center;gap:8px}
+  .mockup-dot{width:10px;height:10px;border-radius:50%}
+  .mockup-dot.r{background:#FF5F57}.mockup-dot.y{background:#FEBC2E}.mockup-dot.g{background:#28C840}
+  .mockup-url{margin-left:14px;font-size:12px;color:var(--muted);background:#fff;border:1px solid var(--border);padding:3px 10px;border-radius:6px;flex:1;max-width:480px}
+  .mockup-body{padding:0;background:var(--bg)}
+
+  /* === Login page mockup === */
+  .login{padding:40px 24px;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(180deg,#fff 0%,#F4F5FB 100%)}
+  .login-logo{width:80px;height:80px;border-radius:22px;background:var(--grad-brand);box-shadow:var(--shadow-brand);display:grid;place-items:center;color:#fff;font-weight:800;font-size:34px;margin-bottom:8px}
+  .login-wordmark{font-size:22px;font-weight:800;letter-spacing:.04em;background:var(--grad-brand);-webkit-background-clip:text;background-clip:text;color:transparent;margin-bottom:24px}
+  .login-card{width:100%;max-width:380px;background:#fff;border:1px solid var(--border);border-radius:16px;padding:24px;box-shadow:var(--shadow-md)}
+  .login-card .head{text-align:center;margin-bottom:18px}
+  .login-card .head .eyebrow{font-size:11px}
+  .login-card .head .sub{font-size:14px;color:var(--muted);margin-top:8px}
+  .field{margin-top:14px}
+  .field label{display:block;font-size:13px;font-weight:600;color:var(--ink);margin-bottom:6px}
+  .field .input{display:flex;align-items:center;gap:8px;padding:10px 12px;border:1px solid var(--border-strong);border-radius:10px;background:#fff;color:var(--faint);font-size:14px}
+  .field .input svg{width:14px;height:14px;color:var(--faint)}
+  .btn-primary{display:block;width:100%;text-align:center;padding:11px 16px;border-radius:10px;background:var(--grad-brand);color:#fff;font-weight:600;font-size:14px;margin-top:18px;box-shadow:var(--shadow-brand)}
+  .login-card .forgot{text-align:center;margin-top:14px;font-size:13px;color:var(--brand-500)}
+
+  /* === Annotation arrows === */
+  .annot{position:relative;margin:14px 0}
+  .annot-row{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--brand-50);border:1px dashed var(--brand-200);border-radius:10px;margin:6px 0;font-size:13px;color:var(--ink-2)}
+  .annot-row strong{color:var(--brand-500);font-weight:600}
+  .annot-num{width:22px;height:22px;border-radius:6px;background:var(--brand-400);color:#fff;display:grid;place-items:center;font-size:11px;font-weight:700;flex-shrink:0}
+
+  /* === Dashboard mockup === */
+  .dashboard{display:grid;grid-template-columns:240px 1fr;min-height:480px;background:var(--bg)}
+  .sb{background:var(--grad-sidebar);color:#CBD5E1;padding:18px 12px;font-size:13px;display:flex;flex-direction:column;gap:2px}
+  .sb-brand{display:flex;align-items:center;gap:10px;padding:6px 10px 14px;color:#fff;font-weight:700;font-size:14px}
+  .sb-brand .mark{width:28px;height:28px;border-radius:8px;background:var(--grad-brand);box-shadow:0 4px 12px rgba(46,55,254,.5);display:grid;place-items:center;color:#fff;font-weight:800;font-size:13px}
+  .sb-section{font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:#64748B;padding:14px 12px 6px;font-weight:600}
+  .sb-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;color:#CBD5E1;font-weight:500;cursor:default}
+  .sb-item svg{width:16px;height:16px;flex-shrink:0;opacity:.85}
+  .sb-item.active{background:rgba(46,55,254,.18);color:#fff}
+  .sb-item.active svg{color:var(--brand-300);opacity:1}
+  .sb-item:hover:not(.active){background:rgba(255,255,255,.04);color:#E2E8F0}
+  .sb-foot{margin-top:auto;padding:10px;border-top:1px solid rgba(255,255,255,.06);display:flex;align-items:center;gap:10px}
+  .sb-avatar{width:32px;height:32px;border-radius:50%;background:var(--grad-brand);color:#fff;display:grid;place-items:center;font-weight:600;font-size:12px}
+  .sb-foot .who{display:flex;flex-direction:column;font-size:12px}
+  .sb-foot .who .name{color:#fff;font-weight:600}
+  .sb-foot .who .role{color:#64748B;font-size:11px}
+
+  .main{display:flex;flex-direction:column}
+  .tb{display:flex;align-items:center;padding:12px 20px;border-bottom:1px solid var(--border);background:#fff;gap:12px}
+  .tb .search{flex:1;max-width:340px;display:flex;align-items:center;gap:8px;padding:7px 12px;background:var(--bg);border:1px solid var(--border);border-radius:10px;color:var(--faint);font-size:13px}
+  .tb .search svg{width:14px;height:14px}
+  .tb .ic{width:34px;height:34px;border-radius:10px;background:var(--bg);border:1px solid var(--border);display:grid;place-items:center;color:var(--muted);position:relative}
+  .tb .ic svg{width:16px;height:16px}
+  .tb .ic.bell::after{content:"";position:absolute;top:6px;right:7px;width:7px;height:7px;border-radius:50%;background:var(--danger);border:2px solid #fff}
+  .tb .me{display:flex;align-items:center;gap:8px;padding:5px 6px 5px 5px;border-radius:10px;border:1px solid var(--border);background:#fff}
+  .tb .me .av{width:26px;height:26px;border-radius:50%;background:var(--grad-brand);color:#fff;display:grid;place-items:center;font-size:11px;font-weight:600}
+  .tb .me .nm{font-size:13px;font-weight:600;padding-right:6px}
+  .tb .ml{margin-left:auto;display:flex;align-items:center;gap:8px}
+
+  .content{padding:24px 20px;flex:1}
+  .content h1.page{font-size:22px;font-weight:700;margin:0 0 4px;letter-spacing:-.01em}
+  .content .pgsub{font-size:14px;color:var(--muted);margin-bottom:18px}
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
+  .kpi{background:#fff;border:1px solid var(--border);border-radius:14px;padding:14px 14px 12px;position:relative;overflow:hidden}
+  .kpi::before{content:"";position:absolute;top:0;left:0;right:0;height:3px;background:var(--brand-400)}
+  .kpi.green::before{background:var(--success)}
+  .kpi.amber::before{background:var(--warning)}
+  .kpi.red::before{background:var(--danger)}
+  .kpi .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600}
+  .kpi .val{font-size:24px;font-weight:700;margin-top:6px;letter-spacing:-.02em}
+  .kpi .sub{font-size:11px;color:var(--muted);margin-top:2px}
+  .kpi .badge{position:absolute;top:14px;right:14px;font-size:10px;font-weight:600;padding:2px 7px;border-radius:999px}
+  .kpi.green .badge{background:var(--success-light);color:var(--success)}
+  .kpi.amber .badge{background:var(--warning-light);color:var(--warning)}
+  .kpi.red .badge{background:var(--danger-light);color:var(--danger)}
+  .panel{background:#fff;border:1px solid var(--border);border-radius:14px;padding:16px}
+  .panel-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+  .panel-title{font-size:14px;font-weight:600}
+  .panel-sub{font-size:12px;color:var(--muted)}
+  .chart{height:140px;background:linear-gradient(180deg,rgba(46,55,254,.10) 0%,rgba(46,55,254,0) 100%);border-radius:10px;position:relative;overflow:hidden}
+  .chart svg{position:absolute;inset:0;width:100%;height:100%}
+
+  /* === Callouts === */
+  .callout{background:#fff;border:1px solid var(--border);border-left:4px solid var(--brand-400);border-radius:12px;padding:14px 18px;margin:18px 0}
+  .callout.warn{border-left-color:var(--warning);background:var(--warning-light)}
+  .callout.danger{border-left-color:var(--danger);background:var(--danger-light)}
+  .callout.success{border-left-color:var(--success);background:var(--success-light)}
+  .callout-title{font-weight:600;display:flex;align-items:center;gap:8px;margin-bottom:6px}
+  .callout-title svg{width:16px;height:16px;color:var(--brand-400)}
+  .callout.warn .callout-title svg{color:var(--warning)}
+  .callout.danger .callout-title svg{color:var(--danger)}
+  .callout.success .callout-title svg{color:var(--success)}
+  .callout p{font-size:13.5px;margin:4px 0;color:var(--ink-2)}
+
+  /* === Roles table === */
+  .roles{margin:14px 0;border:1px solid var(--border);border-radius:14px;overflow:hidden;background:#fff}
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  th,td{text-align:left;padding:12px 14px;border-bottom:1px solid var(--border);vertical-align:top}
+  thead th{background:var(--bg);font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600}
+  tbody tr:last-child td{border-bottom:none}
+  td.role{font-weight:600;color:var(--ink)}
+  td.role .pill{display:inline-block;font-size:11px;padding:2px 8px;border-radius:999px;font-weight:600;margin-right:6px}
+  td.role .pill.owner{background:var(--brand-50);color:var(--brand-500);border:1px solid var(--brand-100)}
+  td.role .pill.va{background:var(--info-light);color:var(--info);border:1px solid var(--brand-100)}
+  td.role .pill.client{background:var(--success-light);color:var(--success);border:1px solid #BBF7D0}
+  .y{color:var(--success);font-weight:600}
+  .n{color:var(--faint)}
+
+  /* === Next nav === */
+  .next-nav{margin-top:48px;display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .next-nav a{padding:18px;border:1px solid var(--border);background:#fff;border-radius:14px;display:flex;flex-direction:column;gap:4px;transition:border-color .15s ease,transform .15s ease}
+  .next-nav a:hover{border-color:var(--brand-200);transform:translateY(-1px);box-shadow:var(--shadow-md)}
+  .next-nav a.next{align-items:flex-end;text-align:right}
+  .next-nav .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+  .next-nav .ttl{font-size:15px;font-weight:600;color:var(--ink)}
+
+  @media (max-width:680px){
+    .dashboard{grid-template-columns:1fr}
+    .sb{display:none}
+    .kpis{grid-template-columns:repeat(2,1fr)}
+    .next-nav{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand"><div class="brand-mark">L</div><div class="brand-name">LeadStart<span>Operator Guide</span></div></div>
+    <div class="right"><a class="back" href="index.html">&larr; All guides</a></div>
+  </div>
+</header>
+
+<article>
+  <div class="crumbs"><a href="index.html">Operator Guide</a><span>/</span><span>01 · Getting Started</span></div>
+  <span class="eyebrow">Guide 01 · 8 min read</span>
+  <h1>Getting Started</h1>
+  <p class="lede">
+    Where you log in, what each piece of the dashboard is for, and what your role lets
+    you do. Read this once before you touch anything else.
+  </p>
+  <div class="meta">
+    <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg> 6 numbered steps</div>
+    <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> ~8 min</div>
+    <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg> No risk to production</div>
+  </div>
+
+  <!-- =============== STEP 1 =============== -->
+  <h2><span class="num">Step 1</span> Open the login page</h2>
+
+  <div class="step">
+    <div class="step-num">1</div>
+    <div class="step-body">
+      <h3>Go to the production URL</h3>
+      <p>
+        Open your browser to <code>https://leadstart-ebon.vercel.app/app/login</code>.
+        That's the only URL you need to bookmark.
+      </p>
+      <p>
+        The <code>/app</code> at the end is required — it's the app's base path. If you go to
+        the bare domain you'll see a 404. (For local development the URL is
+        <code>http://localhost:3000/app/login</code>.)
+      </p>
+    </div>
+  </div>
+
+  <div class="mockup">
+    <div class="mockup-bar">
+      <span class="mockup-dot r"></span><span class="mockup-dot y"></span><span class="mockup-dot g"></span>
+      <span class="mockup-url">https://leadstart-ebon.vercel.app/app/login</span>
+    </div>
+    <div class="mockup-body">
+      <div class="login">
+        <div class="login-logo">L</div>
+        <div class="login-wordmark">LEADSTART</div>
+        <div class="login-card">
+          <div class="head">
+            <span class="eyebrow">Welcome back</span>
+            <div class="sub">Sign in to your campaign dashboard</div>
+          </div>
+          <div class="field">
+            <label>Email</label>
+            <div class="input">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1 0 2 .9 2 2v12c0 1.1-1 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1 1-2 2-2z"/><polyline points="22 6 12 13 2 6"/></svg>
+              you@example.com
+            </div>
+          </div>
+          <div class="field">
+            <label>Password</label>
+            <div class="input">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              ••••••••
+            </div>
+          </div>
+          <div class="btn-primary">Sign In</div>
+          <div class="forgot">Forgot your password?</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="annot">
+    <div class="annot-row"><div class="annot-num">1</div><div><strong>The blue gradient logo</strong> is the LeadStart wordmark. If you see it, you're on the right page.</div></div>
+    <div class="annot-row"><div class="annot-num">2</div><div><strong>Sign In</strong> button is the brand gradient (indigo &rarr; deep blue). It's the only primary action on this page.</div></div>
+    <div class="annot-row"><div class="annot-num">3</div><div><strong>"Forgot your password?"</strong> sends a Supabase reset email — it works, but only for accounts that exist in Supabase.</div></div>
+  </div>
+
+  <!-- =============== STEP 2 =============== -->
+  <h2><span class="num">Step 2</span> Sign in with your operator account</h2>
+
+  <div class="step">
+    <div class="step-num">2</div>
+    <div class="step-body">
+      <h3>Use the email + password the owner gave you</h3>
+      <p>
+        LeadStart uses Supabase Auth — the same email and password you'd use anywhere.
+        There is no SSO and no magic link in this version.
+      </p>
+      <ul>
+        <li>Enter email, enter password, click <strong>Sign In</strong>.</li>
+        <li>If your role is <code>owner</code> or <code>va</code>, you'll land on <code>/app/admin</code> — the operator dashboard.</li>
+        <li>If your role is <code>client</code>, you'll land on <code>/app/client</code> — the client portal (a different view; see Step 6 for what each role sees).</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="callout warn">
+    <div class="callout-title">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      Watch out — wrong landing page?
+    </div>
+    <p>If you land on <code>/app/client</code> when you expected to be in the admin view, your role isn't set to <code>owner</code> or <code>va</code> in Supabase. Ask the owner to update your <code>profiles.role</code> column. It's <strong>not</strong> something you can fix from the UI.</p>
+  </div>
+
+  <!-- =============== STEP 3 =============== -->
+  <h2><span class="num">Step 3</span> Get oriented — the dashboard at a glance</h2>
+
+  <div class="step">
+    <div class="step-num">3</div>
+    <div class="step-body">
+      <h3>Three regions: sidebar, top bar, content</h3>
+      <p>
+        Every screen in LeadStart follows the same skeleton. Once you know it, you can
+        find anything.
+      </p>
+    </div>
+  </div>
+
+  <div class="mockup">
+    <div class="mockup-bar">
+      <span class="mockup-dot r"></span><span class="mockup-dot y"></span><span class="mockup-dot g"></span>
+      <span class="mockup-url">https://leadstart-ebon.vercel.app/app/admin</span>
+    </div>
+    <div class="mockup-body">
+      <div class="dashboard">
+        <aside class="sb">
+          <div class="sb-brand"><div class="mark">L</div>LeadStart</div>
+          <div class="sb-section">Overview</div>
+          <div class="sb-item active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg> Dashboard</div>
+          <div class="sb-section">Manage</div>
+          <div class="sb-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> Clients</div>
+          <div class="sb-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-9-9c2.4 0 4.6.94 6.2 2.5"/><polyline points="21 3 21 9 15 9"/></svg> Campaigns</div>
+          <div class="sb-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v16H4z"/><line x1="4" y1="9" x2="20" y2="9"/></svg> Inbox</div>
+          <div class="sb-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19 12c0 1.1-.4 2.1-1.1 2.9l1.7 1.7-2.8 2.8-1.7-1.7c-.8.7-1.8 1.1-2.9 1.1s-2.1-.4-2.9-1.1l-1.7 1.7-2.8-2.8 1.7-1.7C5.9 14.1 5.5 13.1 5.5 12s.4-2.1 1.1-2.9L4.9 7.4l2.8-2.8 1.7 1.7C10.2 5.6 11.2 5.2 12.3 5.2s2.1.4 2.9 1.1l1.7-1.7 2.8 2.8-1.7 1.7c.7.8 1.1 1.8 1.1 2.9z"/></svg> Prospects</div>
+          <div class="sb-section">Communicate</div>
+          <div class="sb-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> Feedback</div>
+          <div class="sb-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg> Reports</div>
+          <div class="sb-section">Operate</div>
+          <div class="sb-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg> Billing</div>
+          <div class="sb-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> Webhooks</div>
+          <div class="sb-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> Settings</div>
+          <div class="sb-foot">
+            <div class="sb-avatar">DT</div>
+            <div class="who"><div class="name">Daniel</div><div class="role">Owner</div></div>
+          </div>
+        </aside>
+        <div class="main">
+          <div class="tb">
+            <div class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Search clients, campaigns…</div>
+            <div class="ml">
+              <div class="ic bell"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></div>
+              <div class="me"><div class="av">DT</div><div class="nm">Daniel</div></div>
+            </div>
+          </div>
+          <div class="content">
+            <h1 class="page">Dashboard</h1>
+            <div class="pgsub">All clients · last 30 days</div>
+            <div class="kpis">
+              <div class="kpi green"><span class="badge">Healthy</span><div class="lbl">Active clients</div><div class="val">12</div><div class="sub">+1 this week</div></div>
+              <div class="kpi"><div class="lbl">Active campaigns</div><div class="val">28</div><div class="sub">across 12 clients</div></div>
+              <div class="kpi green"><span class="badge">Good</span><div class="lbl">Reply rate</div><div class="val">3.4%</div><div class="sub">↑ vs trailing avg</div></div>
+              <div class="kpi amber"><span class="badge">Watch</span><div class="lbl">Bounce rate</div><div class="val">1.8%</div><div class="sub">3 campaigns flagged</div></div>
+            </div>
+            <div class="panel">
+              <div class="panel-head">
+                <div><div class="panel-title">Daily volume — all clients</div><div class="panel-sub">Sent · Opens · Replies</div></div>
+                <div class="panel-sub">Last 30 days</div>
+              </div>
+              <div class="chart">
+                <svg viewBox="0 0 600 140" preserveAspectRatio="none">
+                  <defs><linearGradient id="g1" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#2E37FE" stop-opacity=".35"/><stop offset="100%" stop-color="#2E37FE" stop-opacity="0"/></linearGradient></defs>
+                  <path fill="url(#g1)" d="M0,90 C40,70 80,80 120,60 C160,40 200,70 240,55 C280,40 320,30 360,45 C400,60 440,40 480,50 C520,60 560,30 600,40 L600,140 L0,140 Z"/>
+                  <path fill="none" stroke="#2E37FE" stroke-width="2" d="M0,90 C40,70 80,80 120,60 C160,40 200,70 240,55 C280,40 320,30 360,45 C400,60 440,40 480,50 C520,60 560,30 600,40"/>
+                </svg>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="annot">
+    <div class="annot-row"><div class="annot-num">1</div><div><strong>Sidebar (left, dark slate)</strong> — primary navigation. The active item gets an indigo tint and a brighter icon.</div></div>
+    <div class="annot-row"><div class="annot-num">2</div><div><strong>Top bar (white)</strong> — search, notifications bell, and your user menu. Sticky on scroll.</div></div>
+    <div class="annot-row"><div class="annot-num">3</div><div><strong>Page content (center)</strong> — title, optional subtitle, then KPIs / panels / tables. Same shape on every page.</div></div>
+  </div>
+
+  <!-- =============== STEP 4 =============== -->
+  <h2><span class="num">Step 4</span> The sidebar — what each item is for</h2>
+
+  <div class="step">
+    <div class="step-num">4</div>
+    <div class="step-body">
+      <h3>Three groups: Overview · Manage · Communicate · Operate</h3>
+      <p>The admin sidebar is grouped by what you're trying to do. Memorize this and you'll never click around looking for a screen.</p>
+    </div>
+  </div>
+
+  <div class="roles">
+    <table>
+      <thead><tr><th style="width:32%">Item</th><th style="width:42%">What it is</th><th>Covered in</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Dashboard</strong></td><td>All clients at a glance — cards sorted by health, KPIs, drill-in.</td><td>This guide</td></tr>
+        <tr><td><strong>Clients</strong></td><td>List of every client, add new ones, archive, drill into per-client detail.</td><td>Guide 02</td></tr>
+        <tr><td><strong>Campaigns</strong></td><td>Every campaign across every client. Sync from Instantly. Pause / resume / delete.</td><td>Guide 03</td></tr>
+        <tr><td><strong>Inbox</strong></td><td>All replies routed through the AI pipeline. Filter by client / class / outcome.</td><td>Guide 04</td></tr>
+        <tr><td><strong>Prospects</strong></td><td>Kanban CRM (lead → contacted → meeting → proposal → closed / lost).</td><td>Guide 06</td></tr>
+        <tr><td><strong>Feedback</strong></td><td>Read-only stream of "good lead / bad lead" tags from clients.</td><td>Guide 06</td></tr>
+        <tr><td><strong>Reports</strong></td><td>Generate weekly KPI emails, preview, send manually or schedule.</td><td>Guide 05</td></tr>
+        <tr><td><strong>Billing</strong></td><td>MRR, subscriptions, invoices, quotes via Stripe.</td><td>Guide 07</td></tr>
+        <tr><td><strong>Webhooks</strong></td><td>Audit log of every Instantly event we received. Useful when something looks broken.</td><td>Guide 07</td></tr>
+        <tr><td><strong>Settings</strong></td><td>Team members, API keys, the one-time Instantly webhook registration.</td><td>Guide 07</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- =============== STEP 5 =============== -->
+  <h2><span class="num">Step 5</span> The top bar — what each control does</h2>
+
+  <div class="step">
+    <div class="step-num">5</div>
+    <div class="step-body">
+      <h3>Three things you'll actually use</h3>
+      <p>
+        The top bar is intentionally minimal. Most actions live on the page itself, not up here.
+      </p>
+      <ul>
+        <li><strong>Search</strong> — placeholder for now. Doesn't return live results yet. Don't rely on it.</li>
+        <li><strong>Notification bell</strong> — placeholder. Hot&#8209;lead alerts go to <em>email</em>, not the bell. (See Guide 04.)</li>
+        <li><strong>Your name + avatar</strong> — opens a dropdown with <em>Profile</em>, <em>Settings</em>, <em>Switch view</em> (only if you have multiple roles), and <em>Sign out</em>.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="callout">
+    <div class="callout-title">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+      Heads up
+    </div>
+    <p>The bell with the red dot is a placeholder. It does <strong>not</strong> indicate unread hot leads. The way you actually find new replies is the <strong>Inbox</strong> sidebar item or the email Resend sends to the client.</p>
+  </div>
+
+  <!-- =============== STEP 6 =============== -->
+  <h2><span class="num">Step 6</span> Roles — who can do what</h2>
+
+  <div class="step">
+    <div class="step-num">6</div>
+    <div class="step-body">
+      <h3>Three roles, two dashboards</h3>
+      <p>Your role is set in Supabase (<code>profiles.role</code>) and determines which dashboard you land on after login. The middleware enforces this on every request, so there's no way to "sneak in" by typing a URL.</p>
+    </div>
+  </div>
+
+  <div class="roles">
+    <table>
+      <thead>
+        <tr>
+          <th style="width:24%">Role</th>
+          <th>Sees admin (<code>/admin</code>)?</th>
+          <th>Sees client portal (<code>/client</code>)?</th>
+          <th>Can do</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="role"><span class="pill owner">owner</span></td>
+          <td class="y">Yes</td>
+          <td class="n">No (own org only)</td>
+          <td>Everything: clients, campaigns, billing, team, API keys, webhook registration.</td>
+        </tr>
+        <tr>
+          <td class="role"><span class="pill va">va</span></td>
+          <td class="y">Yes</td>
+          <td class="n">No</td>
+          <td>Most operator tasks. Cannot manage team or API keys.</td>
+        </tr>
+        <tr>
+          <td class="role"><span class="pill client">client</span></td>
+          <td class="n">No</td>
+          <td class="y">Yes (their data only)</td>
+          <td>View their own campaigns, reports, feedback, hot&#8209;lead inbox. Submit feedback.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- =============== Common gotchas =============== -->
+  <h2><span class="num">Heads up</span> Common gotchas</h2>
+
+  <div class="callout warn">
+    <div class="callout-title">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      You're on production
+    </div>
+    <p>The URL to bookmark is <code>https://leadstart-ebon.vercel.app/app/login</code>. Anything you do there is live for paying clients. There is no separate "staging" or "demo" mode.</p>
+  </div>
+
+  <div class="callout warn">
+    <div class="callout-title">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      Search and notifications are placeholders
+    </div>
+    <p>The search bar at the top doesn't return real results yet. The bell is decorative. Don't expect either to do anything — use the sidebar.</p>
+  </div>
+
+  <div class="callout">
+    <div class="callout-title">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+      Forgot your password?
+    </div>
+    <p>The "Forgot your password?" link sends a Supabase reset email. Check spam. If you don't get it within a few minutes, ping the owner — your account may not exist in Supabase yet.</p>
+  </div>
+
+  <!-- =============== Next nav =============== -->
+  <div class="next-nav">
+    <a href="index.html"><div class="lbl">&larr; Back to</div><div class="ttl">All guides</div></a>
+    <a href="02-onboarding-clients.html" class="next"><div class="lbl">Next &rarr;</div><div class="ttl">02 · Onboarding a New Client</div></a>
+  </div>
+
+</article>
+
+</body>
+</html>

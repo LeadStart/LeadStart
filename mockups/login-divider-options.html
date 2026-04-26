@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Login Divider Options — LeadStart</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #f1f5f9;
+    color: #0f172a;
+    padding: 40px 24px 80px;
+  }
+  h1 {
+    font-size: 28px; font-weight: 700;
+    max-width: 1100px; margin: 0 auto 8px;
+  }
+  .subtitle {
+    color: #64748b; font-size: 15px;
+    max-width: 1100px; margin: 0 auto 40px;
+  }
+  .option {
+    max-width: 1100px;
+    margin: 0 auto 48px;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 4px 14px rgba(15,23,42,0.04);
+  }
+  .option-header {
+    padding: 18px 24px;
+    border-bottom: 1px solid #e2e8f0;
+    background: linear-gradient(180deg, #fafbff 0%, #fff 100%);
+  }
+  .option-header h2 {
+    font-size: 18px; font-weight: 700; color: #0f172a;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .option-header .num {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px; border-radius: 8px;
+    background: linear-gradient(135deg, #6B72FF, #1C24B8);
+    color: #fff; font-size: 13px; font-weight: 700;
+  }
+  .option-header p {
+    font-size: 13px; color: #64748b; margin-top: 4px; margin-left: 38px;
+  }
+  .preview {
+    position: relative;
+    height: 360px;
+    overflow: hidden;
+    background: #fff;
+  }
+  .left {
+    position: absolute; top: 0; left: 0; bottom: 0;
+    width: 50%;
+    background: linear-gradient(135deg, #EDEEFF 0%, #D1D3FF 50%, #fff 100%);
+    padding: 40px;
+    display: flex; flex-direction: column; justify-content: center;
+    z-index: 1;
+  }
+  .right {
+    position: absolute; top: 0; right: 0; bottom: 0;
+    width: 50%;
+    background: #fff;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .brand {
+    font-size: 22px; font-weight: 800; letter-spacing: -0.5px;
+    color: #2E37FE;
+    margin-bottom: 12px;
+  }
+  .headline {
+    font-size: 20px; font-weight: 700; color: #0f172a;
+    max-width: 280px;
+  }
+  .card {
+    width: 260px;
+    padding: 20px;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: 0 8px 24px rgba(15,23,42,0.06);
+    text-align: center;
+  }
+  .card .label {
+    font-size: 11px; text-transform: uppercase;
+    letter-spacing: 1px; color: #64748b; margin-bottom: 8px;
+  }
+  .card .title {
+    font-size: 16px; font-weight: 700; margin-bottom: 16px;
+  }
+  .card .input {
+    width: 100%; height: 32px;
+    border: 1px solid #e2e8f0; border-radius: 8px;
+    margin-bottom: 10px;
+  }
+  .card .btn {
+    width: 100%; height: 32px;
+    background: linear-gradient(135deg, #6B72FF, #1C24B8);
+    border-radius: 8px;
+    color: #fff; font-size: 12px; font-weight: 600;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  /* ---------- OPTION 1: Wavy SVG curve ---------- */
+  .opt1 .left {
+    clip-path: url(#wave-clip);
+    width: 54%;
+  }
+
+  /* ---------- OPTION 2: Diagonal slant ---------- */
+  .opt2 .left {
+    clip-path: polygon(0 0, 100% 0, 82% 100%, 0 100%);
+    width: 54%;
+  }
+
+  /* ---------- OPTION 3: Soft blur fade ---------- */
+  .opt3 .left {
+    -webkit-mask-image: linear-gradient(to right, #000 60%, transparent 100%);
+            mask-image: linear-gradient(to right, #000 60%, transparent 100%);
+    width: 58%;
+  }
+
+  /* ---------- OPTION 4: Rounded pill edge ---------- */
+  .opt4 .left {
+    border-top-right-radius: 180px;
+    border-bottom-right-radius: 180px;
+    width: 52%;
+  }
+
+  /* ---------- OPTION 5: Organic blob ---------- */
+  .opt5 .left {
+    clip-path: url(#blob-clip);
+    width: 58%;
+  }
+
+  /* ---------- OPTION 6: Dotted feather ---------- */
+  .opt6 .left {
+    width: 50%;
+  }
+  .opt6 .dots {
+    position: absolute;
+    top: 0; bottom: 0;
+    left: 46%; width: 10%;
+    background-image: radial-gradient(circle, #6B72FF 1.2px, transparent 1.6px);
+    background-size: 10px 10px;
+    -webkit-mask-image: linear-gradient(to right, transparent 0%, #000 50%, transparent 100%);
+            mask-image: linear-gradient(to right, transparent 0%, #000 50%, transparent 100%);
+    opacity: 0.5;
+    z-index: 2;
+  }
+
+  /* Subtle hover lift */
+  .option:hover {
+    transform: translateY(-1px);
+    transition: transform 0.2s;
+  }
+</style>
+</head>
+<body>
+
+<!-- Inline SVG clip-path defs -->
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <clipPath id="wave-clip" clipPathUnits="objectBoundingBox">
+      <path d="M 0,0 L 1,0 L 1,0.15 C 0.85,0.28 0.92,0.42 0.95,0.55 C 0.98,0.7 0.88,0.82 1,0.95 L 1,1 L 0,1 Z" />
+    </clipPath>
+    <clipPath id="blob-clip" clipPathUnits="objectBoundingBox">
+      <path d="M 0,0 L 1,0 L 0.94,0.1 C 0.87,0.22 0.98,0.35 0.91,0.5 C 0.82,0.66 0.99,0.78 0.89,0.9 L 0.93,1 L 0,1 Z" />
+    </clipPath>
+  </defs>
+</svg>
+
+<h1>Login Page Divider Options</h1>
+<p class="subtitle">Six design treatments to replace the current hard vertical line between the branding panel and the sign-in form.</p>
+
+<!-- OPTION 1: Wavy SVG curve -->
+<div class="option opt1">
+  <div class="option-header">
+    <h2><span class="num">1</span> Wavy SVG Curve</h2>
+    <p>Smooth sine-like wave. Classic, friendly, organic feel.</p>
+  </div>
+  <div class="preview">
+    <div class="left">
+      <div class="brand">▼ LEADSTART</div>
+      <div class="headline">Cold email campaigns that convert.</div>
+    </div>
+    <div class="right">
+      <div class="card">
+        <div class="label">Welcome Back</div>
+        <div class="title">Sign In</div>
+        <div class="input"></div>
+        <div class="input"></div>
+        <div class="btn">Sign In</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- OPTION 2: Diagonal slant -->
+<div class="option opt2">
+  <div class="option-header">
+    <h2><span class="num">2</span> Diagonal Slant</h2>
+    <p>Clean angular cut. Modern, bold, editorial.</p>
+  </div>
+  <div class="preview">
+    <div class="left">
+      <div class="brand">▼ LEADSTART</div>
+      <div class="headline">Cold email campaigns that convert.</div>
+    </div>
+    <div class="right">
+      <div class="card">
+        <div class="label">Welcome Back</div>
+        <div class="title">Sign In</div>
+        <div class="input"></div>
+        <div class="input"></div>
+        <div class="btn">Sign In</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- OPTION 3: Soft blur fade -->
+<div class="option opt3">
+  <div class="option-header">
+    <h2><span class="num">3</span> Soft Gradient Fade</h2>
+    <p>Left panel gradually fades into the right. Seamless, airy, dreamy.</p>
+  </div>
+  <div class="preview">
+    <div class="left">
+      <div class="brand">▼ LEADSTART</div>
+      <div class="headline">Cold email campaigns that convert.</div>
+    </div>
+    <div class="right">
+      <div class="card">
+        <div class="label">Welcome Back</div>
+        <div class="title">Sign In</div>
+        <div class="input"></div>
+        <div class="input"></div>
+        <div class="btn">Sign In</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- OPTION 4: Rounded pill edge -->
+<div class="option opt4">
+  <div class="option-header">
+    <h2><span class="num">4</span> Rounded Pill Edge</h2>
+    <p>Left panel has a big rounded right edge — feels soft and app-like.</p>
+  </div>
+  <div class="preview">
+    <div class="left">
+      <div class="brand">▼ LEADSTART</div>
+      <div class="headline">Cold email campaigns that convert.</div>
+    </div>
+    <div class="right">
+      <div class="card">
+        <div class="label">Welcome Back</div>
+        <div class="title">Sign In</div>
+        <div class="input"></div>
+        <div class="input"></div>
+        <div class="btn">Sign In</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- OPTION 5: Organic blob -->
+<div class="option opt5">
+  <div class="option-header">
+    <h2><span class="num">5</span> Organic Blob Edge</h2>
+    <p>Irregular freeform curve. Playful, distinctive, designer-y.</p>
+  </div>
+  <div class="preview">
+    <div class="left">
+      <div class="brand">▼ LEADSTART</div>
+      <div class="headline">Cold email campaigns that convert.</div>
+    </div>
+    <div class="right">
+      <div class="card">
+        <div class="label">Welcome Back</div>
+        <div class="title">Sign In</div>
+        <div class="input"></div>
+        <div class="input"></div>
+        <div class="btn">Sign In</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- OPTION 6: Dotted feather -->
+<div class="option opt6">
+  <div class="option-header">
+    <h2><span class="num">6</span> Dotted Feather</h2>
+    <p>Dot-grid fades from left to right across the boundary. Modern, techy, subtle.</p>
+  </div>
+  <div class="preview">
+    <div class="left">
+      <div class="brand">▼ LEADSTART</div>
+      <div class="headline">Cold email campaigns that convert.</div>
+    </div>
+    <div class="dots"></div>
+    <div class="right">
+      <div class="card">
+        <div class="label">Welcome Back</div>
+        <div class="title">Sign In</div>
+        <div class="input"></div>
+        <div class="input"></div>
+        <div class="btn">Sign In</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

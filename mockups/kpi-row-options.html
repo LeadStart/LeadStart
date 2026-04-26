@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KPI Row Mockups</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f8f9fb; padding: 40px; color: #1a1a2e; }
+  h1 { text-align: center; font-size: 24px; margin-bottom: 8px; }
+  .subtitle { text-align: center; color: #6b7280; font-size: 14px; margin-bottom: 48px; }
+  .option { margin-bottom: 60px; max-width: 900px; margin-left: auto; margin-right: auto; }
+  .option-label { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 1.5px; color: #7c3aed; margin-bottom: 12px; }
+  .option-desc { font-size: 13px; color: #6b7280; margin-bottom: 16px; line-height: 1.5; }
+
+  /* Shared */
+  .card { background: white; border-radius: 16px; border: 1px solid #e5e7eb; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+  .kpi-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: #9ca3af; }
+  .kpi-value { font-size: 28px; font-weight: 700; color: #1a1a2e; }
+  .kpi-value-sm { font-size: 22px; font-weight: 700; color: #1a1a2e; }
+  .trend { display: inline-flex; align-items: center; gap: 2px; font-size: 11px; color: #9ca3af; background: #f3f4f6; padding: 2px 8px; border-radius: 6px; }
+  select, input[type="date"] { border: 1px solid #e5e7eb; border-radius: 8px; padding: 6px 10px; font-size: 13px; color: #374151; background: white; outline: none; }
+  select:focus, input[type="date"]:focus { border-color: #6366f1; box-shadow: 0 0 0 2px rgba(99,102,241,0.15); }
+  .label-sm { font-size: 11px; font-weight: 500; color: #9ca3af; margin-bottom: 4px; }
+  .divider-v { width: 1px; background: #e5e7eb; align-self: stretch; }
+  .divider-h { height: 1px; background: #e5e7eb; width: 100%; }
+
+  /* Option A */
+  .option-a .inner { display: flex; align-items: center; padding: 20px 28px; gap: 32px; }
+  .option-a .kpi-block { flex: 0 0 auto; }
+  .option-a .range-block { margin-left: auto; display: flex; align-items: flex-end; gap: 12px; }
+
+  /* Option B */
+  .option-b .inner { display: flex; align-items: stretch; }
+  .option-b .kpi-cell { flex: 1; padding: 20px 24px; display: flex; flex-direction: column; justify-content: center; }
+  .option-b .kpi-cell + .kpi-cell { border-left: 1px solid #f0f0f3; }
+  .option-b .range-cell { flex: 0 0 200px; padding: 16px 24px; background: #fafbfc; border-left: 1px solid #f0f0f3; border-radius: 0 16px 16px 0; display: flex; flex-direction: column; justify-content: center; gap: 10px; }
+
+  /* Option C */
+  .option-c .top-bar { display: flex; align-items: center; justify-content: space-between; padding: 14px 24px; background: linear-gradient(135deg, #4f46e5, #7c3aed); border-radius: 16px 16px 0 0; }
+  .option-c .top-bar .title { font-size: 13px; font-weight: 600; color: white; }
+  .option-c .top-bar .range-row { display: flex; align-items: center; gap: 8px; }
+  .option-c .top-bar select { background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.25); color: white; font-size: 12px; padding: 4px 8px; border-radius: 6px; }
+  .option-c .top-bar select option { color: #1a1a2e; background: white; }
+  .option-c .top-bar .date-label { font-size: 11px; color: rgba(255,255,255,0.7); }
+  .option-c .kpi-row { display: flex; }
+  .option-c .kpi-cell { flex: 1; padding: 20px 24px; text-align: center; }
+  .option-c .kpi-cell + .kpi-cell { border-left: 1px solid #f0f0f3; }
+
+  /* Option D */
+  .option-d .inner { padding: 20px 28px; }
+  .option-d .header-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  .option-d .header-row .title { font-size: 14px; font-weight: 600; color: #374151; }
+  .option-d .badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 500; color: #6366f1; background: #eef2ff; padding: 3px 10px; border-radius: 20px; }
+  .option-d .metrics-row { display: flex; gap: 16px; }
+  .option-d .metric-tile { flex: 1; background: #fafbfc; border-radius: 12px; padding: 16px 20px; border: 1px solid #f0f0f3; }
+  .option-d .metric-tile.accent { background: linear-gradient(135deg, #eef2ff, #f5f3ff); border-color: #e0e7ff; }
+  .option-d .range-tile { flex: 0 0 auto; min-width: 280px; background: #fafbfc; border-radius: 12px; padding: 16px 20px; border: 1px solid #f0f0f3; display: flex; flex-direction: column; justify-content: center; gap: 8px; }
+  .option-d .range-inline { display: flex; gap: 8px; align-items: flex-end; }
+</style>
+</head>
+<body>
+
+<h1>KPI + Date Range — Combined Card Options</h1>
+<p class="subtitle">4 layout concepts for unifying Emails Sent, Positive Responses, and the date range selector</p>
+
+<!-- ====== OPTION A: Inline Flow ====== -->
+<div class="option option-a">
+  <div class="option-label">Option A — Inline Flow</div>
+  <div class="option-desc">KPIs on the left, date range anchored to the right. Clean horizontal read. Minimal dividers keep it feeling open.</div>
+  <div class="card">
+    <div class="inner">
+      <div class="kpi-block">
+        <div class="kpi-label">Emails Sent</div>
+        <div style="display:flex;align-items:center;gap:10px;margin-top:4px;">
+          <div class="kpi-value">842</div>
+          <div class="trend">&#8599; &mdash;</div>
+        </div>
+      </div>
+      <div class="divider-v" style="margin: 4px 0;"></div>
+      <div class="kpi-block">
+        <div class="kpi-label">Positive Responses</div>
+        <div style="display:flex;align-items:center;gap:10px;margin-top:4px;">
+          <div class="kpi-value">3</div>
+          <div class="trend">&#8599; &mdash;</div>
+        </div>
+      </div>
+      <div class="range-block">
+        <div>
+          <div class="label-sm">Range</div>
+          <select style="width:130px;">
+            <option>Last 30 Days</option>
+            <option>Last 7 Days</option>
+            <option>Last 90 Days</option>
+            <option>Custom</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ====== OPTION B: Equal Columns ====== -->
+<div class="option option-b">
+  <div class="option-label">Option B — Equal Columns</div>
+  <div class="option-desc">Three equal-feeling sections with subtle borders. The range section has a slightly tinted background to visually separate it as a control rather than a metric.</div>
+  <div class="card">
+    <div class="inner">
+      <div class="kpi-cell">
+        <div class="kpi-label">Emails Sent</div>
+        <div style="display:flex;align-items:center;gap:10px;margin-top:6px;">
+          <div class="kpi-value">842</div>
+          <div class="trend">&#8599; &mdash;</div>
+        </div>
+      </div>
+      <div class="kpi-cell">
+        <div class="kpi-label">Positive Responses</div>
+        <div style="display:flex;align-items:center;gap:10px;margin-top:6px;">
+          <div class="kpi-value">3</div>
+          <div class="trend">&#8599; &mdash;</div>
+        </div>
+      </div>
+      <div class="range-cell">
+        <div>
+          <div class="label-sm">Range</div>
+          <select style="width:100%;">
+            <option>Last 30 Days</option>
+            <option>Last 7 Days</option>
+            <option>Last 90 Days</option>
+            <option>Custom</option>
+          </select>
+        </div>
+        <div style="font-size:11px;color:#9ca3af;">Mar 3 — Apr 2, 2026</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ====== OPTION C: Gradient Header Bar ====== -->
+<div class="option option-c">
+  <div class="option-label">Option C — Branded Header Bar</div>
+  <div class="option-desc">Date range lives in a compact gradient header that matches the page hero. Metrics sit below as large centered numbers. Feels premium and intentional.</div>
+  <div class="card" style="overflow:hidden;">
+    <div class="top-bar">
+      <div class="title">Campaign Performance</div>
+      <div class="range-row">
+        <div class="date-label">Mar 3 — Apr 2, 2026</div>
+        <select>
+          <option>Last 30 Days</option>
+          <option>Last 7 Days</option>
+          <option>Last 90 Days</option>
+          <option>Custom</option>
+        </select>
+      </div>
+    </div>
+    <div class="kpi-row">
+      <div class="kpi-cell">
+        <div class="kpi-label" style="margin-bottom:6px;">Emails Sent</div>
+        <div class="kpi-value">842</div>
+      </div>
+      <div class="kpi-cell">
+        <div class="kpi-label" style="margin-bottom:6px;">Positive Responses</div>
+        <div class="kpi-value" style="color:#059669;">3</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ====== OPTION D: Nested Tiles ====== -->
+<div class="option option-d">
+  <div class="option-label">Option D — Nested Tiles</div>
+  <div class="option-desc">A single container card with inner "tiles" for each metric and the date control. Feels modern and modular. The positive responses tile gets a subtle accent to draw the eye.</div>
+  <div class="card">
+    <div class="inner">
+      <div class="header-row">
+        <div class="title">Performance Overview</div>
+        <div class="badge">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          Last 30 Days
+        </div>
+      </div>
+      <div class="metrics-row">
+        <div class="metric-tile">
+          <div class="kpi-label">Emails Sent</div>
+          <div style="display:flex;align-items:center;gap:8px;margin-top:8px;">
+            <div class="kpi-value-sm">842</div>
+            <div class="trend">&#8599; &mdash;</div>
+          </div>
+        </div>
+        <div class="metric-tile accent">
+          <div class="kpi-label" style="color:#6366f1;">Positive Responses</div>
+          <div style="display:flex;align-items:center;gap:8px;margin-top:8px;">
+            <div class="kpi-value-sm" style="color:#4f46e5;">3</div>
+            <div class="trend" style="background:#e0e7ff;color:#6366f1;">&#8599; &mdash;</div>
+          </div>
+        </div>
+        <div class="range-tile">
+          <div>
+            <div class="label-sm">Date Range</div>
+            <select style="width:100%;">
+              <option>Last 30 Days</option>
+              <option>Last 7 Days</option>
+              <option>Last 90 Days</option>
+              <option>Custom</option>
+            </select>
+          </div>
+          <div class="range-inline" style="display:none;">
+            <div style="flex:1;">
+              <div class="label-sm">From</div>
+              <input type="date" style="width:100%;" value="2026-03-03">
+            </div>
+            <div style="flex:1;">
+              <div class="label-sm">To</div>
+              <input type="date" style="width:100%;" value="2026-04-02">
+            </div>
+          </div>
+          <div style="font-size:11px;color:#9ca3af;">Mar 3 — Apr 2, 2026</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

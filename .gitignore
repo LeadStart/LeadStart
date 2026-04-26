@@ -45,5 +45,8 @@ instantly_campaigns.json
 .env*.local
 leads*.json
 
+# Generated email-template previews (output of scripts/render-*.mjs)
+public/hot-lead-email-preview.html
+
 # Claude Code personal overrides (team-wide config lives in .claude/settings.json)
 .claude/settings.local.json

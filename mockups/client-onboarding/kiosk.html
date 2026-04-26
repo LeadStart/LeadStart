@@ -1,0 +1,1471 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>How LeadStart Works — Kiosk</title>
+<style>
+  :root {
+    --ink: #1A1A2E;
+    --muted: #6B6E8A;
+    --faint: #9194AD;
+    --bg: #F4F5F9;
+    --surface: #FFFFFF;
+    --border: #E2E3ED;
+    --border-strong: #D4D7E9;
+    --indigo-1: #6B72FF;
+    --indigo-2: #2E37FE;
+    --indigo-3: #1C24B8;
+    --indigo-4: #0F1880;
+    --green-1: #10b981;
+    --green-2: #059669;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: radial-gradient(ellipse at top, #1a1f3d 0%, #0a0e1f 60%, #05070f 100%);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+    line-height: 1.5;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    gap: 22px;
+  }
+
+  /* Monitor frame */
+  .monitor-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: min(86vw, 1440px);
+  }
+  .monitor-frame {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    max-height: 78vh;
+    background: linear-gradient(180deg, #2a2e3e 0%, #15171f 100%);
+    border-radius: 18px;
+    padding: 14px 14px 18px;
+    box-shadow:
+      0 50px 100px rgba(0, 0, 0, 0.55),
+      0 0 0 1px rgba(255, 255, 255, 0.04) inset,
+      0 -1px 0 rgba(255, 255, 255, 0.06) inset;
+    position: relative;
+  }
+  .monitor-frame::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 100%;
+    height: 100%;
+    border-radius: 18px;
+    background: radial-gradient(ellipse at top, rgba(107, 114, 255, 0.05) 0%, transparent 50%);
+    pointer-events: none;
+  }
+  .monitor-screen {
+    width: 100%;
+    height: 100%;
+    background: var(--bg);
+    border-radius: 6px;
+    overflow: hidden;
+    position: relative;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.3) inset;
+  }
+  .monitor-stand {
+    width: 0; height: 0;
+    border-left: 70px solid transparent;
+    border-right: 70px solid transparent;
+    border-top: 38px solid #1a1d28;
+    margin-top: -2px;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
+  }
+  .monitor-base {
+    width: 240px;
+    height: 8px;
+    background: linear-gradient(180deg, #2a2e3e 0%, #15171f 100%);
+    border-radius: 0 0 4px 4px;
+    margin-top: -2px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  }
+
+  /* Slides */
+  .slides {
+    position: relative;
+    width: 100%;
+    height: 100%;
+  }
+  .slide {
+    position: absolute;
+    inset: 0;
+    padding: 4% 5.5%;
+    display: flex;
+    flex-direction: column;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.45s ease;
+  }
+  .slide.active { opacity: 1; pointer-events: auto; }
+
+  .slide-head {
+    margin-bottom: clamp(14px, 2.2vh, 28px);
+  }
+  .step-num {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    font-size: clamp(10px, 1.1vw, 12px);
+    font-weight: 700;
+    color: var(--indigo-2);
+    text-transform: uppercase;
+    letter-spacing: 1.8px;
+    margin-bottom: 10px;
+  }
+  .step-num .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--indigo-2); }
+  .slide h1 {
+    font-size: clamp(24px, 3.6vw, 48px);
+    font-weight: 800;
+    letter-spacing: -1.2px;
+    line-height: 1.05;
+    margin-bottom: 8px;
+  }
+  .slide h1 .accent {
+    background: linear-gradient(90deg, var(--indigo-1), var(--indigo-2));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .slide p.lede {
+    font-size: clamp(13px, 1.4vw, 17px);
+    color: var(--muted);
+    max-width: 640px;
+    line-height: 1.55;
+  }
+
+  .slide-body {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    min-height: 0;
+  }
+
+  /* ----- HERO ----- */
+  .slide.hero {
+    text-align: center;
+    align-items: center;
+    justify-content: center;
+    background: radial-gradient(ellipse at top, rgba(107, 114, 255, 0.1) 0%, transparent 60%), var(--bg);
+  }
+  .hero-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+  .hero .wordmark {
+    font-size: clamp(11px, 1.1vw, 14px);
+    font-weight: 700;
+    letter-spacing: 2.5px;
+    color: var(--indigo-2);
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .hero h1 {
+    font-size: clamp(36px, 6vw, 78px);
+    font-weight: 800;
+    letter-spacing: -2px;
+    line-height: 1.02;
+  }
+  .hero h1 .gradient {
+    background: linear-gradient(90deg, var(--indigo-1), var(--indigo-2), var(--indigo-3), var(--indigo-2), var(--indigo-1));
+    background-size: 300% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: shimmer 3.5s linear infinite;
+  }
+  @keyframes shimmer { 0% { background-position: 0% 50%; } 100% { background-position: 300% 50%; } }
+  .hero p.tagline {
+    font-size: clamp(14px, 1.6vw, 20px);
+    color: var(--muted);
+    max-width: 520px;
+    margin-top: 6px;
+  }
+
+  /* ----- STEP 1 — SEND STACK ----- */
+  .send-stack {
+    width: 100%;
+    max-width: 720px;
+    display: flex;
+    flex-direction: column;
+    gap: clamp(6px, 1vh, 12px);
+  }
+  .send-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: clamp(8px, 1vh, 14px) clamp(12px, 1.4vw, 18px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+  }
+  .send-row .day {
+    font-size: clamp(10px, 0.95vw, 12px);
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    font-weight: 700;
+    color: var(--muted);
+    width: 48px;
+    flex-shrink: 0;
+  }
+  .send-row .bar-track {
+    flex: 1;
+    height: 8px;
+    background: var(--bg);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .send-row .bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--indigo-1), var(--indigo-2));
+    border-radius: 4px;
+    transform-origin: left;
+    transform: scaleX(0);
+  }
+  .send-row .count {
+    font-size: clamp(11px, 1vw, 13px);
+    font-weight: 600;
+    color: var(--ink);
+    min-width: 72px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ----- STEP 2 — CLASSIFIER ----- */
+  .classifier {
+    display: grid;
+    grid-template-columns: 1.2fr auto 1fr;
+    gap: clamp(14px, 2vw, 30px);
+    align-items: center;
+    width: 100%;
+    max-width: 900px;
+  }
+  .reply-bubble {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: clamp(10px, 1.4vw, 16px);
+    font-size: clamp(11px, 1.05vw, 14px);
+    color: var(--ink);
+    line-height: 1.5;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    position: relative;
+    overflow: hidden;
+  }
+  .reply-bubble .from {
+    font-size: clamp(9px, 0.85vw, 11px);
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+  .scan-sweep {
+    position: absolute; top: 0; left: -40%; width: 35%; height: 100%;
+    background: linear-gradient(90deg, rgba(46, 55, 254, 0) 0%, rgba(46, 55, 254, 0.2) 50%, rgba(46, 55, 254, 0) 100%);
+    pointer-events: none;
+    opacity: 0;
+  }
+  .arrow-flow {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+  .ai-badge {
+    width: clamp(44px, 4.5vw, 58px);
+    height: clamp(44px, 4.5vw, 58px);
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--indigo-1), var(--indigo-2));
+    display: flex; align-items: center; justify-content: center;
+    color: #fff;
+    box-shadow: 0 6px 20px rgba(46, 55, 254, 0.35);
+    animation: pulse-ai 2.4s infinite;
+  }
+  @keyframes pulse-ai {
+    0%, 100% { box-shadow: 0 6px 20px rgba(46, 55, 254, 0.35); transform: scale(1); }
+    50% { box-shadow: 0 6px 34px rgba(46, 55, 254, 0.65); transform: scale(1.04); }
+  }
+  .ai-badge svg { width: 50%; height: 50%; }
+  .arrow { color: var(--faint); }
+  .verdict-card {
+    background: var(--surface);
+    border: 2px solid var(--green-1);
+    border-radius: 12px;
+    padding: clamp(10px, 1.3vw, 16px);
+    text-align: center;
+    box-shadow: 0 4px 16px rgba(16, 185, 129, 0.18);
+  }
+  .verdict-card .label {
+    font-size: clamp(9px, 0.85vw, 11px);
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    font-weight: 700;
+    color: var(--green-2);
+    margin-bottom: 4px;
+  }
+  .verdict-card .value {
+    font-size: clamp(13px, 1.2vw, 16px);
+    font-weight: 700;
+    color: var(--ink);
+  }
+  .tags-stack {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 12px;
+    justify-content: center;
+  }
+  .tag {
+    font-size: clamp(9px, 0.85vw, 11px);
+    font-weight: 600;
+    padding: 3px 9px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--muted);
+  }
+  .tag.hot {
+    background: linear-gradient(135deg, #ECFDF5, #D1FAE5);
+    color: var(--green-2);
+    border-color: rgba(16, 185, 129, 0.3);
+  }
+
+  /* ----- PHONE FRAME (used across multiple slides) ----- */
+  .phone-with-context {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: clamp(18px, 3vw, 48px);
+    align-items: center;
+    width: 100%;
+    max-width: 900px;
+    height: 100%;
+  }
+  .phone-frame {
+    width: clamp(220px, 22vw, 300px);
+    aspect-ratio: 9 / 19;
+    background: #0f0f1a;
+    border-radius: clamp(20px, 2.2vw, 32px);
+    padding: clamp(6px, 0.8vw, 10px);
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.05) inset,
+      0 20px 50px rgba(0, 0, 0, 0.4);
+    position: relative;
+    margin: 0 auto;
+  }
+  .phone-frame::before {
+    content: "";
+    position: absolute;
+    top: 6px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 30%;
+    height: 14px;
+    background: #0f0f1a;
+    border-radius: 0 0 12px 12px;
+    z-index: 2;
+  }
+  .phone-screen {
+    background: var(--bg);
+    border-radius: clamp(16px, 1.8vw, 24px);
+    overflow: hidden;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+  .phone-context {
+    display: flex;
+    flex-direction: column;
+    gap: clamp(10px, 1.4vh, 18px);
+  }
+  .context-points {
+    display: flex;
+    flex-direction: column;
+    gap: clamp(8px, 1.2vh, 14px);
+  }
+  .context-point {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    font-size: clamp(11px, 1.05vw, 14px);
+    color: var(--ink);
+    line-height: 1.5;
+  }
+  .context-point .check {
+    flex-shrink: 0;
+    width: clamp(18px, 1.8vw, 22px);
+    height: clamp(18px, 1.8vw, 22px);
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--green-1), var(--green-2));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    margin-top: 1px;
+  }
+  .context-stat {
+    background: linear-gradient(135deg, rgba(107, 114, 255, 0.08), rgba(46, 55, 254, 0.04));
+    border: 1px solid rgba(46, 55, 254, 0.15);
+    border-radius: 14px;
+    padding: clamp(12px, 1.6vh, 18px);
+    text-align: center;
+  }
+  .context-stat .big {
+    font-size: clamp(32px, 4.2vw, 56px);
+    font-weight: 800;
+    background: linear-gradient(135deg, var(--indigo-1), var(--indigo-2));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    letter-spacing: -2px;
+    line-height: 1;
+  }
+  .context-stat .desc {
+    font-size: clamp(11px, 1vw, 13px);
+    color: var(--muted);
+    margin-top: 4px;
+  }
+
+  /* ----- SLIDE 3 — Email inside phone ----- */
+  .phone-screen.email-view {
+    background: #F4F5F9;
+    padding: clamp(14px, 2vh, 20px) clamp(10px, 1.2vw, 14px) clamp(10px, 1.4vh, 14px);
+  }
+  .mini-email {
+    background: #fff;
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+  }
+  .me-header {
+    background: linear-gradient(135deg, #6B72FF 0%, #2E37FE 30%, #1C24B8 65%, #0F1880 100%);
+    padding: clamp(10px, 1.4vh, 14px) clamp(10px, 1.2vw, 14px);
+    color: #fff;
+  }
+  .me-header .eyebrow {
+    font-size: clamp(8px, 0.75vw, 10px);
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    font-weight: 700;
+    opacity: 0.85;
+  }
+  .me-header h3 {
+    font-size: clamp(13px, 1.25vw, 17px);
+    font-weight: 700;
+    letter-spacing: -0.3px;
+    margin: 3px 0 2px;
+  }
+  .me-header .at { opacity: 0.7; font-weight: 500; }
+  .me-header .tag {
+    font-size: clamp(9px, 0.8vw, 11px);
+    opacity: 0.8;
+    color: #fff;
+    background: transparent;
+    border: none;
+    padding: 0;
+    margin: 0;
+  }
+  .me-phone {
+    padding: clamp(10px, 1.4vh, 14px) clamp(10px, 1.2vw, 14px) 0;
+  }
+  .me-phone-pill {
+    background: linear-gradient(135deg, var(--green-1) 0%, var(--green-2) 100%);
+    border-radius: 10px;
+    padding: clamp(8px, 1.2vh, 12px);
+    text-align: center;
+    color: #fff;
+  }
+  .me-phone-pill .label {
+    font-size: clamp(8px, 0.75vw, 10px);
+    opacity: 0.9;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-weight: 700;
+  }
+  .me-phone-pill .number {
+    font-size: clamp(14px, 1.4vw, 19px);
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    margin-top: 2px;
+  }
+  .me-reply {
+    padding: clamp(8px, 1.2vh, 12px) clamp(10px, 1.2vw, 14px) 0;
+    flex: 1;
+  }
+  .me-reply .eyebrow {
+    font-size: clamp(8px, 0.75vw, 10px);
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+  .me-reply .quote {
+    background: var(--bg);
+    border-left: 2px solid var(--indigo-2);
+    border-radius: 0 6px 6px 0;
+    padding: clamp(6px, 1vh, 9px) clamp(8px, 1vw, 11px);
+    font-size: clamp(10px, 0.95vw, 12px);
+    color: var(--ink);
+    line-height: 1.45;
+  }
+  .me-cta {
+    padding: clamp(8px, 1.2vh, 12px);
+    text-align: center;
+  }
+  .me-cta .btn {
+    display: inline-block;
+    background: linear-gradient(135deg, var(--indigo-1), var(--indigo-2));
+    color: #fff;
+    text-decoration: none;
+    padding: clamp(7px, 1vh, 9px) clamp(14px, 2vw, 20px);
+    border-radius: 8px;
+    font-size: clamp(10px, 0.95vw, 12px);
+    font-weight: 700;
+  }
+
+  /* ----- SLIDE 4 — Tap to call inside phone ----- */
+  .phone-screen.call-view {
+    background: linear-gradient(180deg, #F4F5F9 0%, #E6EAFF 100%);
+    padding: clamp(20px, 3vh, 32px) clamp(14px, 1.8vw, 20px);
+    justify-content: center;
+    align-items: center;
+    gap: 20px;
+  }
+  .call-who {
+    text-align: center;
+    font-size: clamp(11px, 1vw, 13px);
+    color: var(--muted);
+  }
+  .call-who .name {
+    font-size: clamp(15px, 1.4vw, 19px);
+    font-weight: 700;
+    color: var(--ink);
+    letter-spacing: -0.3px;
+    margin-bottom: 2px;
+  }
+  .big-call-card {
+    background: linear-gradient(135deg, var(--green-1) 0%, var(--green-2) 100%);
+    border-radius: 16px;
+    padding: clamp(18px, 2.4vh, 28px) clamp(14px, 1.8vw, 20px);
+    text-align: center;
+    color: #fff;
+    box-shadow: 0 20px 40px rgba(16, 185, 129, 0.35);
+    position: relative;
+    width: 100%;
+  }
+  .big-call-card .label {
+    font-size: clamp(9px, 0.85vw, 11px);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    font-weight: 700;
+    opacity: 0.9;
+    margin-bottom: 6px;
+  }
+  .big-call-card .num {
+    font-size: clamp(18px, 2vw, 26px);
+    font-weight: 800;
+    letter-spacing: -0.8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+  .ripple {
+    position: absolute; top: 50%; left: 50%;
+    width: 50px; height: 50px;
+    border: 2px solid rgba(16, 185, 129, 0.5);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    opacity: 0;
+    animation: ripple 2.2s infinite ease-out;
+    pointer-events: none;
+  }
+  .ripple.r2 { animation-delay: 0.7s; }
+  .ripple.r3 { animation-delay: 1.4s; }
+  @keyframes ripple {
+    0% { width: 50px; height: 50px; opacity: 0.7; }
+    100% { width: 320px; height: 320px; opacity: 0; }
+  }
+
+  /* ----- SLIDE 5 — Portal dossier inside phone ----- */
+  .phone-screen.portal-view {
+    background: var(--bg);
+    padding: clamp(12px, 1.8vh, 16px) clamp(10px, 1.2vw, 12px);
+    gap: clamp(6px, 1vh, 10px);
+  }
+  .portal-urgency {
+    background: rgba(239, 68, 68, 0.08);
+    border: 1px solid rgba(239, 68, 68, 0.25);
+    border-radius: 9px;
+    padding: clamp(6px, 0.9vh, 8px) clamp(8px, 1vw, 10px);
+    font-size: clamp(9px, 0.85vw, 11px);
+    color: #B91C1C;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    line-height: 1.35;
+  }
+  .portal-urgency strong { font-weight: 700; }
+  .portal-card {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    padding: clamp(8px, 1.1vh, 10px) clamp(10px, 1.1vw, 12px);
+  }
+  .portal-card .name {
+    font-size: clamp(12px, 1.15vw, 15px);
+    font-weight: 700;
+    color: var(--ink);
+    margin-bottom: 2px;
+  }
+  .portal-card .badge {
+    display: inline-block;
+    font-size: clamp(8px, 0.75vw, 10px);
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: rgba(16, 185, 129, 0.12);
+    color: var(--green-2);
+    margin-left: 4px;
+    vertical-align: middle;
+  }
+  .portal-card .meta {
+    font-size: clamp(9px, 0.9vw, 11px);
+    color: var(--muted);
+    margin-top: 2px;
+  }
+  .portal-call {
+    background: linear-gradient(135deg, var(--indigo-1), var(--indigo-2));
+    color: #fff;
+    border-radius: 9px;
+    padding: clamp(8px, 1.1vh, 10px);
+    text-align: center;
+    font-weight: 700;
+    font-size: clamp(11px, 1vw, 13px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+  .portal-composer {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    padding: clamp(8px, 1.1vh, 10px) clamp(10px, 1.1vw, 12px);
+  }
+  .portal-composer .label {
+    font-size: clamp(8px, 0.75vw, 10px);
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    font-weight: 700;
+    margin-bottom: 5px;
+  }
+  .portal-composer .field {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: clamp(5px, 0.8vh, 7px) clamp(7px, 0.8vw, 9px);
+    font-size: clamp(9px, 0.9vw, 11px);
+    color: var(--ink);
+    margin-bottom: 5px;
+    min-height: 22px;
+  }
+  .portal-composer .field.body { min-height: clamp(28px, 4vh, 44px); }
+  .portal-composer .send {
+    background: linear-gradient(135deg, var(--indigo-1), var(--indigo-2));
+    color: #fff;
+    border-radius: 6px;
+    padding: clamp(5px, 0.8vh, 7px) clamp(10px, 1.2vw, 13px);
+    font-size: clamp(9px, 0.9vw, 11px);
+    font-weight: 700;
+    text-align: center;
+    display: inline-block;
+  }
+
+  /* ----- SLIDE 6 — Outcome inside phone + report email thumbnail ----- */
+  .phone-screen.outcome-view {
+    background: var(--bg);
+    padding: clamp(14px, 2vh, 18px) clamp(10px, 1.2vw, 14px);
+    justify-content: center;
+    gap: clamp(10px, 1.4vh, 14px);
+  }
+  .outcome-head {
+    font-size: clamp(10px, 0.9vw, 12px);
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-weight: 700;
+  }
+  .outcome-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: clamp(6px, 1vh, 9px);
+  }
+  .outcome-btn {
+    padding: clamp(7px, 1.1vh, 10px) clamp(8px, 1vw, 10px);
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    font-size: clamp(9px, 0.9vw, 11px);
+    color: var(--ink);
+    text-align: left;
+    font-weight: 500;
+    line-height: 1.3;
+  }
+  .outcome-btn.active {
+    border-color: var(--indigo-2);
+    background: rgba(46, 55, 254, 0.08);
+    color: var(--indigo-2);
+    font-weight: 700;
+  }
+
+  /* Weekly KPI email mini inside phone for slide 6 context */
+  .kpi-mini {
+    background: #fff;
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06);
+    border: 1px solid var(--border);
+    width: 100%;
+  }
+  .kpi-mini-head {
+    background: linear-gradient(135deg, #6B72FF, #2E37FE);
+    padding: clamp(10px, 1.4vh, 14px);
+    color: #fff;
+  }
+  .kpi-mini-head .eyebrow {
+    font-size: clamp(8px, 0.75vw, 10px);
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    opacity: 0.85;
+    font-weight: 700;
+  }
+  .kpi-mini-head .title {
+    font-size: clamp(12px, 1.15vw, 15px);
+    font-weight: 700;
+    letter-spacing: -0.3px;
+    margin-top: 2px;
+  }
+  .kpi-mini-body {
+    padding: clamp(10px, 1.4vh, 14px);
+  }
+  .kpi-mini-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+  .kpi-mini-cell {
+    flex: 1;
+    background: var(--bg);
+    border-radius: 8px;
+    padding: clamp(7px, 1vh, 10px);
+    text-align: center;
+  }
+  .kpi-mini-cell .v {
+    font-size: clamp(14px, 1.5vw, 20px);
+    font-weight: 800;
+    color: var(--ink);
+    letter-spacing: -0.5px;
+  }
+  .kpi-mini-cell .l {
+    font-size: clamp(8px, 0.75vw, 10px);
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    font-weight: 700;
+    margin-top: 1px;
+  }
+  .spark-mini {
+    height: clamp(30px, 5vh, 50px);
+    position: relative;
+  }
+  .spark-mini svg { width: 100%; height: 100%; display: block; }
+  .spark-mini .line {
+    fill: none;
+    stroke: var(--indigo-2);
+    stroke-width: 2;
+  }
+
+  /* ----- CLOSING ----- */
+  .slide.closing {
+    text-align: center;
+    align-items: center;
+    justify-content: center;
+    background: radial-gradient(ellipse at bottom, rgba(107, 114, 255, 0.1) 0%, transparent 60%), var(--bg);
+  }
+  .closing-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+  }
+  .closing h1 {
+    font-size: clamp(32px, 4.6vw, 60px);
+    font-weight: 800;
+    letter-spacing: -1.5px;
+  }
+  .closing h1 .accent {
+    background: linear-gradient(90deg, var(--indigo-1), var(--indigo-2), var(--indigo-1));
+    background-size: 200% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: shimmer 4s linear infinite;
+  }
+  .closing p {
+    font-size: clamp(15px, 1.6vw, 20px);
+    color: var(--muted);
+    max-width: 480px;
+  }
+  .recap {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    max-width: 640px;
+  }
+  .recap .chip {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 6px 14px;
+    font-size: clamp(10px, 1vw, 12px);
+    font-weight: 600;
+    color: var(--muted);
+  }
+  .recap .chip strong { color: var(--ink); }
+
+  /* ----- CONTROLS ----- */
+  .controls {
+    display: flex;
+    align-items: center;
+    gap: clamp(10px, 1.5vw, 20px);
+    color: rgba(255, 255, 255, 0.85);
+  }
+  .ctrl-btn {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #fff;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 0.2s ease, border-color 0.2s ease;
+  }
+  .ctrl-btn:hover {
+    background: rgba(255, 255, 255, 0.14);
+    border-color: rgba(255, 255, 255, 0.2);
+  }
+  .dots {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.25);
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    transition: background 0.25s ease, transform 0.25s ease;
+    position: relative;
+  }
+  .dot.active {
+    background: var(--indigo-1);
+    transform: scale(1.3);
+    box-shadow: 0 0 0 3px rgba(107, 114, 255, 0.2);
+  }
+  .step-label {
+    color: rgba(255, 255, 255, 0.65);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    min-width: 80px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
+  .progress-line {
+    position: absolute;
+    bottom: -10px;
+    left: 0;
+    height: 2px;
+    background: var(--indigo-1);
+    border-radius: 2px;
+    width: 0%;
+    transition: width 0.1s linear;
+  }
+
+  /* ----- MOBILE ADAPTIVE ----- */
+  @media (max-width: 860px) {
+    body { padding: 12px; gap: 14px; }
+    .monitor-wrap { width: 100%; }
+    .monitor-frame {
+      aspect-ratio: 4 / 5;
+      max-height: none;
+      padding: 8px 8px 10px;
+      border-radius: 14px;
+    }
+    .monitor-stand { display: none; }
+    .monitor-base { display: none; }
+    .slide { padding: 5% 6%; }
+    .slide h1 { font-size: clamp(22px, 5.5vw, 32px); }
+
+    /* Swap horizontal layouts to vertical on mobile */
+    .classifier {
+      grid-template-columns: 1fr;
+      gap: 14px;
+    }
+    .phone-with-context {
+      grid-template-columns: 1fr;
+      gap: 14px;
+    }
+    .phone-frame { width: clamp(180px, 55vw, 230px); }
+    .context-points { display: none; } /* context moves to header on mobile */
+
+    .controls { flex-wrap: wrap; justify-content: center; }
+  }
+
+  @media (max-width: 480px) {
+    .slide h1 { font-size: 22px; letter-spacing: -0.8px; }
+    .slide p.lede { font-size: 12px; }
+    .phone-frame { width: clamp(160px, 60vw, 200px); }
+    .ctrl-btn { width: 34px; height: 34px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+</style>
+</head>
+<body>
+
+<div class="monitor-wrap">
+  <div class="monitor-frame">
+    <div class="monitor-screen">
+      <div class="slides" id="slides">
+
+        <!-- SLIDE 0: Hero -->
+        <div class="slide hero active" data-dur="4500">
+          <div class="hero-content">
+            <div class="wordmark">LeadStart</div>
+            <h1>How this <span class="gradient">works</span></h1>
+            <p class="tagline">A 60-second tour of what to expect — from the first cold email to your first booked call.</p>
+          </div>
+        </div>
+
+        <!-- SLIDE 1: We send -->
+        <div class="slide" data-dur="6500">
+          <div class="slide-head">
+            <div class="step-num"><span class="dot"></span>Step 01</div>
+            <h1>We run your <span class="accent">cold campaigns</span></h1>
+            <p class="lede">Daily outreach from a real inbox on your alias domain. You don't lift a finger.</p>
+          </div>
+          <div class="slide-body">
+            <div class="send-stack" data-active-anim="send">
+              <div class="send-row" data-w="0.92" data-target="412"><div class="day">Mon</div><div class="bar-track"><div class="bar"></div></div><div class="count"><span class="num">0</span> sent</div></div>
+              <div class="send-row" data-w="0.95" data-target="428"><div class="day">Tue</div><div class="bar-track"><div class="bar"></div></div><div class="count"><span class="num">0</span> sent</div></div>
+              <div class="send-row" data-w="0.88" data-target="395"><div class="day">Wed</div><div class="bar-track"><div class="bar"></div></div><div class="count"><span class="num">0</span> sent</div></div>
+              <div class="send-row" data-w="0.97" data-target="434"><div class="day">Thu</div><div class="bar-track"><div class="bar"></div></div><div class="count"><span class="num">0</span> sent</div></div>
+              <div class="send-row" data-w="0.90" data-target="404"><div class="day">Fri</div><div class="bar-track"><div class="bar"></div></div><div class="count"><span class="num">0</span> sent</div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- SLIDE 2: AI catches -->
+        <div class="slide" data-dur="6500">
+          <div class="slide-head">
+            <div class="step-num"><span class="dot"></span>Step 02</div>
+            <h1>AI catches <span class="accent">every hot reply</span></h1>
+            <p class="lede">Real interest, meeting requests, and qualifying questions get flagged in seconds. Auto-replies and unsubscribes get filtered out.</p>
+          </div>
+          <div class="slide-body">
+            <div class="classifier" data-active-anim="classifier">
+              <div class="reply-bubble">
+                <div class="from">Sarah Chen · 2:14 PM</div>
+                Thanks for reaching out — this is actually really timely. We just wrapped a board review and cold outreach is one of the gaps. Can you do a quick call tomorrow afternoon?
+                <div class="scan-sweep"></div>
+              </div>
+              <div class="arrow-flow">
+                <div class="ai-badge">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"></path>
+                    <path d="M20 3v4"></path><path d="M22 5h-4"></path>
+                  </svg>
+                </div>
+                <svg class="arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                  <polyline points="12 5 19 12 12 19"></polyline>
+                </svg>
+              </div>
+              <div>
+                <div class="verdict-card">
+                  <div class="label">Verdict</div>
+                  <div class="value">Hot — Interested</div>
+                </div>
+                <div class="tags-stack">
+                  <span class="tag hot">Interested</span>
+                  <span class="tag hot">Meeting</span>
+                  <span class="tag hot">Question</span>
+                  <span class="tag">OOO</span>
+                  <span class="tag">Unsubscribe</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- SLIDE 3: You get the email (PHONE) -->
+        <div class="slide" data-dur="6500">
+          <div class="slide-head">
+            <div class="step-num"><span class="dot"></span>Step 03</div>
+            <h1>You get this email — <span class="accent">within 2 minutes</span></h1>
+            <p class="lede">One alert per hot lead, on the device you already have in your pocket. Their phone number. Their reply.</p>
+          </div>
+          <div class="slide-body">
+            <div class="phone-with-context">
+              <div class="phone-frame">
+                <div class="phone-screen email-view">
+                  <div class="mini-email">
+                    <div class="me-header">
+                      <div class="eyebrow">🔔 Hot lead</div>
+                      <h3>Sarah Chen <span class="at">@ Acme</span></h3>
+                      <div class="tag">Call them now — every minute matters.</div>
+                    </div>
+                    <div class="me-phone">
+                      <div class="me-phone-pill">
+                        <div class="label">Call now</div>
+                        <div class="number">📞 (415) 555-0142</div>
+                      </div>
+                    </div>
+                    <div class="me-reply">
+                      <div class="eyebrow">Their reply</div>
+                      <div class="quote">Thanks for reaching out — this is actually really timely. Can you do a quick call tomorrow?</div>
+                    </div>
+                    <div class="me-cta">
+                      <a href="#" class="btn">View Full Reply →</a>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="phone-context">
+                <div class="context-points">
+                  <div class="context-point">
+                    <div class="check">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    </div>
+                    One alert per hot lead. Never a digest.
+                  </div>
+                  <div class="context-point">
+                    <div class="check">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    </div>
+                    Includes the prospect's phone number.
+                  </div>
+                  <div class="context-point">
+                    <div class="check">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    </div>
+                    Works on any device — email, no app required.
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- SLIDE 4: Tap to call (PHONE) -->
+        <div class="slide" data-dur="6500">
+          <div class="slide-head">
+            <div class="step-num"><span class="dot"></span>Step 04</div>
+            <h1>Call within <span class="accent">5 minutes</span></h1>
+            <p class="lede">Tap the green number. Your phone dials. That's it.</p>
+          </div>
+          <div class="slide-body">
+            <div class="phone-with-context">
+              <div class="phone-frame">
+                <div class="phone-screen call-view">
+                  <div class="call-who">
+                    <div class="name">Sarah Chen</div>
+                    <div>Acme Corp · VP Marketing</div>
+                  </div>
+                  <div class="big-call-card">
+                    <div class="ripple"></div>
+                    <div class="ripple r2"></div>
+                    <div class="ripple r3"></div>
+                    <div class="label">Tap to call</div>
+                    <div class="num">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+                      </svg>
+                      <span>(415) 555-0142</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="phone-context">
+                <div class="context-stat">
+                  <div class="big">4&times;</div>
+                  <div class="desc">more meetings booked when you call within 5 minutes</div>
+                </div>
+                <div class="context-points">
+                  <div class="context-point">
+                    <div class="check">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    </div>
+                    One tap to dial.
+                  </div>
+                  <div class="context-point">
+                    <div class="check">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    </div>
+                    You talk directly — no middleman.
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- SLIDE 5: Portal reply (PHONE) -->
+        <div class="slide" data-dur="7000">
+          <div class="slide-head">
+            <div class="step-num"><span class="dot"></span>Step 05</div>
+            <h1>Or reply <span class="accent">from your portal</span></h1>
+            <p class="lede">Can't call right now? Type a reply. We send it from the mailbox the prospect replied to — your inbox stays CC'd so the thread continues there.</p>
+          </div>
+          <div class="slide-body">
+            <div class="phone-with-context">
+              <div class="phone-frame">
+                <div class="phone-screen portal-view">
+                  <div class="portal-urgency">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <line x1="12" y1="8" x2="12" y2="12"></line>
+                      <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                    </svg>
+                    <div><strong>Received 3 min ago.</strong> Call now.</div>
+                  </div>
+                  <div class="portal-card">
+                    <div class="name">Sarah Chen <span class="badge">Interested</span></div>
+                    <div class="meta">Acme Corp · VP Marketing</div>
+                  </div>
+                  <div class="portal-call">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+                    </svg>
+                    Call (415) 555-0142
+                  </div>
+                  <div class="portal-composer">
+                    <div class="label">Reply via portal</div>
+                    <div class="field">Re: Quick intro — LeadStart x Acme</div>
+                    <div class="field body">Hi Sarah — happy to grab 20 min tomorrow. Does 2pm PT work?</div>
+                    <div class="send">Send reply</div>
+                  </div>
+                </div>
+              </div>
+              <div class="phone-context">
+                <div class="context-points">
+                  <div class="context-point">
+                    <div class="check">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    </div>
+                    Type a reply. Send from the portal.
+                  </div>
+                  <div class="context-point">
+                    <div class="check">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    </div>
+                    Sends from the mailbox the prospect replied to.
+                  </div>
+                  <div class="context-point">
+                    <div class="check">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    </div>
+                    CC'd to your inbox so the thread continues there.
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- SLIDE 6: Log outcome + weekly report (PHONE) -->
+        <div class="slide" data-dur="7000">
+          <div class="slide-head">
+            <div class="step-num"><span class="dot"></span>Step 06</div>
+            <h1>Log it. <span class="accent">Get the digest.</span></h1>
+            <p class="lede">One click after each call so we learn what's working. Every Monday, a clean weekly report lands in your inbox.</p>
+          </div>
+          <div class="slide-body">
+            <div class="phone-with-context">
+              <div class="phone-frame">
+                <div class="phone-screen outcome-view">
+                  <div class="outcome-head">What happened?</div>
+                  <div class="outcome-grid">
+                    <div class="outcome-btn active">Booked a meeting</div>
+                    <div class="outcome-btn">Spoke, follow-up</div>
+                    <div class="outcome-btn">Left voicemail</div>
+                    <div class="outcome-btn">Not a fit</div>
+                  </div>
+                </div>
+              </div>
+              <div class="phone-context">
+                <div class="kpi-mini">
+                  <div class="kpi-mini-head">
+                    <div class="eyebrow">📊 Weekly KPI report</div>
+                    <div class="title">Week of Apr 17 — Apr 23</div>
+                  </div>
+                  <div class="kpi-mini-body">
+                    <div class="kpi-mini-row">
+                      <div class="kpi-mini-cell"><div class="v">2,073</div><div class="l">Sent</div></div>
+                      <div class="kpi-mini-cell"><div class="v">38%</div><div class="l">Open</div></div>
+                      <div class="kpi-mini-cell"><div class="v">11</div><div class="l">Hot</div></div>
+                    </div>
+                    <div class="spark-mini">
+                      <svg viewBox="0 0 200 50" preserveAspectRatio="none">
+                        <path class="line" d="M0,40 L25,32 L50,36 L75,22 L100,28 L125,18 L150,24 L175,12 L200,16"></path>
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- SLIDE 7: Closing -->
+        <div class="slide closing" data-dur="5500">
+          <div class="closing-content">
+            <h1>That's the <span class="accent">whole loop</span>.</h1>
+            <p>Real replies. Fast alerts. Your call.</p>
+            <div class="recap">
+              <div class="chip"><strong>01</strong> We send</div>
+              <div class="chip"><strong>02</strong> AI flags</div>
+              <div class="chip"><strong>03</strong> You're alerted</div>
+              <div class="chip"><strong>04</strong> You call</div>
+              <div class="chip"><strong>05</strong> Or portal-reply</div>
+              <div class="chip"><strong>06</strong> Log + report</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+  <div class="monitor-stand"></div>
+  <div class="monitor-base"></div>
+</div>
+
+<div class="controls">
+  <button class="ctrl-btn" id="prevBtn" title="Previous" aria-label="Previous slide">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+  </button>
+  <button class="ctrl-btn" id="playBtn" title="Play/Pause" aria-label="Play or pause">
+    <svg id="pauseIcon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"></rect><rect x="14" y="5" width="4" height="14" rx="1"></rect></svg>
+    <svg id="playIcon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="display:none"><polygon points="6 4 20 12 6 20"></polygon></svg>
+  </button>
+  <div class="dots" id="dots"></div>
+  <div class="step-label" id="stepLabel">01 / 08</div>
+  <button class="ctrl-btn" id="nextBtn" title="Next" aria-label="Next slide">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+  </button>
+</div>
+
+<script>
+  const slides = [...document.querySelectorAll('.slide')];
+  const dotsContainer = document.getElementById('dots');
+  const prevBtn = document.getElementById('prevBtn');
+  const nextBtn = document.getElementById('nextBtn');
+  const playBtn = document.getElementById('playBtn');
+  const pauseIcon = document.getElementById('pauseIcon');
+  const playIcon = document.getElementById('playIcon');
+  const stepLabel = document.getElementById('stepLabel');
+
+  let currentIdx = 0;
+  let playing = true;
+  let timer = null;
+  let progressTimer = null;
+
+  // Build dots
+  slides.forEach((_, i) => {
+    const d = document.createElement('button');
+    d.className = 'dot';
+    d.setAttribute('aria-label', `Go to slide ${i + 1}`);
+    d.addEventListener('click', () => goTo(i));
+    dotsContainer.appendChild(d);
+  });
+  const dots = [...dotsContainer.querySelectorAll('.dot')];
+
+  function updateStepLabel() {
+    const n = String(currentIdx + 1).padStart(2, '0');
+    const tot = String(slides.length).padStart(2, '0');
+    stepLabel.textContent = `${n} / ${tot}`;
+  }
+
+  function resetSlideAnimations(slide) {
+    // Reset send-stack bars + counters
+    slide.querySelectorAll('.send-row').forEach(row => {
+      row.querySelector('.bar').style.transform = 'scaleX(0)';
+      row.querySelector('.num').textContent = '0';
+    });
+    // Reset scan sweep position
+    const sweep = slide.querySelector('.scan-sweep');
+    if (sweep) {
+      sweep.style.left = '-40%';
+      sweep.style.opacity = '0';
+    }
+  }
+
+  function runSlideAnimations(slide) {
+    // Send stack — bars + counters
+    const rows = slide.querySelectorAll('.send-row');
+    rows.forEach((row, i) => {
+      const bar = row.querySelector('.bar');
+      const num = row.querySelector('.num');
+      const target = parseInt(row.dataset.target, 10);
+      const w = parseFloat(row.dataset.w);
+      setTimeout(() => {
+        bar.style.transition = 'transform 0.9s cubic-bezier(0.25, 1, 0.5, 1)';
+        bar.style.transform = `scaleX(${w})`;
+        // Count up
+        const start = performance.now();
+        const dur = 900;
+        function tick(t) {
+          const p = Math.min((t - start) / dur, 1);
+          const eased = 1 - Math.pow(1 - p, 3);
+          num.textContent = Math.round(target * eased).toLocaleString();
+          if (p < 1) requestAnimationFrame(tick);
+        }
+        requestAnimationFrame(tick);
+      }, 200 + i * 130);
+    });
+
+    // Scan sweep on classifier slide
+    const sweep = slide.querySelector('.scan-sweep');
+    if (sweep) {
+      setTimeout(() => {
+        sweep.style.transition = 'opacity 0.2s linear';
+        sweep.style.opacity = '1';
+        sweep.style.transition = 'left 1.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s linear';
+        requestAnimationFrame(() => {
+          sweep.style.left = '105%';
+        });
+        setTimeout(() => { sweep.style.opacity = '0'; }, 1400);
+      }, 500);
+    }
+  }
+
+  function show(idx) {
+    // Deactivate current
+    slides[currentIdx].classList.remove('active');
+    resetSlideAnimations(slides[currentIdx]);
+
+    currentIdx = (idx + slides.length) % slides.length;
+    slides[currentIdx].classList.add('active');
+    dots.forEach((d, i) => d.classList.toggle('active', i === currentIdx));
+    updateStepLabel();
+
+    // Kick off slide-specific animations after fade-in
+    setTimeout(() => runSlideAnimations(slides[currentIdx]), 300);
+
+    // Reset + start progress ring on the active dot
+    startProgress();
+  }
+
+  function next() { show(currentIdx + 1); }
+  function prev() { show(currentIdx - 1); }
+  function goTo(i) { show(i); }
+
+  function startProgress() {
+    clearTimeout(timer);
+    cancelAnimationFrame(progressTimer);
+    // Remove any existing progress line
+    document.querySelectorAll('.progress-line').forEach(n => n.remove());
+
+    const dur = parseInt(slides[currentIdx].dataset.dur || '6000', 10);
+    const dot = dots[currentIdx];
+    const line = document.createElement('div');
+    line.className = 'progress-line';
+    dot.appendChild(line);
+
+    if (!playing) return;
+
+    const start = performance.now();
+    function tick(t) {
+      const elapsed = t - start;
+      const pct = Math.min((elapsed / dur) * 100, 100);
+      line.style.width = pct + '%';
+      if (elapsed < dur) {
+        progressTimer = requestAnimationFrame(tick);
+      }
+    }
+    progressTimer = requestAnimationFrame(tick);
+
+    timer = setTimeout(next, dur);
+  }
+
+  function togglePlay() {
+    playing = !playing;
+    pauseIcon.style.display = playing ? '' : 'none';
+    playIcon.style.display = playing ? 'none' : '';
+    if (playing) {
+      startProgress();
+    } else {
+      clearTimeout(timer);
+      cancelAnimationFrame(progressTimer);
+    }
+  }
+
+  // Wire controls
+  prevBtn.addEventListener('click', () => { prev(); });
+  nextBtn.addEventListener('click', () => { next(); });
+  playBtn.addEventListener('click', togglePlay);
+
+  // Keyboard
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowRight') next();
+    else if (e.key === 'ArrowLeft') prev();
+    else if (e.key === ' ') { e.preventDefault(); togglePlay(); }
+  });
+
+  // Initial kick
+  updateStepLabel();
+  setTimeout(() => runSlideAnimations(slides[0]), 200);
+  startProgress();
+</script>
+
+</body>
+</html>

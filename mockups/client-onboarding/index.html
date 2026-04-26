@@ -1,0 +1,1093 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>How LeadStart Works — A 60-second tour</title>
+<style>
+  :root {
+    --ink: #1A1A2E;
+    --muted: #6B6E8A;
+    --faint: #9194AD;
+    --bg: #F4F5F9;
+    --surface: #FFFFFF;
+    --border: #E2E3ED;
+    --border-strong: #D4D7E9;
+    --indigo-1: #6B72FF;
+    --indigo-2: #2E37FE;
+    --indigo-3: #1C24B8;
+    --indigo-4: #0F1880;
+    --green-1: #10b981;
+    --green-2: #059669;
+    --amber-bg: #FEF3C7;
+    --amber-border: #FCD34D;
+    --amber-text: #92400E;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+    line-height: 1.5;
+    overflow-x: hidden;
+  }
+
+  /* Top progress bar */
+  .progress {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: rgba(46, 55, 254, 0.1);
+    z-index: 100;
+  }
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--indigo-1), var(--indigo-2));
+    width: 0%;
+    transition: width 0.1s ease-out;
+  }
+
+  /* Section frame */
+  section {
+    min-height: 100vh;
+    padding: 80px 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+
+  .container {
+    width: 100%;
+    max-width: 720px;
+    margin: 0 auto;
+  }
+
+  /* Step header */
+  .step-num {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--indigo-2);
+    text-transform: uppercase;
+    letter-spacing: 1.8px;
+    margin-bottom: 16px;
+  }
+  .step-num .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--indigo-2);
+  }
+
+  h1.headline {
+    font-size: clamp(28px, 5vw, 44px);
+    font-weight: 800;
+    letter-spacing: -1px;
+    line-height: 1.1;
+    margin-bottom: 14px;
+    color: var(--ink);
+  }
+  h1.headline .accent {
+    background: linear-gradient(90deg, var(--indigo-1), var(--indigo-2));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  p.lede {
+    font-size: clamp(15px, 2vw, 17px);
+    color: var(--muted);
+    max-width: 560px;
+    margin-bottom: 40px;
+    line-height: 1.55;
+  }
+
+  /* HERO */
+  .hero {
+    text-align: center;
+    background: radial-gradient(ellipse at top, rgba(107, 114, 255, 0.12) 0%, transparent 50%), var(--bg);
+  }
+  .hero .wordmark {
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    color: var(--indigo-2);
+    text-transform: uppercase;
+    margin-bottom: 32px;
+  }
+  .hero h1 {
+    font-size: clamp(40px, 7vw, 64px);
+    font-weight: 800;
+    letter-spacing: -2px;
+    line-height: 1.05;
+    margin-bottom: 18px;
+  }
+  .hero h1 .gradient {
+    background: linear-gradient(90deg, var(--indigo-1), var(--indigo-2), var(--indigo-3));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .hero p {
+    font-size: clamp(16px, 2.2vw, 20px);
+    color: var(--muted);
+    max-width: 540px;
+    margin: 0 auto 48px;
+  }
+  .scroll-hint {
+    position: absolute;
+    bottom: 40px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: var(--faint);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    font-weight: 600;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    animation: bounce 2s infinite ease-in-out;
+  }
+  .scroll-hint svg { opacity: 0.7; }
+  @keyframes bounce {
+    0%, 100% { transform: translateX(-50%) translateY(0); }
+    50% { transform: translateX(-50%) translateY(8px); }
+  }
+
+  /* Reusable visual card */
+  .visual {
+    width: 100%;
+    margin-top: 8px;
+  }
+
+  /* Section 2 — daily campaign visual */
+  .send-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    align-items: stretch;
+  }
+  .send-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 18px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+  }
+  .send-row .day {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    font-weight: 700;
+    color: var(--muted);
+    width: 50px;
+    flex-shrink: 0;
+  }
+  .send-row .bar {
+    flex: 1;
+    height: 8px;
+    background: linear-gradient(90deg, var(--indigo-1), var(--indigo-2));
+    border-radius: 4px;
+    transform-origin: left;
+    transform: scaleX(0);
+    transition: transform 0.6s ease-out;
+  }
+  .send-row.in-view .bar { transform: scaleX(var(--w, 1)); }
+  .send-row .count {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink);
+    min-width: 70px;
+    text-align: right;
+  }
+
+  /* Section 3 — classifier flow */
+  .classifier {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 20px;
+    align-items: center;
+  }
+  .reply-bubble {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    font-size: 13px;
+    color: var(--ink);
+    line-height: 1.5;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  }
+  .reply-bubble .from {
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+  .arrow-flow {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+  .ai-badge {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--indigo-1), var(--indigo-2));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    box-shadow: 0 6px 20px rgba(46, 55, 254, 0.3);
+    animation: pulse-ai 2.5s infinite;
+  }
+  @keyframes pulse-ai {
+    0%, 100% { box-shadow: 0 6px 20px rgba(46, 55, 254, 0.3); }
+    50% { box-shadow: 0 6px 30px rgba(46, 55, 254, 0.55); }
+  }
+  .arrow-flow .arrow { color: var(--faint); }
+  .tags-stack {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .tag {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--muted);
+  }
+  .tag.hot {
+    background: linear-gradient(135deg, #ECFDF5, #D1FAE5);
+    color: var(--green-2);
+    border-color: rgba(16, 185, 129, 0.3);
+  }
+  .verdict-card {
+    background: var(--surface);
+    border: 2px solid var(--green-1);
+    border-radius: 12px;
+    padding: 16px;
+    text-align: center;
+    box-shadow: 0 4px 16px rgba(16, 185, 129, 0.18);
+  }
+  .verdict-card .label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    font-weight: 700;
+    color: var(--green-2);
+    margin-bottom: 4px;
+  }
+  .verdict-card .value {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--ink);
+  }
+
+  @media (max-width: 640px) {
+    .classifier { grid-template-columns: 1fr; }
+    .arrow-flow { flex-direction: row; justify-content: center; padding: 8px 0; }
+    .arrow-flow .arrow { transform: rotate(-90deg); }
+  }
+
+  /* Section 4 — Email mockup (mirrors src/lib/notifications/client-email.ts) */
+  .email {
+    width: 100%;
+    max-width: 540px;
+    margin: 0 auto;
+    background: var(--surface);
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.08);
+  }
+  .email-header {
+    background: linear-gradient(135deg, #6B72FF 0%, #2E37FE 30%, #1C24B8 65%, #0F1880 100%);
+    padding: 26px 28px;
+    color: #fff;
+  }
+  .email-header .eyebrow {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.75);
+    margin-bottom: 8px;
+  }
+  .email-header h2 {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.4px;
+    margin: 0 0 6px;
+  }
+  .email-header h2 .at {
+    color: rgba(255, 255, 255, 0.7);
+    font-weight: 500;
+  }
+  .email-header .tagline {
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.7);
+  }
+  .email-phone {
+    padding: 20px 28px 0;
+  }
+  .phone-pill {
+    background: linear-gradient(135deg, var(--green-1) 0%, var(--green-2) 100%);
+    border-radius: 14px;
+    padding: 18px;
+    text-align: center;
+    color: #fff;
+  }
+  .phone-pill .label {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.85);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+  .phone-pill .number {
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+  }
+  .email-reply {
+    padding: 22px 28px 8px;
+  }
+  .email-reply .eyebrow {
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    font-weight: 600;
+    margin-bottom: 10px;
+  }
+  .reply-quote {
+    background: var(--bg);
+    border-left: 3px solid var(--indigo-2);
+    border-radius: 0 8px 8px 0;
+    padding: 14px 16px;
+    font-size: 13px;
+    color: var(--ink);
+    line-height: 1.55;
+  }
+  .email-cta {
+    padding: 18px 28px 24px;
+    text-align: center;
+  }
+  .btn-primary-email {
+    display: inline-block;
+    background: linear-gradient(135deg, var(--indigo-1), var(--indigo-2));
+    color: #fff !important;
+    text-decoration: none;
+    padding: 13px 32px;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: -0.2px;
+  }
+  .or-divider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    max-width: 280px;
+    margin: 16px auto 0;
+  }
+  .or-divider .line {
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+  .or-divider .or {
+    font-size: 10px;
+    color: var(--faint);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    font-weight: 600;
+  }
+  .btn-ghost-email {
+    display: inline-block;
+    background: var(--surface);
+    color: var(--indigo-2) !important;
+    text-decoration: none;
+    padding: 11px 26px;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: -0.2px;
+    border: 1.5px solid var(--border-strong);
+    margin-top: 14px;
+  }
+  .email-foot {
+    padding: 14px 22px;
+    border-top: 1px solid var(--border);
+    font-size: 11px;
+    color: var(--muted);
+    text-align: center;
+  }
+
+  /* Section 5 — Tap to call */
+  .tap-stage {
+    position: relative;
+    width: 100%;
+    max-width: 360px;
+    margin: 0 auto;
+    padding: 32px 0;
+  }
+  .big-call {
+    background: linear-gradient(135deg, var(--green-1) 0%, var(--green-2) 100%);
+    border-radius: 20px;
+    padding: 36px 24px;
+    text-align: center;
+    color: #fff;
+    box-shadow: 0 20px 50px rgba(16, 185, 129, 0.3);
+    position: relative;
+  }
+  .big-call .label {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.85);
+    margin-bottom: 8px;
+  }
+  .big-call .num {
+    font-size: 36px;
+    font-weight: 800;
+    letter-spacing: -1px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+  }
+  .ripple {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 60px;
+    height: 60px;
+    border: 2px solid var(--green-1);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    opacity: 0;
+    animation: ripple 2s infinite ease-out;
+    pointer-events: none;
+  }
+  .ripple.r2 { animation-delay: 0.7s; }
+  .ripple.r3 { animation-delay: 1.4s; }
+  @keyframes ripple {
+    0% { width: 60px; height: 60px; opacity: 0.6; }
+    100% { width: 320px; height: 320px; opacity: 0; }
+  }
+  .stat-band {
+    margin-top: 36px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 18px 22px;
+    text-align: center;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+  }
+  .stat-band .big {
+    font-size: 32px;
+    font-weight: 800;
+    background: linear-gradient(90deg, var(--indigo-1), var(--indigo-2));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    letter-spacing: -1px;
+  }
+  .stat-band .desc {
+    font-size: 13px;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+
+  /* Section 6 — Portal dossier */
+  .phone-frame {
+    width: 100%;
+    max-width: 360px;
+    margin: 0 auto;
+    background: #1a1a2e;
+    border-radius: 36px;
+    padding: 12px;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.18);
+  }
+  .phone-screen {
+    background: var(--bg);
+    border-radius: 26px;
+    padding: 18px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-height: 580px;
+    overflow: hidden;
+  }
+  .urgency {
+    background: rgba(239, 68, 68, 0.08);
+    border: 1px solid rgba(239, 68, 68, 0.25);
+    border-radius: 12px;
+    padding: 10px 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: #B91C1C;
+  }
+  .urgency strong { font-weight: 700; }
+  .prospect-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px;
+  }
+  .prospect-card .name {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--ink);
+    margin-bottom: 2px;
+  }
+  .prospect-card .badge {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: rgba(16, 185, 129, 0.12);
+    color: var(--green-2);
+    margin-left: 6px;
+    vertical-align: middle;
+  }
+  .prospect-card .meta {
+    font-size: 12px;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 2px;
+  }
+  .call-btn-mini {
+    background: linear-gradient(135deg, var(--indigo-1), var(--indigo-2));
+    color: #fff;
+    border-radius: 12px;
+    padding: 14px;
+    text-align: center;
+    font-weight: 700;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+  .reply-mini {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 14px;
+  }
+  .reply-mini .label {
+    font-size: 10px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+  .reply-mini .body {
+    font-size: 12px;
+    color: var(--ink);
+    line-height: 1.45;
+  }
+  .composer-mini {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 14px;
+  }
+  .composer-mini .label {
+    font-size: 10px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+  .composer-mini .field {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 12px;
+    color: var(--ink);
+    margin-bottom: 6px;
+  }
+  .composer-mini .field.body { min-height: 50px; }
+  .composer-mini .send {
+    background: linear-gradient(135deg, var(--indigo-1), var(--indigo-2));
+    color: #fff;
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-size: 12px;
+    font-weight: 600;
+    text-align: center;
+    margin-top: 4px;
+    display: inline-block;
+  }
+  .frame-cap {
+    text-align: center;
+    margin-top: 20px;
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  /* Section 7 — Outcome + report */
+  .panel-pair {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    align-items: stretch;
+  }
+  @media (max-width: 720px) {
+    .panel-pair { grid-template-columns: 1fr; }
+  }
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+  }
+  .panel .panel-title {
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-weight: 700;
+    margin-bottom: 14px;
+  }
+  .outcome-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .outcome-btn {
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    font-size: 12px;
+    color: var(--ink);
+    text-align: left;
+    font-weight: 500;
+  }
+  .outcome-btn.active {
+    border-color: var(--indigo-2);
+    background: rgba(46, 55, 254, 0.08);
+    color: var(--indigo-2);
+    font-weight: 600;
+  }
+  .kpi-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .kpi-cell {
+    flex: 1;
+    background: var(--bg);
+    border-radius: 10px;
+    padding: 10px 12px;
+    text-align: center;
+  }
+  .kpi-cell .v {
+    font-size: 18px;
+    font-weight: 800;
+    color: var(--ink);
+    letter-spacing: -0.5px;
+  }
+  .kpi-cell .l {
+    font-size: 10px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    font-weight: 600;
+    margin-top: 2px;
+  }
+  .spark {
+    height: 50px;
+    width: 100%;
+    background: linear-gradient(180deg, rgba(46, 55, 254, 0.18) 0%, rgba(46, 55, 254, 0) 100%);
+    border-radius: 8px;
+    position: relative;
+    overflow: hidden;
+  }
+  .spark svg { width: 100%; height: 100%; }
+
+  /* Closing */
+  .closing {
+    text-align: center;
+    background: linear-gradient(180deg, var(--bg) 0%, rgba(107, 114, 255, 0.08) 100%);
+  }
+  .closing h2 {
+    font-size: clamp(32px, 5vw, 48px);
+    font-weight: 800;
+    letter-spacing: -1.5px;
+    margin-bottom: 14px;
+  }
+  .closing h2 .accent {
+    background: linear-gradient(90deg, var(--indigo-1), var(--indigo-2));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .closing p {
+    font-size: 18px;
+    color: var(--muted);
+    max-width: 480px;
+    margin: 0 auto 32px;
+  }
+  .recap {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 12px;
+    max-width: 600px;
+    margin: 0 auto;
+  }
+  .recap .chip {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 8px 16px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted);
+  }
+  .recap .chip strong { color: var(--ink); }
+  .footer-mark {
+    margin-top: 60px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+    width: 100%;
+    max-width: 480px;
+    text-align: center;
+    font-size: 12px;
+    color: var(--faint);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+
+  /* Reveal-on-scroll */
+  .reveal {
+    opacity: 0;
+    transform: translateY(24px);
+    transition: opacity 0.7s ease-out, transform 0.7s ease-out;
+  }
+  .reveal.in-view {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  .reveal.delay-1 { transition-delay: 0.1s; }
+  .reveal.delay-2 { transition-delay: 0.2s; }
+  .reveal.delay-3 { transition-delay: 0.3s; }
+</style>
+</head>
+<body>
+
+<div class="progress"><div class="progress-fill" id="progressFill"></div></div>
+
+<!-- =================== HERO =================== -->
+<section class="hero">
+  <div class="container">
+    <div class="wordmark reveal">LeadStart</div>
+    <h1 class="reveal delay-1">How this <span class="gradient">works</span></h1>
+    <p class="reveal delay-2">A 60-second tour of what to expect — from the first cold email to your first booked call.</p>
+  </div>
+  <div class="scroll-hint">
+    <span>Scroll</span>
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="6 9 12 15 18 9"></polyline>
+    </svg>
+  </div>
+</section>
+
+<!-- =================== STEP 1: We send =================== -->
+<section>
+  <div class="container">
+    <div class="step-num reveal"><span class="dot"></span>Step 01</div>
+    <h1 class="headline reveal delay-1">We run your <span class="accent">cold campaigns</span></h1>
+    <p class="lede reveal delay-2">Daily outreach goes out from a real inbox on your alias domain. You don't lift a finger.</p>
+
+    <div class="visual reveal delay-3">
+      <div class="send-stack">
+        <div class="send-row" style="--w: 0.92"><div class="day">Mon</div><div class="bar"></div><div class="count">412 sent</div></div>
+        <div class="send-row" style="--w: 0.95"><div class="day">Tue</div><div class="bar"></div><div class="count">428 sent</div></div>
+        <div class="send-row" style="--w: 0.88"><div class="day">Wed</div><div class="bar"></div><div class="count">395 sent</div></div>
+        <div class="send-row" style="--w: 0.97"><div class="day">Thu</div><div class="bar"></div><div class="count">434 sent</div></div>
+        <div class="send-row" style="--w: 0.90"><div class="day">Fri</div><div class="bar"></div><div class="count">404 sent</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- =================== STEP 2: AI watches =================== -->
+<section>
+  <div class="container">
+    <div class="step-num reveal"><span class="dot"></span>Step 02</div>
+    <h1 class="headline reveal delay-1">AI catches <span class="accent">every hot reply</span></h1>
+    <p class="lede reveal delay-2">Every response is read in seconds. Real interest, meeting requests, and qualifying questions get flagged. Auto-replies and unsubscribes get filtered out.</p>
+
+    <div class="visual reveal delay-3">
+      <div class="classifier">
+        <div class="reply-bubble">
+          <div class="from">Sarah Chen · 2:14 PM</div>
+          Thanks for reaching out — this is actually really timely. We just wrapped a board review and cold outreach is one of the gaps. Can you do a quick call tomorrow afternoon?
+        </div>
+        <div class="arrow-flow">
+          <div class="ai-badge">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"></path>
+              <path d="M20 3v4"></path>
+              <path d="M22 5h-4"></path>
+              <path d="M4 17v2"></path>
+              <path d="M5 18H3"></path>
+            </svg>
+          </div>
+          <svg class="arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+            <polyline points="12 5 19 12 12 19"></polyline>
+          </svg>
+        </div>
+        <div>
+          <div class="verdict-card">
+            <div class="label">Verdict</div>
+            <div class="value">Hot — Interested</div>
+          </div>
+          <div class="tags-stack" style="margin-top: 12px; justify-content: center;">
+            <span class="tag hot">Interested</span>
+            <span class="tag hot">Meeting</span>
+            <span class="tag hot">Question</span>
+            <span class="tag">OOO</span>
+            <span class="tag">Unsubscribe</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- =================== STEP 3: You get the email =================== -->
+<section>
+  <div class="container">
+    <div class="step-num reveal"><span class="dot"></span>Step 03</div>
+    <h1 class="headline reveal delay-1">You get this email — <span class="accent">within 2 minutes</span></h1>
+    <p class="lede reveal delay-2">One alert per hot lead. Their phone number. Their reply in your inbox. No noise, no daily digest, no app to open.</p>
+
+    <div class="visual reveal delay-3">
+      <div class="email">
+        <div class="email-header">
+          <div class="eyebrow">🔔 Hot lead</div>
+          <h2>Sarah Chen <span class="at">@ Acme Corp</span></h2>
+          <div class="tagline">A hot lead just replied. Call them now — every minute matters.</div>
+        </div>
+        <div class="email-phone">
+          <div class="phone-pill">
+            <div class="label">Call now</div>
+            <div class="number">📞 +1 (415) 555-0142</div>
+          </div>
+        </div>
+        <div class="email-reply">
+          <div class="eyebrow">Their reply · Wed, 2:14 PM PST</div>
+          <div class="reply-quote">Thanks for reaching out — this is actually really timely. We just wrapped a board review and cold outreach is one of the gaps. Can you do a quick call tomorrow afternoon?</div>
+        </div>
+        <div class="email-cta">
+          <a href="#" class="btn-primary-email">View Full Reply &rarr;</a>
+          <div class="or-divider"><div class="line"></div><div class="or">or</div><div class="line"></div></div>
+          <a href="#" class="btn-ghost-email">Open in Portal</a>
+        </div>
+        <div class="email-foot">Sent by <strong style="color: var(--ink);">LeadStart</strong> · Cold email done right</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- =================== STEP 4: Tap to call =================== -->
+<section>
+  <div class="container">
+    <div class="step-num reveal"><span class="dot"></span>Step 04</div>
+    <h1 class="headline reveal delay-1">Call within <span class="accent">5 minutes</span></h1>
+    <p class="lede reveal delay-2">Tap the green number. Your phone dials. That's it.</p>
+
+    <div class="visual reveal delay-3">
+      <div class="tap-stage">
+        <div class="big-call">
+          <div class="ripple"></div>
+          <div class="ripple r2"></div>
+          <div class="ripple r3"></div>
+          <div class="label">Tap to call</div>
+          <div class="num">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+            </svg>
+            <span>(415) 555-0142</span>
+          </div>
+        </div>
+        <div class="stat-band">
+          <div class="big">4&times;</div>
+          <div class="desc">more meetings booked when you call within 5 minutes</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- =================== STEP 5: Portal dossier + composer =================== -->
+<section>
+  <div class="container">
+    <div class="step-num reveal"><span class="dot"></span>Step 05</div>
+    <h1 class="headline reveal delay-1">Or reply <span class="accent">from your portal</span></h1>
+    <p class="lede reveal delay-2">If you can't call right now, type a reply in the portal. We send it from the same inbox the prospect replied to — they never know it came through us.</p>
+
+    <div class="visual reveal delay-3">
+      <div class="phone-frame">
+        <div class="phone-screen">
+          <div class="urgency">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="8" x2="12" y2="12"></line>
+              <line x1="12" y1="16" x2="12.01" y2="16"></line>
+            </svg>
+            <div><strong>Received 3 minutes ago.</strong> Every minute matters — call now.</div>
+          </div>
+
+          <div class="prospect-card">
+            <div class="name">Sarah Chen <span class="badge">Interested</span></div>
+            <div class="meta">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="4" y="2" width="16" height="20" rx="2"></rect>
+                <line x1="9" y1="22" x2="15" y2="22"></line>
+              </svg>
+              Acme Corp · VP of Marketing
+            </div>
+          </div>
+
+          <div class="call-btn-mini">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+            </svg>
+            Call (415) 555-0142
+          </div>
+
+          <div class="composer-mini">
+            <div class="label">Reply via portal</div>
+            <div class="field">Re: Quick intro — LeadStart x Acme</div>
+            <div class="field body">Hi Sarah — happy to grab 20 min tomorrow. Does 2pm PT work?</div>
+            <div class="send">Send reply</div>
+          </div>
+        </div>
+      </div>
+      <div class="frame-cap">Sends from your inbox · CC'd to you · thread continues there</div>
+    </div>
+  </div>
+</section>
+
+<!-- =================== STEP 6: Outcome + report =================== -->
+<section>
+  <div class="container">
+    <div class="step-num reveal"><span class="dot"></span>Step 06</div>
+    <h1 class="headline reveal delay-1">Log it. <span class="accent">Get the digest.</span></h1>
+    <p class="lede reveal delay-2">One click after each call so we learn what's working. Every Monday, a clean weekly report shows up in your inbox.</p>
+
+    <div class="visual reveal delay-3">
+      <div class="panel-pair">
+        <div class="panel">
+          <div class="panel-title">What happened?</div>
+          <div class="outcome-grid">
+            <div class="outcome-btn active">Booked a meeting</div>
+            <div class="outcome-btn">Spoke, follow-up</div>
+            <div class="outcome-btn">Left voicemail</div>
+            <div class="outcome-btn">Not a fit</div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-title">Weekly KPI report</div>
+          <div class="kpi-row">
+            <div class="kpi-cell"><div class="v">2,073</div><div class="l">Sent</div></div>
+            <div class="kpi-cell"><div class="v">38%</div><div class="l">Open</div></div>
+            <div class="kpi-cell"><div class="v">11</div><div class="l">Hot</div></div>
+          </div>
+          <div class="spark">
+            <svg viewBox="0 0 200 50" preserveAspectRatio="none">
+              <path d="M0,40 L25,32 L50,36 L75,22 L100,28 L125,18 L150,24 L175,12 L200,16 L200,50 L0,50 Z" fill="rgba(46, 55, 254, 0.18)"></path>
+              <path d="M0,40 L25,32 L50,36 L75,22 L100,28 L125,18 L150,24 L175,12 L200,16" fill="none" stroke="#2E37FE" stroke-width="2"></path>
+            </svg>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- =================== CLOSING =================== -->
+<section class="closing">
+  <div class="container">
+    <h2 class="reveal">That's the <span class="accent">whole loop</span>.</h2>
+    <p class="reveal delay-1">Real replies. Fast alerts. Your call.</p>
+
+    <div class="recap reveal delay-2">
+      <div class="chip"><strong>01</strong> · We send</div>
+      <div class="chip"><strong>02</strong> · AI flags</div>
+      <div class="chip"><strong>03</strong> · You're alerted</div>
+      <div class="chip"><strong>04</strong> · You call</div>
+      <div class="chip"><strong>05</strong> · Or portal-reply</div>
+      <div class="chip"><strong>06</strong> · Log + report</div>
+    </div>
+
+    <div class="footer-mark reveal delay-3">LeadStart · Cold email done right</div>
+  </div>
+</section>
+
+<script>
+  // Progress bar
+  const progressFill = document.getElementById('progressFill');
+  function updateProgress() {
+    const scrolled = window.scrollY;
+    const max = document.documentElement.scrollHeight - window.innerHeight;
+    const pct = max > 0 ? (scrolled / max) * 100 : 0;
+    progressFill.style.width = pct + '%';
+  }
+  window.addEventListener('scroll', updateProgress, { passive: true });
+  updateProgress();
+
+  // Reveal-on-scroll
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('in-view');
+      }
+    });
+  }, { threshold: 0.15, rootMargin: '0px 0px -60px 0px' });
+
+  document.querySelectorAll('.reveal, .send-row').forEach((el) => observer.observe(el));
+</script>
+
+</body>
+</html>

@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hot-Lead Email CTA — Permanent Link Options</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #F4F5F9; padding: 40px 20px; color: #1a1a2e; -webkit-font-smoothing: antialiased; }
+  h1 { text-align: center; font-size: 24px; margin-bottom: 8px; }
+  .subtitle { text-align: center; color: #6b7280; font-size: 14px; margin-bottom: 48px; max-width: 640px; margin-left: auto; margin-right: auto; line-height: 1.5; }
+  .option { margin-bottom: 60px; max-width: 600px; margin-left: auto; margin-right: auto; }
+  .option-label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; color: #7c3aed; margin-bottom: 6px; }
+  .option-label.current { color: #6B6E8A; }
+  .option-title { font-size: 16px; font-weight: 700; margin-bottom: 6px; color: #1a1a2e; }
+  .option-desc { font-size: 13px; color: #6b7280; margin-bottom: 18px; line-height: 1.55; }
+  .option-desc .pro { color: #059669; font-weight: 600; }
+  .option-desc .con { color: #b45309; font-weight: 600; }
+
+  /* Shared email frame — only the CTA block varies between options. */
+  .email { width: 100%; max-width: 600px; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,0.06); }
+  .email-header { background: linear-gradient(135deg, #6B72FF 0%, #2E37FE 30%, #1C24B8 65%, #0F1880 100%); padding: 28px 32px; color: #fff; }
+  .email-header .eyebrow { font-size: 12px; text-transform: uppercase; letter-spacing: 1.2px; font-weight: 600; color: rgba(255,255,255,0.75); margin-bottom: 8px; }
+  .email-header h1 { font-size: 24px; font-weight: 700; letter-spacing: -0.4px; margin: 0 0 6px 0; color: #fff; text-align: left; }
+  .email-header h1 .at { color: rgba(255,255,255,0.7); font-weight: 500; }
+  .email-header .sub { font-size: 13px; color: rgba(255,255,255,0.7); }
+
+  .phone-block { padding: 24px 32px 0; }
+  .phone-inner { background: linear-gradient(135deg, #10b981 0%, #059669 100%); border-radius: 14px; padding: 22px; text-align: center; }
+  .phone-inner .label { font-size: 11px; color: rgba(255,255,255,0.85); text-transform: uppercase; letter-spacing: 1px; font-weight: 600; margin-bottom: 6px; }
+  .phone-inner a { color: #fff; font-size: 28px; font-weight: 700; text-decoration: none; letter-spacing: -0.5px; }
+
+  .reply-block { padding: 24px 32px 8px; }
+  .reply-block .eyebrow { font-size: 11px; color: #6B6E8A; text-transform: uppercase; letter-spacing: 0.8px; font-weight: 600; margin-bottom: 10px; }
+  .reply-quote { background: #F4F5F9; border-left: 3px solid #2E37FE; border-radius: 0 8px 8px 0; padding: 14px 16px; font-size: 14px; color: #1A1A2E; line-height: 1.55; white-space: pre-wrap; }
+
+  .cta-block { padding: 20px 32px 28px; text-align: center; }
+  .email-footer { padding: 18px 24px; border-top: 1px solid #E2E3ED; }
+  .email-footer p { margin: 0; font-size: 12px; color: #6B6E8A; }
+  .email-footer p + p { margin-top: 4px; font-size: 11px; color: #9194AD; }
+
+  /* CTA primitives */
+  .btn-primary { display: inline-block; background: linear-gradient(135deg, #6B72FF, #2E37FE); color: #ffffff !important; text-decoration: none; padding: 14px 36px; border-radius: 10px; font-size: 14px; font-weight: 600; letter-spacing: -0.2px; }
+  .btn-ghost { display: inline-block; background: #ffffff; color: #2E37FE !important; text-decoration: none; padding: 13px 28px; border-radius: 10px; font-size: 14px; font-weight: 600; letter-spacing: -0.2px; border: 1.5px solid #D4D7E9; }
+  .link-inline { color: #2E37FE; text-decoration: none; font-weight: 600; font-size: 13px; }
+  .link-inline:hover { text-decoration: underline; }
+  .cta-subtext { margin-top: 12px; font-size: 12px; color: #6B6E8A; }
+  .cta-subtext strong { color: #1A1A2E; font-weight: 600; }
+
+  /* Option C — side-by-side */
+  .cta-row { display: inline-flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+
+  /* Option D — divider row */
+  .cta-divider { display: flex; align-items: center; gap: 14px; max-width: 420px; margin: 16px auto 0; }
+  .cta-divider .line { flex: 1; height: 1px; background: #E2E3ED; }
+  .cta-divider .or { font-size: 11px; color: #9194AD; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 600; }
+
+  /* Highlight ring around current */
+  .current-badge { display: inline-block; background: #E2E3ED; color: #6B6E8A; font-size: 10px; text-transform: uppercase; letter-spacing: 1px; font-weight: 700; padding: 3px 8px; border-radius: 4px; margin-left: 8px; vertical-align: middle; }
+</style>
+</head>
+<body>
+
+  <h1>Hot-Lead Email — Permanent Link Options</h1>
+  <p class="subtitle">Keeping the short-lived "tap to view" deep-link as the primary mobile CTA, and adding a permanent portal link alongside it. Only the CTA block changes — header, phone block, and reply preview are identical across all options.</p>
+
+  <!-- ============= CURRENT ============= -->
+  <div class="option">
+    <div class="option-label current">Current <span class="current-badge">Live now</span></div>
+    <div class="option-title">Single CTA, expires in 4 hours</div>
+    <div class="option-desc">One signed URL. If the client misses the 4-hour window or their mail gateway pre-clicks it, the link is dead and they have to find the reply in the portal manually.</div>
+    <div class="email">
+      <div class="email-header">
+        <div class="eyebrow">🔔 Hot lead</div>
+        <h1>Sarah Chen <span class="at">@ Acme Corp</span></h1>
+        <div class="sub">A hot lead just replied. Call them now — every minute matters.</div>
+      </div>
+      <div class="phone-block">
+        <div class="phone-inner">
+          <div class="label">Call now</div>
+          <a href="#">📞 +1 (415) 555-0142</a>
+        </div>
+      </div>
+      <div class="reply-block">
+        <div class="eyebrow">Their reply · Wed, 2:14 PM PST</div>
+        <div class="reply-quote">Thanks for reaching out — this is actually really timely. We just wrapped a board review and cold outreach is one of the gaps. Can you do a quick call tomorrow afternoon?</div>
+      </div>
+      <div class="cta-block">
+        <a href="#" class="btn-primary">View Full Reply &rarr;</a>
+        <div class="cta-subtext">Single-use link · expires in 4 hours</div>
+      </div>
+      <div class="email-footer">
+        <p>Sent by <strong>LeadStart</strong> · Cold email done right</p>
+        <p>You're receiving this because your campaign flagged a hot reply. Manage notification preferences in your admin settings.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============= OPTION A ============= -->
+  <div class="option">
+    <div class="option-label">Option A — Recommended</div>
+    <div class="option-title">Primary "tap to view" + secondary portal link below</div>
+    <div class="option-desc">Mobile flow stays one-tap. Below it, a text link to the portal version — never expires, works even after the 4-hour window closes.<br><span class="pro">Pro:</span> Cleanest, keeps one strong CTA. <span class="con">Con:</span> Secondary link is easy to overlook if they need it.</div>
+    <div class="email">
+      <div class="email-header">
+        <div class="eyebrow">🔔 Hot lead</div>
+        <h1>Sarah Chen <span class="at">@ Acme Corp</span></h1>
+        <div class="sub">A hot lead just replied. Call them now — every minute matters.</div>
+      </div>
+      <div class="phone-block">
+        <div class="phone-inner">
+          <div class="label">Call now</div>
+          <a href="#">📞 +1 (415) 555-0142</a>
+        </div>
+      </div>
+      <div class="reply-block">
+        <div class="eyebrow">Their reply · Wed, 2:14 PM PST</div>
+        <div class="reply-quote">Thanks for reaching out — this is actually really timely. We just wrapped a board review and cold outreach is one of the gaps. Can you do a quick call tomorrow afternoon?</div>
+      </div>
+      <div class="cta-block">
+        <a href="#" class="btn-primary">View Full Reply &rarr;</a>
+        <div class="cta-subtext">Tap to view instantly — no login needed <strong>(4h)</strong></div>
+        <div class="cta-subtext" style="margin-top: 14px;">
+          Missed the window? <a href="#" class="link-inline">Open in your portal &rarr;</a>
+        </div>
+      </div>
+      <div class="email-footer">
+        <p>Sent by <strong>LeadStart</strong> · Cold email done right</p>
+        <p>You're receiving this because your campaign flagged a hot reply. Manage notification preferences in your admin settings.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============= OPTION B ============= -->
+  <div class="option">
+    <div class="option-label">Option B</div>
+    <div class="option-title">Two buttons, stacked — primary + ghost</div>
+    <div class="option-desc">Both links are equally visible. Primary gradient button for the fast path; outlined ghost button for the permanent portal link.<br><span class="pro">Pro:</span> Client can't miss the permanent option. <span class="con">Con:</span> Two buttons dilutes the "call now" urgency.</div>
+    <div class="email">
+      <div class="email-header">
+        <div class="eyebrow">🔔 Hot lead</div>
+        <h1>Sarah Chen <span class="at">@ Acme Corp</span></h1>
+        <div class="sub">A hot lead just replied. Call them now — every minute matters.</div>
+      </div>
+      <div class="phone-block">
+        <div class="phone-inner">
+          <div class="label">Call now</div>
+          <a href="#">📞 +1 (415) 555-0142</a>
+        </div>
+      </div>
+      <div class="reply-block">
+        <div class="eyebrow">Their reply · Wed, 2:14 PM PST</div>
+        <div class="reply-quote">Thanks for reaching out — this is actually really timely. We just wrapped a board review and cold outreach is one of the gaps. Can you do a quick call tomorrow afternoon?</div>
+      </div>
+      <div class="cta-block">
+        <a href="#" class="btn-primary">View Full Reply &rarr;</a>
+        <div class="cta-divider">
+          <div class="line"></div>
+          <div class="or">or</div>
+          <div class="line"></div>
+        </div>
+        <div style="margin-top: 16px;">
+          <a href="#" class="btn-ghost">Open in Portal</a>
+        </div>
+        <div class="cta-subtext">Fast link expires in 4 hours — portal link never expires</div>
+      </div>
+      <div class="email-footer">
+        <p>Sent by <strong>LeadStart</strong> · Cold email done right</p>
+        <p>You're receiving this because your campaign flagged a hot reply. Manage notification preferences in your admin settings.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============= OPTION C ============= -->
+  <div class="option">
+    <div class="option-label">Option C</div>
+    <div class="option-title">Side-by-side buttons</div>
+    <div class="option-desc">Both CTAs on one row, equal visual weight. The subtext underneath clarifies which is which.<br><span class="pro">Pro:</span> Compact, symmetrical. <span class="con">Con:</span> Risks looking cluttered on narrow mobile clients (buttons may wrap anyway, defeating the point).</div>
+    <div class="email">
+      <div class="email-header">
+        <div class="eyebrow">🔔 Hot lead</div>
+        <h1>Sarah Chen <span class="at">@ Acme Corp</span></h1>
+        <div class="sub">A hot lead just replied. Call them now — every minute matters.</div>
+      </div>
+      <div class="phone-block">
+        <div class="phone-inner">
+          <div class="label">Call now</div>
+          <a href="#">📞 +1 (415) 555-0142</a>
+        </div>
+      </div>
+      <div class="reply-block">
+        <div class="eyebrow">Their reply · Wed, 2:14 PM PST</div>
+        <div class="reply-quote">Thanks for reaching out — this is actually really timely. We just wrapped a board review and cold outreach is one of the gaps. Can you do a quick call tomorrow afternoon?</div>
+      </div>
+      <div class="cta-block">
+        <div class="cta-row">
+          <a href="#" class="btn-primary">View Full Reply &rarr;</a>
+          <a href="#" class="btn-ghost">Open in Portal</a>
+        </div>
+        <div class="cta-subtext"><strong>View Full Reply:</strong> tap &amp; go (4h) · <strong>Portal:</strong> login, never expires</div>
+      </div>
+      <div class="email-footer">
+        <p>Sent by <strong>LeadStart</strong> · Cold email done right</p>
+        <p>You're receiving this because your campaign flagged a hot reply. Manage notification preferences in your admin settings.</p>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>
