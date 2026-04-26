@@ -26,11 +26,19 @@ import {
   TransientResendError,
   PermanentResendError,
 } from "./resend-client";
+import { enqueueOwnerAlert } from "./owner-alerts";
 
 // retry_count sentinel that parks a row permanently — above the retry cron's
 // MAX_RETRIES threshold (5), so it stays visible to admins but isn't picked
 // up for another attempt.
 const PERMANENT_FAIL_RETRY_COUNT = 99;
+
+// Mirror of MAX_RETRIES in src/app/api/cron/retry-notifications/route.ts.
+// When notification_retry_count reaches this value the retry cron stops
+// picking the row up, so this is the terminal state for transient failures
+// (the Permanent path uses PERMANENT_FAIL_RETRY_COUNT). Kept duplicated
+// rather than imported to avoid a server-route import inside a lib module.
+const RETRY_BUDGET = 5;
 
 // Truncate the reply body for the email preview. Long chains with quoted
 // history would explode the email; this keeps it scannable.
@@ -199,6 +207,41 @@ export async function sendHotLeadNotification(
         `[send-hot-lead] Failed to stamp retry state on reply ${reply.id}:`,
         stampError,
       );
+    }
+
+    // Persistent-failure alert: fire on Permanent (one-shot, parks at 99)
+    // and on the moment the transient retry budget is exhausted (count
+    // crosses RETRY_BUDGET). Earlier transient retries stay silent — the
+    // retry cron will keep trying and most resolve on their own.
+    const exhaustedRetries =
+      !isPermanent && nextRetryCount >= RETRY_BUDGET;
+    if (isPermanent || exhaustedRetries) {
+      try {
+        await enqueueOwnerAlert({
+          admin,
+          kind: "hot_lead_persistent_failure",
+          subject: `Hot-lead notification permanently failed for reply ${reply.id}`,
+          summary:
+            (isPermanent
+              ? "Resend rejected the send (permanent error). "
+              : `Retry budget exhausted (${nextRetryCount}/${RETRY_BUDGET}). `) +
+            `Client will not be notified about this reply.`,
+          context: {
+            reply_id: reply.id,
+            client_id: reply.client_id ?? "(no client)",
+            recipient: clientNotificationEmail,
+            final_class: reply.final_class ?? "(none)",
+            error: errorMessage.slice(0, 500),
+            failure_mode: isPermanent ? "permanent" : "retries_exhausted",
+          },
+        });
+      } catch (alertErr) {
+        // Never let alert-path failure mask the original throw below.
+        console.error(
+          `[send-hot-lead] enqueueOwnerAlert failed for reply ${reply.id}:`,
+          alertErr,
+        );
+      }
     }
 
     if (!isKnown) {

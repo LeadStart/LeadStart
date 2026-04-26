@@ -24,6 +24,7 @@ import { after } from "next/server";
 import crypto from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { recordWebhookAuthFailure } from "@/lib/notifications/webhook-auth-alerts";
+import { enqueueOwnerAlert } from "@/lib/notifications/owner-alerts";
 
 const REPLAY_WINDOW_MS = 5 * 60 * 1000;
 
@@ -31,9 +32,52 @@ interface ResendWebhookPayload {
   type?: string;
   data?: {
     email_id?: string;
+    to?: string | string[];
+    bounce?: {
+      // Resend marks Permanent for hard bounces, Transient for soft.
+      // Field absent on older payloads — see classifyBounce() below.
+      type?: string;
+      subType?: string;
+      message?: string;
+    };
     [key: string]: unknown;
   };
   [key: string]: unknown;
+}
+
+interface BounceClassification {
+  isHardBounce: boolean;
+  subtype: string | null;
+  message: string | null;
+}
+
+/**
+ * Decide whether a bounce event is hard (alertable) or soft (Resend will
+ * retry — stay quiet). Conservative default: if Resend doesn't include a
+ * bounce.type, treat as hard so the operator hears about it. The
+ * alternative — silently swallow ambiguous events — is the failure mode
+ * this whole feature is trying to fix.
+ */
+function classifyBounce(payload: ResendWebhookPayload): BounceClassification {
+  const bounce = payload.data?.bounce;
+  const rawType = bounce?.type?.toLowerCase() ?? null;
+  const isHardBounce =
+    rawType === null ||
+    rawType === "permanent" ||
+    rawType === "hard" ||
+    rawType === "undetermined";
+  return {
+    isHardBounce,
+    subtype: bounce?.subType ?? null,
+    message: bounce?.message ?? null,
+  };
+}
+
+function recipientFromPayload(payload: ResendWebhookPayload): string | null {
+  const to = payload.data?.to;
+  if (typeof to === "string") return to;
+  if (Array.isArray(to) && to.length > 0) return to[0];
+  return null;
 }
 
 function verifySvixSignature(input: {
@@ -147,40 +191,117 @@ export async function POST(request: NextRequest) {
   const admin = createAdminClient();
   const nowIso = new Date().toISOString();
 
-  // Map event type → column. Complaints (spam reports) count the same as
-  // bounces for our purposes: the client's inbox did NOT deliver our mail
-  // to the user's attention, so we shouldn't trust the notification.
-  let update: Record<string, string> | null = null;
+  // Map event type → column updates. Complaints (spam reports) count the
+  // same as bounces for delivery-state purposes: the client's inbox did
+  // NOT show our mail, so we shouldn't trust the send.
+  let leadReplyUpdate: Record<string, string> | null = null;
+  let kpiReportUpdate: Record<string, string | null> | null = null;
   if (eventType === "email.delivered") {
-    update = { notification_delivered_at: nowIso };
+    leadReplyUpdate = { notification_delivered_at: nowIso };
+    kpiReportUpdate = { delivered_at: nowIso };
   } else if (
     eventType === "email.bounced" ||
     eventType === "email.complained"
   ) {
-    update = { notification_bounced_at: nowIso };
+    leadReplyUpdate = { notification_bounced_at: nowIso };
+    kpiReportUpdate = {
+      bounced_at: nowIso,
+      bounce_type: eventType === "email.complained" ? "complaint" : "bounce",
+    };
   }
 
-  if (!update) {
+  if (!leadReplyUpdate || !kpiReportUpdate) {
     return NextResponse.json({ ignored: true, event_type: eventType });
   }
 
-  const { data: updated, error: updateError } = await admin
+  // Try lead_replies first — that's the high-volume path. If we don't match,
+  // fall through to kpi_reports. Either match (or none) is normal: the same
+  // email_id can only live in one of the two tables.
+  const { data: leadMatches, error: leadError } = await admin
     .from("lead_replies")
-    .update(update)
+    .update(leadReplyUpdate)
     .eq("notification_email_id", emailId)
-    .select("id");
+    .select("id, client_id");
 
-  if (updateError) {
+  if (leadError) {
     console.error(
-      `[webhooks/resend] update failed for email ${emailId}:`,
-      updateError,
+      `[webhooks/resend] lead_replies update failed for email ${emailId}:`,
+      leadError,
     );
-    return NextResponse.json({ error: updateError.message }, { status: 500 });
+    return NextResponse.json({ error: leadError.message }, { status: 500 });
+  }
+
+  const leadMatched = (leadMatches?.length ?? 0) > 0;
+
+  const { data: reportMatches, error: reportError } = leadMatched
+    ? { data: [], error: null }
+    : await admin
+        .from("kpi_reports")
+        .update(kpiReportUpdate)
+        .eq("resend_email_id", emailId)
+        .select("id, client_id");
+
+  if (reportError) {
+    console.error(
+      `[webhooks/resend] kpi_reports update failed for email ${emailId}:`,
+      reportError,
+    );
+    return NextResponse.json({ error: reportError.message }, { status: 500 });
+  }
+
+  const reportMatched = (reportMatches?.length ?? 0) > 0;
+
+  // Severity filter for the owner alert: hard bounces and complaints only.
+  // Soft bounces fall through to the digest as informational? — no: by user
+  // policy soft bounces stay silent (Resend retries internally; we don't
+  // want digest noise on transient inbox-full / greylist events).
+  if (eventType === "email.bounced" || eventType === "email.complained") {
+    const recipient = recipientFromPayload(payload);
+    const { isHardBounce, subtype, message } = classifyBounce(payload);
+    const isComplaint = eventType === "email.complained";
+
+    if (isHardBounce || isComplaint) {
+      const matchKind = leadMatched
+        ? "hot_lead_notification"
+        : reportMatched
+          ? "kpi_report"
+          : "unknown";
+      const alertKind = isComplaint ? "email_complaint" : "email_hard_bounce";
+      const subjectVerb = isComplaint ? "Complaint received" : "Hard bounce";
+      const subject = `${subjectVerb} on ${matchKind} email${recipient ? ` to ${recipient}` : ""}`;
+      after(async () => {
+        try {
+          await enqueueOwnerAlert({
+            admin,
+            kind: alertKind,
+            subject,
+            summary:
+              `${subjectVerb} for ${matchKind} email` +
+              (recipient ? ` to ${recipient}` : "") +
+              (message ? `: ${message}` : "."),
+            context: {
+              email_id: emailId,
+              recipient: recipient ?? "(unknown)",
+              event_type: eventType,
+              bounce_type: subtype ?? "(not provided)",
+              match_kind: matchKind,
+              row_id:
+                (leadMatches?.[0] as { id?: string } | undefined)?.id ??
+                (reportMatches?.[0] as { id?: string } | undefined)?.id ??
+                "(no row matched)",
+            },
+          });
+        } catch (err) {
+          console.error("[webhooks/resend] enqueueOwnerAlert threw:", err);
+        }
+      });
+    }
   }
 
   return NextResponse.json({
     event_type: eventType,
     email_id: emailId,
-    matched_rows: updated?.length ?? 0,
+    matched_lead_replies: leadMatches?.length ?? 0,
+    matched_kpi_reports: reportMatches?.length ?? 0,
   });
 }

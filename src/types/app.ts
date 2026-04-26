@@ -142,6 +142,12 @@ export interface KPIReport {
   sent_to: string[] | null;
   created_by: string | null;
   created_at: string;
+  /** Resend message id captured on send; populated for rows sent after migration 00041. */
+  resend_email_id: string | null;
+  delivered_at: string | null;
+  bounced_at: string | null;
+  /** 'bounce' | 'complaint' | null. Set by /api/webhooks/resend. */
+  bounce_type: string | null;
 }
 
 export interface KPIReportData {

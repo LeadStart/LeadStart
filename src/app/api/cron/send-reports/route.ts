@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { calculateMetrics } from "@/lib/kpi/calculator";
 import { buildWeeklyReportEmail as buildReportHtml } from "@/lib/email/weekly-report";
 import { sendViaResend } from "@/lib/notifications/resend-client";
+import { enqueueOwnerAlert } from "@/lib/notifications/owner-alerts";
 import { isClientDueNow } from "@/lib/kpi/schedule";
 import type { CampaignSnapshot, Client, Campaign, KPIReportData, KPIReport } from "@/types/app";
 
@@ -58,13 +59,15 @@ async function generateReportData(
 
 /** Send an email report via the throttled Resend wrapper.
  *  Throws on missing API key so the caller's catch block records a real error
- *  (prevents the "ghost sent" case where sent_at was stamped but nothing shipped). */
+ *  (prevents the "ghost sent" case where sent_at was stamped but nothing shipped).
+ *  Returns the Resend message id so the caller can store it on the kpi_reports
+ *  row — the Resend webhook needs that id to correlate delivery/bounce events. */
 async function sendReportEmail(
   reportData: KPIReportData,
   toEmails: string[],
   startDate: string,
   endDate: string
-): Promise<void> {
+): Promise<{ resendId: string | null }> {
   if (toEmails.length === 0) {
     throw new Error("No recipients provided");
   }
@@ -76,12 +79,13 @@ async function sendReportEmail(
   // is low-urgency and the next-hour cron rerun catches most transient drops.
   // The throttle is still valuable to avoid bursts when a scheduled run
   // sends to many clients at once.
-  await sendViaResend({
+  const result = await sendViaResend({
     from: process.env.EMAIL_FROM || "LeadStart <info@no-reply.leadstart.io>",
     to: toEmails,
     subject: `Your Campaign Report — ${startDate} to ${endDate}`,
     html: buildReportHtml(reportData),
   });
+  return { resendId: result.id };
 }
 
 // ── GET: Vercel Cron (fires hourly) ─────────────────────────────────────
@@ -157,12 +161,16 @@ export async function GET(request: NextRequest) {
       // through to the catch block and DO NOT stamp sent_at / last_sent_at.
       // That's what makes a next-hour retry possible and keeps the client's
       // schedule unblocked.
-      await sendReportEmail(reportData, recipients, startDate, endDate);
+      const { resendId } = await sendReportEmail(reportData, recipients, startDate, endDate);
 
       if (report) {
         await admin
           .from("kpi_reports")
-          .update({ sent_at: now.toISOString(), sent_to: recipients })
+          .update({
+            sent_at: now.toISOString(),
+            sent_to: recipients,
+            resend_email_id: resendId,
+          })
           .eq("id", (report as Record<string, unknown>).id);
       }
 
@@ -173,11 +181,30 @@ export async function GET(request: NextRequest) {
 
       results.push({ client: client.name, status: "sent" });
     } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
       console.error(`Failed to send report for ${client.name}:`, err);
+      // Persistent failure: every cron throw bypasses the silent next-hour
+      // retry by surfacing in the owner digest. Soft Resend errors classify
+      // as TransientResendError and don't reach here — they throw before
+      // sendReportEmail returns and we don't have a separate transient
+      // bucket for reports today.
+      await enqueueOwnerAlert({
+        admin,
+        kind: "report_send_error",
+        subject: `Report send failed for ${client.name}`,
+        summary: `KPI report cron failed for ${client.name}: ${errorMessage}`,
+        context: {
+          client_id: client.id,
+          client_name: client.name,
+          recipients: recipients.join(", "),
+          period: `${startDate} → ${endDate}`,
+          error: errorMessage,
+        },
+      });
       results.push({
         client: client.name,
         status: "error",
-        reason: err instanceof Error ? err.message : String(err),
+        reason: errorMessage,
       });
     }
   }
@@ -238,7 +265,7 @@ export async function POST(request: NextRequest) {
     }
 
     try {
-      await sendReportEmail(
+      const { resendId } = await sendReportEmail(
         report.report_data,
         toEmails,
         report.report_period_start,
@@ -247,7 +274,11 @@ export async function POST(request: NextRequest) {
 
       await admin
         .from("kpi_reports")
-        .update({ sent_at: new Date().toISOString(), sent_to: toEmails })
+        .update({
+          sent_at: new Date().toISOString(),
+          sent_to: toEmails,
+          resend_email_id: resendId,
+        })
         .eq("id", report.id);
 
       return NextResponse.json({ success: true, sent_to: toEmails });
@@ -293,7 +324,12 @@ export async function POST(request: NextRequest) {
 
     if (client.contact_email && process.env.RESEND_API_KEY) {
       try {
-        await sendReportEmail(reportData, [client.contact_email], startDate, endDate);
+        const { resendId } = await sendReportEmail(
+          reportData,
+          [client.contact_email],
+          startDate,
+          endDate
+        );
 
         if (report) {
           await admin
@@ -301,6 +337,7 @@ export async function POST(request: NextRequest) {
             .update({
               sent_at: new Date().toISOString(),
               sent_to: [client.contact_email],
+              resend_email_id: resendId,
             })
             .eq("id", (report as Record<string, unknown>).id);
         }
