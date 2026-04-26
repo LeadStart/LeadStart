@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { checkCronAuth } from "@/lib/security/cron-auth";
 import { InstantlyClient } from "@/lib/instantly/client";
 import { syncCampaignMetadata } from "@/lib/campaigns/sync";
 
 export async function GET(request: NextRequest) {
-  // Verify cron secret (Vercel sends this automatically)
-  if (process.env.CRON_SECRET && request.headers.get("authorization") !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const authError = checkCronAuth(request);
+  if (authError) return authError;
 
   const admin = createAdminClient();
 

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { checkCronAuth } from "@/lib/security/cron-auth";
 import { calculateMetrics } from "@/lib/kpi/calculator";
 import { buildWeeklyReportEmail as buildReportHtml } from "@/lib/email/weekly-report";
 import { sendViaResend } from "@/lib/notifications/resend-client";
@@ -94,12 +95,8 @@ async function sendReportEmail(
 // (weekly / biweekly / monthly), generates a trailing-period report and sends
 // to saved recipients.
 export async function GET(request: NextRequest) {
-  if (
-    process.env.CRON_SECRET &&
-    request.headers.get("authorization") !== `Bearer ${process.env.CRON_SECRET}`
-  ) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const authError = checkCronAuth(request);
+  if (authError) return authError;
 
   const admin = createAdminClient();
   const now = new Date();

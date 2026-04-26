@@ -16,6 +16,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { checkCronAuth } from "@/lib/security/cron-auth";
 import { sendHotLeadNotification } from "@/lib/notifications/send-hot-lead";
 import type { LeadReply, Client } from "@/types/app";
 
@@ -37,12 +38,8 @@ function backoffWaitMs(retryCount: number): number {
 const STALE_REPLY_STATUSES = new Set(["sent", "resolved", "expired", "rejected"]);
 
 export async function GET(request: NextRequest) {
-  if (
-    process.env.CRON_SECRET &&
-    request.headers.get("authorization") !== `Bearer ${process.env.CRON_SECRET}`
-  ) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const authError = checkCronAuth(request);
+  if (authError) return authError;
 
   const admin = createAdminClient();
   const nowMs = Date.now();
