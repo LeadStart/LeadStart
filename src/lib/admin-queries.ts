@@ -43,6 +43,10 @@ export type AdminOverviewData = {
   cards: AdminOverviewCard[];
   totalActive: number;
   allStepAlerts: StepHealthAlert[];
+  // 7-day rollups derived from the 30-day snapshot pull we already do.
+  // Surfaced on the dashboard KPI strip; no extra queries.
+  repliesLast7d: number;
+  emailsSentLast7d: number;
 };
 
 export async function fetchAdminOverview(
@@ -120,10 +124,27 @@ export async function fetchAdminOverview(
   });
   const healthOrder = { bad: 0, warning: 1, good: 2, none: 3 };
   cards.sort((a, b) => healthOrder[a.health] - healthOrder[b.health]);
+
+  // 7-day rollups across all snapshots already pulled. snapshot_date is
+  // YYYY-MM-DD; compare as ISO date strings to avoid TZ surprises.
+  const sevenDaysAgo = new Date(Date.now() - 7 * 86400000)
+    .toISOString()
+    .split("T")[0];
+  let repliesLast7d = 0;
+  let emailsSentLast7d = 0;
+  for (const snap of snapshots) {
+    if (snap.snapshot_date >= sevenDaysAgo) {
+      repliesLast7d += snap.replies ?? 0;
+      emailsSentLast7d += snap.emails_sent ?? 0;
+    }
+  }
+
   return {
     cards,
     totalActive: campaigns.filter((c) => c.status === "active").length,
     allStepAlerts,
+    repliesLast7d,
+    emailsSentLast7d,
   };
 }
 
