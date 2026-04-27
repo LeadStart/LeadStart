@@ -114,6 +114,13 @@ export interface Campaign {
   instantly_campaign_id: string;
   name: string;
   status: CampaignStatus;
+  // Channel discriminator (migration 00045). 'instantly' for legacy email
+  // campaigns; 'linkedin' for Unipile-driven sequences (commit #6+).
+  source_channel: "instantly" | "linkedin";
+  // Per-campaign Unipile account binding (migration 00046). Defaults to
+  // clients.unipile_account_id but lives on the campaign so accounts can
+  // rotate without invalidating campaign history.
+  unipile_account_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -244,6 +251,9 @@ export interface WebhookEvent {
   processed: boolean;
   excluded: boolean;
   received_at: string;
+  // Channel discriminator (migration 00045). Splits the audit log by
+  // provider so the Events page can filter Instantly vs Unipile traffic.
+  source_channel: SourceChannel;
 }
 
 // Contacts (campaign leads)
@@ -470,6 +480,8 @@ export interface ReplyReferralContact {
   title: string | null;
 }
 
+export type SourceChannel = "instantly" | "linkedin";
+
 export interface LeadReply {
   id: string;
   organization_id: string;
@@ -479,12 +491,22 @@ export interface LeadReply {
   // campaign and a follow-up UPDATE populates client_id.
   client_id: string | null;
   campaign_id: string | null;
+  // Channel discriminator (migration 00045). 'instantly' for email replies
+  // (the legacy default), 'linkedin' for inbound DMs ingested by the
+  // Unipile webhook.
+  source_channel: SourceChannel;
 
-  // Instantly references
+  // Instantly references (null for LinkedIn replies; both columns made
+  // nullable in migration 00046)
   instantly_email_id: string | null;
   instantly_message_id: string | null;
   thread_id: string | null;
   instantly_campaign_id: string | null;
+  // Unipile references (migration 00046). Null for Instantly replies;
+  // populated for LinkedIn DMs. unipile_message_id is org-scoped unique
+  // for webhook dedup; unipile_chat_id threads messages within a chat.
+  unipile_message_id: string | null;
+  unipile_chat_id: string | null;
   // Hosted Instantly mailbox that received the reply. Passed back to
   // POST /api/v2/emails/reply as `eaccount` when the client sends a
   // reply through the portal. (Migration 00026.)
