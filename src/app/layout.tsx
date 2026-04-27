@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Poppins, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { PostLoginOverlay } from "@/components/layout/post-login-overlay";
+import { Toaster } from "@/components/ui/sonner";
 
 const poppins = Poppins({
   variable: "--font-sans",
@@ -40,6 +41,7 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col font-sans">
         <PostLoginOverlay />
         {children}
+        <Toaster position="bottom-right" richColors />
       </body>
     </html>
   );

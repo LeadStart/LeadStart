@@ -19,6 +19,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { MoreHorizontal, Pause, Play, Trash2, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import { appUrl } from "@/lib/api-url";
 
 type CampaignStatus = "active" | "paused" | "draft" | "completed" | null;
@@ -57,6 +58,13 @@ export function CampaignRowActions({
       if (action === "delete") {
         setDeleteOpen(false);
         setTypedName("");
+        toast.success(`Deleted "${campaignName}"`, {
+          description: "Campaign removed from Instantly and LeadStart.",
+        });
+      } else if (action === "pause") {
+        toast.success(`Paused "${campaignName}"`);
+      } else if (action === "resume") {
+        toast.success(`Resumed "${campaignName}"`);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));

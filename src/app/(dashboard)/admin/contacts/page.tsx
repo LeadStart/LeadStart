@@ -37,6 +37,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { createClient } from "@/lib/supabase/client";
+import { toast } from "sonner";
 import {
   Users,
   Plus,
@@ -373,6 +374,10 @@ export default function ContactsPage() {
         }
       }
       await refetch();
+      // Prospects kanban reads from a separate SWR cache key — invalidate
+      // it so a contact added/edited with a pipeline stage shows up there
+      // without a manual reload. Same pattern as the import-CSV path.
+      await swrMutate("admin-contacts-with-pipeline");
       closeDialog();
     } finally {
       setSaving(false);
@@ -407,6 +412,7 @@ export default function ContactsPage() {
       // deleted prospect doesn't linger on /admin/prospects.
       await swrMutate("admin-contacts-with-pipeline");
       closeDialog();
+      toast.success(`Deleted ${label}`);
     } finally {
       setDeleting(false);
     }
