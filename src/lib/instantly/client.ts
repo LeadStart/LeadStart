@@ -35,13 +35,23 @@ export class InstantlyClient {
     const url = `${BASE_URL}${endpoint}`;
     let lastError: Error | null = null;
 
+    // Instantly's Fastify backend rejects requests with Content-Type:
+    // application/json and an empty body (FST_ERR_CTP_EMPTY_JSON_BODY) —
+    // so we only declare the JSON content type when we're actually sending
+    // a body. DELETEs and parameterless POSTs (pause/activate) ride bare.
+    const baseHeaders: Record<string, string> = {
+      Authorization: `Bearer ${this.apiKey}`,
+    };
+    if (options.body !== undefined && options.body !== null) {
+      baseHeaders["Content-Type"] = "application/json";
+    }
+
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
         const response = await fetch(url, {
           ...options,
           headers: {
-            Authorization: `Bearer ${this.apiKey}`,
-            "Content-Type": "application/json",
+            ...baseHeaders,
             ...options.headers,
           },
         });

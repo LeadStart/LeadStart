@@ -9,6 +9,12 @@
       "autoPort": true
     },
     {
+      "name": "leadstart-dev-3030",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--", "-p", "3030"],
+      "port": 3030
+    },
+    {
       "name": "mockup-server",
       "runtimeExecutable": "npx",
       "runtimeArgs": ["serve", "mockups", "-l", "4444"],

@@ -150,9 +150,13 @@ export function CampaignRowActions({
           <div className="space-y-2">
             <label
               htmlFor={`confirm-delete-${campaignId}`}
-              className="text-xs font-medium text-[#64748b]"
+              className="text-xs font-medium text-muted-foreground"
             >
-              Type <span className="font-mono text-[#0f172a]">{campaignName}</span> to confirm:
+              Type{" "}
+              <span className="font-semibold text-foreground">
+                {campaignName}
+              </span>{" "}
+              to confirm:
             </label>
             <Input
               id={`confirm-delete-${campaignId}`}
@@ -165,7 +169,14 @@ export function CampaignRowActions({
           </div>
 
           {error && (
-            <p className="text-sm text-red-600">{error}</p>
+            <div className="rounded-lg border border-red-200 bg-red-50 p-3">
+              <p className="text-xs font-semibold text-red-700">
+                Couldn&apos;t delete the campaign
+              </p>
+              <p className="mt-1 max-h-28 overflow-y-auto text-xs text-red-700/90 break-words whitespace-pre-wrap">
+                {error}
+              </p>
+            </div>
           )}
 
           <DialogFooter>
