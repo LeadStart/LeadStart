@@ -81,6 +81,12 @@ export default function IntegrationsPage() {
     | { kind: "fail"; message: string }
     | null
   >(null);
+  const [resettingBlacklist, setResettingBlacklist] = useState(false);
+  const [blacklistResetResult, setBlacklistResetResult] = useState<
+    | { kind: "success"; note?: string }
+    | { kind: "fail"; message: string }
+    | null
+  >(null);
   const [error, setError] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<string | null>(null);
@@ -131,6 +137,40 @@ export default function IntegrationsPage() {
     setScrapioSaved(true);
     setSavingScrapio(false);
     setTimeout(() => setScrapioSaved(false), 3000);
+  }
+
+  async function handleResetBlacklist() {
+    if (
+      !confirm(
+        "Reset the Scrap.io blacklist for this org? Future searches will be allowed to re-pull every business they've ever fetched — credits WILL be charged again. This is intended for starting fresh on a region you scraped a long time ago.",
+      )
+    ) {
+      return;
+    }
+    setResettingBlacklist(true);
+    setBlacklistResetResult(null);
+    try {
+      const res = await fetch(
+        appUrl("/api/admin/prospecting/blacklist/reset"),
+        { method: "POST" },
+      );
+      const data = await res.json();
+      if (res.ok) {
+        setBlacklistResetResult({ kind: "success", note: data.note });
+      } else {
+        setBlacklistResetResult({
+          kind: "fail",
+          message: data.error ?? "Reset failed",
+        });
+      }
+    } catch (err) {
+      setBlacklistResetResult({
+        kind: "fail",
+        message: err instanceof Error ? err.message : "Reset failed",
+      });
+    } finally {
+      setResettingBlacklist(false);
+    }
   }
 
   async function handleTestScrapio() {
@@ -380,6 +420,42 @@ export default function IntegrationsPage() {
               <span className="text-sm font-medium text-red-700">{scrapioTestResult.message}</span>
             </div>
           )}
+
+          <div className="border-t border-border/60 pt-4 mt-4 space-y-2">
+            <p className="text-sm font-medium">Prospecting blacklist</p>
+            <p className="text-[11px] text-muted-foreground">
+              Every business pulled by the Prospecting tab is added to a Scrap.io
+              blacklist for this org. Future searches automatically skip those
+              businesses (no credits charged). Reset wipes the list — only do
+              this when you want to re-pull a region you scraped a long time ago.
+            </p>
+            <div className="flex items-center gap-3">
+              <Button
+                onClick={handleResetBlacklist}
+                disabled={resettingBlacklist || !scrapioKey}
+                variant="outline"
+                size="sm"
+              >
+                {resettingBlacklist ? "Resetting…" : "Reset blacklist"}
+              </Button>
+              {blacklistResetResult?.kind === "success" && (
+                <span className="text-sm text-emerald-600 flex items-center gap-1">
+                  <CheckCircle size={14} />
+                  Blacklist reset
+                  {blacklistResetResult.note && (
+                    <span className="text-muted-foreground ml-1">
+                      ({blacklistResetResult.note})
+                    </span>
+                  )}
+                </span>
+              )}
+              {blacklistResetResult?.kind === "fail" && (
+                <span className="text-sm text-red-600">
+                  {blacklistResetResult.message}
+                </span>
+              )}
+            </div>
+          </div>
         </CardContent>
       </Card>
 

@@ -32,6 +32,10 @@
     {
       "path": "/app/api/cron/owner-heartbeat",
       "schedule": "0 13 * * *"
+    },
+    {
+      "path": "/app/api/cron/run-prospect-searches",
+      "schedule": "* * * * *"
     }
   ]
 }

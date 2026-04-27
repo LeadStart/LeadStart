@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,9 +23,13 @@ import {
   Building2,
   Map as MapIcon,
   X,
+  CheckCircle2,
+  XCircle,
+  Clock,
+  History,
 } from "lucide-react";
 import { appUrl } from "@/lib/api-url";
-import type { ScrapioBusiness } from "@/types/app";
+import type { ScrapioBusiness, ProspectSearchStatus } from "@/types/app";
 import { Typeahead, type TypeaheadResult } from "./typeahead";
 
 type Filters = {
@@ -52,16 +56,9 @@ const FILTER_LABELS: Record<keyof Filters, string> = {
   main_activity_only: "Main category only",
 };
 
-const MAX_RESULTS_OPTIONS = [100, 250, 500, 1000] as const;
-const HARD_RESULT_CAP = 1000;
-
-type ResultMeta = {
-  search_id: string | null;
-  count: number;
-  pages: number;
-  total_available: number | null;
-  truncated: boolean;
-};
+const MAX_RESULTS_OPTIONS = [100, 500, 1000, 2500, 5000] as const;
+const HARD_RESULT_CAP = 5000;
+const POLL_INTERVAL_MS = 3000;
 
 type LocationBadge = {
   label: string;
@@ -87,26 +84,139 @@ const LOCATION_BADGES: Record<string, LocationBadge> = {
   },
 };
 
+type SearchSummary = {
+  id: string;
+  query: Record<string, unknown>;
+  result_count: number;
+  pages_fetched: number;
+  truncated: boolean;
+  status: ProspectSearchStatus;
+  started_at: string | null;
+  completed_at: string | null;
+  progress_message: string | null;
+  error_message: string | null;
+  target_max_results: number;
+  created_at: string;
+};
+
+type SearchDetail = SearchSummary & {
+  results: ScrapioBusiness[];
+};
+
+function describeQuery(query: Record<string, unknown>): string {
+  const cat = (query.type as string) || "—";
+  const admin1 = (query.admin1_code as string) || "";
+  const admin2 = (query.admin2_code as string | null) || "";
+  const city = (query.city as string | null) || "";
+  const loc = city
+    ? `${city}, ${admin1}`
+    : admin2
+      ? `county ${admin2}, ${admin1}`
+      : admin1;
+  return `${cat} · ${loc}`;
+}
+
+function timeAgo(iso: string | null): string {
+  if (!iso) return "";
+  const ms = Date.now() - new Date(iso).getTime();
+  const s = Math.round(ms / 1000);
+  if (s < 60) return `${s}s ago`;
+  const m = Math.round(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.round(h / 24);
+  return `${d}d ago`;
+}
+
 export default function ProspectingPage() {
   const [categoryInput, setCategoryInput] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState<TypeaheadResult | null>(
-    null,
-  );
+  const [selectedCategory, setSelectedCategory] =
+    useState<TypeaheadResult | null>(null);
 
   const [locationInput, setLocationInput] = useState("");
-  const [selectedLocation, setSelectedLocation] = useState<TypeaheadResult | null>(
-    null,
-  );
+  const [selectedLocation, setSelectedLocation] =
+    useState<TypeaheadResult | null>(null);
 
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
-  const [maxResults, setMaxResults] = useState<number>(100);
+  const [maxResults, setMaxResults] = useState<number>(500);
 
-  const [searching, setSearching] = useState(false);
-  const [searchError, setSearchError] = useState<string | null>(null);
-  const [results, setResults] = useState<ScrapioBusiness[] | null>(null);
-  const [resultMeta, setResultMeta] = useState<ResultMeta | null>(null);
+  const [activeSearchId, setActiveSearchId] = useState<string | null>(null);
+  const [activeSearch, setActiveSearch] = useState<SearchDetail | null>(null);
+  const [recentSearches, setRecentSearches] = useState<SearchSummary[]>([]);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const loadRecentSearches = useCallback(async () => {
+    const res = await fetch(appUrl("/api/admin/prospecting/searches"), {
+      cache: "no-store",
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    setRecentSearches(
+      Array.isArray(data.searches) ? (data.searches as SearchSummary[]) : [],
+    );
+  }, []);
+
+  const loadSearchDetail = useCallback(async (id: string) => {
+    const res = await fetch(
+      appUrl(`/api/admin/prospecting/searches/${id}`),
+      { cache: "no-store" },
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    return (data.search as SearchDetail) ?? null;
+  }, []);
+
+  const stopPolling = useCallback(() => {
+    if (pollTimerRef.current) {
+      clearTimeout(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
+  }, []);
+
+  const pollOnce = useCallback(
+    async (id: string) => {
+      const detail = await loadSearchDetail(id);
+      if (!detail) return;
+      setActiveSearch(detail);
+      if (detail.status === "complete" || detail.status === "failed") {
+        stopPolling();
+        loadRecentSearches();
+        return;
+      }
+      pollTimerRef.current = setTimeout(() => pollOnce(id), POLL_INTERVAL_MS);
+    },
+    [loadRecentSearches, loadSearchDetail, stopPolling],
+  );
+
+  useEffect(() => {
+    loadRecentSearches();
+    return () => stopPolling();
+  }, [loadRecentSearches, stopPolling]);
+
+  useEffect(() => {
+    if (!activeSearchId) {
+      stopPolling();
+      return;
+    }
+    setSelected(new Set());
+    pollOnce(activeSearchId);
+    return () => stopPolling();
+  }, [activeSearchId, pollOnce, stopPolling]);
+
+  function clearCategory() {
+    setSelectedCategory(null);
+    setCategoryInput("");
+  }
+
+  function clearLocation() {
+    setSelectedLocation(null);
+    setLocationInput("");
+  }
 
   async function searchCategories(term: string): Promise<TypeaheadResult[]> {
     const res = await fetch(appUrl("/api/admin/prospecting/typeahead/type"), {
@@ -133,38 +243,19 @@ export default function ProspectingPage() {
     return Array.isArray(data.results) ? data.results : [];
   }
 
-  function handleCategorySelect(item: TypeaheadResult) {
-    setSelectedCategory(item);
-    setCategoryInput(item.text);
-  }
-
-  function handleLocationSelect(item: TypeaheadResult) {
-    setSelectedLocation(item);
-    setLocationInput(item.text);
-  }
-
-  function clearCategory() {
-    setSelectedCategory(null);
-    setCategoryInput("");
-  }
-
-  function clearLocation() {
-    setSelectedLocation(null);
-    setLocationInput("");
-  }
-
   async function handleSearch() {
     if (!selectedCategory) {
-      setSearchError("Pick a category from the dropdown first.");
+      setSubmitError("Pick a category from the dropdown first.");
       return;
     }
     if (!selectedLocation) {
-      setSearchError("Pick a location (state, county, or city) from the dropdown first.");
+      setSubmitError(
+        "Pick a location (state, county, or city) from the dropdown first.",
+      );
       return;
     }
-    setSearching(true);
-    setSearchError(null);
-    setSelected(new Set());
+    setSubmitting(true);
+    setSubmitError(null);
 
     const body: Record<string, unknown> = {
       type: selectedCategory.id,
@@ -174,18 +265,15 @@ export default function ProspectingPage() {
     if (selectedLocation.search_type === "admin1") {
       body.admin1_code = selectedLocation.id;
     } else if (selectedLocation.search_type === "admin2") {
-      // Server requires admin1_code alongside admin2_code.
       body.admin1_code = selectedLocation.parent_admin1;
       body.admin2_code = selectedLocation.id;
     } else if (selectedLocation.search_type === "city") {
-      // Use the city portion of "Austin, TX" — Scrap.io's city param is a
-      // free-text name, not the gmap location id.
       const cityName = selectedLocation.text.split(",")[0].trim();
       body.admin1_code = selectedLocation.parent_admin1;
       body.city = cityName;
     } else {
-      setSearchError("Selected location is missing a type. Pick again.");
-      setSearching(false);
+      setSubmitError("Selected location is missing a type. Pick again.");
+      setSubmitting(false);
       return;
     }
 
@@ -196,26 +284,17 @@ export default function ProspectingPage() {
         body: JSON.stringify(body),
       });
       const data = await res.json();
-      if (!res.ok) {
-        setSearchError(data.error ?? "Search failed");
-        setResults(null);
-        setResultMeta(null);
+      if (!res.ok || !data.search_id) {
+        setSubmitError(data.error ?? "Failed to queue search");
       } else {
-        setResults(data.results ?? []);
-        setResultMeta({
-          search_id: data.search_id ?? null,
-          count: data.count ?? 0,
-          pages: data.pages ?? 0,
-          total_available: data.total_available ?? null,
-          truncated: !!data.truncated,
-        });
+        setActiveSearchId(data.search_id);
+        setActiveSearch(null);
+        loadRecentSearches();
       }
     } catch (err) {
-      setSearchError(err instanceof Error ? err.message : "Search failed");
-      setResults(null);
-      setResultMeta(null);
+      setSubmitError(err instanceof Error ? err.message : "Failed to queue search");
     } finally {
-      setSearching(false);
+      setSubmitting(false);
     }
   }
 
@@ -233,16 +312,16 @@ export default function ProspectingPage() {
   }
 
   function toggleAll() {
-    if (!results) return;
+    if (!activeSearch) return;
     setSelected((prev) => {
-      if (prev.size === results.length) return new Set();
-      return new Set(results.map(rowKey));
+      if (prev.size === activeSearch.results.length) return new Set();
+      return new Set(activeSearch.results.map(rowKey));
     });
   }
 
   function handleSaveSelected() {
     alert(
-      `Save flow lands in Phase 3.\nSelected ${selected.size} of ${results?.length ?? 0}.`,
+      `Save flow lands in Phase 3.\nSelected ${selected.size} of ${activeSearch?.results.length ?? 0}.`,
     );
   }
 
@@ -250,6 +329,12 @@ export default function ProspectingPage() {
     selectedLocation?.search_type
       ? LOCATION_BADGES[selectedLocation.search_type]
       : null;
+
+  const showProgress =
+    activeSearch &&
+    (activeSearch.status === "pending" || activeSearch.status === "running");
+  const showError = activeSearch?.status === "failed";
+  const showResults = activeSearch?.status === "complete";
 
   return (
     <div className="space-y-6">
@@ -275,11 +360,80 @@ export default function ProspectingPage() {
           </h1>
           <p className="text-sm text-[#0f172a]/60 mt-1">
             Search Scrap.io by category and location, then save selected leads
-            into your CRM pipeline.
+            into your CRM pipeline. Searches run in the background — close the
+            tab and come back any time.
           </p>
         </div>
         <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-[rgba(107,114,255,0.06)]" />
       </div>
+
+      {/* Recent searches */}
+      {recentSearches.length > 0 && (
+        <Card className="border-border/50 shadow-sm">
+          <CardHeader className="flex flex-row items-center gap-2 pb-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-500">
+              <History size={16} className="text-white" />
+            </div>
+            <div>
+              <CardTitle className="text-base">Recent searches</CardTitle>
+              <p className="text-xs text-muted-foreground">
+                Click to reload cached results — no Scrap.io credits charged.
+              </p>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {recentSearches.map((s) => {
+                const isActive = s.id === activeSearchId;
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => setActiveSearchId(s.id)}
+                    className={`w-full text-left flex items-center gap-3 rounded-md border px-3 py-2 transition-colors cursor-pointer ${
+                      isActive
+                        ? "border-[#2E37FE] bg-[#EDEEFF]"
+                        : "border-border hover:bg-muted/40"
+                    }`}
+                  >
+                    <SearchStatusIcon status={s.status} />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium truncate">
+                        {describeQuery(s.query)}
+                      </div>
+                      <div className="text-[11px] text-muted-foreground">
+                        {s.status === "complete" && (
+                          <>
+                            {s.result_count.toLocaleString()} results · {s.pages_fetched} pages
+                            {s.truncated && (
+                              <span className="ml-1 text-amber-600">(truncated)</span>
+                            )}
+                            {" · "}
+                            {timeAgo(s.completed_at ?? s.created_at)}
+                          </>
+                        )}
+                        {s.status === "running" && (
+                          <span className="text-blue-600">
+                            {s.progress_message ?? "Running…"}
+                          </span>
+                        )}
+                        {s.status === "pending" && (
+                          <span className="text-amber-600">Queued</span>
+                        )}
+                        {s.status === "failed" && (
+                          <span className="text-red-600">
+                            Failed: {s.error_message ?? "unknown error"}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Search form */}
       <Card className="border-border/50 shadow-sm">
@@ -290,8 +444,8 @@ export default function ProspectingPage() {
           <div>
             <CardTitle className="text-base">New search</CardTitle>
             <p className="text-xs text-muted-foreground">
-              Burns Scrap.io credits on Search — capped at {HARD_RESULT_CAP} results
-              per run.
+              Burns Scrap.io credits on each run. Already-fetched businesses
+              are auto-blacklisted so re-running similar searches won't double-charge.
             </p>
           </div>
         </CardHeader>
@@ -325,7 +479,10 @@ export default function ProspectingPage() {
                 placeholder="Type 2+ chars — e.g. plumber, dentist, lawyer"
                 value={categoryInput}
                 onValueChange={setCategoryInput}
-                onSelect={handleCategorySelect}
+                onSelect={(item) => {
+                  setSelectedCategory(item);
+                  setCategoryInput(item.text);
+                }}
                 onSearch={searchCategories}
               />
             )}
@@ -365,13 +522,16 @@ export default function ProspectingPage() {
                 placeholder="Type 2+ chars — state, county, or city"
                 value={locationInput}
                 onValueChange={setLocationInput}
-                onSelect={handleLocationSelect}
+                onSelect={(item) => {
+                  setSelectedLocation(item);
+                  setLocationInput(item.text);
+                }}
                 onSearch={searchLocations}
               />
             )}
             <p className="text-[11px] text-muted-foreground">
-              Pick a State to search the whole state, a County to narrow to one,
-              or a City for hyper-local results.
+              Pick a State, County, or City. Counties and cities narrow the
+              search to the area inside the parent state.
             </p>
           </div>
 
@@ -413,7 +573,7 @@ export default function ProspectingPage() {
                       : "bg-white text-foreground border-border hover:bg-muted/40"
                   }`}
                 >
-                  {n}
+                  {n.toLocaleString()}
                 </button>
               ))}
               <div className="flex items-center gap-2 ml-2">
@@ -429,13 +589,15 @@ export default function ProspectingPage() {
                       setMaxResults(Math.min(n, HARD_RESULT_CAP));
                     }
                   }}
-                  className="w-24 h-8"
+                  className="w-28 h-8"
                 />
               </div>
             </div>
             <p className="text-[11px] text-muted-foreground">
-              Hard cap is {HARD_RESULT_CAP} per search to keep credit burn predictable.
-              Each ~100 results = roughly one Scrap.io API call.
+              Hard cap is {HARD_RESULT_CAP.toLocaleString()} per search. Each ~50
+              results = roughly one Scrap.io API call. A 5,000-result search
+              finishes in ~13 minutes (cron runs every minute, processes 8 pages
+              per tick).
             </p>
           </div>
 
@@ -443,47 +605,74 @@ export default function ProspectingPage() {
           <div className="flex items-center gap-3 pt-2">
             <Button
               onClick={handleSearch}
-              disabled={searching}
+              disabled={submitting}
               style={{ background: "#2E37FE" }}
             >
-              {searching ? (
+              {submitting ? (
                 <>
-                  <Loader2 size={14} className="animate-spin mr-2" /> Searching…
+                  <Loader2 size={14} className="animate-spin mr-2" /> Queuing…
                 </>
               ) : (
                 <>
-                  <Search size={14} className="mr-2" /> Search up to {maxResults}
+                  <Search size={14} className="mr-2" /> Search up to {maxResults.toLocaleString()}
                 </>
               )}
             </Button>
-            {resultMeta && (
-              <span className="text-xs text-muted-foreground">
-                Last run: {resultMeta.count} results across {resultMeta.pages}{" "}
-                page{resultMeta.pages === 1 ? "" : "s"}
-                {resultMeta.total_available !== null && (
-                  <> · {resultMeta.total_available} available</>
-                )}
-                {resultMeta.truncated && (
-                  <span className="ml-2 text-amber-600">(truncated to cap)</span>
-                )}
-              </span>
+            {submitError && (
+              <span className="text-sm text-red-600">{submitError}</span>
             )}
           </div>
         </CardContent>
       </Card>
 
-      {/* Error */}
-      {searchError && (
-        <Card className="border-red-200 bg-red-50/50">
-          <CardContent className="flex items-center gap-3 pt-6">
-            <AlertTriangle size={18} className="text-red-500 shrink-0" />
-            <span className="text-sm text-red-700">{searchError}</span>
+      {/* Active search: progress / error / results */}
+      {showProgress && activeSearch && (
+        <Card className="border-blue-200 bg-blue-50/40">
+          <CardContent className="pt-6 space-y-2">
+            <div className="flex items-center gap-3">
+              <Loader2 size={18} className="animate-spin text-blue-600" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-blue-900">
+                  {activeSearch.status === "pending"
+                    ? "Queued — waiting for the next worker tick"
+                    : activeSearch.progress_message ?? "Running…"}
+                </p>
+                <p className="text-xs text-blue-700/70">
+                  {activeSearch.result_count.toLocaleString()} of up to{" "}
+                  {activeSearch.target_max_results.toLocaleString()} results ·{" "}
+                  {activeSearch.pages_fetched} pages fetched
+                </p>
+              </div>
+            </div>
+            <p className="text-[11px] text-blue-700/60">
+              You can close this tab — the search keeps running. Open it again
+              from "Recent searches" any time.
+            </p>
           </CardContent>
         </Card>
       )}
 
-      {/* Results */}
-      {results && (
+      {showError && activeSearch && (
+        <Card className="border-red-200 bg-red-50/50">
+          <CardContent className="flex items-start gap-3 pt-6">
+            <AlertTriangle size={18} className="text-red-500 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-medium text-red-700">Search failed</p>
+              <p className="text-xs text-red-600/80 mt-1">
+                {activeSearch.error_message ?? "Unknown error"}
+              </p>
+              {activeSearch.result_count > 0 && (
+                <p className="text-xs text-red-600/80 mt-1">
+                  {activeSearch.result_count.toLocaleString()} results were
+                  fetched before the failure (preserved below).
+                </p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {(showResults || (showError && activeSearch && activeSearch.results.length > 0)) && activeSearch && (
         <Card className="border-border/50 shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between gap-2 pb-3">
             <div className="flex items-center gap-2">
@@ -493,7 +682,12 @@ export default function ProspectingPage() {
               <div>
                 <CardTitle className="text-base">Results</CardTitle>
                 <p className="text-xs text-muted-foreground">
-                  {selected.size} of {results.length} selected
+                  {selected.size} of {activeSearch.results.length} selected
+                  {activeSearch.truncated && (
+                    <span className="ml-2 text-amber-600">
+                      (more available — bump the cap to fetch more)
+                    </span>
+                  )}
                 </p>
               </div>
             </div>
@@ -507,7 +701,7 @@ export default function ProspectingPage() {
             </Button>
           </CardHeader>
           <CardContent>
-            {results.length === 0 ? (
+            {activeSearch.results.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-8">
                 No matches. Loosen your filters or try a different category.
               </p>
@@ -519,8 +713,8 @@ export default function ProspectingPage() {
                       <input
                         type="checkbox"
                         checked={
-                          results.length > 0 &&
-                          selected.size === results.length
+                          activeSearch.results.length > 0 &&
+                          selected.size === activeSearch.results.length
                         }
                         onChange={toggleAll}
                         className="cursor-pointer"
@@ -535,7 +729,7 @@ export default function ProspectingPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {results.map((r) => {
+                  {activeSearch.results.map((r) => {
                     const key = rowKey(r);
                     return (
                       <TableRow key={key}>
@@ -612,4 +806,14 @@ export default function ProspectingPage() {
       )}
     </div>
   );
+}
+
+function SearchStatusIcon({ status }: { status: ProspectSearchStatus }) {
+  if (status === "complete")
+    return <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />;
+  if (status === "running")
+    return <Loader2 size={16} className="text-blue-600 animate-spin shrink-0" />;
+  if (status === "pending")
+    return <Clock size={16} className="text-amber-600 shrink-0" />;
+  return <XCircle size={16} className="text-red-600 shrink-0" />;
 }

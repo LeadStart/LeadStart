@@ -583,8 +583,11 @@ export interface ScrapioBusiness {
   youtube: string;
 }
 
+export type ProspectSearchStatus = "pending" | "running" | "complete" | "failed";
+
 // Cached search audit row. Lives 30 days, then expires_at is the cron's
-// cleanup signal.
+// cleanup signal. Status fields drive the background worker (see
+// /api/cron/run-prospect-searches) and the polling UX on the page.
 export interface ProspectSearch {
   id: string;
   organization_id: string;
@@ -595,6 +598,13 @@ export interface ProspectSearch {
   pages_fetched: number;
   truncated: boolean;
   saved_count: number;
+  status: ProspectSearchStatus;
+  started_at: string | null;
+  completed_at: string | null;
+  progress_message: string | null;
+  error_message: string | null;
+  next_cursor: string | null;
+  target_max_results: number;
   expires_at: string;
   created_at: string;
 }

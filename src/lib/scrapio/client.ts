@@ -124,4 +124,50 @@ export class ScrapioClient {
       searchParams,
     });
   }
+
+  // Adds entries to a Scrap.io blacklist. Future searches skip blacklisted
+  // items AND don't count them toward credits.
+  //
+  // Per Scrap.io docs: max 100 entries per call. We chunk automatically
+  // so the caller can pass any size array. Failures on individual chunks
+  // are logged but don't block the rest — the worst case is paying credits
+  // for a few items next time, which is recoverable.
+  async blacklistAdd(
+    listName: string,
+    type: "google_id" | "place_id" | "domain" | "email",
+    ids: string[],
+  ): Promise<{ added: number; failed: number }> {
+    const unique = Array.from(new Set(ids.filter((id) => id && id.length > 0)));
+    let added = 0;
+    let failed = 0;
+    for (let i = 0; i < unique.length; i += 100) {
+      const chunk = unique.slice(i, i + 100);
+      try {
+        await this.request<unknown>(
+          `/blacklists/${encodeURIComponent(listName)}`,
+          {
+            method: "POST",
+            body: JSON.stringify({ type, data: chunk }),
+          },
+        );
+        added += chunk.length;
+      } catch (err) {
+        console.error(
+          `[scrapio] blacklist chunk ${i}-${i + chunk.length} failed:`,
+          err,
+        );
+        failed += chunk.length;
+      }
+    }
+    return { added, failed };
+  }
+
+  // Wipes an entire blacklist. Used by the "Reset blacklist" admin action
+  // when the user wants to re-pull a region they scraped previously.
+  async blacklistDelete(listName: string): Promise<void> {
+    await this.request<unknown>(
+      `/blacklists/${encodeURIComponent(listName)}`,
+      { method: "DELETE" },
+    );
+  }
 }
