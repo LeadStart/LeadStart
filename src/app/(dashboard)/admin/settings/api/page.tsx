@@ -34,6 +34,22 @@ import type { Organization } from "@/types/app";
 import { appUrl } from "@/lib/api-url";
 import { RegisterWebhookButton } from "./register-webhook-button";
 
+// Brand icon — Lucide's brand-icon set was removed upstream, so inline.
+function LinkedinIcon({ size = 16, className = "" }: { size?: number; className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      className={className}
+    >
+      <path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z" />
+    </svg>
+  );
+}
+
 // Generate hour options 1-12 for AM/PM display
 const HOUR_OPTIONS = Array.from({ length: 12 }, (_, i) => ({
   value: String(i === 0 ? 12 : i),
@@ -112,6 +128,16 @@ export default function IntegrationsPage() {
     { kind: "success"; model: string } | { kind: "fail"; message: string } | null
   >(null);
 
+  // Unipile (LinkedIn channel — migration 00046)
+  const [unipileKey, setUnipileKey] = useState("");
+  const [unipileDsn, setUnipileDsn] = useState("");
+  const [savingUnipile, setSavingUnipile] = useState(false);
+  const [unipileSaved, setUnipileSaved] = useState(false);
+  const [testingUnipile, setTestingUnipile] = useState(false);
+  const [unipileTestResult, setUnipileTestResult] = useState<
+    "success" | "fail" | null
+  >(null);
+
   useEffect(() => {
     if (!organizationId) return;
     const supabase = createClient();
@@ -143,9 +169,13 @@ export default function IntegrationsPage() {
           const dmOrg = data as {
             anthropic_api_key?: string | null;
             perplexity_api_key?: string | null;
+            unipile_api_key?: string | null;
+            unipile_dsn?: string | null;
           };
           if (dmOrg.anthropic_api_key) setAnthropicKey(dmOrg.anthropic_api_key);
           if (dmOrg.perplexity_api_key) setPerplexityKey(dmOrg.perplexity_api_key);
+          if (dmOrg.unipile_api_key) setUnipileKey(dmOrg.unipile_api_key);
+          if (dmOrg.unipile_dsn) setUnipileDsn(dmOrg.unipile_dsn);
         }
       });
   }, [organizationId]);
@@ -384,6 +414,40 @@ export default function IntegrationsPage() {
       });
     } finally {
       setTestingPerplexity(false);
+    }
+  }
+
+  async function handleSaveUnipile() {
+    if (!organizationId) return;
+    setSavingUnipile(true);
+    setUnipileSaved(false);
+    const supabase = createClient();
+    await supabase
+      .from("organizations")
+      .update({
+        unipile_api_key: unipileKey || null,
+        unipile_dsn: unipileDsn || null,
+      })
+      .eq("id", organizationId);
+    setUnipileSaved(true);
+    setSavingUnipile(false);
+    setTimeout(() => setUnipileSaved(false), 3000);
+  }
+
+  async function handleTestUnipile() {
+    setTestingUnipile(true);
+    setUnipileTestResult(null);
+    try {
+      const res = await fetch(appUrl("/api/admin/unipile/test"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ api_key: unipileKey, dsn: unipileDsn }),
+      });
+      setUnipileTestResult(res.ok ? "success" : "fail");
+    } catch {
+      setUnipileTestResult("fail");
+    } finally {
+      setTestingUnipile(false);
     }
   }
 
@@ -720,6 +784,94 @@ export default function IntegrationsPage() {
               <XCircle size={16} className="text-red-500" />
               <span className="text-sm font-medium text-red-700">
                 {perplexityTestResult.message}
+              </span>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Unipile — LinkedIn channel (migration 00046) */}
+      <Card className="border-border/50 shadow-sm">
+        <CardHeader className="flex flex-row items-center gap-2 pb-3">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#0A66C2]">
+            <LinkedinIcon size={16} className="text-white" />
+          </div>
+          <div>
+            <CardTitle className="text-base">Unipile (LinkedIn)</CardTitle>
+            <p className="text-xs text-muted-foreground">
+              Connects LinkedIn / Sales Navigator accounts for outbound sequences and reply ingestion
+            </p>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="space-y-1">
+              <Label htmlFor="unipileKey" className="text-sm font-medium">
+                API Key
+              </Label>
+              <Input
+                id="unipileKey"
+                type="password"
+                value={unipileKey}
+                onChange={(e) => setUnipileKey(e.target.value)}
+                placeholder="Unipile workspace API key"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Find at{" "}
+                <span className="font-mono">dashboard.unipile.com</span> →
+                Access Tokens.
+              </p>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="unipileDsn" className="text-sm font-medium">
+                DSN
+              </Label>
+              <Input
+                id="unipileDsn"
+                value={unipileDsn}
+                onChange={(e) => setUnipileDsn(e.target.value)}
+                placeholder="api7.unipile.com:13779"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Workspace host shown next to your API key on the Unipile
+                dashboard.
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              onClick={handleSaveUnipile}
+              disabled={savingUnipile}
+              style={{ background: "#2E37FE" }}
+            >
+              {savingUnipile ? "Saving..." : "Save Credentials"}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleTestUnipile}
+              disabled={testingUnipile || !unipileKey || !unipileDsn}
+            >
+              {testingUnipile ? "Testing..." : "Test Connection"}
+            </Button>
+            {unipileSaved && (
+              <span className="text-sm text-emerald-600 flex items-center gap-1">
+                <CheckCircle size={14} /> Saved
+              </span>
+            )}
+          </div>
+          {unipileTestResult === "success" && (
+            <div className="flex items-center gap-2 rounded-lg bg-emerald-50 border border-emerald-200 p-3">
+              <CheckCircle size={16} className="text-emerald-500" />
+              <span className="text-sm font-medium text-emerald-700">
+                Connection successful
+              </span>
+            </div>
+          )}
+          {unipileTestResult === "fail" && (
+            <div className="flex items-center gap-2 rounded-lg bg-red-50 border border-red-200 p-3">
+              <XCircle size={16} className="text-red-500" />
+              <span className="text-sm font-medium text-red-700">
+                Connection failed — check the API key and DSN
               </span>
             </div>
           )}
