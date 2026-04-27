@@ -45,6 +45,7 @@ import {
   AlertCircle,
   TrendingUp,
   ChevronDown,
+  Trash2,
 } from "lucide-react";
 import type { Contact, ContactStatus, ProspectStage } from "@/types/app";
 import { ImportContactsDialog } from "./import-dialog";
@@ -209,6 +210,7 @@ export default function ContactsPage() {
   const [dialogMode, setDialogMode] = useState<"add" | Contact | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
 
   const { data, loading, refetch } = useSupabaseQuery(
@@ -374,6 +376,39 @@ export default function ContactsPage() {
       closeDialog();
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (!editing) return;
+    const label =
+      [editing.first_name, editing.last_name].filter(Boolean).join(" ") ||
+      editing.email;
+    if (
+      !confirm(
+        `Delete ${label}? This permanently removes the contact and cannot be undone.`,
+      )
+    ) {
+      return;
+    }
+    setDeleting(true);
+    try {
+      const supabase = createClient();
+      const { error } = await supabase
+        .from("contacts")
+        .delete()
+        .eq("id", editing.id);
+      if (error) {
+        alert(`Failed to delete contact: ${error.message}`);
+        return;
+      }
+      await refetch();
+      // Pipeline kanban reads from a separate cache key — invalidate it so a
+      // deleted prospect doesn't linger on /admin/prospects.
+      await swrMutate("admin-contacts-with-pipeline");
+      closeDialog();
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -760,22 +795,36 @@ export default function ContactsPage() {
               </div>
             )}
 
-            <div className="flex gap-2 pt-2">
-              <Button variant="outline" className="flex-1" onClick={closeDialog}>
-                Cancel
-              </Button>
-              <Button
-                className="flex-1"
-                style={{ background: "#2E37FE" }}
-                disabled={
-                  !form.email.trim() ||
-                  saving ||
-                  (form.owner === "client" && !form.clientId)
-                }
-                onClick={handleSubmit}
-              >
-                {saving ? "Saving..." : editing ? "Save changes" : "Add Contact"}
-              </Button>
+            <div className="flex items-center gap-2 pt-2">
+              {editing && (
+                <Button
+                  variant="ghost"
+                  className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                  onClick={handleDelete}
+                  disabled={deleting || saving}
+                >
+                  <Trash2 size={14} className="mr-1" />
+                  {deleting ? "Deleting..." : "Delete"}
+                </Button>
+              )}
+              <div className="flex flex-1 gap-2">
+                <Button variant="outline" className="flex-1" onClick={closeDialog}>
+                  Cancel
+                </Button>
+                <Button
+                  className="flex-1"
+                  style={{ background: "#2E37FE" }}
+                  disabled={
+                    !form.email.trim() ||
+                    saving ||
+                    deleting ||
+                    (form.owner === "client" && !form.clientId)
+                  }
+                  onClick={handleSubmit}
+                >
+                  {saving ? "Saving..." : editing ? "Save changes" : "Add Contact"}
+                </Button>
+              </div>
             </div>
           </div>
         </DialogContent>
