@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ClientUsersSection } from "./client-users-section";
 import { ReplyRoutingSection } from "./reply-routing-section";
+import { LinkedinSection } from "./linkedin-section";
 import { ArrowLeft, ArrowRight, Mail, MessageSquare, Calendar, Archive, ArchiveRestore } from "lucide-react";
 import type { Client, Campaign, CampaignSnapshot, LeadFeedback, Profile, ClientStatus } from "@/types/app";
 
@@ -197,6 +198,9 @@ export default function ClientDetailPage({
 
       {/* Reply routing settings (collapsed by default) */}
       <ReplyRoutingSection client={typedClient} onSaved={() => mutate()} />
+
+      {/* LinkedIn channel — Unipile hosted-auth connection (collapsed by default) */}
+      <LinkedinSection client={typedClient} onChanged={() => mutate()} />
 
       {/* Period Selector */}
       <div className="flex items-center gap-2">

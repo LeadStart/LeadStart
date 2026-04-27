@@ -30,6 +30,13 @@ export interface Organization {
   // fallback (web search). Either may fall back to env vars at runtime.
   anthropic_api_key: string | null;
   perplexity_api_key: string | null;
+  // Unipile (LinkedIn channel — migration 00046). DSN is the per-workspace
+  // host Unipile assigns at signup (e.g. "api7.unipile.com:13779"). Webhook
+  // ID is populated when commit #5 registers the messaging/account_status
+  // webhooks; null until one-time setup runs.
+  unipile_api_key: string | null;
+  unipile_dsn: string | null;
+  unipile_webhook_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -80,6 +87,11 @@ export interface Client {
   persona_photo_url: string | null;
   brand_voice: string | null;
   signature_block: string | null;
+  // LinkedIn channel (migration 00046). Populated by the hosted-auth
+  // connect flow; status flips to 'expired' on Unipile's
+  // account_disconnected webhook (handled in commit #5).
+  unipile_account_id: string | null;
+  unipile_account_status: "disconnected" | "connected" | "expired" | null;
   created_at: string;
   updated_at: string;
 }
