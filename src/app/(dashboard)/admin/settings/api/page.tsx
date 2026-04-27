@@ -27,6 +27,8 @@ import {
   Settings2,
   Webhook,
   Search,
+  Sparkles,
+  Compass,
 } from "lucide-react";
 import type { Organization } from "@/types/app";
 import { appUrl } from "@/lib/api-url";
@@ -94,6 +96,22 @@ export default function IntegrationsPage() {
   const [resendSaved, setResendSaved] = useState(false);
   const [scrapioSaved, setScrapioSaved] = useState(false);
 
+  // Anthropic + Perplexity (Decision-maker enrichment, migration 00044)
+  const [anthropicKey, setAnthropicKey] = useState("");
+  const [savingAnthropic, setSavingAnthropic] = useState(false);
+  const [anthropicSaved, setAnthropicSaved] = useState(false);
+  const [testingAnthropic, setTestingAnthropic] = useState(false);
+  const [anthropicTestResult, setAnthropicTestResult] = useState<
+    { kind: "success"; model: string } | { kind: "fail"; message: string } | null
+  >(null);
+  const [perplexityKey, setPerplexityKey] = useState("");
+  const [savingPerplexity, setSavingPerplexity] = useState(false);
+  const [perplexitySaved, setPerplexitySaved] = useState(false);
+  const [testingPerplexity, setTestingPerplexity] = useState(false);
+  const [perplexityTestResult, setPerplexityTestResult] = useState<
+    { kind: "success"; model: string } | { kind: "fail"; message: string } | null
+  >(null);
+
   useEffect(() => {
     if (!organizationId) return;
     const supabase = createClient();
@@ -119,6 +137,15 @@ export default function IntegrationsPage() {
           if (typedOrg.resend_api_key) setResendKey(typedOrg.resend_api_key);
           if (typedOrg.email_from) setEmailFrom(typedOrg.email_from);
           if (typedOrg.scrapio_api_key) setScrapioKey(typedOrg.scrapio_api_key);
+          // Decision-maker enrichment keys (migration 00044). Cast through
+          // unknown because typedOrg's compile-time shape (Organization) is
+          // stale w.r.t. the new columns until we update the type.
+          const dmOrg = data as {
+            anthropic_api_key?: string | null;
+            perplexity_api_key?: string | null;
+          };
+          if (dmOrg.anthropic_api_key) setAnthropicKey(dmOrg.anthropic_api_key);
+          if (dmOrg.perplexity_api_key) setPerplexityKey(dmOrg.perplexity_api_key);
         }
       });
   }, [organizationId]);
@@ -280,6 +307,84 @@ export default function IntegrationsPage() {
     setResendSaved(true);
     setSavingResend(false);
     setTimeout(() => setResendSaved(false), 3000);
+  }
+
+  async function handleSaveAnthropic() {
+    if (!organizationId) return;
+    setSavingAnthropic(true);
+    setAnthropicSaved(false);
+    const supabase = createClient();
+    await supabase
+      .from("organizations")
+      .update({ anthropic_api_key: anthropicKey || null })
+      .eq("id", organizationId);
+    setAnthropicSaved(true);
+    setSavingAnthropic(false);
+    setTimeout(() => setAnthropicSaved(false), 3000);
+  }
+
+  async function handleTestAnthropic() {
+    setTestingAnthropic(true);
+    setAnthropicTestResult(null);
+    try {
+      const res = await fetch(appUrl("/api/admin/prospecting/validate-anthropic"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ api_key: anthropicKey }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setAnthropicTestResult({ kind: "success", model: data.model ?? "" });
+      } else {
+        setAnthropicTestResult({ kind: "fail", message: data.error ?? "Connection failed" });
+      }
+    } catch (err) {
+      setAnthropicTestResult({
+        kind: "fail",
+        message: err instanceof Error ? err.message : "Connection failed",
+      });
+    } finally {
+      setTestingAnthropic(false);
+    }
+  }
+
+  async function handleSavePerplexity() {
+    if (!organizationId) return;
+    setSavingPerplexity(true);
+    setPerplexitySaved(false);
+    const supabase = createClient();
+    await supabase
+      .from("organizations")
+      .update({ perplexity_api_key: perplexityKey || null })
+      .eq("id", organizationId);
+    setPerplexitySaved(true);
+    setSavingPerplexity(false);
+    setTimeout(() => setPerplexitySaved(false), 3000);
+  }
+
+  async function handleTestPerplexity() {
+    setTestingPerplexity(true);
+    setPerplexityTestResult(null);
+    try {
+      const res = await fetch(appUrl("/api/admin/prospecting/validate-perplexity"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ api_key: perplexityKey }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setPerplexityTestResult({ kind: "success", model: data.model ?? "" });
+      } else {
+        setPerplexityTestResult({ kind: "fail", message: data.error ?? "Connection failed" });
+      }
+    } catch (err) {
+      setPerplexityTestResult({
+        kind: "fail",
+        message: err instanceof Error ? err.message : "Connection failed",
+      });
+    } finally {
+      setTestingPerplexity(false);
+    }
   }
 
   return (
@@ -456,6 +561,168 @@ export default function IntegrationsPage() {
               )}
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Anthropic — decision-maker enrichment Layer 1 */}
+      <Card className="border-border/50 shadow-sm">
+        <CardHeader className="flex flex-row items-center gap-2 pb-3">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500">
+            <Sparkles size={16} className="text-white" />
+          </div>
+          <div>
+            <CardTitle className="text-base">Anthropic</CardTitle>
+            <p className="text-xs text-muted-foreground">
+              Powers decision-maker extraction in the Prospecting tab
+            </p>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-1">
+            <Label htmlFor="anthropicKey" className="text-sm font-medium">
+              API Key
+            </Label>
+            <Input
+              id="anthropicKey"
+              type="password"
+              value={anthropicKey}
+              onChange={(e) => setAnthropicKey(e.target.value)}
+              placeholder="sk-ant-..."
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Find your key at{" "}
+              <span className="font-mono">console.anthropic.com</span>. Roughly
+              $0.003 per business enriched (Claude Haiku 4.5).
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              onClick={handleSaveAnthropic}
+              disabled={savingAnthropic}
+              style={{ background: "#2E37FE" }}
+            >
+              {savingAnthropic ? "Saving..." : "Save Key"}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleTestAnthropic}
+              disabled={testingAnthropic || !anthropicKey}
+            >
+              {testingAnthropic ? "Testing..." : "Test Connection"}
+            </Button>
+            {anthropicSaved && (
+              <span className="text-sm text-emerald-600 flex items-center gap-1">
+                <CheckCircle size={14} /> Saved
+              </span>
+            )}
+          </div>
+          {anthropicTestResult?.kind === "success" && (
+            <div className="flex items-center gap-2 rounded-lg bg-emerald-50 border border-emerald-200 p-3">
+              <CheckCircle size={16} className="text-emerald-500" />
+              <span className="text-sm font-medium text-emerald-700">
+                Connection successful{" "}
+                {anthropicTestResult.model && (
+                  <span className="text-emerald-700/70 font-normal">
+                    — {anthropicTestResult.model}
+                  </span>
+                )}
+              </span>
+            </div>
+          )}
+          {anthropicTestResult?.kind === "fail" && (
+            <div className="flex items-center gap-2 rounded-lg bg-red-50 border border-red-200 p-3">
+              <XCircle size={16} className="text-red-500" />
+              <span className="text-sm font-medium text-red-700">
+                {anthropicTestResult.message}
+              </span>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Perplexity — decision-maker enrichment Layer 2 (optional) */}
+      <Card className="border-border/50 shadow-sm">
+        <CardHeader className="flex flex-row items-center gap-2 pb-3">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-500">
+            <Compass size={16} className="text-white" />
+          </div>
+          <div>
+            <CardTitle className="text-base flex items-center gap-2">
+              Perplexity
+              <Badge
+                variant="secondary"
+                className="bg-slate-100 text-slate-600 border border-slate-200 text-[10px]"
+              >
+                Optional
+              </Badge>
+            </CardTitle>
+            <p className="text-xs text-muted-foreground">
+              Web-search fallback when a business website doesn&apos;t surface a
+              decision maker
+            </p>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-1">
+            <Label htmlFor="perplexityKey" className="text-sm font-medium">
+              API Key
+            </Label>
+            <Input
+              id="perplexityKey"
+              type="password"
+              value={perplexityKey}
+              onChange={(e) => setPerplexityKey(e.target.value)}
+              placeholder="pplx-..."
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Find your key at{" "}
+              <span className="font-mono">perplexity.ai/settings/api</span>. If
+              unset, Layer 2 falls back to Claude&apos;s built-in web search
+              (slightly less accurate).
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              onClick={handleSavePerplexity}
+              disabled={savingPerplexity}
+              style={{ background: "#2E37FE" }}
+            >
+              {savingPerplexity ? "Saving..." : "Save Key"}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleTestPerplexity}
+              disabled={testingPerplexity || !perplexityKey}
+            >
+              {testingPerplexity ? "Testing..." : "Test Connection"}
+            </Button>
+            {perplexitySaved && (
+              <span className="text-sm text-emerald-600 flex items-center gap-1">
+                <CheckCircle size={14} /> Saved
+              </span>
+            )}
+          </div>
+          {perplexityTestResult?.kind === "success" && (
+            <div className="flex items-center gap-2 rounded-lg bg-emerald-50 border border-emerald-200 p-3">
+              <CheckCircle size={16} className="text-emerald-500" />
+              <span className="text-sm font-medium text-emerald-700">
+                Connection successful{" "}
+                {perplexityTestResult.model && (
+                  <span className="text-emerald-700/70 font-normal">
+                    — {perplexityTestResult.model}
+                  </span>
+                )}
+              </span>
+            </div>
+          )}
+          {perplexityTestResult?.kind === "fail" && (
+            <div className="flex items-center gap-2 rounded-lg bg-red-50 border border-red-200 p-3">
+              <XCircle size={16} className="text-red-500" />
+              <span className="text-sm font-medium text-red-700">
+                {perplexityTestResult.message}
+              </span>
+            </div>
+          )}
         </CardContent>
       </Card>
 

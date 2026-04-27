@@ -36,6 +36,10 @@
     {
       "path": "/app/api/cron/run-prospect-searches",
       "schedule": "* * * * *"
+    },
+    {
+      "path": "/app/api/cron/run-decision-maker-enrichment",
+      "schedule": "* * * * *"
     }
   ]
 }

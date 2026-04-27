@@ -4,17 +4,23 @@ import type { ScrapioBusiness } from "@/types/app";
 
 // POST /api/admin/prospecting/save
 //
-// Body: { search_id: string, google_ids: string[] }
+// Body: { search_id: string, google_ids: string[], run_id?: string }
 //
 // Pulls the selected rows out of the cached prospect_searches.results,
 // maps them onto the contacts table, and bulk-inserts. Saved contacts land
 // in the existing Prospects/CRM Kanban under the Lead column with
 // source='scrap.io'. Email-based dedup runs as a pre-flight check against
 // the unique index from migration 00042.
+//
+// Optional run_id (migration 00044): when provided, decision_maker_results
+// rows for the same (search_id, google_id) are merged in, populating
+// first_name / last_name / title and preferring personal_email over the
+// scraped generic. Tag becomes ['scrap.io', 'enriched'] for those rows.
 
 type Body = {
   search_id?: unknown;
   google_ids?: unknown;
+  run_id?: unknown;
 };
 
 function pickFirst(value: string | null | undefined): string | null {
@@ -35,6 +41,10 @@ export async function POST(request: NextRequest) {
         (id): id is string => typeof id === "string" && id.length > 0,
       )
     : [];
+  const runId =
+    typeof body.run_id === "string" && body.run_id.length > 0
+      ? body.run_id
+      : null;
 
   if (!searchId || googleIds.length === 0) {
     return NextResponse.json(
@@ -82,6 +92,43 @@ export async function POST(request: NextRequest) {
     });
   }
 
+  // If a decision-maker run was passed, load its results for the same
+  // (search, google_id) pairs. The map keys on google_id and lets us
+  // populate first/last/title/personal_email per row at insert time.
+  type DmEnrichment = {
+    first_name: string | null;
+    last_name: string | null;
+    title: string | null;
+    personal_email: string | null;
+    other_emails: string[] | null;
+    enrichment_source: string | null;
+    enrichment_notes: string | null;
+    status: string;
+  };
+  const enrichmentByGoogleId = new Map<string, DmEnrichment>();
+  if (runId) {
+    const { data: enrichRows } = await admin
+      .from("decision_maker_results")
+      .select(
+        "google_id, first_name, last_name, title, personal_email, other_emails, enrichment_source, enrichment_notes, status",
+      )
+      .eq("run_id", runId)
+      .eq("search_id", searchId)
+      .in("google_id", googleIds);
+    for (const r of (enrichRows as (DmEnrichment & { google_id: string })[]) ?? []) {
+      enrichmentByGoogleId.set(r.google_id, r);
+    }
+  }
+
+  // Resolve the *effective* email for a row — the email that will be
+  // saved on the contact and used for dedup. Prefer the enriched personal
+  // email when present; fall back to the first scraped email.
+  function effectiveEmail(row: ScrapioBusiness): string | null {
+    const enrich = row.google_id ? enrichmentByGoogleId.get(row.google_id) : null;
+    if (enrich?.personal_email) return enrich.personal_email.trim() || null;
+    return pickFirst(row.email);
+  }
+
   // Pre-flight dedup. Two layers:
   // 1. In-batch: collapse duplicate emails within this save batch.
   // 2. Cross-batch: exclude rows whose lower(email) already exists in
@@ -92,8 +139,8 @@ export async function POST(request: NextRequest) {
     emailKey: string | null;
   }> = [];
   for (const r of candidates) {
-    const firstEmail = pickFirst(r.email);
-    const lowered = firstEmail?.toLowerCase() ?? null;
+    const eff = effectiveEmail(r);
+    const lowered = eff?.toLowerCase() ?? null;
     if (lowered && seenEmails.has(lowered)) continue;
     if (lowered) seenEmails.add(lowered);
     candidatesByKey.push({ row: r, emailKey: lowered });
@@ -126,21 +173,27 @@ export async function POST(request: NextRequest) {
     .filter((c) => !c.emailKey || !alreadyInDb.has(c.emailKey))
     .map(({ row, emailKey }) => {
       const now = new Date().toISOString();
+      const enrich = row.google_id
+        ? enrichmentByGoogleId.get(row.google_id)
+        : null;
+      const hasEnrichment = Boolean(enrich && enrich.first_name);
       return {
         organization_id: organizationId,
         client_id: null,
         campaign_id: null,
-        first_name: null,
-        last_name: null,
+        first_name: enrich?.first_name ?? null,
+        last_name: enrich?.last_name ?? null,
         email: emailKey,
         company_name: row.name || null,
-        title: null,
+        title: enrich?.title ?? null,
         phone: row.phone || null,
         linkedin_url: pickFirst(row.linkedin),
         intro_line: null,
-        enrichment_data: row,
-        tags: ["scrap.io"],
-        status: "new",
+        enrichment_data: enrich
+          ? { ...row, decision_maker: enrich }
+          : row,
+        tags: hasEnrichment ? ["scrap.io", "enriched"] : ["scrap.io"],
+        status: hasEnrichment ? "enriched" : "new",
         source: "scrap.io",
         notes: null,
         pipeline_stage: "lead",

@@ -27,6 +27,8 @@ import {
   XCircle,
   Clock,
   History,
+  UserSearch,
+  Settings2,
 } from "lucide-react";
 import { appUrl } from "@/lib/api-url";
 import type { ScrapioBusiness, ProspectSearchStatus } from "@/types/app";
@@ -103,6 +105,45 @@ type SearchDetail = SearchSummary & {
   results: ScrapioBusiness[];
 };
 
+// ---------- Decision-maker enrichment (migration 00044) ----------
+type DmRunStatus = "pending" | "running" | "complete" | "failed";
+
+type DmResult = {
+  id: string;
+  google_id: string;
+  business_name: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  title: string | null;
+  personal_email: string | null;
+  other_emails: string[] | null;
+  enrichment_source: string | null;
+  enrichment_notes: string | null;
+  status: "pending" | "complete" | "error" | "skipped";
+  cost_usd: number | string;
+  updated_at: string;
+};
+
+type DmRun = {
+  id: string;
+  search_id: string;
+  service_type: string;
+  use_layer2: boolean;
+  status: DmRunStatus;
+  total_count: number;
+  processed_count: number;
+  cost_usd: number | string;
+  started_at: string | null;
+  completed_at: string | null;
+  progress_message: string | null;
+  error_message: string | null;
+  created_at: string;
+};
+
+type DmRunDetail = { run: DmRun; results: DmResult[] };
+
+const ESTIMATED_COST_PER_BUSINESS = 0.003;
+
 function describeQuery(query: Record<string, unknown>): string {
   const cat = (query.type as string) || "—";
   const admin1 = (query.admin1_code as string) || "";
@@ -156,6 +197,21 @@ export default function ProspectingPage() {
     | null
   >(null);
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Decision-maker enrichment state
+  const [dmPanelOpen, setDmPanelOpen] = useState(false);
+  const [dmServiceType, setDmServiceType] = useState<"operations" | "events">(
+    "operations",
+  );
+  const [dmUseLayer2, setDmUseLayer2] = useState(true);
+  const [dmStarting, setDmStarting] = useState(false);
+  const [dmStartError, setDmStartError] = useState<string | null>(null);
+  const [activeRunId, setActiveRunId] = useState<string | null>(null);
+  const [activeRun, setActiveRun] = useState<DmRunDetail | null>(null);
+  const [enrichmentByGoogleId, setEnrichmentByGoogleId] = useState<
+    Map<string, DmResult>
+  >(new Map());
+  const dmPollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadRecentSearches = useCallback(async () => {
     const res = await fetch(appUrl("/api/admin/prospecting/searches"), {
@@ -213,9 +269,60 @@ export default function ProspectingPage() {
     setSelected(new Set());
     setSavedGoogleIds(new Set());
     setSaveResult(null);
+    setActiveRunId(null);
+    setActiveRun(null);
+    setEnrichmentByGoogleId(new Map());
+    setDmPanelOpen(false);
+    setDmStartError(null);
     pollOnce(activeSearchId);
     return () => stopPolling();
   }, [activeSearchId, pollOnce, stopPolling]);
+
+  // Decision-maker enrichment polling. Mirrors the activeSearch polling
+  // pattern above — fetches the run + per-business results, hydrates the
+  // map keyed on google_id, stops on terminal status.
+  const stopDmPolling = useCallback(() => {
+    if (dmPollTimerRef.current) {
+      clearTimeout(dmPollTimerRef.current);
+      dmPollTimerRef.current = null;
+    }
+  }, []);
+
+  const pollDmRunOnce = useCallback(
+    async (id: string) => {
+      const res = await fetch(
+        appUrl(`/api/admin/prospecting/decision-makers/run/${id}`),
+        { cache: "no-store" },
+      );
+      if (!res.ok) return;
+      const data = (await res.json()) as DmRunDetail;
+      setActiveRun(data);
+      const map = new Map<string, DmResult>();
+      for (const r of data.results) {
+        if (r.google_id) map.set(r.google_id, r);
+      }
+      setEnrichmentByGoogleId(map);
+      const status = data.run.status;
+      if (status === "complete" || status === "failed") {
+        stopDmPolling();
+        return;
+      }
+      dmPollTimerRef.current = setTimeout(
+        () => pollDmRunOnce(id),
+        POLL_INTERVAL_MS,
+      );
+    },
+    [stopDmPolling],
+  );
+
+  useEffect(() => {
+    if (!activeRunId) {
+      stopDmPolling();
+      return;
+    }
+    pollDmRunOnce(activeRunId);
+    return () => stopDmPolling();
+  }, [activeRunId, pollDmRunOnce, stopDmPolling]);
 
   function clearCategory() {
     setSelectedCategory(null);
@@ -332,6 +439,42 @@ export default function ProspectingPage() {
     });
   }
 
+  async function handleStartEnrichment() {
+    if (!activeSearch || selected.size === 0) return;
+    setDmStarting(true);
+    setDmStartError(null);
+    try {
+      const res = await fetch(
+        appUrl("/api/admin/prospecting/decision-makers/start"),
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            search_id: activeSearch.id,
+            google_ids: Array.from(selected),
+            service_type: dmServiceType,
+            use_layer2: dmUseLayer2,
+          }),
+        },
+      );
+      const data = await res.json();
+      if (!res.ok || !data.run_id) {
+        setDmStartError(data.error ?? "Failed to start enrichment");
+      } else {
+        setActiveRunId(data.run_id);
+        setActiveRun(null);
+        setEnrichmentByGoogleId(new Map());
+        setDmPanelOpen(false);
+      }
+    } catch (err) {
+      setDmStartError(
+        err instanceof Error ? err.message : "Failed to start enrichment",
+      );
+    } finally {
+      setDmStarting(false);
+    }
+  }
+
   async function handleSaveSelected() {
     if (!activeSearch || selected.size === 0) return;
     setSaving(true);
@@ -343,6 +486,10 @@ export default function ProspectingPage() {
         body: JSON.stringify({
           search_id: activeSearch.id,
           google_ids: Array.from(selected),
+          run_id:
+            activeRun && activeRun.run.status === "complete"
+              ? activeRun.run.id
+              : null,
         }),
       });
       const data = await res.json();
@@ -773,15 +920,39 @@ export default function ProspectingPage() {
                 </span>
               )}
               <Button
-                onClick={handleSaveSelected}
-                disabled={selected.size === 0 || saving}
+                onClick={() => setDmPanelOpen((o) => !o)}
+                disabled={
+                  selected.size === 0 ||
+                  dmStarting ||
+                  activeRun?.run.status === "pending" ||
+                  activeRun?.run.status === "running"
+                }
                 variant="outline"
                 size="sm"
+              >
+                <UserSearch size={14} className="mr-2" />
+                Find decision makers
+                {selected.size > 0 && ` (${selected.size})`}
+              </Button>
+              <Button
+                onClick={handleSaveSelected}
+                disabled={selected.size === 0 || saving}
+                variant={
+                  activeRun?.run.status === "complete" ? "default" : "outline"
+                }
+                size="sm"
+                style={
+                  activeRun?.run.status === "complete"
+                    ? { background: "#2E37FE" }
+                    : undefined
+                }
               >
                 {saving ? (
                   <>
                     <Loader2 size={14} className="animate-spin mr-2" /> Saving…
                   </>
+                ) : activeRun?.run.status === "complete" ? (
+                  "Save with decision makers"
                 ) : (
                   "Save selected"
                 )}
@@ -789,6 +960,170 @@ export default function ProspectingPage() {
             </div>
           </CardHeader>
           <CardContent>
+            {/* Decision-maker enrichment panel (toggled by "Find decision makers") */}
+            {dmPanelOpen && (
+              <div className="rounded-lg border border-violet-200 bg-violet-50/40 p-4 mb-4">
+                <div className="flex items-start gap-3">
+                  <Settings2 size={16} className="text-violet-600 mt-1" />
+                  <div className="flex-1 space-y-3">
+                    <div>
+                      <p className="text-sm font-medium text-slate-900">
+                        Decision-maker enrichment
+                      </p>
+                      <p className="text-[11px] text-slate-600">
+                        Layer 1 scrapes each business website with Claude
+                        Haiku. Layer 2 (optional) falls back to a web-search
+                        lookup when the website yields nothing.
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <Label className="text-xs font-medium">
+                          Targeting profile
+                        </Label>
+                        <div className="flex gap-1.5">
+                          {(["operations", "events"] as const).map((p) => (
+                            <button
+                              key={p}
+                              type="button"
+                              onClick={() => setDmServiceType(p)}
+                              className={`flex-1 px-3 py-1.5 rounded-md text-xs border transition-colors cursor-pointer ${
+                                dmServiceType === p
+                                  ? "bg-[#2E37FE] text-white border-[#2E37FE]"
+                                  : "bg-white text-foreground border-border hover:bg-muted/40"
+                              }`}
+                            >
+                              {p === "operations"
+                                ? "Operations / Facilities"
+                                : "Events / Programs"}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs font-medium">Web-search fallback</Label>
+                        <label className="flex items-center gap-2 text-xs cursor-pointer rounded-md border border-border/60 px-3 py-1.5 hover:bg-white">
+                          <input
+                            type="checkbox"
+                            checked={dmUseLayer2}
+                            onChange={(e) => setDmUseLayer2(e.target.checked)}
+                            className="cursor-pointer"
+                          />
+                          <span>
+                            Use Perplexity / web search if website yields
+                            nothing
+                          </span>
+                        </label>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between border-t border-violet-200/60 pt-3">
+                      <div className="text-xs text-slate-600">
+                        Estimated cost:{" "}
+                        <span className="font-medium text-slate-900">
+                          ~$
+                          {(
+                            selected.size * ESTIMATED_COST_PER_BUSINESS
+                          ).toFixed(3)}
+                        </span>{" "}
+                        for {selected.size} business
+                        {selected.size === 1 ? "" : "es"}
+                      </div>
+                      <div className="flex items-center gap-3">
+                        {dmStartError && (
+                          <span className="text-xs text-red-600">
+                            {dmStartError}
+                          </span>
+                        )}
+                        <Button
+                          onClick={handleStartEnrichment}
+                          disabled={dmStarting || selected.size === 0}
+                          size="sm"
+                          style={{ background: "#2E37FE" }}
+                        >
+                          {dmStarting ? (
+                            <>
+                              <Loader2 size={14} className="animate-spin mr-2" />
+                              Starting…
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles size={14} className="mr-2" />
+                              Start enrichment
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Decision-maker run status banner */}
+            {activeRun && (
+              <div
+                className={`rounded-lg border p-3 mb-4 flex items-start gap-3 ${
+                  activeRun.run.status === "failed"
+                    ? "border-red-200 bg-red-50/50"
+                    : activeRun.run.status === "complete"
+                      ? "border-emerald-200 bg-emerald-50/50"
+                      : "border-blue-200 bg-blue-50/40"
+                }`}
+              >
+                {activeRun.run.status === "failed" ? (
+                  <XCircle size={18} className="text-red-500 shrink-0 mt-0.5" />
+                ) : activeRun.run.status === "complete" ? (
+                  <CheckCircle2
+                    size={18}
+                    className="text-emerald-600 shrink-0 mt-0.5"
+                  />
+                ) : (
+                  <Loader2
+                    size={18}
+                    className="animate-spin text-blue-600 shrink-0 mt-0.5"
+                  />
+                )}
+                <div className="flex-1">
+                  <p
+                    className={`text-sm font-medium ${
+                      activeRun.run.status === "failed"
+                        ? "text-red-700"
+                        : activeRun.run.status === "complete"
+                          ? "text-emerald-800"
+                          : "text-blue-900"
+                    }`}
+                  >
+                    {activeRun.run.status === "pending"
+                      ? "Queued — waiting for the worker"
+                      : activeRun.run.status === "running"
+                        ? `Enriching ${activeRun.run.processed_count} of ${activeRun.run.total_count}…`
+                        : activeRun.run.status === "complete"
+                          ? `Decision makers found for ${
+                              activeRun.results.filter((r) => r.first_name)
+                                .length
+                            } of ${activeRun.run.total_count}`
+                          : `Enrichment failed: ${activeRun.run.error_message ?? "unknown error"}`}
+                  </p>
+                  <p
+                    className={`text-[11px] ${
+                      activeRun.run.status === "failed"
+                        ? "text-red-600/80"
+                        : activeRun.run.status === "complete"
+                          ? "text-emerald-700/80"
+                          : "text-blue-700/70"
+                    }`}
+                  >
+                    Cost so far: ${Number(activeRun.run.cost_usd || 0).toFixed(3)}
+                    {" · "}
+                    {activeRun.run.service_type === "events"
+                      ? "Events / Programs"
+                      : "Operations / Facilities"}
+                    {activeRun.run.use_layer2 ? " · web-search fallback on" : ""}
+                  </p>
+                </div>
+              </div>
+            )}
+
             {activeSearch.results.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-8">
                 No matches. Loosen your filters or try a different category.
@@ -813,6 +1148,7 @@ export default function ProspectingPage() {
                     </TableHead>
                     <TableHead>Business</TableHead>
                     <TableHead>Email</TableHead>
+                    <TableHead>Decision Maker</TableHead>
                     <TableHead>Phone</TableHead>
                     <TableHead>Location</TableHead>
                     <TableHead>Reviews</TableHead>
@@ -882,6 +1218,15 @@ export default function ProspectingPage() {
                             <span className="text-muted-foreground">—</span>
                           )}
                         </TableCell>
+                        <TableCell className="max-w-[260px]">
+                          <DecisionMakerCell
+                            enrichment={enrichmentByGoogleId.get(key) ?? null}
+                            runActive={
+                              activeRun?.run.status === "pending" ||
+                              activeRun?.run.status === "running"
+                            }
+                          />
+                        </TableCell>
                         <TableCell>
                           {r.phone || (
                             <span className="text-muted-foreground">—</span>
@@ -928,4 +1273,56 @@ function SearchStatusIcon({ status }: { status: ProspectSearchStatus }) {
   if (status === "pending")
     return <Clock size={16} className="text-amber-600 shrink-0" />;
   return <XCircle size={16} className="text-red-600 shrink-0" />;
+}
+
+function DecisionMakerCell({
+  enrichment,
+  runActive,
+}: {
+  enrichment: DmResult | null;
+  runActive: boolean;
+}) {
+  if (!enrichment) {
+    return runActive ? (
+      <Loader2 size={14} className="animate-spin text-muted-foreground" />
+    ) : (
+      <span className="text-muted-foreground">—</span>
+    );
+  }
+  if (enrichment.status === "pending") {
+    return <Loader2 size={14} className="animate-spin text-muted-foreground" />;
+  }
+  if (enrichment.status === "error") {
+    return (
+      <span
+        className="text-red-600 text-xs cursor-help"
+        title={enrichment.enrichment_notes ?? "Unknown error"}
+      >
+        Error
+      </span>
+    );
+  }
+  if (!enrichment.first_name && !enrichment.last_name) {
+    return (
+      <span className="italic text-muted-foreground text-xs">Not found</span>
+    );
+  }
+  return (
+    <div className="flex flex-col text-xs">
+      <span className="font-medium text-slate-900">
+        {enrichment.first_name} {enrichment.last_name}
+      </span>
+      {enrichment.title && (
+        <span className="text-muted-foreground">{enrichment.title}</span>
+      )}
+      {enrichment.personal_email && (
+        <a
+          href={`mailto:${enrichment.personal_email}`}
+          className="text-[#2E37FE] hover:underline truncate"
+        >
+          {enrichment.personal_email}
+        </a>
+      )}
+    </div>
+  );
 }

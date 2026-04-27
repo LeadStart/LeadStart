@@ -25,6 +25,11 @@ export interface Organization {
   scrapio_api_key: string | null;
   scrapio_credits_balance: number | null;
   scrapio_last_credit_check_at: string | null;
+  // Decision-maker enrichment (migration 00044). Anthropic powers Layer 1
+  // (website scrape via Haiku); Perplexity is the optional Layer 2
+  // fallback (web search). Either may fall back to env vars at runtime.
+  anthropic_api_key: string | null;
+  perplexity_api_key: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -607,4 +612,54 @@ export interface ProspectSearch {
   target_max_results: number;
   expires_at: string;
   created_at: string;
+}
+
+// ---------- Decision-maker enrichment (migration 00044) ----------
+
+export type DmRunStatus = "pending" | "running" | "complete" | "failed";
+export type DmServiceType = "operations" | "events";
+export type DmResultStatus = "pending" | "complete" | "error" | "skipped";
+
+// Parent run row — one created per "Find decision makers" click. The cron
+// worker /api/cron/run-decision-maker-enrichment processes the children.
+export interface DecisionMakerRun {
+  id: string;
+  organization_id: string;
+  created_by: string;
+  search_id: string;
+  service_type: DmServiceType;
+  use_layer2: boolean;
+  status: DmRunStatus;
+  total_count: number;
+  processed_count: number;
+  cost_usd: number | string;
+  started_at: string | null;
+  completed_at: string | null;
+  progress_message: string | null;
+  error_message: string | null;
+  created_at: string;
+}
+
+// Per-business enrichment result. UNIQUE (search_id, google_id) lets a
+// re-run reuse a prior result and lets the save endpoint merge enrichment
+// onto the contact insert by (search, google_id).
+export interface DecisionMakerResult {
+  id: string;
+  run_id: string;
+  organization_id: string;
+  search_id: string;
+  google_id: string;
+  business_name: string | null;
+  category: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  title: string | null;
+  personal_email: string | null;
+  other_emails: string[];
+  enrichment_source: "website" | "web_search" | null;
+  enrichment_notes: string | null;
+  status: DmResultStatus;
+  cost_usd: number | string;
+  created_at: string;
+  updated_at: string;
 }

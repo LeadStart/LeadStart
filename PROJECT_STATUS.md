@@ -1,6 +1,6 @@
 # LeadStart — Project Status
 
-> Last updated: 2026-04-21
+> Last updated: 2026-04-26
 
 ## Current State: Local Demo (Not Deployed)
 
@@ -26,6 +26,18 @@ Everything runs locally on mock data. No live database, no API connections, no d
 - No auto-reply, ever. Portal composer sends only when the client clicks Send.
 
 **Security follow-up:** rotate hardcoded Instantly API key at `scripts/backfill-emails.mjs:9` after this work ships.
+
+---
+
+## Prospecting tab — phases shipped
+
+**Phase 1 — Scrap.io plumbing:** API key in Settings, validate-key route, sidebar entry. Commit `2e35b1b`.
+
+**Phase 2 — Background search:** cron-driven worker (`/api/cron/run-prospect-searches`), polling UI for live progress, save-to-CRM with email dedup, prospect_searches table with status lifecycle (migrations 00042 + 00043).
+
+**Phase 3 — Decision-maker enrichment (this commit, code-complete):** Two-layer enrichment ported from the standalone LeadEnrich tool. Layer 1 = Claude Haiku scrapes the business website with a category-aware seniority hierarchy. Layer 2 = Perplexity Sonar (or Claude web_search) when the website yields nothing. Surfaced inline on the Scrap.io results table as a "Find decision makers" action; saved contacts get first/last/title/personal_email merged in via a `run_id` on the existing /save endpoint. New cron worker mirrors the prospect-search pattern. Settings page gains Anthropic + Perplexity key cards. Migration 00044 (`decision_maker_runs` + `decision_maker_results` + 2 org columns).
+
+**Phase 3 next:** apply migration 00044 in Supabase dashboard, add Anthropic + Perplexity keys in /admin/settings/api, smoke-test end-to-end, then ship.
 
 ---
 
