@@ -241,17 +241,34 @@ export class InstantlyClient {
     });
   }
 
-  async getAccountCampaignMappings(startingAfter?: string): Promise<InstantlyAccountCampaignMappingResponse> {
+  // GET /api/v2/account-campaign-mappings/{email}
+  // Per Instantly docs (https://developer.instantly.ai/api/v2/accountcampaignmapping/getaccountcampaignmapping)
+  // there is no list-all endpoint — mappings are fetched per email.
+  async getAccountCampaignMappings(
+    email: string,
+    startingAfter?: string,
+  ): Promise<InstantlyAccountCampaignMappingResponse> {
     const params = new URLSearchParams({ limit: "100" });
     if (startingAfter) params.set("starting_after", startingAfter);
-    return this.request<InstantlyAccountCampaignMappingResponse>(`/account-campaign-mappings?${params.toString()}`);
+    return this.request<InstantlyAccountCampaignMappingResponse>(
+      `/account-campaign-mappings/${encodeURIComponent(email)}?${params.toString()}`,
+    );
   }
 
-  async getAllAccountCampaignMappings(): Promise<InstantlyAccountCampaignMapping[]> {
+  // DELETE /api/v2/accounts/{email} — permanently removes the sending
+  // mailbox from Instantly. Requires accounts:update / accounts:all scope.
+  async deleteAccount(email: string): Promise<void> {
+    await this.request<unknown>(
+      `/accounts/${encodeURIComponent(email)}`,
+      { method: "DELETE" },
+    );
+  }
+
+  async getAllAccountCampaignMappingsForEmail(email: string): Promise<InstantlyAccountCampaignMapping[]> {
     const all: InstantlyAccountCampaignMapping[] = [];
     let cursor: string | undefined;
     do {
-      const response = await this.getAccountCampaignMappings(cursor);
+      const response = await this.getAccountCampaignMappings(email, cursor);
       all.push(...response.items);
       cursor = response.next_starting_after;
     } while (cursor);

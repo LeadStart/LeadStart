@@ -10,6 +10,7 @@ import { useApiQuery } from "@/hooks/use-api-query";
 import { API_INBOX_HEALTH_PATH } from "@/lib/admin-queries";
 import { SortableHead } from "@/components/ui/sortable-head";
 import { Inbox, Globe, Activity, AlertTriangle, Shield, RefreshCw } from "lucide-react";
+import { InboxRowActions } from "./inbox-row-actions";
 
 interface InboxData {
   email: string;
@@ -69,7 +70,7 @@ function inboxRateBadge(rate: number | null) {
 
 export default function InboxHealthPage() {
   const [view, setView] = useState<"inboxes" | "domains">("domains");
-  const { data, loading, error, refetch } = useApiQuery<InboxHealthResponse>(
+  const { data, loading, error, refetch, refreshing } = useApiQuery<InboxHealthResponse>(
     API_INBOX_HEALTH_PATH,
   );
   const fetchData = () => {
@@ -123,9 +124,13 @@ export default function InboxHealthPage() {
             <h1 className="text-[20px] sm:text-[22px] font-bold mt-1" style={{ color: '#0f172a', letterSpacing: '-0.01em' }}>Inbox Health</h1>
             <p className="text-sm text-[#0f172a]/60 mt-1">{summary.totalInboxes} inboxes across {domainRows.length} domains</p>
           </div>
-          <button onClick={fetchData} className="flex items-center gap-2 rounded-lg bg-white/10 px-3 py-2 text-sm font-medium text-[#0f172a] hover:bg-white/20 transition-colors">
-            <RefreshCw size={14} />
-            Refresh
+          <button
+            onClick={fetchData}
+            disabled={refreshing}
+            className="flex items-center gap-2 rounded-lg bg-white/60 px-3 py-2 text-sm font-medium text-[#0f172a] hover:bg-white/80 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            <RefreshCw size={14} className={refreshing ? "animate-spin" : undefined} />
+            {refreshing ? "Refreshing…" : "Refresh"}
           </button>
         </div>
         <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-[rgba(107,114,255,0.06)]" />
@@ -202,6 +207,7 @@ export default function InboxHealthPage() {
                   <SortableHead sortKey="inboxRate" sortConfig={inboxSort} onSort={requestInboxSort} className="text-right">Inbox Rate</SortableHead>
                   <SortableHead sortKey="sent30d" sortConfig={inboxSort} onSort={requestInboxSort} className="text-right">Sent (30d)</SortableHead>
                   <TableHead>Campaigns</TableHead>
+                  <TableHead className="w-[60px]"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -214,7 +220,7 @@ export default function InboxHealthPage() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="secondary" className={inbox.status === "active" ? "badge-green" : "badge-slate"}>
+                      <Badge variant="secondary" className={inbox.status === "active" ? "badge-green" : "badge-red"}>
                         {inbox.status}
                       </Badge>
                     </TableCell>
@@ -236,6 +242,9 @@ export default function InboxHealthPage() {
                           <Badge variant="secondary" className="bg-gray-100 text-gray-500 text-[10px]">+{inbox.campaigns.length - 3}</Badge>
                         )}
                       </div>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <InboxRowActions email={inbox.email} onDeleted={fetchData} />
                     </TableCell>
                   </TableRow>
                 ))}
