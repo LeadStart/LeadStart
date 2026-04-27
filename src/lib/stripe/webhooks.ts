@@ -3,6 +3,7 @@ import type Stripe from "stripe";
 import type { createClient } from "@/lib/supabase/server";
 import { buildSubscriptionStartedEmail } from "@/lib/email/subscription-started";
 import { buildPaymentFailedEmail } from "@/lib/email/payment-failed";
+import { buildInvoiceEmail } from "@/lib/email/invoice";
 
 type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
 
@@ -298,6 +299,76 @@ async function handleInvoiceEvent(
     } as Record<string, unknown>,
     { onConflict: "id" },
   );
+
+  // Newly finalized open invoice → send branded LeadStart invoice email.
+  // Stripe still sends its own; ours is the on-brand cover. We skip if the
+  // hosted URL isn't set yet (the Pay button needs it) or if status flipped
+  // straight to paid (covered by the receipt flow, not an "amount due" mail).
+  if (
+    eventType === "invoice.finalized" &&
+    invoice.status === "open" &&
+    invoice.hosted_invoice_url
+  ) {
+    const toEmail =
+      invoice.customer_email ||
+      (typeof invoice.customer === "object" && invoice.customer
+        ? (invoice.customer as { email?: string }).email
+        : null);
+    if (toEmail) {
+      const lineItems = (invoice.lines?.data ?? []).map((line) => {
+        const start = line.period?.start
+          ? new Date(line.period.start * 1000).toISOString()
+          : null;
+        const end = line.period?.end
+          ? new Date(line.period.end * 1000).toISOString()
+          : null;
+        const periodLabel =
+          start && end
+            ? `${new Date(start).toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${new Date(end).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
+            : null;
+        return {
+          description: line.description ?? "Subscription",
+          periodLabel,
+          amountCents: line.amount,
+        };
+      });
+      await sendEmail(
+        toEmail,
+        `Invoice ${invoice.number ?? invoice.id} — $${(invoice.amount_due / 100).toFixed(2)} due`,
+        buildInvoiceEmail({
+          clientName:
+            (client as unknown as { name?: string }).name || "",
+          invoiceNumber: invoice.number ?? invoice.id,
+          amountDueCents: invoice.amount_due,
+          currency: invoice.currency,
+          issuedAt:
+            invoice.status_transitions?.finalized_at != null
+              ? new Date(
+                  invoice.status_transitions.finalized_at * 1000,
+                ).toISOString()
+              : new Date().toISOString(),
+          dueAt: invoice.due_date
+            ? new Date(invoice.due_date * 1000).toISOString()
+            : null,
+          periodStart: invoice.period_start
+            ? new Date(invoice.period_start * 1000).toISOString()
+            : null,
+          periodEnd: invoice.period_end
+            ? new Date(invoice.period_end * 1000).toISOString()
+            : null,
+          lineItems,
+          subtotalCents: invoice.subtotal,
+          taxCents: (invoice.total_taxes ?? []).reduce(
+            (sum, t) => sum + (t.amount ?? 0),
+            0,
+          ),
+          totalCents: invoice.total,
+          hostedInvoiceUrl: invoice.hosted_invoice_url,
+          invoicePdfUrl: invoice.invoice_pdf ?? null,
+        }),
+      );
+    }
+  }
 
   // Failed payment → mark the subscription past_due + send nudge.
   if (eventType === "invoice.payment_failed" && subscriptionId) {

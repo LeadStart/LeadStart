@@ -63,7 +63,9 @@ import {
   Play,
   RotateCcw,
   Ban,
+  Mail,
 } from "lucide-react";
+import { toast } from "sonner";
 import { StatCard } from "@/components/charts/stat-card";
 import {
   DropdownMenu,
@@ -737,6 +739,7 @@ export default function BillingPage() {
   const [rowActionLoading, setRowActionLoading] = useState<string | null>(null);
   const [portalSentFor, setPortalSentFor] = useState<string | null>(null);
   const [portalSending, setPortalSending] = useState<string | null>(null);
+  const [sendingInvoiceId, setSendingInvoiceId] = useState<string | null>(null);
   const [portalUrlDialog, setPortalUrlDialog] = useState<{
     clientName: string;
     url: string;
@@ -811,6 +814,35 @@ export default function BillingPage() {
     const { plan: created } = (await res.json()) as { plan: PricingPlan };
     setPlans((prev) => [...prev, created]);
     setCreatingPlan(false);
+  }
+
+  async function handleSendInvoiceEmail(inv: BillingInvoice) {
+    setSendingInvoiceId(inv.id);
+    try {
+      const res = await fetch(
+        appUrl(`/api/billing/invoices/${inv.id}/send`),
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        },
+      );
+      const payload = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        sent_to?: string;
+      };
+      if (!res.ok) {
+        toast.error(payload.error || "Could not send invoice email.");
+        return;
+      }
+      toast.success(
+        payload.sent_to
+          ? `Invoice emailed to ${payload.sent_to}`
+          : "Invoice email sent.",
+      );
+    } finally {
+      setSendingInvoiceId(null);
+    }
   }
 
   async function handleSendPortal(clientId: string, emailIt: boolean) {
@@ -1568,15 +1600,26 @@ export default function BillingPage() {
                       </TableCell>
                       <TableCell>
                         {inv.hosted_invoice_url ? (
-                          <a
-                            href={inv.hosted_invoice_url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center gap-1 text-xs text-[#2E37FE] hover:underline"
-                          >
-                            <ExternalLink size={12} />
-                            View
-                          </a>
+                          <div className="flex items-center gap-3">
+                            <a
+                              href={inv.hosted_invoice_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1 text-xs text-[#2E37FE] hover:underline"
+                            >
+                              <ExternalLink size={12} />
+                              View
+                            </a>
+                            <button
+                              type="button"
+                              onClick={() => handleSendInvoiceEmail(inv)}
+                              disabled={sendingInvoiceId === inv.id}
+                              className="inline-flex items-center gap-1 text-xs text-[#2E37FE] hover:underline disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                            >
+                              <Mail size={12} />
+                              {sendingInvoiceId === inv.id ? "Sending…" : "Send"}
+                            </button>
+                          </div>
                         ) : (
                           <span className="text-xs text-muted-foreground">
                             —
