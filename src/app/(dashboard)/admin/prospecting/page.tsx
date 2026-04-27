@@ -148,6 +148,13 @@ export default function ProspectingPage() {
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [savedGoogleIds, setSavedGoogleIds] = useState<Set<string>>(new Set());
+  const [saving, setSaving] = useState(false);
+  const [saveResult, setSaveResult] = useState<
+    | { kind: "ok"; inserted: number; skipped_duplicates: number }
+    | { kind: "error"; message: string }
+    | null
+  >(null);
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadRecentSearches = useCallback(async () => {
@@ -204,6 +211,8 @@ export default function ProspectingPage() {
       return;
     }
     setSelected(new Set());
+    setSavedGoogleIds(new Set());
+    setSaveResult(null);
     pollOnce(activeSearchId);
     return () => stopPolling();
   }, [activeSearchId, pollOnce, stopPolling]);
@@ -303,6 +312,7 @@ export default function ProspectingPage() {
   }
 
   function toggleRow(key: string) {
+    if (savedGoogleIds.has(key)) return;
     setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
@@ -313,16 +323,63 @@ export default function ProspectingPage() {
 
   function toggleAll() {
     if (!activeSearch) return;
+    const selectable = activeSearch.results
+      .map(rowKey)
+      .filter((k) => !savedGoogleIds.has(k));
     setSelected((prev) => {
-      if (prev.size === activeSearch.results.length) return new Set();
-      return new Set(activeSearch.results.map(rowKey));
+      if (prev.size === selectable.length) return new Set();
+      return new Set(selectable);
     });
   }
 
-  function handleSaveSelected() {
-    alert(
-      `Save flow lands in Phase 3.\nSelected ${selected.size} of ${activeSearch?.results.length ?? 0}.`,
-    );
+  async function handleSaveSelected() {
+    if (!activeSearch || selected.size === 0) return;
+    setSaving(true);
+    setSaveResult(null);
+    try {
+      const res = await fetch(appUrl("/api/admin/prospecting/save"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          search_id: activeSearch.id,
+          google_ids: Array.from(selected),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setSaveResult({
+          kind: "error",
+          message: data.error ?? "Save failed",
+        });
+      } else {
+        setSaveResult({
+          kind: "ok",
+          inserted: data.inserted ?? 0,
+          skipped_duplicates: data.skipped_duplicates ?? 0,
+        });
+        const newlySaved: string[] = Array.isArray(data.saved_google_ids)
+          ? data.saved_google_ids
+          : [];
+        setSavedGoogleIds((prev) => {
+          const next = new Set(prev);
+          // Mark every requested id as "saved" — both newly-inserted ones
+          // (so the user sees them locked) and skipped-duplicates (because
+          // they're already in the CRM, just not from this session).
+          for (const id of selected) next.add(id);
+          for (const id of newlySaved) next.add(id);
+          return next;
+        });
+        setSelected(new Set());
+        loadRecentSearches();
+      }
+    } catch (err) {
+      setSaveResult({
+        kind: "error",
+        message: err instanceof Error ? err.message : "Save failed",
+      });
+    } finally {
+      setSaving(false);
+    }
   }
 
   const locationBadge =
@@ -683,6 +740,11 @@ export default function ProspectingPage() {
                 <CardTitle className="text-base">Results</CardTitle>
                 <p className="text-xs text-muted-foreground">
                   {selected.size} of {activeSearch.results.length} selected
+                  {savedGoogleIds.size > 0 && (
+                    <span className="ml-2 text-emerald-600">
+                      · {savedGoogleIds.size} saved this session
+                    </span>
+                  )}
                   {activeSearch.truncated && (
                     <span className="ml-2 text-amber-600">
                       (more available — bump the cap to fetch more)
@@ -691,14 +753,40 @@ export default function ProspectingPage() {
                 </p>
               </div>
             </div>
-            <Button
-              onClick={handleSaveSelected}
-              disabled={selected.size === 0}
-              variant="outline"
-              size="sm"
-            >
-              Save selected
-            </Button>
+            <div className="flex items-center gap-3">
+              {saveResult?.kind === "ok" && (
+                <span className="text-sm text-emerald-600">
+                  Saved {saveResult.inserted}
+                  {saveResult.skipped_duplicates > 0 && (
+                    <>
+                      {" "}
+                      <span className="text-muted-foreground">
+                        ({saveResult.skipped_duplicates} already in CRM)
+                      </span>
+                    </>
+                  )}
+                </span>
+              )}
+              {saveResult?.kind === "error" && (
+                <span className="text-sm text-red-600">
+                  {saveResult.message}
+                </span>
+              )}
+              <Button
+                onClick={handleSaveSelected}
+                disabled={selected.size === 0 || saving}
+                variant="outline"
+                size="sm"
+              >
+                {saving ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin mr-2" /> Saving…
+                  </>
+                ) : (
+                  "Save selected"
+                )}
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
             {activeSearch.results.length === 0 ? (
@@ -712,10 +800,12 @@ export default function ProspectingPage() {
                     <TableHead className="w-10">
                       <input
                         type="checkbox"
-                        checked={
-                          activeSearch.results.length > 0 &&
-                          selected.size === activeSearch.results.length
-                        }
+                        checked={(() => {
+                          const selectable = activeSearch.results.filter(
+                            (r) => !savedGoogleIds.has(rowKey(r)),
+                          ).length;
+                          return selectable > 0 && selected.size === selectable;
+                        })()}
                         onChange={toggleAll}
                         className="cursor-pointer"
                         aria-label="Select all"
@@ -731,20 +821,42 @@ export default function ProspectingPage() {
                 <TableBody>
                   {activeSearch.results.map((r) => {
                     const key = rowKey(r);
+                    const isSaved = savedGoogleIds.has(key);
                     return (
-                      <TableRow key={key}>
+                      <TableRow
+                        key={key}
+                        className={isSaved ? "opacity-60" : undefined}
+                      >
                         <TableCell>
-                          <input
-                            type="checkbox"
-                            checked={selected.has(key)}
-                            onChange={() => toggleRow(key)}
-                            className="cursor-pointer"
-                            aria-label={`Select ${r.name}`}
-                          />
+                          {isSaved ? (
+                            <CheckCircle2
+                              size={16}
+                              className="text-emerald-600"
+                              aria-label={`${r.name} saved`}
+                            />
+                          ) : (
+                            <input
+                              type="checkbox"
+                              checked={selected.has(key)}
+                              onChange={() => toggleRow(key)}
+                              className="cursor-pointer"
+                              aria-label={`Select ${r.name}`}
+                            />
+                          )}
                         </TableCell>
                         <TableCell>
                           <div className="flex flex-col">
-                            <span className="font-medium">{r.name || "—"}</span>
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">{r.name || "—"}</span>
+                              {isSaved && (
+                                <Badge
+                                  variant="secondary"
+                                  className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px]"
+                                >
+                                  Saved
+                                </Badge>
+                              )}
+                            </div>
                             {r.website && (
                               <a
                                 href={r.website}
