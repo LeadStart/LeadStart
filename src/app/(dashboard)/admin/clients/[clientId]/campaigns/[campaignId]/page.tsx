@@ -20,6 +20,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { RefreshButton } from "./refresh-button";
+import { LinkedinCampaignDetail } from "./linkedin-campaign-detail";
 import { ArrowLeft, MessageSquare } from "lucide-react";
 import type { Campaign, CampaignSnapshot, CampaignStepMetric, LeadFeedback, Client } from "@/types/app";
 
@@ -78,6 +79,14 @@ export default function CampaignDetailPage({
   const { clientId, campaignId } = use(params);
   const { data } = useSWR(`admin-campaign-${campaignId}`, () => fetchCampaignDetail(campaignId));
 
+  // LinkedIn campaigns get a different detail view — campaign_snapshots /
+  // step_metrics are email-shaped and empty for LinkedIn. We branch early
+  // so the SWR refetch + the LinkedIn component's own SWR don't both
+  // run unnecessarily.
+  if (data?.campaign?.source_channel === "linkedin") {
+    return <LinkedinCampaignDetail params={params} />;
+  }
+
   if (!data) {
     return (
       <div className="space-y-6 animate-pulse">
@@ -123,9 +132,11 @@ export default function CampaignDetailPage({
           <div className="relative z-10 flex items-start justify-between">
             <div>
               <h1 className="text-2xl font-bold">{typedCampaign.name}</h1>
-              <p className="text-xs text-[#0f172a]/50 font-mono mt-1">
-                {typedCampaign.instantly_campaign_id}
-              </p>
+              {typedCampaign.instantly_campaign_id && (
+                <p className="text-xs text-[#0f172a]/50 font-mono mt-1">
+                  {typedCampaign.instantly_campaign_id}
+                </p>
+              )}
             </div>
             <div className="flex items-center gap-2">
               <Badge
