@@ -1,29 +1,37 @@
 # LeadStart — Project Status
 
-> Last updated: 2026-04-26
+> Last updated: 2026-04-27
 
-## Current State: Local Demo (Not Deployed)
+## Current State: Deployed to Production
 
-Everything runs locally on mock data. No live database, no API connections, no deployment yet. The app is fully functional for previewing and iterating on design/features.
+Live at https://leadstart-ebon.vercel.app (LeadStart Vercel account, auto-deploys on push to `master`). Real Supabase project (`exedxjrifprqgftyuroc`). Real auth, real data. No mock-mode anywhere — local dev points at the same Supabase.
 
 ---
 
-## Current Initiative: AI Lead-Reply Classification & Routing
+## Current Initiative: LinkedIn Channel via Unipile
 
-**Status:** Commits 1–8 shipped (code-complete, not yet activated). The Instantly webhook is not registered in production, so the pipeline isn't firing on live events yet. Commits 9–12 + activation are next.
+**Status:** All 9 code commits shipped (latest `64b45fd`). **NOT live yet** — gated on three migrations + Unipile config + webhook registration. No more code commits required for first activation.
 
-**What it does:** Instantly's native AI tags + a keyword prefilter + a Claude Haiku verifier classify every inbound reply. When a hot class lands (configurable via `clients.auto_notify_classes`), the client gets a Resend email with a signed-URL deep-link to a mobile dossier showing the prospect's phone number and a `tel:` button. Primary action: phone call within 5 minutes. Fallback: a manual composer in the portal to send an email reply through Instantly with the client's inbox CC'd. **No AI drafting** — the client writes the reply themselves.
+**What it does:** Adds LinkedIn as a parallel outreach channel alongside Instantly email. Per-client hosted-auth connect flow (Unipile-brokered), a sequence builder for multi-step outreach (connect_request → message → message → message), a 15-min cron worker that dispatches steps with per-account safety caps (80 connect/wk, 150 messages/day), and a Unipile webhook handler that ingests inbound DMs into the existing `lead_replies` AI classification + notification pipeline (reuses every line of the email pipeline — `source_channel='linkedin'` is the only difference at the row level).
 
-**Full plan:** [`docs/plans/ai-reply-routing.md`](docs/plans/ai-reply-routing.md). Current shipped state + next commits: [`RESUME-AI-REPLY-ROUTING.md`](RESUME-AI-REPLY-ROUTING.md).
+**Resume doc with full activation checklist:** [`RESUME-LINKEDIN-CHANNEL.md`](RESUME-LINKEDIN-CHANNEL.md).
 
-**Next action when resuming:** commit #9 — outcome-capture + admin-reclassify API routes.
+**Next action when resuming:** apply migrations 00045 + 00046 + 00047 in the Supabase SQL editor, then walk through the activation checklist in the resume doc. After activation, the resume doc lists prioritized post-activation polish commits (Activate-campaign action UI, Bulk-enroll UI, channel-aware dossier, contact resolution, deferred step kinds, analytics-sync cron).
 
-**Decisions locked in (current):**
-- Client (not owner) gets the notification; phone call is the primary CTA.
-- Claude Haiku 4.5 for classification only; **no Sonnet drafter** (removed 2026-04-21).
-- Resend for client notifications; no Pushover.
-- Path 1 persona model: real person on alias domain, mandatory for every client pre-launch.
-- No auto-reply, ever. Portal composer sends only when the client clicks Send.
+**Decisions locked in:**
+- Hosted-auth (Unipile-brokered), not raw OAuth. Owner clicks Connect on the client detail page; client (or owner on their behalf) authorizes via Unipile's hosted page.
+- One LinkedIn account per client (their own — not LeadStart's master).
+- Reuse the existing AI classification + notification pipeline. No LinkedIn-specific classifier.
+- Reply pipeline is channel-agnostic; only the inbound side and the campaign engine differ. Admin inbox + reply pipeline + notification are unchanged.
+- Cookie expiry every 1–3 months → Unipile fires `account_disconnected` → flips `clients.unipile_account_status='expired'` → Reconnect button surfaces in the LinkedinSection UI.
+- No AI auto-drafting on LinkedIn replies (mirrors the email-channel rule).
+- Sequence engine: support `connect_request` + `message` for v0; `inmail` / `like_post` / `profile_visit` are reserved kinds (cron marks them `failed` if used) until there's a real product use case.
+
+---
+
+## Other initiative — AI Lead-Reply Classification & Routing
+
+**Status:** Code-complete through commit #11 per [`RESUME-AI-REPLY-ROUTING.md`](RESUME-AI-REPLY-ROUTING.md); commit #12 is the staging smoke test, not new code. The Instantly webhook is **not** registered in production yet — see the "Activation — do not run yet" section of that resume doc for the gating prereqs (test campaign, David Cabrera persona migration, etc.).
 
 **Security follow-up:** rotate hardcoded Instantly API key at `scripts/backfill-emails.mjs:9` after this work ships.
 

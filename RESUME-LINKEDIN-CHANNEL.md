@@ -108,15 +108,19 @@ Client portal mirror of #8 in `linkedin-client-campaign.tsx`. Stripped down — 
 
 ---
 
-## What's deferred (not in 1–9)
+## Next code work (post-activation polish — pick up any of these)
 
-- **`inmail`, `like_post`, `profile_visit` step kinds.** Builder UI surfaces them; cron worker marks enrollments using these kinds as `failed` with a clear message. Add when there's a real product use case.
-- **`/api/cron/sync-linkedin-analytics`.** The plan listed it; deferred because `campaign_snapshots` is email-shaped (emails_sent, replies, bounce_rate) and doesn't fit LinkedIn metrics (connect requests sent, acceptance rate, etc.). Repurposing or adding new schema is a real product decision — defer until the metrics matter for reporting.
-- **Synthetic `lead_email` for LinkedIn replies.** `lead_replies.lead_email` is NOT NULL, but LinkedIn DMs don't carry an email. Webhook stores `linkedin:<sender_id>`. Hot-lead notification emails will display this synthetic value until the dossier UI gets channel-aware rendering. Functional, just ugly.
-- **Contact resolution from inbound LinkedIn replies.** Currently we don't try to look up `contacts.linkedin_url` to populate `lead_name` / real email. Pipeline still classifies fine (it uses `body_text`).
-- **Throttle counter precision.** Counts ALL enrollment dispatches per account per window without splitting connect_request vs message. Conservative for v0; split via a `dispatch_log` table later if it bites.
-- **Sales Nav search** (originally part of plan, deferred to post-MVP per the plan's "Future work" section).
-- **AI-personalized openers.** Schema is wired (`contacts.intro_line_model`, `intro_line_generated_at`); no Haiku worker built.
+These are real, actionable commits that would make the channel materially better. None block first activation, but the first two are what turn the sequence engine from "API-driven" into "usable from the admin UI."
+
+- [ ] **Activate-campaign action.** LinkedIn campaigns save as `status='draft'`. Today the only way to flip them to `active` is a Supabase UPDATE. Add an "Activate" button to the LinkedIn admin campaign detail page (`linkedin-campaign-detail.tsx`) that POSTs to a small new route or reuses an existing campaign-status endpoint. Without this, the sequence engine cron skips every saved campaign.
+- [ ] **Bulk enroll UI.** The `POST /api/admin/campaigns/[id]/enroll` route is built but there's no UI calling it. Add an "Add contacts" panel on `linkedin-campaign-detail.tsx` that picks contacts filtered by `linkedin_url IS NOT NULL AND client_id = <campaign.client_id>`, with a search box and checkbox list. Without this, enrollment is API-only.
+- [ ] **Channel-aware hot-lead dossier UI.** Inbound LinkedIn replies land with synthetic `lead_email = "linkedin:<sender_id>"` (since the column is NOT NULL but DMs have no email). The hot-lead notification email and dossier page render this synthetic string as if it were an email address. Branch the dossier on `lead_replies.source_channel === 'linkedin'`: show the LinkedIn URL, a "Reply on LinkedIn" CTA, and skip the `tel:` button (or fall back to `clients.phone_number` if set).
+- [ ] **Contact resolution from inbound LinkedIn replies.** Solves the same UX problem from the source: at webhook time, look up `contacts` where `linkedin_url` ends with the sender's `provider_id` (or matches via name + recent campaign enrollment). If found, populate `lead_name` / `lead_company` / `lead_email` (real, if any) on the row instead of the synthetic placeholder. Pipeline classification doesn't need this — it's purely for display.
+- [ ] **Bigger:** add the deferred step kinds (`inmail`, `like_post`, `profile_visit`) to `dispatchStep` in the cron worker. Builder UI already surfaces them; cron currently marks them `failed`. Adding `inmail` first is the highest-value of the three since the other two are soft-touch warmup.
+- [ ] **Bigger:** `/api/cron/sync-linkedin-analytics`. `campaign_snapshots` is email-shaped (emails_sent, replies, bounce_rate) and doesn't fit LinkedIn metrics. Either repurpose by reading enrollment-derived counts, or add a parallel `linkedin_campaign_snapshots` table. Real product decision — defer until weekly KPI reports need to show LinkedIn numbers.
+- [ ] **Throttle counter precision.** Cron currently counts ALL enrollment dispatches per account per window without splitting connect_request vs message; both share the smaller-of-the-two cap. Add a `dispatch_log` table (account_id, kind, dispatched_at) to count precisely.
+- [ ] **Sales Nav search.** Originally in the plan, deferred to post-MVP per the plan's "Future work" section. Mirror the Scrap.io page at `/admin/prospecting/linkedin`. Generalizes `prospect_searches.provider`.
+- [ ] **AI-personalized openers.** Schema is wired (`contacts.intro_line_model`, `intro_line_generated_at`); no Haiku worker built. Worker reads each contact's LinkedIn bio + recent post and writes a 1-line opener; sequence engine reads `contacts.intro_line` in `renderTemplate` (currently merge fields are `{{first_name}}` / `{{last_name}}` / `{{company}}` / `{{title}}` only).
 
 ---
 
