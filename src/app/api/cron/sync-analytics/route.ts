@@ -105,7 +105,9 @@ export async function GET(request: NextRequest) {
               unsubscribes: unsubs,
               meetings_booked: meetings,
               new_leads_contacted: newLeads,
-              reply_rate: sent > 0 ? Number(((replies / sent) * 100).toFixed(2)) : 0,
+              // Reply rate is share of unique leads contacted who replied —
+              // not share of total sends (each lead gets multiple follow-ups).
+              reply_rate: newLeads > 0 ? Number(((uniqueReplies / newLeads) * 100).toFixed(2)) : 0,
               positive_reply_rate: 0,
               bounce_rate: sent > 0 ? Number(((bounced / sent) * 100).toFixed(2)) : 0,
               unsubscribe_rate: sent > 0 ? Number(((unsubs / sent) * 100).toFixed(2)) : 0,

@@ -250,6 +250,7 @@ export interface KPIMetrics {
   bounces: number;
   unsubscribes: number;
   meetings_booked: number;
+  new_leads_contacted: number;
   reply_rate: number;
   positive_reply_rate: number;
   bounce_rate: number;

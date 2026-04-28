@@ -10,6 +10,7 @@ export function calculateMetrics(snapshots: CampaignSnapshot[]): KPIMetrics {
       bounces: acc.bounces + s.bounces,
       unsubscribes: acc.unsubscribes + s.unsubscribes,
       meetings_booked: acc.meetings_booked + s.meetings_booked,
+      new_leads_contacted: acc.new_leads_contacted + (s.new_leads_contacted ?? 0),
     }),
     {
       emails_sent: 0,
@@ -19,15 +20,20 @@ export function calculateMetrics(snapshots: CampaignSnapshot[]): KPIMetrics {
       bounces: 0,
       unsubscribes: 0,
       meetings_booked: 0,
+      new_leads_contacted: 0,
     }
   );
 
   const sent = totals.emails_sent;
   const replies = totals.unique_replies;
+  // Reply rate is the share of unique leads contacted who replied — not a
+  // share of total sends. Each lead receives multiple follow-up steps, so
+  // dividing by sends artificially deflates the rate.
+  const leadsContacted = totals.new_leads_contacted;
 
   return {
     ...totals,
-    reply_rate: sent > 0 ? Number(((replies / sent) * 100).toFixed(2)) : 0,
+    reply_rate: leadsContacted > 0 ? Number(((replies / leadsContacted) * 100).toFixed(2)) : 0,
     positive_reply_rate: replies > 0 ? Number(((totals.positive_replies / replies) * 100).toFixed(2)) : 0,
     bounce_rate: sent > 0 ? Number(((totals.bounces / sent) * 100).toFixed(2)) : 0,
     unsubscribe_rate: sent > 0 ? Number(((totals.unsubscribes / sent) * 100).toFixed(2)) : 0,

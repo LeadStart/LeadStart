@@ -19,9 +19,9 @@ export const KPI_DEFINITIONS: KPIDefinition[] = [
   {
     key: "reply_rate",
     label: "Reply Rate",
-    description: "Percentage of sent emails that received a reply",
+    description: "Percentage of unique leads contacted who replied",
     unit: "percent",
-    thresholds: { good: 5, warning: 2 },
+    thresholds: { good: 10, warning: 5 },
     higherIsBetter: true,
   },
   {
