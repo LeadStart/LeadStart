@@ -38,7 +38,7 @@ export default function RootLayout({
       lang="en"
       className={`${poppins.variable} ${jetbrainsMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col font-sans">
+      <body className="h-full font-sans">
         <PostLoginOverlay />
         {children}
         <Toaster position="bottom-right" richColors />
