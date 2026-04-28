@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { calculateMetrics } from "@/lib/kpi/calculator";
-import { Mail, ArrowRight, RefreshCcw } from "lucide-react";
+import { Mail, ArrowRight, RefreshCcw, Plus } from "lucide-react";
 import { useSort } from "@/hooks/use-sort";
 import { SortableHead } from "@/components/ui/sortable-head";
 import { PaginationControls } from "@/components/ui/pagination-controls";
@@ -70,7 +70,14 @@ export default function AllCampaignsPage() {
               )}
             </p>
           </div>
-          <SyncFromInstantlyButton onDone={refetch} />
+          <div className="flex items-center gap-2">
+            <Link href="/admin/campaigns/new/linkedin">
+              <Button size="sm" variant="outline" className="gap-2">
+                <Plus size={14} /> New LinkedIn campaign
+              </Button>
+            </Link>
+            <SyncFromInstantlyButton onDone={refetch} />
+          </div>
         </div>
         <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-[rgba(107,114,255,0.06)]" />
       </div>

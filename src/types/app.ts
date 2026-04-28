@@ -111,7 +111,9 @@ export interface Campaign {
   // gracefully when client_id is NULL.
   client_id: string | null;
   organization_id: string;
-  instantly_campaign_id: string;
+  // Made nullable in migration 00047 — LinkedIn campaigns have no Instantly
+  // id. Still NOT NULL in practice for source_channel='instantly' rows.
+  instantly_campaign_id: string | null;
   name: string;
   status: CampaignStatus;
   // Channel discriminator (migration 00045). 'instantly' for legacy email
@@ -121,6 +123,56 @@ export interface Campaign {
   // clients.unipile_account_id but lives on the campaign so accounts can
   // rotate without invalidating campaign history.
   unipile_account_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// ---------- Sequence engine (migration 00047) ----------
+
+export type SequenceStepKind =
+  | "connect_request"
+  | "message"
+  | "inmail"
+  | "like_post"
+  | "profile_visit";
+
+export type EnrollmentStatus =
+  | "active"
+  | "paused"
+  | "completed"
+  | "replied"
+  | "failed";
+
+// One row per step in a campaign's sequence template. step_index orders
+// the steps; wait_days is days to wait AFTER the previous step's
+// last_action_at before this one fires.
+export interface CampaignStep {
+  id: string;
+  campaign_id: string;
+  step_index: number;
+  kind: SequenceStepKind;
+  wait_days: number;
+  body_template: string | null;
+  conditions: Record<string, unknown> | null;
+  created_at: string;
+}
+
+// Per-contact progress through a sequence. The cron worker
+// /api/cron/run-linkedin-sequences advances active enrollments whose
+// last_action_at + current step's wait_days has elapsed. unipile_chat_id
+// is populated after the first message step opens a chat (or after a
+// connect_request is accepted and the recipient replies).
+export interface CampaignEnrollment {
+  id: string;
+  campaign_id: string;
+  contact_id: string;
+  current_step_index: number;
+  last_action_at: string | null;
+  status: EnrollmentStatus;
+  started_at: string;
+  unipile_chat_id: string | null;
+  unipile_invitation_id: string | null;
+  last_error: string | null;
   created_at: string;
   updated_at: string;
 }
