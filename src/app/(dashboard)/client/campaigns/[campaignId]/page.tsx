@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ArrowLeft, TrendingUp } from "lucide-react";
+import { LinkedinClientCampaign } from "./linkedin-client-campaign";
 import type { Campaign, CampaignSnapshot } from "@/types/app";
 
 const supabase = createClient();
@@ -86,6 +87,13 @@ export default function ClientCampaignPage({
     if (!data?.snapshots) return [];
     return data.snapshots.filter((s) => s.snapshot_date >= startDate && s.snapshot_date <= endDate);
   }, [data?.snapshots, startDate, endDate]);
+
+  // LinkedIn campaigns get a stripped-down view (no email-shaped chart /
+  // bounce-rate KPI). Branched here AFTER all hooks have run so the
+  // rules-of-hooks order is preserved across renders.
+  if (data?.campaign?.source_channel === "linkedin") {
+    return <LinkedinClientCampaign params={params} />;
+  }
 
   if (!data) {
     return (
