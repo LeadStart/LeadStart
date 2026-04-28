@@ -40,6 +40,10 @@
     {
       "path": "/app/api/cron/run-decision-maker-enrichment",
       "schedule": "* * * * *"
+    },
+    {
+      "path": "/app/api/cron/run-linkedin-sequences",
+      "schedule": "*/15 * * * *"
     }
   ]
 }
