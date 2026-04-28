@@ -98,7 +98,7 @@ export default function AllCampaignsPage() {
                       <TableCell>{clientHref ? <Link href={clientHref} className="text-muted-foreground hover:text-foreground transition-colors">{row.clientName || "—"}</Link> : <Badge variant="secondary" className="badge-amber">Unlinked</Badge>}</TableCell>
                       <TableCell><Badge variant="secondary" className={row.status === "active" ? "badge-green" : row.status === "paused" ? "badge-amber" : "badge-slate"}>{row.status}</Badge></TableCell>
                       <TableCell className="text-right font-medium">{row.metrics.emails_sent.toLocaleString()}</TableCell>
-                      <TableCell className="text-right"><span className={row.metrics.reply_rate >= 10 ? "text-emerald-600 font-medium" : row.metrics.reply_rate >= 5 ? "text-amber-600" : "text-red-600"}>{row.metrics.reply_rate}%</span></TableCell>
+                      <TableCell className="text-right"><span className={row.metrics.reply_rate >= 5 ? "text-emerald-600 font-medium" : row.metrics.reply_rate >= 2 ? "text-amber-600" : "text-red-600"}>{row.metrics.reply_rate}%</span></TableCell>
                       <TableCell className="text-right"><span className={row.metrics.bounce_rate <= 2 ? "text-emerald-600" : "text-red-600 font-medium"}>{row.metrics.bounce_rate}%</span></TableCell>
                       <TableCell className="text-right font-medium">{row.metrics.meetings_booked}</TableCell>
                       <TableCell className="w-[80px]">

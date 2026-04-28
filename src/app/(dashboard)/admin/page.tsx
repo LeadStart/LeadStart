@@ -194,9 +194,9 @@ function ClientCard({ card }: { card: AdminOverviewCard }) {
                 label="Reply"
                 value={`${metrics.reply_rate}%`}
                 health={
-                  metrics.reply_rate >= 10
+                  metrics.reply_rate >= 5
                     ? "good"
-                    : metrics.reply_rate >= 5
+                    : metrics.reply_rate >= 2
                       ? "warning"
                       : "bad"
                 }

@@ -25,7 +25,7 @@ const SAMPLE_REPORT_DATA = {
         unsubscribes: 2,
         meetings_booked: 6,
         new_leads_contacted: 245,
-        reply_rate: 15.51,
+        reply_rate: 5.59,
         positive_reply_rate: 39.47,
         bounce_rate: 1.76,
         unsubscribe_rate: 0.29,

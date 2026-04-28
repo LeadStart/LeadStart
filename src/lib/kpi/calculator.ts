@@ -1,6 +1,19 @@
 import type { CampaignSnapshot, KPIMetrics } from "@/types/app";
 
-export function calculateMetrics(snapshots: CampaignSnapshot[]): KPIMetrics {
+export type ReplyRateMode = "lifetime" | "period";
+
+// Lifetime view: replies / unique leads contacted (per-lead). Bounded on
+// both sides because the campaign is the universe.
+//
+// Period view: replies / sends (per-send). A windowed per-lead rate is
+// inflated — replies in the window come from the entire history of leads
+// (follow-ups land weeks after a lead is added), but the leads-contacted
+// denominator only counts leads added inside the window. Per-send is
+// bounded to the window on both sides, so the math stays honest.
+export function calculateMetrics(
+  snapshots: CampaignSnapshot[],
+  mode: ReplyRateMode = "period",
+): KPIMetrics {
   const totals = snapshots.reduce(
     (acc, s) => ({
       emails_sent: acc.emails_sent + s.emails_sent,
@@ -26,14 +39,20 @@ export function calculateMetrics(snapshots: CampaignSnapshot[]): KPIMetrics {
 
   const sent = totals.emails_sent;
   const replies = totals.unique_replies;
-  // Reply rate is the share of unique leads contacted who replied — not a
-  // share of total sends. Each lead receives multiple follow-up steps, so
-  // dividing by sends artificially deflates the rate.
   const leadsContacted = totals.new_leads_contacted;
+
+  const replyRate =
+    mode === "lifetime"
+      ? leadsContacted > 0
+        ? Number(((replies / leadsContacted) * 100).toFixed(2))
+        : 0
+      : sent > 0
+        ? Number(((replies / sent) * 100).toFixed(2))
+        : 0;
 
   return {
     ...totals,
-    reply_rate: leadsContacted > 0 ? Number(((replies / leadsContacted) * 100).toFixed(2)) : 0,
+    reply_rate: replyRate,
     positive_reply_rate: replies > 0 ? Number(((totals.positive_replies / replies) * 100).toFixed(2)) : 0,
     bounce_rate: sent > 0 ? Number(((totals.bounces / sent) * 100).toFixed(2)) : 0,
     unsubscribe_rate: sent > 0 ? Number(((totals.unsubscribes / sent) * 100).toFixed(2)) : 0,

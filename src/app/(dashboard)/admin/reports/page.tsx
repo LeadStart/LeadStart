@@ -1050,7 +1050,7 @@ export default function ReportsPage() {
                       <p className="text-[10px] text-muted-foreground uppercase">Sent</p>
                     </div>
                     <div>
-                      <p className={`text-sm font-bold ${camp.metrics.reply_rate >= 10 ? "text-emerald-700" : camp.metrics.reply_rate >= 5 ? "text-amber-700" : "text-red-700"}`}>
+                      <p className={`text-sm font-bold ${camp.metrics.reply_rate >= 5 ? "text-emerald-700" : camp.metrics.reply_rate >= 2 ? "text-amber-700" : "text-red-700"}`}>
                         {camp.metrics.reply_rate}%
                       </p>
                       <p className="text-[10px] text-muted-foreground uppercase">Reply</p>

@@ -111,7 +111,9 @@ export default function CampaignDetailPage({
   }
 
   const { campaign: typedCampaign, clientName, snapshots, feedback, stepMetrics } = data;
-  const metrics = calculateMetrics(snapshots);
+  // Campaign detail page shows lifetime metrics for this campaign — pass
+  // "lifetime" so reply rate uses the per-lead denominator.
+  const metrics = calculateMetrics(snapshots, "lifetime");
 
   // Run step health analysis
   const campaignInfoMap = new Map([[campaignId, { id: campaignId, name: typedCampaign.name, client_name: clientName }]]);
