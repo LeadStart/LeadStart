@@ -64,6 +64,11 @@ export async function GET() {
         .from("clients")
         .select()
         .eq("organization_id", organizationId)
+        // Exclude the internal pseudo-client (migration 00048): it isn't a
+        // paying customer, so it shouldn't appear in the New Quote picker,
+        // the subscriptions table, or the MRR-derived signals on the admin
+        // overview that read from this same payload.
+        .eq("is_internal", false)
         .order("name", { ascending: true }),
     ]);
 

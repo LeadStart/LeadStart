@@ -76,6 +76,10 @@ export interface Client {
   report_recipients: string[] | null;
   stripe_customer_id: string | null;
   status: ClientStatus;
+  // True for the pseudo-client representing this organization's own internal
+  // marketing outreach (migration 00048). Excluded from billing/MRR; pinned
+  // in the campaign-linking picker. At most one per organization.
+  is_internal: boolean;
   // Reply routing pipeline (migration 00025) — populated during onboarding
   notification_email: string | null;     // single address for hot-reply notifications
   notification_cc_emails: string[];       // extra teammates CC'd on notifications + portal sends (migration 00030)

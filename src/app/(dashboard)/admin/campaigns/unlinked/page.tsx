@@ -28,7 +28,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Link2, Mail, ArrowLeft } from "lucide-react";
+import { Link2, Mail, ArrowLeft, Sparkles } from "lucide-react";
 import type { Client } from "@/types/app";
 
 export default function UnlinkedCampaignsPage() {
@@ -161,6 +161,10 @@ function UnlinkedRow({
   const eligible = clients.filter(
     (c) => c.organization_id === campaign.organization_id,
   );
+  // Internal pseudo-clients pin to the top of the picker so LeadStart's own
+  // marketing outreach is always one click away (migration 00048).
+  const internalEligible = eligible.filter((c) => c.is_internal);
+  const regularEligible = eligible.filter((c) => !c.is_internal);
 
   async function handleLink() {
     if (!selectedClientId) return;
@@ -254,11 +258,34 @@ function UnlinkedRow({
                     No clients in this organization
                   </SelectItem>
                 ) : (
-                  eligible.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.name}
-                    </SelectItem>
-                  ))
+                  <>
+                    {internalEligible.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        <span className="flex items-center gap-2">
+                          <Sparkles
+                            size={12}
+                            className="text-[#2E37FE] shrink-0"
+                          />
+                          <span>{c.name}</span>
+                          <span className="ml-1 rounded-md bg-[#2E37FE]/10 px-1.5 py-0.5 text-[10px] font-medium text-[#2E37FE]">
+                            Internal
+                          </span>
+                        </span>
+                      </SelectItem>
+                    ))}
+                    {internalEligible.length > 0 &&
+                      regularEligible.length > 0 && (
+                        <div
+                          role="separator"
+                          className="my-1 h-px bg-border"
+                        />
+                      )}
+                    {regularEligible.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                  </>
                 )}
               </SelectContent>
             </Select>
