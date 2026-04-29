@@ -403,12 +403,12 @@
   background: rgba(46,55,254,0.12) !important;
 }
 /* Table cell text cascade — exclude badges and elements that explicitly request white text (e.g. avatar bubbles with a solid colored bg) */
-[data-slot="table-body"] [data-slot="table-cell"] strong:not([data-slot="badge"]):not(.badge-green):not(.badge-amber):not(.badge-red):not(.badge-blue):not(.badge-purple):not(.badge-slate):not(.text-white),
-[data-slot="table-body"] [data-slot="table-cell"] .font-semibold:not([data-slot="badge"]):not(.badge-green):not(.badge-amber):not(.badge-red):not(.badge-blue):not(.badge-purple):not(.badge-slate):not(.text-white),
-[data-slot="table-body"] [data-slot="table-cell"] .font-medium:not([data-slot="badge"]):not(.badge-green):not(.badge-amber):not(.badge-red):not(.badge-blue):not(.badge-purple):not(.badge-slate):not(.text-white) {
+[data-slot="table-body"] [data-slot="table-cell"] strong:not([data-slot="badge"]):not([data-slot="button"]):not(.badge-green):not(.badge-amber):not(.badge-red):not(.badge-blue):not(.badge-purple):not(.badge-slate):not(.text-white),
+[data-slot="table-body"] [data-slot="table-cell"] .font-semibold:not([data-slot="badge"]):not([data-slot="button"]):not(.badge-green):not(.badge-amber):not(.badge-red):not(.badge-blue):not(.badge-purple):not(.badge-slate):not(.text-white),
+[data-slot="table-body"] [data-slot="table-cell"] .font-medium:not([data-slot="badge"]):not([data-slot="button"]):not(.badge-green):not(.badge-amber):not(.badge-red):not(.badge-blue):not(.badge-purple):not(.badge-slate):not(.text-white) {
   color: #0f172a !important;
 }
-[data-slot="table-body"] [data-slot="table-cell"] .font-bold:not(.text-white) {
+[data-slot="table-body"] [data-slot="table-cell"] .font-bold:not([data-slot="button"]):not(.text-white) {
   color: #0f172a !important;
   font-variant-numeric: tabular-nums;
 }

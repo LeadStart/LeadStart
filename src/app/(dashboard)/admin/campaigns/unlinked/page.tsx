@@ -302,7 +302,7 @@ function UnlinkedRow({
               size="sm"
               onClick={handleLink}
               disabled={!selectedClientId || linking}
-              className="gap-1.5 text-[#f8fafc]"
+              className="gap-1.5 !text-[#f8fafc]"
             >
               <Link2 size={14} className={linking ? "animate-pulse" : ""} />
               {linking ? "Linking…" : "Link"}
