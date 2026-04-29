@@ -437,7 +437,13 @@ export default function ReportsPage() {
               <Label className="text-sm font-medium">Client</Label>
               <Select value={selectedClient} onValueChange={(val) => setSelectedClient(val ?? "")}>
                 <SelectTrigger className="w-full" style={{ height: '36px' }}>
-                  <SelectValue placeholder="Select client" />
+                  <SelectValue placeholder="Select client">
+                    {(value) => {
+                      if (typeof value !== "string" || !value)
+                        return "Select client";
+                      return clients.find((c) => c.id === value)?.name ?? value;
+                    }}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {clients.map((c) => (

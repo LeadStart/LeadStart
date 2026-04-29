@@ -539,7 +539,13 @@ export default function ContactsPage() {
             onValueChange={(v) => setClientFilter(v ?? "all")}
           >
             <SelectTrigger className="w-[180px]" style={{ height: "36px" }}>
-              <SelectValue placeholder="Client" />
+              <SelectValue placeholder="Client">
+                {(value) => {
+                  if (typeof value !== "string" || !value) return "Client";
+                  if (value === "all") return "All Clients";
+                  return clients.find((c) => c.id === value)?.name ?? value;
+                }}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Clients</SelectItem>

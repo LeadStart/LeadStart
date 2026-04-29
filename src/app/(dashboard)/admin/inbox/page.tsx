@@ -168,7 +168,13 @@ export default function AdminInboxPage() {
       <div className="flex flex-wrap gap-2 items-center">
         <Select value={filterClient} onValueChange={(v) => setFilterClient((v as FilterClient) || "all")}>
           <SelectTrigger className="h-9 w-[200px] text-xs font-medium">
-            <SelectValue />
+            <SelectValue>
+              {(value) => {
+                if (typeof value !== "string" || !value || value === "all")
+                  return "All clients";
+                return clientOptions.find((c) => c.id === value)?.name ?? value;
+              }}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All clients</SelectItem>

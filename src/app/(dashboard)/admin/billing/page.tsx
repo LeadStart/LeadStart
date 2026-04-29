@@ -539,7 +539,15 @@ function NewQuoteDialog({
                 <Label>Contact</Label>
                 <Select value={contactId} onValueChange={handleContactChange}>
                   <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Pick a contact" />
+                    <SelectValue placeholder="Pick a contact">
+                      {(value) => {
+                        if (typeof value !== "string" || !value)
+                          return "Pick a contact";
+                        return (
+                          clients.find((c) => c.id === value)?.name ?? value
+                        );
+                      }}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {clients.map((c) => (
@@ -554,7 +562,17 @@ function NewQuoteDialog({
                 <Label>Plan</Label>
                 <Select value={planId} onValueChange={handlePlanChange}>
                   <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Pick a plan" />
+                    <SelectValue placeholder="Pick a plan">
+                      {(value) => {
+                        if (typeof value !== "string" || !value)
+                          return "Pick a plan";
+                        if (value === "custom") return "Custom (no template)";
+                        const plan = plans.find((p) => p.id === value);
+                        return plan
+                          ? `${plan.name} — ${formatCents(plan.monthly_price_cents)}/mo`
+                          : value;
+                      }}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {plans

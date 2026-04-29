@@ -250,7 +250,15 @@ export default function NewLinkedinCampaignPage() {
               <Label htmlFor="client">Client</Label>
               <Select value={clientId} onValueChange={(v) => setClientId(v ?? "")}>
                 <SelectTrigger id="client">
-                  <SelectValue placeholder="Pick a client" />
+                  <SelectValue placeholder="Pick a client">
+                    {(value) => {
+                      if (typeof value !== "string" || !value)
+                        return "Pick a client";
+                      return (
+                        clients.find((c) => c.id === value)?.name ?? value
+                      );
+                    }}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {clients.map((c) => (

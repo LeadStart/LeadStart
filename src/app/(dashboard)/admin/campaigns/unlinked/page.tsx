@@ -250,7 +250,15 @@ function UnlinkedRow({
               onValueChange={(v) => setSelectedClientId(v ?? "")}
             >
               <SelectTrigger className="h-9 min-w-[200px] text-sm">
-                <SelectValue placeholder="Choose a client…" />
+                <SelectValue placeholder="Choose a client…">
+                  {(value) => {
+                    if (typeof value !== "string" || !value)
+                      return "Choose a client…";
+                    return (
+                      eligible.find((c) => c.id === value)?.name ?? value
+                    );
+                  }}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {eligible.length === 0 ? (
