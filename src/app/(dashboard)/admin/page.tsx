@@ -28,11 +28,26 @@ import {
   DollarSign,
   Send,
   CheckCircle2,
+  Trash2,
 } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogFooter,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
+import { createClient } from "@/lib/supabase/client";
 import type {
   ClientSubscription,
   PricingPlan,
   Client,
+  ClientStatus,
   BillingInvoice,
   Quote,
 } from "@/types/app";
@@ -271,6 +286,10 @@ export default function AdminOverviewPage() {
     API_INBOX_HEALTH_PATH,
   );
 
+  const [clientFilter, setClientFilter] = useState<ClientStatus>("active");
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
   // Capture once per page instance so date comparisons during render are
   // referentially stable (and don't trip the react-hooks/purity rule). The
   // dashboard isn't a real-time clock — if the owner leaves the tab open
@@ -301,12 +320,30 @@ export default function AdminOverviewPage() {
     );
   }
 
-  const clientCards = overview.cards;
+  const allCards = overview.cards;
+  const activeCards = allCards.filter((c) => (c.client.status ?? "active") === "active");
+  const formerCards = allCards.filter((c) => c.client.status === "former");
+  const displayCards = clientFilter === "active" ? activeCards : formerCards;
   const totalActive = overview.totalActive;
-  const totalClients = clientCards.length;
-  const healthyCt = clientCards.filter((c) => c.health === "good").length;
-  const warningCt = clientCards.filter((c) => c.health === "warning").length;
-  const badCt = clientCards.filter((c) => c.health === "bad").length;
+  const totalClients = activeCards.length;
+  const healthyCt = activeCards.filter((c) => c.health === "good").length;
+  const warningCt = activeCards.filter((c) => c.health === "warning").length;
+  const badCt = activeCards.filter((c) => c.health === "bad").length;
+
+  async function deleteClient(clientId: string) {
+    setDeleting(true);
+    const supabase = createClient();
+    await supabase.from("contacts").delete().eq("client_id", clientId);
+    const { error } = await supabase.from("clients").delete().eq("id", clientId);
+    setDeleting(false);
+    setDeleteTarget(null);
+    if (error) {
+      console.error("Failed to delete client:", error);
+      alert(`Could not delete client: ${error.message}`);
+      return;
+    }
+    window.location.reload();
+  }
 
   // ----- Billing-derived signals -----
   const subs = billing?.subscriptions ?? [];
@@ -371,7 +408,7 @@ export default function AdminOverviewPage() {
     trialsEndingSoon.length > 0 ||
     criticalStepAlerts.length > 0;
 
-  const attentionClients = clientCards.filter(
+  const attentionClients = activeCards.filter(
     (c) => c.health === "warning" || c.health === "bad",
   );
 
@@ -708,8 +745,8 @@ export default function AdminOverviewPage() {
         </div>
       )}
 
-      {/* ---------- Band 6 — All clients ---------- */}
-      {totalClients === 0 ? (
+      {/* ---------- Band 6 — Clients (toggle) ---------- */}
+      {activeCards.length === 0 && formerCards.length === 0 ? (
         <Card className="border-border/50 shadow-sm">
           <CardContent className="py-12 text-center">
             <p className="text-muted-foreground font-medium">
@@ -725,17 +762,75 @@ export default function AdminOverviewPage() {
         </Card>
       ) : (
         <div>
-          <SectionHeading
-            icon={<Users size={16} className="text-white" />}
-            title="All clients"
-          />
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {clientCards.map((card) => (
-              <ClientCard key={card.client.id} card={card} />
-            ))}
+          <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
+            <SectionHeading
+              icon={<Users size={16} className="text-white" />}
+              title={clientFilter === "active" ? "Current Clients" : "Former Clients"}
+            />
+            <Tabs value={clientFilter} onValueChange={(v) => setClientFilter(v as ClientStatus)}>
+              <TabsList>
+                <TabsTrigger value="active">Current ({activeCards.length})</TabsTrigger>
+                <TabsTrigger value="former">Former ({formerCards.length})</TabsTrigger>
+              </TabsList>
+            </Tabs>
           </div>
+          {displayCards.length === 0 ? (
+            <Card className="border-border/50 shadow-sm">
+              <CardContent className="py-8 text-center">
+                <p className="text-sm text-muted-foreground">
+                  {clientFilter === "active"
+                    ? "No active clients. Check the Former tab or add a new client."
+                    : "No former clients."}
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {displayCards.map((card) => (
+                <div key={card.client.id} className="relative">
+                  <ClientCard card={card} />
+                  {clientFilter === "former" && (
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      className="absolute top-3 right-3 z-10 text-muted-foreground hover:text-red-600 hover:bg-red-50"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setDeleteTarget({ id: card.client.id, name: card.client.name });
+                      }}
+                    >
+                      <Trash2 size={14} />
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
+
+      {/* ---------- Delete confirmation dialog ---------- */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Permanently delete {deleteTarget?.name}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will also delete all contacts associated with this client from the database. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={deleting}
+              onClick={() => { if (deleteTarget) deleteClient(deleteTarget.id); }}
+            >
+              {deleting ? "Deleting…" : "Delete permanently"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -12,13 +12,25 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { SortableHead } from "@/components/ui/sortable-head";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogFooter,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
 import { AddClientForm } from "./add-client-form";
-import { Users, ArrowRight, Archive, ArchiveRestore } from "lucide-react";
+import { Users, ArrowRight, Archive, ArchiveRestore, Trash2 } from "lucide-react";
 import type { ClientStatus } from "@/types/app";
 
 export default function ClientsPage() {
   const [statusFilter, setStatusFilter] = useState<ClientStatus>("active");
   const [pendingId, setPendingId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const { data, loading, refetch } = useSupabaseQuery(
     ADMIN_CLIENTS_KEY,
@@ -52,6 +64,21 @@ export default function ClientsPage() {
     if (error) {
       console.error("Failed to update client status:", error);
       alert(`Could not update client: ${error.message}`);
+      return;
+    }
+    refetch();
+  }
+
+  async function deleteClient(clientId: string) {
+    setDeleting(true);
+    const supabase = createClient();
+    await supabase.from("contacts").delete().eq("client_id", clientId);
+    const { error } = await supabase.from("clients").delete().eq("id", clientId);
+    setDeleting(false);
+    setDeleteTarget(null);
+    if (error) {
+      console.error("Failed to delete client:", error);
+      alert(`Could not delete client: ${error.message}`);
       return;
     }
     refetch();
@@ -118,6 +145,16 @@ export default function ClientsPage() {
                               <><ArchiveRestore size={13} /> Restore</>
                             )}
                           </Button>
+                          {rowStatus === "former" && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 px-2 text-xs text-muted-foreground hover:text-red-600"
+                              onClick={() => setDeleteTarget({ id: row.id, name: row.name })}
+                            >
+                              <Trash2 size={13} /> Delete
+                            </Button>
+                          )}
                           <Link href={`/admin/clients/${row.id}`} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-[#2E37FE] transition-colors">
                             View<ArrowRight size={13} className="opacity-0 group-hover:opacity-100 transition-opacity" />
                           </Link>
@@ -131,6 +168,27 @@ export default function ClientsPage() {
           )}
         </CardContent>
       </Card>
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Permanently delete {deleteTarget?.name}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will also delete all contacts associated with this client from the database. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={deleting}
+              onClick={() => { if (deleteTarget) deleteClient(deleteTarget.id); }}
+            >
+              {deleting ? "Deleting…" : "Delete permanently"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
