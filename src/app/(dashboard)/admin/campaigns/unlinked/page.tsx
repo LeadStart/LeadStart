@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/select";
 import { Link2, Mail, ArrowLeft, Sparkles } from "lucide-react";
 import type { Client } from "@/types/app";
+import { appUrl } from "@/lib/api-url";
 
 export default function UnlinkedCampaignsPage() {
   const { data, loading, refetch } = useSupabaseQuery(
@@ -172,7 +173,7 @@ function UnlinkedRow({
     setResult(null);
     setIsError(false);
     try {
-      const res = await fetch(`/api/campaigns/${campaign.id}/link-client`, {
+      const res = await fetch(appUrl(`/api/campaigns/${campaign.id}/link-client`), {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ client_id: selectedClientId }),
@@ -249,7 +250,7 @@ function UnlinkedRow({
               value={selectedClientId}
               onValueChange={(v) => setSelectedClientId(v ?? "")}
             >
-              <SelectTrigger className="h-9 min-w-[200px] text-sm">
+              <SelectTrigger className="h-9 min-w-[200px] text-sm bg-white">
                 <SelectValue placeholder="Choose a client…">
                   {(value) => {
                     if (typeof value !== "string" || !value)
@@ -301,7 +302,7 @@ function UnlinkedRow({
               size="sm"
               onClick={handleLink}
               disabled={!selectedClientId || linking}
-              className="gap-1.5"
+              className="gap-1.5 text-[#f8fafc]"
             >
               <Link2 size={14} className={linking ? "animate-pulse" : ""} />
               {linking ? "Linking…" : "Link"}
