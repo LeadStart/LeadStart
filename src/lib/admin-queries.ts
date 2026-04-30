@@ -274,16 +274,22 @@ export async function fetchAdminUnlinkedCampaigns(
 export const ADMIN_CONTACTS_KEY = "admin-contacts";
 
 export async function fetchAdminContacts(supabase: SupabaseClient) {
-  const [contactsRes, clientsRes] = await Promise.all([
+  const [contactsRes, clientsRes, campaignsRes] = await Promise.all([
     supabase
       .from("contacts")
       .select("*")
       .order("created_at", { ascending: false }),
     supabase.from("clients").select("id, name"),
+    supabase.from("campaigns").select("id, name, client_id"),
   ]);
   return {
     contacts: (contactsRes.data || []) as Contact[],
     clients: (clientsRes.data || []) as { id: string; name: string }[],
+    campaigns: (campaignsRes.data || []) as {
+      id: string;
+      name: string;
+      client_id: string | null;
+    }[],
   };
 }
 

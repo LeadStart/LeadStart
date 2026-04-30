@@ -4,6 +4,7 @@ import type {
   InstantlyAnalytics,
   InstantlyAnalyticsResponse,
   InstantlyLead,
+  InstantlyLeadCreate,
   InstantlyLeadListResponse,
   InstantlyAccount,
   InstantlyAccountListResponse,
@@ -201,6 +202,43 @@ export class InstantlyClient {
       method: "POST",
       body: JSON.stringify(body),
     });
+  }
+
+  // POST /api/v2/leads — create a single lead and assign it to a campaign.
+  // The `campaign` field is the Instantly campaign UUID. Only `email` is
+  // required by Instantly; everything else is optional. Custom variables go
+  // in `personalization` / top-level fields per Instantly's lead schema.
+  async addLead(input: InstantlyLeadCreate): Promise<InstantlyLead> {
+    return this.request<InstantlyLead>("/leads", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  }
+
+  // Sequential bulk-add wrapper. Instantly v2's documented bulk-add endpoint
+  // path varies across docs mirrors and isn't reliable to target — but the
+  // single-lead /leads endpoint is stable and idempotent on its workspace
+  // dedup (returns the existing lead when the email is already in the
+  // campaign). Calling it sequentially keeps us under the ~10 req/sec rate
+  // limit and surfaces per-lead failures cleanly.
+  async addLeadsToCampaign(
+    campaignId: string,
+    leads: Omit<InstantlyLeadCreate, "campaign">[],
+  ): Promise<{ uploaded: number; failed: { email: string | null; error: string }[] }> {
+    let uploaded = 0;
+    const failed: { email: string | null; error: string }[] = [];
+
+    for (const lead of leads) {
+      try {
+        await this.addLead({ ...lead, campaign: campaignId });
+        uploaded++;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        failed.push({ email: lead.email ?? null, error: message });
+      }
+    }
+
+    return { uploaded, failed };
   }
 
   // ===== ACCOUNTS / INBOXES =====

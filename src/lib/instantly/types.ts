@@ -65,6 +65,21 @@ export interface InstantlyLeadListResponse {
   next_starting_after?: string;
 }
 
+// Payload for POST /api/v2/leads. Email is the only field Instantly
+// requires; the others map to their lead schema. `campaign` is the
+// Instantly campaign UUID.
+export interface InstantlyLeadCreate {
+  email: string;
+  campaign?: string;
+  first_name?: string;
+  last_name?: string;
+  company_name?: string;
+  phone?: string;
+  website?: string;
+  personalization?: string;
+  custom_variables?: Record<string, string | number | boolean | null>;
+}
+
 // ===== INBOX / ACCOUNT TYPES =====
 
 export interface InstantlyAccount {

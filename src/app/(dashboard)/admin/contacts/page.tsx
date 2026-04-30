@@ -48,6 +48,7 @@ import {
   TrendingUp,
   ChevronDown,
   Trash2,
+  Send,
 } from "lucide-react";
 import type { Contact, ContactStatus, ProspectStage } from "@/types/app";
 import { ImportContactsDialog } from "./import-dialog";
@@ -241,7 +242,9 @@ export default function ContactsPage() {
 
   const allContacts = data?.contacts ?? [];
   const clients = data?.clients ?? [];
+  const campaigns = data?.campaigns ?? [];
   const clientMap = new Map(clients.map((c) => [c.id, c.name]));
+  const campaignMap = new Map(campaigns.map((c) => [c.id, c.name]));
 
   // Split by owner. LeadStart contacts (client_id IS NULL) are the agency's
   // own prospects — they're the only ones eligible for the Prospects kanban.
@@ -286,10 +289,12 @@ export default function ContactsPage() {
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
-  // Switching agency/client view changes the underlying dataset entirely —
-  // any leftover selection from the other view would be invisible & confusing.
+  const [campaignDialogOpen, setCampaignDialogOpen] = useState(false);
+  const [selectedCampaignId, setSelectedCampaignId] = useState("");
+  const [assigning, setAssigning] = useState(false);
   useEffect(() => {
     setSelectedIds(new Set());
+    setCampaignDialogOpen(false);
   }, [ownerView]);
 
   const pageRowIds = pageRows.map((r) => r.id);
@@ -359,6 +364,77 @@ export default function ContactsPage() {
       toast.success(`Deleted ${count} contact${count === 1 ? "" : "s"}`);
     } finally {
       setBulkDeleting(false);
+    }
+  }
+
+  const selectedContacts = allContacts.filter((c) => selectedIds.has(c.id));
+  const selectedClientIds = new Set(
+    selectedContacts.map((c) => c.client_id).filter(Boolean) as string[],
+  );
+  const isMixedClients = selectedClientIds.size > 1;
+  const commonClientId =
+    selectedClientIds.size === 1 ? [...selectedClientIds][0] : null;
+  const eligibleCampaigns = campaigns.filter(
+    (c) => c.client_id === commonClientId,
+  );
+
+  async function handleBulkAssignCampaign() {
+    if (!selectedCampaignId || selectedIds.size === 0) return;
+    setAssigning(true);
+    try {
+      const ids = Array.from(selectedIds);
+      const res = await fetch("/api/admin/contacts/push-to-campaign", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contact_ids: ids,
+          campaign_id: selectedCampaignId,
+        }),
+      });
+      const data = (await res.json()) as {
+        error?: string;
+        assigned?: number;
+        uploaded?: number;
+        failed?: number;
+        skipped_no_email?: number;
+        skipped_invalid?: number;
+        pushed_to_instantly?: boolean;
+        campaign_name?: string;
+        reason?: string;
+      };
+      if (!res.ok) {
+        toast.error(data.error ?? `Failed (${res.status})`);
+        return;
+      }
+
+      const name =
+        data.campaign_name ?? campaignMap.get(selectedCampaignId) ?? "campaign";
+      const assigned = data.assigned ?? 0;
+
+      if (data.pushed_to_instantly) {
+        const parts: string[] = [`${data.uploaded ?? 0} uploaded`];
+        if ((data.failed ?? 0) > 0) parts.push(`${data.failed} failed`);
+        if ((data.skipped_no_email ?? 0) > 0)
+          parts.push(`${data.skipped_no_email} no email`);
+        toast.success(
+          `Added ${assigned} contact${assigned === 1 ? "" : "s"} to ${name} — ${parts.join(", ")}`,
+        );
+      } else {
+        toast.success(
+          `Assigned ${assigned} contact${assigned === 1 ? "" : "s"} to ${name}${data.reason ? ` (${data.reason})` : ""}`,
+        );
+      }
+
+      setSelectedIds(new Set());
+      setCampaignDialogOpen(false);
+      setSelectedCampaignId("");
+      await refetch();
+      await swrMutate("admin-contacts-with-pipeline");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      toast.error(`Failed to assign campaign: ${message}`);
+    } finally {
+      setAssigning(false);
     }
   }
 
@@ -682,6 +758,17 @@ export default function ContactsPage() {
             >
               Clear
             </Button>
+            {ownerView === "client" && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setCampaignDialogOpen(true)}
+                className="gap-1.5"
+              >
+                <Send size={14} />
+                Add to Campaign
+              </Button>
+            )}
             <Button
               size="sm"
               variant="destructive"
@@ -760,6 +847,7 @@ export default function ContactsPage() {
                     Company
                   </SortableHead>
                   <TableHead>Tags</TableHead>
+                  {ownerView === "client" && <TableHead>Campaign</TableHead>}
                   <SortableHead sortKey="created_at" sortConfig={sortConfig} onSort={requestSort}>
                     Created
                   </SortableHead>
@@ -834,6 +922,13 @@ export default function ContactsPage() {
                       <TableCell>
                         <TagsCell tags={row.tags ?? []} />
                       </TableCell>
+                      {ownerView === "client" && (
+                        <TableCell className="text-muted-foreground">
+                          {row.campaign_id
+                            ? campaignMap.get(row.campaign_id) || "—"
+                            : "—"}
+                        </TableCell>
+                      )}
                       <TableCell className="text-muted-foreground">
                         {new Date(row.created_at).toLocaleDateString("en-US", {
                           month: "short",
@@ -1098,6 +1193,111 @@ export default function ContactsPage() {
           await swrMutate("admin-contacts-with-pipeline");
         }}
       />
+
+      {/* Add to Campaign dialog */}
+      <Dialog
+        open={campaignDialogOpen}
+        onOpenChange={(v) => {
+          if (!v) {
+            setCampaignDialogOpen(false);
+            setSelectedCampaignId("");
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add to Campaign</DialogTitle>
+          </DialogHeader>
+          {isMixedClients ? (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                The selected contacts belong to different clients. Filter to a
+                single client first, then try again.
+              </p>
+              <div className="flex justify-end">
+                <Button
+                  variant="outline"
+                  onClick={() => setCampaignDialogOpen(false)}
+                >
+                  Close
+                </Button>
+              </div>
+            </div>
+          ) : eligibleCampaigns.length === 0 ? (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                No campaigns found for{" "}
+                <span className="font-medium text-foreground">
+                  {commonClientId ? clientMap.get(commonClientId) : "this client"}
+                </span>
+                . Create a campaign for this client first.
+              </p>
+              <div className="flex justify-end">
+                <Button
+                  variant="outline"
+                  onClick={() => setCampaignDialogOpen(false)}
+                >
+                  Close
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Assign {selectedIds.size} contact
+                {selectedIds.size === 1 ? "" : "s"} to a campaign for{" "}
+                <span className="font-medium text-foreground">
+                  {commonClientId
+                    ? clientMap.get(commonClientId)
+                    : "this client"}
+                </span>
+                . Contacts will be uploaded to Instantly as leads.
+              </p>
+              <Select
+                value={selectedCampaignId}
+                onValueChange={(v) => setSelectedCampaignId(v ?? "")}
+              >
+                <SelectTrigger className="w-full" style={{ height: "36px" }}>
+                  <SelectValue placeholder="Select a campaign">
+                    {selectedCampaignId
+                      ? campaignMap.get(selectedCampaignId) ??
+                        "Select a campaign"
+                      : "Select a campaign"}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent
+                  className="min-w-[220px]"
+                  alignItemWithTrigger={false}
+                >
+                  {eligibleCampaigns.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <div className="flex gap-2 justify-end">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setCampaignDialogOpen(false);
+                    setSelectedCampaignId("");
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  disabled={!selectedCampaignId || assigning}
+                  onClick={handleBulkAssignCampaign}
+                  style={{ background: "#2E37FE" }}
+                >
+                  {assigning ? "Assigning..." : "Assign"}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
