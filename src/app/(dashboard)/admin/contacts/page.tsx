@@ -38,6 +38,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { createClient } from "@/lib/supabase/client";
+import { appUrl } from "@/lib/api-url";
 import { toast } from "sonner";
 import {
   Users,
@@ -383,7 +384,7 @@ export default function ContactsPage() {
     setAssigning(true);
     try {
       const ids = Array.from(selectedIds);
-      const res = await fetch("/api/admin/contacts/push-to-campaign", {
+      const res = await fetch(appUrl("/api/admin/contacts/push-to-campaign"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
