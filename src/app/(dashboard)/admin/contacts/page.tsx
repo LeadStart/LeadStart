@@ -8,6 +8,7 @@ import { ADMIN_CONTACTS_KEY, fetchAdminContacts } from "@/lib/admin-queries";
 import { useSort } from "@/hooks/use-sort";
 import { useUser } from "@/hooks/use-user";
 import { SortableHead } from "@/components/ui/sortable-head";
+import { PaginationControls } from "@/components/ui/pagination-controls";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -50,6 +51,8 @@ import {
 } from "lucide-react";
 import type { Contact, ContactStatus, ProspectStage } from "@/types/app";
 import { ImportContactsDialog } from "./import-dialog";
+
+const CONTACTS_PAGE_SIZE = 25;
 
 const PIPELINE_STAGES: { value: ProspectStage; label: string }[] = [
   { value: "lead", label: "Lead" },
@@ -254,6 +257,93 @@ export default function ContactsPage() {
     clientName: contact.client_id ? clientMap.get(contact.client_id) || "—" : "—",
   }));
   const { sorted, sortConfig, requestSort } = useSort(rows, "created_at", "desc");
+
+  const [page, setPage] = useState(1);
+  useEffect(() => {
+    setPage(1);
+  }, [search, statusFilter, clientFilter, ownerView, sortConfig?.key, sortConfig?.direction]);
+  const totalPages = Math.max(1, Math.ceil(sorted.length / CONTACTS_PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pageStart = (safePage - 1) * CONTACTS_PAGE_SIZE;
+  const pageRows = sorted.slice(pageStart, pageStart + CONTACTS_PAGE_SIZE);
+
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  // Switching agency/client view changes the underlying dataset entirely —
+  // any leftover selection from the other view would be invisible & confusing.
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [ownerView]);
+
+  const pageRowIds = pageRows.map((r) => r.id);
+  const filteredIds = sorted.map((r) => r.id);
+  const pageAllSelected =
+    pageRowIds.length > 0 && pageRowIds.every((id) => selectedIds.has(id));
+  const pageSomeSelected = pageRowIds.some((id) => selectedIds.has(id));
+  const filteredAllSelected =
+    filteredIds.length > 0 && filteredIds.every((id) => selectedIds.has(id));
+  const filteredSomeSelected = filteredIds.some((id) => selectedIds.has(id));
+
+  function toggleRowSelection(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function togglePageSelection() {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (pageAllSelected) {
+        pageRowIds.forEach((id) => next.delete(id));
+      } else {
+        pageRowIds.forEach((id) => next.add(id));
+      }
+      return next;
+    });
+  }
+
+  function toggleFilteredSelection() {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (filteredAllSelected) {
+        filteredIds.forEach((id) => next.delete(id));
+      } else {
+        filteredIds.forEach((id) => next.add(id));
+      }
+      return next;
+    });
+  }
+
+  async function handleBulkDelete() {
+    if (selectedIds.size === 0) return;
+    const count = selectedIds.size;
+    if (
+      !confirm(
+        `Delete ${count} contact${count === 1 ? "" : "s"}? This permanently removes them and cannot be undone.`,
+      )
+    ) {
+      return;
+    }
+    setBulkDeleting(true);
+    try {
+      const supabase = createClient();
+      const ids = Array.from(selectedIds);
+      const { error } = await supabase.from("contacts").delete().in("id", ids);
+      if (error) {
+        alert(`Failed to delete contacts: ${error.message}`);
+        return;
+      }
+      setSelectedIds(new Set());
+      await refetch();
+      await swrMutate("admin-contacts-with-pipeline");
+      toast.success(`Deleted ${count} contact${count === 1 ? "" : "s"}`);
+    } finally {
+      setBulkDeleting(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -559,15 +649,86 @@ export default function ContactsPage() {
         ) : null}
       </div>
 
+      {/* Bulk action bar — visible whenever any contact is selected */}
+      {selectedIds.size > 0 && (
+        <div className="flex items-center justify-between rounded-lg border border-[#2E37FE]/30 bg-[#2E37FE]/5 px-4 py-2.5">
+          <p className="text-sm font-medium text-[#0f172a]">
+            {selectedIds.size.toLocaleString()} contact
+            {selectedIds.size === 1 ? "" : "s"} selected
+          </p>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setSelectedIds(new Set())}
+              className="text-xs"
+            >
+              Clear
+            </Button>
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={handleBulkDelete}
+              disabled={bulkDeleting}
+              className="gap-1.5"
+            >
+              <Trash2 size={14} />
+              {bulkDeleting
+                ? "Deleting..."
+                : `Delete ${selectedIds.size.toLocaleString()}`}
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Contacts table — row click opens edit dialog */}
       <Card className="border-border/50 shadow-sm">
         <CardContent className="pt-6">
           {sorted.length === 0 ? (
             <p className="text-sm text-muted-foreground">No contacts found.</p>
           ) : (
+            <>
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-[88px]">
+                    <div className="flex items-center gap-3 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                      <label
+                        className="flex flex-col items-center gap-0.5 cursor-pointer"
+                        title="Select all on this page"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={pageAllSelected}
+                          ref={(el) => {
+                            if (el)
+                              el.indeterminate =
+                                !pageAllSelected && pageSomeSelected;
+                          }}
+                          onChange={togglePageSelection}
+                          className="h-3.5 w-3.5 rounded border-border accent-[#2E37FE] cursor-pointer"
+                        />
+                        <span>Page</span>
+                      </label>
+                      <label
+                        className="flex flex-col items-center gap-0.5 cursor-pointer"
+                        title="Select all matching the current filter (across pages)"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={filteredAllSelected}
+                          ref={(el) => {
+                            if (el)
+                              el.indeterminate =
+                                !filteredAllSelected && filteredSomeSelected;
+                          }}
+                          onChange={toggleFilteredSelection}
+                          className="h-3.5 w-3.5 rounded border-border accent-[#2E37FE] cursor-pointer"
+                        />
+                        <span>All</span>
+                      </label>
+                    </div>
+                  </TableHead>
                   <SortableHead sortKey="fullName" sortConfig={sortConfig} onSort={requestSort}>
                     Name
                   </SortableHead>
@@ -585,14 +746,32 @@ export default function ContactsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sorted.map((row) => {
+                {pageRows.map((row) => {
                   const pipelineStage = row.pipeline_stage;
+                  const isSelected = selectedIds.has(row.id);
                   return (
                     <TableRow
                       key={row.id}
                       onClick={() => openForEdit(row)}
-                      className="cursor-pointer transition-colors hover:bg-muted/40"
+                      data-state={isSelected ? "selected" : undefined}
+                      className="group cursor-pointer transition-colors hover:bg-muted/40 data-[state=selected]:bg-[#2E37FE]/5"
                     >
+                      <TableCell
+                        className="w-[88px]"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleRowSelection(row.id)}
+                          aria-label={`Select ${row.fullName}`}
+                          className={`h-3.5 w-3.5 rounded border-border accent-[#2E37FE] cursor-pointer transition-opacity ${
+                            isSelected
+                              ? "opacity-100"
+                              : "opacity-0 group-hover:opacity-100 focus:opacity-100"
+                          }`}
+                        />
+                      </TableCell>
                       <TableCell className="font-medium">{row.fullName}</TableCell>
                       <TableCell className="text-muted-foreground">{row.email}</TableCell>
                       <TableCell className="text-muted-foreground">
@@ -626,6 +805,13 @@ export default function ContactsPage() {
                 })}
               </TableBody>
             </Table>
+            <PaginationControls
+              currentPage={safePage}
+              totalItems={sorted.length}
+              pageSize={CONTACTS_PAGE_SIZE}
+              onPageChange={setPage}
+            />
+            </>
           )}
         </CardContent>
       </Card>

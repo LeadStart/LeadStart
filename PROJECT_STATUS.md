@@ -127,6 +127,27 @@ Live at https://leadstart-ebon.vercel.app (LeadStart Vercel account, auto-deploy
 - [ ] **Client checkout flow**: Payment links or embedded checkout for onboarding
 
 ### Priority 4 — Polish & UX
+
+#### Pagination audit (lists rendering all rows)
+**Convention:** Default page size = 25 rows. Use [`PaginationControls`](src/components/ui/pagination-controls.tsx) and follow the pattern in [`admin/campaigns/page.tsx`](src/app/(dashboard)/admin/campaigns/page.tsx) and [`admin/contacts/page.tsx`](src/app/(dashboard)/admin/contacts/page.tsx). Reset page to 1 on filter/sort changes. Counts and stat cards should reflect the full filtered set, not the current page slice.
+
+Lists that still need pagination:
+- [ ] `admin/clients` — full client list
+- [x] `admin/contacts` — agency + client contact lists *(shipped 2026-04-29, page size 25)*
+- [ ] `admin/prospecting` — Scrap.io results table (can hit thousands of rows)
+- [ ] `admin/feedback` — lead feedback submissions
+- [ ] `admin/inbox` — classified replies (fetches `.limit(200)` today)
+- [ ] `admin/reports` — KPI report history
+- [ ] `admin/tasks` — internal task list
+- [ ] `client/inbox` — hot leads
+- [ ] `client/activity` — webhook event feed (grouped by date — pagination should slice the date groups, not individual rows)
+- [ ] `client/feedback` — submitted feedback history
+- [ ] `client/reports` — KPI reports
+
+Out of scope: `admin/prospects` (kanban — paginates per-column or not at all is a separate design question).
+
+Already paginated: `admin/campaigns` (page size 10), `admin/webhooks` (page size 10). These pre-date the 25-row standard; can be aligned in a follow-up if desired.
+
 - [ ] **Font upgrade**: Replace default with a cleaner sans-serif (Inter or similar)
 - [ ] **Alignment audit**: Verify vertical alignment across all stat cards and metric displays
 - [ ] **Mobile responsive**: Test and fix all pages on mobile/tablet
