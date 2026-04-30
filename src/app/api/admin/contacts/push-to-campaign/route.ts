@@ -79,17 +79,27 @@ export async function POST(req: NextRequest) {
 
   const admin = createAdminClient();
 
-  const { data: campaignData } = await admin
+  // Note: `source_channel` lives in migration 00045 which isn't applied in
+  // every environment yet — selecting it would make the whole query fail.
+  // We treat every campaign as an Instantly campaign here; once LinkedIn
+  // migrations land we can branch on source_channel.
+  const { data: campaignData, error: campaignError } = await admin
     .from("campaigns")
-    .select("id, organization_id, instantly_campaign_id, source_channel, name")
+    .select("id, organization_id, instantly_campaign_id, name")
     .eq("id", campaignId)
     .maybeSingle();
+  if (campaignError) {
+    console.error("[admin/contacts/push-to-campaign] campaign lookup failed:", campaignError);
+    return NextResponse.json(
+      { error: `Campaign lookup failed: ${campaignError.message}` },
+      { status: 500 },
+    );
+  }
   const campaign = campaignData as
     | {
         id: string;
         organization_id: string;
         instantly_campaign_id: string | null;
-        source_channel: string | null;
         name: string;
       }
     | null;
@@ -139,20 +149,6 @@ export async function POST(req: NextRequest) {
       { error: "Could not assign contacts to campaign" },
       { status: 500 },
     );
-  }
-
-  const sourceChannel = campaign.source_channel ?? "instantly";
-
-  if (sourceChannel !== "instantly") {
-    return NextResponse.json({
-      assigned: contacts.length,
-      uploaded: 0,
-      failed: 0,
-      skipped_no_email: 0,
-      skipped_invalid: skippedInvalid,
-      pushed_to_instantly: false,
-      reason: "LinkedIn campaign — no Instantly push",
-    });
   }
 
   if (!campaign.instantly_campaign_id) {
