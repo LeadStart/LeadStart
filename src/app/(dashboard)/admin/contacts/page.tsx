@@ -54,6 +54,23 @@ import { ImportContactsDialog } from "./import-dialog";
 
 const CONTACTS_PAGE_SIZE = 25;
 
+// Lucide dropped its brand-icon set upstream, so inline the LinkedIn glyph
+// (same SVG used in the client-page LinkedIn section).
+function LinkedinIcon({ size = 14, className }: { size?: number; className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      className={className}
+    >
+      <path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z" />
+    </svg>
+  );
+}
+
 const PIPELINE_STAGES: { value: ProspectStage; label: string }[] = [
   { value: "lead", label: "Lead" },
   { value: "contacted", label: "Contacted" },
@@ -735,6 +752,10 @@ export default function ContactsPage() {
                   <SortableHead sortKey="email" sortConfig={sortConfig} onSort={requestSort}>
                     Email
                   </SortableHead>
+                  <SortableHead sortKey="phone" sortConfig={sortConfig} onSort={requestSort}>
+                    Phone
+                  </SortableHead>
+                  <TableHead className="w-[80px]">LinkedIn</TableHead>
                   <SortableHead sortKey="company_name" sortConfig={sortConfig} onSort={requestSort}>
                     Company
                   </SortableHead>
@@ -774,6 +795,39 @@ export default function ContactsPage() {
                       </TableCell>
                       <TableCell className="font-medium">{row.fullName}</TableCell>
                       <TableCell className="text-muted-foreground">{row.email}</TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {row.phone ? (
+                          <a
+                            href={`tel:${row.phone}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="hover:text-[#2E37FE] hover:underline"
+                          >
+                            {row.phone}
+                          </a>
+                        ) : (
+                          "—"
+                        )}
+                      </TableCell>
+                      <TableCell className="w-[80px]">
+                        {row.linkedin_url ? (
+                          <a
+                            href={
+                              row.linkedin_url.startsWith("http")
+                                ? row.linkedin_url
+                                : `https://${row.linkedin_url}`
+                            }
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            aria-label="Open LinkedIn profile"
+                            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[#0A66C2] hover:bg-[#0A66C2]/10 transition-colors"
+                          >
+                            <LinkedinIcon size={14} />
+                          </a>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
                       <TableCell className="text-muted-foreground">
                         {row.company_name || "—"}
                       </TableCell>
