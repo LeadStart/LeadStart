@@ -201,18 +201,18 @@ export interface InstantlyReplyRequest {
 // rest; we handle unknown events gracefully in the webhook handler so
 // there's no downside to the broad subscription.
 export interface InstantlyWebhookCreate {
-  event_type: string;  // use "all_events" for a single catch-all subscription
-  url: string;         // must be publicly reachable; Instantly POSTs to this
-  secret?: string;     // appended as ?secret=... on the URL; we set this
-                       // to WEBHOOK_SECRET so the handler can authenticate
-                       // inbound payloads
-  name?: string;       // optional label shown in the Instantly UI
+  event_type: string;       // use "all_events" for a single catch-all subscription
+  target_hook_url: string;  // must be publicly reachable; Instantly POSTs to this.
+                            // Append ?secret=<WEBHOOK_SECRET> as a query param so
+                            // our handler can authenticate inbound payloads —
+                            // Instantly does not have a separate secret field.
+  name?: string;            // optional label shown in the Instantly UI
 }
 
 export interface InstantlyWebhookResponse {
   id: string;
   event_type: string;
-  url: string;
+  target_hook_url: string;
   name?: string;
   created_at?: string;
   updated_at?: string;

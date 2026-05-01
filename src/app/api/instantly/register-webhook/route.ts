@@ -104,8 +104,7 @@ export async function POST(request: NextRequest) {
     const instantly = new InstantlyClient(org.instantly_api_key);
     created = await instantly.createWebhook({
       event_type: "all_events",
-      url: webhookUrl,
-      secret: webhookSecret, // some Instantly accounts sign with this; handler accepts either path
+      target_hook_url: webhookUrl,
       name: "LeadStart — reply routing",
     });
   } catch (err) {
