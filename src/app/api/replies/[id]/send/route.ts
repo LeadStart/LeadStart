@@ -1,31 +1,34 @@
 // POST /api/replies/[id]/send — send the client's edited reply through
-// Instantly's native reply API and CC the client's notification email so
-// the thread lives in their inbox.
+// the channel that ingested the original (Instantly or Salesforge) and
+// CC the client's notification email so the thread lives in their inbox.
 //
 // Flow:
 //   1. Auth + access check (client_users or admin/VA in the org).
-//   2. Atomic load+claim: UPDATE status='sent' WHERE id=:id AND status IN
+//   2. Per-channel precondition check: Instantly needs eaccount +
+//      instantly_email_id; Salesforge needs salesforge_mailbox_id +
+//      salesforge_email_id + the org-level salesforge_workspace_id.
+//   3. Atomic load+claim: UPDATE status='sent' WHERE id=:id AND status IN
 //      ('new','classified') RETURNING *. Guards against double-click and
 //      concurrent sends — only one request wins the row.
-//   3. Build the Instantly request via buildReplyRequest (reads eaccount
-//      + reply_to_uuid back out of the claimed row — the eaccount roundtrip).
-//   4. Call InstantlyClient.replyViaEmailsApi. On success, record the new
-//      instantly email id. On failure, roll back: set status='classified'
+//   4. Per-channel send. On failure, roll back: set status='classified'
 //      and record the error so the client can retry.
 //
 // Request body: { subject?: string, body_text: string, body_html?: string }
-// `subject` defaults to the inbound's "Re:" form inside buildReplyRequest.
+// `subject` is honored by Instantly (defaults to the inbound's "Re:" form
+// inside buildReplyRequest) but ignored by Salesforge — Salesforge infers
+// the subject from the original thread server-side.
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { InstantlyClient } from "@/lib/instantly/client";
+import { SalesforgeClient } from "@/lib/salesforge/client";
 import {
   buildReplyRequest,
   computeIdempotencyKey,
   MissingReplyFieldError,
 } from "@/lib/replies/send";
-import type { LeadReply } from "@/types/app";
+import type { LeadReply, SourceChannel } from "@/types/app";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -77,11 +80,11 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
 
   const admin = createAdminClient();
 
-  // --- Precheck: load reply for access + org key lookup (no state change) ---
+  // --- Precheck: load reply for access + per-channel field lookup (no state change) ---
   const { data: preRow, error: preLoadErr } = await admin
     .from("lead_replies")
     .select(
-      "id, organization_id, client_id, status, eaccount, instantly_email_id, client:client_id(notification_email, notification_cc_emails)"
+      "id, organization_id, client_id, status, source_channel, eaccount, instantly_email_id, salesforge_email_id, salesforge_mailbox_id, client:client_id(notification_email, notification_cc_emails)"
     )
     .eq("id", id)
     .maybeSingle();
@@ -100,8 +103,11 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     organization_id: string;
     client_id: string;
     status: LeadReply["status"];
+    source_channel: SourceChannel;
     eaccount: string | null;
     instantly_email_id: string | null;
+    salesforge_email_id: string | null;
+    salesforge_mailbox_id: string | null;
     client: {
       notification_email: string | null;
       notification_cc_emails: string[] | null;
@@ -127,32 +133,72 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     }
   }
 
-  // --- Precondition: sendable fields present ---
-  if (!pre.eaccount || !pre.instantly_email_id) {
+  // --- Channel-aware precondition: sendable fields present ---
+  if (pre.source_channel === "instantly") {
+    if (!pre.eaccount || !pre.instantly_email_id) {
+      return NextResponse.json(
+        {
+          error:
+            "This reply is missing the Instantly metadata needed to send (eaccount / instantly_email_id). Check the webhook ingest.",
+        },
+        { status: 412 }
+      );
+    }
+  } else if (pre.source_channel === "salesforge") {
+    if (!pre.salesforge_email_id || !pre.salesforge_mailbox_id) {
+      return NextResponse.json(
+        {
+          error:
+            "This reply is missing the Salesforge metadata needed to send (salesforge_email_id / salesforge_mailbox_id). Check the webhook ingest.",
+        },
+        { status: 412 }
+      );
+    }
+  } else {
     return NextResponse.json(
       {
-        error:
-          "This reply is missing the Instantly metadata needed to send (eaccount / instantly_email_id). Check the webhook ingest.",
+        error: `Sending replies from the ${pre.source_channel} channel is not supported yet.`,
       },
-      { status: 412 }
+      { status: 501 }
     );
   }
 
-  // --- Fetch org Instantly API key ---
+  // --- Fetch org credentials for the active channel ---
   const { data: orgRow, error: orgErr } = await admin
     .from("organizations")
-    .select("instantly_api_key")
+    .select(
+      "instantly_api_key, salesforge_api_key, salesforge_workspace_id"
+    )
     .eq("id", pre.organization_id)
     .maybeSingle();
   if (orgErr || !orgRow) {
     return NextResponse.json({ error: "Organization not found" }, { status: 404 });
   }
-  const orgKey = (orgRow as { instantly_api_key: string | null }).instantly_api_key;
-  if (!orgKey) {
+  const org = orgRow as {
+    instantly_api_key: string | null;
+    salesforge_api_key: string | null;
+    salesforge_workspace_id: string | null;
+  };
+
+  if (pre.source_channel === "instantly" && !org.instantly_api_key) {
     return NextResponse.json(
       { error: "Instantly API key is not configured for this organization." },
       { status: 500 }
     );
+  }
+  if (pre.source_channel === "salesforge") {
+    if (!org.salesforge_api_key) {
+      return NextResponse.json(
+        { error: "Salesforge API key is not configured for this organization." },
+        { status: 500 }
+      );
+    }
+    if (!org.salesforge_workspace_id) {
+      return NextResponse.json(
+        { error: "Salesforge workspace is not configured for this organization." },
+        { status: 500 }
+      );
+    }
   }
 
   // --- Atomic claim: only one send wins ---
@@ -176,7 +222,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     .eq("id", id)
     .in("status", ["new", "classified"])
     .select(
-      "id, eaccount, instantly_email_id, subject, body_text, status"
+      "id, eaccount, instantly_email_id, salesforge_email_id, salesforge_mailbox_id, subject, body_text, status"
     )
     .maybeSingle();
 
@@ -193,13 +239,18 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
 
   const claimed = claimedRow as Pick<
     LeadReply,
-    "id" | "eaccount" | "instantly_email_id" | "subject" | "body_text"
+    | "id"
+    | "eaccount"
+    | "instantly_email_id"
+    | "salesforge_email_id"
+    | "salesforge_mailbox_id"
+    | "subject"
+    | "body_text"
   >;
 
-  // --- Build Instantly request ---
-  // CC the client's primary notification inbox + any teammates they added.
-  // Lowercased + deduped so one stray duplicate doesn't cause Instantly to
-  // reject the send.
+  // CC the client's primary notification inbox + any teammates they
+  // added. Lowercased + deduped so one stray duplicate doesn't cause
+  // the upstream provider to reject the send.
   const ccSet = new Set<string>();
   if (pre.client?.notification_email) {
     ccSet.add(pre.client.notification_email.trim().toLowerCase());
@@ -209,73 +260,110 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   }
   const cc = ccSet.size > 0 ? Array.from(ccSet) : undefined;
 
-  let request;
-  try {
-    request = buildReplyRequest({
-      reply: claimed,
-      body_text,
-      body_html,
-      subject,
-      cc_addresses: cc,
-    });
-  } catch (err) {
-    // Defense-in-depth: the precheck above already guards eaccount/id.
-    await admin
-      .from("lead_replies")
-      .update({
-        status: "classified",
-        sent_at: null,
-        final_body_text: null,
-        final_body_html: null,
-        error: truncErr(err),
-      })
-      .eq("id", id);
-    const status = err instanceof MissingReplyFieldError ? 412 : 500;
-    return NextResponse.json({ error: truncErr(err) }, { status });
+  // --- Per-channel send ---
+  let sentExternalId: string | null = null;
+  if (pre.source_channel === "instantly") {
+    let request;
+    try {
+      request = buildReplyRequest({
+        reply: claimed,
+        body_text,
+        body_html,
+        subject,
+        cc_addresses: cc,
+      });
+    } catch (err) {
+      // Defense-in-depth: the precheck above already guards eaccount/id.
+      await admin
+        .from("lead_replies")
+        .update({
+          status: "classified",
+          sent_at: null,
+          final_body_text: null,
+          final_body_html: null,
+          error: truncErr(err),
+        })
+        .eq("id", id);
+      const status = err instanceof MissingReplyFieldError ? 412 : 500;
+      return NextResponse.json({ error: truncErr(err) }, { status });
+    }
+
+    try {
+      // org.instantly_api_key is non-null here — the credential check
+      // above returns 500 otherwise.
+      const instantly = new InstantlyClient(org.instantly_api_key!);
+      const sentEmail = await instantly.replyViaEmailsApi(request);
+      sentExternalId = sentEmail.id;
+    } catch (err) {
+      console.error("[replies/send] Instantly reply API failed:", err);
+      await admin
+        .from("lead_replies")
+        .update({
+          status: "classified",
+          sent_at: null,
+          error: truncErr(err),
+        })
+        .eq("id", id);
+      return NextResponse.json(
+        { error: `Instantly rejected the send: ${truncErr(err)}` },
+        { status: 502 }
+      );
+    }
+  } else {
+    // Salesforge path. Subject is implicit on Salesforge's side — the
+    // server infers it from the original thread. So unlike Instantly
+    // we do not pass subject in the request body.
+    try {
+      const salesforge = new SalesforgeClient(org.salesforge_api_key!);
+      const sentEmail = await salesforge.replyToEmail(
+        org.salesforge_workspace_id!,
+        claimed.salesforge_mailbox_id!,
+        claimed.salesforge_email_id!,
+        {
+          body_text,
+          body_html,
+          cc_addresses: cc,
+        }
+      );
+      sentExternalId = sentEmail.id;
+    } catch (err) {
+      console.error("[replies/send] Salesforge reply API failed:", err);
+      await admin
+        .from("lead_replies")
+        .update({
+          status: "classified",
+          sent_at: null,
+          error: truncErr(err),
+        })
+        .eq("id", id);
+      return NextResponse.json(
+        { error: `Salesforge rejected the send: ${truncErr(err)}` },
+        { status: 502 }
+      );
+    }
   }
 
-  // --- Send ---
-  let sentEmail;
-  try {
-    const instantly = new InstantlyClient(orgKey);
-    sentEmail = await instantly.replyViaEmailsApi(request);
-  } catch (err) {
-    // Roll back the claim so the client can retry. Leave final_body_text
-    // populated so their edits aren't lost.
-    console.error("[replies/send] Instantly reply API failed:", err);
-    await admin
+  // --- Finalize: record the upstream provider's new email id on the row ---
+  // The column is named sent_instantly_email_id by history; semantically
+  // it stores "the upstream provider's id for the email we just sent".
+  // For Salesforge sends we re-use it rather than adding a parallel column.
+  if (sentExternalId) {
+    const { error: finalizeErr } = await admin
       .from("lead_replies")
-      .update({
-        status: "classified",
-        sent_at: null,
-        error: truncErr(err),
-      })
+      .update({ sent_instantly_email_id: sentExternalId })
       .eq("id", id);
-    return NextResponse.json(
-      { error: `Instantly rejected the send: ${truncErr(err)}` },
-      { status: 502 }
-    );
-  }
-
-  // --- Finalize: record Instantly's new email id on the row ---
-  const { error: finalizeErr } = await admin
-    .from("lead_replies")
-    .update({ sent_instantly_email_id: sentEmail.id })
-    .eq("id", id);
-  if (finalizeErr) {
-    // The send succeeded on Instantly's side; only the local reference
-    // write failed. Surface a 200 with a warning rather than confusing the
-    // UI into thinking the send failed.
-    console.error(
-      "[replies/send] Send succeeded but failed to record sent_instantly_email_id:",
-      finalizeErr
-    );
+    if (finalizeErr) {
+      console.error(
+        "[replies/send] Send succeeded but failed to record external email id:",
+        finalizeErr
+      );
+    }
   }
 
   return NextResponse.json({
     success: true,
     sent_at: sentAt,
-    sent_instantly_email_id: sentEmail.id,
+    sent_instantly_email_id: sentExternalId,
     cc_addresses: cc ?? [],
   });
 }

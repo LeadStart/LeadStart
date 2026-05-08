@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { InstantlyClient } from "@/lib/instantly/client";
+import { SalesforgeClient } from "@/lib/salesforge/client";
+import { WarmforgeClient } from "@/lib/warmforge/client";
 
 export async function GET() {
   try {
@@ -17,43 +19,54 @@ export async function GET() {
 
     const { data: org } = await supabase
       .from("organizations")
-      .select("instantly_api_key")
+      .select(
+        "instantly_api_key, salesforge_api_key, salesforge_workspace_id, warmforge_api_key"
+      )
       .eq("id", profile.organization_id)
       .single();
-    if (!org?.instantly_api_key) {
-      return NextResponse.json({ error: "No Instantly API key configured" }, { status: 400 });
+    if (!org?.instantly_api_key && !org?.salesforge_api_key) {
+      return NextResponse.json(
+        { error: "No upstream API key configured (Instantly or Salesforge)" },
+        { status: 400 }
+      );
     }
 
-    const instantly = new InstantlyClient(org.instantly_api_key);
+    const instantly = org.instantly_api_key
+      ? new InstantlyClient(org.instantly_api_key)
+      : null;
 
     const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString().split("T")[0];
     const today = new Date().toISOString().split("T")[0];
 
     // Fetch accounts and 30-day daily analytics in parallel. Daily analytics
     // is best-effort — if it fails, we still want to render the page with
-    // health scores + campaigns.
-    const [accounts, dailyResponse] = await Promise.all([
-      instantly.getAllAccounts(),
-      instantly
-        .getAccountDailyAnalytics(undefined, thirtyDaysAgo, today)
-        .catch(() => ({ data: [] as { email: string; date: string; sent: number }[] })),
-    ]);
+    // health scores + campaigns. Skip both if Instantly is not configured.
+    const [accounts, dailyResponse] = instantly
+      ? await Promise.all([
+          instantly.getAllAccounts(),
+          instantly
+            .getAccountDailyAnalytics(undefined, thirtyDaysAgo, today)
+            .catch(() => ({ data: [] as { email: string; date: string; sent: number }[] })),
+        ])
+      : [[], { data: [] as { email: string; date: string; sent: number }[] }];
 
     // Account-campaign mappings are scoped per email on Instantly's side
     // (no list-all endpoint), so fan out one call per inbox in parallel.
     // The InstantlyClient handles 429 retries with exponential backoff.
-    const mappingResults = await Promise.all(
-      accounts.map(async (account) => {
-        const email = (account as unknown as { email: string }).email;
-        try {
-          const items = await instantly.getAllAccountCampaignMappingsForEmail(email);
-          return { email, items };
-        } catch (err) {
-          console.error(`Failed to fetch campaign mappings for ${email}:`, err);
-          return { email, items: [] };
-        }
-      }),
-    );
+    const mappingResults = instantly
+      ? await Promise.all(
+          accounts.map(async (account) => {
+            const email = (account as unknown as { email: string }).email;
+            try {
+              const items = await instantly.getAllAccountCampaignMappingsForEmail(email);
+              return { email, items };
+            } catch (err) {
+              console.error(`Failed to fetch campaign mappings for ${email}:`, err);
+              return { email, items: [] };
+            }
+          }),
+        )
+      : [];
     const mappings = mappingResults.flatMap((r) => r.items);
 
     // Resolve Instantly campaign IDs to our own campaigns rows. The hourly
@@ -99,7 +112,7 @@ export async function GET() {
     // Aggregate by domain
     const domainStats = new Map<string, { inboxes: number; totalHealth: number; healthCount: number; totalSent: number }>();
 
-    const inboxes = accounts.map((account) => {
+    const instantlyInboxes = accounts.map((account) => {
       // The InstantlyAccount type only declares the fields we care about
       // strongly; the API actually returns more (stat_warmup_score, daily_limit,
       // timestamp_created). Cast through unknown to access them untyped.
@@ -133,8 +146,111 @@ export async function GET() {
         dailyLimit,
         campaigns: campaignsByEmail.get(email) || [],
         createdAt: a.timestamp_created as string,
+        sourceChannel: "instantly" as const,
       };
     });
+
+    // ===== SALESFORGE LEG =====
+    // Pull mailboxes from Salesforge (status + daily limit) and enrich
+    // each with Warmforge data (heat score + warmup stats). Both are
+    // best-effort — if either provider is misconfigured we keep going
+    // and surface what we have.
+    const salesforgeInboxes: Array<{
+      email: string;
+      domain: string;
+      name: string | null;
+      status: string;
+      warmupStatus: number;
+      healthScore: number | null;
+      sent30d: number;
+      dailyLimit: number;
+      campaigns: { id: string; name: string }[];
+      createdAt: string;
+      sourceChannel: "salesforge";
+    }> = [];
+
+    if (org.salesforge_api_key && org.salesforge_workspace_id) {
+      const salesforge = new SalesforgeClient(org.salesforge_api_key);
+      const warmforge = org.warmforge_api_key
+        ? new WarmforgeClient(org.warmforge_api_key)
+        : null;
+
+      try {
+        const sfMailboxes = await salesforge.listMailboxes(
+          org.salesforge_workspace_id,
+        );
+
+        // Fan out one Warmforge call per mailbox in parallel. Failures
+        // degrade to null heat score for that mailbox rather than failing
+        // the whole page.
+        const warmforgeResults = warmforge
+          ? await Promise.all(
+              sfMailboxes.map(async (m) => {
+                try {
+                  const detail = await warmforge.getMailbox(m.email);
+                  return { email: m.email, detail };
+                } catch (err) {
+                  console.error(
+                    `Warmforge getMailbox(${m.email}) failed:`,
+                    err,
+                  );
+                  return { email: m.email, detail: null };
+                }
+              }),
+            )
+          : [];
+        const warmforgeByEmail = new Map(
+          warmforgeResults.map((r) => [r.email, r.detail]),
+        );
+
+        for (const m of sfMailboxes) {
+          const email = m.email;
+          if (!email) continue;
+          const domain = email.split("@")[1] || "unknown";
+          const wf = warmforgeByEmail.get(email);
+          const healthScore =
+            typeof wf?.heat_score === "number" ? wf.heat_score : null;
+          const sent30d =
+            typeof wf?.warmup_sent === "number" ? wf.warmup_sent : 0;
+
+          // Domain aggregation reuses the same map as the Instantly leg.
+          const ds = domainStats.get(domain) || {
+            inboxes: 0,
+            totalHealth: 0,
+            healthCount: 0,
+            totalSent: 0,
+          };
+          ds.inboxes++;
+          if (healthScore !== null) {
+            ds.totalHealth += healthScore;
+            ds.healthCount++;
+          }
+          ds.totalSent += sent30d;
+          domainStats.set(domain, ds);
+
+          salesforgeInboxes.push({
+            email,
+            domain,
+            name: null,
+            status: m.status ?? "active",
+            warmupStatus: wf?.warmup_enabled ? 1 : 0,
+            healthScore,
+            sent30d,
+            dailyLimit: m.dailyLimit ?? 0,
+            campaigns: [],
+            createdAt: new Date().toISOString(),
+            sourceChannel: "salesforge",
+          });
+        }
+      } catch (err) {
+        console.error(
+          "Salesforge inbox enrichment failed; rendering Instantly only:",
+          err,
+        );
+      }
+    }
+
+    const inboxes = [...instantlyInboxes, ...salesforgeInboxes];
 
     // Build domain summary
     const domains = Array.from(domainStats.entries()).map(([domain, stats]) => ({

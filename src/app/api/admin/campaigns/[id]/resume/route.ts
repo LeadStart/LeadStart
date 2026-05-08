@@ -1,13 +1,18 @@
-// POST /api/admin/campaigns/[id]/resume — resume (activate) a paused
-// Instantly campaign and mark our campaigns row active again. Owner or
-// VA. Instantly exposes a single /activate endpoint for both start and
-// resume — we always use the "resume" label in the UI because going from
-// draft to active is handled inside Instantly's own UI, not here.
+// POST /api/admin/campaigns/[id]/resume — resume a paused campaign on
+// its upstream provider (Instantly or Salesforge) and mark our campaigns
+// row active again. Owner or VA.
+//
+// Instantly exposes a single /activate endpoint for both start and resume;
+// Salesforge has a dedicated /sequences/{id}/resume. Either way we always
+// use the "resume" label in the UI because going from draft to active is
+// handled inside the upstream provider's own UI, not here.
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { InstantlyClient } from "@/lib/instantly/client";
+import { SalesforgeClient } from "@/lib/salesforge/client";
+import type { SourceChannel } from "@/types/app";
 
 export async function POST(
   _req: NextRequest,
@@ -33,14 +38,18 @@ export async function POST(
   const admin = createAdminClient();
   const { data: campaign } = await admin
     .from("campaigns")
-    .select("id, organization_id, instantly_campaign_id, name, status")
+    .select(
+      "id, organization_id, source_channel, instantly_campaign_id, salesforge_sequence_id, name, status",
+    )
     .eq("id", campaignId)
     .maybeSingle();
   const c = campaign as
     | {
         id: string;
         organization_id: string;
+        source_channel: SourceChannel;
         instantly_campaign_id: string | null;
+        salesforge_sequence_id: string | null;
         name: string;
         status: string | null;
       }
@@ -51,38 +60,61 @@ export async function POST(
   if (c.organization_id !== user.app_metadata?.organization_id) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  if (!c.instantly_campaign_id) {
-    return NextResponse.json(
-      { error: "Campaign has no Instantly id — cannot resume remotely." },
-      { status: 400 },
-    );
-  }
 
   const { data: org } = await admin
     .from("organizations")
-    .select("instantly_api_key")
+    .select("instantly_api_key, salesforge_api_key")
     .eq("id", c.organization_id)
     .maybeSingle();
-  const apiKey = (org as { instantly_api_key: string | null } | null)
-    ?.instantly_api_key;
-  if (!apiKey) {
-    return NextResponse.json(
-      { error: "Instantly API key not set on organization." },
-      { status: 400 },
-    );
-  }
+  const orgRow = org as
+    | { instantly_api_key: string | null; salesforge_api_key: string | null }
+    | null;
 
   try {
-    const client = new InstantlyClient(apiKey);
-    await client.activateCampaign(c.instantly_campaign_id);
+    if (c.source_channel === "instantly") {
+      if (!c.instantly_campaign_id) {
+        return NextResponse.json(
+          { error: "Campaign has no Instantly id — cannot resume remotely." },
+          { status: 400 },
+        );
+      }
+      if (!orgRow?.instantly_api_key) {
+        return NextResponse.json(
+          { error: "Instantly API key not set on organization." },
+          { status: 400 },
+        );
+      }
+      const client = new InstantlyClient(orgRow.instantly_api_key);
+      await client.activateCampaign(c.instantly_campaign_id);
+    } else if (c.source_channel === "salesforge") {
+      if (!c.salesforge_sequence_id) {
+        return NextResponse.json(
+          { error: "Campaign has no Salesforge sequence id — cannot resume remotely." },
+          { status: 400 },
+        );
+      }
+      if (!orgRow?.salesforge_api_key) {
+        return NextResponse.json(
+          { error: "Salesforge API key not set on organization." },
+          { status: 400 },
+        );
+      }
+      const client = new SalesforgeClient(orgRow.salesforge_api_key);
+      await client.resumeSequence(c.salesforge_sequence_id);
+    } else {
+      return NextResponse.json(
+        { error: `Resume is not supported for ${c.source_channel} campaigns yet.` },
+        { status: 501 },
+      );
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error(
-      `[admin/campaigns/${campaignId}/resume] Instantly call failed:`,
+      `[admin/campaigns/${campaignId}/resume] upstream call failed:`,
       err,
     );
     return NextResponse.json(
-      { error: `Instantly rejected the resume: ${message}` },
+      { error: `Upstream rejected the resume: ${message}` },
       { status: 502 },
     );
   }
@@ -93,13 +125,13 @@ export async function POST(
     .eq("id", campaignId);
   if (updateError) {
     console.error(
-      `[admin/campaigns/${campaignId}/resume] Instantly resumed but local update failed:`,
+      `[admin/campaigns/${campaignId}/resume] upstream resumed but local update failed:`,
       updateError,
     );
     return NextResponse.json(
       {
         warning:
-          "Resumed on Instantly but local status update failed. Next sync will reconcile.",
+          "Resumed upstream but local status update failed. Next sync will reconcile.",
         error: updateError.message,
       },
       { status: 200 },

@@ -27,6 +27,9 @@ interface InboxData {
   dailyLimit?: number;
   campaigns?: { id: string; name: string }[];
   createdAt: string;
+  // Defaults to 'instantly' for back-compat with rows from the
+  // pre-Salesforge endpoint shape.
+  sourceChannel?: "instantly" | "salesforge" | "linkedin";
 }
 
 interface DomainData {
@@ -244,7 +247,11 @@ export default function InboxHealthPage() {
                       </div>
                     </TableCell>
                     <TableCell className="text-right">
-                      <InboxRowActions email={inbox.email} onDeleted={fetchData} />
+                      <InboxRowActions
+                        email={inbox.email}
+                        onDeleted={fetchData}
+                        sourceChannel={inbox.sourceChannel}
+                      />
                     </TableCell>
                   </TableRow>
                 ))}

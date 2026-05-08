@@ -1,5 +1,6 @@
 // POST /api/admin/contacts/push-to-campaign — bulk-assign contacts to a
-// campaign and (for Instantly campaigns) push them to Instantly as leads.
+// campaign and push them to the campaign's upstream provider (Instantly,
+// Salesforge) as leads / contacts.
 //
 // Owner-only. Body: { contact_ids: string[], campaign_id: string }.
 //
@@ -8,6 +9,10 @@
 // - For Instantly campaigns (source_channel='instantly') with a stored API
 //   key: pushes each contact to Instantly via POST /leads, then sets
 //   status='uploaded' on contacts that uploaded successfully.
+// - For Salesforge campaigns (source_channel='salesforge') with a stored
+//   API key: pushes contacts in 100-row chunks via POST /contacts/bulk,
+//   then enrolls all created contact ids into the sequence via
+//   PUT /sequences/{id}/contacts.
 // - For LinkedIn campaigns: skips the push (LinkedIn enrollment is a
 //   separate flow). The /campaigns/[id]/enroll route handles that.
 //
@@ -18,6 +23,9 @@ import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { InstantlyClient } from "@/lib/instantly/client";
 import type { InstantlyLeadCreate } from "@/lib/instantly/types";
+import { SalesforgeClient } from "@/lib/salesforge/client";
+import type { SalesforgeContactCreate } from "@/lib/salesforge/types";
+import type { SourceChannel } from "@/types/app";
 
 interface PushBody {
   contact_ids?: string[];
@@ -79,13 +87,11 @@ export async function POST(req: NextRequest) {
 
   const admin = createAdminClient();
 
-  // Note: `source_channel` lives in migration 00045 which isn't applied in
-  // every environment yet — selecting it would make the whole query fail.
-  // We treat every campaign as an Instantly campaign here; once LinkedIn
-  // migrations land we can branch on source_channel.
   const { data: campaignData, error: campaignError } = await admin
     .from("campaigns")
-    .select("id, organization_id, instantly_campaign_id, name")
+    .select(
+      "id, organization_id, source_channel, instantly_campaign_id, salesforge_sequence_id, name",
+    )
     .eq("id", campaignId)
     .maybeSingle();
   if (campaignError) {
@@ -99,7 +105,9 @@ export async function POST(req: NextRequest) {
     | {
         id: string;
         organization_id: string;
+        source_channel: SourceChannel;
         instantly_campaign_id: string | null;
+        salesforge_sequence_id: string | null;
         name: string;
       }
     | null;
@@ -112,7 +120,9 @@ export async function POST(req: NextRequest) {
 
   const { data: contactRows } = await admin
     .from("contacts")
-    .select("id, email, first_name, last_name, company_name, phone")
+    .select(
+      "id, email, first_name, last_name, company_name, phone, title, linkedin_url",
+    )
     .in("id", contactIds)
     .eq("organization_id", organizationId);
   const contacts = (contactRows ?? []) as {
@@ -122,6 +132,8 @@ export async function POST(req: NextRequest) {
     last_name: string | null;
     company_name: string | null;
     phone: string | null;
+    title: string | null;
+    linkedin_url: string | null;
   }[];
 
   if (contacts.length === 0) {
@@ -151,93 +163,193 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  if (!campaign.instantly_campaign_id) {
-    return NextResponse.json({
-      assigned: contacts.length,
-      uploaded: 0,
-      failed: 0,
-      skipped_no_email: 0,
-      skipped_invalid: skippedInvalid,
-      pushed_to_instantly: false,
-      reason: "Campaign has no Instantly ID — cannot push",
-    });
-  }
-
-  const { data: orgData } = await admin
-    .from("organizations")
-    .select("id, instantly_api_key")
-    .eq("id", organizationId)
-    .maybeSingle();
-  const org = orgData as { id: string; instantly_api_key: string | null } | null;
-
-  if (!org?.instantly_api_key) {
-    return NextResponse.json(
-      {
-        error:
-          "Instantly API key not set. Save it in /admin/settings/api first.",
-      },
-      { status: 400 },
-    );
-  }
-
-  // Email is required by Instantly. Contacts without one are skipped here
-  // rather than failing the whole batch.
+  // Email is required by both upstreams. Contacts without one are skipped
+  // here rather than failing the whole batch.
   const pushable = contacts.filter(
     (c) => typeof c.email === "string" && c.email.trim().length > 0,
   );
   const skippedNoEmail = contacts.length - pushable.length;
 
-  const leads: (Omit<InstantlyLeadCreate, "campaign"> & { _id: string })[] =
-    pushable.map((c) => ({
-      _id: c.id,
+  // ----- Per-channel branch -----
+
+  if (campaign.source_channel === "instantly") {
+    if (!campaign.instantly_campaign_id) {
+      return NextResponse.json({
+        assigned: contacts.length,
+        uploaded: 0,
+        failed: 0,
+        skipped_no_email: 0,
+        skipped_invalid: skippedInvalid,
+        pushed: false,
+        reason: "Campaign has no Instantly ID — cannot push",
+      });
+    }
+
+    const { data: orgData } = await admin
+      .from("organizations")
+      .select("id, instantly_api_key")
+      .eq("id", organizationId)
+      .maybeSingle();
+    const org = orgData as { id: string; instantly_api_key: string | null } | null;
+
+    if (!org?.instantly_api_key) {
+      return NextResponse.json(
+        {
+          error:
+            "Instantly API key not set. Save it in /admin/settings/api first.",
+        },
+        { status: 400 },
+      );
+    }
+
+    const leads: (Omit<InstantlyLeadCreate, "campaign"> & { _id: string })[] =
+      pushable.map((c) => ({
+        _id: c.id,
+        email: c.email!.trim(),
+        first_name: c.first_name ?? undefined,
+        last_name: c.last_name ?? undefined,
+        company_name: c.company_name ?? undefined,
+        phone: c.phone ?? undefined,
+      }));
+
+    const client = new InstantlyClient(org.instantly_api_key);
+    let uploaded = 0;
+    const failed: { id: string; email: string; error: string }[] = [];
+    const uploadedIds: string[] = [];
+
+    for (const lead of leads) {
+      try {
+        const { _id, ...payload } = lead;
+        await client.addLead({
+          ...payload,
+          campaign: campaign.instantly_campaign_id,
+        });
+        uploaded++;
+        uploadedIds.push(_id);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        failed.push({ id: lead._id, email: lead.email, error: message });
+      }
+    }
+
+    if (uploadedIds.length > 0) {
+      const { error: statusError } = await admin
+        .from("contacts")
+        .update({ status: "uploaded", updated_at: new Date().toISOString() })
+        .in("id", uploadedIds);
+      if (statusError) {
+        console.error(
+          "[admin/contacts/push-to-campaign] status update failed:",
+          statusError,
+        );
+      }
+    }
+
+    return NextResponse.json({
+      assigned: contacts.length,
+      uploaded,
+      failed: failed.length,
+      failures: failed,
+      skipped_no_email: skippedNoEmail,
+      skipped_invalid: skippedInvalid,
+      pushed: true,
+      provider: "instantly",
+      campaign_name: campaign.name,
+    });
+  }
+
+  if (campaign.source_channel === "salesforge") {
+    if (!campaign.salesforge_sequence_id) {
+      return NextResponse.json({
+        assigned: contacts.length,
+        uploaded: 0,
+        failed: 0,
+        skipped_no_email: 0,
+        skipped_invalid: skippedInvalid,
+        pushed: false,
+        reason: "Campaign has no Salesforge sequence id — cannot push",
+      });
+    }
+
+    const { data: orgData } = await admin
+      .from("organizations")
+      .select("id, salesforge_api_key")
+      .eq("id", organizationId)
+      .maybeSingle();
+    const org = orgData as { id: string; salesforge_api_key: string | null } | null;
+
+    if (!org?.salesforge_api_key) {
+      return NextResponse.json(
+        {
+          error:
+            "Salesforge API key not set. Save it in /admin/settings/api first.",
+        },
+        { status: 400 },
+      );
+    }
+
+    const sfContacts: SalesforgeContactCreate[] = pushable.map((c) => ({
       email: c.email!.trim(),
       first_name: c.first_name ?? undefined,
       last_name: c.last_name ?? undefined,
-      company_name: c.company_name ?? undefined,
+      company: c.company_name ?? undefined,
+      title: c.title ?? undefined,
       phone: c.phone ?? undefined,
+      linkedin_url: c.linkedin_url ?? undefined,
     }));
 
-  const client = new InstantlyClient(org.instantly_api_key);
-  let uploaded = 0;
-  const failed: { id: string; email: string; error: string }[] = [];
-  const uploadedIds: string[] = [];
+    const client = new SalesforgeClient(org.salesforge_api_key);
+    const result = await client.pushContactsToSequence(
+      campaign.salesforge_sequence_id,
+      sfContacts,
+    );
 
-  for (const lead of leads) {
-    try {
-      const { _id, ...payload } = lead;
-      await client.addLead({
-        ...payload,
-        campaign: campaign.instantly_campaign_id,
-      });
-      uploaded++;
-      uploadedIds.push(_id);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      failed.push({ id: lead._id, email: lead.email, error: message });
+    // Salesforge's bulk endpoint doesn't tell us per-contact ids matched
+    // back to our row ids, so we mark every contact whose email landed
+    // in `pushable` and that wasn't in the failed list as 'uploaded'.
+    const failedEmails = new Set(
+      result.failed.map((f) => f.email?.toLowerCase()).filter(Boolean) as string[],
+    );
+    const uploadedIds = pushable
+      .filter((c) => !failedEmails.has(c.email!.trim().toLowerCase()))
+      .map((c) => c.id);
+
+    if (uploadedIds.length > 0) {
+      const { error: statusError } = await admin
+        .from("contacts")
+        .update({ status: "uploaded", updated_at: new Date().toISOString() })
+        .in("id", uploadedIds);
+      if (statusError) {
+        console.error(
+          "[admin/contacts/push-to-campaign] status update failed:",
+          statusError,
+        );
+      }
     }
+
+    return NextResponse.json({
+      assigned: contacts.length,
+      uploaded: result.uploaded,
+      failed: result.failed.length,
+      failures: result.failed,
+      skipped_no_email: skippedNoEmail,
+      skipped_invalid: skippedInvalid,
+      pushed: true,
+      provider: "salesforge",
+      campaign_name: campaign.name,
+    });
   }
 
-  if (uploadedIds.length > 0) {
-    const { error: statusError } = await admin
-      .from("contacts")
-      .update({ status: "uploaded", updated_at: new Date().toISOString() })
-      .in("id", uploadedIds);
-    if (statusError) {
-      console.error(
-        "[admin/contacts/push-to-campaign] status update failed:",
-        statusError,
-      );
-    }
-  }
-
+  // LinkedIn / other channels: contacts are assigned locally, but
+  // upstream enrollment goes through /campaigns/[id]/enroll instead.
   return NextResponse.json({
     assigned: contacts.length,
-    uploaded,
-    failed: failed.length,
-    failures: failed,
-    skipped_no_email: skippedNoEmail,
+    uploaded: 0,
+    failed: 0,
+    skipped_no_email: 0,
     skipped_invalid: skippedInvalid,
-    pushed_to_instantly: true,
+    pushed: false,
+    reason: `Push is not supported for ${campaign.source_channel} campaigns; use the channel-specific enrollment flow.`,
     campaign_name: campaign.name,
   });
 }

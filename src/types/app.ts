@@ -37,6 +37,14 @@ export interface Organization {
   unipile_api_key: string | null;
   unipile_dsn: string | null;
   unipile_webhook_id: string | null;
+  // Salesforge (migration 00049). Replacement for Instantly as the email
+  // channel. Auth uses the raw key (no Bearer prefix). One workspace per
+  // org; default product id is used for newly-created sequences. Warmforge
+  // is Salesforge's mailbox-warming sister product with its own API key.
+  salesforge_api_key: string | null;
+  salesforge_workspace_id: string | null;
+  salesforge_default_product_id: string | null;
+  warmforge_api_key: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -118,11 +126,16 @@ export interface Campaign {
   // Made nullable in migration 00047 — LinkedIn campaigns have no Instantly
   // id. Still NOT NULL in practice for source_channel='instantly' rows.
   instantly_campaign_id: string | null;
+  // Salesforge sequence id (migration 00049). Populated for
+  // source_channel='salesforge' rows; null otherwise. Parallels
+  // instantly_campaign_id.
+  salesforge_sequence_id: string | null;
   name: string;
   status: CampaignStatus;
-  // Channel discriminator (migration 00045). 'instantly' for legacy email
-  // campaigns; 'linkedin' for Unipile-driven sequences (commit #6+).
-  source_channel: "instantly" | "linkedin";
+  // Channel discriminator (migration 00045 + 00049). 'instantly' for legacy
+  // email campaigns; 'linkedin' for Unipile-driven sequences; 'salesforge'
+  // for the Salesforge channel (the new email default).
+  source_channel: SourceChannel;
   // Per-campaign Unipile account binding (migration 00046). Defaults to
   // clients.unipile_account_id but lives on the campaign so accounts can
   // rotate without invalidating campaign history.
@@ -537,7 +550,7 @@ export interface ReplyReferralContact {
   title: string | null;
 }
 
-export type SourceChannel = "instantly" | "linkedin";
+export type SourceChannel = "instantly" | "linkedin" | "salesforge";
 
 export interface LeadReply {
   id: string;
@@ -564,6 +577,15 @@ export interface LeadReply {
   // for webhook dedup; unipile_chat_id threads messages within a chat.
   unipile_message_id: string | null;
   unipile_chat_id: string | null;
+  // Salesforge references (migration 00049). Null for non-Salesforge
+  // replies; populated for source_channel='salesforge' rows. The trio
+  // (workspace, mailbox, email_id) is what POST .../emails/{em}/reply
+  // needs — workspace lives on organizations, mailbox + email id live
+  // here. salesforge_email_id is org-scoped unique for webhook dedup
+  // (Salesforge does not expose RFC 5322 message-id).
+  salesforge_email_id: string | null;
+  salesforge_thread_id: string | null;
+  salesforge_mailbox_id: string | null;
   // Hosted Instantly mailbox that received the reply. Passed back to
   // POST /api/v2/emails/reply as `eaccount` when the client sends a
   // reply through the portal. (Migration 00026.)

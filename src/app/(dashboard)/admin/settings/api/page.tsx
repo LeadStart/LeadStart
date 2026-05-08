@@ -29,6 +29,8 @@ import {
   Search,
   Sparkles,
   Compass,
+  Send,
+  Flame,
 } from "lucide-react";
 import type { Organization } from "@/types/app";
 import { appUrl } from "@/lib/api-url";
@@ -138,6 +140,34 @@ export default function IntegrationsPage() {
     "success" | "fail" | null
   >(null);
 
+  // Salesforge (email channel replacing Instantly — migration 00049)
+  const [salesforgeKey, setSalesforgeKey] = useState("");
+  const [salesforgeWorkspaceId, setSalesforgeWorkspaceId] = useState("");
+  const [salesforgeProductId, setSalesforgeProductId] = useState("");
+  const [salesforgeWorkspaces, setSalesforgeWorkspaces] = useState<
+    { id: string; name: string }[]
+  >([]);
+  const [salesforgeProducts, setSalesforgeProducts] = useState<
+    { id: string; name: string }[]
+  >([]);
+  const [loadingWorkspaces, setLoadingWorkspaces] = useState(false);
+  const [loadingProducts, setLoadingProducts] = useState(false);
+  const [savingSalesforge, setSavingSalesforge] = useState(false);
+  const [salesforgeSaved, setSalesforgeSaved] = useState(false);
+  const [testingSalesforge, setTestingSalesforge] = useState(false);
+  const [salesforgeTestResult, setSalesforgeTestResult] = useState<
+    { kind: "success"; me?: Record<string, unknown> } | { kind: "fail"; message: string } | null
+  >(null);
+
+  // Warmforge (Salesforge's mailbox-warming sister product — migration 00049)
+  const [warmforgeKey, setWarmforgeKey] = useState("");
+  const [savingWarmforge, setSavingWarmforge] = useState(false);
+  const [warmforgeSaved, setWarmforgeSaved] = useState(false);
+  const [testingWarmforge, setTestingWarmforge] = useState(false);
+  const [warmforgeTestResult, setWarmforgeTestResult] = useState<
+    { kind: "success" } | { kind: "fail"; message: string } | null
+  >(null);
+
   useEffect(() => {
     if (!organizationId) return;
     const supabase = createClient();
@@ -176,6 +206,21 @@ export default function IntegrationsPage() {
           if (dmOrg.perplexity_api_key) setPerplexityKey(dmOrg.perplexity_api_key);
           if (dmOrg.unipile_api_key) setUnipileKey(dmOrg.unipile_api_key);
           if (dmOrg.unipile_dsn) setUnipileDsn(dmOrg.unipile_dsn);
+          // Salesforge + Warmforge (migration 00049). Read through a
+          // separate cast since Organization may not yet enumerate them
+          // in the compile-time type until app.ts is regenerated.
+          const sfOrg = data as {
+            salesforge_api_key?: string | null;
+            salesforge_workspace_id?: string | null;
+            salesforge_default_product_id?: string | null;
+            warmforge_api_key?: string | null;
+          };
+          if (sfOrg.salesforge_api_key) setSalesforgeKey(sfOrg.salesforge_api_key);
+          if (sfOrg.salesforge_workspace_id)
+            setSalesforgeWorkspaceId(sfOrg.salesforge_workspace_id);
+          if (sfOrg.salesforge_default_product_id)
+            setSalesforgeProductId(sfOrg.salesforge_default_product_id);
+          if (sfOrg.warmforge_api_key) setWarmforgeKey(sfOrg.warmforge_api_key);
         }
       });
   }, [organizationId]);
@@ -451,6 +496,131 @@ export default function IntegrationsPage() {
     }
   }
 
+  async function handleTestSalesforge() {
+    setTestingSalesforge(true);
+    setSalesforgeTestResult(null);
+    try {
+      const res = await fetch(appUrl("/api/admin/salesforge/test"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ api_key: salesforgeKey }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setSalesforgeTestResult({ kind: "success", me: data.me });
+        // Auto-load workspaces on a successful test so the dropdown
+        // is ready without a second click.
+        await handleLoadWorkspaces();
+      } else {
+        setSalesforgeTestResult({ kind: "fail", message: data.error ?? "Connection failed" });
+      }
+    } catch (err) {
+      setSalesforgeTestResult({
+        kind: "fail",
+        message: err instanceof Error ? err.message : "Connection failed",
+      });
+    } finally {
+      setTestingSalesforge(false);
+    }
+  }
+
+  async function handleLoadWorkspaces() {
+    if (!salesforgeKey) return;
+    setLoadingWorkspaces(true);
+    try {
+      const res = await fetch(appUrl("/api/admin/salesforge/workspaces"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ api_key: salesforgeKey }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setSalesforgeWorkspaces(data.workspaces ?? []);
+      }
+    } catch (err) {
+      console.error("Failed to load Salesforge workspaces:", err);
+    } finally {
+      setLoadingWorkspaces(false);
+    }
+  }
+
+  async function handleLoadProducts(workspaceId: string) {
+    if (!salesforgeKey || !workspaceId) return;
+    setLoadingProducts(true);
+    try {
+      const res = await fetch(appUrl("/api/admin/salesforge/products"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ api_key: salesforgeKey, workspace_id: workspaceId }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setSalesforgeProducts(data.products ?? []);
+      }
+    } catch (err) {
+      console.error("Failed to load Salesforge products:", err);
+    } finally {
+      setLoadingProducts(false);
+    }
+  }
+
+  async function handleSaveSalesforge() {
+    if (!organizationId) return;
+    setSavingSalesforge(true);
+    setSalesforgeSaved(false);
+    const supabase = createClient();
+    await supabase
+      .from("organizations")
+      .update({
+        salesforge_api_key: salesforgeKey || null,
+        salesforge_workspace_id: salesforgeWorkspaceId || null,
+        salesforge_default_product_id: salesforgeProductId || null,
+      })
+      .eq("id", organizationId);
+    setSalesforgeSaved(true);
+    setSavingSalesforge(false);
+    setTimeout(() => setSalesforgeSaved(false), 3000);
+  }
+
+  async function handleSaveWarmforge() {
+    if (!organizationId) return;
+    setSavingWarmforge(true);
+    setWarmforgeSaved(false);
+    const supabase = createClient();
+    await supabase
+      .from("organizations")
+      .update({ warmforge_api_key: warmforgeKey || null })
+      .eq("id", organizationId);
+    setWarmforgeSaved(true);
+    setSavingWarmforge(false);
+    setTimeout(() => setWarmforgeSaved(false), 3000);
+  }
+
+  async function handleTestWarmforge() {
+    setTestingWarmforge(true);
+    setWarmforgeTestResult(null);
+    try {
+      const res = await fetch(appUrl("/api/admin/warmforge/test"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ api_key: warmforgeKey }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setWarmforgeTestResult({ kind: "success" });
+      } else {
+        setWarmforgeTestResult({ kind: "fail", message: data.error ?? "Connection failed" });
+      }
+    } catch (err) {
+      setWarmforgeTestResult({
+        kind: "fail",
+        message: err instanceof Error ? err.message : "Connection failed",
+      });
+    } finally {
+      setTestingWarmforge(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -533,6 +703,210 @@ export default function IntegrationsPage() {
             initialWebhookId={org?.instantly_webhook_id ?? null}
             hasApiKey={Boolean(apiKey)}
           />
+        </CardContent>
+      </Card>
+
+      {/* Salesforge — replacement email channel (migration 00049) */}
+      <Card className="border-border/50 shadow-sm">
+        <CardHeader className="flex flex-row items-center gap-2 pb-3">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#0EA5E9]">
+            <Send size={16} className="text-white" />
+          </div>
+          <div>
+            <CardTitle className="text-base">Salesforge</CardTitle>
+            <p className="text-xs text-muted-foreground">
+              New email channel — replacing Instantly. Pick a workspace and default product after entering your key.
+            </p>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-1">
+            <Label htmlFor="salesforgeKey" className="text-sm font-medium">
+              API Key
+            </Label>
+            <Input
+              id="salesforgeKey"
+              type="password"
+              value={salesforgeKey}
+              onChange={(e) => setSalesforgeKey(e.target.value)}
+              placeholder="Salesforge workspace API key"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Find at <span className="font-mono">app.salesforge.ai</span> →
+              Workspace settings → API. The header is sent as the raw key
+              (not <span className="font-mono">Bearer</span>-prefixed).
+            </p>
+          </div>
+
+          {salesforgeWorkspaces.length > 0 && (
+            <div className="space-y-1">
+              <Label className="text-sm font-medium">Workspace</Label>
+              <Select
+                value={salesforgeWorkspaceId}
+                onValueChange={(v) => {
+                  if (!v) return;
+                  setSalesforgeWorkspaceId(v);
+                  setSalesforgeProductId("");
+                  setSalesforgeProducts([]);
+                  void handleLoadProducts(v);
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Pick a workspace" />
+                </SelectTrigger>
+                <SelectContent>
+                  {salesforgeWorkspaces.map((w) => (
+                    <SelectItem key={w.id} value={w.id}>
+                      {w.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {salesforgeProducts.length > 0 && (
+            <div className="space-y-1">
+              <Label className="text-sm font-medium">Default product</Label>
+              <Select
+                value={salesforgeProductId}
+                onValueChange={(v) => v && setSalesforgeProductId(v)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Pick a default product" />
+                </SelectTrigger>
+                <SelectContent>
+                  {salesforgeProducts.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          <div className="flex flex-wrap gap-2 items-center">
+            <Button
+              onClick={handleSaveSalesforge}
+              disabled={savingSalesforge}
+              style={{ background: "#2E37FE" }}
+            >
+              {savingSalesforge ? "Saving..." : "Save Salesforge Setup"}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleTestSalesforge}
+              disabled={testingSalesforge || !salesforgeKey}
+            >
+              {testingSalesforge ? "Testing..." : "Test Connection"}
+            </Button>
+            {salesforgeWorkspaces.length === 0 && salesforgeKey && (
+              <Button
+                variant="outline"
+                onClick={handleLoadWorkspaces}
+                disabled={loadingWorkspaces}
+              >
+                {loadingWorkspaces ? "Loading..." : "Load Workspaces"}
+              </Button>
+            )}
+            {loadingProducts && (
+              <span className="text-xs text-muted-foreground">Loading products…</span>
+            )}
+            {salesforgeSaved && (
+              <span className="text-sm text-emerald-600 flex items-center gap-1">
+                <CheckCircle size={14} /> Saved
+              </span>
+            )}
+          </div>
+
+          {salesforgeTestResult?.kind === "success" && (
+            <div className="flex items-center gap-2 rounded-lg bg-emerald-50 border border-emerald-200 p-3">
+              <CheckCircle size={16} className="text-emerald-500" />
+              <span className="text-sm font-medium text-emerald-700">
+                Connection successful
+              </span>
+            </div>
+          )}
+          {salesforgeTestResult?.kind === "fail" && (
+            <div className="flex items-center gap-2 rounded-lg bg-red-50 border border-red-200 p-3">
+              <XCircle size={16} className="text-red-500" />
+              <span className="text-sm font-medium text-red-700">
+                {salesforgeTestResult.message}
+              </span>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Warmforge — Salesforge's mailbox-warming sister product (migration 00049) */}
+      <Card className="border-border/50 shadow-sm">
+        <CardHeader className="flex flex-row items-center gap-2 pb-3">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#EA580C]">
+            <Flame size={16} className="text-white" />
+          </div>
+          <div>
+            <CardTitle className="text-base">Warmforge</CardTitle>
+            <p className="text-xs text-muted-foreground">
+              Inbox-warming sister product to Salesforge. Mailboxes auto-sync
+              from Salesforge — only the API key is needed here.
+            </p>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-1">
+            <Label htmlFor="warmforgeKey" className="text-sm font-medium">
+              API Key
+            </Label>
+            <Input
+              id="warmforgeKey"
+              type="password"
+              value={warmforgeKey}
+              onChange={(e) => setWarmforgeKey(e.target.value)}
+              placeholder="Warmforge API key"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Find at <span className="font-mono">app.warmforge.ai</span> →
+              Settings → API.
+            </p>
+          </div>
+          <div className="flex gap-2 items-center">
+            <Button
+              onClick={handleSaveWarmforge}
+              disabled={savingWarmforge}
+              style={{ background: "#2E37FE" }}
+            >
+              {savingWarmforge ? "Saving..." : "Save Key"}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleTestWarmforge}
+              disabled={testingWarmforge || !warmforgeKey}
+            >
+              {testingWarmforge ? "Testing..." : "Test Connection"}
+            </Button>
+            {warmforgeSaved && (
+              <span className="text-sm text-emerald-600 flex items-center gap-1">
+                <CheckCircle size={14} /> Saved
+              </span>
+            )}
+          </div>
+          {warmforgeTestResult?.kind === "success" && (
+            <div className="flex items-center gap-2 rounded-lg bg-emerald-50 border border-emerald-200 p-3">
+              <CheckCircle size={16} className="text-emerald-500" />
+              <span className="text-sm font-medium text-emerald-700">
+                Connection successful
+              </span>
+            </div>
+          )}
+          {warmforgeTestResult?.kind === "fail" && (
+            <div className="flex items-center gap-2 rounded-lg bg-red-50 border border-red-200 p-3">
+              <XCircle size={16} className="text-red-500" />
+              <span className="text-sm font-medium text-red-700">
+                {warmforgeTestResult.message}
+              </span>
+            </div>
+          )}
         </CardContent>
       </Card>
 

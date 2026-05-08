@@ -11,16 +11,53 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Trash2, Loader2 } from "lucide-react";
+import { Trash2, Loader2, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { appUrl } from "@/lib/api-url";
+import type { SourceChannel } from "@/types/app";
 
 interface InboxRowActionsProps {
   email: string;
   onDeleted: () => void;
+  // Defaults to 'instantly' for back-compat with existing call sites.
+  // For 'salesforge' inboxes we render an orange external link to
+  // app.salesforge.ai instead of the in-app delete dialog — Salesforge's
+  // delete-mailbox flow is best handled inside their own app until the
+  // cascade test confirms in-app delete is preferable.
+  sourceChannel?: SourceChannel;
 }
 
-export function InboxRowActions({ email, onDeleted }: InboxRowActionsProps) {
+export function InboxRowActions({
+  email,
+  onDeleted,
+  sourceChannel = "instantly",
+}: InboxRowActionsProps) {
+  if (sourceChannel === "salesforge") {
+    return (
+      <a
+        href="https://app.salesforge.ai"
+        target="_blank"
+        rel="noopener noreferrer"
+        // #EA580C = Tailwind orange-600 — matches the spec.
+        className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-xs font-medium text-[#EA580C] hover:bg-orange-50 transition-colors cursor-pointer"
+        aria-label={`Manage ${email} in Salesforge`}
+      >
+        Manage in Salesforge
+        <ExternalLink size={12} />
+      </a>
+    );
+  }
+
+  return <InstantlyDeleteAction email={email} onDeleted={onDeleted} />;
+}
+
+function InstantlyDeleteAction({
+  email,
+  onDeleted,
+}: {
+  email: string;
+  onDeleted: () => void;
+}) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [typed, setTyped] = useState("");
