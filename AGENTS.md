@@ -6,17 +6,17 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 # Local dev — every URL is under `/app`
 
-`next.config.ts` sets **`basePath: "/app"`**. This means:
+`next.config.ts` sets **`basePath: "/app"`**. Every route lives under `/app/...`:
 
-- Root `http://localhost:3000/` returns **404 by design** (and so does `/login`, `/admin`, etc.). This is NOT a bug.
-- Every route lives under `/app`:
-  - Login: `http://localhost:3000/app/login`
-  - Admin home: `http://localhost:3000/app/admin`
-  - Settings: `http://localhost:3000/app/admin/settings/api`
-  - Any API route: `http://localhost:3000/app/api/...`
-- Production has the same prefix: `https://leadstart-ebon.vercel.app/app/...`
+- Login: `http://localhost:3000/app/login`
+- Admin home: `http://localhost:3000/app/admin`
+- Settings: `http://localhost:3000/app/admin/settings/api`
+- Any API route: `http://localhost:3000/app/api/...`
+- Production uses the same prefix: `https://leadstart-ebon.vercel.app/app/...`
 
-When you start the dev server (via `preview_start` or `npm run dev`), tell the user to open `http://localhost:3000/app/login` — not the bare root. If you see a 404 in your screenshot, check the URL has `/app` before reporting an actual bug.
+`next.config.ts` ALSO declares a few `redirects()` (with `basePath: false`) so the bare URLs `/`, `/login`, `/admin/*`, `/client/*` 307-redirect to their `/app/...` counterparts. This means a user who types `http://localhost:3000/` lands on `/app/login` instead of seeing a 404. **API routes (`/api/...`) are not redirected** — they must be called with the `/app` prefix or they 404.
+
+If you see a 404 on a non-API route, check (a) whether you're hitting an `/app` URL directly, (b) whether the route exists. If it's an API route 404, the cause is almost always a missing `/app` prefix.
 
 # Other local-dev quirks (benign — don't chase them)
 
