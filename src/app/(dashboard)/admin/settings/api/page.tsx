@@ -31,6 +31,7 @@ import {
   Compass,
   Send,
   Flame,
+  ExternalLink,
 } from "lucide-react";
 import type { Organization } from "@/types/app";
 import { appUrl } from "@/lib/api-url";
@@ -836,6 +837,36 @@ export default function IntegrationsPage() {
               </span>
             </div>
           )}
+
+          {/* Mailbox connect — the one operation Salesforge doesn't expose
+              via API (Gmail/Outlook OAuth requires their hosted page).
+              Open Salesforge in a new tab; the user navigates to
+              Senders & Mailboxes → Connect from there. */}
+          <div className="border-t border-border/60 pt-4 mt-4 space-y-2">
+            <p className="text-sm font-medium">Connect a sending mailbox</p>
+            <p className="text-[11px] text-muted-foreground">
+              The OAuth flow for Gmail/Outlook can&apos;t be done via API,
+              so this is the one trip back to Salesforge&apos;s dashboard.
+              Open Salesforge → Senders &amp; Mailboxes → Connect. The new
+              mailbox auto-syncs back into LeadStart within a minute.
+            </p>
+            <a
+              href={(() => {
+                const ws = salesforgeWorkspaces.find(
+                  (w) => w.id === salesforgeWorkspaceId,
+                ) as { slug?: string } | undefined;
+                return ws?.slug
+                  ? `https://app.salesforge.ai/${ws.slug}/senders`
+                  : "https://app.salesforge.ai";
+              })()}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 rounded-md px-3 py-2 text-sm font-medium text-white bg-[#EA580C] hover:bg-[#c2410c] transition-colors"
+            >
+              Connect mailbox in Salesforge
+              <ExternalLink size={14} />
+            </a>
+          </div>
         </CardContent>
       </Card>
 
