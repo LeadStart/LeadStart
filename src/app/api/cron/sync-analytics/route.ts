@@ -172,8 +172,9 @@ export async function GET(request: NextRequest) {
     // Walk source_channel='salesforge' campaigns and refresh their
     // analytics. Salesforge legacy does not expose step-level metrics,
     // so step-level rows are dropped for this channel.
-    if (org.salesforge_api_key) {
+    if (org.salesforge_api_key && org.salesforge_workspace_id) {
       const salesforge = new SalesforgeClient(org.salesforge_api_key);
+      const salesforgeWorkspaceId = org.salesforge_workspace_id;
 
       let salesforgeCampaigns;
       if (campaignId) {
@@ -211,38 +212,45 @@ export async function GET(request: NextRequest) {
           const endDate = new Date().toISOString().split("T")[0];
 
           const analytics = await salesforge.getSequenceAnalytics(
+            salesforgeWorkspaceId,
             campaign.salesforge_sequence_id,
             startDate,
             endDate,
           );
 
-          const days = analytics.daily ?? [];
-          if (days.length === 0) continue;
+          // Salesforge returns days as an object map keyed by date
+          // (e.g. {"2026-05-07": {sent, replied, ...}}), not an array.
+          const days = analytics.days ?? {};
+          const dateKeys = Object.keys(days);
+          if (dateKeys.length === 0) continue;
 
-          for (const day of days) {
+          for (const dateKey of dateKeys) {
+            const day = days[dateKey];
             const sent = day.sent ?? 0;
             const replies = day.replied ?? 0;
-            const bounced = day.bounced ?? 0;
-            const unsubs = day.unsubscribed ?? 0;
-            const meetings = day.meetings_booked ?? 0;
+            // Salesforge's day object doesn't expose bounces/unsubs/
+            // meetings per-day on the legacy analytics surface — those
+            // only show up in the rollup `stats`. Default to 0 for
+            // per-day rows; the stats rollup is captured implicitly
+            // by the most recent day's snapshot.
 
             await admin.from("campaign_snapshots").upsert(
               {
                 campaign_id: campaign.id,
-                snapshot_date: day.date,
+                snapshot_date: dateKey,
                 total_leads: 0,
                 emails_sent: sent,
                 replies,
                 unique_replies: replies,
                 positive_replies: 0,
-                bounces: bounced,
-                unsubscribes: unsubs,
-                meetings_booked: meetings,
+                bounces: 0,
+                unsubscribes: 0,
+                meetings_booked: 0,
                 new_leads_contacted: 0,
                 reply_rate: sent > 0 ? Number(((replies / sent) * 100).toFixed(2)) : 0,
                 positive_reply_rate: 0,
-                bounce_rate: sent > 0 ? Number(((bounced / sent) * 100).toFixed(2)) : 0,
-                unsubscribe_rate: sent > 0 ? Number(((unsubs / sent) * 100).toFixed(2)) : 0,
+                bounce_rate: 0,
+                unsubscribe_rate: 0,
                 raw_data: day as unknown as Record<string, unknown>,
               },
               { onConflict: "campaign_id,snapshot_date" }

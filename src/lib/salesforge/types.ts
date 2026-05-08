@@ -1,30 +1,20 @@
-// Salesforge.ai API types (legacy / v0 surface).
+// Salesforge.ai API types (legacy / public v2 surface).
 //
-// Salesforge has TWO sequence systems:
-//   - legacy:        https://api.salesforge.ai            ← what we use
-//   - multichannel:  https://multichannel-api.salesforge.ai
-// We are migrating from Instantly to legacy Salesforge, so every type
-// here targets the legacy host. The multichannel API is a different
-// product surface and is not used in this migration.
-//
-// Where Salesforge's published OpenAPI spec is incomplete (most notably
-// the webhook payload shape, several list-response envelopes, and the
-// per-mailbox analytics surfaces), the types below cover the fields we
-// actually consume in the rest of the codebase. The first cascade test
-// against a real Salesforge account will surface any field-name drift;
-// we tighten the types then rather than guessing now.
+// All types here track the OpenAPI spec at
+// https://api.salesforge.ai/public/v2/swagger/doc3.json — see
+// docs/salesforge-api-reference.md for the gotchas. Field names use the
+// API's camelCase convention (workspaceId, sequenceID, contactIds, etc.)
+// rather than snake_case so request bodies don't need rewriting.
 
 // ===== ME / WORKSPACES / PRODUCTS =====
 
 // GET /me returns { accountId, apiKeyName } — the api-key-scoped account.
-// (Confirmed against the live API 2026-05-07.)
 export interface SalesforgeMe {
   accountId: string;
   apiKeyName?: string;
 }
 
-// Salesforge wraps list responses in a paginated envelope. SalesforgeListEnvelope
-// captures the pagination fields used by every list endpoint we call.
+// Salesforge wraps list responses in a paginated envelope.
 export interface SalesforgeListEnvelope<T> {
   total: number;
   offset: number;
@@ -48,50 +38,136 @@ export interface SalesforgeProduct {
 
 export type SalesforgeProductList = SalesforgeListEnvelope<SalesforgeProduct>;
 
-// ===== SEQUENCES (legacy = "campaigns") =====
+// ===== SEQUENCES =====
+
+// SequenceStatus values that the legacy /status PUT accepts. The spec
+// also lists 'deleted', 'completed', 'video_pending' but only the four
+// here are user-actionable.
+export type SalesforgeSequenceStatus =
+  | "active"
+  | "paused"
+  | "draft"
+  | "completed";
+
+// Languages Salesforge supports for sequence content. Used as the
+// `language` field on POST /sequences.
+export type SalesforgeLanguage =
+  | "american_english"
+  | "british_english"
+  | "russian"
+  | "ukrainian"
+  | "finnish"
+  | "french"
+  | "spanish"
+  | "polish"
+  | "romanian"
+  | "german"
+  | "lithuanian"
+  | "dutch"
+  | "latvian"
+  | "italian"
+  | "czech"
+  | "hungarian"
+  | "japanese"
+  | "brazilian_portugese"
+  | "swedish"
+  | "danish"
+  | "norwegian"
+  | "estonian";
 
 export interface SalesforgeSequence {
   id: string;
   name: string;
-  // Salesforge uses string statuses ("active", "paused", "draft",
-  // "completed"). We keep the field permissive so a future status the
-  // spec adds doesn't break the client.
-  status?: string;
+  status?: SalesforgeSequenceStatus | string;
   workspaceId?: string;
   productId?: string;
-  createdAt?: string;
-  updatedAt?: string;
+  // Counts surface on the SequenceResponse — kept optional since most
+  // call sites don't read them.
+  leadCount?: number;
+  contactedCount?: number;
+  openedCount?: number;
+  repliedCount?: number;
+  bouncedCount?: number;
+  completedCount?: number;
 }
 
 export type SalesforgeSequenceList = SalesforgeListEnvelope<SalesforgeSequence>;
 
-// GET /sequences/{id}/analytics — totals + an optional daily breakdown.
-// The daily array is what powers /admin/campaigns/{id}'s area chart, so
-// we map it to the existing campaign_snapshots row shape in the cron.
-export interface SalesforgeAnalytics {
-  sequence_id?: string;
-  from_date?: string;
-  to_date?: string;
-  emails_sent?: number;
-  emails_opened?: number;
-  emails_replied?: number;
-  emails_bounced?: number;
-  unsubscribes?: number;
-  meetings_booked?: number;
-  open_rate?: number;
-  reply_rate?: number;
-  bounce_rate?: number;
-  daily?: SalesforgeDailyAnalytics[];
+// POST /workspaces/{ws}/sequences body.
+export interface SalesforgeCreateSequenceRequest {
+  name: string;
+  productId: string;
+  language: SalesforgeLanguage;
+  timezone: string; // IANA tz, e.g. "America/New_York"
 }
 
-export interface SalesforgeDailyAnalytics {
-  date: string;
+// PUT /workspaces/{ws}/sequences/{seq}/steps body. Each step has an
+// `id` (Salesforge generates one if you pass an empty string for new
+// steps) and an array of variants. A step with one variant is the
+// common case; multiple variants enable A/B testing.
+export interface SalesforgeStepVariantRequest {
+  // `label` is the only required field. Pass "A" / "B" / etc. for A/B
+  // tests, or any short identifier for a single-variant step.
+  label: string;
+  emailSubject?: string;
+  emailContent?: string; // HTML or plain text
+  // Salesforge sets these implicitly for single-variant steps; only
+  // populate them when building an A/B test by hand.
+  distributionWeight?: number;
+  order?: number;
+  id?: string;
+}
+
+export interface SalesforgeStepRequest {
+  id?: string; // empty for new steps
+  name?: string;
+  order: number; // 0-indexed step position
+  waitDays: number; // days to wait BEFORE this step fires (0 for the first step)
+  variants: SalesforgeStepVariantRequest[];
+  distributionStrategy?: "equal" | "custom";
+}
+
+export interface SalesforgeUpdateStepsRequest {
+  steps: SalesforgeStepRequest[];
+}
+
+// PUT /workspaces/{ws}/sequences/{seq}/mailboxes body.
+export interface SalesforgeAssignMailboxesRequest {
+  mailboxIds: string[];
+}
+
+// PUT /workspaces/{ws}/sequences/{seq}/status body.
+export interface SalesforgeUpdateStatusRequest {
+  status: SalesforgeSequenceStatus;
+}
+
+// GET /workspaces/{ws}/sequences/{seq}/analytics returns
+// { days: { 'YYYY-MM-DD': SequenceAnalyticsDayResponse }, stats: {...} }
+// — note `days` is an object map, not an array.
+export interface SalesforgeAnalyticsDay {
   sent?: number;
-  opened?: number;
   replied?: number;
-  bounced?: number;
-  unsubscribed?: number;
-  meetings_booked?: number;
+  totalOpened?: number;
+  uniqueOpened?: number;
+  totalClicked?: number;
+  uniqueClicked?: number;
+}
+
+export interface SalesforgeAnalyticsStats {
+  contacted?: number;
+  opened?: number;
+  openedPercent?: number;
+  replied?: number;
+  repliedPercent?: number;
+  repliedPositive?: number;
+  repliedPositivePercent?: number;
+  clicked?: number;
+  clickedPercent?: number;
+}
+
+export interface SalesforgeAnalytics {
+  days?: Record<string, SalesforgeAnalyticsDay>;
+  stats?: SalesforgeAnalyticsStats;
 }
 
 // ===== MAILBOXES =====
@@ -99,7 +175,6 @@ export interface SalesforgeDailyAnalytics {
 export interface SalesforgeMailbox {
   id: string;
   email: string;
-  // "active" | "paused" | "disconnected" — kept permissive.
   status?: string;
   dailyLimit?: number;
   workspaceId?: string;
@@ -110,9 +185,6 @@ export type SalesforgeMailboxList = SalesforgeListEnvelope<SalesforgeMailbox>;
 
 // ===== EMAILS =====
 
-// Partial Email shape — covers the fields the ingest pipeline reads.
-// Salesforge addresses emails by (workspace, mailbox, email_id), unlike
-// Instantly which uses a flat /emails/{id} surface.
 export interface SalesforgeEmail {
   id: string;
   thread_id?: string;
@@ -125,13 +197,10 @@ export interface SalesforgeEmail {
   body_text?: string;
   body_html?: string;
   received_at?: string;
-  // Salesforge's reply endpoint infers subject from the original email,
-  // so unlike Instantly we do not pass subject on outbound replies.
 }
 
-// POST /workspaces/{ws}/mailboxes/{mb}/emails/{em}/reply request body.
-// Salesforge infers the subject from the original thread, so the field
-// is intentionally absent.
+// POST /workspaces/{ws}/mailboxes/{mb}/emails/{em}/reply body.
+// Salesforge infers subject from the original thread; no subject field.
 export interface SalesforgeReplyRequest {
   body_text: string;
   body_html?: string;
@@ -141,68 +210,97 @@ export interface SalesforgeReplyRequest {
 
 // ===== CONTACTS =====
 
-// POST /contacts/bulk — Salesforge caps a single request at 100 contacts.
-// Callers passing larger lists must batch upstream.
+// POST /workspaces/{ws}/contacts/bulk request body uses the
+// CreateSimpleLeadRequest shape — note `position` (not `title`),
+// `customVars` (not `custom_variables`), and no `phone` field.
+//
+// `firstName` is the only documented required field.
 export interface SalesforgeContactCreate {
-  email: string;
-  first_name?: string;
-  last_name?: string;
+  firstName: string;
+  email?: string;
+  lastName?: string;
   company?: string;
-  title?: string;
-  phone?: string;
-  linkedin_url?: string;
-  custom_variables?: Record<string, string | number | boolean | null>;
+  position?: string;
+  linkedinUrl?: string;
+  customVars?: Record<string, string>;
+  tags?: string[];
+  tagIds?: string[];
 }
 
+// POST /workspaces/{ws}/contacts/bulk response — Salesforge returns
+// `{contacts: [...]}` but the array element shape is undocumented in
+// the spec. We treat it as a permissive object so callers can read
+// `id`/`email` when present.
 export interface SalesforgeContactBulkResponse {
-  // Counts vary across spec mirrors; both forms are tolerated.
-  created?: number;
-  updated?: number;
-  failed?: Array<{ email: string; error: string }>;
-  contacts?: Array<{ id: string; email: string }>;
+  contacts?: Array<{
+    id?: string;
+    email?: string;
+    firstName?: string;
+    lastName?: string;
+    company?: string;
+  }>;
 }
 
-// PUT /sequences/{id}/contacts — associate already-created contacts
-// with a sequence.
-export interface SalesforgeSequenceContactsRequest {
-  contact_ids: string[];
+// PUT /workspaces/{ws}/sequences/{seq}/contacts body — note camelCase
+// `contactIds`, NOT `contact_ids`.
+export interface SalesforgeAssignContactsRequest {
+  contactIds: string[];
 }
 
 // ===== WEBHOOKS =====
 
-// Webhooks register per-sequence + per-event-type. Salesforge has no
-// DELETE endpoint, so registration is idempotent via GET /webhooks
-// dedupe by (sequence_id, event_type, url) — see registerSequenceWebhooks
-// in src/lib/salesforge/webhooks.ts (commit 3).
-export type SalesforgeWebhookEvent =
+// All webhook event types Salesforge can fire. The seven below are the
+// ones we register for our reply-routing pipeline. Spec also lists
+// email_sent / email_opened / link_clicked / linkedin_replied — kept
+// in the union for completeness but we don't subscribe to them.
+export type SalesforgeWebhookType =
   | "email_replied"
   | "positive_reply"
   | "negative_reply"
   | "email_bounced"
   | "contact_unsubscribed"
   | "dnc_added"
-  | "label_changed";
+  | "label_changed"
+  | "email_sent"
+  | "email_opened"
+  | "link_clicked"
+  | "linkedin_replied";
 
-export interface SalesforgeWebhookCreate {
-  sequence_id: string;
-  event_type: SalesforgeWebhookEvent;
+// The 7 event types we actually subscribe to per sequence.
+export const SALESFORGE_REPLY_PIPELINE_EVENTS: SalesforgeWebhookType[] = [
+  "email_replied",
+  "positive_reply",
+  "negative_reply",
+  "email_bounced",
+  "contact_unsubscribed",
+  "dnc_added",
+  "label_changed",
+];
+
+// POST /workspaces/{ws}/integrations/webhooks body. Note `sequenceID`
+// is camelCase with capital ID — the spec is inconsistent about case.
+export interface SalesforgeCreateWebhookRequest {
+  name: string;
+  type: SalesforgeWebhookType;
   url: string;
+  sequenceID?: string;
 }
 
+// GET /workspaces/{ws}/integrations/webhooks response item — note
+// `sequenceId` here uses lowercase `d` (different from the Create
+// request's `sequenceID`).
 export interface SalesforgeWebhook {
   id: string;
-  sequenceId: string;
-  // Permissive on the read side so a value the spec adds later does
-  // not break the dedup helper.
-  eventType: string;
+  name: string;
+  type: SalesforgeWebhookType | string;
   url: string;
+  sequenceId?: string;
+  sentCount?: number;
 }
 
 export type SalesforgeWebhookList = SalesforgeListEnvelope<SalesforgeWebhook>;
 
 // Webhook delivery payload — undocumented shape. The handler in
 // src/app/api/webhooks/salesforge/route.ts uses defensive parsing
-// (typeof / optional chaining) before reading any field. We treat
-// this as an opaque record for now and tighten it after the cascade
-// test captures a real payload.
+// before reading any field.
 export type SalesforgeWebhookPayload = Record<string, unknown>;

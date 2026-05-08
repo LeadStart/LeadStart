@@ -68,11 +68,15 @@ export async function POST(
   // campaigns, or rows imported before a sync). Per-channel branch.
   const { data: org } = await admin
     .from("organizations")
-    .select("instantly_api_key, salesforge_api_key")
+    .select("instantly_api_key, salesforge_api_key, salesforge_workspace_id")
     .eq("id", c.organization_id)
     .maybeSingle();
   const orgRow = org as
-    | { instantly_api_key: string | null; salesforge_api_key: string | null }
+    | {
+        instantly_api_key: string | null;
+        salesforge_api_key: string | null;
+        salesforge_workspace_id: string | null;
+      }
     | null;
 
   if (c.source_channel === "instantly" && c.instantly_campaign_id) {
@@ -103,9 +107,15 @@ export async function POST(
         { status: 400 },
       );
     }
+    if (!orgRow?.salesforge_workspace_id) {
+      return NextResponse.json(
+        { error: "Salesforge workspace not set on organization." },
+        { status: 400 },
+      );
+    }
     try {
       const client = new SalesforgeClient(orgRow.salesforge_api_key);
-      await client.deleteSequence(c.salesforge_sequence_id);
+      await client.deleteSequence(orgRow.salesforge_workspace_id, c.salesforge_sequence_id);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       console.error(

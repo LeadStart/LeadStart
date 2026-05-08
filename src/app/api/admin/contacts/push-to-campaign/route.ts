@@ -273,10 +273,16 @@ export async function POST(req: NextRequest) {
 
     const { data: orgData } = await admin
       .from("organizations")
-      .select("id, salesforge_api_key")
+      .select("id, salesforge_api_key, salesforge_workspace_id")
       .eq("id", organizationId)
       .maybeSingle();
-    const org = orgData as { id: string; salesforge_api_key: string | null } | null;
+    const org = orgData as
+      | {
+          id: string;
+          salesforge_api_key: string | null;
+          salesforge_workspace_id: string | null;
+        }
+      | null;
 
     if (!org?.salesforge_api_key) {
       return NextResponse.json(
@@ -287,19 +293,36 @@ export async function POST(req: NextRequest) {
         { status: 400 },
       );
     }
+    if (!org?.salesforge_workspace_id) {
+      return NextResponse.json(
+        {
+          error:
+            "Salesforge workspace not selected. Open /admin/settings/api and pick one.",
+        },
+        { status: 400 },
+      );
+    }
 
-    const sfContacts: SalesforgeContactCreate[] = pushable.map((c) => ({
-      email: c.email!.trim(),
-      first_name: c.first_name ?? undefined,
-      last_name: c.last_name ?? undefined,
-      company: c.company_name ?? undefined,
-      title: c.title ?? undefined,
-      phone: c.phone ?? undefined,
-      linkedin_url: c.linkedin_url ?? undefined,
-    }));
+    // Salesforge's CreateSimpleLeadRequest requires firstName. We fall
+    // back to the local-part of the email when the contact row has no
+    // first_name set (otherwise the bulk-create call would 422 the
+    // entire chunk).
+    const sfContacts: SalesforgeContactCreate[] = pushable.map((c) => {
+      const fallbackFirst =
+        (c.email ?? "").split("@")[0] || "Lead";
+      return {
+        firstName: c.first_name?.trim() || fallbackFirst,
+        email: c.email!.trim(),
+        lastName: c.last_name ?? undefined,
+        company: c.company_name ?? undefined,
+        position: c.title ?? undefined,
+        linkedinUrl: c.linkedin_url ?? undefined,
+      };
+    });
 
     const client = new SalesforgeClient(org.salesforge_api_key);
     const result = await client.pushContactsToSequence(
+      org.salesforge_workspace_id,
       campaign.salesforge_sequence_id,
       sfContacts,
     );

@@ -63,11 +63,15 @@ export async function POST(
 
   const { data: org } = await admin
     .from("organizations")
-    .select("instantly_api_key, salesforge_api_key")
+    .select("instantly_api_key, salesforge_api_key, salesforge_workspace_id")
     .eq("id", c.organization_id)
     .maybeSingle();
   const orgRow = org as
-    | { instantly_api_key: string | null; salesforge_api_key: string | null }
+    | {
+        instantly_api_key: string | null;
+        salesforge_api_key: string | null;
+        salesforge_workspace_id: string | null;
+      }
     | null;
 
   try {
@@ -99,8 +103,14 @@ export async function POST(
           { status: 400 },
         );
       }
+      if (!orgRow?.salesforge_workspace_id) {
+        return NextResponse.json(
+          { error: "Salesforge workspace not set on organization." },
+          { status: 400 },
+        );
+      }
       const client = new SalesforgeClient(orgRow.salesforge_api_key);
-      await client.resumeSequence(c.salesforge_sequence_id);
+      await client.resumeSequence(orgRow.salesforge_workspace_id, c.salesforge_sequence_id);
     } else {
       return NextResponse.json(
         { error: `Resume is not supported for ${c.source_channel} campaigns yet.` },
