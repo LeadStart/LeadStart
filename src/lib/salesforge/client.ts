@@ -6,6 +6,7 @@ import type {
   SalesforgeProductList,
   SalesforgeSequence,
   SalesforgeSequenceList,
+  SalesforgeSequenceDetail,
   SalesforgeSequenceStatus,
   SalesforgeAnalytics,
   SalesforgeMailbox,
@@ -19,6 +20,20 @@ import type {
   SalesforgeCreateWebhookRequest,
   SalesforgeCreateSequenceRequest,
   SalesforgeStepRequest,
+  SalesforgeSchedule,
+  SalesforgePrimeboxThread,
+  SalesforgePrimeboxThreadList,
+  SalesforgeThreadsListParams,
+  SalesforgeThreadDetail,
+  SalesforgePrimeboxLabel,
+  SalesforgePrimeboxLabelList,
+  SalesforgeValidationResults,
+  SalesforgeConfirmValidationRequest,
+  SalesforgeCreateProductRequest,
+  SalesforgeBulkDNCRequest,
+  SalesforgeCustomVariable,
+  SalesforgeCustomVariableList,
+  SalesforgeWorkspaceSequenceMetrics,
 } from "./types";
 
 // Salesforge public API host. The path prefix /public/v2 IS part of the
@@ -137,8 +152,11 @@ export class SalesforgeClient {
     return this.unwrapList(response);
   }
 
-  async getSequence(workspaceId: string, sequenceId: string): Promise<SalesforgeSequence> {
-    return this.request<SalesforgeSequence>(
+  // GET /sequences/{id} returns the full sequence detail including
+  // the steps array and assigned mailboxes — used by the edit-sequence
+  // page to pre-populate the form without a separate steps fetch.
+  async getSequence(workspaceId: string, sequenceId: string): Promise<SalesforgeSequenceDetail> {
+    return this.request<SalesforgeSequenceDetail>(
       `/workspaces/${encodeURIComponent(workspaceId)}/sequences/${encodeURIComponent(sequenceId)}`
     );
   }
@@ -224,6 +242,193 @@ export class SalesforgeClient {
       `/workspaces/${encodeURIComponent(workspaceId)}/sequences/${encodeURIComponent(sequenceId)}`,
       { method: "DELETE" },
     );
+  }
+
+  // ===== SCHEDULES =====
+
+  // PUT /workspaces/{ws}/sequences/{seq}/schedules — replaces the
+  // sequence's sending-window schedule. Each entry maps a weekday
+  // (0=Sun..6=Sat) to an hour range in the sequence's local timezone.
+  async updateSequenceSchedules(
+    workspaceId: string,
+    sequenceId: string,
+    schedules: SalesforgeSchedule[],
+  ): Promise<unknown> {
+    return this.request<unknown>(
+      `/workspaces/${encodeURIComponent(workspaceId)}/sequences/${encodeURIComponent(sequenceId)}/schedules`,
+      {
+        method: "PUT",
+        body: JSON.stringify({ schedules }),
+      },
+    );
+  }
+
+  // ===== EMAIL VALIDATION =====
+
+  // POST /sequences/{id}/contacts/validation/start — kick off an
+  // email-deliverability validation pass on the sequence's enrolled
+  // contacts. Poll getValidationResults to check progress.
+  async startSequenceValidation(workspaceId: string, sequenceId: string): Promise<unknown> {
+    return this.request<unknown>(
+      `/workspaces/${encodeURIComponent(workspaceId)}/sequences/${encodeURIComponent(sequenceId)}/contacts/validation/start`,
+      { method: "POST" },
+    );
+  }
+
+  async getValidationResults(
+    workspaceId: string,
+    sequenceId: string,
+  ): Promise<SalesforgeValidationResults> {
+    return this.request<SalesforgeValidationResults>(
+      `/workspaces/${encodeURIComponent(workspaceId)}/sequences/${encodeURIComponent(sequenceId)}/contacts/validation/result`,
+    );
+  }
+
+  async confirmSequenceValidation(
+    workspaceId: string,
+    sequenceId: string,
+    request: SalesforgeConfirmValidationRequest,
+  ): Promise<unknown> {
+    return this.request<unknown>(
+      `/workspaces/${encodeURIComponent(workspaceId)}/sequences/${encodeURIComponent(sequenceId)}/contacts/validation/confirm`,
+      {
+        method: "POST",
+        body: JSON.stringify(request),
+      },
+    );
+  }
+
+  async skipSequenceValidation(workspaceId: string, sequenceId: string): Promise<unknown> {
+    return this.request<unknown>(
+      `/workspaces/${encodeURIComponent(workspaceId)}/sequences/${encodeURIComponent(sequenceId)}/contacts/validation/skip`,
+      { method: "POST" },
+    );
+  }
+
+  // ===== PRODUCTS (write) =====
+
+  // POST /workspaces/{ws}/products — create a new product (the
+  // marketing offering a sequence sells against).
+  async createProduct(
+    workspaceId: string,
+    request: SalesforgeCreateProductRequest,
+  ): Promise<SalesforgeProduct> {
+    return this.request<SalesforgeProduct>(
+      `/workspaces/${encodeURIComponent(workspaceId)}/products`,
+      {
+        method: "POST",
+        body: JSON.stringify(request),
+      },
+    );
+  }
+
+  // ===== DNC =====
+
+  // POST /workspaces/{ws}/dnc/bulk — append emails to the do-not-
+  // contact list. Salesforge dedupes server-side.
+  async bulkAddDNC(workspaceId: string, request: SalesforgeBulkDNCRequest): Promise<unknown> {
+    return this.request<unknown>(
+      `/workspaces/${encodeURIComponent(workspaceId)}/dnc/bulk`,
+      {
+        method: "POST",
+        body: JSON.stringify(request),
+      },
+    );
+  }
+
+  // ===== CUSTOM VARIABLES =====
+
+  // GET /workspaces/{ws}/custom-vars — paginated list of custom
+  // variables defined in the workspace (used in step body templates).
+  async listCustomVariables(workspaceId: string): Promise<SalesforgeCustomVariable[]> {
+    const response = await this.request<SalesforgeCustomVariableList | SalesforgeCustomVariable[]>(
+      `/workspaces/${encodeURIComponent(workspaceId)}/custom-vars`,
+    );
+    return this.unwrapList(response);
+  }
+
+  // ===== WORKSPACE METRICS =====
+
+  // GET /workspaces/{ws}/sequence-metrics — workspace-wide rollup of
+  // contacted / opened / replied / bounced counts. Optional filter by
+  // product_id or specific sequence ids.
+  async getWorkspaceSequenceMetrics(
+    workspaceId: string,
+    filters?: { productId?: string; sequenceIds?: string[] },
+  ): Promise<SalesforgeWorkspaceSequenceMetrics> {
+    const params = new URLSearchParams();
+    if (filters?.productId) params.set("product_id", filters.productId);
+    if (filters?.sequenceIds) {
+      for (const id of filters.sequenceIds) params.append("sequence_ids[]", id);
+    }
+    const qs = params.toString();
+    return this.request<SalesforgeWorkspaceSequenceMetrics>(
+      `/workspaces/${encodeURIComponent(workspaceId)}/sequence-metrics${qs ? `?${qs}` : ""}`,
+    );
+  }
+
+  // ===== INBOX THREADS =====
+
+  // GET /workspaces/{ws}/threads — workspace-wide thread list. Used by
+  // the LeadStart Salesforge inbox page.
+  async listThreads(
+    workspaceId: string,
+    params?: SalesforgeThreadsListParams,
+  ): Promise<SalesforgePrimeboxThread[]> {
+    const qs = new URLSearchParams();
+    if (params?.limit !== undefined) qs.set("limit", String(params.limit));
+    if (params?.offset !== undefined) qs.set("offset", String(params.offset));
+    if (params?.positive !== undefined) qs.set("positive", String(params.positive));
+    if (params?.filter) qs.set("filter", params.filter);
+    if (params?.q) qs.set("q", params.q);
+    if (params?.mailboxIds) for (const v of params.mailboxIds) qs.append("mailbox_ids[]", v);
+    if (params?.agentIds) for (const v of params.agentIds) qs.append("agent_ids[]", v);
+    if (params?.sequenceIds) for (const v of params.sequenceIds) qs.append("sequence_ids[]", v);
+    if (params?.labels) for (const v of params.labels) qs.append("labels[]", v);
+    if (params?.excludeLabels) for (const v of params.excludeLabels) qs.append("exclude_labels[]", v);
+    const queryString = qs.toString();
+    const response = await this.request<SalesforgePrimeboxThreadList | SalesforgePrimeboxThread[]>(
+      `/workspaces/${encodeURIComponent(workspaceId)}/threads${queryString ? `?${queryString}` : ""}`,
+    );
+    return this.unwrapList(response);
+  }
+
+  // GET /workspaces/{ws}/mailboxes/{mb}/threads/{th} — full thread
+  // detail with all messages.
+  async getThread(
+    workspaceId: string,
+    mailboxId: string,
+    threadId: string,
+  ): Promise<SalesforgeThreadDetail> {
+    return this.request<SalesforgeThreadDetail>(
+      `/workspaces/${encodeURIComponent(workspaceId)}/mailboxes/${encodeURIComponent(mailboxId)}/threads/${encodeURIComponent(threadId)}`,
+    );
+  }
+
+  // PUT /workspaces/{ws}/mailboxes/{mb}/threads/{th}/label — apply a
+  // primebox label (Hot / Cold / etc.) to a thread.
+  async updateThreadLabel(
+    workspaceId: string,
+    mailboxId: string,
+    threadId: string,
+    labelId: string,
+  ): Promise<unknown> {
+    return this.request<unknown>(
+      `/workspaces/${encodeURIComponent(workspaceId)}/mailboxes/${encodeURIComponent(mailboxId)}/threads/${encodeURIComponent(threadId)}/label`,
+      {
+        method: "PUT",
+        body: JSON.stringify({ labelId }),
+      },
+    );
+  }
+
+  // GET /workspaces/{ws}/primebox-labels — list available labels for
+  // categorizing inbox threads. Used by the inbox view's label picker.
+  async listPrimeboxLabels(workspaceId: string): Promise<SalesforgePrimeboxLabel[]> {
+    const response = await this.request<SalesforgePrimeboxLabelList | SalesforgePrimeboxLabel[]>(
+      `/workspaces/${encodeURIComponent(workspaceId)}/primebox-labels`,
+    );
+    return this.unwrapList(response);
   }
 
   // ===== ANALYTICS =====

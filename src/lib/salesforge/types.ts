@@ -304,3 +304,276 @@ export type SalesforgeWebhookList = SalesforgeListEnvelope<SalesforgeWebhook>;
 // src/app/api/webhooks/salesforge/route.ts uses defensive parsing
 // before reading any field.
 export type SalesforgeWebhookPayload = Record<string, unknown>;
+
+// ===== SEQUENCE READS (extending GET /sequences/{id}) =====
+
+// Returned alongside a sequence's `mailboxes` array on
+// GET /sequences/{id}. Lets the edit-sequence UI pre-select assigned
+// mailboxes without a second fetch.
+export interface SalesforgeSequenceMailbox {
+  id: string;
+  address: string;
+  firstName?: string;
+  lastName?: string;
+}
+
+// Variant on a step — same shape as the upsert request, plus runtime
+// fields the API echoes back.
+export interface SalesforgeStepVariantResponse {
+  id: string;
+  label: string;
+  emailSubject?: string;
+  emailContent?: string;
+  order?: number;
+  distributionWeight?: number;
+  status?: string;
+  isGenerated?: boolean;
+}
+
+export interface SalesforgeStepResponse {
+  id: string;
+  name?: string;
+  order: number;
+  waitDays: number;
+  variants: SalesforgeStepVariantResponse[];
+  distributionStrategy?: "equal" | "custom";
+}
+
+// Full sequence detail (the response of GET /sequences/{id}).
+// Subset of api.SequenceResponse — only the fields the edit UI reads.
+export interface SalesforgeSequenceDetail extends SalesforgeSequence {
+  steps?: SalesforgeStepResponse[];
+  mailboxes?: SalesforgeSequenceMailbox[];
+  agentId?: string;
+  openTrackingEnabled?: boolean;
+  clickTrackingEnabled?: boolean;
+  localizedOptOutEnabled?: boolean;
+  companyOutreachLimitEnabled?: boolean;
+  companyOutreachLimitCount?: number;
+  sequentialCompanySendingEnabled?: boolean;
+}
+
+// ===== SCHEDULES =====
+
+// One row of the sending schedule. weekday is 0–6 (Sunday=0). hours
+// are local to the sequence's timezone (set on createSequence).
+export interface SalesforgeSchedule {
+  id?: string;
+  weekday: number;     // 0=Sun, 1=Mon, ..., 6=Sat
+  fromHour: number;    // 0–23
+  toHour: number;      // 0–23 (exclusive); 17 = stop sending at 5pm
+}
+
+export interface SalesforgeUpdateSchedulesRequest {
+  schedules: SalesforgeSchedule[];
+}
+
+// ===== THREADS (inbox) =====
+
+// One row in the workspace threads list. Salesforge calls this a
+// "primebox thread" — it's the per-conversation summary the inbox UI
+// shows. Use getThread for the full message list.
+export interface SalesforgePrimeboxThread {
+  id: string;
+  contactEmail?: string;
+  contactFirstName?: string;
+  contactLastName?: string;
+  subject?: string;
+  content?: string;       // last message preview
+  date?: string;
+  isPositive?: boolean;
+  isUnread?: boolean;
+  labelId?: string;
+  mailboxId?: string;
+  agentId?: string;
+  agentReply?: string;
+  agentStatus?: string;
+  replyType?: string;
+}
+
+export type SalesforgePrimeboxThreadList = SalesforgeListEnvelope<SalesforgePrimeboxThread>;
+
+// Filters for GET /workspaces/{ws}/threads.
+export interface SalesforgeThreadsListParams {
+  limit?: number;
+  offset?: number;
+  mailboxIds?: string[];
+  agentIds?: string[];
+  sequenceIds?: string[];
+  positive?: boolean;
+  filter?: string;
+  labels?: string[];
+  excludeLabels?: string[];
+  q?: string; // text search
+}
+
+// Per-message detail in a thread.
+export interface SalesforgeThreadEmail {
+  id: string;
+  emailId?: string;
+  type?: string;       // "sent" | "received" | etc.
+  subject?: string;
+  fromAddress?: string;
+  toAddress?: string;
+  content?: string;
+  date?: string;
+  tos?: Array<{ address?: string; name?: string }>;
+  ccs?: Array<{ address?: string; name?: string }>;
+  bccs?: Array<{ address?: string; name?: string }>;
+}
+
+export interface SalesforgeThreadContact {
+  id?: string;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  company?: string;
+  linkedinUrl?: string;
+}
+
+export interface SalesforgeThreadSequenceSummary {
+  id?: string;
+  name?: string;
+  status?: string;
+  product?: { id?: string; name?: string };
+}
+
+// Full thread response from GET /mailboxes/{mb}/threads/{th}.
+export interface SalesforgeThreadDetail {
+  contact?: SalesforgeThreadContact;
+  sequence?: SalesforgeThreadSequenceSummary;
+  emails?: SalesforgeThreadEmail[];
+}
+
+// PUT /threads/{id}/label body — `labelId` references a primebox label
+// id from listPrimeboxLabels.
+export interface SalesforgeUpdateThreadLabelRequest {
+  labelId: string;
+}
+
+// One label option (returned by listPrimeboxLabels). isBuiltIn=true
+// means a Salesforge-default label like "Hot" / "Cold" / etc.
+export interface SalesforgePrimeboxLabel {
+  id: string;
+  name: string;
+  isBuiltIn?: boolean;
+  specialLabel?: string;
+}
+
+export type SalesforgePrimeboxLabelList = SalesforgeListEnvelope<SalesforgePrimeboxLabel>;
+
+// ===== EMAIL VALIDATION =====
+
+// GET /sequences/{id}/contacts/validation/result response.
+export interface SalesforgeValidationResults {
+  status: "in_progress" | "completed" | string;
+  progress: number; // 0-100
+  result?: SalesforgeValidationResultByEsp;
+}
+
+// LeadsESPValidationResult is a map keyed by ESP name → counts. The
+// spec doesn't enumerate ESPs, so we model permissively.
+export type SalesforgeValidationResultByEsp = Record<
+  string,
+  SalesforgeValidationCounts
+>;
+
+export interface SalesforgeValidationCounts {
+  catch_all?: number;
+  disabled?: number;
+  disposable?: number;
+  inbox_full?: number;
+  invalid?: number;
+  role_account?: number;
+  safe?: number;
+  spam_trap?: number;
+  unknown?: number;
+  unvalidated?: number;
+}
+
+// ESP enum from the spec.
+export type SalesforgeLeadESP =
+  | "empty"
+  | "gmail"
+  | "gsuite"
+  | "icloud"
+  | "outlook"
+  | "ms365"
+  | "yandex"
+  | "yahoo"
+  | "unknown"
+  | "mailcom"
+  | "proofpoint"
+  | "antispamsoftware";
+
+export type SalesforgeReonEmailStatus =
+  | "safe"
+  | "invalid"
+  | "disabled"
+  | "disposable"
+  | "inbox_full"
+  | "catch_all"
+  | "role_account"
+  | "spamtrap"
+  | "unknown"
+  | "unvalidated";
+
+// Confirm body — tell Salesforge which ESP+status combinations to
+// proceed sending to. Empty array = drop all validated-bad contacts.
+export interface SalesforgeConfirmValidationRequest {
+  esps: SalesforgeLeadESP[];
+  statuses?: SalesforgeReonEmailStatus[];
+}
+
+// ===== PRODUCT CREATION =====
+
+export interface SalesforgeProductRequest {
+  name: string;
+  internalName?: string;
+  language?: SalesforgeLanguage;
+  industry?: string;
+  idealCustomerProfile?: string;
+  pain?: string;
+  costOfInaction?: string;
+  solution?: string;
+  proofPoints?: string;
+}
+
+export interface SalesforgeCreateProductRequest {
+  product: SalesforgeProductRequest;
+  translation?: SalesforgeProductRequest[];
+}
+
+// ===== DNC =====
+
+export interface SalesforgeBulkDNCRequest {
+  dncs: string[]; // email addresses to add to do-not-contact list
+}
+
+// ===== CUSTOM VARIABLES =====
+
+export interface SalesforgeCustomVariable {
+  id?: string;
+  name?: string;
+  description?: string;
+  defaultValue?: string;
+}
+
+export type SalesforgeCustomVariableList = SalesforgeListEnvelope<SalesforgeCustomVariable>;
+
+// ===== WORKSPACE SEQUENCE METRICS =====
+
+// Roll-up across all (or filtered) sequences in the workspace.
+export interface SalesforgeWorkspaceSequenceMetrics {
+  contacted?: number;
+  opened?: number;
+  openedPercent?: number;
+  clicked?: number;
+  clickedPercent?: number;
+  replied?: number;
+  repliedPercent?: number;
+  repliedPositive?: number;
+  repliedPositivePercent?: number;
+  bounced?: number;
+  bouncedPercent?: number;
+}
