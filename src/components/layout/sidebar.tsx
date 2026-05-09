@@ -13,7 +13,6 @@ import {
   MessageSquare,
   FileText,
   CreditCard,
-  Bell,
   Building2,
   Key,
   LayoutDashboard,
@@ -21,17 +20,12 @@ import {
   ContactRound,
   CheckSquare,
   Inbox,
-  Phone,
   Settings,
-  Unlink,
-  Activity,
   Sparkles,
-  Send,
   Layers,
   TrendingUp,
   Variable,
   ShieldOff,
-  Box,
   X,
 } from "lucide-react";
 import { useOrphanCampaignCount } from "@/hooks/use-orphan-campaign-count";
@@ -46,32 +40,24 @@ const adminNav: NavItem[] = [
   { href: "/admin", label: "Overview", icon: <BarChart3 size={18} /> },
   { href: "/admin/clients", label: "Clients", icon: <Users size={18} /> },
   { href: "/admin/campaigns", label: "Campaigns", icon: <Mail size={18} /> },
-  { href: "/admin/campaigns/unlinked", label: "Unlinked", icon: <Unlink size={18} /> },
+  { href: "/admin/inbox", label: "Inbox", icon: <Inbox size={18} /> },
   { href: "/admin/contacts", label: "Contacts", icon: <ContactRound size={18} /> },
-  { href: "/admin/inbox", label: "Inbox", icon: <Phone size={18} /> },
+  { href: "/admin/prospecting", label: "Prospecting", icon: <Sparkles size={18} /> },
   { href: "/admin/feedback", label: "Feedback", icon: <MessageSquare size={18} /> },
   { href: "/admin/reports", label: "Reports", icon: <FileText size={18} /> },
-  { href: "/admin/prospecting", label: "Prospecting", icon: <Sparkles size={18} /> },
-  { href: "/admin/prospects", label: "Prospects", icon: <Target size={18} /> },
-  { href: "/admin/inbox-health", label: "Inbox Health", icon: <Inbox size={18} /> },
-  { href: "/admin/billing", label: "Billing", icon: <CreditCard size={18} /> },
-  { href: "/admin/webhooks", label: "Events", icon: <Bell size={18} /> },
-  { href: "/admin/pipeline-health", label: "Pipeline Health", icon: <Activity size={18} /> },
 ];
 
-// Salesforge-specific destinations. Grouped under their own section so
-// the channel-specific items don't crowd the main nav.
-const adminSalesforgeNav: NavItem[] = [
-  { href: "/admin/inbox/salesforge", label: "Salesforge inbox", icon: <Send size={18} /> },
-  { href: "/admin/salesforge/bulk", label: "Bulk pause/resume", icon: <Layers size={18} /> },
+const adminSendingNav: NavItem[] = [
+  { href: "/admin/inbox-health", label: "Mailboxes", icon: <Inbox size={18} /> },
   { href: "/admin/salesforge/metrics", label: "Workspace metrics", icon: <TrendingUp size={18} /> },
+  { href: "/admin/salesforge/bulk", label: "Bulk actions", icon: <Layers size={18} /> },
   { href: "/admin/salesforge/dnc", label: "DNC list", icon: <ShieldOff size={18} /> },
   { href: "/admin/salesforge/custom-vars", label: "Custom variables", icon: <Variable size={18} /> },
-  { href: "/admin/salesforge/products/new", label: "New product", icon: <Box size={18} /> },
 ];
 
 const adminSettingsNav: NavItem[] = [
   { href: "/admin/tasks", label: "Tasks", icon: <CheckSquare size={18} /> },
+  { href: "/admin/billing", label: "Billing", icon: <CreditCard size={18} /> },
   { href: "/admin/settings/team", label: "Team", icon: <Building2 size={18} /> },
   { href: "/admin/settings/api", label: "Integrations", icon: <Key size={18} /> },
 ];
@@ -86,7 +72,7 @@ export function Sidebar({ role, open = false, onClose }: { role: AppRole; open?:
   const pathname = usePathname();
   const isAdmin = role === "owner" || role === "va";
   const nav = isAdmin ? adminNav : clientNav;
-  const salesforgeNav = isAdmin ? adminSalesforgeNav : [];
+  const sendingNav = isAdmin ? adminSendingNav : [];
   const settingsNav = isAdmin ? adminSettingsNav : [];
   const orphanCount = useOrphanCampaignCount(role);
 
@@ -161,14 +147,14 @@ export function Sidebar({ role, open = false, onClose }: { role: AppRole; open?:
           );
         })}
 
-        {salesforgeNav.length > 0 && (
+        {sendingNav.length > 0 && (
           <>
             <div className="pt-6 pb-2 px-3">
               <p className="text-[10px] font-semibold uppercase tracking-widest text-[#64748b]">
-                Salesforge
+                Sending
               </p>
             </div>
-            {salesforgeNav.map((item) => {
+            {sendingNav.map((item) => {
               const isActive = pathname === item.href;
               return (
                 <Link
