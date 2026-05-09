@@ -8,7 +8,6 @@
 // table — the things an operator actually wants to see for a sequence in
 // flight.
 
-import { use } from "react";
 import useSWR from "swr";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
@@ -117,11 +116,12 @@ async function fetchLinkedinCampaign(
 }
 
 export function LinkedinCampaignDetail({
-  params,
+  clientId,
+  campaignId,
 }: {
-  params: Promise<{ clientId: string; campaignId: string }>;
+  clientId: string;
+  campaignId: string;
 }) {
-  const { clientId, campaignId } = use(params);
   const { data } = useSWR(`admin-linkedin-campaign-${campaignId}`, () =>
     fetchLinkedinCampaign(campaignId),
   );

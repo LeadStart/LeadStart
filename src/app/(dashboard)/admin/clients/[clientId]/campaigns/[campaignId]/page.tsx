@@ -1,15 +1,16 @@
-"use client";
-
-import { use } from "react";
-import useSWR from "swr";
-import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
+import { createClient } from "@/lib/supabase/server";
 import { KPICard } from "@/components/charts/kpi-card";
 import { DailyChart } from "@/components/charts/daily-chart";
 import { StepFunnel } from "@/components/charts/step-funnel";
 import { calculateMetrics } from "@/lib/kpi/calculator";
 import { analyzeStepHealth } from "@/lib/kpi/step-health";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -22,87 +23,35 @@ import {
 import { RefreshButton } from "./refresh-button";
 import { LinkedinCampaignDetail } from "./linkedin-campaign-detail";
 import { ArrowLeft, MessageSquare } from "lucide-react";
-import type { Campaign, CampaignSnapshot, CampaignStepMetric, LeadFeedback, Client } from "@/types/app";
+import type {
+  Campaign,
+  CampaignSnapshot,
+  CampaignStepMetric,
+  LeadFeedback,
+} from "@/types/app";
 
-const supabase = createClient();
+// Snapshot columns minus raw_data (the JSONB blob is write-only).
+const SNAPSHOT_COLUMNS =
+  "id, campaign_id, snapshot_date, total_leads, emails_sent, replies, " +
+  "unique_replies, positive_replies, bounces, unsubscribes, meetings_booked, " +
+  "new_leads_contacted, reply_rate, positive_reply_rate, bounce_rate, " +
+  "unsubscribe_rate, fetched_at";
 
-async function fetchCampaignDetail(campaignId: string) {
-  const { data: campaign } = await supabase
-    .from("campaigns")
-    .select("*")
-    .eq("id", campaignId)
-    .single();
-
-  if (!campaign) return null;
-
-  const typedCampaign = campaign as Campaign;
-
-  // Get client name for step health alerts
-  const { data: clientData } = await supabase
-    .from("clients")
-    .select("name")
-    .eq("id", typedCampaign.client_id)
-    .single();
-
-  const [snapshotsRes, feedbackRes, stepMetricsRes] = await Promise.all([
-    supabase
-      .from("campaign_snapshots")
-      .select("*")
-      .eq("campaign_id", campaignId)
-      .order("snapshot_date", { ascending: false }),
-    supabase
-      .from("lead_feedback")
-      .select("*")
-      .eq("campaign_id", campaignId)
-      .order("created_at", { ascending: false }),
-    supabase
-      .from("campaign_step_metrics")
-      .select("*")
-      .eq("campaign_id", campaignId)
-      .order("period_start", { ascending: true }),
-  ]);
-
-  return {
-    campaign: typedCampaign,
-    clientName: (clientData as Client | null)?.name || "Unknown",
-    snapshots: (snapshotsRes.data || []) as CampaignSnapshot[],
-    feedback: (feedbackRes.data || []) as LeadFeedback[],
-    stepMetrics: (stepMetricsRes.data || []) as CampaignStepMetric[],
-  };
-}
-
-export default function CampaignDetailPage({
+export default async function CampaignDetailPage({
   params,
 }: {
   params: Promise<{ clientId: string; campaignId: string }>;
 }) {
-  const { clientId, campaignId } = use(params);
-  const { data } = useSWR(`admin-campaign-${campaignId}`, () => fetchCampaignDetail(campaignId));
+  const { clientId, campaignId } = await params;
+  const supabase = await createClient();
 
-  // LinkedIn campaigns get a different detail view — campaign_snapshots /
-  // step_metrics are email-shaped and empty for LinkedIn. We branch early
-  // so the SWR refetch + the LinkedIn component's own SWR don't both
-  // run unnecessarily.
-  if (data?.campaign?.source_channel === "linkedin") {
-    return <LinkedinCampaignDetail params={params} />;
-  }
+  const { data: campaignRow } = await supabase
+    .from("campaigns")
+    .select("*")
+    .eq("id", campaignId)
+    .maybeSingle();
 
-  if (!data) {
-    return (
-      <div className="space-y-6 animate-pulse">
-        <div className="h-8 w-48 rounded bg-muted" />
-        <div className="h-32 rounded-xl bg-muted" />
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="h-24 rounded-xl bg-muted" />
-          ))}
-        </div>
-        <div className="h-64 rounded-xl bg-muted" />
-      </div>
-    );
-  }
-
-  if (!data.campaign) {
+  if (!campaignRow) {
     return (
       <div className="flex items-center justify-center h-64">
         <p className="text-muted-foreground">Campaign not found.</p>
@@ -110,18 +59,59 @@ export default function CampaignDetailPage({
     );
   }
 
-  const { campaign: typedCampaign, clientName, snapshots, feedback, stepMetrics } = data;
-  // Campaign detail page shows lifetime metrics for this campaign — pass
-  // "lifetime" so reply rate uses the per-lead denominator.
-  const metrics = calculateMetrics(snapshots, "lifetime");
+  const campaign = campaignRow as Campaign;
 
-  // Run step health analysis
-  const campaignInfoMap = new Map([[campaignId, { id: campaignId, name: typedCampaign.name, client_name: clientName }]]);
+  // LinkedIn campaigns get a different detail view — campaign_snapshots /
+  // step_metrics are email-shaped and empty for LinkedIn.
+  if (campaign.source_channel === "linkedin") {
+    return (
+      <LinkedinCampaignDetail clientId={clientId} campaignId={campaignId} />
+    );
+  }
+
+  const [clientRes, snapshotsRes, feedbackRes, stepMetricsRes] =
+    await Promise.all([
+      campaign.client_id
+        ? supabase
+            .from("clients")
+            .select("name")
+            .eq("id", campaign.client_id)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
+      supabase
+        .from("campaign_snapshots")
+        .select(SNAPSHOT_COLUMNS)
+        .eq("campaign_id", campaignId)
+        .order("snapshot_date", { ascending: false }),
+      supabase
+        .from("lead_feedback")
+        .select("*")
+        .eq("campaign_id", campaignId)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("campaign_step_metrics")
+        .select("*")
+        .eq("campaign_id", campaignId)
+        .order("period_start", { ascending: true }),
+    ]);
+
+  const clientName =
+    (clientRes.data as { name: string } | null)?.name || "Unknown";
+  const snapshots = (snapshotsRes.data ?? []) as unknown as CampaignSnapshot[];
+  const feedback = (feedbackRes.data ?? []) as LeadFeedback[];
+  const stepMetrics = (stepMetricsRes.data ?? []) as CampaignStepMetric[];
+
+  const metrics = calculateMetrics(snapshots, "lifetime");
+  const campaignInfoMap = new Map([
+    [
+      campaignId,
+      { id: campaignId, name: campaign.name, client_name: clientName },
+    ],
+  ]);
   const stepAlerts = analyzeStepHealth(stepMetrics, campaignInfoMap);
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div>
         <Link
           href={`/admin/clients/${clientId}`}
@@ -130,25 +120,35 @@ export default function CampaignDetailPage({
           <ArrowLeft size={14} />
           Back to Client
         </Link>
-        <div className="relative overflow-hidden rounded-[20px] p-5 sm:p-7 text-[#0f172a] mt-3" style={{ background: 'linear-gradient(135deg, #EDEEFF 0%, #D1D3FF 50%, #fff 100%)', border: '1px solid rgba(46,55,254,0.2)', borderTop: '1px solid rgba(46,55,254,0.3)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.9), 0 4px 14px rgba(46,55,254,0.1)' }}>
+        <div
+          className="relative overflow-hidden rounded-[20px] p-5 sm:p-7 text-[#0f172a] mt-3"
+          style={{
+            background:
+              "linear-gradient(135deg, #EDEEFF 0%, #D1D3FF 50%, #fff 100%)",
+            border: "1px solid rgba(46,55,254,0.2)",
+            borderTop: "1px solid rgba(46,55,254,0.3)",
+            boxShadow:
+              "inset 0 1px 0 rgba(255,255,255,0.9), 0 4px 14px rgba(46,55,254,0.1)",
+          }}
+        >
           <div className="relative z-10 flex items-start justify-between">
             <div>
-              <h1 className="text-2xl font-bold">{typedCampaign.name}</h1>
-              {typedCampaign.instantly_campaign_id && (
+              <h1 className="text-2xl font-bold">{campaign.name}</h1>
+              {campaign.instantly_campaign_id && (
                 <p className="text-xs text-[#0f172a]/50 font-mono mt-1">
-                  {typedCampaign.instantly_campaign_id}
+                  {campaign.instantly_campaign_id}
                 </p>
               )}
             </div>
             <div className="flex items-center gap-2">
               <Badge
                 className={
-                  typedCampaign.status === "active"
+                  campaign.status === "active"
                     ? "bg-white/15 text-[#0f172a] border-0"
                     : "bg-white/10 text-[#0f172a]/60 border-0"
                 }
               >
-                {typedCampaign.status}
+                {campaign.status}
               </Badge>
               <RefreshButton campaignId={campaignId} />
             </div>
@@ -157,27 +157,39 @@ export default function CampaignDetailPage({
         </div>
       </div>
 
-      {/* KPIs */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <KPICard label="Emails Sent" value={metrics.emails_sent} unit="count" />
-        <KPICard label="Reply Rate" value={metrics.reply_rate} unit="percent" kpiKey="reply_rate" />
-        <KPICard label="Bounce Rate" value={metrics.bounce_rate} unit="percent" kpiKey="bounce_rate" />
-        <KPICard label="Positive Responses" value={metrics.meetings_booked} unit="count" />
+        <KPICard
+          label="Reply Rate"
+          value={metrics.reply_rate}
+          unit="percent"
+          kpiKey="reply_rate"
+        />
+        <KPICard
+          label="Bounce Rate"
+          value={metrics.bounce_rate}
+          unit="percent"
+          kpiKey="bounce_rate"
+        />
+        <KPICard
+          label="Positive Responses"
+          value={metrics.meetings_booked}
+          unit="count"
+        />
       </div>
 
-      {/* Daily Chart */}
       <DailyChart snapshots={snapshots} />
 
-      {/* Step Performance Funnel — THE KEY SECTION */}
       <StepFunnel
         stepMetrics={stepMetrics}
         alerts={stepAlerts}
-        campaignName={typedCampaign.name}
+        campaignName={campaign.name}
       />
 
-      {/* Daily Breakdown */}
       <div className="flex items-center gap-2 mb-3">
-        <h2 className="text-[15px] font-semibold text-[#0f172a]">Daily Breakdown</h2>
+        <h2 className="text-[15px] font-semibold text-[#0f172a]">
+          Daily Breakdown
+        </h2>
       </div>
       <Card className="border-border/50 shadow-sm">
         <CardContent>
@@ -198,12 +210,20 @@ export default function CampaignDetailPage({
               <TableBody>
                 {snapshots.slice(0, 14).map((s) => (
                   <TableRow key={s.id}>
-                    <TableCell className="text-sm">{s.snapshot_date}</TableCell>
-                    <TableCell className="text-right">{s.emails_sent}</TableCell>
+                    <TableCell className="text-sm">
+                      {s.snapshot_date}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {s.emails_sent}
+                    </TableCell>
                     <TableCell className="text-right">{s.replies}</TableCell>
                     <TableCell className="text-right">{s.bounces}</TableCell>
-                    <TableCell className="text-right">{s.unsubscribes}</TableCell>
-                    <TableCell className="text-right">{s.meetings_booked}</TableCell>
+                    <TableCell className="text-right">
+                      {s.unsubscribes}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {s.meetings_booked}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -212,38 +232,54 @@ export default function CampaignDetailPage({
         </CardContent>
       </Card>
 
-      {/* Lead Feedback */}
       <Card className="border-border/50 shadow-sm">
         <CardHeader className="flex flex-row items-center gap-2 pb-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]">
             <MessageSquare size={16} className="text-white" />
           </div>
-          <CardTitle className="text-base">Lead Feedback ({feedback.length})</CardTitle>
+          <CardTitle className="text-base">
+            Lead Feedback ({feedback.length})
+          </CardTitle>
         </CardHeader>
         <CardContent>
           {feedback.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No feedback submitted yet.</p>
+            <p className="text-sm text-muted-foreground">
+              No feedback submitted yet.
+            </p>
           ) : (
             <div className="space-y-2">
               {feedback.map((f) => (
-                <div key={f.id} className="flex items-center gap-3 rounded-xl border border-border/50 p-3 text-sm hover:bg-muted/30 transition-colors">
+                <div
+                  key={f.id}
+                  className="flex items-center gap-3 rounded-xl border border-border/50 p-3 text-sm hover:bg-muted/30 transition-colors"
+                >
                   <Badge
                     variant="secondary"
                     className={
                       ["good_lead", "interested"].includes(f.status)
                         ? "badge-green"
-                        : ["bad_lead", "wrong_person", "not_interested"].includes(f.status)
-                        ? "badge-red"
-                        : "badge-slate"
+                        : ["bad_lead", "wrong_person", "not_interested"].includes(
+                              f.status,
+                            )
+                          ? "badge-red"
+                          : "badge-slate"
                     }
                   >
                     {f.status.replace(/_/g, " ")}
                   </Badge>
                   <div className="min-w-0 flex-1">
                     <p className="font-medium truncate">{f.lead_email}</p>
-                    {f.lead_company && <p className="text-xs text-muted-foreground">{f.lead_company}</p>}
+                    {f.lead_company && (
+                      <p className="text-xs text-muted-foreground">
+                        {f.lead_company}
+                      </p>
+                    )}
                   </div>
-                  {f.comment && <span className="text-muted-foreground truncate hidden sm:inline text-xs max-w-xs">{f.comment}</span>}
+                  {f.comment && (
+                    <span className="text-muted-foreground truncate hidden sm:inline text-xs max-w-xs">
+                      {f.comment}
+                    </span>
+                  )}
                   <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0">
                     {new Date(f.created_at).toLocaleDateString()}
                   </span>
