@@ -125,8 +125,10 @@ export function Sidebar({ role, open = false, onClose }: { role: AppRole; open?:
         </button>
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 space-y-1 px-3 py-4 overflow-visible" style={{ direction: 'rtl' }}>
+      {/* Navigation. Scrollable so a tall nav (e.g. with the Salesforge
+          section added) doesn't get clipped on shorter screens. The
+          parent <aside> is overflow-hidden, so we scroll inside <nav>. */}
+      <nav className="flex-1 space-y-1 px-3 py-4 overflow-y-auto" style={{ direction: 'rtl' }}>
         <div style={{ direction: 'ltr' }}>
         {nav.map((item) => {
           const isActive = pathname === item.href;
