@@ -1,6 +1,6 @@
 # LeadStart — Project Status
 
-> Last updated: 2026-04-27
+> Last updated: 2026-05-09
 
 ## Current State: Deployed to Production
 
@@ -8,7 +8,19 @@ Live at https://leadstart-ebon.vercel.app (LeadStart Vercel account, auto-deploy
 
 ---
 
-## Current Initiative: LinkedIn Channel via Unipile
+## Current Initiative: Salesforge AI reply pipeline activation
+
+**Status:** all code shipped (`c1462e0` → `c30803c`, plus the AI reply pipeline from the earlier Instantly work which is now channel-agnostic). **NOT live yet** — gated on three migrations + Salesforge/Anthropic API keys + a test-campaign smoke.
+
+**What it does:** Replaces the Instantly email channel (ripped out in `5cc1589`) with Salesforge.ai. Inbound replies fire `POST /app/api/webhooks/salesforge?secret=…`, get tagged `source_channel='salesforge'`, and ride the existing Claude classifier + Resend hot-lead notification path. Salesforge Phase 2 dashboard at `/app/admin/campaigns/new/salesforge` creates sequences and auto-registers webhooks in one shot.
+
+**Resume doc with full activation checklist:** [`RESUME-SALESFORGE-ACTIVATION.md`](RESUME-SALESFORGE-ACTIVATION.md). That doc supersedes [`RESUME-AI-REPLY-ROUTING.md`](RESUME-AI-REPLY-ROUTING.md) for the activation flow — the older doc is preserved for the architectural / commit-by-commit history of how the pipeline was originally built around Instantly.
+
+**Next action when resuming:** apply migrations 00021 + 00045 + 00049 in the Supabase SQL editor (the resume doc has a single safe-to-paste block guarded with `IF NOT EXISTS` / `DO $$`), then walk the test-campaign smoke before pointing at a real client.
+
+---
+
+## Other initiative: LinkedIn Channel via Unipile
 
 **Status:** All 9 code commits shipped (latest `64b45fd`). **NOT live yet** — gated on three migrations + Unipile config + webhook registration. No more code commits required for first activation.
 
@@ -29,11 +41,11 @@ Live at https://leadstart-ebon.vercel.app (LeadStart Vercel account, auto-deploy
 
 ---
 
-## Other initiative — AI Lead-Reply Classification & Routing
+## Reply pipeline (channel-agnostic, code-complete)
 
-**Status:** Code-complete through commit #11 per [`RESUME-AI-REPLY-ROUTING.md`](RESUME-AI-REPLY-ROUTING.md); commit #12 is the staging smoke test, not new code. The Instantly webhook is **not** registered in production yet — see the "Activation — do not run yet" section of that resume doc for the gating prereqs (test campaign, David Cabrera persona migration, etc.).
+The Claude classifier + Resend hot-lead notification flow originally built around Instantly is now channel-agnostic. Salesforge inbound replies (and LinkedIn DMs once that channel activates) hand off to the same `runReplyPipeline` in [`src/lib/replies/pipeline.ts`](src/lib/replies/pipeline.ts). Activation is now driven per-channel, not as a separate initiative — see the Current and Other initiatives above.
 
-**Security follow-up:** rotate hardcoded Instantly API key at `scripts/backfill-emails.mjs:9` after this work ships.
+[`RESUME-AI-REPLY-ROUTING.md`](RESUME-AI-REPLY-ROUTING.md) is preserved for the architectural / commit-by-commit history of how this pipeline was first built. Its "Activation — do not run yet" section is stale (Instantly-flavored); use [`RESUME-SALESFORGE-ACTIVATION.md`](RESUME-SALESFORGE-ACTIVATION.md) for the live activation flow.
 
 ---
 
