@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { PaginationControls } from "@/components/ui/pagination-controls";
 import {
   Table,
   TableBody,
@@ -157,6 +158,8 @@ function describeQuery(query: Record<string, unknown>): string {
   return `${cat} · ${loc}`;
 }
 
+const RESULTS_PAGE_SIZE = 25;
+
 function timeAgo(iso: string | null): string {
   if (!iso) return "";
   const ms = Date.now() - new Date(iso).getTime();
@@ -184,6 +187,7 @@ export default function ProspectingPage() {
 
   const [activeSearchId, setActiveSearchId] = useState<string | null>(null);
   const [activeSearch, setActiveSearch] = useState<SearchDetail | null>(null);
+  const [resultsPage, setResultsPage] = useState(1);
   const [recentSearches, setRecentSearches] = useState<SearchSummary[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -260,6 +264,11 @@ export default function ProspectingPage() {
     loadRecentSearches();
     return () => stopPolling();
   }, [loadRecentSearches, stopPolling]);
+
+  // Reset the results pagination whenever the user switches searches.
+  useEffect(() => {
+    setResultsPage(1);
+  }, [activeSearchId]);
 
   useEffect(() => {
     if (!activeSearchId) {
@@ -539,6 +548,19 @@ export default function ProspectingPage() {
     (activeSearch.status === "pending" || activeSearch.status === "running");
   const showError = activeSearch?.status === "failed";
   const showResults = activeSearch?.status === "complete";
+
+  const totalResultsPages = Math.max(
+    1,
+    Math.ceil((activeSearch?.results.length ?? 0) / RESULTS_PAGE_SIZE),
+  );
+  const safeResultsPage = Math.min(resultsPage, totalResultsPages);
+  const resultsStart = (safeResultsPage - 1) * RESULTS_PAGE_SIZE;
+  const pagedResults = activeSearch
+    ? activeSearch.results.slice(
+        resultsStart,
+        resultsStart + RESULTS_PAGE_SIZE,
+      )
+    : [];
 
   return (
     <div className="space-y-6">
@@ -1155,7 +1177,7 @@ export default function ProspectingPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {activeSearch.results.map((r) => {
+                  {pagedResults.map((r) => {
                     const key = rowKey(r);
                     const isSaved = savedGoogleIds.has(key);
                     return (
@@ -1258,6 +1280,12 @@ export default function ProspectingPage() {
                 </TableBody>
               </Table>
             )}
+            <PaginationControls
+              currentPage={safeResultsPage}
+              totalItems={activeSearch.results.length}
+              pageSize={RESULTS_PAGE_SIZE}
+              onPageChange={setResultsPage}
+            />
           </CardContent>
         </Card>
       )}

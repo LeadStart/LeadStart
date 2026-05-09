@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useSupabaseQuery } from "@/hooks/use-supabase-query";
 import { useSort } from "@/hooks/use-sort";
 import { createClient } from "@/lib/supabase/client";
@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { SortableHead } from "@/components/ui/sortable-head";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { PaginationControls } from "@/components/ui/pagination-controls";
 import {
   AlertDialog,
   AlertDialogContent,
@@ -25,6 +26,8 @@ import {
 import { AddClientForm } from "./add-client-form";
 import { Users, ArrowRight, Archive, ArchiveRestore, Trash2 } from "lucide-react";
 import type { ClientStatus } from "@/types/app";
+
+const CLIENTS_PAGE_SIZE = 25;
 
 export default function ClientsPage() {
   const [statusFilter, setStatusFilter] = useState<ClientStatus>("active");
@@ -51,6 +54,15 @@ export default function ClientsPage() {
       return { ...client, totalCampaigns: clientCampaigns.length, activeCampaigns: activeCampaigns.length, userCount };
     });
   const { sorted, sortConfig, requestSort } = useSort(rows, "name", "asc");
+
+  const [page, setPage] = useState(1);
+  useEffect(() => {
+    setPage(1);
+  }, [statusFilter, sortConfig?.key, sortConfig?.direction]);
+  const totalPages = Math.max(1, Math.ceil(sorted.length / CLIENTS_PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pageStart = (safePage - 1) * CLIENTS_PAGE_SIZE;
+  const pageRows = sorted.slice(pageStart, pageStart + CLIENTS_PAGE_SIZE);
 
   async function toggleStatus(clientId: string, current: ClientStatus) {
     const next: ClientStatus = current === "active" ? "former" : "active";
@@ -123,7 +135,7 @@ export default function ClientsPage() {
             <Table>
               <TableHeader><TableRow><SortableHead sortKey="name" sortConfig={sortConfig} onSort={requestSort}>Name</SortableHead><SortableHead sortKey="activeCampaigns" sortConfig={sortConfig} onSort={requestSort}>Campaigns</SortableHead><SortableHead sortKey="userCount" sortConfig={sortConfig} onSort={requestSort}>Portal Access</SortableHead><TableHead></TableHead></TableRow></TableHeader>
               <TableBody>
-                {sorted.map((row) => {
+                {pageRows.map((row) => {
                   const rowStatus: ClientStatus = (row.status ?? "active") as ClientStatus;
                   return (
                     <TableRow key={row.id} className="group">
@@ -166,6 +178,12 @@ export default function ClientsPage() {
               </TableBody>
             </Table>
           )}
+          <PaginationControls
+            currentPage={safePage}
+            totalItems={sorted.length}
+            pageSize={CLIENTS_PAGE_SIZE}
+            onPageChange={setPage}
+          />
         </CardContent>
       </Card>
 

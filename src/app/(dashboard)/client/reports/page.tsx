@@ -5,8 +5,11 @@ import { createClient } from "@/lib/supabase/client";
 import { useClientData } from "../client-data-context";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { PaginationControls } from "@/components/ui/pagination-controls";
 import { FileText, TrendingUp, TrendingDown, Minus, Calendar, Mail } from "lucide-react";
 import type { KPIReport } from "@/types/app";
+
+const REPORTS_PAGE_SIZE = 25;
 
 function MetricRow({ label, value, unit, trend }: { label: string; value: number; unit: string; trend?: "up" | "down" | "flat" }) {
   return (
@@ -26,6 +29,7 @@ export default function ClientReportsPage() {
   const { client, loading: contextLoading } = useClientData();
   const [reports, setReports] = useState<KPIReport[]>([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     if (contextLoading || !client) return;
@@ -40,6 +44,11 @@ export default function ClientReportsPage() {
   if (contextLoading || loading) {
     return <div className="space-y-6 animate-pulse"><div className="rounded-xl h-36 bg-muted/50" /><div className="rounded-xl h-64 bg-muted/50" /></div>;
   }
+
+  const totalPages = Math.max(1, Math.ceil(reports.length / REPORTS_PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pageStart = (safePage - 1) * REPORTS_PAGE_SIZE;
+  const pageRows = reports.slice(pageStart, pageStart + REPORTS_PAGE_SIZE);
 
   return (
     <div className="space-y-6">
@@ -62,7 +71,7 @@ export default function ClientReportsPage() {
         </Card>
       ) : (
         <div className="space-y-4">
-          {reports.map((report) => {
+          {pageRows.map((report) => {
             const { totals, period, campaigns } = report.report_data;
             const wasSent = !!report.sent_at;
             return (
@@ -96,6 +105,12 @@ export default function ClientReportsPage() {
               </Card>
             );
           })}
+          <PaginationControls
+            currentPage={safePage}
+            totalItems={reports.length}
+            pageSize={REPORTS_PAGE_SIZE}
+            onPageChange={setPage}
+          />
         </div>
       )}
     </div>

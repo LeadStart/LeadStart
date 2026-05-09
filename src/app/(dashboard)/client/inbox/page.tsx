@@ -7,9 +7,12 @@ import { useClientData } from "../client-data-context";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { StatCard } from "@/components/charts/stat-card";
+import { PaginationControls } from "@/components/ui/pagination-controls";
 import { Inbox as InboxIcon, Phone, Clock, ArrowRight, AlertCircle, CheckCircle2 } from "lucide-react";
 import type { LeadReply } from "@/types/app";
 import { CLASS_META, isReplyActionable, timeSince } from "@/lib/replies/ui";
+
+const INBOX_PAGE_SIZE = 25;
 
 // ===== Page =====
 
@@ -18,6 +21,10 @@ export default function ClientInboxPage() {
   const [replies, setReplies] = useState<LeadReply[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"urgent" | "all" | "resolved">("urgent");
+  const [page, setPage] = useState(1);
+  useEffect(() => {
+    setPage(1);
+  }, [filter]);
 
   useEffect(() => {
     if (contextLoading || !client) return;
@@ -90,6 +97,11 @@ export default function ClientInboxPage() {
       : filter === "resolved"
         ? resolvedReplies
         : replies;
+
+  const totalPages = Math.max(1, Math.ceil(shown.length / INBOX_PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pageStart = (safePage - 1) * INBOX_PAGE_SIZE;
+  const pageRows = shown.slice(pageStart, pageStart + INBOX_PAGE_SIZE);
 
   return (
     <div className="space-y-6">
@@ -179,7 +191,7 @@ export default function ClientInboxPage() {
         </Card>
       ) : (
         <div className="space-y-3">
-          {shown.map((reply) => {
+          {pageRows.map((reply) => {
             const meta = reply.final_class ? CLASS_META[reply.final_class] : null;
             const isOverHour =
               isReplyActionable(reply) &&
@@ -266,6 +278,12 @@ export default function ClientInboxPage() {
               </Link>
             );
           })}
+          <PaginationControls
+            currentPage={safePage}
+            totalItems={shown.length}
+            pageSize={INBOX_PAGE_SIZE}
+            onPageChange={setPage}
+          />
         </div>
       )}
     </div>

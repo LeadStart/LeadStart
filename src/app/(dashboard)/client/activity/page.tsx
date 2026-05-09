@@ -6,8 +6,11 @@ import { useClientData } from "../client-data-context";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { StatCard } from "@/components/charts/stat-card";
+import { PaginationControls } from "@/components/ui/pagination-controls";
 import { Mail, MailOpen, AlertTriangle, CalendarCheck, Send, UserX, Activity } from "lucide-react";
 import type { WebhookEvent } from "@/types/app";
+
+const ACTIVITY_PAGE_SIZE = 25; // pages slice date groups, not individual events
 
 const EVENT_CONFIG: Record<string, { label: string; icon: React.ReactNode; color: string; badgeClass: string }> = {
   email_sent: { label: "Email Sent", icon: <Send size={14} />, color: "text-gray-500", badgeClass: "badge-slate" },
@@ -38,6 +41,7 @@ export default function ClientActivityPage() {
   const [events, setEvents] = useState<WebhookEvent[]>([]);
   const [campaignNameMap, setCampaignNameMap] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     if (contextLoading || !client) return;
@@ -69,6 +73,12 @@ export default function ClientActivityPage() {
     grouped.set(dateKey, existing);
   });
 
+  const groupEntries = Array.from(grouped.entries());
+  const totalPages = Math.max(1, Math.ceil(groupEntries.length / ACTIVITY_PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pageStart = (safePage - 1) * ACTIVITY_PAGE_SIZE;
+  const pageGroups = groupEntries.slice(pageStart, pageStart + ACTIVITY_PAGE_SIZE);
+
   return (
     <div className="space-y-6">
       <div className="relative overflow-hidden rounded-[20px] p-5 sm:p-7 text-[#0f172a]" style={{ background: 'linear-gradient(135deg, #EDEEFF 0%, #D1D3FF 50%, #fff 100%)', border: '1px solid rgba(46,55,254,0.2)', borderTop: '1px solid rgba(46,55,254,0.3)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.9), 0 4px 14px rgba(46,55,254,0.1)' }}>
@@ -96,7 +106,7 @@ export default function ClientActivityPage() {
         </Card>
       ) : (
         <div className="space-y-6">
-          {Array.from(grouped.entries()).map(([dateLabel, dayEvents]) => (
+          {pageGroups.map(([dateLabel, dayEvents]) => (
             <div key={dateLabel}>
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3 px-1">{dateLabel}</p>
               <Card className="border-border/50 shadow-sm">
@@ -122,6 +132,12 @@ export default function ClientActivityPage() {
               </Card>
             </div>
           ))}
+          <PaginationControls
+            currentPage={safePage}
+            totalItems={groupEntries.length}
+            pageSize={ACTIVITY_PAGE_SIZE}
+            onPageChange={setPage}
+          />
         </div>
       )}
     </div>

@@ -7,12 +7,16 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { StatCard } from "@/components/charts/stat-card";
 import { FeedbackDonut } from "@/components/charts/feedback-donut";
+import { PaginationControls } from "@/components/ui/pagination-controls";
 import { MessageSquare, ThumbsUp, ThumbsDown } from "lucide-react";
 import type { LeadFeedback } from "@/types/app";
+
+const FEEDBACK_PAGE_SIZE = 25;
 
 export default function ClientFeedbackPage() {
   const [feedback, setFeedback] = useState<LeadFeedback[]>([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     const supabase = createClient();
@@ -30,6 +34,11 @@ export default function ClientFeedbackPage() {
   const total = feedback.length;
   const good = feedback.filter((f) => ["good_lead", "interested"].includes(f.status)).length;
   const bad = feedback.filter((f) => ["bad_lead", "wrong_person", "not_interested"].includes(f.status)).length;
+
+  const totalPages = Math.max(1, Math.ceil(feedback.length / FEEDBACK_PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pageStart = (safePage - 1) * FEEDBACK_PAGE_SIZE;
+  const pageRows = feedback.slice(pageStart, pageStart + FEEDBACK_PAGE_SIZE);
 
   return (
     <div className="space-y-6">
@@ -81,7 +90,7 @@ export default function ClientFeedbackPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {feedback.map((f) => (
+                {pageRows.map((f) => (
                   <TableRow key={f.id}>
                     <TableCell className="font-medium">{f.lead_email}</TableCell>
                     <TableCell>{f.lead_company || "—"}</TableCell>
@@ -97,6 +106,12 @@ export default function ClientFeedbackPage() {
               </TableBody>
             </Table>
           )}
+          <PaginationControls
+            currentPage={safePage}
+            totalItems={feedback.length}
+            pageSize={FEEDBACK_PAGE_SIZE}
+            onPageChange={setPage}
+          />
         </CardContent>
       </Card>
     </div>

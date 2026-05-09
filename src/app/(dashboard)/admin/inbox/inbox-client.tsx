@@ -1,10 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { StatCard } from "@/components/charts/stat-card";
+import { PaginationControls } from "@/components/ui/pagination-controls";
 import {
   Select,
   SelectContent,
@@ -48,9 +49,15 @@ export interface InboxRowReply {
 type FilterClient = "all" | string;
 type FilterClass = "all" | "hot" | "needs_review" | "silent" | ReplyClass;
 
+const INBOX_PAGE_SIZE = 25;
+
 export function InboxClient({ replies }: { replies: InboxRowReply[] }) {
   const [filterClient, setFilterClient] = useState<FilterClient>("all");
   const [filterClass, setFilterClass] = useState<FilterClass>("hot");
+  const [page, setPage] = useState(1);
+  useEffect(() => {
+    setPage(1);
+  }, [filterClient, filterClass]);
 
   const clientOptions = useMemo(() => {
     const seen = new Map<string, string>();
@@ -102,6 +109,11 @@ export function InboxClient({ replies }: { replies: InboxRowReply[] }) {
       Date.now() - new Date(r.outcome_logged_at).getTime() < 24 * 60 * 60 * 1000
     );
   }).length;
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / INBOX_PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pageStart = (safePage - 1) * INBOX_PAGE_SIZE;
+  const pageRows = filtered.slice(pageStart, pageStart + INBOX_PAGE_SIZE);
 
   return (
     <div className="space-y-6">
@@ -231,7 +243,7 @@ export function InboxClient({ replies }: { replies: InboxRowReply[] }) {
         </Card>
       ) : (
         <div className="space-y-2">
-          {filtered.map((reply) => {
+          {pageRows.map((reply) => {
             const meta = reply.final_class
               ? CLASS_META[reply.final_class]
               : null;
@@ -332,6 +344,12 @@ export function InboxClient({ replies }: { replies: InboxRowReply[] }) {
               </Link>
             );
           })}
+          <PaginationControls
+            currentPage={safePage}
+            totalItems={filtered.length}
+            pageSize={INBOX_PAGE_SIZE}
+            onPageChange={setPage}
+          />
         </div>
       )}
     </div>

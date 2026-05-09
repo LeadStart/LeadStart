@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { PaginationControls } from "@/components/ui/pagination-controls";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -46,6 +47,8 @@ import {
 } from "@/lib/kpi/schedule";
 import { appUrl } from "@/lib/api-url";
 
+const REPORTS_PAGE_SIZE = 25;
+
 export function ReportsClient({
   initialClients,
   initialReports,
@@ -55,6 +58,7 @@ export function ReportsClient({
 }) {
   const [clients, setClients] = useState<Client[]>(initialClients);
   const [reports, setReports] = useState<KPIReport[]>(initialReports);
+  const [reportsPage, setReportsPage] = useState(1);
   const [selectedClient, setSelectedClient] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -396,6 +400,17 @@ export function ReportsClient({
 
   const sentCount = reports.filter((r) => r.sent_at).length;
   const draftCount = reports.filter((r) => !r.sent_at).length;
+
+  const totalReportsPages = Math.max(
+    1,
+    Math.ceil(reports.length / REPORTS_PAGE_SIZE),
+  );
+  const safeReportsPage = Math.min(reportsPage, totalReportsPages);
+  const reportsStart = (safeReportsPage - 1) * REPORTS_PAGE_SIZE;
+  const pagedReports = reports.slice(
+    reportsStart,
+    reportsStart + REPORTS_PAGE_SIZE,
+  );
 
   return (
     <div className="space-y-6">
@@ -812,7 +827,7 @@ export function ReportsClient({
             <p className="text-sm text-muted-foreground">No reports generated yet.</p>
           ) : (
             <div className="space-y-2">
-              {reports.map((report) => {
+              {pagedReports.map((report) => {
                 const client = clientMap.get(report.client_id);
                 const wasSent = !!report.sent_at;
 
@@ -877,6 +892,12 @@ export function ReportsClient({
               })}
             </div>
           )}
+          <PaginationControls
+            currentPage={safeReportsPage}
+            totalItems={reports.length}
+            pageSize={REPORTS_PAGE_SIZE}
+            onPageChange={setReportsPage}
+          />
         </CardContent>
       </Card>
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useSupabaseQuery } from "@/hooks/use-supabase-query";
 import { ADMIN_TASKS_KEY, fetchAdminTasks } from "@/lib/admin-queries";
 import { useSort } from "@/hooks/use-sort";
@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { SortableHead } from "@/components/ui/sortable-head";
 import { StatCard } from "@/components/charts/stat-card";
+import { PaginationControls } from "@/components/ui/pagination-controls";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -64,6 +65,8 @@ const NEXT_STATUS: Record<TaskStatus, TaskStatus> = {
   done: "todo",
 };
 
+const TASKS_PAGE_SIZE = 25;
+
 export default function TasksPage() {
   const { user, organizationId } = useUser();
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -100,6 +103,15 @@ export default function TasksPage() {
   });
 
   const { sorted, sortConfig, requestSort } = useSort(filtered);
+
+  const [page, setPage] = useState(1);
+  useEffect(() => {
+    setPage(1);
+  }, [statusFilter, priorityFilter, categoryFilter, sortConfig?.key, sortConfig?.direction]);
+  const totalPages = Math.max(1, Math.ceil(sorted.length / TASKS_PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pageStart = (safePage - 1) * TASKS_PAGE_SIZE;
+  const pageRows = sorted.slice(pageStart, pageStart + TASKS_PAGE_SIZE);
 
   if (loading) return <div className="space-y-6 animate-pulse"><div className="rounded-xl h-36 bg-muted/50" /><div className="grid grid-cols-4 gap-4">{[1,2,3,4].map(i => <div key={i} className="rounded-xl h-24 bg-muted/50" />)}</div><div className="rounded-xl h-64 bg-muted/50" /></div>;
 
@@ -330,7 +342,7 @@ export default function TasksPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sorted.map((task) => (
+                {pageRows.map((task) => (
                   <TableRow key={task.id}>
                     <TableCell>
                       <p className="font-medium">{task.title}</p>
@@ -376,6 +388,12 @@ export default function TasksPage() {
               </TableBody>
             </Table>
           )}
+          <PaginationControls
+            currentPage={safePage}
+            totalItems={sorted.length}
+            pageSize={TASKS_PAGE_SIZE}
+            onPageChange={setPage}
+          />
         </CardContent>
       </Card>
     </div>

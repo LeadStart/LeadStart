@@ -10,7 +10,7 @@ export default async function ReportsPage() {
       .from("kpi_reports")
       .select("*")
       .order("created_at", { ascending: false })
-      .limit(20),
+      .limit(200),
   ]);
 
   return (

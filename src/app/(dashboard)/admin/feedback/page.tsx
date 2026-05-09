@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useSupabaseQuery } from "@/hooks/use-supabase-query";
 import { ADMIN_FEEDBACK_KEY, fetchAdminFeedback } from "@/lib/admin-queries";
 import { useSort } from "@/hooks/use-sort";
@@ -8,7 +9,10 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { SortableHead } from "@/components/ui/sortable-head";
 import { StatCard } from "@/components/charts/stat-card";
+import { PaginationControls } from "@/components/ui/pagination-controls";
 import { MessageSquare, ThumbsUp, ThumbsDown } from "lucide-react";
+
+const FEEDBACK_PAGE_SIZE = 25;
 
 export default function FeedbackPage() {
   const { data, loading } = useSupabaseQuery(
@@ -24,6 +28,15 @@ export default function FeedbackPage() {
   }));
   const { sorted, sortConfig, requestSort } = useSort(rows);
   const total = feedback.length;
+
+  const [page, setPage] = useState(1);
+  useEffect(() => {
+    setPage(1);
+  }, [sortConfig?.key, sortConfig?.direction]);
+  const totalPages = Math.max(1, Math.ceil(sorted.length / FEEDBACK_PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pageStart = (safePage - 1) * FEEDBACK_PAGE_SIZE;
+  const pageRows = sorted.slice(pageStart, pageStart + FEEDBACK_PAGE_SIZE);
   const good = feedback.filter((f) => ["good_lead", "interested"].includes(f.status)).length;
   const bad = feedback.filter((f) => ["bad_lead", "wrong_person", "not_interested"].includes(f.status)).length;
 
@@ -50,7 +63,7 @@ export default function FeedbackPage() {
             <Table>
               <TableHeader><TableRow><SortableHead sortKey="lead_email" sortConfig={sortConfig} onSort={requestSort}>Lead</SortableHead><SortableHead sortKey="campaignName" sortConfig={sortConfig} onSort={requestSort}>Campaign</SortableHead><SortableHead sortKey="status" sortConfig={sortConfig} onSort={requestSort}>Status</SortableHead><SortableHead sortKey="comment" sortConfig={sortConfig} onSort={requestSort}>Comment</SortableHead><SortableHead sortKey="created_at" sortConfig={sortConfig} onSort={requestSort}>Date</SortableHead></TableRow></TableHeader>
               <TableBody>
-                {sorted.map((f) => (
+                {pageRows.map((f) => (
                   <TableRow key={f.id}>
                     <TableCell><p className="font-medium">{f.lead_email}</p>{f.lead_company && <p className="text-xs text-muted-foreground">{f.lead_company}</p>}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">{campaignMap.get(f.campaign_id) || "—"}</TableCell>
@@ -62,6 +75,12 @@ export default function FeedbackPage() {
               </TableBody>
             </Table>
           )}
+          <PaginationControls
+            currentPage={safePage}
+            totalItems={sorted.length}
+            pageSize={FEEDBACK_PAGE_SIZE}
+            onPageChange={setPage}
+          />
         </CardContent>
       </Card>
     </div>
