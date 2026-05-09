@@ -27,6 +27,26 @@ import {
 
 type SupabaseClient = ReturnType<typeof createClient>;
 
+// Snapshot columns minus `raw_data` — that JSONB blob is only ever
+// written by the analytics-sync cron and never read by any admin page.
+// Pulling 30 days × every campaign × full raw payload was the single
+// largest contributor to first-paint download size.
+const SNAPSHOT_COLUMNS =
+  "id, campaign_id, snapshot_date, total_leads, emails_sent, replies, " +
+  "unique_replies, positive_replies, bounces, unsubscribes, meetings_booked, " +
+  "new_leads_contacted, reply_rate, positive_reply_rate, bounce_rate, " +
+  "unsubscribe_rate, fetched_at";
+
+// Contact columns minus `enrichment_data` for the admin list view. The
+// pipeline / prospects page DOES read enrichment_data (industry,
+// website) so its fetcher keeps select("*").
+const CONTACT_LIST_COLUMNS =
+  "id, organization_id, client_id, campaign_id, first_name, last_name, " +
+  "email, company_name, title, phone, linkedin_url, intro_line, tags, " +
+  "status, source, notes, pipeline_stage, pipeline_sort_order, " +
+  "pipeline_notes, pipeline_follow_up_date, pipeline_added_at, " +
+  "created_at, updated_at";
+
 // ---------- Overview ----------
 export const ADMIN_OVERVIEW_KEY = "admin-overview";
 
@@ -58,7 +78,7 @@ export async function fetchAdminOverview(
       supabase.from("campaigns").select("*"),
       supabase
         .from("campaign_snapshots")
-        .select("*")
+        .select(SNAPSHOT_COLUMNS)
         .gte(
           "snapshot_date",
           new Date(Date.now() - 30 * 86400000).toISOString().split("T")[0],
@@ -176,7 +196,7 @@ export async function fetchAdminCampaigns(supabase: SupabaseClient) {
     supabase.from("clients").select("*"),
     supabase
       .from("campaign_snapshots")
-      .select("*")
+      .select(SNAPSHOT_COLUMNS)
       .gte(
         "snapshot_date",
         new Date(Date.now() - 30 * 86400000).toISOString().split("T")[0],
@@ -277,7 +297,7 @@ export async function fetchAdminContacts(supabase: SupabaseClient) {
   const [contactsRes, clientsRes, campaignsRes] = await Promise.all([
     supabase
       .from("contacts")
-      .select("*")
+      .select(CONTACT_LIST_COLUMNS)
       .order("created_at", { ascending: false }),
     supabase.from("clients").select("id, name"),
     supabase.from("campaigns").select("id, name, client_id"),

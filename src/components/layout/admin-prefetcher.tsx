@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useSupabaseQuery } from "@/hooks/use-supabase-query";
 import { useApiQuery } from "@/hooks/use-api-query";
 import {
@@ -21,16 +22,62 @@ import {
 } from "@/lib/admin-queries";
 
 /**
- * Warms the SWR cache for every admin tab on first dashboard mount. Renders
- * nothing; the hooks just fire their fetchers and populate the shared cache
- * by key. When the user later clicks a sidebar link, that page's
- * useSupabaseQuery / useApiQuery hits the cache and renders instantly
- * instead of paying a fresh round-trip.
+ * Warms the SWR cache for every admin tab so later sidebar clicks render
+ * from cache instead of paying a fresh round-trip. Renders nothing.
+ *
+ * Deferred until the browser is idle: firing 8 background queries on
+ * mount competes with the current page's own queries for the browser's
+ * ~6-connection-per-origin limit, which made first paint feel slow. We
+ * wait for `requestIdleCallback` (or a 1500ms fallback) so the page
+ * being viewed gets the connection pool to itself, then warm the cache
+ * once it's settled.
  *
  * Only mount this for admin users — client users never navigate to these
  * keys so warming them would waste bandwidth.
  */
+const PREFETCH_FALLBACK_DELAY_MS = 1500;
+
 export function AdminPrefetcher() {
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    const win = window as Window & {
+      requestIdleCallback?: (
+        cb: () => void,
+        opts?: { timeout: number },
+      ) => number;
+      cancelIdleCallback?: (handle: number) => void;
+    };
+
+    let idleHandle: number | undefined;
+    let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+
+    if (typeof win.requestIdleCallback === "function") {
+      idleHandle = win.requestIdleCallback(() => setReady(true), {
+        timeout: PREFETCH_FALLBACK_DELAY_MS * 2,
+      });
+    } else {
+      timeoutHandle = setTimeout(() => setReady(true), PREFETCH_FALLBACK_DELAY_MS);
+    }
+
+    return () => {
+      if (
+        idleHandle !== undefined &&
+        typeof win.cancelIdleCallback === "function"
+      ) {
+        win.cancelIdleCallback(idleHandle);
+      }
+      if (timeoutHandle !== undefined) {
+        clearTimeout(timeoutHandle);
+      }
+    };
+  }, []);
+
+  if (!ready) return null;
+  return <DeferredPrefetchQueries />;
+}
+
+function DeferredPrefetchQueries() {
   useSupabaseQuery(ADMIN_OVERVIEW_KEY, fetchAdminOverview);
   useSupabaseQuery(ADMIN_CLIENTS_KEY, fetchAdminClients);
   useSupabaseQuery(ADMIN_CAMPAIGNS_KEY, fetchAdminCampaigns);
@@ -39,8 +86,7 @@ export function AdminPrefetcher() {
   useSupabaseQuery(ADMIN_TASKS_KEY, fetchAdminTasks);
   useSupabaseQuery(ADMIN_CONTACTS_PIPELINE_KEY, fetchAdminContactsPipeline);
 
-  // Billing pulls plans+quotes+subs+invoices+clients in one round-trip;
-  // prefetching in the background hides the first-visit latency.
+  // Billing pulls plans+quotes+subs+invoices+clients in one round-trip.
   useApiQuery(API_BILLING_DATA_PATH);
 
   return null;
