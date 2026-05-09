@@ -1,14 +1,10 @@
 // POST /api/admin/contacts/push-to-campaign — bulk-assign contacts to a
-// campaign and push them to the campaign's upstream provider (Instantly,
-// Salesforge) as leads / contacts.
+// campaign and push them to Salesforge as contacts.
 //
 // Owner-only. Body: { contact_ids: string[], campaign_id: string }.
 //
 // Behavior:
 // - Always updates contacts.campaign_id locally.
-// - For Instantly campaigns (source_channel='instantly') with a stored API
-//   key: pushes each contact to Instantly via POST /leads, then sets
-//   status='uploaded' on contacts that uploaded successfully.
 // - For Salesforge campaigns (source_channel='salesforge') with a stored
 //   API key: pushes contacts in 100-row chunks via POST /contacts/bulk,
 //   then enrolls all created contact ids into the sequence via
@@ -21,8 +17,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { InstantlyClient } from "@/lib/instantly/client";
-import type { InstantlyLeadCreate } from "@/lib/instantly/types";
 import { SalesforgeClient } from "@/lib/salesforge/client";
 import type { SalesforgeContactCreate } from "@/lib/salesforge/types";
 import type { SourceChannel } from "@/types/app";
@@ -90,7 +84,7 @@ export async function POST(req: NextRequest) {
   const { data: campaignData, error: campaignError } = await admin
     .from("campaigns")
     .select(
-      "id, organization_id, source_channel, instantly_campaign_id, salesforge_sequence_id, name",
+      "id, organization_id, source_channel, salesforge_sequence_id, name",
     )
     .eq("id", campaignId)
     .maybeSingle();
@@ -106,7 +100,6 @@ export async function POST(req: NextRequest) {
         id: string;
         organization_id: string;
         source_channel: SourceChannel;
-        instantly_campaign_id: string | null;
         salesforge_sequence_id: string | null;
         name: string;
       }
@@ -171,92 +164,6 @@ export async function POST(req: NextRequest) {
   const skippedNoEmail = contacts.length - pushable.length;
 
   // ----- Per-channel branch -----
-
-  if (campaign.source_channel === "instantly") {
-    if (!campaign.instantly_campaign_id) {
-      return NextResponse.json({
-        assigned: contacts.length,
-        uploaded: 0,
-        failed: 0,
-        skipped_no_email: 0,
-        skipped_invalid: skippedInvalid,
-        pushed: false,
-        reason: "Campaign has no Instantly ID — cannot push",
-      });
-    }
-
-    const { data: orgData } = await admin
-      .from("organizations")
-      .select("id, instantly_api_key")
-      .eq("id", organizationId)
-      .maybeSingle();
-    const org = orgData as { id: string; instantly_api_key: string | null } | null;
-
-    if (!org?.instantly_api_key) {
-      return NextResponse.json(
-        {
-          error:
-            "Instantly API key not set. Save it in /admin/settings/api first.",
-        },
-        { status: 400 },
-      );
-    }
-
-    const leads: (Omit<InstantlyLeadCreate, "campaign"> & { _id: string })[] =
-      pushable.map((c) => ({
-        _id: c.id,
-        email: c.email!.trim(),
-        first_name: c.first_name ?? undefined,
-        last_name: c.last_name ?? undefined,
-        company_name: c.company_name ?? undefined,
-        phone: c.phone ?? undefined,
-      }));
-
-    const client = new InstantlyClient(org.instantly_api_key);
-    let uploaded = 0;
-    const failed: { id: string; email: string; error: string }[] = [];
-    const uploadedIds: string[] = [];
-
-    for (const lead of leads) {
-      try {
-        const { _id, ...payload } = lead;
-        await client.addLead({
-          ...payload,
-          campaign: campaign.instantly_campaign_id,
-        });
-        uploaded++;
-        uploadedIds.push(_id);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        failed.push({ id: lead._id, email: lead.email, error: message });
-      }
-    }
-
-    if (uploadedIds.length > 0) {
-      const { error: statusError } = await admin
-        .from("contacts")
-        .update({ status: "uploaded", updated_at: new Date().toISOString() })
-        .in("id", uploadedIds);
-      if (statusError) {
-        console.error(
-          "[admin/contacts/push-to-campaign] status update failed:",
-          statusError,
-        );
-      }
-    }
-
-    return NextResponse.json({
-      assigned: contacts.length,
-      uploaded,
-      failed: failed.length,
-      failures: failed,
-      skipped_no_email: skippedNoEmail,
-      skipped_invalid: skippedInvalid,
-      pushed: true,
-      provider: "instantly",
-      campaign_name: campaign.name,
-    });
-  }
 
   if (campaign.source_channel === "salesforge") {
     if (!campaign.salesforge_sequence_id) {

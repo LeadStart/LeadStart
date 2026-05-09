@@ -16,7 +16,6 @@ import {
   Building2,
   Key,
   LayoutDashboard,
-  Target,
   ContactRound,
   CheckSquare,
   Inbox,
@@ -28,7 +27,6 @@ import {
   ShieldOff,
   X,
 } from "lucide-react";
-import { useOrphanCampaignCount } from "@/hooks/use-orphan-campaign-count";
 
 interface NavItem {
   href: string;
@@ -48,7 +46,6 @@ const adminNav: NavItem[] = [
 ];
 
 const adminSendingNav: NavItem[] = [
-  { href: "/admin/inbox-health", label: "Mailboxes", icon: <Inbox size={18} /> },
   { href: "/admin/salesforge/metrics", label: "Workspace metrics", icon: <TrendingUp size={18} /> },
   { href: "/admin/salesforge/bulk", label: "Bulk actions", icon: <Layers size={18} /> },
   { href: "/admin/salesforge/dnc", label: "DNC list", icon: <ShieldOff size={18} /> },
@@ -74,7 +71,6 @@ export function Sidebar({ role, open = false, onClose }: { role: AppRole; open?:
   const nav = isAdmin ? adminNav : clientNav;
   const sendingNav = isAdmin ? adminSendingNav : [];
   const settingsNav = isAdmin ? adminSettingsNav : [];
-  const orphanCount = useOrphanCampaignCount(role);
 
   return (
     <>
@@ -118,8 +114,6 @@ export function Sidebar({ role, open = false, onClose }: { role: AppRole; open?:
         <div style={{ direction: 'ltr' }}>
         {nav.map((item) => {
           const isActive = pathname === item.href;
-          const showOrphanBadge =
-            item.href === "/admin/campaigns/unlinked" && orphanCount > 0;
           return (
             <Link
               key={item.href}
@@ -135,14 +129,6 @@ export function Sidebar({ role, open = false, onClose }: { role: AppRole; open?:
                 {item.icon}
               </span>
               <span className="relative z-[1]">{item.label}</span>
-              {showOrphanBadge && (
-                <span
-                  className="relative z-[1] ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-semibold bg-amber-500 text-white"
-                  aria-label={`${orphanCount} unlinked campaigns`}
-                >
-                  {orphanCount}
-                </span>
-              )}
             </Link>
           );
         })}

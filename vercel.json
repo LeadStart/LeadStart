@@ -18,10 +18,6 @@
       "schedule": "*/2 * * * *"
     },
     {
-      "path": "/app/api/cron/retry-enrichment",
-      "schedule": "*/2 * * * *"
-    },
-    {
       "path": "/app/api/cron/prune-webhook-events",
       "schedule": "0 4 * * *"
     },

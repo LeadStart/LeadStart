@@ -6,25 +6,18 @@ import {
   ADMIN_OVERVIEW_KEY,
   ADMIN_CLIENTS_KEY,
   ADMIN_CAMPAIGNS_KEY,
-  ADMIN_UNLINKED_CAMPAIGNS_KEY,
   ADMIN_CONTACTS_KEY,
   ADMIN_FEEDBACK_KEY,
-  ADMIN_WEBHOOKS_KEY,
   ADMIN_TASKS_KEY,
   ADMIN_CONTACTS_PIPELINE_KEY,
-  ADMIN_PIPELINE_HEALTH_KEY,
-  API_INBOX_HEALTH_PATH,
   API_BILLING_DATA_PATH,
   fetchAdminOverview,
   fetchAdminClients,
   fetchAdminCampaigns,
-  fetchAdminUnlinkedCampaigns,
   fetchAdminContacts,
   fetchAdminFeedback,
-  fetchAdminWebhooks,
   fetchAdminTasks,
   fetchAdminContactsPipeline,
-  fetchAdminPipelineHealth,
 } from "@/lib/admin-queries";
 
 /**
@@ -38,22 +31,16 @@ import {
  * keys so warming them would waste bandwidth.
  */
 export function AdminPrefetcher() {
-  // Supabase-backed pages
   useSupabaseQuery(ADMIN_OVERVIEW_KEY, fetchAdminOverview);
   useSupabaseQuery(ADMIN_CLIENTS_KEY, fetchAdminClients);
   useSupabaseQuery(ADMIN_CAMPAIGNS_KEY, fetchAdminCampaigns);
-  useSupabaseQuery(ADMIN_UNLINKED_CAMPAIGNS_KEY, fetchAdminUnlinkedCampaigns);
   useSupabaseQuery(ADMIN_CONTACTS_KEY, fetchAdminContacts);
   useSupabaseQuery(ADMIN_FEEDBACK_KEY, fetchAdminFeedback);
-  useSupabaseQuery(ADMIN_WEBHOOKS_KEY, fetchAdminWebhooks);
   useSupabaseQuery(ADMIN_TASKS_KEY, fetchAdminTasks);
   useSupabaseQuery(ADMIN_CONTACTS_PIPELINE_KEY, fetchAdminContactsPipeline);
-  useSupabaseQuery(ADMIN_PIPELINE_HEALTH_KEY, fetchAdminPipelineHealth);
 
-  // API-route-backed pages (Inbox Health hits Instantly.ai; Billing pulls
-  // plans+quotes+subs+invoices+clients in one round-trip). Both are slow
-  // first-visits — prefetching in the background hides the latency.
-  useApiQuery(API_INBOX_HEALTH_PATH);
+  // Billing pulls plans+quotes+subs+invoices+clients in one round-trip;
+  // prefetching in the background hides the first-visit latency.
   useApiQuery(API_BILLING_DATA_PATH);
 
   return null;

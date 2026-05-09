@@ -1,12 +1,10 @@
 // POST /api/admin/campaigns/[id]/pause — pause the campaign on its
-// upstream provider (Instantly or Salesforge) and reflect the new status
-// in our campaigns row. Owner or VA. Reversible via the companion
-// /resume route.
+// upstream provider (Salesforge) and reflect the new status in our
+// campaigns row. Owner or VA. Reversible via the companion /resume route.
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { InstantlyClient } from "@/lib/instantly/client";
 import { SalesforgeClient } from "@/lib/salesforge/client";
 import type { SourceChannel } from "@/types/app";
 
@@ -35,7 +33,7 @@ export async function POST(
   const { data: campaign } = await admin
     .from("campaigns")
     .select(
-      "id, organization_id, source_channel, instantly_campaign_id, salesforge_sequence_id, name, status",
+      "id, organization_id, source_channel, salesforge_sequence_id, name, status",
     )
     .eq("id", campaignId)
     .maybeSingle();
@@ -44,7 +42,6 @@ export async function POST(
         id: string;
         organization_id: string;
         source_channel: SourceChannel;
-        instantly_campaign_id: string | null;
         salesforge_sequence_id: string | null;
         name: string;
         status: string | null;
@@ -59,34 +56,18 @@ export async function POST(
 
   const { data: org } = await admin
     .from("organizations")
-    .select("instantly_api_key, salesforge_api_key, salesforge_workspace_id")
+    .select("salesforge_api_key, salesforge_workspace_id")
     .eq("id", c.organization_id)
     .maybeSingle();
   const orgRow = org as
     | {
-        instantly_api_key: string | null;
         salesforge_api_key: string | null;
         salesforge_workspace_id: string | null;
       }
     | null;
 
   try {
-    if (c.source_channel === "instantly") {
-      if (!c.instantly_campaign_id) {
-        return NextResponse.json(
-          { error: "Campaign has no Instantly id — cannot pause remotely." },
-          { status: 400 },
-        );
-      }
-      if (!orgRow?.instantly_api_key) {
-        return NextResponse.json(
-          { error: "Instantly API key not set on organization." },
-          { status: 400 },
-        );
-      }
-      const client = new InstantlyClient(orgRow.instantly_api_key);
-      await client.pauseCampaign(c.instantly_campaign_id);
-    } else if (c.source_channel === "salesforge") {
+    if (c.source_channel === "salesforge") {
       if (!c.salesforge_sequence_id) {
         return NextResponse.json(
           { error: "Campaign has no Salesforge sequence id — cannot pause remotely." },

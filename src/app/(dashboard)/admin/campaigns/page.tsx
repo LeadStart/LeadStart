@@ -9,12 +9,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { calculateMetrics } from "@/lib/kpi/calculator";
-import { Mail, ArrowRight, RefreshCcw, Plus } from "lucide-react";
+import { Mail, ArrowRight, Plus } from "lucide-react";
 import { useSort } from "@/hooks/use-sort";
 import { SortableHead } from "@/components/ui/sortable-head";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { CampaignRowActions } from "./campaign-row-actions";
-import { appUrl } from "@/lib/api-url";
 
 const CAMPAIGNS_PAGE_SIZE = 10;
 
@@ -28,7 +27,6 @@ export default function AllCampaignsPage() {
   const clientMap = new Map(clients.map((c) => [c.id, c]));
   const active = campaigns.filter((c) => c.status === "active").length;
   const paused = campaigns.filter((c) => c.status === "paused").length;
-  const unlinked = campaigns.filter((c) => c.client_id === null).length;
 
   const rows = campaigns.map((campaign) => {
     const client = campaign.client_id ? clientMap.get(campaign.client_id) : undefined;
@@ -56,27 +54,19 @@ export default function AllCampaignsPage() {
             <h1 className="text-[20px] sm:text-[22px] font-bold mt-1" style={{ color: '#0f172a', letterSpacing: '-0.01em' }}>All Campaigns</h1>
             <p className="text-sm text-[#0f172a]/60 mt-1">
               {active} active &middot; {paused} paused &middot; {campaigns.length} total
-              {unlinked > 0 && (
-                <>
-                  {" "}
-                  &middot;{" "}
-                  <Link
-                    href="/admin/campaigns/unlinked"
-                    className="text-amber-700 font-medium hover:underline"
-                  >
-                    {unlinked} unlinked
-                  </Link>
-                </>
-              )}
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <Link href="/admin/campaigns/new/salesforge">
+              <Button size="sm" className="gap-2">
+                <Plus size={14} /> New Salesforge campaign
+              </Button>
+            </Link>
             <Link href="/admin/campaigns/new/linkedin">
               <Button size="sm" variant="outline" className="gap-2">
                 <Plus size={14} /> New LinkedIn campaign
               </Button>
             </Link>
-            <SyncFromInstantlyButton onDone={refetch} />
           </div>
         </div>
         <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-[rgba(107,114,255,0.06)]" />
@@ -139,38 +129,3 @@ export default function AllCampaignsPage() {
   );
 }
 
-function SyncFromInstantlyButton({ onDone }: { onDone: () => void }) {
-  const [syncing, setSyncing] = useState(false);
-  const [result, setResult] = useState<string | null>(null);
-  const [isError, setIsError] = useState(false);
-
-  async function handleClick() {
-    setSyncing(true);
-    setResult(null);
-    setIsError(false);
-    try {
-      const res = await fetch(appUrl("/api/admin/sync-campaigns"), { method: "POST" });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || `Sync failed (${res.status})`);
-      setResult(`+${json.created} new · ${json.updated} updated · ${json.orphan_count} unlinked`);
-      onDone();
-    } catch (err) {
-      setIsError(true);
-      setResult(err instanceof Error ? err.message : String(err));
-    } finally {
-      setSyncing(false);
-    }
-  }
-
-  return (
-    <div className="flex flex-col items-end gap-1">
-      <Button size="sm" onClick={handleClick} disabled={syncing} className="gap-2">
-        <RefreshCcw size={14} className={syncing ? "animate-spin" : ""} />
-        {syncing ? "Syncing…" : "Sync from Instantly"}
-      </Button>
-      {result && (
-        <p className={`text-xs ${isError ? "text-red-600" : "text-muted-foreground"}`}>{result}</p>
-      )}
-    </div>
-  );
-}

@@ -6,7 +6,6 @@ import { useApiQuery } from "@/hooks/use-api-query";
 import {
   ADMIN_OVERVIEW_KEY,
   API_BILLING_DATA_PATH,
-  API_INBOX_HEALTH_PATH,
   fetchAdminOverview,
   type AdminOverviewCard,
 } from "@/lib/admin-queries";
@@ -24,7 +23,6 @@ import {
   Users,
   MessageSquare,
   Activity,
-  Inbox,
   DollarSign,
   Send,
   CheckCircle2,
@@ -52,30 +50,7 @@ import type {
   Quote,
 } from "@/types/app";
 
-// ---------- Threshold ----------
-// Matches the "Good" cutoff used on the inbox-health detail page so the
-// dashboard signal and the detail page stay in sync. Changing this in one
-// place would create two competing definitions of "unhealthy" — keep them
-// aligned (or bump both together).
-const INBOX_HEALTH_THRESHOLD = 80;
-
 // ---------- API response shapes (cached endpoints) ----------
-interface InboxHealthInbox {
-  email: string;
-  domain: string;
-  healthScore: number | null;
-  sent30d: number;
-}
-interface InboxHealthResponse {
-  inboxes: InboxHealthInbox[];
-  domains: { domain: string; inboxCount: number; avgHealthScore: number | null }[];
-  summary: {
-    totalInboxes: number;
-    activeInboxes: number;
-    avgHealthScore: number | null;
-  };
-}
-
 interface BillingDataResponse {
   plans: PricingPlan[];
   quotes: Quote[];
@@ -277,13 +252,10 @@ export default function AdminOverviewPage() {
     ADMIN_OVERVIEW_KEY,
     fetchAdminOverview,
   );
-  // Both endpoints are pre-warmed by AdminPrefetcher — these calls share that
-  // cache instead of triggering a second round-trip to Instantly / Supabase.
+  // Pre-warmed by AdminPrefetcher — this call shares that cache instead of
+  // triggering a second round-trip to Supabase.
   const { data: billing } = useApiQuery<BillingDataResponse>(
     API_BILLING_DATA_PATH,
-  );
-  const { data: inbox } = useApiQuery<InboxHealthResponse>(
-    API_INBOX_HEALTH_PATH,
   );
 
   const [clientFilter, setClientFilter] = useState<ClientStatus>("active");
@@ -389,21 +361,12 @@ export default function AdminOverviewPage() {
       0,
     );
 
-  // ----- Inbox-health-derived signals -----
-  const inboxes = inbox?.inboxes ?? [];
-  const lowHealthInboxes = inboxes
-    .filter(
-      (i) => i.healthScore !== null && i.healthScore < INBOX_HEALTH_THRESHOLD,
-    )
-    .sort((a, b) => (a.healthScore ?? 0) - (b.healthScore ?? 0));
-
   // ----- Step alert signals (already computed by fetchAdminOverview) -----
   const criticalStepAlerts = overview.allStepAlerts.filter(
     (a) => a.severity === "critical",
   );
 
   const anySignal =
-    lowHealthInboxes.length > 0 ||
     pastDueSubs.length > 0 ||
     trialsEndingSoon.length > 0 ||
     criticalStepAlerts.length > 0;
@@ -505,16 +468,6 @@ export default function AdminOverviewPage() {
             subtitle="Issues to review now"
           />
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {lowHealthInboxes.length > 0 && (
-              <Link href="/admin/inbox-health" className="block">
-                <StatCard
-                  label={`Inboxes below ${INBOX_HEALTH_THRESHOLD}`}
-                  value={lowHealthInboxes.length}
-                  icon={<Inbox size={18} className="text-amber-600" />}
-                  tone="warning"
-                />
-              </Link>
-            )}
             {pastDueSubs.length > 0 && (
               <Link href="/admin/billing" className="block">
                 <StatCard
@@ -597,7 +550,7 @@ export default function AdminOverviewPage() {
       </div>
 
       {/* ---------- Band 4 — Watchlists ---------- */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4">
         {/* Upcoming billing */}
         <Card className="border-border/50 shadow-sm">
           <CardContent className="pt-5 pb-4 px-5">
@@ -657,70 +610,6 @@ export default function AdminOverviewPage() {
                 {upcomingRenewals.length > 5 && (
                   <p className="text-xs text-muted-foreground text-center pt-1">
                     +{upcomingRenewals.length - 5} more renewals this week
-                  </p>
-                )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Inbox health watchlist */}
-        <Card className="border-border/50 shadow-sm">
-          <CardContent className="pt-5 pb-4 px-5">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-[15px] font-semibold text-[#0f172a]">
-                Inbox health watchlist
-              </h3>
-              <Link
-                href="/admin/inbox-health"
-                className="text-xs text-[#2E37FE] font-medium hover:underline"
-              >
-                View all
-              </Link>
-            </div>
-            {lowHealthInboxes.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-6 text-center">
-                All inboxes at or above {INBOX_HEALTH_THRESHOLD}.
-              </p>
-            ) : (
-              <div className="space-y-2">
-                {lowHealthInboxes.slice(0, 5).map((i) => {
-                  const score = i.healthScore ?? 0;
-                  const tone =
-                    score < 50
-                      ? "bg-red-50 text-red-700 border-red-200"
-                      : "bg-amber-50 text-amber-700 border-amber-200";
-                  return (
-                    <Link
-                      key={i.email}
-                      href="/admin/inbox-health"
-                      className="flex items-center justify-between rounded-lg border border-border/40 px-3 py-2.5 hover:border-[#2E37FE]/30 hover:bg-[#2E37FE]/[0.02] transition-colors group"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium text-foreground truncate">
-                          {i.email}
-                        </p>
-                        <p className="text-xs text-muted-foreground truncate">
-                          {i.domain} · {i.sent30d.toLocaleString()} sent / 30d
-                        </p>
-                      </div>
-                      <Badge
-                        variant="secondary"
-                        className={`text-xs border ml-3 shrink-0 ${tone}`}
-                      >
-                        {score}
-                      </Badge>
-                      <ArrowRight
-                        size={14}
-                        className="text-muted-foreground ml-2 shrink-0 opacity-0 transition-all group-hover:opacity-100 group-hover:translate-x-0.5"
-                      />
-                    </Link>
-                  );
-                })}
-                {lowHealthInboxes.length > 5 && (
-                  <p className="text-xs text-muted-foreground text-center pt-1">
-                    +{lowHealthInboxes.length - 5} more inboxes below{" "}
-                    {INBOX_HEALTH_THRESHOLD}
                   </p>
                 )}
               </div>

@@ -1,10 +1,10 @@
 // POST /api/admin/campaigns/[id]/delete — delete the campaign from its
-// upstream provider (Instantly or Salesforge) AND drop the local row.
-// Owner only (matches the pattern for sync-campaigns, team management,
-// client-user provisioning — anything irreversible or destructive).
-// Requires the client to have already completed the typed-confirmation
-// dialog on the UI; this route does NOT duplicate that check server-side
-// (the confirm is a UX belt, not an auth mechanism).
+// upstream provider (Salesforge) AND drop the local row. Owner only
+// (matches the pattern for team management, client-user provisioning —
+// anything irreversible or destructive). Requires the client to have
+// already completed the typed-confirmation dialog on the UI; this route
+// does NOT duplicate that check server-side (the confirm is a UX belt,
+// not an auth mechanism).
 //
 // FK safety: campaign_snapshots / lead_feedback / campaign_step_metrics
 // cascade-delete with the campaign row. contacts.campaign_id and
@@ -15,7 +15,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { InstantlyClient } from "@/lib/instantly/client";
 import { SalesforgeClient } from "@/lib/salesforge/client";
 import type { SourceChannel } from "@/types/app";
 
@@ -43,7 +42,7 @@ export async function POST(
   const { data: campaign } = await admin
     .from("campaigns")
     .select(
-      "id, organization_id, source_channel, instantly_campaign_id, salesforge_sequence_id, name",
+      "id, organization_id, source_channel, salesforge_sequence_id, name",
     )
     .eq("id", campaignId)
     .maybeSingle();
@@ -52,7 +51,6 @@ export async function POST(
         id: string;
         organization_id: string;
         source_channel: SourceChannel;
-        instantly_campaign_id: string | null;
         salesforge_sequence_id: string | null;
         name: string;
       }
@@ -64,43 +62,19 @@ export async function POST(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  // Upstream leg — only skip if the campaign has no remote id (orphan
-  // campaigns, or rows imported before a sync). Per-channel branch.
   const { data: org } = await admin
     .from("organizations")
-    .select("instantly_api_key, salesforge_api_key, salesforge_workspace_id")
+    .select("salesforge_api_key, salesforge_workspace_id")
     .eq("id", c.organization_id)
     .maybeSingle();
   const orgRow = org as
     | {
-        instantly_api_key: string | null;
         salesforge_api_key: string | null;
         salesforge_workspace_id: string | null;
       }
     | null;
 
-  if (c.source_channel === "instantly" && c.instantly_campaign_id) {
-    if (!orgRow?.instantly_api_key) {
-      return NextResponse.json(
-        { error: "Instantly API key not set on organization." },
-        { status: 400 },
-      );
-    }
-    try {
-      const client = new InstantlyClient(orgRow.instantly_api_key);
-      await client.deleteCampaign(c.instantly_campaign_id);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      console.error(
-        `[admin/campaigns/${campaignId}/delete] Instantly call failed:`,
-        err,
-      );
-      return NextResponse.json(
-        { error: `Instantly rejected the delete: ${message}` },
-        { status: 502 },
-      );
-    }
-  } else if (c.source_channel === "salesforge" && c.salesforge_sequence_id) {
+  if (c.source_channel === "salesforge" && c.salesforge_sequence_id) {
     if (!orgRow?.salesforge_api_key) {
       return NextResponse.json(
         { error: "Salesforge API key not set on organization." },

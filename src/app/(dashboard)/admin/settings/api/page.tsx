@@ -35,7 +35,6 @@ import {
 } from "lucide-react";
 import type { Organization } from "@/types/app";
 import { appUrl } from "@/lib/api-url";
-import { RegisterWebhookButton } from "./register-webhook-button";
 
 // Brand icon — Lucide's brand-icon set was removed upstream, so inline.
 function LinkedinIcon({ size = 16, className = "" }: { size?: number; className?: string }) {
@@ -84,18 +83,14 @@ function to24h(hour12: string, ampm: string): string {
 export default function IntegrationsPage() {
   const { organizationId } = useUser();
   const [org, setOrg] = useState<Organization | null>(null);
-  const [apiKey, setApiKey] = useState("");
   const [resendKey, setResendKey] = useState("");
   const [emailFrom, setEmailFrom] = useState("");
   const [scrapioKey, setScrapioKey] = useState("");
   const [syncHour12, setSyncHour12] = useState("6");
   const [syncAmPm, setSyncAmPm] = useState("AM");
-  const [saving, setSaving] = useState(false);
   const [savingSchedule, setSavingSchedule] = useState(false);
   const [savingResend, setSavingResend] = useState(false);
   const [savingScrapio, setSavingScrapio] = useState(false);
-  const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState<"success" | "fail" | null>(null);
   const [testingScrapio, setTestingScrapio] = useState(false);
   const [scrapioTestResult, setScrapioTestResult] = useState<
     | { kind: "success"; subscription: Record<string, unknown> }
@@ -108,9 +103,6 @@ export default function IntegrationsPage() {
     | { kind: "fail"; message: string }
     | null
   >(null);
-  const [error, setError] = useState<string | null>(null);
-  const [syncing, setSyncing] = useState(false);
-  const [syncResult, setSyncResult] = useState<string | null>(null);
   const [scheduleSaved, setScheduleSaved] = useState(false);
   const [resendSaved, setResendSaved] = useState(false);
   const [scrapioSaved, setScrapioSaved] = useState(false);
@@ -141,7 +133,7 @@ export default function IntegrationsPage() {
     "success" | "fail" | null
   >(null);
 
-  // Salesforge (email channel replacing Instantly — migration 00049)
+  // Salesforge (primary email channel — migration 00049)
   const [salesforgeKey, setSalesforgeKey] = useState("");
   const [salesforgeWorkspaceId, setSalesforgeWorkspaceId] = useState("");
   const [salesforgeProductId, setSalesforgeProductId] = useState("");
@@ -185,7 +177,6 @@ export default function IntegrationsPage() {
             email_from?: string;
           };
           setOrg(typedOrg);
-          setApiKey(typedOrg.instantly_api_key || "");
           if (typedOrg.sync_hour) {
             const { hour, ampm } = to12h(typedOrg.sync_hour);
             setSyncHour12(hour);
@@ -298,54 +289,6 @@ export default function IntegrationsPage() {
       });
     } finally {
       setTestingScrapio(false);
-    }
-  }
-
-  async function handleSaveApiKey() {
-    if (!organizationId) return;
-    setSaving(true);
-    setError(null);
-
-    const supabase = createClient();
-    const { error } = await supabase
-      .from("organizations")
-      .update({ instantly_api_key: apiKey })
-      .eq("id", organizationId);
-
-    if (error) setError(error.message);
-    setSaving(false);
-  }
-
-  async function handleTest() {
-    setTesting(true);
-    setTestResult(null);
-
-    try {
-      const res = await fetch(appUrl("/api/instantly/test"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ api_key: apiKey }),
-      });
-      setTestResult(res.ok ? "success" : "fail");
-    } catch {
-      setTestResult("fail");
-    } finally {
-      setTesting(false);
-    }
-  }
-
-  async function handleSync() {
-    setSyncing(true);
-    setSyncResult(null);
-
-    try {
-      const res = await fetch(appUrl("/api/cron/sync-analytics"), { method: "POST" });
-      const data = await res.json();
-      setSyncResult(res.ok ? `Synced ${data.synced || 0} campaigns` : "Sync failed");
-    } catch {
-      setSyncResult("Sync failed");
-    } finally {
-      setSyncing(false);
     }
   }
 
@@ -636,78 +579,7 @@ export default function IntegrationsPage() {
         <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-[rgba(107,114,255,0.06)]" />
       </div>
 
-      {/* Instantly.ai API Key */}
-      <Card className="border-border/50 shadow-sm">
-        <CardHeader className="flex flex-row items-center gap-2 pb-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]">
-            <Key size={16} className="text-white" />
-          </div>
-          <div>
-            <CardTitle className="text-base">Instantly.ai</CardTitle>
-            <p className="text-xs text-muted-foreground">Campaign data source</p>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-1">
-            <Label htmlFor="apiKey" className="text-sm font-medium">API Key</Label>
-            <Input
-              id="apiKey"
-              type="password"
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              placeholder="Enter your Instantly.ai API key"
-            />
-          </div>
-          <div className="flex gap-2">
-            <Button onClick={handleSaveApiKey} disabled={saving} style={{ background: '#2E37FE' }}>
-              {saving ? "Saving..." : "Save Key"}
-            </Button>
-            <Button variant="outline" onClick={handleTest} disabled={testing || !apiKey}>
-              {testing ? "Testing..." : "Test Connection"}
-            </Button>
-          </div>
-          {testResult === "success" && (
-            <div className="flex items-center gap-2 rounded-lg bg-emerald-50 border border-emerald-200 p-3">
-              <CheckCircle size={16} className="text-emerald-500" />
-              <span className="text-sm font-medium text-emerald-700">Connection successful</span>
-            </div>
-          )}
-          {testResult === "fail" && (
-            <div className="flex items-center gap-2 rounded-lg bg-red-50 border border-red-200 p-3">
-              <XCircle size={16} className="text-red-500" />
-              <span className="text-sm font-medium text-red-700">Connection failed — check your API key</span>
-            </div>
-          )}
-          {error && (
-            <div className="rounded-lg bg-red-50 border border-red-200 p-3">
-              <p className="text-sm text-red-700">{error}</p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Reply-routing webhook */}
-      <Card className="border-border/50 shadow-sm">
-        <CardHeader className="flex flex-row items-center gap-2 pb-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#6B72FF]">
-            <Webhook size={16} className="text-white" />
-          </div>
-          <div>
-            <CardTitle className="text-base">Reply-routing webhook</CardTitle>
-            <p className="text-xs text-muted-foreground">
-              Subscribe Instantly to reply + tag events so hot leads land in the inbox
-            </p>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <RegisterWebhookButton
-            initialWebhookId={org?.instantly_webhook_id ?? null}
-            hasApiKey={Boolean(apiKey)}
-          />
-        </CardContent>
-      </Card>
-
-      {/* Salesforge — replacement email channel (migration 00049) */}
+      {/* Salesforge — primary email channel (migration 00049) */}
       <Card className="border-border/50 shadow-sm">
         <CardHeader className="flex flex-row items-center gap-2 pb-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#0EA5E9]">
@@ -716,7 +588,7 @@ export default function IntegrationsPage() {
           <div>
             <CardTitle className="text-base">Salesforge</CardTitle>
             <p className="text-xs text-muted-foreground">
-              New email channel — replacing Instantly. Pick a workspace and default product after entering your key.
+              Primary email channel. Pick a workspace and default product after entering your key.
             </p>
           </div>
         </CardHeader>
@@ -1338,7 +1210,7 @@ export default function IntegrationsPage() {
           </div>
           <div>
             <CardTitle className="text-base">Data Sync Schedule</CardTitle>
-            <p className="text-xs text-muted-foreground">Control when campaign analytics are pulled from Instantly</p>
+            <p className="text-xs text-muted-foreground">Control when campaign analytics are pulled from Salesforge</p>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -1377,7 +1249,7 @@ export default function IntegrationsPage() {
                 Eastern Time (ET)
               </Badge>
             </div>
-            <p className="text-[11px] text-muted-foreground">Pulls latest campaign data from Instantly.ai for all active campaigns</p>
+            <p className="text-[11px] text-muted-foreground">Pulls latest campaign data from Salesforge for all active campaigns</p>
           </div>
 
           <div className="flex items-center gap-3 pt-2">
@@ -1390,31 +1262,6 @@ export default function IntegrationsPage() {
               </span>
             )}
           </div>
-        </CardContent>
-      </Card>
-
-      {/* Manual Sync */}
-      <Card className="border-border/50 shadow-sm">
-        <CardHeader className="flex flex-row items-center gap-2 pb-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]">
-            <Zap size={16} className="text-white" />
-          </div>
-          <CardTitle className="text-base">Manual Sync</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <p className="text-sm text-muted-foreground">
-            Trigger an immediate sync of all active campaign analytics from Instantly.ai.
-          </p>
-          <Button onClick={handleSync} disabled={syncing} variant="outline">
-            <RefreshCw size={14} className={syncing ? "animate-spin mr-2" : "mr-2"} />
-            {syncing ? "Syncing..." : "Sync Now"}
-          </Button>
-          {syncResult && (
-            <div className="flex items-center gap-2 rounded-lg bg-[#2E37FE]/10 border border-[#2E37FE]/20 p-3">
-              <Zap size={16} className="text-[#2E37FE]" />
-              <span className="text-sm font-medium text-[#6B72FF]">{syncResult}</span>
-            </div>
-          )}
         </CardContent>
       </Card>
 

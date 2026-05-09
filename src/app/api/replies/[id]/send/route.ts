@@ -1,33 +1,26 @@
 // POST /api/replies/[id]/send — send the client's edited reply through
-// the channel that ingested the original (Instantly or Salesforge) and
-// CC the client's notification email so the thread lives in their inbox.
+// Salesforge and CC the client's notification email so the thread lives
+// in their inbox.
 //
 // Flow:
 //   1. Auth + access check (client_users or admin/VA in the org).
-//   2. Per-channel precondition check: Instantly needs eaccount +
-//      instantly_email_id; Salesforge needs salesforge_mailbox_id +
-//      salesforge_email_id + the org-level salesforge_workspace_id.
+//   2. Precondition check: salesforge_mailbox_id + salesforge_email_id +
+//      org-level salesforge_workspace_id.
 //   3. Atomic load+claim: UPDATE status='sent' WHERE id=:id AND status IN
 //      ('new','classified') RETURNING *. Guards against double-click and
 //      concurrent sends — only one request wins the row.
-//   4. Per-channel send. On failure, roll back: set status='classified'
+//   4. Salesforge send. On failure, roll back: set status='classified'
 //      and record the error so the client can retry.
 //
 // Request body: { subject?: string, body_text: string, body_html?: string }
-// `subject` is honored by Instantly (defaults to the inbound's "Re:" form
-// inside buildReplyRequest) but ignored by Salesforge — Salesforge infers
-// the subject from the original thread server-side.
+// `subject` is ignored — Salesforge infers the subject from the original
+// thread server-side.
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { InstantlyClient } from "@/lib/instantly/client";
 import { SalesforgeClient } from "@/lib/salesforge/client";
-import {
-  buildReplyRequest,
-  computeIdempotencyKey,
-  MissingReplyFieldError,
-} from "@/lib/replies/send";
+import { computeIdempotencyKey } from "@/lib/replies/send";
 import type { LeadReply, SourceChannel } from "@/types/app";
 
 interface RouteParams {
@@ -52,7 +45,6 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "Missing reply id" }, { status: 400 });
   }
 
-  // --- Parse body ---
   let body: SendBody;
   try {
     body = (await req.json()) as SendBody;
@@ -66,10 +58,8 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       { status: 400 }
     );
   }
-  const subject = body.subject?.trim() || undefined;
   const body_html = body.body_html?.trim() || undefined;
 
-  // --- Auth ---
   const supabase = await createServerClient();
   const {
     data: { user },
@@ -80,11 +70,10 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
 
   const admin = createAdminClient();
 
-  // --- Precheck: load reply for access + per-channel field lookup (no state change) ---
   const { data: preRow, error: preLoadErr } = await admin
     .from("lead_replies")
     .select(
-      "id, organization_id, client_id, status, source_channel, eaccount, instantly_email_id, salesforge_email_id, salesforge_mailbox_id, client:client_id(notification_email, notification_cc_emails)"
+      "id, organization_id, client_id, status, source_channel, salesforge_email_id, salesforge_mailbox_id, client:client_id(notification_email, notification_cc_emails)"
     )
     .eq("id", id)
     .maybeSingle();
@@ -95,17 +84,12 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "Reply not found" }, { status: 404 });
   }
 
-  // Supabase's generated types infer foreign-keyed relations as arrays even
-  // when the FK is to a single row, so go through `unknown` to land on the
-  // single-object shape we actually get at runtime.
   const pre = preRow as unknown as {
     id: string;
     organization_id: string;
     client_id: string;
     status: LeadReply["status"];
     source_channel: SourceChannel;
-    eaccount: string | null;
-    instantly_email_id: string | null;
     salesforge_email_id: string | null;
     salesforge_mailbox_id: string | null;
     client: {
@@ -114,7 +98,6 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     } | null;
   };
 
-  // --- Access check ---
   const role = user.app_metadata?.role;
   const userOrgId = user.app_metadata?.organization_id;
   if (role === "owner" || role === "va") {
@@ -133,80 +116,50 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     }
   }
 
-  // --- Channel-aware precondition: sendable fields present ---
-  if (pre.source_channel === "instantly") {
-    if (!pre.eaccount || !pre.instantly_email_id) {
-      return NextResponse.json(
-        {
-          error:
-            "This reply is missing the Instantly metadata needed to send (eaccount / instantly_email_id). Check the webhook ingest.",
-        },
-        { status: 412 }
-      );
-    }
-  } else if (pre.source_channel === "salesforge") {
-    if (!pre.salesforge_email_id || !pre.salesforge_mailbox_id) {
-      return NextResponse.json(
-        {
-          error:
-            "This reply is missing the Salesforge metadata needed to send (salesforge_email_id / salesforge_mailbox_id). Check the webhook ingest.",
-        },
-        { status: 412 }
-      );
-    }
-  } else {
+  if (pre.source_channel !== "salesforge") {
     return NextResponse.json(
       {
-        error: `Sending replies from the ${pre.source_channel} channel is not supported yet.`,
+        error: `Sending replies from the ${pre.source_channel} channel is not supported. Only Salesforge replies can be sent from the portal.`,
       },
       { status: 501 }
     );
   }
+  if (!pre.salesforge_email_id || !pre.salesforge_mailbox_id) {
+    return NextResponse.json(
+      {
+        error:
+          "This reply is missing the Salesforge metadata needed to send (salesforge_email_id / salesforge_mailbox_id). Check the webhook ingest.",
+      },
+      { status: 412 }
+    );
+  }
 
-  // --- Fetch org credentials for the active channel ---
   const { data: orgRow, error: orgErr } = await admin
     .from("organizations")
-    .select(
-      "instantly_api_key, salesforge_api_key, salesforge_workspace_id"
-    )
+    .select("salesforge_api_key, salesforge_workspace_id")
     .eq("id", pre.organization_id)
     .maybeSingle();
   if (orgErr || !orgRow) {
     return NextResponse.json({ error: "Organization not found" }, { status: 404 });
   }
   const org = orgRow as {
-    instantly_api_key: string | null;
     salesforge_api_key: string | null;
     salesforge_workspace_id: string | null;
   };
-
-  if (pre.source_channel === "instantly" && !org.instantly_api_key) {
+  if (!org.salesforge_api_key) {
     return NextResponse.json(
-      { error: "Instantly API key is not configured for this organization." },
+      { error: "Salesforge API key is not configured for this organization." },
       { status: 500 }
     );
   }
-  if (pre.source_channel === "salesforge") {
-    if (!org.salesforge_api_key) {
-      return NextResponse.json(
-        { error: "Salesforge API key is not configured for this organization." },
-        { status: 500 }
-      );
-    }
-    if (!org.salesforge_workspace_id) {
-      return NextResponse.json(
-        { error: "Salesforge workspace is not configured for this organization." },
-        { status: 500 }
-      );
-    }
+  if (!org.salesforge_workspace_id) {
+    return NextResponse.json(
+      { error: "Salesforge workspace is not configured for this organization." },
+      { status: 500 }
+    );
   }
 
-  // --- Atomic claim: only one send wins ---
-  // Also stamp a deterministic idempotency_key derived from (reply.id,
-  // body_text). Instantly doesn't honor an Idempotency-Key header, so the
-  // key is purely local state for D2 — persists through error rollbacks
-  // so a future commit can add an active pre-check against repeated sends
-  // of the same body after a timeout.
+  // Atomic claim: only one send wins.
   const sentAt = new Date().toISOString();
   const idempotencyKey = computeIdempotencyKey(id, body_text);
   const { data: claimedRow, error: claimErr } = await admin
@@ -222,7 +175,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     .eq("id", id)
     .in("status", ["new", "classified"])
     .select(
-      "id, eaccount, instantly_email_id, salesforge_email_id, salesforge_mailbox_id, subject, body_text, status"
+      "id, salesforge_email_id, salesforge_mailbox_id, subject, body_text, status"
     )
     .maybeSingle();
 
@@ -230,7 +183,6 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: claimErr.message }, { status: 500 });
   }
   if (!claimedRow) {
-    // Someone else sent it (or status already moved to resolved/expired).
     return NextResponse.json(
       { error: "Reply has already been sent or is no longer sendable." },
       { status: 409 }
@@ -239,18 +191,12 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
 
   const claimed = claimedRow as Pick<
     LeadReply,
-    | "id"
-    | "eaccount"
-    | "instantly_email_id"
-    | "salesforge_email_id"
-    | "salesforge_mailbox_id"
-    | "subject"
-    | "body_text"
+    "id" | "salesforge_email_id" | "salesforge_mailbox_id" | "subject" | "body_text"
   >;
 
   // CC the client's primary notification inbox + any teammates they
   // added. Lowercased + deduped so one stray duplicate doesn't cause
-  // the upstream provider to reject the send.
+  // Salesforge to reject the send.
   const ccSet = new Set<string>();
   if (pre.client?.notification_email) {
     ccSet.add(pre.client.notification_email.trim().toLowerCase());
@@ -260,93 +206,39 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   }
   const cc = ccSet.size > 0 ? Array.from(ccSet) : undefined;
 
-  // --- Per-channel send ---
   let sentExternalId: string | null = null;
-  if (pre.source_channel === "instantly") {
-    let request;
-    try {
-      request = buildReplyRequest({
-        reply: claimed,
+  try {
+    const salesforge = new SalesforgeClient(org.salesforge_api_key);
+    const sentEmail = await salesforge.replyToEmail(
+      org.salesforge_workspace_id,
+      claimed.salesforge_mailbox_id!,
+      claimed.salesforge_email_id!,
+      {
         body_text,
         body_html,
-        subject,
         cc_addresses: cc,
-      });
-    } catch (err) {
-      // Defense-in-depth: the precheck above already guards eaccount/id.
-      await admin
-        .from("lead_replies")
-        .update({
-          status: "classified",
-          sent_at: null,
-          final_body_text: null,
-          final_body_html: null,
-          error: truncErr(err),
-        })
-        .eq("id", id);
-      const status = err instanceof MissingReplyFieldError ? 412 : 500;
-      return NextResponse.json({ error: truncErr(err) }, { status });
-    }
-
-    try {
-      // org.instantly_api_key is non-null here — the credential check
-      // above returns 500 otherwise.
-      const instantly = new InstantlyClient(org.instantly_api_key!);
-      const sentEmail = await instantly.replyViaEmailsApi(request);
-      sentExternalId = sentEmail.id;
-    } catch (err) {
-      console.error("[replies/send] Instantly reply API failed:", err);
-      await admin
-        .from("lead_replies")
-        .update({
-          status: "classified",
-          sent_at: null,
-          error: truncErr(err),
-        })
-        .eq("id", id);
-      return NextResponse.json(
-        { error: `Instantly rejected the send: ${truncErr(err)}` },
-        { status: 502 }
-      );
-    }
-  } else {
-    // Salesforge path. Subject is implicit on Salesforge's side — the
-    // server infers it from the original thread. So unlike Instantly
-    // we do not pass subject in the request body.
-    try {
-      const salesforge = new SalesforgeClient(org.salesforge_api_key!);
-      const sentEmail = await salesforge.replyToEmail(
-        org.salesforge_workspace_id!,
-        claimed.salesforge_mailbox_id!,
-        claimed.salesforge_email_id!,
-        {
-          body_text,
-          body_html,
-          cc_addresses: cc,
-        }
-      );
-      sentExternalId = sentEmail.id;
-    } catch (err) {
-      console.error("[replies/send] Salesforge reply API failed:", err);
-      await admin
-        .from("lead_replies")
-        .update({
-          status: "classified",
-          sent_at: null,
-          error: truncErr(err),
-        })
-        .eq("id", id);
-      return NextResponse.json(
-        { error: `Salesforge rejected the send: ${truncErr(err)}` },
-        { status: 502 }
-      );
-    }
+      }
+    );
+    sentExternalId = sentEmail.id;
+  } catch (err) {
+    console.error("[replies/send] Salesforge reply API failed:", err);
+    await admin
+      .from("lead_replies")
+      .update({
+        status: "classified",
+        sent_at: null,
+        error: truncErr(err),
+      })
+      .eq("id", id);
+    return NextResponse.json(
+      { error: `Salesforge rejected the send: ${truncErr(err)}` },
+      { status: 502 }
+    );
   }
 
-  // --- Finalize: record the upstream provider's new email id on the row ---
-  // The column is named sent_instantly_email_id by history; semantically
-  // it stores "the upstream provider's id for the email we just sent".
-  // For Salesforge sends we re-use it rather than adding a parallel column.
+  // Record the upstream provider's new email id on the row. Column is
+  // legacy-named sent_instantly_email_id but semantically holds whichever
+  // upstream provider's id we just got back.
   if (sentExternalId) {
     const { error: finalizeErr } = await admin
       .from("lead_replies")
