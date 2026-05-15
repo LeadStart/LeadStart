@@ -96,8 +96,12 @@ export async function updateSession(request: NextRequest) {
     return response;
   };
 
-  // Public routes that don't require auth
-  const publicRoutes = ["/login", "/accept-invite", "/reset-password", "/update-password", "/auth/callback", "/quote", "/billing/welcome"];
+  // Public routes that don't require auth. `/site-chat.js` is the
+  // embeddable widget served to the public LeadStart.io marketing site —
+  // it must load with no session. (The chat API it calls,
+  // /api/site-chat, is already public via the `/api/` bypass below and
+  // enforces its own origin allowlist + rate limit.)
+  const publicRoutes = ["/login", "/accept-invite", "/reset-password", "/update-password", "/auth/callback", "/quote", "/billing/welcome", "/site-chat.js"];
   const isPublicRoute = publicRoutes.some((route) =>
     pathname.startsWith(route)
   );
