@@ -30,6 +30,7 @@ import { ArrowLeft, Inbox, Upload, AlertCircle, CheckCircle2 } from "lucide-reac
 import { CampaignImportPanel } from "./import-panel";
 import { CampaignContactsTable } from "./contacts-table";
 import { PacingEditor } from "./pacing-editor";
+import { TagsEditor } from "./tags-editor";
 import type { Campaign, CampaignSnapshot, Client } from "@/types/app";
 
 const DEFAULT_DAILY_CAP = 66;
@@ -204,6 +205,22 @@ export default async function AdminCampaignDetailPage({
                   <PacingEditor
                     campaignId={campaign.id}
                     currentCap={campaign.salesforge_daily_contact_cap}
+                  />
+                </p>
+                <p className="text-xs text-muted-foreground mt-1 inline-flex items-center gap-1.5 flex-wrap">
+                  <span>
+                    Salesforge tags pushed with each contact:{" "}
+                    <strong>
+                      {campaign.salesforge_default_tags &&
+                      campaign.salesforge_default_tags.length > 0
+                        ? campaign.salesforge_default_tags.join(", ")
+                        : "leadstart (default)"}
+                    </strong>
+                    {" — "}
+                  </span>
+                  <TagsEditor
+                    campaignId={campaign.id}
+                    currentTags={campaign.salesforge_default_tags}
                   />
                 </p>
               </div>

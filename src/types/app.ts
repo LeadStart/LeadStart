@@ -122,6 +122,15 @@ export interface Campaign {
   // Per-campaign daily cap on new Salesforge enrollments (migration 00050).
   // NULL = dispatcher falls back to DEFAULT_DAILY_CAP=66.
   salesforge_daily_contact_cap: number | null;
+  // Per-campaign Salesforge tags attached to every contact the
+  // dispatcher bulk-creates (migration 00054). NULL or empty array =
+  // dispatcher uses the contact's own tags, or "leadstart" fallback.
+  salesforge_default_tags: string[] | null;
+  // Mapping from Salesforge custom-variable names to LeadStart contact
+  // column names. The dispatcher reads the named column per-contact
+  // and sends it under the Salesforge name in customVars.
+  // Example: { "intro": "intro_line", "notes": "notes" }
+  salesforge_custom_var_mapping: Record<string, string> | null;
   name: string;
   status: CampaignStatus;
   // Channel discriminator. 'linkedin' for Unipile-driven sequences;

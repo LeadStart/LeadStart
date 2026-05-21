@@ -63,6 +63,8 @@ type CampaignRow = {
   status: string;
   salesforge_sequence_id: string | null;
   salesforge_daily_contact_cap: number | null;
+  salesforge_default_tags: string[] | null;
+  salesforge_custom_var_mapping: Record<string, string> | null;
   name: string;
 };
 
@@ -81,7 +83,41 @@ type ContactRow = {
   phone: string | null;
   title: string | null;
   linkedin_url: string | null;
+  tags: string[] | null;
+  // Fields a custom-var mapping might reference. Add to this set as
+  // new mappable fields are introduced; the dispatcher only reads
+  // values via the named-lookup in resolveCustomVars below so an
+  // unknown mapping target just resolves to empty string.
+  intro_line: string | null;
+  notes: string | null;
 };
+
+// Resolve the customVars dict Salesforge expects on /contacts/bulk.
+// mapping shape: { "<salesforge_var_name>": "<leadstart_contact_field>" }
+// e.g. { "intro": "intro_line" } means "send LeadStart's intro_line
+// value under Salesforge's intro customVar".
+function resolveCustomVars(
+  contact: ContactRow,
+  mapping: Record<string, string> | null,
+): Record<string, string> {
+  if (!mapping || Object.keys(mapping).length === 0) return {};
+  const out: Record<string, string> = {};
+  for (const [sfName, leadField] of Object.entries(mapping)) {
+    const value = (contact as unknown as Record<string, unknown>)[leadField];
+    if (typeof value === "string" && value.length > 0) {
+      out[sfName] = value;
+    } else if (typeof value === "number") {
+      out[sfName] = String(value);
+    }
+  }
+  return out;
+}
+
+// Salesforge's POST /contacts/bulk now rejects contacts without at
+// least one tag (returns 422 "at least one tag must be provided for
+// each contact"). Use this as a default when the local contact row
+// has no tags of its own.
+const DEFAULT_SALESFORGE_TAG = "leadstart";
 
 export async function GET(request: NextRequest) {
   const authError = checkCronAuth(request);
@@ -122,7 +158,7 @@ export async function GET(request: NextRequest) {
   const { data: campaignsData } = await admin
     .from("campaigns")
     .select(
-      "id, organization_id, source_channel, status, salesforge_sequence_id, salesforge_daily_contact_cap, name",
+      "id, organization_id, source_channel, status, salesforge_sequence_id, salesforge_daily_contact_cap, salesforge_default_tags, salesforge_custom_var_mapping, name",
     )
     .in("id", campaignIds);
   const campaignMap = new Map<string, CampaignRow>();
@@ -206,9 +242,11 @@ export async function GET(request: NextRequest) {
       continue;
     }
 
-    if (campaign.status !== "active") {
-      // Paused / archived. Leave rows pending — they'll dispatch when
-      // the owner re-activates the campaign.
+    // Allowed statuses: active (sending), draft (pre-launch — pushing
+    // contacts into a draft sequence is fine; Salesforge holds them
+    // until the sequence flips active). Skip paused/completed: the
+    // operator paused/finished for a reason, don't keep enrolling.
+    if (campaign.status !== "active" && campaign.status !== "draft") {
       results.push({
         campaign_id: campaignId,
         queued: rows.length,
@@ -283,7 +321,7 @@ export async function GET(request: NextRequest) {
     const { data: contactsData } = await admin
       .from("contacts")
       .select(
-        "id, email, first_name, last_name, company_name, phone, title, linkedin_url",
+        "id, email, first_name, last_name, company_name, phone, title, linkedin_url, tags, intro_line, notes",
       )
       .in(
         "id",
@@ -326,16 +364,40 @@ export async function GET(request: NextRequest) {
     let failedCount = localFailed.length;
 
     if (pushable.length > 0) {
+      // Tags precedence: campaign-level default > the contact's own
+      // tags array > "leadstart" fallback. Salesforge rejects untagged
+      // contacts (422) so at least one tag MUST be present.
+      const campaignTags = (campaign.salesforge_default_tags ?? []).filter(
+        (t): t is string => typeof t === "string" && t.trim().length > 0,
+      );
       const sfContacts: SalesforgeContactCreate[] = pushable.map(({ contact }) => {
         const fallbackFirst = (contact.email ?? "").split("@")[0] || "Lead";
-        return {
+        const localTags = (contact.tags ?? []).filter(
+          (t) => typeof t === "string" && t.trim().length > 0,
+        );
+        const tags =
+          campaignTags.length > 0
+            ? campaignTags
+            : localTags.length > 0
+              ? localTags
+              : [DEFAULT_SALESFORGE_TAG];
+        const customVars = resolveCustomVars(
+          contact,
+          campaign.salesforge_custom_var_mapping,
+        );
+        const payload: SalesforgeContactCreate = {
           firstName: contact.first_name?.trim() || fallbackFirst,
           email: contact.email!.trim(),
           lastName: contact.last_name ?? undefined,
           company: contact.company_name ?? undefined,
           position: contact.title ?? undefined,
           linkedinUrl: contact.linkedin_url ?? undefined,
+          tags,
         };
+        if (Object.keys(customVars).length > 0) {
+          payload.customVars = customVars;
+        }
+        return payload;
       });
 
       const client = new SalesforgeClient(org.salesforge_api_key);
