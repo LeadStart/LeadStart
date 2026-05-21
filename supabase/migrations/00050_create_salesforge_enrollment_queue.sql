@@ -18,7 +18,7 @@
 --   2) salesforge_enrollment_queue — pending bucket. The push endpoint
 --      writes rows here instead of calling Salesforge synchronously. The
 --      once-daily cron at /api/cron/dispatch-salesforge-enrollments
---      (15:00 UTC ≈ 8am Pacific) dequeues up to (cap - sent_today) per
+--      (12:00 UTC ≈ 5am Pacific) dequeues up to (cap - sent_today) per
 --      campaign, calls pushContactsToSequence() in 100-row chunks
 --      (Salesforge's bulk limit), and stamps rows as 'sent' or 'failed'.
 --

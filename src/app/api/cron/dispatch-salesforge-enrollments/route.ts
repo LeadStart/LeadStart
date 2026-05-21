@@ -1,6 +1,6 @@
 // GET /api/cron/dispatch-salesforge-enrollments
 //
-// Daily tick at 15:00 UTC (= 8am PDT / 7am PST — always ≤ 8am Pacific
+// Daily tick at 12:00 UTC (= 5am PDT / 4am PST — always ≤ 5am Pacific
 // year-round, since Vercel cron doesn't track DST). Drains
 // salesforge_enrollment_queue at a per-campaign daily cap so
 // Salesforge.ai doesn't receive more new contacts per day than the

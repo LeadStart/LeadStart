@@ -29,6 +29,7 @@ import {
 import { ArrowLeft, Inbox, Upload, AlertCircle, CheckCircle2 } from "lucide-react";
 import { CampaignImportPanel } from "./import-panel";
 import { CampaignContactsTable } from "./contacts-table";
+import { PacingEditor } from "./pacing-editor";
 import type { Campaign, CampaignSnapshot, Client } from "@/types/app";
 
 const DEFAULT_DAILY_CAP = 66;
@@ -191,12 +192,19 @@ export default async function AdminCampaignDetailPage({
               </div>
               <div className="flex-1">
                 <CardTitle className="text-base">Enrollment queue</CardTitle>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Cron drains pending rows daily at 15:00 UTC ≈ 8am Pacific
-                  at <strong>{cap}/day</strong>
-                  {campaign.salesforge_daily_contact_cap == null && (
-                    <> (default — set a per-campaign cap on the create page)</>
-                  )}
+                <p className="text-xs text-muted-foreground mt-0.5 inline-flex items-center gap-1.5 flex-wrap">
+                  <span>
+                    Cron drains pending rows daily at 12:00 UTC ≈ 5am Pacific at{" "}
+                    <strong>{cap}/day</strong>
+                    {campaign.salesforge_daily_contact_cap == null && (
+                      <> (default)</>
+                    )}
+                    {" — "}
+                  </span>
+                  <PacingEditor
+                    campaignId={campaign.id}
+                    currentCap={campaign.salesforge_daily_contact_cap}
+                  />
                 </p>
               </div>
             </CardHeader>

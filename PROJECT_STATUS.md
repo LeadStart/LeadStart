@@ -14,12 +14,12 @@ Live at https://leadstart-ebon.vercel.app (LeadStart Vercel account, auto-deploy
 
 ## Current Initiative: Salesforge enrollment throttle + discovery (live)
 
-**Status:** schema applied (migration 00050), discovery wired into the existing hourly `sync-analytics` cron, dispatcher cron registered (daily at 15:00 UTC ≈ 8am Pacific). End-to-end verified on the SaaSassins Janitorial campaign.
+**Status:** schema applied (migration 00050), discovery wired into the existing hourly `sync-analytics` cron, dispatcher cron registered (daily at 12:00 UTC ≈ 5am Pacific). End-to-end verified on the SaaSassins Janitorial campaign.
 
 **What it does:**
 
 - **Push contacts** at `/admin/contacts` → rows land in `salesforge_enrollment_queue` (pending) instead of synchronously hitting Salesforge. Toast says e.g. *"queued 487 — will enroll at 66/day over ~8 days"*.
-- **Daily dispatcher** at `/api/cron/dispatch-salesforge-enrollments` (15:00 UTC) drains the queue per campaign at the configured cap. Default cap = 66 (200 sends/day inbox capacity ÷ 3-step sequence). Tunable per-campaign in the builder UI.
+- **Daily dispatcher** at `/api/cron/dispatch-salesforge-enrollments` (12:00 UTC) drains the queue per campaign at the configured cap. Default cap = 66 (200 sends/day inbox capacity ÷ 3-step sequence). Tunable per-campaign in the builder UI.
 - **Discovery** in `/api/cron/sync-analytics` (hourly) lists Salesforge sequences each tick and INSERTs any unknown `salesforge_sequence_id` into `campaigns` with status passthrough, registering the reply-pipeline webhooks idempotently.
 
 **Resume doc:** [`RESUME-SALESFORGE-ACTIVATION.md`](RESUME-SALESFORGE-ACTIVATION.md) — preflight + safe-apply SQL block + smoke-test walkthrough. Delete once the first paying client has shipped on Salesforge.

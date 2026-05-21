@@ -138,7 +138,7 @@ export default function NewSalesforgeCampaignPage() {
   const [steps, setSteps] = useState<StepDraft[]>(DEFAULT_STEPS);
   // Daily contact cap — gates how many NEW contacts the
   // dispatch-salesforge-enrollments cron will push into this sequence
-  // per UTC day (the cron runs once daily at 15:00 UTC ≈ 8am Pacific).
+  // per UTC day (the cron runs once daily at 12:00 UTC ≈ 5am Pacific).
   // Default 66 = (8 inboxes × 25 sends/day) / 3-step sequence at
   // steady state. Tune up for shorter sequences, down for safer ramps.
   const [dailyCap, setDailyCap] = useState<number>(66);
@@ -497,7 +497,7 @@ export default function NewSalesforgeCampaignPage() {
             Salesforge has no native limit on how many new contacts can be
             enrolled per day. LeadStart enforces one app-side so a big
             upload doesn&apos;t overflow your inbox capacity. The
-            enrollment cron runs once daily at ~8am Pacific.
+            enrollment cron runs once daily at ~5am Pacific.
           </p>
         </CardHeader>
         <CardContent>

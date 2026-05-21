@@ -43,7 +43,7 @@
     },
     {
       "path": "/app/api/cron/dispatch-salesforge-enrollments",
-      "schedule": "0 15 * * *"
+      "schedule": "0 12 * * *"
     }
   ]
 }

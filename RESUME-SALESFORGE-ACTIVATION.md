@@ -215,7 +215,7 @@ CREATE INDEX IF NOT EXISTS idx_sf_queue_org_status
 
 Re-run the pre-flight check after to confirm everything came back `t`.
 
-> **Note on the new cron:** `00050` enables the `dispatch-salesforge-enrollments` cron (registered in `vercel.json` at `0 15 * * *`, daily at 15:00 UTC ≈ 8am Pacific year-round — Vercel cron doesn't track DST so this floats by 1h seasonally; in winter it runs at 7am PST, in summer at 8am PDT, always ≤ 8am Pacific). It auto-deploys with the next push to master — no extra activation step. Until a sequence has a cap configured, the cron uses the dispatcher default of 66 new contacts per day.
+> **Note on the new cron:** `00050` enables the `dispatch-salesforge-enrollments` cron (registered in `vercel.json` at `0 12 * * *`, daily at 12:00 UTC — Vercel cron doesn't track DST so this floats by 1h seasonally; in winter it runs at 4am PST, in summer at 5am PDT, always ≤ 5am Pacific). It auto-deploys with the next push to master — no extra activation step. Until a sequence has a cap configured, the cron uses the dispatcher default of 66 new contacts per day; the per-campaign cap can be tuned in the campaign create page or via the inline editor on the campaign detail page.
 
 ---
 
