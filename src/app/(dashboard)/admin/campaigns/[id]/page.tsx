@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/table";
 import { ArrowLeft, Inbox, Upload, AlertCircle, CheckCircle2 } from "lucide-react";
 import { CampaignImportPanel } from "./import-panel";
+import { CampaignContactsTable } from "./contacts-table";
 import type { Campaign, CampaignSnapshot, Client } from "@/types/app";
 
 const DEFAULT_DAILY_CAP = 66;
@@ -251,6 +252,8 @@ export default async function AdminCampaignDetailPage({
               />
             </CardContent>
           </Card>
+
+          <CampaignContactsTable campaignId={campaign.id} />
         </>
       )}
 
