@@ -28,9 +28,18 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { PaginationControls } from "@/components/ui/pagination-controls";
-import { Loader2, Users, X, Info } from "lucide-react";
+import { Loader2, Users, X, Info, RefreshCw } from "lucide-react";
 import { appUrl } from "@/lib/api-url";
 import type { Contact, CampaignStatus } from "@/types/app";
+
+interface RefreshResult {
+  workspace_total: number;
+  in_sequence_total: number;
+  inserted: number;
+  updated: number;
+  linked_to_campaign: number;
+  unlinked_not_in_sequence: number;
+}
 
 const PAGE_SIZE = 25;
 
@@ -125,6 +134,9 @@ export function CampaignContactsTable({
   const [error, setError] = useState<string | null>(null);
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [removeError, setRemoveError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
+  const [refreshResult, setRefreshResult] = useState<RefreshResult | null>(null);
 
   const fetchPage = useCallback(
     async (pageNum: number) => {
@@ -155,6 +167,38 @@ export function CampaignContactsTable({
   useEffect(() => {
     fetchPage(page);
   }, [page, fetchPage]);
+
+  async function handleRefresh() {
+    setRefreshing(true);
+    setRefreshError(null);
+    setRefreshResult(null);
+    try {
+      const res = await fetch(
+        appUrl(`/api/admin/campaigns/${campaignId}/refresh-contacts`),
+        { method: "POST" },
+      );
+      const data = (await res.json()) as { ok?: boolean; error?: string } & RefreshResult;
+      if (!res.ok || !data.ok) {
+        setRefreshError(data.error ?? `Failed (HTTP ${res.status})`);
+        return;
+      }
+      setRefreshResult({
+        workspace_total: data.workspace_total,
+        in_sequence_total: data.in_sequence_total,
+        inserted: data.inserted,
+        updated: data.updated,
+        linked_to_campaign: data.linked_to_campaign,
+        unlinked_not_in_sequence: data.unlinked_not_in_sequence,
+      });
+      // Jump back to page 1 in case auto-link added new rows; refetch.
+      if (page !== 1) setPage(1);
+      else await fetchPage(1);
+    } catch (err) {
+      setRefreshError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setRefreshing(false);
+    }
+  }
 
   async function handleRemove(contactId: string, email: string) {
     if (
@@ -218,8 +262,57 @@ export function CampaignContactsTable({
                 }`}
           </p>
         </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={handleRefresh}
+          disabled={refreshing}
+          title="Pull the latest from Salesforge: refresh statuses, add new workspace contacts, and unlink any that have been removed in Salesforge."
+        >
+          {refreshing ? (
+            <>
+              <Loader2 size={14} className="mr-1 animate-spin" /> Refreshing…
+            </>
+          ) : (
+            <>
+              <RefreshCw size={14} className="mr-1" /> Refresh
+            </>
+          )}
+        </Button>
       </div>
       <CardContent className="pt-4 space-y-3">
+        {refreshError && (
+          <div className="flex items-start gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-900">
+            <Info size={14} className="mt-0.5 shrink-0" />
+            <p>Refresh failed: {refreshError}</p>
+          </div>
+        )}
+        {refreshResult && (
+          <div className="flex items-start gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
+            <Info size={14} className="mt-0.5 shrink-0" />
+            <p>
+              Salesforge says <strong>{refreshResult.in_sequence_total}</strong>{" "}
+              contact{refreshResult.in_sequence_total === 1 ? "" : "s"} enrolled
+              in this sequence ({refreshResult.workspace_total} total in
+              workspace). {refreshResult.inserted} new contact rows,{" "}
+              {refreshResult.updated} updated
+              {refreshResult.linked_to_campaign > 0 && (
+                <>, {refreshResult.linked_to_campaign} linked to this campaign</>
+              )}
+              {refreshResult.unlinked_not_in_sequence > 0 && (
+                <>
+                  ,{" "}
+                  <strong>
+                    {refreshResult.unlinked_not_in_sequence}
+                  </strong>{" "}
+                  unlinked (removed from Salesforge sequence)
+                </>
+              )}
+              .
+            </p>
+          </div>
+        )}
         <div
           className={`flex items-start gap-2 rounded-md border px-3 py-2 ${noteToneClasses}`}
         >

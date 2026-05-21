@@ -14,7 +14,16 @@ Also run `npm install` if `package.json` changed in the pull.
 
 Do not skip this even if the session appears to be a continuation — a different machine or session may have pushed since.
 
-# CRITICAL: Deployment
+# CRITICAL: Local-only by default — NEVER push or commit without explicit permission
+
+**Do all work locally. Do not `git commit`, do not `git push`, and do not auto-deploy without the owner saying so in the current turn.**
+
+- A `git push` to master triggers a Vercel auto-deploy to production — there is no staging environment. Pushing without explicit permission can put broken code in front of paying clients.
+- Commit only when the owner says "commit", "commit and push", "ship it", "push it", "deploy", or similarly direct language for the change at hand. A general OK earlier in the session does NOT carry over to later changes.
+- If you finish a change and aren't sure whether to push, **stop and ask**. Default = local only.
+- "Verify locally first" means: TypeScript / build check, exercise via the dev preview when applicable, surface what changed in the response — then wait for the owner to greenlight the push.
+
+# Deployment mechanics (for when you DO have permission)
 - **Production URL**: https://leadstart-ebon.vercel.app (LeadStart Vercel account)
 - **GitHub**: LeadStart/LeadStart, master branch — auto-deploys on push
 - **Deploy by pushing to master**: `git push origin master` — that's it

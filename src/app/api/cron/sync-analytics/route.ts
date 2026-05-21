@@ -323,39 +323,110 @@ export async function GET(request: NextRequest) {
               }
             }
 
-            // Auto-link workspace contacts to a campaign — but only when
-            // there's exactly ONE Salesforge campaign in the org. With
-            // multiple campaigns we can't tell which sequence a contact
-            // belongs to: Salesforge's API has no reliable
-            // contact↔sequence list endpoint (the not_in_sequence_id
-            // filter only counts actively-sending enrollments, so it
-            // returns "all" for draft sequences regardless of UI state).
+            // Per-campaign sequence-membership reconcile. For each
+            // Salesforge campaign in the org, ask Salesforge which
+            // workspace contacts are NOT in this sequence; the diff
+            // against the workspace total is the truth for "currently
+            // enrolled". Link contacts that ARE in the sequence to the
+            // campaign, unlink local rows that aren't.
             //
-            // For multi-campaign orgs, contacts arrive in the local
-            // contacts table with campaign_id=NULL and the operator
-            // assigns them via the per-campaign import UI.
-            if (salesforgeCampaigns.length === 1) {
-              const onlyCampaign = salesforgeCampaigns[0];
-              const { error: linkErr, count: linkedCount } = await admin
-                .from("contacts")
-                .update(
-                  {
-                    campaign_id: onlyCampaign.id,
-                    client_id: onlyCampaign.client_id,
-                    updated_at: now,
-                  },
-                  { count: "exact" },
-                )
-                .eq("organization_id", org.id)
-                .not("salesforge_contact_id", "is", null)
-                .is("campaign_id", null);
-              if (linkErr) {
-                console.error(
-                  `[cron/sync-analytics] single-campaign auto-link failed for ${onlyCampaign.id}:`,
-                  linkErr,
+            // The previous "auto-link all workspace contacts when org
+            // has one Salesforge campaign" rule was a hack — it ignored
+            // sequence membership and would re-link rows the operator
+            // had just unlinked. Trusting the API's not_in_sequence_id
+            // filter is honest and reversible.
+            //
+            // Use a separate query that includes draft + paused campaigns
+            // (salesforgeCampaigns above is filtered to status='active'
+            // because that's what analytics sync wants, but reconcile
+            // needs to run for every Salesforge campaign regardless).
+            const { data: allOrgCampaigns } = await admin
+              .from("campaigns")
+              .select("id, client_id, salesforge_sequence_id")
+              .eq("organization_id", org.id)
+              .eq("source_channel", "salesforge")
+              .not("salesforge_sequence_id", "is", null);
+            const reconcileCampaigns = (allOrgCampaigns ?? []) as {
+              id: string;
+              client_id: string | null;
+              salesforge_sequence_id: string | null;
+            }[];
+            const workspaceSfIdSet = new Set(usable.map((c) => c.id));
+            for (const campaign of reconcileCampaigns) {
+              if (!campaign.salesforge_sequence_id) continue;
+              try {
+                const notInSeq = await salesforge.listAllWorkspaceContacts(
+                  salesforgeWorkspaceId,
+                  { notInSequenceId: campaign.salesforge_sequence_id },
                 );
-              } else if (linkedCount && linkedCount > 0) {
-                totalContactsLinked += linkedCount;
+                const notInSeqIdSet = new Set(notInSeq.map((c) => c.id));
+                const inSeqIds = [...workspaceSfIdSet].filter(
+                  (id) => !notInSeqIdSet.has(id),
+                );
+
+                // Link in-sequence Salesforge contacts to this campaign.
+                if (inSeqIds.length > 0) {
+                  const chunkSize = 500;
+                  for (let i = 0; i < inSeqIds.length; i += chunkSize) {
+                    const chunk = inSeqIds.slice(i, i + chunkSize);
+                    const { count: linkedCount, error: linkErr } = await admin
+                      .from("contacts")
+                      .update(
+                        {
+                          campaign_id: campaign.id,
+                          client_id: campaign.client_id,
+                          updated_at: now,
+                        },
+                        { count: "exact" },
+                      )
+                      .eq("organization_id", org.id)
+                      .in("salesforge_contact_id", chunk)
+                      .or(`campaign_id.is.null,campaign_id.neq.${campaign.id}`);
+                    if (linkErr) {
+                      console.error(
+                        `[cron/sync-analytics] sequence-link failed for ${campaign.id}:`,
+                        linkErr,
+                      );
+                    } else {
+                      totalContactsLinked += linkedCount ?? 0;
+                    }
+                  }
+                }
+
+                // Unlink local rows on this campaign whose Salesforge
+                // contact id is NOT in the in-sequence set (removed
+                // from sequence assignment OR from workspace entirely).
+                const inSeqIdSet = new Set(inSeqIds);
+                const { data: linkedHere } = await admin
+                  .from("contacts")
+                  .select("id, salesforge_contact_id")
+                  .eq("campaign_id", campaign.id)
+                  .not("salesforge_contact_id", "is", null);
+                const orphanIds = ((linkedHere ?? []) as {
+                  id: string;
+                  salesforge_contact_id: string | null;
+                }[])
+                  .filter(
+                    (r) =>
+                      r.salesforge_contact_id &&
+                      !inSeqIdSet.has(r.salesforge_contact_id),
+                  )
+                  .map((r) => r.id);
+                if (orphanIds.length > 0) {
+                  const chunkSize = 500;
+                  for (let i = 0; i < orphanIds.length; i += chunkSize) {
+                    const chunk = orphanIds.slice(i, i + chunkSize);
+                    await admin
+                      .from("contacts")
+                      .update({ campaign_id: null, updated_at: now })
+                      .in("id", chunk);
+                  }
+                }
+              } catch (err) {
+                console.error(
+                  `[cron/sync-analytics] sequence-membership reconcile failed for ${campaign.id}:`,
+                  err,
+                );
               }
             }
           }

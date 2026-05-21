@@ -6,9 +6,11 @@ type: feedback
 
 When working on LeadStart, default to local-only development. Never run `git push` without explicit approval from the user. Also never run `git commit` without being asked.
 
-**Why:** LeadStart auto-deploys from master to production (per CLAUDE.md's "Deploy by pushing to master" section). A push = a deploy, so unapproved pushes can ship broken/unready code to real users. The user wants to review the working tree before anything lands.
+**Why:** LeadStart auto-deploys from master to production. A push = an immediate prod deploy in front of paying clients, with no staging in between. The owner wants to review the working tree before anything lands. Unapproved pushes have shipped broken code in past sessions; this is a recurring failure mode worth being strict about.
 
 **How to apply:**
-- In plans that list "commit #N" as units of work (e.g. `docs/plans/stripe-billing.md`, `docs/plans/ai-reply-routing.md`), treat each as a local dev milestone — work that leaves the app runnable, not a trigger to push.
-- Leave changes as a modified working tree so the user can review with `git status` / `git diff` before deciding to commit.
-- When a milestone is ready, describe what changed and ask before pushing or committing.
+- Default behavior at the end of every coding turn: **local only**. Describe what changed, ask before committing or pushing.
+- Permission is per-change, not per-session. The owner saying "push it" for change A does NOT carry over to change B done later in the same session.
+- Trigger words that ARE explicit permission: "commit", "commit and push", "push", "push it", "ship it", "deploy". Anything vaguer — "looks good", "nice", "ok" — is not permission to push; clarify.
+- Leave changes as a modified working tree so the owner can review with `git status` / `git diff` before deciding to commit.
+- The CLAUDE.md at the project root has a "CRITICAL: Local-only by default" section that says the same thing — that's the authoritative copy. This memory exists so future sessions hit the rule even before reading CLAUDE.md.
