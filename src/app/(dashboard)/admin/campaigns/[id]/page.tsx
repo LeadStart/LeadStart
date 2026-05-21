@@ -253,7 +253,10 @@ export default async function AdminCampaignDetailPage({
             </CardContent>
           </Card>
 
-          <CampaignContactsTable campaignId={campaign.id} />
+          <CampaignContactsTable
+            campaignId={campaign.id}
+            campaignStatus={campaign.status}
+          />
         </>
       )}
 
