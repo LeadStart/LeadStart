@@ -172,3 +172,98 @@ export function rowsFromCSV(
   }
   return out;
 }
+
+// Apply a user-provided column mapping to a parsed CSV grid.
+// mapping: { "CSV Header Name": "first_name", ... } — empty string = skip.
+export function rowsWithMapping(
+  grid: string[][],
+  mapping: Record<string, string>,
+): ParsedContactRow[] {
+  if (grid.length < 2) return [];
+
+  const rawHeaders = grid[0].map((h) => h.trim());
+  const fieldToCol: Record<string, number> = {};
+  for (let i = 0; i < rawHeaders.length; i++) {
+    const target = mapping[rawHeaders[i]];
+    if (target) fieldToCol[target] = i;
+  }
+
+  if (fieldToCol.email === undefined) return [];
+
+  const out: ParsedContactRow[] = [];
+  for (let r = 1; r < grid.length; r++) {
+    const row = grid[r];
+    const get = (field: string) => {
+      const i = fieldToCol[field];
+      return i !== undefined ? (row[i] ?? "").trim() : "";
+    };
+    const email = get("email");
+    if (!email || !email.includes("@")) continue;
+    const stageRaw = get("pipeline_stage").toLowerCase();
+    const stage: ProspectStage | null = (VALID_STAGES as string[]).includes(
+      stageRaw,
+    )
+      ? (stageRaw as ProspectStage)
+      : null;
+    out.push({
+      first_name: get("first_name") || null,
+      last_name: get("last_name") || null,
+      email,
+      company_name: get("company_name") || null,
+      title: get("title") || null,
+      phone: get("phone") || null,
+      linkedin_url: get("linkedin_url") || null,
+      tags: splitTags(get("tags")),
+      intro_line: get("intro_line") || null,
+      notes: get("notes") || null,
+      pipeline_stage: stage,
+    });
+  }
+  return out;
+}
+
+// LeadStart contact fields available as mapping targets.
+export const MAPPING_TARGETS: { value: string; label: string }[] = [
+  { value: "email", label: "Email" },
+  { value: "first_name", label: "First Name" },
+  { value: "last_name", label: "Last Name" },
+  { value: "company_name", label: "Company" },
+  { value: "title", label: "Job Title" },
+  { value: "phone", label: "Phone" },
+  { value: "linkedin_url", label: "LinkedIn URL" },
+  { value: "intro_line", label: "Intro / Icebreaker" },
+  { value: "notes", label: "Notes" },
+  { value: "tags", label: "Tags" },
+];
+
+const VALID_TARGET_SET = new Set(MAPPING_TARGETS.map((f) => f.value));
+
+// Build initial column mapping from CSV headers, using a saved mapping
+// first, then falling back to HEADER_ALIASES auto-detection.
+export function buildInitialMapping(
+  csvHeaders: string[],
+  savedMapping: Record<string, string> | null,
+): Record<string, string> {
+  const mapping: Record<string, string> = {};
+  const usedTargets = new Set<string>();
+
+  for (const header of csvHeaders) {
+    if (savedMapping && header in savedMapping) {
+      const target = savedMapping[header];
+      if (VALID_TARGET_SET.has(target) && !usedTargets.has(target)) {
+        mapping[header] = target;
+        usedTargets.add(target);
+        continue;
+      }
+    }
+    const normalized = normalizeHeader(header);
+    if (VALID_TARGET_SET.has(normalized) && !usedTargets.has(normalized)) {
+      mapping[header] = normalized;
+      usedTargets.add(normalized);
+      continue;
+    }
+    mapping[header] = "";
+  }
+
+  return mapping;
+}

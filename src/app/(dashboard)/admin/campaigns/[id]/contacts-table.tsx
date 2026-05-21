@@ -14,7 +14,8 @@
 //     stopping the upstream send requires pausing the sequence in
 //     app.salesforge.ai or adding the email to DNC.)
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -28,9 +29,17 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { PaginationControls } from "@/components/ui/pagination-controls";
-import { Loader2, Users, X, Info, RefreshCw, ArrowRight } from "lucide-react";
+import {
+  Loader2,
+  Users,
+  X,
+  Info,
+  RefreshCw,
+  ArrowRight,
+  Trash2,
+} from "lucide-react";
 import { appUrl } from "@/lib/api-url";
-import type { Contact, CampaignStatus } from "@/types/app";
+import type { Contact } from "@/types/app";
 
 interface RefreshResult {
   workspace_total: number;
@@ -44,7 +53,7 @@ interface RefreshResult {
 const PAGE_SIZE = 25;
 
 const CONTACT_COLUMNS =
-  "id, email, first_name, last_name, company_name, title, status, source, created_at, updated_at";
+  "id, email, first_name, last_name, company_name, title, linkedin_url, phone, tags, notes, status, source, created_at, updated_at";
 
 type ContactRow = Pick<
   Contact,
@@ -54,11 +63,24 @@ type ContactRow = Pick<
   | "last_name"
   | "company_name"
   | "title"
+  | "linkedin_url"
+  | "phone"
+  | "tags"
+  | "notes"
   | "status"
   | "source"
   | "created_at"
   | "updated_at"
 >;
+
+// Pull the human-readable handle out of a LinkedIn URL so the column
+// shows "@john-doe" rather than the full https://… string. Falls back
+// to the raw URL if the path doesn't match the expected /in/<handle>
+// shape.
+function linkedinHandle(url: string): string {
+  const m = url.match(/linkedin\.com\/in\/([^/?#]+)/i);
+  return m ? `@${m[1]}` : url;
+}
 
 function statusBadgeClass(status: string): string {
   switch (status) {
@@ -166,53 +188,13 @@ function StatusLegend() {
   );
 }
 
-// One-liner explaining the sequence state so the user understands
-// whether emails are actively being sent.
-function sequenceStatusNote(status: CampaignStatus): {
-  label: string;
-  detail: string;
-  tone: "amber" | "emerald" | "slate";
-} {
-  switch (status) {
-    case "active":
-      return {
-        label: "Sequence is active",
-        detail:
-          "Salesforge is sending to these contacts at the per-campaign daily cap. Newly added contacts start at step 1.",
-        tone: "emerald",
-      };
-    case "paused":
-      return {
-        label: "Sequence is paused",
-        detail:
-          "No emails are going out. Resume the sequence in app.salesforge.ai to start sending again.",
-        tone: "amber",
-      };
-    case "completed":
-      return {
-        label: "Sequence completed",
-        detail:
-          "All steps have been delivered. Contacts here are historical.",
-        tone: "slate",
-      };
-    case "draft":
-    default:
-      return {
-        label: "Sequence is in draft — not sending yet",
-        detail:
-          "These contacts are assigned to the sequence but Salesforge will only start emailing them once you flip the sequence to active in app.salesforge.ai.",
-        tone: "amber",
-      };
-  }
-}
-
 export function CampaignContactsTable({
   campaignId,
-  campaignStatus,
 }: {
   campaignId: string;
-  campaignStatus: CampaignStatus;
 }) {
+  const router = useRouter();
+  const [, startTransition] = useTransition();
   const [rows, setRows] = useState<ContactRow[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -223,6 +205,28 @@ export function CampaignContactsTable({
   const [refreshing, setRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const [refreshResult, setRefreshResult] = useState<RefreshResult | null>(null);
+  // Per-row bulk-select state. Keys are contact ids. Persists across
+  // page changes so the operator can build up a selection by paging
+  // through, or use "Select all N queued in this campaign" in one click.
+  // Visual confirmation comes from the count shown in the action bar.
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [bulkError, setBulkError] = useState<string | null>(null);
+  // Total count of contacts that are eligible for bulk-delete on this
+  // campaign — i.e. status='queued'. Drives the "Select all N queued"
+  // affordance.
+  const [queuedTotalCount, setQueuedTotalCount] = useState(0);
+  const [selectingAll, setSelectingAll] = useState(false);
+  // Whether to render each optional column. Set once on mount via a
+  // campaign-wide presence check so columns don't flicker as the operator
+  // pages through. Columns appear only when at least one contact has
+  // data in that field.
+  const [optionalCols, setOptionalCols] = useState({
+    linkedin: false,
+    phone: false,
+    tags: false,
+    notes: false,
+  });
 
   const fetchPage = useCallback(
     async (pageNum: number) => {
@@ -231,20 +235,33 @@ export function CampaignContactsTable({
       const supabase = createClient();
       const from = (pageNum - 1) * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
-      const { data, count, error: queryErr } = await supabase
-        .from("contacts")
-        .select(CONTACT_COLUMNS, { count: "exact" })
-        .eq("campaign_id", campaignId)
-        .order("created_at", { ascending: false })
-        .range(from, to);
-      if (queryErr) {
-        setError(queryErr.message);
+      const [pageRes, queuedCountRes] = await Promise.all([
+        supabase
+          .from("contacts")
+          .select(CONTACT_COLUMNS, { count: "exact" })
+          .eq("campaign_id", campaignId)
+          .order("created_at", { ascending: false })
+          .range(from, to),
+        // Source of truth for "scheduled to be sent on this campaign" is
+        // status='queued' alone. salesforge_contact_id may be populated
+        // by sync-analytics from prior workspace presence and is not a
+        // signal that this campaign has dispatched the contact yet —
+        // only status='uploaded' (set by the dispatcher) means that.
+        supabase
+          .from("contacts")
+          .select("id", { count: "exact", head: true })
+          .eq("campaign_id", campaignId)
+          .eq("status", "queued"),
+      ]);
+      if (pageRes.error) {
+        setError(pageRes.error.message);
         setRows([]);
         setTotal(0);
       } else {
-        setRows((data ?? []) as unknown as ContactRow[]);
-        setTotal(count ?? 0);
+        setRows((pageRes.data ?? []) as unknown as ContactRow[]);
+        setTotal(pageRes.count ?? 0);
       }
+      setQueuedTotalCount(queuedCountRes.count ?? 0);
       setLoading(false);
     },
     [campaignId],
@@ -253,6 +270,152 @@ export function CampaignContactsTable({
   useEffect(() => {
     fetchPage(page);
   }, [page, fetchPage]);
+
+  // One-shot presence check per campaign — decides which optional columns
+  // to render. Cheap (HEAD count queries that hit existing indexes).
+  // tags->0 trick: returns the first array element or NULL if empty/null,
+  // so `not is null` filters to "tags is non-empty array".
+  useEffect(() => {
+    let cancelled = false;
+    const supabase = createClient();
+    Promise.all([
+      supabase
+        .from("contacts")
+        .select("id", { count: "exact", head: true })
+        .eq("campaign_id", campaignId)
+        .not("linkedin_url", "is", null),
+      supabase
+        .from("contacts")
+        .select("id", { count: "exact", head: true })
+        .eq("campaign_id", campaignId)
+        .not("phone", "is", null),
+      supabase
+        .from("contacts")
+        .select("id", { count: "exact", head: true })
+        .eq("campaign_id", campaignId)
+        .not("tags->0", "is", null),
+      supabase
+        .from("contacts")
+        .select("id", { count: "exact", head: true })
+        .eq("campaign_id", campaignId)
+        .not("notes", "is", null),
+    ]).then(([linkedin, phone, tags, notes]) => {
+      if (cancelled) return;
+      setOptionalCols({
+        linkedin: (linkedin.count ?? 0) > 0,
+        phone: (phone.count ?? 0) > 0,
+        tags: (tags.count ?? 0) > 0,
+        notes: (notes.count ?? 0) > 0,
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [campaignId]);
+
+  // IDs of QUEUED rows on the current page — non-queued rows can't be
+  // bulk-deleted (the API filters them out anyway, but disabling the
+  // checkbox is clearer to the operator).
+  const queuedIdsOnPage = useMemo(
+    () => rows.filter((r) => r.status === "queued").map((r) => r.id),
+    [rows],
+  );
+  const selectedOnPageCount = useMemo(
+    () => queuedIdsOnPage.filter((id) => selectedIds.has(id)).length,
+    [queuedIdsOnPage, selectedIds],
+  );
+  const allQueuedOnPageSelected =
+    queuedIdsOnPage.length > 0 &&
+    selectedOnPageCount === queuedIdsOnPage.length;
+  const someQueuedOnPageSelected =
+    selectedOnPageCount > 0 && !allQueuedOnPageSelected;
+
+  function toggleSelectAllOnPage() {
+    const next = new Set(selectedIds);
+    if (allQueuedOnPageSelected) {
+      queuedIdsOnPage.forEach((id) => next.delete(id));
+    } else {
+      queuedIdsOnPage.forEach((id) => next.add(id));
+    }
+    setSelectedIds(next);
+  }
+
+  function toggleSelectOne(id: string) {
+    const next = new Set(selectedIds);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setSelectedIds(next);
+  }
+
+  async function handleSelectAllQueued() {
+    setSelectingAll(true);
+    setBulkError(null);
+    try {
+      const supabase = createClient();
+      const { data, error: selectErr } = await supabase
+        .from("contacts")
+        .select("id")
+        .eq("campaign_id", campaignId)
+        .eq("status", "queued");
+      if (selectErr) {
+        setBulkError(`Failed to load all queued: ${selectErr.message}`);
+        return;
+      }
+      const ids = (data ?? []).map((r) => (r as { id: string }).id);
+      setSelectedIds(new Set(ids));
+    } catch (err) {
+      setBulkError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSelectingAll(false);
+    }
+  }
+
+  async function handleBulkDelete() {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    if (
+      !confirm(
+        `Delete ${ids.length.toLocaleString()} selected queued contact${
+          ids.length === 1 ? "" : "s"
+        } from this campaign?\n\n` +
+          `These contacts have NOT yet been pushed to Salesforge. ` +
+          `Deleting removes them from LeadStart entirely (contact row + queue row). ` +
+          `Re-import via CSV if you change your mind.`,
+      )
+    ) {
+      return;
+    }
+    setBulkDeleting(true);
+    setBulkError(null);
+    try {
+      const res = await fetch(
+        appUrl(`/api/admin/campaigns/${campaignId}/purge-queued`),
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ contact_ids: ids }),
+        },
+      );
+      const data = (await res.json()) as {
+        ok?: boolean;
+        deleted?: number;
+        error?: string;
+      };
+      if (!res.ok || !data.ok) {
+        setBulkError(data.error ?? `Failed (HTTP ${res.status})`);
+        return;
+      }
+      setSelectedIds(new Set());
+      await fetchPage(page);
+      // Re-render the server components above (Enrollment queue card)
+      // so the Pending count + "Clear queued (N)" button drop to match.
+      startTransition(() => router.refresh());
+    } catch (err) {
+      setBulkError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBulkDeleting(false);
+    }
+  }
 
   async function handleRefresh() {
     setRefreshing(true);
@@ -279,6 +442,9 @@ export function CampaignContactsTable({
       // Jump back to page 1 in case auto-link added new rows; refetch.
       if (page !== 1) setPage(1);
       else await fetchPage(1);
+      // Queue card numbers can shift after refresh (newly linked or
+      // unlinked-not-in-sequence contacts) — re-render the server side.
+      startTransition(() => router.refresh());
     } catch (err) {
       setRefreshError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -313,20 +479,15 @@ export function CampaignContactsTable({
       // Optimistically drop the row + refetch the current page so totals
       // and pagination stay accurate.
       await fetchPage(page);
+      // Also re-render the queue card — unlinking a pending contact
+      // also cancels its pending queue row (see unlink-contact route).
+      startTransition(() => router.refresh());
     } catch (err) {
       setRemoveError(err instanceof Error ? err.message : String(err));
     } finally {
       setRemovingId(null);
     }
   }
-
-  const note = sequenceStatusNote(campaignStatus);
-  const noteToneClasses =
-    note.tone === "emerald"
-      ? "border-emerald-200 bg-emerald-50 text-emerald-900"
-      : note.tone === "amber"
-        ? "border-amber-200 bg-amber-50 text-amber-900"
-        : "border-border/60 bg-muted/30 text-foreground";
 
   return (
     <Card className="border-border/50 shadow-sm">
@@ -399,17 +560,64 @@ export function CampaignContactsTable({
             </p>
           </div>
         )}
-        <div
-          className={`flex items-start gap-2 rounded-md border px-3 py-2 ${noteToneClasses}`}
-        >
-          <Info size={14} className="mt-0.5 shrink-0" />
-          <div className="text-xs">
-            <p className="font-medium">{note.label}</p>
-            <p className="opacity-80 mt-0.5">{note.detail}</p>
-          </div>
-        </div>
-
         <StatusLegend />
+
+        {selectedIds.size > 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-red-200 bg-red-50 px-3 py-2.5">
+            <div className="text-sm text-red-900">
+              <strong>{selectedIds.size.toLocaleString()}</strong> queued
+              contact{selectedIds.size === 1 ? "" : "s"} selected for delete
+              {selectedIds.size < queuedTotalCount && (
+                <>
+                  {" — "}
+                  <button
+                    type="button"
+                    onClick={handleSelectAllQueued}
+                    disabled={selectingAll || bulkDeleting}
+                    className="underline underline-offset-2 font-medium hover:text-red-950 disabled:opacity-60 disabled:no-underline"
+                  >
+                    {selectingAll
+                      ? "Selecting…"
+                      : `Select all ${queuedTotalCount.toLocaleString()} queued in this campaign`}
+                  </button>
+                </>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setSelectedIds(new Set())}
+                disabled={bulkDeleting}
+                className="text-red-700 hover:bg-red-100 hover:text-red-800"
+              >
+                Clear selection
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleBulkDelete}
+                disabled={bulkDeleting}
+                className="border-red-300 text-red-700 hover:bg-red-100 hover:text-red-800"
+              >
+                {bulkDeleting ? (
+                  <>
+                    <Loader2 size={14} className="mr-1 animate-spin" /> Deleting…
+                  </>
+                ) : (
+                  <>
+                    <Trash2 size={14} className="mr-1" /> Delete selected
+                  </>
+                )}
+              </Button>
+            </div>
+            {bulkError && (
+              <p className="basis-full text-xs text-red-700">{bulkError}</p>
+            )}
+          </div>
+        )}
 
         {error && (
           <p className="text-sm text-red-600">Failed to load: {error}</p>
@@ -428,10 +636,33 @@ export function CampaignContactsTable({
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-[36px]">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 cursor-pointer rounded border-border accent-red-600 disabled:cursor-not-allowed disabled:opacity-40"
+                        checked={allQueuedOnPageSelected}
+                        ref={(el) => {
+                          if (el)
+                            el.indeterminate = someQueuedOnPageSelected;
+                        }}
+                        onChange={toggleSelectAllOnPage}
+                        disabled={queuedIdsOnPage.length === 0}
+                        aria-label="Select all queued contacts on this page"
+                        title={
+                          queuedIdsOnPage.length === 0
+                            ? "No queued contacts on this page"
+                            : "Select all queued on this page"
+                        }
+                      />
+                    </TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Name</TableHead>
                     <TableHead>Company</TableHead>
                     <TableHead>Title</TableHead>
+                    {optionalCols.linkedin && <TableHead>LinkedIn</TableHead>}
+                    {optionalCols.phone && <TableHead>Phone</TableHead>}
+                    {optionalCols.tags && <TableHead>Tags</TableHead>}
+                    {optionalCols.notes && <TableHead>Notes</TableHead>}
                     <TableHead>Status</TableHead>
                     <TableHead>Source</TableHead>
                     <TableHead className="text-right">Added</TableHead>
@@ -441,7 +672,16 @@ export function CampaignContactsTable({
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center py-6">
+                      <TableCell
+                        colSpan={
+                          9 +
+                          (optionalCols.linkedin ? 1 : 0) +
+                          (optionalCols.phone ? 1 : 0) +
+                          (optionalCols.tags ? 1 : 0) +
+                          (optionalCols.notes ? 1 : 0)
+                        }
+                        className="text-center py-6"
+                      >
                         <Loader2
                           size={16}
                           className="inline-block animate-spin text-muted-foreground"
@@ -449,8 +689,35 @@ export function CampaignContactsTable({
                       </TableCell>
                     </TableRow>
                   ) : (
-                    rows.map((c) => (
-                      <TableRow key={c.id} className="group">
+                    rows.map((c) => {
+                      const isQueued = c.status === "queued";
+                      const isSelected = selectedIds.has(c.id);
+                      return (
+                      <TableRow
+                        key={c.id}
+                        className={`group ${
+                          isSelected ? "bg-red-50/40" : ""
+                        }`}
+                      >
+                        <TableCell>
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 cursor-pointer rounded border-border accent-red-600 disabled:cursor-not-allowed disabled:opacity-30"
+                            checked={isSelected}
+                            onChange={() => toggleSelectOne(c.id)}
+                            disabled={!isQueued}
+                            aria-label={
+                              isQueued
+                                ? `Select ${c.email ?? c.id}`
+                                : "Only queued contacts can be bulk-deleted"
+                            }
+                            title={
+                              isQueued
+                                ? "Select for bulk delete"
+                                : "Only queued contacts can be bulk-deleted"
+                            }
+                          />
+                        </TableCell>
                         <TableCell className="font-mono text-[11px]">
                           {c.email}
                         </TableCell>
@@ -465,6 +732,74 @@ export function CampaignContactsTable({
                         <TableCell className="text-sm">
                           {c.title || "—"}
                         </TableCell>
+                        {optionalCols.linkedin && (
+                          <TableCell className="text-xs">
+                            {c.linkedin_url ? (
+                              <a
+                                href={c.linkedin_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-[#2E37FE] hover:underline font-mono"
+                                title={c.linkedin_url}
+                              >
+                                {linkedinHandle(c.linkedin_url)}
+                              </a>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                        )}
+                        {optionalCols.phone && (
+                          <TableCell className="text-xs">
+                            {c.phone ? (
+                              <a
+                                href={`tel:${c.phone}`}
+                                className="text-[#2E37FE] hover:underline font-mono"
+                              >
+                                {c.phone}
+                              </a>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                        )}
+                        {optionalCols.tags && (
+                          <TableCell>
+                            {Array.isArray(c.tags) && c.tags.length > 0 ? (
+                              <div className="flex flex-wrap gap-1 max-w-[200px]">
+                                {c.tags.slice(0, 3).map((t) => (
+                                  <Badge
+                                    key={t}
+                                    variant="secondary"
+                                    className="badge-slate text-[10px]"
+                                  >
+                                    {t}
+                                  </Badge>
+                                ))}
+                                {c.tags.length > 3 && (
+                                  <span
+                                    className="text-[10px] text-muted-foreground self-center"
+                                    title={c.tags.slice(3).join(", ")}
+                                  >
+                                    +{c.tags.length - 3}
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground text-xs">
+                                —
+                              </span>
+                            )}
+                          </TableCell>
+                        )}
+                        {optionalCols.notes && (
+                          <TableCell
+                            className="text-xs text-muted-foreground max-w-[240px] truncate"
+                            title={c.notes ?? undefined}
+                          >
+                            {c.notes || "—"}
+                          </TableCell>
+                        )}
                         <TableCell>
                           <Badge
                             variant="secondary"
@@ -503,7 +838,8 @@ export function CampaignContactsTable({
                           </Button>
                         </TableCell>
                       </TableRow>
-                    ))
+                      );
+                    })
                   )}
                 </TableBody>
               </Table>

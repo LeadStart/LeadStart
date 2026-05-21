@@ -32,6 +32,7 @@ import { CampaignContactsTable } from "./contacts-table";
 import { PacingEditor } from "./pacing-editor";
 import { TagsEditor } from "./tags-editor";
 import { CustomVarMapping } from "./custom-var-mapping";
+import { PurgeQueuedButton } from "./purge-queued-button";
 import type { Campaign, CampaignSnapshot, Client } from "@/types/app";
 
 const DEFAULT_DAILY_CAP = 66;
@@ -188,7 +189,7 @@ export default async function AdminCampaignDetailPage({
       {campaign.source_channel === "salesforge" && (
         <>
           <Card className="border-border/50 shadow-sm">
-            <CardHeader className="flex flex-row items-center gap-2 pb-3">
+            <CardHeader className="flex flex-row items-start gap-2 pb-3">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]">
                 <Inbox size={16} className="text-white" />
               </div>
@@ -225,6 +226,12 @@ export default async function AdminCampaignDetailPage({
                   />
                 </p>
               </div>
+              {queue.pending > 0 && (
+                <PurgeQueuedButton
+                  campaignId={campaign.id}
+                  pendingCount={queue.pending}
+                />
+              )}
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-3 gap-4">
@@ -275,6 +282,7 @@ export default async function AdminCampaignDetailPage({
                 campaignName={campaign.name}
                 organizationId={campaign.organization_id}
                 clientId={campaign.client_id}
+                savedMapping={campaign.csv_column_mapping ?? null}
               />
             </CardContent>
           </Card>
@@ -284,10 +292,7 @@ export default async function AdminCampaignDetailPage({
             currentMapping={campaign.salesforge_custom_var_mapping}
           />
 
-          <CampaignContactsTable
-            campaignId={campaign.id}
-            campaignStatus={campaign.status}
-          />
+          <CampaignContactsTable campaignId={campaign.id} />
         </>
       )}
 

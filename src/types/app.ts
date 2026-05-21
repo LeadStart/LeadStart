@@ -131,6 +131,9 @@ export interface Campaign {
   // and sends it under the Salesforge name in customVars.
   // Example: { "intro": "intro_line", "notes": "notes" }
   salesforge_custom_var_mapping: Record<string, string> | null;
+  // User-chosen CSV header → LeadStart field mapping, persisted per
+  // campaign so re-uploads pre-populate the mapping UI (migration 00055).
+  csv_column_mapping: Record<string, string> | null;
   name: string;
   status: CampaignStatus;
   // Channel discriminator. 'linkedin' for Unipile-driven sequences;
