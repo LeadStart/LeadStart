@@ -323,58 +323,39 @@ export async function GET(request: NextRequest) {
               }
             }
 
-            // For each Salesforge campaign in the org, compute which
-            // workspace contacts are actually enrolled in its sequence
-            // and link them to that campaign locally. Salesforge has
-            // no direct "list contacts in sequence" endpoint, so we use:
-            //   in_sequence = all_workspace - not_in_sequence
-            const workspaceIdSet = new Set(
-              allWorkspaceContacts.map((c) => c.id),
-            );
-            for (const campaign of salesforgeCampaigns) {
-              if (!campaign.salesforge_sequence_id) continue;
-              try {
-                const notInSeq = await salesforge.listAllWorkspaceContacts(
-                  salesforgeWorkspaceId,
-                  { notInSequenceId: campaign.salesforge_sequence_id },
-                );
-                const notInSeqIdSet = new Set(notInSeq.map((c) => c.id));
-                const inSequenceSfIds = [...workspaceIdSet].filter(
-                  (id) => !notInSeqIdSet.has(id),
-                );
-                if (inSequenceSfIds.length === 0) continue;
-
-                // Link these contacts to this campaign locally.
-                // Update by salesforge_contact_id (the dedup column we
-                // just upserted), in chunks to keep the IN(...) clause
-                // a reasonable size.
-                const chunkSize = 500;
-                for (let i = 0; i < inSequenceSfIds.length; i += chunkSize) {
-                  const chunk = inSequenceSfIds.slice(i, i + chunkSize);
-                  const { error: linkErr } = await admin
-                    .from("contacts")
-                    .update({
-                      campaign_id: campaign.id,
-                      client_id: campaign.client_id,
-                      status: "uploaded",
-                      updated_at: now,
-                    })
-                    .eq("organization_id", org.id)
-                    .in("salesforge_contact_id", chunk);
-                  if (linkErr) {
-                    console.error(
-                      `[cron/sync-analytics] link-to-campaign failed for ${campaign.id}:`,
-                      linkErr,
-                    );
-                  } else {
-                    totalContactsLinked += chunk.length;
-                  }
-                }
-              } catch (err) {
+            // Auto-link workspace contacts to a campaign — but only when
+            // there's exactly ONE Salesforge campaign in the org. With
+            // multiple campaigns we can't tell which sequence a contact
+            // belongs to: Salesforge's API has no reliable
+            // contact↔sequence list endpoint (the not_in_sequence_id
+            // filter only counts actively-sending enrollments, so it
+            // returns "all" for draft sequences regardless of UI state).
+            //
+            // For multi-campaign orgs, contacts arrive in the local
+            // contacts table with campaign_id=NULL and the operator
+            // assigns them via the per-campaign import UI.
+            if (salesforgeCampaigns.length === 1) {
+              const onlyCampaign = salesforgeCampaigns[0];
+              const { error: linkErr, count: linkedCount } = await admin
+                .from("contacts")
+                .update(
+                  {
+                    campaign_id: onlyCampaign.id,
+                    client_id: onlyCampaign.client_id,
+                    updated_at: now,
+                  },
+                  { count: "exact" },
+                )
+                .eq("organization_id", org.id)
+                .not("salesforge_contact_id", "is", null)
+                .is("campaign_id", null);
+              if (linkErr) {
                 console.error(
-                  `[cron/sync-analytics] sequence-membership compute failed for ${campaign.id}:`,
-                  err,
+                  `[cron/sync-analytics] single-campaign auto-link failed for ${onlyCampaign.id}:`,
+                  linkErr,
                 );
+              } else if (linkedCount && linkedCount > 0) {
+                totalContactsLinked += linkedCount;
               }
             }
           }
