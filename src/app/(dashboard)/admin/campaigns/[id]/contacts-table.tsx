@@ -28,7 +28,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { PaginationControls } from "@/components/ui/pagination-controls";
-import { Loader2, Users, X, Info, RefreshCw } from "lucide-react";
+import { Loader2, Users, X, Info, RefreshCw, ArrowRight } from "lucide-react";
 import { appUrl } from "@/lib/api-url";
 import type { Contact, CampaignStatus } from "@/types/app";
 
@@ -89,6 +89,81 @@ function statusLabel(status: string): string {
     default:
       return status;
   }
+}
+
+// Status lifecycle reference rendered above the table. Keeps the
+// progression (queued → uploaded → active → terminal) visible so the
+// operator doesn't have to remember what each badge color means.
+const LIFECYCLE_STAGES: {
+  status: string;
+  hint: string;
+}[] = [
+  { status: "queued", hint: "in our DB, not yet pushed to Salesforge" },
+  { status: "uploaded", hint: "pushed to Salesforge workspace + sequence" },
+  { status: "active", hint: "sequence actively sending to this contact" },
+];
+
+const LIFECYCLE_TERMINAL: {
+  status: string;
+  hint: string;
+}[] = [
+  { status: "replied", hint: "inbound reply received" },
+  { status: "bounced", hint: "hard bounce — undeliverable" },
+  { status: "unsubscribed", hint: "opted out / on DNC list" },
+];
+
+function StatusLegend() {
+  return (
+    <div className="rounded-md border border-border/60 bg-muted/20 px-3 py-2.5 text-xs">
+      <p className="font-medium text-foreground mb-2">Status lifecycle</p>
+      <div className="flex flex-wrap items-center gap-2">
+        {LIFECYCLE_STAGES.map((stage, i) => (
+          <span key={stage.status} className="inline-flex items-center gap-2">
+            <span className="inline-flex flex-col items-start gap-0.5">
+              <Badge
+                variant="secondary"
+                className={`${statusBadgeClass(stage.status)} text-[10px]`}
+              >
+                {statusLabel(stage.status)}
+              </Badge>
+              <span className="text-[10px] text-muted-foreground">
+                {stage.hint}
+              </span>
+            </span>
+            {i < LIFECYCLE_STAGES.length - 1 && (
+              <ArrowRight
+                size={12}
+                className="text-muted-foreground shrink-0 mt-0.5"
+              />
+            )}
+          </span>
+        ))}
+      </div>
+      <div className="mt-2.5 pt-2 border-t border-border/40">
+        <p className="text-[10px] text-muted-foreground mb-1.5 uppercase tracking-wide">
+          Terminal states
+        </p>
+        <div className="flex flex-wrap items-start gap-3">
+          {LIFECYCLE_TERMINAL.map((s) => (
+            <span
+              key={s.status}
+              className="inline-flex flex-col items-start gap-0.5"
+            >
+              <Badge
+                variant="secondary"
+                className={`${statusBadgeClass(s.status)} text-[10px]`}
+              >
+                {s.status}
+              </Badge>
+              <span className="text-[10px] text-muted-foreground">
+                {s.hint}
+              </span>
+            </span>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // One-liner explaining the sequence state so the user understands
@@ -333,6 +408,8 @@ export function CampaignContactsTable({
             <p className="opacity-80 mt-0.5">{note.detail}</p>
           </div>
         </div>
+
+        <StatusLegend />
 
         {error && (
           <p className="text-sm text-red-600">Failed to load: {error}</p>
