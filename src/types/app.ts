@@ -317,7 +317,7 @@ export interface WebhookEvent {
 }
 
 // Contacts (campaign leads)
-export type ContactStatus = "new" | "enriched" | "uploaded" | "active" | "bounced" | "replied" | "unsubscribed";
+export type ContactStatus = "new" | "enriched" | "queued" | "uploaded" | "active" | "bounced" | "replied" | "unsubscribed";
 
 export interface Contact {
   id: string;

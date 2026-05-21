@@ -254,6 +254,25 @@ export async function POST(req: NextRequest) {
           { status: 500 },
         );
       }
+
+      // Flip the contact rows to status='queued' so the contacts table
+      // shows them as waiting for the dispatcher (instead of misleadingly
+      // showing 'uploaded' before they've actually been pushed). The
+      // dispatcher cron flips them to 'uploaded' once the Salesforge
+      // bulk-create + enroll call returns success.
+      const { error: statusErr } = await admin
+        .from("contacts")
+        .update({ status: "queued", updated_at: new Date().toISOString() })
+        .in(
+          "id",
+          toQueue.map((c) => c.id),
+        );
+      if (statusErr) {
+        console.error(
+          "[admin/contacts/push-to-campaign] status flip to queued failed:",
+          statusErr,
+        );
+      }
     }
 
     const cap = campaign.salesforge_daily_contact_cap ?? DEFAULT_DAILY_CAP;

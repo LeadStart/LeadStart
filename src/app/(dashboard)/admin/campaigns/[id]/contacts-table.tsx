@@ -66,6 +66,8 @@ function statusBadgeClass(status: string): string {
       return "badge-green";
     case "replied":
       return "badge-green";
+    case "queued":
+      return "badge-amber";
     case "bounced":
       return "badge-red";
     case "unsubscribed":
@@ -77,6 +79,15 @@ function statusBadgeClass(status: string): string {
     case "new":
     default:
       return "badge-slate";
+  }
+}
+
+function statusLabel(status: string): string {
+  switch (status) {
+    case "queued":
+      return "queued — pending send";
+    default:
+      return status;
   }
 }
 
@@ -382,7 +393,7 @@ export function CampaignContactsTable({
                             variant="secondary"
                             className={statusBadgeClass(c.status)}
                           >
-                            {c.status}
+                            {statusLabel(c.status)}
                           </Badge>
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">

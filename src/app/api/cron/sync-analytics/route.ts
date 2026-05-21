@@ -396,12 +396,28 @@ export async function GET(request: NextRequest) {
                 // Unlink local rows on this campaign whose Salesforge
                 // contact id is NOT in the in-sequence set (removed
                 // from sequence assignment OR from workspace entirely).
+                //
+                // EXCEPT: contacts with a pending salesforge_enrollment_queue
+                // row for this campaign are protected. They were just
+                // imported and the dispatcher hasn't pushed them yet, so
+                // Salesforge legitimately doesn't have them in the
+                // sequence — don't undo the operator's intent mid-flight.
                 const inSeqIdSet = new Set(inSeqIds);
                 const { data: linkedHere } = await admin
                   .from("contacts")
                   .select("id, salesforge_contact_id")
                   .eq("campaign_id", campaign.id)
                   .not("salesforge_contact_id", "is", null);
+                const { data: pendingQueueRows } = await admin
+                  .from("salesforge_enrollment_queue")
+                  .select("contact_id")
+                  .eq("campaign_id", campaign.id)
+                  .eq("status", "pending");
+                const pendingContactIds = new Set(
+                  ((pendingQueueRows ?? []) as { contact_id: string }[]).map(
+                    (r) => r.contact_id,
+                  ),
+                );
                 const orphanIds = ((linkedHere ?? []) as {
                   id: string;
                   salesforge_contact_id: string | null;
@@ -409,7 +425,8 @@ export async function GET(request: NextRequest) {
                   .filter(
                     (r) =>
                       r.salesforge_contact_id &&
-                      !inSeqIdSet.has(r.salesforge_contact_id),
+                      !inSeqIdSet.has(r.salesforge_contact_id) &&
+                      !pendingContactIds.has(r.id),
                   )
                   .map((r) => r.id);
                 if (orphanIds.length > 0) {

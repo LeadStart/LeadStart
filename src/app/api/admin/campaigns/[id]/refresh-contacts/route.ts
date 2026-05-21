@@ -251,19 +251,38 @@ export async function POST(
   // salesforge_contact_id is NOT in the in-sequence set (i.e. they
   // were removed from the Salesforge sequence assignment OR removed
   // from the workspace entirely). Either way, drop the local link.
+  //
+  // EXCEPT: contacts that have a pending row in
+  // salesforge_enrollment_queue for this campaign are protected. They
+  // were just imported and the dispatcher hasn't pushed them yet, so
+  // Salesforge legitimately doesn't have them in the sequence — but
+  // the operator's intent is clear and we shouldn't undo their import.
   let unlinkedNotInSequence = 0;
   const { data: linkedHere } = await admin
     .from("contacts")
     .select("id, salesforge_contact_id")
     .eq("campaign_id", campaign.id)
     .not("salesforge_contact_id", "is", null);
+  // Pending queue rows protect their contact from unlink.
+  const { data: pendingQueueRows } = await admin
+    .from("salesforge_enrollment_queue")
+    .select("contact_id")
+    .eq("campaign_id", campaign.id)
+    .eq("status", "pending");
+  const pendingContactIds = new Set(
+    ((pendingQueueRows ?? []) as { contact_id: string }[]).map(
+      (r) => r.contact_id,
+    ),
+  );
   const orphanIds = ((linkedHere ?? []) as {
     id: string;
     salesforge_contact_id: string | null;
   }[])
     .filter(
       (r) =>
-        r.salesforge_contact_id && !inSequenceSfIds.has(r.salesforge_contact_id),
+        r.salesforge_contact_id &&
+        !inSequenceSfIds.has(r.salesforge_contact_id) &&
+        !pendingContactIds.has(r.id),
     )
     .map((r) => r.id);
   if (orphanIds.length > 0) {
