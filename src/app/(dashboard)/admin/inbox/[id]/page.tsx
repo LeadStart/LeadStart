@@ -24,7 +24,7 @@ const REPLY_DETAIL_COLUMNS =
   "id, client_id, final_class, status, received_at, " +
   "lead_email, lead_name, lead_company, lead_title, lead_phone_e164, lead_linkedin_url, " +
   "subject, body_text, " +
-  "instantly_category, claude_class, claude_confidence, claude_reason, " +
+  "claude_class, claude_confidence, claude_reason, " +
   "keyword_flags, referral_contact, " +
   "outcome, outcome_notes, outcome_logged_at, " +
   "reclassified_from, reclassified_at, " +
@@ -45,7 +45,6 @@ type DetailReply = Pick<
   | "lead_linkedin_url"
   | "subject"
   | "body_text"
-  | "instantly_category"
   | "claude_class"
   | "claude_confidence"
   | "claude_reason"
@@ -206,14 +205,6 @@ export default async function AdminReplyDetailPage({
             </p>
           </div>
           <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
-            <div>
-              <p className="text-muted-foreground">Instantly tag</p>
-              <p className="font-medium text-foreground">
-                {reply.instantly_category || (
-                  <span className="text-muted-foreground">—</span>
-                )}
-              </p>
-            </div>
             <div>
               <p className="text-muted-foreground">Claude class</p>
               <p className="font-medium text-foreground">

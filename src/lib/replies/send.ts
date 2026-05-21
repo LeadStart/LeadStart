@@ -1,8 +1,7 @@
 // Helpers for /api/replies/[id]/send.
 //
-// At present this just exposes computeIdempotencyKey — the request-shaping
-// logic for the upstream provider lives inline in the route itself, which
-// only targets Salesforge now that Instantly has been ripped out.
+// At present this just exposes computeIdempotencyKey — the Salesforge
+// request-shaping logic lives inline in the route itself.
 
 import crypto from "node:crypto";
 

@@ -136,6 +136,12 @@ export default function NewSalesforgeCampaignPage() {
   const [timezone, setTimezone] = useState("America/New_York");
   const [selectedMailboxIds, setSelectedMailboxIds] = useState<string[]>([]);
   const [steps, setSteps] = useState<StepDraft[]>(DEFAULT_STEPS);
+  // Daily contact cap — gates how many NEW contacts the
+  // dispatch-salesforge-enrollments cron will push into this sequence
+  // per UTC day (the cron runs once daily at 15:00 UTC ≈ 8am Pacific).
+  // Default 66 = (8 inboxes × 25 sends/day) / 3-step sequence at
+  // steady state. Tune up for shorter sequences, down for safer ramps.
+  const [dailyCap, setDailyCap] = useState<number>(66);
 
   const [saving, setSaving] = useState(false);
   const [savingMode, setSavingMode] = useState<"draft" | "launch" | null>(null);
@@ -263,6 +269,7 @@ export default function NewSalesforgeCampaignPage() {
             mailbox_ids: selectedMailboxIds,
             launch,
             register_webhooks: true,
+            daily_contact_cap: dailyCap,
             steps: steps.map((s) => ({
               subject: s.subject,
               body: s.body,
@@ -479,6 +486,41 @@ export default function NewSalesforgeCampaignPage() {
               ))}
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Pacing — daily new-contact cap */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Pacing</CardTitle>
+          <p className="text-xs text-muted-foreground">
+            Salesforge has no native limit on how many new contacts can be
+            enrolled per day. LeadStart enforces one app-side so a big
+            upload doesn&apos;t overflow your inbox capacity. The
+            enrollment cron runs once daily at ~8am Pacific.
+          </p>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-[200px_1fr]">
+            <div className="space-y-1">
+              <Label htmlFor="daily-cap">New contacts per day</Label>
+              <Input
+                id="daily-cap"
+                type="number"
+                min={1}
+                value={dailyCap}
+                onChange={(e) =>
+                  setDailyCap(Math.max(1, parseInt(e.target.value) || 1))
+                }
+                disabled={saving}
+              />
+            </div>
+            <div className="text-xs text-muted-foreground self-end pb-1">
+              Suggested: <strong>200 sends/day ÷ steps in your sequence</strong>.
+              For a 3-step sequence on 8 inboxes × 25/day, that&apos;s ~66.
+              Tune up if your sequence is shorter, down for a safer ramp.
+            </div>
+          </div>
         </CardContent>
       </Card>
 

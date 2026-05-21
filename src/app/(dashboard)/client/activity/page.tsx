@@ -37,25 +37,21 @@ function getRelativeTime(dateStr: string): string {
 }
 
 export default function ClientActivityPage() {
-  const { client, campaigns, loading: contextLoading } = useClientData();
+  const { client, loading: contextLoading } = useClientData();
   const [events, setEvents] = useState<WebhookEvent[]>([]);
-  const [campaignNameMap, setCampaignNameMap] = useState<Map<string, string>>(new Map());
+  const [campaignNameMap] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
 
+  // Activity feed temporarily empty — the old query joined webhook_events
+  // to campaigns via campaign_instantly_id (dropped in migration 00051).
+  // Rebuild against the Salesforge webhook event stream once we wire a
+  // campaign_id FK into webhook_events.
   useEffect(() => {
     if (contextLoading || !client) return;
-    setCampaignNameMap(new Map(campaigns.map((c) => [c.instantly_campaign_id, c.name])));
-    const ids = campaigns.map((c) => c.instantly_campaign_id);
-    const supabase = createClient();
-    supabase.from("webhook_events").select("*")
-      .in("campaign_instantly_id", ids.length > 0 ? ids : ["none"])
-      .order("received_at", { ascending: false })
-      .then(({ data: eventsData }) => {
-        setEvents((eventsData || []) as WebhookEvent[]);
-        setLoading(false);
-      });
-  }, [contextLoading, client, campaigns]);
+    setEvents([]);
+    setLoading(false);
+  }, [contextLoading, client]);
 
   if (contextLoading || loading) {
     return <div className="space-y-6 animate-pulse"><div className="rounded-xl h-36 bg-muted/50" /><div className="grid grid-cols-4 gap-4">{[1,2,3,4].map(i => <div key={i} className="rounded-xl h-24 bg-muted/50" />)}</div><div className="rounded-xl h-64 bg-muted/50" /></div>;
@@ -113,7 +109,9 @@ export default function ClientActivityPage() {
                 <CardContent className="py-2">
                   {dayEvents.map((event, i) => {
                     const config = getEventConfig(event.event_type);
-                    const campaignName = event.campaign_instantly_id ? campaignNameMap.get(event.campaign_instantly_id) : null;
+                    // campaign_instantly_id dropped in migration 00051;
+                    // wire a proper campaign_id FK when events get rebuilt.
+                    const campaignName = campaignNameMap.get(event.id);
                     return (
                       <div key={event.id} className={`flex items-center gap-4 py-3 ${i < dayEvents.length - 1 ? "border-b border-border/30" : ""}`}>
                         <div className={`flex h-9 w-9 items-center justify-center rounded-full bg-muted/50 ${config.color} shrink-0`}>{config.icon}</div>

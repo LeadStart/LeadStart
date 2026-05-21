@@ -19,8 +19,8 @@ const REPLY_EVENT_TYPES = new Set<string>([
 ]);
 
 export async function POST(request: NextRequest) {
-  // Auth — same shape as the Instantly handler. Salesforge does not
-  // sign payloads, so a shared-secret query param is the auth surface.
+  // Auth — Salesforge does not sign payloads, so a shared-secret query
+  // param is the auth surface.
   const secret = request.nextUrl.searchParams.get("secret");
   const expectedSecret = process.env.WEBHOOK_SECRET;
   if (expectedSecret && secret !== expectedSecret) {
@@ -70,8 +70,7 @@ export async function POST(request: NextRequest) {
     null;
 
   // Resolve org/client/campaign via the sequence id. Lazy-create an
-  // orphan campaign when we have a sequence id but no matching row,
-  // mirroring the Instantly handler.
+  // orphan campaign when we have a sequence id but no matching row.
   let organizationId: string | null = null;
   let clientId: string | null = null;
   let campaignId: string | null = null;
@@ -164,7 +163,6 @@ export async function POST(request: NextRequest) {
   await admin.from("webhook_events").insert({
     organization_id: organizationId,
     event_type: eventType,
-    campaign_instantly_id: null,
     lead_email: leadEmail,
     payload: payload as unknown as Record<string, unknown>,
     processed: false,
@@ -237,8 +235,7 @@ async function ingestReply({
 
   // Upsert on (organization_id, salesforge_email_id) — the dedup
   // constraint installed by migration 00049. Using a regular UNIQUE
-  // (not partial) lets ON CONFLICT match without a WHERE predicate
-  // (see migration 00029 for the same fix on the Instantly side).
+  // (not partial) lets ON CONFLICT match without a WHERE predicate.
   const { data: upserted, error: upsertError } = await admin
     .from("lead_replies")
     .upsert(normalized, {

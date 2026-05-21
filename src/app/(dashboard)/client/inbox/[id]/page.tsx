@@ -120,7 +120,7 @@ export default function ReplyDossierPage() {
             ...prev,
             status: "sent",
             sent_at: data.sent_at,
-            sent_instantly_email_id: data.sent_instantly_email_id,
+            sent_external_email_id: data.sent_external_email_id,
             final_body_text: composerBody,
           }
         );

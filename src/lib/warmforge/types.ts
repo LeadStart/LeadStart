@@ -13,7 +13,7 @@ export interface WarmforgeMailbox {
   email: string;
 
   // Primary deliverability metric (0-100). Warmforge's "heat score" is
-  // their direct equivalent of Instantly's stat_warmup_score.
+  // the standard inbox-warming reputation indicator.
   heat_score?: number;
   heat_label?: string;
 

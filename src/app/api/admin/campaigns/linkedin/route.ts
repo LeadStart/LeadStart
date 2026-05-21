@@ -1,8 +1,8 @@
 // POST /api/admin/campaigns/linkedin — create a LinkedIn sequence campaign.
-// Owner-only. Inserts a campaigns row (source_channel='linkedin',
-// instantly_campaign_id=null) plus campaign_steps rows in one logical
-// transaction; if step inserts fail, rolls back the campaign too so we
-// don't leave half-built sequences in the table.
+// Owner-only. Inserts a campaigns row (source_channel='linkedin') plus
+// campaign_steps rows in one logical transaction; if step inserts fail,
+// rolls back the campaign too so we don't leave half-built sequences in
+// the table.
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
@@ -103,7 +103,6 @@ export async function POST(req: NextRequest) {
     .insert({
       organization_id: c.organization_id,
       client_id: c.id,
-      instantly_campaign_id: null,
       name,
       status: "draft",
       source_channel: "linkedin",

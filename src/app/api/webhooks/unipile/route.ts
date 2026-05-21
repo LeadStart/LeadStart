@@ -1,7 +1,7 @@
 // POST /api/webhooks/unipile — inbound webhook for the LinkedIn channel.
 //
-// Mirrors /api/webhooks/instantly: optional ?secret= verification, audit
-// log to webhook_events, deferred reply pipeline via Next.js after().
+// Optional ?secret= verification, audit log to webhook_events, deferred
+// reply pipeline via Next.js after().
 //
 // Three event sources:
 //   - messaging.message_received     → ingest into lead_replies, run pipeline
@@ -34,8 +34,8 @@ interface ResolvedClient {
 
 export async function POST(request: NextRequest) {
   // Optional secret verification. If UNIPILE_WEBHOOK_SECRET isn't set, no
-  // check happens — matches the WEBHOOK_SECRET pattern on the Instantly
-  // handler. Kept separate so the two channels can rotate independently.
+  // check happens. Kept separate from the Salesforge WEBHOOK_SECRET so
+  // the two channels can rotate independently.
   const secret = request.nextUrl.searchParams.get("secret");
   const expectedSecret = process.env.UNIPILE_WEBHOOK_SECRET;
   if (expectedSecret && secret !== expectedSecret) {
@@ -103,7 +103,6 @@ export async function POST(request: NextRequest) {
   await admin.from("webhook_events").insert({
     organization_id: client.organization_id,
     event_type: eventType,
-    campaign_instantly_id: null,
     lead_email: null,
     payload: payload as unknown as Record<string, unknown>,
     processed: false,
@@ -123,7 +122,7 @@ export async function POST(request: NextRequest) {
   }
 
   // Schedule classification + notification after the response so the 200
-  // returns to Unipile immediately. Same pattern as the Instantly handler.
+  // returns to Unipile immediately.
   if (pipelineReplyId) {
     const scheduledId = pipelineReplyId;
     after(async () => {

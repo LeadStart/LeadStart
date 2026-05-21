@@ -16,12 +16,6 @@ export type KPIHealth = "good" | "warning" | "bad";
 export interface Organization {
   id: string;
   name: string;
-  instantly_api_key: string | null;
-  instantly_workspace_id: string | null;
-  // Instantly webhook ID returned from POST /api/v2/webhooks. Populated by
-  // the register-webhook admin button (commit #7). Null until one-time
-  // setup runs.
-  instantly_webhook_id: string | null;
   scrapio_api_key: string | null;
   scrapio_credits_balance: number | null;
   scrapio_last_credit_check_at: string | null;
@@ -37,10 +31,10 @@ export interface Organization {
   unipile_api_key: string | null;
   unipile_dsn: string | null;
   unipile_webhook_id: string | null;
-  // Salesforge (migration 00049). Replacement for Instantly as the email
-  // channel. Auth uses the raw key (no Bearer prefix). One workspace per
-  // org; default product id is used for newly-created sequences. Warmforge
-  // is Salesforge's mailbox-warming sister product with its own API key.
+  // Salesforge (migration 00049). One workspace per org; default product
+  // id is used for newly-created sequences. Auth uses the raw key (no
+  // Bearer prefix). Warmforge is Salesforge's mailbox-warming sister
+  // product with its own API key.
   salesforge_api_key: string | null;
   salesforge_workspace_id: string | null;
   salesforge_default_product_id: string | null;
@@ -117,24 +111,21 @@ export interface ClientUser {
 
 export interface Campaign {
   id: string;
-  // NULL for "orphan" campaigns — rows imported from Instantly by the sync
-  // cron/button before an owner has linked them to a LeadStart client. The
-  // B3 triage UI surfaces them; existing admin surfaces filter or degrade
-  // gracefully when client_id is NULL.
+  // NULL for "orphan" campaigns — rows imported by the discovery cron
+  // before an owner has linked them to a LeadStart client. Existing admin
+  // surfaces filter or degrade gracefully when client_id is NULL.
   client_id: string | null;
   organization_id: string;
-  // Made nullable in migration 00047 — LinkedIn campaigns have no Instantly
-  // id. Still NOT NULL in practice for source_channel='instantly' rows.
-  instantly_campaign_id: string | null;
   // Salesforge sequence id (migration 00049). Populated for
-  // source_channel='salesforge' rows; null otherwise. Parallels
-  // instantly_campaign_id.
+  // source_channel='salesforge' rows; null for linkedin.
   salesforge_sequence_id: string | null;
+  // Per-campaign daily cap on new Salesforge enrollments (migration 00050).
+  // NULL = dispatcher falls back to DEFAULT_DAILY_CAP=66.
+  salesforge_daily_contact_cap: number | null;
   name: string;
   status: CampaignStatus;
-  // Channel discriminator (migration 00045 + 00049). 'instantly' for legacy
-  // email campaigns; 'linkedin' for Unipile-driven sequences; 'salesforge'
-  // for the Salesforge channel (the new email default).
+  // Channel discriminator. 'linkedin' for Unipile-driven sequences;
+  // 'salesforge' for the email channel.
   source_channel: SourceChannel;
   // Per-campaign Unipile account binding (migration 00046). Defaults to
   // clients.unipile_account_id but lives on the campaign so accounts can
@@ -275,7 +266,7 @@ export interface KPIMetrics {
   reply_to_meeting_rate: number;
 }
 
-// Step-level campaign metrics (per-step analytics from Instantly)
+// Step-level campaign metrics (per-step analytics from the upstream provider)
 export interface CampaignStepMetric {
   id: string;
   campaign_id: string;
@@ -315,14 +306,13 @@ export interface WebhookEvent {
   id: string;
   organization_id: string;
   event_type: string;
-  campaign_instantly_id: string | null;
   lead_email: string | null;
   payload: Record<string, unknown>;
   processed: boolean;
   excluded: boolean;
   received_at: string;
   // Channel discriminator (migration 00045). Splits the audit log by
-  // provider so the Events page can filter Instantly vs Unipile traffic.
+  // provider so the Events page can filter Salesforge vs Unipile traffic.
   source_channel: SourceChannel;
 }
 
@@ -550,7 +540,7 @@ export interface ReplyReferralContact {
   title: string | null;
 }
 
-export type SourceChannel = "instantly" | "linkedin" | "salesforge";
+export type SourceChannel = "linkedin" | "salesforge";
 
 export interface LeadReply {
   id: string;
@@ -561,35 +551,24 @@ export interface LeadReply {
   // campaign and a follow-up UPDATE populates client_id.
   client_id: string | null;
   campaign_id: string | null;
-  // Channel discriminator (migration 00045). 'instantly' for email replies
-  // (the legacy default), 'linkedin' for inbound DMs ingested by the
-  // Unipile webhook.
+  // Channel discriminator (migration 00045). 'linkedin' for inbound DMs
+  // ingested by the Unipile webhook; 'salesforge' for email replies.
   source_channel: SourceChannel;
 
-  // Instantly references (null for LinkedIn replies; both columns made
-  // nullable in migration 00046)
-  instantly_email_id: string | null;
-  instantly_message_id: string | null;
-  thread_id: string | null;
-  instantly_campaign_id: string | null;
-  // Unipile references (migration 00046). Null for Instantly replies;
-  // populated for LinkedIn DMs. unipile_message_id is org-scoped unique
-  // for webhook dedup; unipile_chat_id threads messages within a chat.
+  // Unipile references (migration 00046). Populated for LinkedIn DMs.
+  // unipile_message_id is org-scoped unique for webhook dedup;
+  // unipile_chat_id threads messages within a chat.
   unipile_message_id: string | null;
   unipile_chat_id: string | null;
-  // Salesforge references (migration 00049). Null for non-Salesforge
-  // replies; populated for source_channel='salesforge' rows. The trio
-  // (workspace, mailbox, email_id) is what POST .../emails/{em}/reply
-  // needs — workspace lives on organizations, mailbox + email id live
-  // here. salesforge_email_id is org-scoped unique for webhook dedup
-  // (Salesforge does not expose RFC 5322 message-id).
+  // Salesforge references (migration 00049). Populated for
+  // source_channel='salesforge' rows. The trio (workspace, mailbox,
+  // email_id) is what POST .../emails/{em}/reply needs — workspace lives
+  // on organizations, mailbox + email id live here. salesforge_email_id
+  // is org-scoped unique for webhook dedup (Salesforge does not expose
+  // RFC 5322 message-id).
   salesforge_email_id: string | null;
   salesforge_thread_id: string | null;
   salesforge_mailbox_id: string | null;
-  // Hosted Instantly mailbox that received the reply. Passed back to
-  // POST /api/v2/emails/reply as `eaccount` when the client sends a
-  // reply through the portal. (Migration 00026.)
-  eaccount: string | null;
 
   // Lead identity
   lead_email: string;
@@ -609,7 +588,6 @@ export interface LeadReply {
   raw_payload: Record<string, unknown> | null;
 
   // Classification
-  instantly_category: string | null;
   keyword_flags: string[];
   claude_class: ReplyClass | null;
   claude_confidence: number | null;
@@ -651,7 +629,9 @@ export interface LeadReply {
   final_body_text: string | null;
   final_body_html: string | null;
   sent_at: string | null;
-  sent_instantly_email_id: string | null;
+  // Outbound provider id (Salesforge email id, etc.) returned from the
+  // reply-send call. Was named sent_instantly_email_id pre-migration 00051.
+  sent_external_email_id: string | null;
   error: string | null;
   // D2 idempotency tombstone — sha256(reply.id + body_text).slice(0, 16).
   // Stamped on atomic claim; persists through error rollbacks.

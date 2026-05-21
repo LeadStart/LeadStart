@@ -25,7 +25,7 @@ Do not skip this even if the session appears to be a continuation — a differen
 # LeadStart — Cold Email CMS Platform
 
 ## What This Is
-A Next.js 16 app for managing cold email campaigns via Instantly.ai. Two dashboards:
+A Next.js 16 app for managing cold email campaigns via Salesforge.ai. Two dashboards:
 - **Admin** (`/admin/*`) — Owner/VA view for managing all clients, campaigns, billing, reports
 - **Client** (`/client/*`) — Client-facing portal showing their campaigns, activity, reports, feedback
 
@@ -47,5 +47,7 @@ npm run dev
 - Recharts for data visualization
 - Supabase (auth + database) — migrations in `supabase/migrations/`
 - Resend + React Email for transactional emails
-- Instantly.ai API for campaign data (placeholder client in `src/lib/instantly/`)
+- Salesforge.ai API for campaign data (`src/lib/salesforge/`) — discovery cron pulls sequences; daily dispatcher enrolls contacts at a per-campaign cap
+- Warmforge.ai API for inbox warmup (`src/lib/warmforge/`)
+- Unipile API for the LinkedIn channel (`src/lib/unipile/`) — gated on activation
 - Stripe for billing (placeholder, not wired)

@@ -1,14 +1,12 @@
-// Keyword prefilter for inbound replies — Layer 1 of the three-layer
-// classifier (plan: docs/plans/ai-reply-routing.md).
+// Keyword prefilter for inbound replies — Layer 1 of the two-layer
+// classifier.
 //
 // Runs before Claude, fully deterministic, pure function. Scans the reply
 // body for hard signals (wrong-person phrases, referral emails, unsubscribe
-// language) so Claude's classifier has extra context + so we can catch the
-// most costly Instantly misclassification — interested-tagged replies that
-// are actually a polite forward to someone else.
+// language) so Claude's classifier has extra context.
 //
-// Output is merged with Instantly's native tag + Claude's structured class
-// inside `decide.ts` (commit #4) to produce `final_class`.
+// Output is merged with Claude's structured class inside `decide.ts` to
+// produce `final_class`.
 
 export interface PrefilterResult {
   // Specific flags the prefilter matched. Stored on lead_replies.keyword_flags
@@ -19,8 +17,8 @@ export interface PrefilterResult {
   // referral targets. Extracted for downstream routing (auto-follow-up, etc.).
   embedded_emails: string[];
 
-  // Suggested class override. Null means "no strong signal, defer to Claude /
-  // Instantly tag." Non-null is a hard override on top of Claude.
+  // Suggested class override. Null means "no strong signal, defer to Claude."
+  // Non-null is a hard override on top of Claude.
   suggested_class: PrefilterSuggestedClass | null;
 
   // Human-readable explanation for the admin classification trail.
@@ -159,8 +157,6 @@ export function runKeywordPrefilter(
     reason = `Out-of-office phrase matched: ${oooHit.source}`;
   } else if ((wrongPersonHit || referralHit) && embedded.length > 0) {
     // Wrong-person + email-in-body = almost certainly a referral forward.
-    // This is the case where Instantly tags it `lead_interested` but it's
-    // actually a hand-off — one of the biggest classification wins.
     suggested_class = "referral_forward";
     reason = `Handoff phrase + embedded email address${embedded.length > 1 ? "es" : ""}`;
   } else if (wrongPersonHit && embedded.length === 0) {

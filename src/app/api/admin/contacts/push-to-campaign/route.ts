@@ -1,25 +1,32 @@
 // POST /api/admin/contacts/push-to-campaign — bulk-assign contacts to a
-// campaign and push them to Salesforge as contacts.
+// campaign and (for Salesforge) enqueue them for paced enrollment.
 //
 // Owner-only. Body: { contact_ids: string[], campaign_id: string }.
 //
 // Behavior:
 // - Always updates contacts.campaign_id locally.
-// - For Salesforge campaigns (source_channel='salesforge') with a stored
-//   API key: pushes contacts in 100-row chunks via POST /contacts/bulk,
-//   then enrolls all created contact ids into the sequence via
-//   PUT /sequences/{id}/contacts.
+// - For Salesforge campaigns (source_channel='salesforge'): inserts rows
+//   into salesforge_enrollment_queue with status='pending'. The hourly
+//   cron at /api/cron/dispatch-salesforge-enrollments dequeues up to the
+//   per-campaign daily cap and calls Salesforge's bulk-create + enroll.
+//   We do NOT call Salesforge synchronously here — that was the old
+//   behavior and it overflowed the 200 sends/day inbox capacity when an
+//   owner pushed a large batch in one shot.
 // - For LinkedIn campaigns: skips the push (LinkedIn enrollment is a
 //   separate flow). The /campaigns/[id]/enroll route handles that.
 //
-// Returns counts so the UI can show a meaningful toast.
+// Returns counts + an estimated drain in days so the UI can show a
+// meaningful toast.
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { SalesforgeClient } from "@/lib/salesforge/client";
-import type { SalesforgeContactCreate } from "@/lib/salesforge/types";
 import type { SourceChannel } from "@/types/app";
+
+// Same default used by the dispatcher when campaigns.salesforge_daily_contact_cap
+// is NULL. Sized for a 3-step sequence against 200 sends/day of inbox capacity
+// (8 inboxes × 25 sends/day): 200 / 3 ≈ 66 new contacts/day at steady state.
+const DEFAULT_DAILY_CAP = 66;
 
 interface PushBody {
   contact_ids?: string[];
@@ -84,7 +91,7 @@ export async function POST(req: NextRequest) {
   const { data: campaignData, error: campaignError } = await admin
     .from("campaigns")
     .select(
-      "id, organization_id, source_channel, salesforge_sequence_id, name",
+      "id, organization_id, source_channel, salesforge_sequence_id, salesforge_daily_contact_cap, name",
     )
     .eq("id", campaignId)
     .maybeSingle();
@@ -101,6 +108,7 @@ export async function POST(req: NextRequest) {
         organization_id: string;
         source_channel: SourceChannel;
         salesforge_sequence_id: string | null;
+        salesforge_daily_contact_cap: number | null;
         name: string;
       }
     | null;
@@ -156,7 +164,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Email is required by both upstreams. Contacts without one are skipped
+  // Email is required by Salesforge. Contacts without one are skipped
   // here rather than failing the whole batch.
   const pushable = contacts.filter(
     (c) => typeof c.email === "string" && c.email.trim().length > 0,
@@ -169,15 +177,17 @@ export async function POST(req: NextRequest) {
     if (!campaign.salesforge_sequence_id) {
       return NextResponse.json({
         assigned: contacts.length,
-        uploaded: 0,
-        failed: 0,
+        queued: 0,
+        already_queued: 0,
         skipped_no_email: 0,
         skipped_invalid: skippedInvalid,
-        pushed: false,
-        reason: "Campaign has no Salesforge sequence id — cannot push",
+        queued_to_dispatcher: false,
+        reason: "Campaign has no Salesforge sequence id — cannot queue",
       });
     }
 
+    // Fail fast on missing creds so the queue doesn't fill with rows
+    // the dispatcher can never drain.
     const { data: orgData } = await admin
       .from("organizations")
       .select("id, salesforge_api_key, salesforge_workspace_id")
@@ -210,62 +220,55 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Salesforge's CreateSimpleLeadRequest requires firstName. We fall
-    // back to the local-part of the email when the contact row has no
-    // first_name set (otherwise the bulk-create call would 422 the
-    // entire chunk).
-    const sfContacts: SalesforgeContactCreate[] = pushable.map((c) => {
-      const fallbackFirst =
-        (c.email ?? "").split("@")[0] || "Lead";
-      return {
-        firstName: c.first_name?.trim() || fallbackFirst,
-        email: c.email!.trim(),
-        lastName: c.last_name ?? undefined,
-        company: c.company_name ?? undefined,
-        position: c.title ?? undefined,
-        linkedinUrl: c.linkedin_url ?? undefined,
-      };
-    });
-
-    const client = new SalesforgeClient(org.salesforge_api_key);
-    const result = await client.pushContactsToSequence(
-      org.salesforge_workspace_id,
-      campaign.salesforge_sequence_id,
-      sfContacts,
+    // Pre-filter: contacts that already have a pending queue row for
+    // this campaign would hit the unique-index conflict and fail the
+    // whole insert. Cheaper to filter than to per-row upsert.
+    const pushableIds = pushable.map((c) => c.id);
+    const { data: existingPending } = await admin
+      .from("salesforge_enrollment_queue")
+      .select("contact_id")
+      .eq("campaign_id", campaignId)
+      .eq("status", "pending")
+      .in("contact_id", pushableIds);
+    const alreadyPending = new Set(
+      ((existingPending ?? []) as { contact_id: string }[]).map((r) => r.contact_id),
     );
+    const toQueue = pushable.filter((c) => !alreadyPending.has(c.id));
 
-    // Salesforge's bulk endpoint doesn't tell us per-contact ids matched
-    // back to our row ids, so we mark every contact whose email landed
-    // in `pushable` and that wasn't in the failed list as 'uploaded'.
-    const failedEmails = new Set(
-      result.failed.map((f) => f.email?.toLowerCase()).filter(Boolean) as string[],
-    );
-    const uploadedIds = pushable
-      .filter((c) => !failedEmails.has(c.email!.trim().toLowerCase()))
-      .map((c) => c.id);
-
-    if (uploadedIds.length > 0) {
-      const { error: statusError } = await admin
-        .from("contacts")
-        .update({ status: "uploaded", updated_at: new Date().toISOString() })
-        .in("id", uploadedIds);
-      if (statusError) {
+    if (toQueue.length > 0) {
+      const rows = toQueue.map((c) => ({
+        organization_id: organizationId,
+        campaign_id: campaignId,
+        contact_id: c.id,
+      }));
+      const { error: insertError } = await admin
+        .from("salesforge_enrollment_queue")
+        .insert(rows);
+      if (insertError) {
         console.error(
-          "[admin/contacts/push-to-campaign] status update failed:",
-          statusError,
+          "[admin/contacts/push-to-campaign] queue insert failed:",
+          insertError,
+        );
+        return NextResponse.json(
+          { error: `Queue insert failed: ${insertError.message}` },
+          { status: 500 },
         );
       }
     }
 
+    const cap = campaign.salesforge_daily_contact_cap ?? DEFAULT_DAILY_CAP;
+    const drainDays = cap > 0 ? Math.ceil(toQueue.length / cap) : null;
+
     return NextResponse.json({
       assigned: contacts.length,
-      uploaded: result.uploaded,
-      failed: result.failed.length,
-      failures: result.failed,
+      queued: toQueue.length,
+      already_queued: alreadyPending.size,
       skipped_no_email: skippedNoEmail,
       skipped_invalid: skippedInvalid,
-      pushed: true,
+      queued_to_dispatcher: true,
       provider: "salesforge",
+      daily_cap: cap,
+      estimated_drain_days: drainDays,
       campaign_name: campaign.name,
     });
   }
@@ -274,11 +277,11 @@ export async function POST(req: NextRequest) {
   // upstream enrollment goes through /campaigns/[id]/enroll instead.
   return NextResponse.json({
     assigned: contacts.length,
-    uploaded: 0,
-    failed: 0,
+    queued: 0,
+    already_queued: 0,
     skipped_no_email: 0,
     skipped_invalid: skippedInvalid,
-    pushed: false,
+    queued_to_dispatcher: false,
     reason: `Push is not supported for ${campaign.source_channel} campaigns; use the channel-specific enrollment flow.`,
     campaign_name: campaign.name,
   });

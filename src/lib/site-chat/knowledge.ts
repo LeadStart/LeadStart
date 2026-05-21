@@ -82,7 +82,7 @@ A: TODO
 Q: TODO (e.g. "Is there a free trial?")
 A: TODO
 
-Q: TODO (e.g. "How is this different from Instantly / Smartlead?")
+Q: TODO (e.g. "How is this different from other cold-email tools?")
 A: TODO
 
 Q: TODO (e.g. "Do you do the outreach for me, or is it self-serve?")

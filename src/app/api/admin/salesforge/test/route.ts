@@ -1,6 +1,5 @@
 // POST /api/admin/salesforge/test — validates a Salesforge API key by
-// calling GET /me. Mirrors /api/instantly/test and the *-validate-key
-// routes for other vendors. Owner-only.
+// calling GET /me. Owner-only.
 //
 // Body: { api_key: string }
 // Returns 200 { success: true, me } on a successful upstream call,

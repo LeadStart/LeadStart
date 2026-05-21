@@ -1,21 +1,16 @@
 // Ingest helper — normalises a Salesforge webhook payload into the row
-// shape we insert into public.lead_replies. Parallel to ingest.ts.
-//
-// Key differences from the Instantly path:
+// shape we insert into public.lead_replies.
 //
 //   - No enrichment fetch. The Salesforge webhook payload is expected
-//     to carry the body + lead identity inline; the Instantly path's
-//     /emails/{id} round-trip is unnecessary here. (Salesforge does
-//     expose GET /workspaces/.../emails/{id} as a fallback, but the
-//     webhook should be authoritative — see "Trust Salesforge's vendor
-//     reliability" in the migration plan.)
+//     to carry the body + lead identity inline. (Salesforge does expose
+//     GET /workspaces/.../emails/{id} as a fallback, but the webhook
+//     should be authoritative.)
 //
-//   - Dedup key is (organization_id, salesforge_email_id) instead of
-//     instantly_message_id. Salesforge does not expose RFC 5322
-//     message-id, so we lean on their internal email UUID. The unique
-//     constraint is installed by migration 00049 as a regular UNIQUE
-//     (not partial), so the route handler can use ON CONFLICT for
-//     idempotent retries.
+//   - Dedup key is (organization_id, salesforge_email_id). Salesforge
+//     does not expose RFC 5322 message-id, so we lean on their internal
+//     email UUID. The unique constraint is installed by migration 00049
+//     as a regular UNIQUE (not partial), so the route handler can use
+//     ON CONFLICT for idempotent retries.
 //
 //   - Webhook payload shape is undocumented. Every field read goes
 //     through pickString / pickNested with a fallback list of common
@@ -67,7 +62,6 @@ export type IngestedSalesforgeReply = Pick<
   | "body_html"
   | "received_at"
   | "raw_payload"
-  | "instantly_category"
   | "keyword_flags"
   | "referral_contact"
   | "status"
@@ -202,25 +196,13 @@ export function normalizeSalesforgeReplyFromWebhook(
     pickStringNested(payload, ["email", "to_address"]);
 
   // Run prefilter at ingest so keyword_flags is populated before Claude
-  // runs. The pipeline downstream is unchanged from Instantly's path.
+  // runs.
   const prefilter = runKeywordPrefilter(body_text, lead_email);
 
   const referral_contact =
     prefilter.suggested_class === "referral_forward" &&
     prefilter.embedded_emails.length > 0
       ? { email: prefilter.embedded_emails[0], name: null, title: null }
-      : null;
-
-  // The instantly_category column is misnamed by history — it stores
-  // "the upstream provider's classification hint" regardless of channel.
-  // For Salesforge, positive_reply / negative_reply event types are
-  // analogous to Instantly's lead_interested / lead_uninterested tags.
-  // Storing them here lets the existing classifier pipeline use them
-  // unchanged.
-  const event_type = pickString(payload, "event_type", "type");
-  const instantly_category =
-    event_type === "positive_reply" || event_type === "negative_reply"
-      ? event_type
       : null;
 
   return {
@@ -256,7 +238,6 @@ export function normalizeSalesforgeReplyFromWebhook(
     received_at,
     raw_payload: payload,
 
-    instantly_category,
     keyword_flags: prefilter.flags,
     referral_contact,
 

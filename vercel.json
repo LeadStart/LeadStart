@@ -40,6 +40,10 @@
     {
       "path": "/app/api/cron/run-linkedin-sequences",
       "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/app/api/cron/dispatch-salesforge-enrollments",
+      "schedule": "0 15 * * *"
     }
   ]
 }

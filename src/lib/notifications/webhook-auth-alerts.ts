@@ -1,6 +1,7 @@
 // D1 — 401 alerting on webhook endpoints.
 //
-// Called from /api/webhooks/instantly and /api/webhooks/resend whenever a
+// Called from /api/webhooks/salesforge, /api/webhooks/unipile, and
+// /api/webhooks/resend whenever a
 // request is rejected with 401 for a reason that represents a real auth
 // failure (bad_secret / invalid_signature) — NOT missing env. Missing env
 // is an operator config error and would flood this table; it's handled
@@ -39,7 +40,6 @@ const WINDOW_MINUTES = 10;
 const COOLDOWN_MS = 60 * 60 * 1000;
 
 export type WebhookAuthEndpoint =
-  | "/api/webhooks/instantly"
   | "/api/webhooks/resend"
   | "/api/webhooks/unipile"
   | "/api/webhooks/salesforge";
@@ -279,8 +279,8 @@ function buildAlertHtml(input: {
   <h3 style="margin:0 0 6px;font-size:14px;">Top user-agents</h3>
   <ul style="margin:0 0 16px;padding-left:20px;">${uasList}</ul>
   <p style="margin:16px 0 0;color:#555;font-size:13px;">
-    Likely causes: a misconfigured WEBHOOK_SECRET deploy, a stale Instantly webhook registration,
-    or automated probing. Investigate the <code>webhook_auth_failures</code> table for details.
+    Likely causes: a misconfigured WEBHOOK_SECRET deploy or automated probing.
+    Investigate the <code>webhook_auth_failures</code> table for details.
     No further alerts will fire for this endpoint until the cooldown expires.
   </p>
 </div>`.trim();

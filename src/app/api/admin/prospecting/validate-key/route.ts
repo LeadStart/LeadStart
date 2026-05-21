@@ -7,9 +7,8 @@ import { ScrapioClient } from "@/lib/scrapio/client";
 // the subscription payload on success so the settings UI can show plan +
 // credits inline.
 //
-// Pattern matches /api/instantly/test — no auth check on this route. It
-// only echoes back what the user just typed in their own settings page,
-// so there's nothing to leak.
+// No auth check on this route. It only echoes back what the user just
+// typed in their own settings page, so there's nothing to leak.
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}));
   const apiKey = (body as { api_key?: unknown }).api_key;

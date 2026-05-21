@@ -21,8 +21,8 @@ import type {
 // a per-workspace DSN that the dashboard assigns at signup
 // (e.g. "api7.unipile.com:13779"). Both pieces live on organizations.
 //
-// Mirrors the InstantlyClient shape: 3-attempt exponential backoff on 429
-// or transport errors, JSON Content-Type only when sending a body.
+// 3-attempt exponential backoff on 429 or transport errors, JSON
+// Content-Type only when sending a body.
 
 export class UnipileClient {
   private apiKey: string;

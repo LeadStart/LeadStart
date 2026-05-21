@@ -1,13 +1,13 @@
-// Orchestrator: run the three-layer classifier on a lead_replies row and
+// Orchestrator: run the two-layer classifier on a lead_replies row and
 // — if the final_class is a hot one for this client — fire the
 // notification email.
 //
 // Called from the webhook handler via Next.js `after()` so it runs after
-// we've already returned 200 to Instantly. Inputs are just the reply id +
-// an admin Supabase client; everything else is derived.
+// we've already returned 200 to the upstream provider. Inputs are just
+// the reply id + an admin Supabase client; everything else is derived.
 //
 // Idempotent: re-invocations on a row that already has final_class set
-// are a no-op. Safe for Instantly retries.
+// are a no-op. Safe for webhook retries.
 
 import type { createAdminClient } from "@/lib/supabase/admin";
 import type { Client, LeadReply, ReplyClass } from "@/types/app";
@@ -90,7 +90,6 @@ export async function runReplyPipeline(
   try {
     claude = await classifyReply({
       body: reply.body_text,
-      instantly_category: reply.instantly_category,
       prefilter,
       persona_name: client?.persona_name ?? null,
     });
@@ -103,7 +102,6 @@ export async function runReplyPipeline(
   }
 
   const decision = decideFinalClass({
-    instantly_category: reply.instantly_category,
     prefilter,
     claude,
   });

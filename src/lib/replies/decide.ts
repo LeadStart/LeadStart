@@ -1,11 +1,10 @@
-// Three-layer classification merger — Layer 3 of the reply-routing classifier.
+// Two-layer classification merger — Layer 3 of the reply-routing classifier.
 //
-// Takes three independent signals and produces a single `final_class` that
+// Takes two independent signals and produces a single `final_class` that
 // downstream routing (client notification, dossier, etc.) uses.
 //
 // Layer 1: keyword prefilter (deterministic regex, zero cost)
 // Layer 2: Claude Haiku classifier (structured output, ~$0.0005/call)
-// Raw input: Instantly's native AI tag from the webhook (free but unreliable)
 //
 // Pure function. No network. No side effects.
 
@@ -14,7 +13,6 @@ import type { PrefilterResult } from "./keyword-prefilter";
 import type { ClassifierOutput } from "@/lib/ai/classifier";
 
 export interface DecideInput {
-  instantly_category: string | null;  // raw Instantly event name, e.g. lead_interested
   prefilter: PrefilterResult;
   claude: ClassifierOutput | null;    // null when Claude was skipped or errored
 }
@@ -39,8 +37,8 @@ const PREFILTER_HARD_OVERRIDES = new Set<ReplyClass>([
 ]);
 
 /**
- * Merge Instantly's native tag + keyword prefilter + Claude classifier
- * into a single final_class + structured audit trail.
+ * Merge keyword prefilter + Claude classifier into a single final_class +
+ * structured audit trail.
  *
  * Precedence (high → low):
  * 1. Prefilter HARD overrides: unsubscribe, ooo. Deterministic regexes that
@@ -54,12 +52,9 @@ const PREFILTER_HARD_OVERRIDES = new Set<ReplyClass>([
  * 4. Claude missing (API failed or skipped) AND prefilter has a suggested
  *    class → use the prefilter suggestion.
  * 5. Claude missing AND prefilter has no suggestion → needs_review.
- *
- * Instantly's native tag is stored for audit but NEVER drives the final
- * class on its own — that was the v1 architectural mistake we're fixing.
  */
 export function decideFinalClass(input: DecideInput): DecideOutput {
-  const { instantly_category, prefilter, claude } = input;
+  const { prefilter, claude } = input;
 
   // --- Precedence 1: prefilter hard overrides ---
   if (
@@ -122,9 +117,7 @@ export function decideFinalClass(input: DecideInput): DecideOutput {
     final_class: "needs_review",
     claude_confidence: null,
     claude_class: null,
-    reason: `Claude unavailable and prefilter found no strong signal. Instantly tag was "${
-      instantly_category ?? "none"
-    }".`,
+    reason: "Claude unavailable and prefilter found no strong signal.",
     referral_contact: null,
   };
 }

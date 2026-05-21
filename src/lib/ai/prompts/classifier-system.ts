@@ -2,9 +2,8 @@
 //
 // Held as a single exported constant so the prompt cache prefix is stable
 // across every classifier call. Any change here invalidates the cache —
-// keep volatile per-request context (the actual reply body, the Instantly
-// tag, the prefilter signals) out of this string; they go in the user
-// message.
+// keep volatile per-request context (the actual reply body, the prefilter
+// signals) out of this string; they go in the user message.
 //
 // Kept intentionally ≥4096 tokens so it actually hits the Haiku cache
 // threshold. If this gets shorter than that, prompt caching silently
@@ -26,7 +25,7 @@ You MUST return exactly one of these as \`class\`.
 
 - **qualifying_question** — the prospect is interested enough to ask substantive pre-meeting questions (pricing, capabilities, security, integrations, case studies, references, compliance). Treat a pricing question alone as qualifying_question, NOT objection_price (pricing curiosity is a buying signal, not a rejection).
 
-- **referral_forward** — the prospect is NOT the decision maker and is forwarding, looping in, introducing, or handing off to someone else (often naming or CC'ing them). Key tells: phrases like "not the right person", "I'm looping in X", "you should contact Y", "passing this along", OR a third-party email address appearing in the body with context that implies routing. This is the single most-common Instantly misclassification — prospects who say "not the right person, contact X" get tagged \`lead_interested\` by Instantly's internal tagger, and we MUST override to referral_forward. If there is ANY explicit handoff AND a new contact is named or emailed, prefer referral_forward over any other class — even if the prospect sounds warm.
+- **referral_forward** — the prospect is NOT the decision maker and is forwarding, looping in, introducing, or handing off to someone else (often naming or CC'ing them). Key tells: phrases like "not the right person", "I'm looping in X", "you should contact Y", "passing this along", OR a third-party email address appearing in the body with context that implies routing. If there is ANY explicit handoff AND a new contact is named or emailed, prefer referral_forward over any other class — even if the prospect sounds warm.
 
 ### Warm (client gets notified but no urgent action; conversational reply sufficient)
 
@@ -80,9 +79,6 @@ Each user turn will be a single reply to classify, with optional extra signals s
 # Reply body
 <the prospect's reply text>
 
-# Instantly native tag (optional)
-<e.g. lead_interested, lead_wrong_person, lead_out_of_office, lead_not_interested, lead_unsubscribed, lead_meeting_booked, lead_neutral — or "none">
-
 # Prefilter signals (optional)
 flags: <comma-separated flag names, e.g. wrong_person_phrase, referral_email_present, unsubscribe_phrase, ooo_phrase>
 suggested_class: <one of the taxonomy classes the deterministic prefilter suggested, or "none">
@@ -92,7 +88,7 @@ embedded_emails: <any email addresses the prefilter extracted from the body, or 
 <the real name of the person the outreach was sent from, when available, for tone calibration>
 \`\`\`
 
-Treat Instantly's tag and the prefilter's suggestion as HINTS, not ground truth. Your job is to read the reply and decide — override Instantly when the evidence contradicts it. This is the entire point of the layer; we would not be paying to run you if we trusted Instantly's tag at face value.
+Treat the prefilter's suggestion as a HINT, not ground truth. Your job is to read the reply and decide.
 
 ## Output format
 
@@ -129,6 +125,6 @@ Return only this structured object. Do not add preamble, do not explain your cha
 
 9. **"We already have a solution" / "we use X already"** → not_interested at confidence 0.80–0.90 unless the prospect hints at dissatisfaction or re-evaluation window, in which case objection_timing.
 
-10. **Anything that looks like a bounce, mail-daemon notification, or delivery failure** → needs_review. These shouldn't reach you (Instantly's pipeline should filter), but flag if you see one.
+10. **Anything that looks like a bounce, mail-daemon notification, or delivery failure** → needs_review. These shouldn't reach you (the upstream provider should filter), but flag if you see one.
 
 Now wait for the reply to classify.`;

@@ -59,7 +59,7 @@ export function CampaignRowActions({
         setDeleteOpen(false);
         setTypedName("");
         toast.success(`Deleted "${campaignName}"`, {
-          description: "Campaign removed from Instantly and LeadStart.",
+          description: "Campaign removed from LeadStart.",
         });
       } else if (action === "pause") {
         toast.success(`Paused "${campaignName}"`);
@@ -149,9 +149,9 @@ export function CampaignRowActions({
               <span className="font-semibold text-foreground">
                 {campaignName}
               </span>{" "}
-              from Instantly and from LeadStart. Lead replies and contacts
-              tied to this campaign are preserved but lose their campaign
-              link. This cannot be undone.
+              from LeadStart. Lead replies and contacts tied to this
+              campaign are preserved but lose their campaign link. This
+              cannot be undone.
             </DialogDescription>
           </DialogHeader>
 

@@ -46,18 +46,14 @@ export default function ClientDashboardPage() {
   const [endDate, setEndDate] = useState(() => getDateRange("30d").end);
   const [campaignsExpanded, setCampaignsExpanded] = useState(true);
 
-  // Fetch reports and excluded meetings when client/campaigns become available
+  // Excluded-meetings counter temporarily wired to 0 — the old query
+  // joined webhook_events on campaign_instantly_id which was dropped in
+  // migration 00051. Rebuild once webhook_events has a proper
+  // campaign_id FK.
   useEffect(() => {
     if (!client) return;
-    const supabase = createClient();
-    const iIds = campaigns.map((c) => c.instantly_campaign_id);
-
-    if (iIds.length > 0) {
-      supabase.from("webhook_events").select("*", { count: "exact", head: true })
-        .in("campaign_instantly_id", iIds).eq("event_type", "meeting_booked").eq("excluded", true)
-        .then(({ count }) => setExcludedMeetings(count || 0));
-    }
-  }, [client, campaigns]);
+    setExcludedMeetings(0);
+  }, [client]);
 
   // Fetch snapshots when date range or campaigns change
   const campaignIds = campaigns.map((c) => c.id);

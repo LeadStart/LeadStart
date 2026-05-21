@@ -236,13 +236,11 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     );
   }
 
-  // Record the upstream provider's new email id on the row. Column is
-  // legacy-named sent_instantly_email_id but semantically holds whichever
-  // upstream provider's id we just got back.
+  // Record the upstream provider's new email id on the row.
   if (sentExternalId) {
     const { error: finalizeErr } = await admin
       .from("lead_replies")
-      .update({ sent_instantly_email_id: sentExternalId })
+      .update({ sent_external_email_id: sentExternalId })
       .eq("id", id);
     if (finalizeErr) {
       console.error(
@@ -255,7 +253,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   return NextResponse.json({
     success: true,
     sent_at: sentAt,
-    sent_instantly_email_id: sentExternalId,
+    sent_external_email_id: sentExternalId,
     cc_addresses: cc ?? [],
   });
 }

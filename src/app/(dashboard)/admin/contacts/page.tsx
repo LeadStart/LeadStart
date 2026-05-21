@@ -395,11 +395,13 @@ export default function ContactsPage() {
       const data = (await res.json()) as {
         error?: string;
         assigned?: number;
-        uploaded?: number;
-        failed?: number;
+        queued?: number;
+        already_queued?: number;
         skipped_no_email?: number;
         skipped_invalid?: number;
-        pushed_to_instantly?: boolean;
+        queued_to_dispatcher?: boolean;
+        daily_cap?: number;
+        estimated_drain_days?: number | null;
         campaign_name?: string;
         reason?: string;
       };
@@ -412,13 +414,21 @@ export default function ContactsPage() {
         data.campaign_name ?? campaignMap.get(selectedCampaignId) ?? "campaign";
       const assigned = data.assigned ?? 0;
 
-      if (data.pushed_to_instantly) {
-        const parts: string[] = [`${data.uploaded ?? 0} uploaded`];
-        if ((data.failed ?? 0) > 0) parts.push(`${data.failed} failed`);
+      if (data.queued_to_dispatcher) {
+        const queued = data.queued ?? 0;
+        const cap = data.daily_cap ?? 66;
+        const days = data.estimated_drain_days ?? null;
+        const parts: string[] = [`queued ${queued}`];
+        if ((data.already_queued ?? 0) > 0)
+          parts.push(`${data.already_queued} already pending`);
         if ((data.skipped_no_email ?? 0) > 0)
           parts.push(`${data.skipped_no_email} no email`);
+        const drainHint =
+          days && days > 0
+            ? ` — will enroll at ${cap}/day over ~${days} day${days === 1 ? "" : "s"}`
+            : "";
         toast.success(
-          `Added ${assigned} contact${assigned === 1 ? "" : "s"} to ${name} — ${parts.join(", ")}`,
+          `Added ${assigned} contact${assigned === 1 ? "" : "s"} to ${name} — ${parts.join(", ")}${drainHint}`,
         );
       } else {
         toast.success(
@@ -1252,7 +1262,7 @@ export default function ContactsPage() {
                     ? clientMap.get(commonClientId)
                     : "this client"}
                 </span>
-                . Contacts will be uploaded to Instantly as leads.
+                . Contacts will be queued and enrolled into the Salesforge sequence at the campaign&apos;s daily cap.
               </p>
               <Select
                 value={selectedCampaignId}

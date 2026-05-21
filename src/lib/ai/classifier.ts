@@ -1,11 +1,9 @@
-// Claude Haiku 4.5 classifier — Layer 2 of the three-layer reply-routing
-// classifier (plan: docs/plans/ai-reply-routing.md).
+// Claude Haiku 4.5 classifier — Layer 2 of the two-layer reply-routing
+// classifier.
 //
-// Called after the deterministic keyword prefilter (Layer 1). Its job is to
-// verify / override Instantly's native tag using a structured Haiku call
-// with the full taxonomy. Output is merged with Instantly's tag and the
-// prefilter's output inside src/lib/replies/decide.ts (Layer 3) to produce
-// `final_class`.
+// Called after the deterministic keyword prefilter (Layer 1). Output is
+// merged with the prefilter's output inside src/lib/replies/decide.ts
+// (Layer 3) to produce `final_class`.
 
 import { z } from "zod";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
@@ -60,7 +58,6 @@ export type ClassifierOutput = z.infer<typeof ClassifierOutputSchema>;
 
 export interface ClassifierInput {
   body: string;                      // plain-text reply body
-  instantly_category?: string | null; // raw Instantly event name if present
   prefilter?: PrefilterResult;        // output of keyword-prefilter.ts
   persona_name?: string | null;       // real name on the outreach side (Path 1)
 }
@@ -78,9 +75,6 @@ function renderUserMessage(input: ClassifierInput): string {
   const lines: string[] = [];
   lines.push("# Reply body");
   lines.push(input.body.trim() || "(empty body)");
-  lines.push("");
-  lines.push("# Instantly native tag (optional)");
-  lines.push(input.instantly_category || "none");
   lines.push("");
 
   lines.push("# Prefilter signals (optional)");

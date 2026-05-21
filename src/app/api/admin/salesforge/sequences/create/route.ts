@@ -50,6 +50,10 @@ interface CreateBody {
   mailbox_ids?: string[];       // Salesforge mailbox ids to assign
   launch?: boolean;             // default false — leaves the sequence in draft
   register_webhooks?: boolean;  // default true
+  // Per-campaign daily cap on how many NEW contacts the
+  // dispatch-salesforge-enrollments cron will hand to Salesforge per
+  // UTC day. NULL/missing falls back to the dispatcher default (50).
+  daily_contact_cap?: number;
 }
 
 // Resolve our public webhook URL from env. Vercel sets VERCEL_URL on
@@ -250,12 +254,17 @@ export async function POST(req: NextRequest) {
   }
 
   // ----- 6. INSERT local campaign row -----
+  const dailyCap =
+    typeof body.daily_contact_cap === "number" && body.daily_contact_cap > 0
+      ? Math.floor(body.daily_contact_cap)
+      : null;
   const { data: created, error: insertError } = await admin
     .from("campaigns")
     .insert({
       organization_id: organizationId,
       client_id: body.client_id ?? null,
       salesforge_sequence_id: sequenceId,
+      salesforge_daily_contact_cap: dailyCap,
       name,
       status: launch ? "active" : "draft",
       source_channel: "salesforge",

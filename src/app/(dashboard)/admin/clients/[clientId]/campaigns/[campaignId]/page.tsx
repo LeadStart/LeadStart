@@ -134,9 +134,9 @@ export default async function CampaignDetailPage({
           <div className="relative z-10 flex items-start justify-between">
             <div>
               <h1 className="text-2xl font-bold">{campaign.name}</h1>
-              {campaign.instantly_campaign_id && (
+              {campaign.salesforge_sequence_id && (
                 <p className="text-xs text-[#0f172a]/50 font-mono mt-1">
-                  {campaign.instantly_campaign_id}
+                  {campaign.salesforge_sequence_id}
                 </p>
               )}
             </div>

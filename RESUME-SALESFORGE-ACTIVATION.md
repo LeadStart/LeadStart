@@ -2,7 +2,7 @@
 
 > **Status:** all code shipped. Pipeline is gated on three things you do in dashboards: apply migrations, add API keys, register a webhook. Walks you through the test-campaign smoke test before you point this at a real client.
 >
-> **Supersedes** [`RESUME-AI-REPLY-ROUTING.md`](RESUME-AI-REPLY-ROUTING.md) for the activation steps. That doc is preserved for the architectural / commit-by-commit history of how the pipeline was built, but its activation flow is Instantly-flavored and stale (Instantly was ripped out in `5cc1589`).
+> The earlier `RESUME-AI-REPLY-ROUTING.md` was deleted when the Instantly integration was stripped (migration `00051_drop_instantly_schema.sql`). This doc is the only resume reference for the reply pipeline.
 >
 > **Delete this file once activation is verified working in production.** Note in the deletion commit which test client / campaign was used.
 
@@ -26,13 +26,14 @@ Any step that fails surfaces as a missing row, a stuck `notification_status='pen
 
 ## Step 1 — apply migrations
 
-Three migrations underpin this initiative:
+Four migrations underpin this initiative:
 
 | Migration | What it adds | Why it's needed |
 |-----------|--------------|-----------------|
 | `00021_create_campaign_step_metrics.sql` | `campaign_step_metrics` table | Fixes the per-load 404 every dashboard fires; not strictly required for the pipeline but you'll see it on every page until applied |
 | `00045_add_source_channel.sql` | `source_channel` ENUM + columns on `campaigns`, `lead_replies`, `webhook_events` | Channel discriminator. Salesforge replies need this to be tagged `salesforge`. |
 | `00049_add_salesforge_columns.sql` | `salesforge_*` columns on `organizations`, `campaigns`, `lead_replies`; extends ENUM with `'salesforge'` | API key storage + per-sequence/per-reply id plumbing |
+| `00050_create_salesforge_enrollment_queue.sql` | `salesforge_enrollment_queue` table + `campaigns.salesforge_daily_contact_cap` | Salesforge has no native cap on new-contacts-per-day. Push-to-campaign now writes here instead of calling Salesforge synchronously; the once-daily `dispatch-salesforge-enrollments` cron (15:00 UTC ≈ 8am Pacific) drains it at the per-campaign cap. Default cap = 66 (sized for 3-step sequence on 200 sends/day). |
 
 ### Pre-flight check
 
@@ -58,7 +59,12 @@ select
   exists(
     select 1 from information_schema.columns
     where table_schema='public' and table_name='lead_replies' and column_name='salesforge_email_id'
-  ) as has_lead_replies_salesforge_00049;
+  ) as has_lead_replies_salesforge_00049,
+  (to_regclass('public.salesforge_enrollment_queue') is not null) as has_enrollment_queue_00050,
+  exists(
+    select 1 from information_schema.columns
+    where table_schema='public' and table_name='campaigns' and column_name='salesforge_daily_contact_cap'
+  ) as has_campaigns_daily_cap_00050;
 ```
 
 ### Safe-to-paste apply block
@@ -172,9 +178,44 @@ CREATE INDEX IF NOT EXISTS idx_lead_replies_salesforge_thread
 CREATE INDEX IF NOT EXISTS idx_lead_replies_salesforge_mailbox
   ON lead_replies (client_id, salesforge_mailbox_id)
   WHERE salesforge_mailbox_id IS NOT NULL;
+
+-- =============================================================
+-- 00050 — enrollment queue + per-campaign daily cap
+-- =============================================================
+ALTER TABLE campaigns
+  ADD COLUMN IF NOT EXISTS salesforge_daily_contact_cap INTEGER;
+
+CREATE TABLE IF NOT EXISTS salesforge_enrollment_queue (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  campaign_id UUID NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+  contact_id UUID NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
+  status TEXT NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending', 'sent', 'failed')),
+  error TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  processed_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_sf_queue_campaign_pending
+  ON salesforge_enrollment_queue (campaign_id, created_at)
+  WHERE status = 'pending';
+
+CREATE INDEX IF NOT EXISTS idx_sf_queue_campaign_sent_processed
+  ON salesforge_enrollment_queue (campaign_id, processed_at)
+  WHERE status = 'sent';
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_sf_queue_pending_dedup
+  ON salesforge_enrollment_queue (campaign_id, contact_id)
+  WHERE status = 'pending';
+
+CREATE INDEX IF NOT EXISTS idx_sf_queue_org_status
+  ON salesforge_enrollment_queue (organization_id, status, created_at);
 ```
 
 Re-run the pre-flight check after to confirm everything came back `t`.
+
+> **Note on the new cron:** `00050` enables the `dispatch-salesforge-enrollments` cron (registered in `vercel.json` at `0 15 * * *`, daily at 15:00 UTC ≈ 8am Pacific year-round — Vercel cron doesn't track DST so this floats by 1h seasonally; in winter it runs at 7am PST, in summer at 8am PDT, always ≤ 8am Pacific). It auto-deploys with the next push to master — no extra activation step. Until a sequence has a cap configured, the cron uses the dispatcher default of 66 new contacts per day.
 
 ---
 
@@ -281,6 +322,6 @@ After the first real reply lands cleanly, **delete this file** in a commit title
 
 ## Outstanding fragments (not blockers, but on the radar)
 
-- The classifier prompt + class taxonomy live in [`src/lib/ai/classifier.ts`](src/lib/ai/classifier.ts) and are channel-agnostic. Salesforge replies pass through it the same way Instantly replies did — no Salesforge-specific tuning needed.
+- The classifier prompt + class taxonomy live in [`src/lib/ai/classifier.ts`](src/lib/ai/classifier.ts) and are channel-agnostic. Salesforge replies pass through it directly — no channel-specific tuning needed.
 - LinkedIn channel activation (separate initiative) reuses this same `runReplyPipeline` + notification path. Walking through the Salesforge smoke first means LinkedIn activation only needs Unipile-specific wiring later, not pipeline debugging.
-- The `RESUME-AI-REPLY-ROUTING.md` doc still describes the Instantly version of this flow. It's preserved for the per-commit history of how the pipeline was built. Once Salesforge activation is verified, that doc and this one can both be deleted in favor of a short note in `PROJECT_STATUS.md`.
+- Once Salesforge activation is verified end-to-end on a real client, this doc can be deleted in favor of a short note in `PROJECT_STATUS.md`.

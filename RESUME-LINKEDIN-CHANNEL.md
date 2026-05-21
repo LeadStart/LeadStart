@@ -63,11 +63,11 @@ This document lets a fresh session pick up the LinkedIn channel without re-readi
 > ✅ **SHIPPED in `dae23e2`** (2026-04-27).
 
 Migration `00047_create_sequence_engine.sql`:
-- Makes `campaigns.instantly_campaign_id` nullable (LinkedIn campaigns have no Instantly id); replaces the `UNIQUE(organization_id, instantly_campaign_id)` constraint with a partial unique index that only applies when the column is non-null.
+- (Historically also relaxed `campaigns.instantly_campaign_id` to nullable — that column was later dropped entirely in migration `00051_drop_instantly_schema.sql` when the Instantly integration was removed.)
 - Adds `campaign_steps` (id, campaign_id, step_index, kind, wait_days, body_template, conditions) with UNIQUE on `(campaign_id, step_index)`.
 - Adds `campaign_enrollments` (id, campaign_id, contact_id, current_step_index, last_action_at, status, started_at, unipile_chat_id, unipile_invitation_id, last_error) with UNIQUE on `(campaign_id, contact_id)` and a partial index on `(status, last_action_at) WHERE status='active'` for the cron worker.
 
-UI: `/admin/campaigns/new/linkedin` is a sequence builder. Form: name + client + ordered steps (kind dropdown, wait_days input, body_template textarea, up/down/remove buttons). Defaults to a 4-step starter sequence (connect_request → message after 3d → message after 5d → message after 7d). Saved as `status='draft'` so nothing dispatches until activated. CTA on `/admin/campaigns` next to "Sync from Instantly".
+UI: `/admin/campaigns/new/linkedin` is a sequence builder. Form: name + client + ordered steps (kind dropdown, wait_days input, body_template textarea, up/down/remove buttons). Defaults to a 4-step starter sequence (connect_request → message after 3d → message after 5d → message after 7d). Saved as `status='draft'` so nothing dispatches until activated.
 
 APIs:
 - `POST /api/admin/campaigns/linkedin` — owner-only. Inserts campaign + steps atomically; rolls back the campaign if step inserts fail.
