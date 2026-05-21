@@ -31,6 +31,7 @@ import { CampaignImportPanel } from "./import-panel";
 import { CampaignContactsTable } from "./contacts-table";
 import { PacingEditor } from "./pacing-editor";
 import { TagsEditor } from "./tags-editor";
+import { CustomVarMapping } from "./custom-var-mapping";
 import type { Campaign, CampaignSnapshot, Client } from "@/types/app";
 
 const DEFAULT_DAILY_CAP = 66;
@@ -277,6 +278,11 @@ export default async function AdminCampaignDetailPage({
               />
             </CardContent>
           </Card>
+
+          <CustomVarMapping
+            campaignId={campaign.id}
+            currentMapping={campaign.salesforge_custom_var_mapping}
+          />
 
           <CampaignContactsTable
             campaignId={campaign.id}
