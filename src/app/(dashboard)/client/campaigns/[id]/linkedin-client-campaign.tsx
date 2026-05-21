@@ -69,9 +69,9 @@ async function fetchClientLinkedinCampaign(
 export function LinkedinClientCampaign({
   params,
 }: {
-  params: Promise<{ campaignId: string }>;
+  params: Promise<{ id: string }>;
 }) {
-  const { campaignId } = use(params);
+  const { id: campaignId } = use(params);
   const { data } = useSWR(`client-linkedin-campaign-${campaignId}`, () =>
     fetchClientLinkedinCampaign(campaignId),
   );

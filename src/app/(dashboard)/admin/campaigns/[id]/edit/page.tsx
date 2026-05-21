@@ -1,6 +1,6 @@
 "use client";
 
-// /admin/campaigns/[campaignId]/edit — edit a Salesforge campaign.
+// /admin/campaigns/[id]/edit — edit a Salesforge campaign.
 //
 // Bundles:
 //   - Step editor (subject + body + reorder + add/remove)
@@ -97,9 +97,9 @@ interface ValidationResult {
 export default function EditCampaignPage({
   params,
 }: {
-  params: Promise<{ campaignId: string }>;
+  params: Promise<{ id: string }>;
 }) {
-  const { campaignId } = use(params);
+  const { id: campaignId } = use(params);
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);

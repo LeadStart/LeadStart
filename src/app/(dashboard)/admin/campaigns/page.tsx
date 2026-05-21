@@ -80,11 +80,15 @@ export default function AllCampaignsPage() {
               <TableBody>
                 {pageRows.map((row) => {
                   const isOrphan = row.client_id === null;
-                  const campaignHref = isOrphan ? null : `/admin/clients/${row.client_id}/campaigns/${row.id}`;
+                  // Top-level detail page at /admin/campaigns/[id] is
+                  // orphan-safe and handles both linked and unlinked
+                  // campaigns. The client-scoped URL still works for
+                  // linked campaigns when entered via the client dossier.
+                  const campaignHref = `/admin/campaigns/${row.id}`;
                   const clientHref = isOrphan ? null : `/admin/clients/${row.client_id}`;
                   return (
                     <TableRow key={row.id} className="group">
-                      <TableCell><div className="flex items-center gap-3"><div className="flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold text-white shrink-0" style={{ background: '#2E37FE' }}><Mail size={14} /></div>{campaignHref ? <Link href={campaignHref} className="font-medium text-foreground hover:text-[#2E37FE] transition-colors">{row.name}</Link> : <span className="font-medium text-foreground">{row.name}</span>}</div></TableCell>
+                      <TableCell><div className="flex items-center gap-3"><div className="flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold text-white shrink-0" style={{ background: '#2E37FE' }}><Mail size={14} /></div><Link href={campaignHref} className="font-medium text-foreground hover:text-[#2E37FE] transition-colors">{row.name}</Link></div></TableCell>
                       <TableCell>{clientHref ? <Link href={clientHref} className="text-muted-foreground hover:text-foreground transition-colors">{row.clientName || "—"}</Link> : <Badge variant="secondary" className="badge-amber">Unlinked</Badge>}</TableCell>
                       <TableCell><Badge variant="secondary" className={row.status === "active" ? "badge-green" : row.status === "paused" ? "badge-amber" : "badge-slate"}>{row.status}</Badge></TableCell>
                       <TableCell className="text-right font-medium">{row.metrics.emails_sent.toLocaleString()}</TableCell>
@@ -93,15 +97,13 @@ export default function AllCampaignsPage() {
                       <TableCell className="text-right font-medium">{row.metrics.meetings_booked}</TableCell>
                       <TableCell className="w-[80px]">
                         <div className="flex items-center justify-end gap-1">
-                          {campaignHref && (
-                            <Link
-                              href={campaignHref}
-                              aria-label="Open campaign"
-                              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity hover:bg-muted/50 hover:text-foreground"
-                            >
-                              <ArrowRight size={14} />
-                            </Link>
-                          )}
+                          <Link
+                            href={campaignHref}
+                            aria-label="Open campaign"
+                            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity hover:bg-muted/50 hover:text-foreground"
+                          >
+                            <ArrowRight size={14} />
+                          </Link>
                           <CampaignRowActions
                             campaignId={row.id}
                             campaignName={row.name}

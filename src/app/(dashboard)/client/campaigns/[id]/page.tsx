@@ -64,9 +64,9 @@ async function fetchClientCampaign(campaignId: string) {
 export default function ClientCampaignPage({
   params,
 }: {
-  params: Promise<{ campaignId: string }>;
+  params: Promise<{ id: string }>;
 }) {
-  const { campaignId } = use(params);
+  const { id: campaignId } = use(params);
   const { data } = useSWR(`client-campaign-${campaignId}`, () => fetchClientCampaign(campaignId));
   const [datePreset, setDatePreset] = useState("30d");
   const [startDate, setStartDate] = useState(() => getDateRange("30d").start);

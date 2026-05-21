@@ -40,9 +40,9 @@ const SNAPSHOT_COLUMNS =
 export default async function CampaignDetailPage({
   params,
 }: {
-  params: Promise<{ clientId: string; campaignId: string }>;
+  params: Promise<{ clientId: string; id: string }>;
 }) {
-  const { clientId, campaignId } = await params;
+  const { clientId, id: campaignId } = await params;
   const supabase = await createClient();
 
   const { data: campaignRow } = await supabase
