@@ -14,6 +14,8 @@ import type {
   SalesforgeEmail,
   SalesforgeContactCreate,
   SalesforgeContactBulkResponse,
+  SalesforgeWorkspaceContact,
+  SalesforgeWorkspaceContactList,
   SalesforgeReplyRequest,
   SalesforgeWebhook,
   SalesforgeWebhookList,
@@ -461,6 +463,62 @@ export class SalesforgeClient {
   }
 
   // ===== CONTACTS =====
+
+  // GET /workspaces/{ws}/contacts — paginated list of every contact in
+  // the Salesforge workspace. The not_in_sequence_id filter is the
+  // reverse of what's intuitive: pass a sequence id to get contacts
+  // NOT enrolled in that sequence (used by the sync cron to figure out
+  // sequence membership via set diff).
+  async listWorkspaceContacts(
+    workspaceId: string,
+    opts: { limit?: number; offset?: number; notInSequenceId?: string } = {},
+  ): Promise<SalesforgeWorkspaceContactList> {
+    const params = new URLSearchParams();
+    params.set("limit", String(opts.limit ?? 200));
+    params.set("offset", String(opts.offset ?? 0));
+    if (opts.notInSequenceId) {
+      params.set("not_in_sequence_id", opts.notInSequenceId);
+    }
+    return this.request<SalesforgeWorkspaceContactList>(
+      `/workspaces/${encodeURIComponent(workspaceId)}/contacts?${params.toString()}`,
+    );
+  }
+
+  // Convenience: walk every page so the caller gets the full workspace
+  // contact list without managing offsets. Caps at ~10k to avoid
+  // runaway loops on misconfigured workspaces.
+  async listAllWorkspaceContacts(
+    workspaceId: string,
+    opts: { notInSequenceId?: string } = {},
+  ): Promise<SalesforgeWorkspaceContact[]> {
+    const pageSize = 200;
+    const maxPages = 50; // 10k contact ceiling
+    const out: SalesforgeWorkspaceContact[] = [];
+    for (let page = 0; page < maxPages; page++) {
+      const res = await this.listWorkspaceContacts(workspaceId, {
+        limit: pageSize,
+        offset: page * pageSize,
+        notInSequenceId: opts.notInSequenceId,
+      });
+      const batch = res.data ?? [];
+      out.push(...batch);
+      if (batch.length < pageSize) break;
+    }
+    return out;
+  }
+
+  // GET /workspaces/{ws}/sequences/{seq}/contacts/count — quick total
+  // count of contacts enrolled in a sequence. Cheaper than fetching
+  // the full list when we only need to know "is this empty?".
+  async getSequenceContactCount(
+    workspaceId: string,
+    sequenceId: string,
+  ): Promise<number> {
+    const res = await this.request<{ count?: number }>(
+      `/workspaces/${encodeURIComponent(workspaceId)}/sequences/${encodeURIComponent(sequenceId)}/contacts/count`,
+    );
+    return res.count ?? 0;
+  }
 
   // POST /workspaces/{ws}/contacts/bulk — Salesforge caps a single
   // request at 100 contacts. The pushContactsToSequence wrapper below

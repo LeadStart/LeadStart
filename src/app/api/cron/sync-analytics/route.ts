@@ -40,6 +40,8 @@ export async function GET(request: NextRequest) {
   let totalSynced = 0;
   let totalDiscovered = 0;
   let totalStatusUpdated = 0;
+  let totalContactsSynced = 0;
+  let totalContactsLinked = 0;
 
   for (const org of orgs) {
     // Walk source_channel='salesforge' campaigns and refresh their
@@ -156,6 +158,7 @@ export async function GET(request: NextRequest) {
                         client: salesforge,
                         workspaceId: salesforgeWorkspaceId,
                         sequenceId: seqId,
+                        callbackUrl,
                       });
                     } catch (err) {
                       console.error(
@@ -193,6 +196,194 @@ export async function GET(request: NextRequest) {
           .eq("source_channel", "salesforge")
           .eq("status", "active");
         salesforgeCampaigns = data || [];
+      }
+
+      // ----- Contact sync: pull every contact in the Salesforge workspace
+      // and reconcile against LeadStart's contacts table. Salesforge has
+      // no GET /sequences/{id}/contacts, but it does expose a
+      // not_in_sequence_id filter on the workspace contacts endpoint —
+      // so for each LeadStart campaign with a sequence id, we compute
+      // sequence membership by set diff (all workspace contacts MINUS
+      // those not-in-this-sequence = those IN this sequence).
+      //
+      // Skipped on ?campaign_id= (that mode is for refreshing one
+      // campaign's analytics, not a full contact reconcile).
+      if (!campaignId) {
+        try {
+          const allWorkspaceContacts = await salesforge.listAllWorkspaceContacts(
+            salesforgeWorkspaceId,
+          );
+          if (allWorkspaceContacts.length > 0) {
+            const now = new Date().toISOString();
+            // Filter to contacts with usable emails.
+            const usable = allWorkspaceContacts.filter(
+              (c) => c.email && c.email.includes("@"),
+            );
+
+            // Pre-fetch existing local contacts by lower(email) so we
+            // don't trip the contacts unique index (which is on
+            // lower(email) — supabase-js can't onConflict a functional
+            // index). Split into INSERT vs UPDATE based on existence.
+            const lowerEmails = usable.map((c) => c.email!.trim().toLowerCase());
+            const { data: existingLocal } = await admin
+              .from("contacts")
+              .select("id, email")
+              .eq("organization_id", org.id)
+              .in("email", lowerEmails);
+            // Fallback search using case-insensitive matches — the
+            // contacts table may have stored emails in mixed case
+            // historically. Re-scan with the raw emails so we don't
+            // accidentally double-insert a row whose stored email
+            // differs only in case.
+            const rawEmails = usable.map((c) => c.email!.trim());
+            const { data: existingLocalCase } = await admin
+              .from("contacts")
+              .select("id, email")
+              .eq("organization_id", org.id)
+              .in("email", rawEmails);
+            const existingByEmail = new Map<string, string>();
+            for (const row of [
+              ...((existingLocal ?? []) as { id: string; email: string }[]),
+              ...((existingLocalCase ?? []) as { id: string; email: string }[]),
+            ]) {
+              existingByEmail.set(row.email.toLowerCase(), row.id);
+            }
+
+            const toInsert: typeof usable = [];
+            const toUpdate: { localId: string; sf: typeof usable[number] }[] = [];
+            for (const c of usable) {
+              const localId = existingByEmail.get(c.email!.trim().toLowerCase());
+              if (localId) {
+                toUpdate.push({ localId, sf: c });
+              } else {
+                toInsert.push(c);
+              }
+            }
+
+            if (toInsert.length > 0) {
+              const insertPayload = toInsert.map((c) => ({
+                id: crypto.randomUUID(),
+                organization_id: org.id,
+                client_id: null,
+                campaign_id: null,
+                email: c.email!.trim(),
+                salesforge_contact_id: c.id,
+                first_name: c.firstName ?? null,
+                last_name: c.lastName ?? null,
+                company_name: c.company ?? null,
+                linkedin_url: c.linkedinUrl ?? null,
+                tags: c.tags ?? [],
+                status: "uploaded",
+                source: "salesforge-sync",
+                created_at: now,
+                updated_at: now,
+              }));
+              const { error: insertErr } = await admin
+                .from("contacts")
+                .insert(insertPayload);
+              if (insertErr) {
+                console.error(
+                  `[cron/sync-analytics] contact insert failed for org ${org.id}:`,
+                  insertErr,
+                );
+              } else {
+                totalContactsSynced += insertPayload.length;
+              }
+            }
+
+            if (toUpdate.length > 0) {
+              // Update each row individually — different rows get
+              // different field values. Could batch with a CTE but
+              // the count is bounded by workspace size (typically
+              // <10k); per-row UPDATE is fine.
+              for (const { localId, sf } of toUpdate) {
+                const patch: Record<string, unknown> = {
+                  salesforge_contact_id: sf.id,
+                  status: "uploaded",
+                  source: "salesforge-sync",
+                  updated_at: now,
+                };
+                if (sf.firstName) patch.first_name = sf.firstName;
+                if (sf.lastName) patch.last_name = sf.lastName;
+                if (sf.company) patch.company_name = sf.company;
+                if (sf.linkedinUrl) patch.linkedin_url = sf.linkedinUrl;
+                if (sf.tags && sf.tags.length > 0) patch.tags = sf.tags;
+                const { error: updErr } = await admin
+                  .from("contacts")
+                  .update(patch)
+                  .eq("id", localId);
+                if (updErr) {
+                  console.error(
+                    `[cron/sync-analytics] contact update failed for ${localId}:`,
+                    updErr,
+                  );
+                } else {
+                  totalContactsSynced++;
+                }
+              }
+            }
+
+            // For each Salesforge campaign in the org, compute which
+            // workspace contacts are actually enrolled in its sequence
+            // and link them to that campaign locally. Salesforge has
+            // no direct "list contacts in sequence" endpoint, so we use:
+            //   in_sequence = all_workspace - not_in_sequence
+            const workspaceIdSet = new Set(
+              allWorkspaceContacts.map((c) => c.id),
+            );
+            for (const campaign of salesforgeCampaigns) {
+              if (!campaign.salesforge_sequence_id) continue;
+              try {
+                const notInSeq = await salesforge.listAllWorkspaceContacts(
+                  salesforgeWorkspaceId,
+                  { notInSequenceId: campaign.salesforge_sequence_id },
+                );
+                const notInSeqIdSet = new Set(notInSeq.map((c) => c.id));
+                const inSequenceSfIds = [...workspaceIdSet].filter(
+                  (id) => !notInSeqIdSet.has(id),
+                );
+                if (inSequenceSfIds.length === 0) continue;
+
+                // Link these contacts to this campaign locally.
+                // Update by salesforge_contact_id (the dedup column we
+                // just upserted), in chunks to keep the IN(...) clause
+                // a reasonable size.
+                const chunkSize = 500;
+                for (let i = 0; i < inSequenceSfIds.length; i += chunkSize) {
+                  const chunk = inSequenceSfIds.slice(i, i + chunkSize);
+                  const { error: linkErr } = await admin
+                    .from("contacts")
+                    .update({
+                      campaign_id: campaign.id,
+                      client_id: campaign.client_id,
+                      status: "uploaded",
+                      updated_at: now,
+                    })
+                    .eq("organization_id", org.id)
+                    .in("salesforge_contact_id", chunk);
+                  if (linkErr) {
+                    console.error(
+                      `[cron/sync-analytics] link-to-campaign failed for ${campaign.id}:`,
+                      linkErr,
+                    );
+                  } else {
+                    totalContactsLinked += chunk.length;
+                  }
+                }
+              } catch (err) {
+                console.error(
+                  `[cron/sync-analytics] sequence-membership compute failed for ${campaign.id}:`,
+                  err,
+                );
+              }
+            }
+          }
+        } catch (err) {
+          console.error(
+            `[cron/sync-analytics] workspace contact sync threw for org ${org.id}:`,
+            err,
+          );
+        }
       }
 
       for (const campaign of salesforgeCampaigns) {
@@ -269,5 +460,7 @@ export async function GET(request: NextRequest) {
     synced: totalSynced,
     discovered: totalDiscovered,
     status_updated: totalStatusUpdated,
+    contacts_synced: totalContactsSynced,
+    contacts_linked_to_campaigns: totalContactsLinked,
   });
 }

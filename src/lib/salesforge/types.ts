@@ -241,6 +241,28 @@ export interface SalesforgeContactBulkResponse {
   }>;
 }
 
+// GET /workspaces/{ws}/contacts response row. Salesforge's API uses
+// camelCase here too; tags/customVars are optional in practice (object
+// shape mirrors ContactResponse from doc3.json).
+export interface SalesforgeWorkspaceContact {
+  id: string;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  company?: string;
+  linkedinUrl?: string;
+  tags?: string[];
+  customVars?: Record<string, string>;
+}
+
+// Standard list envelope (see docs/salesforge-api-reference.md).
+export interface SalesforgeWorkspaceContactList {
+  total?: number;
+  limit?: number;
+  offset?: number;
+  data?: SalesforgeWorkspaceContact[];
+}
+
 // PUT /workspaces/{ws}/sequences/{seq}/contacts body — note camelCase
 // `contactIds`, NOT `contact_ids`.
 export interface SalesforgeAssignContactsRequest {
