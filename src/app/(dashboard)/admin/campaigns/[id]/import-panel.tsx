@@ -27,9 +27,11 @@ import type { ContactStatus } from "@/types/app";
 import { appUrl } from "@/lib/api-url";
 
 interface ImportResult {
-  inserted: number;
-  queued: number;
-  already_queued: number;
+  inserted: number;            // newly created contact rows
+  linked: number;              // existing rows re-pointed at this campaign
+  queued: number;              // added to salesforge_enrollment_queue
+  already_queued: number;      // had a pending row before this import
+  marked_uploaded: number;     // sync-mode: flipped status='uploaded' without touching the queue
   skipped_no_email: number;
   daily_cap: number | null;
   estimated_drain_days: number | null;
@@ -52,6 +54,11 @@ export function CampaignImportPanel({
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
   const [result, setResult] = useState<ImportResult | null>(null);
+  // Sync mode: these contacts are already enrolled in Salesforge (e.g.
+  // uploaded via the Salesforge UI before LeadStart knew about them). We
+  // still link the local contact rows to this campaign, but we skip the
+  // throttle queue and mark them status='uploaded' directly.
+  const [syncOnly, setSyncOnly] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   function reset() {
@@ -96,50 +103,126 @@ export function CampaignImportPanel({
       const supabase = createClient();
       const now = new Date().toISOString();
 
-      const payload = rows.map((r) => ({
-        id: crypto.randomUUID(),
-        organization_id: organizationId,
-        client_id: clientId,
-        campaign_id: campaignId,
-        first_name: r.first_name,
-        last_name: r.last_name,
-        email: r.email,
-        company_name: r.company_name,
-        title: r.title,
-        phone: r.phone,
-        linkedin_url: r.linkedin_url,
-        intro_line: r.intro_line,
-        enrichment_data: {},
-        tags: r.tags,
-        status: "new" as ContactStatus,
-        source: "csv-import-campaign",
-        notes: r.notes,
-        pipeline_stage: null,
-        pipeline_sort_order: 0,
-        pipeline_notes: null,
-        pipeline_follow_up_date: null,
-        pipeline_added_at: null,
-        created_at: now,
-        updated_at: now,
-      }));
-
-      const { data: inserted, error: insertError } = await supabase
+      // ----- 1. Split parsed rows into already-known (by email) vs new.
+      // contacts has a UNIQUE(organization_id, email) constraint that the
+      // pre-throttle import discovered the hard way — pre-filter to avoid
+      // the duplicate-key crash and to give the owner a useful linked
+      // count separate from inserted count.
+      const emails = rows.map((r) => r.email.toLowerCase());
+      const { data: existingRows, error: existingErr } = await supabase
         .from("contacts")
-        .insert(payload)
-        .select("id");
-      if (insertError) {
-        setImportError(`Contact insert failed: ${insertError.message}`);
+        .select("id, email")
+        .eq("organization_id", organizationId)
+        .in("email", emails);
+      if (existingErr) {
+        setImportError(`Lookup failed: ${existingErr.message}`);
         return;
       }
-      const insertedIds = (inserted ?? []).map((r) => r.id as string);
+      const existingByEmail = new Map<string, string>();
+      for (const r of (existingRows ?? []) as { id: string; email: string }[]) {
+        existingByEmail.set(r.email.toLowerCase(), r.id);
+      }
+      const toInsert = rows.filter(
+        (r) => !existingByEmail.has(r.email.toLowerCase()),
+      );
+      const toLink = rows.filter((r) =>
+        existingByEmail.has(r.email.toLowerCase()),
+      );
+      const linkedIds = toLink
+        .map((r) => existingByEmail.get(r.email.toLowerCase()))
+        .filter((id): id is string => Boolean(id));
 
+      // ----- 2. INSERT new contact rows.
+      const insertedIds: string[] = [];
+      if (toInsert.length > 0) {
+        const payload = toInsert.map((r) => ({
+          id: crypto.randomUUID(),
+          organization_id: organizationId,
+          client_id: clientId,
+          campaign_id: campaignId,
+          first_name: r.first_name,
+          last_name: r.last_name,
+          email: r.email,
+          company_name: r.company_name,
+          title: r.title,
+          phone: r.phone,
+          linkedin_url: r.linkedin_url,
+          intro_line: r.intro_line,
+          enrichment_data: {},
+          tags: r.tags,
+          status: syncOnly ? ("uploaded" as ContactStatus) : ("new" as ContactStatus),
+          source: "csv-import-campaign",
+          notes: r.notes,
+          pipeline_stage: null,
+          pipeline_sort_order: 0,
+          pipeline_notes: null,
+          pipeline_follow_up_date: null,
+          pipeline_added_at: null,
+          created_at: now,
+          updated_at: now,
+        }));
+        const { data: insertedData, error: insertError } = await supabase
+          .from("contacts")
+          .insert(payload)
+          .select("id");
+        if (insertError) {
+          setImportError(`Contact insert failed: ${insertError.message}`);
+          return;
+        }
+        for (const r of (insertedData ?? []) as { id: string }[]) {
+          insertedIds.push(r.id);
+        }
+      }
+
+      // ----- 3. UPDATE existing rows to link them to this campaign.
+      // In sync mode, also flip status='uploaded' so the contacts list
+      // shows them as enrolled.
+      if (linkedIds.length > 0) {
+        const linkUpdate: Record<string, unknown> = {
+          campaign_id: campaignId,
+          updated_at: now,
+        };
+        if (syncOnly) linkUpdate.status = "uploaded";
+        const { error: updateError } = await supabase
+          .from("contacts")
+          .update(linkUpdate)
+          .in("id", linkedIds);
+        if (updateError) {
+          setImportError(
+            `Linked-contacts update failed: ${updateError.message}`,
+          );
+          return;
+        }
+      }
+
+      const allContactIds = [...insertedIds, ...linkedIds];
+
+      // ----- 4a. Sync mode: contacts are already enrolled in Salesforge,
+      // we're just reconciling local state. Don't touch the queue.
+      if (syncOnly) {
+        setResult({
+          inserted: insertedIds.length,
+          linked: linkedIds.length,
+          queued: 0,
+          already_queued: 0,
+          marked_uploaded: allContactIds.length,
+          skipped_no_email: 0,
+          daily_cap: null,
+          estimated_drain_days: null,
+        });
+        resetAfterImport();
+        return;
+      }
+
+      // ----- 4b. Normal mode: queue everything for the daily dispatcher
+      // (the push endpoint dedupes against existing pending rows).
       const pushRes = await fetch(
         appUrl("/api/admin/contacts/push-to-campaign"),
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            contact_ids: insertedIds,
+            contact_ids: allContactIds,
             campaign_id: campaignId,
           }),
         },
@@ -154,28 +237,33 @@ export function CampaignImportPanel({
       };
       if (!pushRes.ok) {
         setImportError(
-          `Contacts inserted but queue push failed: ${pushData.error ?? `HTTP ${pushRes.status}`}`,
+          `Contacts saved but queue push failed: ${pushData.error ?? `HTTP ${pushRes.status}`}`,
         );
         return;
       }
 
       setResult({
         inserted: insertedIds.length,
+        linked: linkedIds.length,
         queued: pushData.queued ?? 0,
         already_queued: pushData.already_queued ?? 0,
+        marked_uploaded: 0,
         skipped_no_email: pushData.skipped_no_email ?? 0,
         daily_cap: pushData.daily_cap ?? null,
         estimated_drain_days: pushData.estimated_drain_days ?? null,
       });
-      // Clear the staged rows so a fresh import starts clean.
-      setFilename(null);
-      setRows([]);
-      if (fileInputRef.current) fileInputRef.current.value = "";
+      resetAfterImport();
     } catch (err) {
       setImportError(err instanceof Error ? err.message : String(err));
     } finally {
       setImporting(false);
     }
+  }
+
+  function resetAfterImport() {
+    setFilename(null);
+    setRows([]);
+    if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
   return (
@@ -193,7 +281,7 @@ export function CampaignImportPanel({
             </p>
             <p className="text-xs text-muted-foreground">
               {filename
-                ? `${rows.length} contact${rows.length === 1 ? "" : "s"} parsed — ready to queue into ${campaignName}`
+                ? `${rows.length} contact${rows.length === 1 ? "" : "s"} parsed — ready to ${syncOnly ? "sync to" : "queue into"} ${campaignName}`
                 : "First row should be column headers (email is required)"}
             </p>
           </div>
@@ -277,18 +365,32 @@ export function CampaignImportPanel({
         <div className="flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3">
           <CheckCircle2 size={16} className="text-emerald-600 mt-0.5 shrink-0" />
           <div className="text-sm text-emerald-900">
-            <p>
-              <strong>{result.inserted}</strong> contact
-              {result.inserted === 1 ? "" : "s"} inserted,{" "}
-              <strong>{result.queued}</strong> queued for enrollment
-              {result.already_queued > 0 && (
-                <> ({result.already_queued} were already pending)</>
-              )}
-              {result.skipped_no_email > 0 && (
-                <> · {result.skipped_no_email} skipped (no email)</>
-              )}
-              .
-            </p>
+            {result.marked_uploaded > 0 ? (
+              <p>
+                Synced{" "}
+                <strong>
+                  {result.inserted + result.linked} contact
+                  {result.inserted + result.linked === 1 ? "" : "s"}
+                </strong>
+                : {result.inserted} newly inserted, {result.linked} already
+                existed and were linked. All marked as{" "}
+                <strong>uploaded</strong> — queue not touched.
+              </p>
+            ) : (
+              <p>
+                <strong>{result.inserted}</strong> newly inserted,{" "}
+                <strong>{result.linked}</strong> already existed and were
+                linked,{" "}
+                <strong>{result.queued}</strong> queued for enrollment
+                {result.already_queued > 0 && (
+                  <> ({result.already_queued} were already pending)</>
+                )}
+                {result.skipped_no_email > 0 && (
+                  <> · {result.skipped_no_email} skipped (no email)</>
+                )}
+                .
+              </p>
+            )}
             {result.estimated_drain_days && result.daily_cap ? (
               <p className="text-xs text-emerald-700 mt-1">
                 At {result.daily_cap}/day, the cron will finish enrolling these
@@ -300,6 +402,27 @@ export function CampaignImportPanel({
         </div>
       )}
 
+      {/* Sync-mode toggle — for contacts already in Salesforge */}
+      <label className="flex items-start gap-2 rounded-md border border-border/60 px-3 py-2 cursor-pointer hover:bg-muted/30 transition-colors">
+        <input
+          type="checkbox"
+          checked={syncOnly}
+          onChange={(e) => setSyncOnly(e.target.checked)}
+          disabled={importing}
+          className="mt-0.5"
+        />
+        <div className="text-xs">
+          <p className="font-medium">
+            These contacts are already enrolled in Salesforge
+          </p>
+          <p className="text-muted-foreground mt-0.5">
+            Link them to this campaign and mark as uploaded — skip the queue.
+            Use this when you uploaded the contacts directly in app.salesforge.ai
+            and just want LeadStart to reflect that.
+          </p>
+        </div>
+      </label>
+
       <div className="flex items-center gap-2">
         <Button
           onClick={handleImport}
@@ -307,12 +430,14 @@ export function CampaignImportPanel({
         >
           {importing ? (
             <>
-              <Loader2 size={14} className="mr-1 animate-spin" /> Importing…
+              <Loader2 size={14} className="mr-1 animate-spin" />{" "}
+              {syncOnly ? "Syncing…" : "Importing…"}
             </>
           ) : (
             <>
-              <UploadCloud size={14} className="mr-1" /> Import {rows.length || ""}{" "}
-              contact{rows.length === 1 ? "" : "s"}
+              <UploadCloud size={14} className="mr-1" />
+              {syncOnly ? " Sync " : " Import "}
+              {rows.length || ""} contact{rows.length === 1 ? "" : "s"}
             </>
           )}
         </Button>
