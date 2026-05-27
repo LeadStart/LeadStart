@@ -37,6 +37,15 @@ import type { SalesforgeContactCreate } from "@/lib/salesforge/types";
 
 export const maxDuration = 60;
 
+// Force dynamic rendering on every invocation. Without this, a Vercel cron
+// (which hits the same URL with no query params) can receive an edge-cached
+// response from a prior tick, skipping the function body entirely — the DB
+// is never touched but the route returns the old payload. We hit this on
+// 2026-05-27: the first manual trigger after a successful run on 2026-05-26
+// returned the previous day's `dispatched: 66, queued: 313` payload without
+// re-running, so the queue actually drained zero rows on the 27th.
+export const dynamic = "force-dynamic";
+
 // Same default the push endpoint uses when campaigns.salesforge_daily_contact_cap
 // is NULL. 200 sends/day inbox capacity (8 inboxes × 25/day) ÷ 3-step
 // sequence = ~66 new contacts/day at steady state.
