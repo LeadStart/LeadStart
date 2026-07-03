@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -32,6 +33,7 @@ import {
   Send,
   Flame,
   ExternalLink,
+  AtSign,
 } from "lucide-react";
 import type { Organization } from "@/types/app";
 import { appUrl } from "@/lib/api-url";
@@ -152,6 +154,12 @@ export default function IntegrationsPage() {
     { kind: "success"; me?: Record<string, unknown> } | { kind: "fail"; message: string } | null
   >(null);
 
+  // Native email — Google service account w/ domain-wide delegation (migration 00056)
+  const [gmailSaEmail, setGmailSaEmail] = useState("");
+  const [gmailSaKey, setGmailSaKey] = useState("");
+  const [savingGmail, setSavingGmail] = useState(false);
+  const [gmailSaved, setGmailSaved] = useState(false);
+
   // Warmforge (Salesforge's mailbox-warming sister product — migration 00049)
   const [warmforgeKey, setWarmforgeKey] = useState("");
   const [savingWarmforge, setSavingWarmforge] = useState(false);
@@ -213,6 +221,15 @@ export default function IntegrationsPage() {
           if (sfOrg.salesforge_default_product_id)
             setSalesforgeProductId(sfOrg.salesforge_default_product_id);
           if (sfOrg.warmforge_api_key) setWarmforgeKey(sfOrg.warmforge_api_key);
+          // Native email service account (migration 00056).
+          const gmOrg = data as {
+            gmail_service_account_email?: string | null;
+            gmail_service_account_key?: string | null;
+          };
+          if (gmOrg.gmail_service_account_email)
+            setGmailSaEmail(gmOrg.gmail_service_account_email);
+          if (gmOrg.gmail_service_account_key)
+            setGmailSaKey(gmOrg.gmail_service_account_key);
         }
       });
   }, [organizationId]);
@@ -526,6 +543,23 @@ export default function IntegrationsPage() {
     setTimeout(() => setSalesforgeSaved(false), 3000);
   }
 
+  async function handleSaveGmail() {
+    if (!organizationId) return;
+    setSavingGmail(true);
+    setGmailSaved(false);
+    const supabase = createClient();
+    await supabase
+      .from("organizations")
+      .update({
+        gmail_service_account_email: gmailSaEmail.trim() || null,
+        gmail_service_account_key: gmailSaKey.trim() || null,
+      })
+      .eq("id", organizationId);
+    setGmailSaved(true);
+    setSavingGmail(false);
+    setTimeout(() => setGmailSaved(false), 3000);
+  }
+
   async function handleSaveWarmforge() {
     if (!organizationId) return;
     setSavingWarmforge(true);
@@ -810,6 +844,71 @@ export default function IntegrationsPage() {
               </span>
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Native email — Google service account w/ domain-wide delegation (migration 00056) */}
+      <Card className="border-border/50 shadow-sm">
+        <CardHeader className="flex flex-row items-center gap-2 pb-3">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#EA4335]">
+            <AtSign size={16} className="text-white" />
+          </div>
+          <div>
+            <CardTitle className="text-base">Native Email (Google)</CardTitle>
+            <p className="text-xs text-muted-foreground">
+              Send directly from client-owned Google Workspace inboxes via a
+              service account with domain-wide delegation. Manage inboxes under
+              Sending → Mailboxes.
+            </p>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-1">
+            <Label htmlFor="gmailSaEmail" className="text-sm font-medium">
+              Service account email
+            </Label>
+            <Input
+              id="gmailSaEmail"
+              value={gmailSaEmail}
+              onChange={(e) => setGmailSaEmail(e.target.value)}
+              placeholder="native-sender@your-project.iam.gserviceaccount.com"
+            />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="gmailSaKey" className="text-sm font-medium">
+              Service account private key
+            </Label>
+            <Textarea
+              id="gmailSaKey"
+              value={gmailSaKey}
+              onChange={(e) => setGmailSaKey(e.target.value)}
+              placeholder={"-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"}
+              rows={4}
+              className="font-mono text-xs"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              The <span className="font-mono">private_key</span> field from the
+              service account&apos;s JSON key file. Each sending domain must
+              authorize this account&apos;s client ID for the{" "}
+              <span className="font-mono">gmail.send</span> and{" "}
+              <span className="font-mono">gmail.readonly</span> scopes in Google
+              Admin — see the setup runbook.
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <Button
+              onClick={handleSaveGmail}
+              disabled={savingGmail}
+              style={{ background: "#2E37FE" }}
+            >
+              {savingGmail ? "Saving..." : "Save Service Account"}
+            </Button>
+            {gmailSaved && (
+              <span className="text-sm text-emerald-600 flex items-center gap-1">
+                <CheckCircle size={14} /> Saved
+              </span>
+            )}
+          </div>
         </CardContent>
       </Card>
 

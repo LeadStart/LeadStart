@@ -120,6 +120,13 @@ export default async function AdminCampaignDetailPage({
   const cap = campaign.salesforge_daily_contact_cap ?? DEFAULT_DAILY_CAP;
   const drainDays = cap > 0 ? Math.ceil(queue.pending / cap) : null;
 
+  // Native email campaigns don't have Salesforge snapshots — pull their
+  // stats straight from native_sends / lead_replies / campaign_enrollments.
+  const nativeStats =
+    campaign.source_channel === "native_email"
+      ? await nativeStatsFor(admin, campaignId)
+      : null;
+
   return (
     <div className="space-y-6">
       <div>
@@ -296,6 +303,97 @@ export default async function AdminCampaignDetailPage({
         </>
       )}
 
+      {/* Native email: send/reply stats, enrollment progress, mailbox pool, sequence */}
+      {nativeStats && (
+        <>
+          <Card className="border-border/50 shadow-sm">
+            <CardHeader className="flex flex-row items-center gap-2 pb-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#EA4335]">
+                <Inbox size={16} className="text-white" />
+              </div>
+              <div>
+                <CardTitle className="text-base">Native email</CardTitle>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Sends directly from your Google inboxes on the{" "}
+                  <code>run-native-sequences</code> cron (every 15 min, Mon–Fri
+                  business hours ET).
+                </p>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-3 gap-4">
+                <QueueStat label="Sent" value={nativeStats.sent} color="text-[#2E37FE]" hint={null} />
+                <QueueStat
+                  label="Replied"
+                  value={nativeStats.replied}
+                  color="text-emerald-600"
+                  hint={null}
+                />
+                <QueueStat
+                  label="Bounced"
+                  value={nativeStats.bounced}
+                  color={nativeStats.bounced > 0 ? "text-red-600" : "text-muted-foreground"}
+                  hint={null}
+                />
+              </div>
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                <span>Active: <strong>{nativeStats.enrollments.active}</strong></span>
+                <span>Completed: <strong>{nativeStats.enrollments.completed}</strong></span>
+                <span>Replied: <strong>{nativeStats.enrollments.replied}</strong></span>
+                <span>Failed: <strong className={nativeStats.enrollments.failed > 0 ? "text-red-600" : ""}>{nativeStats.enrollments.failed}</strong></span>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-muted-foreground mb-1.5">Sending mailboxes</p>
+                {nativeStats.mailboxes.length === 0 ? (
+                  <p className="text-xs text-amber-700">No mailboxes assigned to this campaign.</p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {nativeStats.mailboxes.map((mb) => (
+                      <Badge
+                        key={mb.email}
+                        variant="secondary"
+                        className={mb.status === "active" ? "badge-green" : mb.status === "error" ? "badge-red" : "badge-slate"}
+                      >
+                        {mb.email}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-border/50 shadow-sm">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Sequence</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {nativeStats.steps.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No steps configured.</p>
+              ) : (
+                <ol className="space-y-2">
+                  {nativeStats.steps.map((s, i) => (
+                    <li key={i} className="flex gap-3 text-sm">
+                      <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-[#EA4335] px-2 text-xs font-bold text-white shrink-0">
+                        {i + 1}
+                      </span>
+                      <div>
+                        <p className="font-medium text-[#0f172a]">
+                          {i === 0 ? (s.subject || "(no subject)") : "Re: (same thread)"}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {s.wait_days === 0 ? "Sends immediately" : `Waits ${s.wait_days} day${s.wait_days === 1 ? "" : "s"}`}
+                        </p>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </CardContent>
+          </Card>
+        </>
+      )}
+
       {/* Orphan: surface a client-linker so the owner can attach in one click */}
       {!campaign.client_id && clientsForLink.length > 0 && (
         <Card className="border-amber-200 bg-amber-50 shadow-sm">
@@ -315,8 +413,11 @@ export default async function AdminCampaignDetailPage({
         </Card>
       )}
 
-      {/* KPIs + chart — empty for new draft campaigns, populates as
-          sync-analytics pulls snapshots */}
+      {/* KPIs + chart — Salesforge/LinkedIn snapshot metrics. Native email
+          has its own stats card above (no campaign_snapshots), so skip this
+          empty section for it. */}
+      {campaign.source_channel !== "native_email" && (
+      <>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <KPICard label="Emails Sent" value={metrics.emails_sent} unit="count" />
         <KPICard
@@ -381,6 +482,8 @@ export default async function AdminCampaignDetailPage({
           )}
         </CardContent>
       </Card>
+      </>
+      )}
     </div>
   );
 }
@@ -438,6 +541,65 @@ async function queueCountsFor(
     pending: pending.count ?? 0,
     sent_today: sentToday.count ?? 0,
     failed: failed.count ?? 0,
+  };
+}
+
+interface NativeStats {
+  sent: number;
+  bounced: number;
+  replied: number;
+  enrollments: { active: number; completed: number; replied: number; failed: number };
+  mailboxes: { email: string; status: string }[];
+  steps: { subject: string; wait_days: number }[];
+}
+
+async function nativeStatsFor(
+  admin: ReturnType<typeof createAdminClient>,
+  campaignId: string,
+): Promise<NativeStats> {
+  const [sentRes, bouncedRes, repliedRes, stepsRes, poolRes, enrRes] = await Promise.all([
+    admin.from("native_sends").select("id", { count: "exact", head: true }).eq("campaign_id", campaignId),
+    admin.from("native_sends").select("id", { count: "exact", head: true }).eq("campaign_id", campaignId).eq("status", "bounced"),
+    admin.from("lead_replies").select("id", { count: "exact", head: true }).eq("campaign_id", campaignId).eq("source_channel", "native_email"),
+    admin.from("campaign_steps").select("step_index, subject_template, wait_days").eq("campaign_id", campaignId).order("step_index", { ascending: true }),
+    admin.from("campaign_mailboxes").select("mailbox_id").eq("campaign_id", campaignId),
+    admin.from("campaign_enrollments").select("status").eq("campaign_id", campaignId),
+  ]);
+
+  const enrollments = { active: 0, completed: 0, replied: 0, failed: 0 };
+  for (const row of (enrRes.data ?? []) as { status: string }[]) {
+    if (row.status in enrollments) {
+      enrollments[row.status as keyof typeof enrollments]++;
+    }
+  }
+
+  // Resolve the mailbox pool with a second query rather than a PostgREST
+  // embed (embed typing is array-vs-object ambiguous for a to-one FK).
+  const mailboxIds = ((poolRes.data ?? []) as { mailbox_id: string }[]).map((r) => r.mailbox_id);
+  let mailboxes: { email: string; status: string }[] = [];
+  if (mailboxIds.length > 0) {
+    const { data: mbData } = await admin
+      .from("native_mailboxes")
+      .select("email_address, status")
+      .in("id", mailboxIds);
+    mailboxes = ((mbData ?? []) as { email_address: string; status: string }[]).map((m) => ({
+      email: m.email_address,
+      status: m.status,
+    }));
+  }
+
+  const steps = ((stepsRes.data ?? []) as { subject_template: string | null; wait_days: number }[]).map((s) => ({
+    subject: s.subject_template ?? "",
+    wait_days: s.wait_days,
+  }));
+
+  return {
+    sent: sentRes.count ?? 0,
+    bounced: bouncedRes.count ?? 0,
+    replied: repliedRes.count ?? 0,
+    enrollments,
+    mailboxes,
+    steps,
   };
 }
 

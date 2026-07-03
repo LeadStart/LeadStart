@@ -29,6 +29,14 @@ import type {
 
 export const maxDuration = 60;
 
+// Force dynamic rendering on every invocation. Without this, a Vercel cron
+// (which hits the same URL with no query params) can receive an edge-cached
+// response from a prior tick, skipping the function body entirely — the DB
+// is never touched but the route returns the old payload. Caught on
+// 2026-05-27 in /api/cron/dispatch-salesforge-enrollments (commit 59b8745);
+// applying the same guard to every cron route preemptively.
+export const dynamic = "force-dynamic";
+
 // Per-tick limit. Each dispatch is ~500-1500ms (Unipile call + retry
 // backoff possible) so 30 enrollments uses up to ~45s — safely under
 // Vercel's 60s budget.
@@ -77,8 +85,14 @@ export async function GET(request: NextRequest) {
   // low.
   const { data: enrollmentsData, error: enrError } = await admin
     .from("campaign_enrollments")
-    .select("*")
+    .select("*, campaigns!inner(source_channel)")
     .eq("status", "active")
+    // Filter to LinkedIn campaigns in SQL so this worker never overfetches
+    // native_email / salesforge enrollments — otherwise, once channels run
+    // concurrently, each worker's overfetch fills with the other channel's
+    // rows and throughput collapses. (The JS check below is now redundant
+    // but kept as a cheap guard.)
+    .eq("campaigns.source_channel", "linkedin")
     .order("last_action_at", { ascending: true, nullsFirst: true })
     .order("created_at", { ascending: true })
     .limit(ENROLLMENTS_PER_TICK * 3); // overfetch — many will be filtered out by wait_days

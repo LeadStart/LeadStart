@@ -16,6 +16,7 @@ import { decideFinalClass } from "./decide";
 import { classifyReply, type ClassifierOutput } from "@/lib/ai/classifier";
 import { sendHotLeadNotification } from "@/lib/notifications/send-hot-lead";
 import { MissingAnthropicKeyError } from "@/lib/ai/client";
+import { escapeLikePattern } from "@/lib/utils";
 
 export interface RunReplyPipelineResult {
   skipped: boolean;              // true if row missing, already classified, or body missing
@@ -124,6 +125,23 @@ export async function runReplyPipeline(
   if (updateError) {
     console.error("[pipeline] Failed to write classification:", updateError);
     return { skipped: true, skippedReason: "classification_write_failed" };
+  }
+
+  // --- 4b. Feed the org-wide suppression signal ---
+  // An unsubscribe reply blocks the contact from every channel's future
+  // sends (contacts.status is the shared block list). Channel-agnostic:
+  // benefits Salesforge, LinkedIn, and native email alike. lead_email is a
+  // synthetic id for LinkedIn (no real email), so that update simply matches
+  // no contact — harmless.
+  if (decision.final_class === "unsubscribe" && reply.lead_email) {
+    const { error: suppressError } = await admin
+      .from("contacts")
+      .update({ status: "unsubscribed" })
+      .eq("organization_id", reply.organization_id)
+      .ilike("email", escapeLikePattern(reply.lead_email));
+    if (suppressError) {
+      console.error("[pipeline] Failed to mark contact unsubscribed:", suppressError);
+    }
   }
 
   // --- 5. Notify if hot ---

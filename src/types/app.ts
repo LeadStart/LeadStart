@@ -39,6 +39,11 @@ export interface Organization {
   salesforge_workspace_id: string | null;
   salesforge_default_product_id: string | null;
   warmforge_api_key: string | null;
+  // Native email channel (migration 00056). A Google service account with
+  // domain-wide delegation; the key impersonates any mailbox on an
+  // authorized domain. Same trust boundary as the other org-level keys.
+  gmail_service_account_email: string | null;
+  gmail_service_account_key: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -154,7 +159,10 @@ export type SequenceStepKind =
   | "message"
   | "inmail"
   | "like_post"
-  | "profile_visit";
+  | "profile_visit"
+  // Native email channel (migration 00056). An email step carries a
+  // subject_template on step 0; body_template holds the email body.
+  | "email";
 
 export type EnrollmentStatus =
   | "active"
@@ -173,6 +181,9 @@ export interface CampaignStep {
   kind: SequenceStepKind;
   wait_days: number;
   body_template: string | null;
+  // Email subject (migration 00056). Required on step 0 of an email
+  // sequence; NULL on later steps means "Re: <step-0 subject>" (same thread).
+  subject_template: string | null;
   conditions: Record<string, unknown> | null;
   created_at: string;
 }
@@ -192,6 +203,13 @@ export interface CampaignEnrollment {
   started_at: string;
   unipile_chat_id: string | null;
   unipile_invitation_id: string | null;
+  // Native email channel (migration 00056). native_mailbox_id is sticky:
+  // the mailbox chosen at step 0 sends every follow-up so the thread and
+  // SPF alignment stay consistent. gmail_thread_id + last_rfc_message_id
+  // carry the threading state for follow-up steps.
+  native_mailbox_id: string | null;
+  gmail_thread_id: string | null;
+  last_rfc_message_id: string | null;
   last_error: string | null;
   created_at: string;
   updated_at: string;
@@ -552,7 +570,7 @@ export interface ReplyReferralContact {
   title: string | null;
 }
 
-export type SourceChannel = "linkedin" | "salesforge";
+export type SourceChannel = "linkedin" | "salesforge" | "native_email";
 
 export interface LeadReply {
   id: string;
@@ -581,6 +599,13 @@ export interface LeadReply {
   salesforge_email_id: string | null;
   salesforge_thread_id: string | null;
   salesforge_mailbox_id: string | null;
+  // Native email references (migration 00056). Populated for
+  // source_channel='native_email' rows. gmail_message_id is org-scoped
+  // unique for poller dedup; native_mailbox_id routes the outbound reply
+  // back through the mailbox that received it.
+  gmail_message_id: string | null;
+  gmail_thread_id: string | null;
+  native_mailbox_id: string | null;
 
   // Lead identity
   lead_email: string;
@@ -651,6 +676,54 @@ export interface LeadReply {
 
   created_at: string;
   updated_at: string;
+}
+
+// ---------- Native email channel (migration 00056) ----------
+
+export type NativeMailboxStatus = "active" | "paused" | "error";
+
+// A client-owned Google Workspace sending inbox. LeadStart sends through it
+// via the Gmail API (service account + domain-wide delegation). The ramp
+// fields drive per-inbox pacing (see src/lib/gmail/ramp.ts).
+export interface NativeMailbox {
+  id: string;
+  organization_id: string;
+  client_id: string | null;
+  email_address: string;
+  display_name: string | null;
+  provider: "gmail";
+  status: NativeMailboxStatus;
+  ramp_started_at: string;        // 'YYYY-MM-DD'
+  max_daily_cap: number;
+  daily_cap_override: number | null;
+  last_error: string | null;
+  last_error_at: string | null;
+  last_polled_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type NativeSendStatus = "sent" | "bounced";
+
+// Append-only send log — one row per successful send. Doubles as the
+// per-mailbox daily-cap counter, the sent/bounced metric source, and the
+// reply-thread match index.
+export interface NativeSend {
+  id: string;
+  organization_id: string;
+  campaign_id: string;
+  contact_id: string;
+  enrollment_id: string | null;
+  mailbox_id: string;
+  step_index: number;
+  to_email: string;
+  rfc_message_id: string | null;
+  gmail_message_id: string | null;
+  gmail_thread_id: string | null;
+  status: NativeSendStatus;
+  bounce_reason: string | null;
+  sent_at: string;
+  bounced_at: string | null;
 }
 
 // Classes that trigger client notification by default.

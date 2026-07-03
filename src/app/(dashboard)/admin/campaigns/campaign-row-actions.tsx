@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { MoreHorizontal, Pause, Play, Trash2, Loader2 } from "lucide-react";
+import { MoreHorizontal, Pause, Play, Rocket, Trash2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { appUrl } from "@/lib/api-url";
 
@@ -28,6 +28,7 @@ interface CampaignRowActionsProps {
   campaignId: string;
   campaignName: string;
   status: CampaignStatus;
+  sourceChannel?: string;
   onChanged: () => void;
 }
 
@@ -35,14 +36,15 @@ export function CampaignRowActions({
   campaignId,
   campaignName,
   status,
+  sourceChannel,
   onChanged,
 }: CampaignRowActionsProps) {
-  const [busy, setBusy] = useState<"pause" | "resume" | "delete" | null>(null);
+  const [busy, setBusy] = useState<"activate" | "pause" | "resume" | "delete" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [typedName, setTypedName] = useState("");
 
-  async function callLifecycle(action: "pause" | "resume" | "delete") {
+  async function callLifecycle(action: "activate" | "pause" | "resume" | "delete") {
     setBusy(action);
     setError(null);
     try {
@@ -61,6 +63,10 @@ export function CampaignRowActions({
         toast.success(`Deleted "${campaignName}"`, {
           description: "Campaign removed from LeadStart.",
         });
+      } else if (action === "activate") {
+        toast.success(`Activated "${campaignName}"`, {
+          description: "Sending starts on the next cron tick during the send window.",
+        });
       } else if (action === "pause") {
         toast.success(`Paused "${campaignName}"`);
       } else if (action === "resume") {
@@ -73,6 +79,9 @@ export function CampaignRowActions({
     }
   }
 
+  const isLocalChannel =
+    sourceChannel === "native_email" || sourceChannel === "linkedin";
+  const canActivate = status === "draft" && isLocalChannel;
   const canPause = status === "active";
   const canResume = status === "paused";
   const confirmEnabled = typedName.trim() === campaignName.trim();
@@ -92,6 +101,19 @@ export function CampaignRowActions({
           <MoreHorizontal size={16} />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
+          {canActivate && (
+            <DropdownMenuItem
+              onClick={() => callLifecycle("activate")}
+              disabled={busy !== null}
+            >
+              {busy === "activate" ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <Rocket size={14} />
+              )}
+              Activate
+            </DropdownMenuItem>
+          )}
           {canPause && (
             <DropdownMenuItem
               onClick={() => callLifecycle("pause")}
@@ -118,7 +140,7 @@ export function CampaignRowActions({
               Resume
             </DropdownMenuItem>
           )}
-          {(canPause || canResume) && <DropdownMenuSeparator />}
+          {(canActivate || canPause || canResume) && <DropdownMenuSeparator />}
           <DropdownMenuItem
             onClick={() => {
               setError(null);

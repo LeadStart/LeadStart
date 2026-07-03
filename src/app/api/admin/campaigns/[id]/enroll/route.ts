@@ -71,9 +71,9 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   if (c.organization_id !== user.app_metadata?.organization_id) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  if (c.source_channel !== "linkedin") {
+  if (c.source_channel !== "linkedin" && c.source_channel !== "native_email") {
     return NextResponse.json(
-      { error: "Enrollments are only supported for LinkedIn campaigns" },
+      { error: "Enrollments are only supported for LinkedIn and native email campaigns" },
       { status: 400 },
     );
   }

@@ -1,26 +1,26 @@
-// POST /api/replies/[id]/send — send the client's edited reply through
-// Salesforge and CC the client's notification email so the thread lives
-// in their inbox.
+// POST /api/replies/[id]/send — send the client's edited reply through the
+// reply's own channel (Salesforge or native Gmail) and CC the client's
+// notification email so the thread lives in their inbox.
 //
 // Flow:
 //   1. Auth + access check (client_users or admin/VA in the org).
-//   2. Precondition check: salesforge_mailbox_id + salesforge_email_id +
-//      org-level salesforge_workspace_id.
+//   2. Per-channel precondition check.
 //   3. Atomic load+claim: UPDATE status='sent' WHERE id=:id AND status IN
 //      ('new','classified') RETURNING *. Guards against double-click and
 //      concurrent sends — only one request wins the row.
-//   4. Salesforge send. On failure, roll back: set status='classified'
-//      and record the error so the client can retry.
+//   4. Channel send. On failure, roll back: set status='classified' and
+//      record the error so the client can retry.
 //
 // Request body: { subject?: string, body_text: string, body_html?: string }
-// `subject` is ignored — Salesforge infers the subject from the original
-// thread server-side.
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { SalesforgeClient } from "@/lib/salesforge/client";
 import { computeIdempotencyKey } from "@/lib/replies/send";
+import { loadGmailClientForOrg } from "@/lib/gmail/org";
+import { buildRawEmail, generateMessageId } from "@/lib/gmail/mime";
+import { GmailConfigError, GmailAuthError } from "@/lib/gmail/client";
 import type { LeadReply, SourceChannel } from "@/types/app";
 
 interface RouteParams {
@@ -73,7 +73,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   const { data: preRow, error: preLoadErr } = await admin
     .from("lead_replies")
     .select(
-      "id, organization_id, client_id, status, source_channel, salesforge_email_id, salesforge_mailbox_id, client:client_id(notification_email, notification_cc_emails)"
+      "id, organization_id, client_id, status, source_channel, salesforge_email_id, salesforge_mailbox_id, gmail_thread_id, gmail_message_id, native_mailbox_id, lead_email, from_address, subject, client:client_id(notification_email, notification_cc_emails)"
     )
     .eq("id", id)
     .maybeSingle();
@@ -92,6 +92,12 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     source_channel: SourceChannel;
     salesforge_email_id: string | null;
     salesforge_mailbox_id: string | null;
+    gmail_thread_id: string | null;
+    gmail_message_id: string | null;
+    native_mailbox_id: string | null;
+    lead_email: string | null;
+    from_address: string | null;
+    subject: string | null;
     client: {
       notification_email: string | null;
       notification_cc_emails: string[] | null;
@@ -116,50 +122,70 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     }
   }
 
-  if (pre.source_channel !== "salesforge") {
+  // ─── Per-channel precondition checks ───────────────────────────────────
+  if (pre.source_channel !== "salesforge" && pre.source_channel !== "native_email") {
     return NextResponse.json(
       {
-        error: `Sending replies from the ${pre.source_channel} channel is not supported. Only Salesforge replies can be sent from the portal.`,
+        error: `Sending replies from the ${pre.source_channel} channel is not supported from the portal.`,
       },
       { status: 501 }
     );
   }
-  if (!pre.salesforge_email_id || !pre.salesforge_mailbox_id) {
-    return NextResponse.json(
-      {
-        error:
-          "This reply is missing the Salesforge metadata needed to send (salesforge_email_id / salesforge_mailbox_id). Check the webhook ingest.",
-      },
-      { status: 412 }
-    );
+  if (pre.source_channel === "salesforge") {
+    if (!pre.salesforge_email_id || !pre.salesforge_mailbox_id) {
+      return NextResponse.json(
+        {
+          error:
+            "This reply is missing the Salesforge metadata needed to send (salesforge_email_id / salesforge_mailbox_id). Check the webhook ingest.",
+        },
+        { status: 412 }
+      );
+    }
+  } else {
+    // native_email
+    if (!pre.native_mailbox_id || !pre.gmail_thread_id) {
+      return NextResponse.json(
+        {
+          error:
+            "This reply is missing the Gmail metadata needed to send (native_mailbox_id / gmail_thread_id).",
+        },
+        { status: 412 }
+      );
+    }
   }
 
-  const { data: orgRow, error: orgErr } = await admin
-    .from("organizations")
-    .select("salesforge_api_key, salesforge_workspace_id")
-    .eq("id", pre.organization_id)
-    .maybeSingle();
-  if (orgErr || !orgRow) {
-    return NextResponse.json({ error: "Organization not found" }, { status: 404 });
-  }
-  const org = orgRow as {
-    salesforge_api_key: string | null;
-    salesforge_workspace_id: string | null;
-  };
-  if (!org.salesforge_api_key) {
-    return NextResponse.json(
-      { error: "Salesforge API key is not configured for this organization." },
-      { status: 500 }
-    );
-  }
-  if (!org.salesforge_workspace_id) {
-    return NextResponse.json(
-      { error: "Salesforge workspace is not configured for this organization." },
-      { status: 500 }
-    );
+  // Salesforge sends need org-level workspace creds up front. Native email
+  // resolves its client lazily at send time (loadGmailClientForOrg).
+  let salesforgeCreds: { apiKey: string; workspaceId: string } | null = null;
+  if (pre.source_channel === "salesforge") {
+    const { data: orgRow, error: orgErr } = await admin
+      .from("organizations")
+      .select("salesforge_api_key, salesforge_workspace_id")
+      .eq("id", pre.organization_id)
+      .maybeSingle();
+    if (orgErr || !orgRow) {
+      return NextResponse.json({ error: "Organization not found" }, { status: 404 });
+    }
+    const org = orgRow as {
+      salesforge_api_key: string | null;
+      salesforge_workspace_id: string | null;
+    };
+    if (!org.salesforge_api_key) {
+      return NextResponse.json(
+        { error: "Salesforge API key is not configured for this organization." },
+        { status: 500 }
+      );
+    }
+    if (!org.salesforge_workspace_id) {
+      return NextResponse.json(
+        { error: "Salesforge workspace is not configured for this organization." },
+        { status: 500 }
+      );
+    }
+    salesforgeCreds = { apiKey: org.salesforge_api_key, workspaceId: org.salesforge_workspace_id };
   }
 
-  // Atomic claim: only one send wins.
+  // ─── Atomic claim: only one send wins ──────────────────────────────────
   const sentAt = new Date().toISOString();
   const idempotencyKey = computeIdempotencyKey(id, body_text);
   const { data: claimedRow, error: claimErr } = await admin
@@ -174,9 +200,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     })
     .eq("id", id)
     .in("status", ["new", "classified"])
-    .select(
-      "id, salesforge_email_id, salesforge_mailbox_id, subject, body_text, status"
-    )
+    .select("id, status")
     .maybeSingle();
 
   if (claimErr) {
@@ -189,14 +213,8 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     );
   }
 
-  const claimed = claimedRow as Pick<
-    LeadReply,
-    "id" | "salesforge_email_id" | "salesforge_mailbox_id" | "subject" | "body_text"
-  >;
-
-  // CC the client's primary notification inbox + any teammates they
-  // added. Lowercased + deduped so one stray duplicate doesn't cause
-  // Salesforge to reject the send.
+  // CC the client's primary notification inbox + any teammates they added.
+  // Lowercased + deduped.
   const ccSet = new Set<string>();
   if (pre.client?.notification_email) {
     ccSet.add(pre.client.notification_email.trim().toLowerCase());
@@ -206,37 +224,34 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   }
   const cc = ccSet.size > 0 ? Array.from(ccSet) : undefined;
 
+  // ─── Send via the reply's channel ──────────────────────────────────────
   let sentExternalId: string | null = null;
   try {
-    const salesforge = new SalesforgeClient(org.salesforge_api_key);
-    const sentEmail = await salesforge.replyToEmail(
-      org.salesforge_workspace_id,
-      claimed.salesforge_mailbox_id!,
-      claimed.salesforge_email_id!,
-      {
-        body_text,
-        body_html,
-        cc_addresses: cc,
-      }
-    );
-    sentExternalId = sentEmail.id;
+    if (pre.source_channel === "salesforge") {
+      const salesforge = new SalesforgeClient(salesforgeCreds!.apiKey);
+      const sentEmail = await salesforge.replyToEmail(
+        salesforgeCreds!.workspaceId,
+        pre.salesforge_mailbox_id!,
+        pre.salesforge_email_id!,
+        { body_text, body_html, cc_addresses: cc }
+      );
+      sentExternalId = sentEmail.id;
+    } else {
+      sentExternalId = await sendNativeReply(admin, pre, body_text, cc);
+    }
   } catch (err) {
-    console.error("[replies/send] Salesforge reply API failed:", err);
+    console.error("[replies/send] channel send failed:", err);
     await admin
       .from("lead_replies")
-      .update({
-        status: "classified",
-        sent_at: null,
-        error: truncErr(err),
-      })
+      .update({ status: "classified", sent_at: null, error: truncErr(err) })
       .eq("id", id);
     return NextResponse.json(
-      { error: `Salesforge rejected the send: ${truncErr(err)}` },
+      { error: `Send failed: ${truncErr(err)}` },
       { status: 502 }
     );
   }
 
-  // Record the upstream provider's new email id on the row.
+  // Record the provider's new email id on the row.
   if (sentExternalId) {
     const { error: finalizeErr } = await admin
       .from("lead_replies")
@@ -256,4 +271,85 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     sent_external_email_id: sentExternalId,
     cc_addresses: cc ?? [],
   });
+}
+
+// Send a portal reply through the native Gmail mailbox that received it,
+// threaded into the same Gmail conversation. Returns the sent Gmail id.
+async function sendNativeReply(
+  admin: ReturnType<typeof createAdminClient>,
+  pre: {
+    organization_id: string;
+    native_mailbox_id: string | null;
+    gmail_thread_id: string | null;
+    gmail_message_id: string | null;
+    lead_email: string | null;
+    from_address: string | null;
+    subject: string | null;
+  },
+  bodyText: string,
+  cc: string[] | undefined,
+): Promise<string> {
+  const { data: mbRow } = await admin
+    .from("native_mailboxes")
+    .select("email_address, display_name")
+    .eq("id", pre.native_mailbox_id!)
+    .eq("organization_id", pre.organization_id)
+    .maybeSingle();
+  const mailbox = mbRow as { email_address: string; display_name: string | null } | null;
+  if (!mailbox) {
+    throw new Error("The mailbox that received this reply no longer exists.");
+  }
+
+  const to = pre.lead_email || pre.from_address;
+  if (!to) throw new Error("This reply has no recipient address to send to.");
+
+  let gmail;
+  try {
+    gmail = await loadGmailClientForOrg(admin, pre.organization_id);
+  } catch (err) {
+    if (err instanceof GmailConfigError) throw new Error(err.message);
+    throw err;
+  }
+
+  // Thread correctly: reference the inbound message's RFC Message-ID. Gmail
+  // also threads via threadId, so this is best-effort.
+  let inReplyTo: string | null = null;
+  if (pre.gmail_message_id) {
+    try {
+      const meta = await gmail.getMessage(mailbox.email_address, pre.gmail_message_id, "metadata", ["Message-ID"]);
+      const hdr = meta.payload?.headers?.find((h) => h.name.toLowerCase() === "message-id");
+      if (hdr?.value) inReplyTo = hdr.value;
+    } catch {
+      /* fall back to threadId-only threading */
+    }
+  }
+
+  const baseSubject = (pre.subject ?? "").trim();
+  const subject = !baseSubject
+    ? "Re: (no subject)"
+    : baseSubject.toLowerCase().startsWith("re:")
+      ? baseSubject
+      : `Re: ${baseSubject}`;
+
+  const raw = buildRawEmail({
+    fromEmail: mailbox.email_address,
+    fromName: mailbox.display_name,
+    to,
+    cc,
+    subject,
+    bodyText,
+    messageId: generateMessageId(mailbox.email_address),
+    inReplyTo,
+    references: inReplyTo,
+  });
+
+  try {
+    const result = await gmail.sendMessage(mailbox.email_address, raw, pre.gmail_thread_id!);
+    return result.id;
+  } catch (err) {
+    if (err instanceof GmailAuthError) {
+      throw new Error(`Gmail rejected the send (mailbox delegation issue): ${err.message}`);
+    }
+    throw err;
+  }
 }

@@ -42,6 +42,14 @@
       "schedule": "*/15 * * * *"
     },
     {
+      "path": "/app/api/cron/run-native-sequences",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/app/api/cron/poll-native-replies",
+      "schedule": "7,22,37,52 * * * *"
+    },
+    {
       "path": "/app/api/cron/dispatch-salesforge-enrollments",
       "schedule": "0 12 * * *"
     }

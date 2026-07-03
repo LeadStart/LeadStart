@@ -88,6 +88,9 @@ export async function POST(
       }
       const client = new SalesforgeClient(orgRow.salesforge_api_key);
       await client.resumeSequence(orgRow.salesforge_workspace_id, c.salesforge_sequence_id);
+    } else if (c.source_channel === "native_email" || c.source_channel === "linkedin") {
+      // Local channels have no upstream sequencer to resume — the status flip
+      // below to 'active' is enough for the cron workers to pick it up again.
     } else {
       return NextResponse.json(
         { error: `Resume is not supported for ${c.source_channel} campaigns yet.` },

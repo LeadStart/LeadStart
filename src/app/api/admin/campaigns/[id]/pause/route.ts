@@ -88,6 +88,10 @@ export async function POST(
       }
       const client = new SalesforgeClient(orgRow.salesforge_api_key);
       await client.pauseSequence(orgRow.salesforge_workspace_id, c.salesforge_sequence_id);
+    } else if (c.source_channel === "native_email" || c.source_channel === "linkedin") {
+      // Local channels have no upstream sequencer to pause — the status flip
+      // below is enough, since the cron workers only dispatch status='active'
+      // campaigns.
     } else {
       return NextResponse.json(
         { error: `Pause is not supported for ${c.source_channel} campaigns yet.` },
