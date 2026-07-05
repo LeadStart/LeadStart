@@ -302,6 +302,60 @@ export async function GET(request: NextRequest) {
       continue;
     }
 
+    const client = new SalesforgeClient(org.salesforge_api_key);
+
+    // Pre-flight: confirm the sequence has at least one step AND one
+    // mailbox before we push. Salesforge's bulk-create + sequence-enroll
+    // PUT both return 200 OK against an empty sequence, so the dispatcher
+    // would happily report `sent` while no email could possibly ship —
+    // confirmed on 2026-05-27 when 134 contacts had been "uploaded" over
+    // multiple days into sequence 16082 (0 steps, 0 mailboxes). Leave
+    // queue rows pending so the operator only needs to finish configuring
+    // the sequence; the next tick picks them up automatically.
+    let stepCount = 0;
+    let mailboxCount = 0;
+    try {
+      const sequenceDetail = await client.getSequence(
+        org.salesforge_workspace_id,
+        campaign.salesforge_sequence_id,
+      );
+      stepCount = sequenceDetail.steps?.length ?? 0;
+      mailboxCount = sequenceDetail.mailboxes?.length ?? 0;
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      console.warn(
+        `[cron/dispatch-salesforge-enrollments] pre-flight getSequence failed for campaign ${campaignId} (${campaign.name}), sequence ${campaign.salesforge_sequence_id}: ${errMsg} — leaving ${rows.length} queue rows pending`,
+      );
+      results.push({
+        campaign_id: campaignId,
+        queued: rows.length,
+        sent: 0,
+        failed: 0,
+        skipped_reason: "sequence_check_failed",
+      });
+      continue;
+    }
+
+    if (stepCount === 0 || mailboxCount === 0) {
+      const reason =
+        stepCount === 0 && mailboxCount === 0
+          ? "sequence_not_configured"
+          : stepCount === 0
+            ? "sequence_no_steps"
+            : "sequence_no_mailboxes";
+      console.warn(
+        `[cron/dispatch-salesforge-enrollments] skipping campaign ${campaignId} (${campaign.name}): sequence ${campaign.salesforge_sequence_id} has ${stepCount} step(s), ${mailboxCount} mailbox(es) — leaving ${rows.length} queue rows pending (reason: ${reason})`,
+      );
+      results.push({
+        campaign_id: campaignId,
+        queued: rows.length,
+        sent: 0,
+        failed: 0,
+        skipped_reason: reason,
+      });
+      continue;
+    }
+
     const cap = campaign.salesforge_daily_contact_cap ?? DEFAULT_DAILY_CAP;
     const { count: sentToday } = await admin
       .from("salesforge_enrollment_queue")
@@ -409,7 +463,6 @@ export async function GET(request: NextRequest) {
         return payload;
       });
 
-      const client = new SalesforgeClient(org.salesforge_api_key);
       let pushResult: {
         uploaded: number;
         failed: { email: string | null; error: string }[];
