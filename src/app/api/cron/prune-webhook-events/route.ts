@@ -2,6 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { checkCronAuth } from "@/lib/security/cron-auth";
 
+// Force dynamic rendering on every invocation. Without this, a Vercel cron
+// (which hits the same URL with no query params) can receive an edge-cached
+// response from a prior tick, skipping the function body entirely — the DB
+// is never touched but the route returns the old payload. Caught on
+// 2026-05-27 in /api/cron/dispatch-salesforge-enrollments (commit 59b8745);
+// applying the same guard to every cron route preemptively.
+export const dynamic = "force-dynamic";
+
 // D3 — webhook_events retention cron. Daily at 4am UTC (see vercel.json).
 //
 // Deletes processed webhook_events older than 90 days. Keeps rows with

@@ -18,6 +18,14 @@ import type { ScrapioBusiness } from "@/types/app";
 
 export const maxDuration = 60;
 
+// Force dynamic rendering on every invocation. Without this, a Vercel cron
+// (which hits the same URL with no query params) can receive an edge-cached
+// response from a prior tick, skipping the function body entirely — the DB
+// is never touched but the route returns the old payload. Caught on
+// 2026-05-27 in /api/cron/dispatch-salesforge-enrollments (commit 59b8745);
+// applying the same guard to every cron route preemptively.
+export const dynamic = "force-dynamic";
+
 // 8 pages × 50 per page = 400 results per tick. Each page is ~3-5s plus
 // 300ms throttle, so a tick runs ~30-45s — comfortably under Vercel's 60s
 // budget. A 5000-result search completes in ~13 ticks (~13 minutes at the

@@ -22,6 +22,14 @@ import {
   PermanentResendError,
 } from "@/lib/notifications/resend-client";
 
+// Force dynamic rendering on every invocation. Without this, a Vercel cron
+// (which hits the same URL with no query params) can receive an edge-cached
+// response from a prior tick, skipping the function body entirely — the DB
+// is never touched but the route returns the old payload. Caught on
+// 2026-05-27 in /api/cron/dispatch-salesforge-enrollments (commit 59b8745);
+// applying the same guard to every cron route preemptively.
+export const dynamic = "force-dynamic";
+
 export async function GET(request: NextRequest) {
   const authError = checkCronAuth(request);
   if (authError) return authError;

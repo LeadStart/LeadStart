@@ -8,6 +8,14 @@ import { enqueueOwnerAlert } from "@/lib/notifications/owner-alerts";
 import { isClientDueNow } from "@/lib/kpi/schedule";
 import type { CampaignSnapshot, Client, Campaign, KPIReportData, KPIReport } from "@/types/app";
 
+// Force dynamic rendering on every invocation. Without this, a Vercel cron
+// (which hits the same URL with no query params) can receive an edge-cached
+// response from a prior tick, skipping the function body entirely — the DB
+// is never touched but the route returns the old payload. Caught on
+// 2026-05-27 in /api/cron/dispatch-salesforge-enrollments (commit 59b8745);
+// applying the same guard to every cron route preemptively.
+export const dynamic = "force-dynamic";
+
 // Map frequency → period covered by the emailed report
 function reportPeriodDays(frequency: Client["report_frequency"]): number {
   if (frequency === "biweekly") return 14;
