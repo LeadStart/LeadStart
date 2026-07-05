@@ -3,6 +3,15 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { checkCronAuth } from "@/lib/security/cron-auth";
 import { SalesforgeClient } from "@/lib/salesforge/client";
 import { registerSequenceWebhooks } from "@/lib/salesforge/webhooks";
+import { HOT_REPLY_CLASSES, type ReplyClass } from "@/types/app";
+
+// Force dynamic rendering on every invocation. Without this, a Vercel cron
+// (which hits the same URL with no query params) can receive an edge-cached
+// response from a prior tick, skipping the function body entirely — the DB
+// is never touched but the route returns the old payload. Caught on
+// 2026-05-27 in /api/cron/dispatch-salesforge-enrollments (commit 59b8745);
+// applying the same guard to every cron route preemptively.
+export const dynamic = "force-dynamic";
 
 // Same shape used by the sequences/create endpoint to build the
 // webhook callback URL. Returns null when WEBHOOK_SECRET is unset so
@@ -42,6 +51,7 @@ export async function GET(request: NextRequest) {
   let totalStatusUpdated = 0;
   let totalContactsSynced = 0;
   let totalContactsLinked = 0;
+  let totalNativeSynced = 0;
 
   for (const org of orgs) {
     // Walk source_channel='salesforge' campaigns and refresh their
@@ -525,11 +535,139 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  // ----- Native email analytics -----
+  // Salesforge exposes analytics via its API; the native email channel has no
+  // external analytics surface, so we roll our own per-day snapshots from the
+  // local send log + reply pipeline. These write the SAME campaign_snapshots
+  // rows the client portal + KPI calculator already render, so no portal
+  // changes are needed — a native campaign just starts showing real numbers.
+  //
+  // Runs independently of the Salesforge org loop above (all inputs are local
+  // tables, no API key needed). It does sit after the "no Salesforge orgs"
+  // early return — always fine for this deployment since the agency org holds
+  // the Salesforge key; if a Salesforge-less org ever needs native analytics,
+  // lift this block above that return.
+  {
+    let nativeQuery = admin
+      .from("campaigns")
+      .select("id")
+      .eq("source_channel", "native_email");
+    // ?campaign_id= refreshes one campaign regardless of status (mirrors the
+    // Salesforge targeted path); otherwise only active campaigns are synced.
+    nativeQuery = campaignId
+      ? nativeQuery.eq("id", campaignId)
+      : nativeQuery.eq("status", "active");
+    const { data: nativeCampaigns } = await nativeQuery;
+
+    for (const nc of (nativeCampaigns ?? []) as { id: string }[]) {
+      try {
+        // PostgREST caps a response at 1000 rows, so page through the send log
+        // + replies (a full campaign can exceed 1000 sends).
+        type SendRow = { sent_at: string | null; status: string; step_index: number };
+        const sends: SendRow[] = [];
+        for (let from = 0; ; from += 1000) {
+          const { data, error } = await admin
+            .from("native_sends")
+            .select("sent_at, status, step_index")
+            .eq("campaign_id", nc.id)
+            .order("id", { ascending: true })
+            .range(from, from + 999);
+          if (error) throw error;
+          const rows = (data ?? []) as SendRow[];
+          sends.push(...rows);
+          if (rows.length < 1000) break;
+        }
+
+        type ReplyRow = { received_at: string | null; final_class: string | null; lead_email: string | null };
+        const replies: ReplyRow[] = [];
+        for (let from = 0; ; from += 1000) {
+          const { data, error } = await admin
+            .from("lead_replies")
+            .select("received_at, final_class, lead_email")
+            .eq("campaign_id", nc.id)
+            .eq("source_channel", "native_email")
+            .order("id", { ascending: true })
+            .range(from, from + 999);
+          if (error) throw error;
+          const rows = (data ?? []) as ReplyRow[];
+          replies.push(...rows);
+          if (rows.length < 1000) break;
+        }
+
+        // Bucket both streams by UTC day. Sends run in the ET business window
+        // (12:00–22:00 UTC), so a send's UTC day == its ET day; replies can
+        // arrive any hour, but day-granularity chart buckets tolerate that.
+        type DayBucket = {
+          sent: number; bounces: number; newLeads: number;
+          replies: number; positive: number; unsub: number; meetings: number;
+          repliers: Set<string>;
+        };
+        const byDay = new Map<string, DayBucket>();
+        const bucket = (d: string): DayBucket => {
+          let b = byDay.get(d);
+          if (!b) {
+            b = { sent: 0, bounces: 0, newLeads: 0, replies: 0, positive: 0, unsub: 0, meetings: 0, repliers: new Set() };
+            byDay.set(d, b);
+          }
+          return b;
+        };
+
+        for (const s of sends) {
+          if (!s.sent_at) continue;
+          const b = bucket(s.sent_at.slice(0, 10));
+          b.sent++;                              // a bounced email was still sent
+          if (s.status === "bounced") b.bounces++;
+          if (s.step_index === 0) b.newLeads++;  // step 0 == first touch for a lead
+        }
+        for (const r of replies) {
+          if (!r.received_at) continue;
+          const b = bucket(r.received_at.slice(0, 10));
+          b.replies++;
+          if (r.lead_email) b.repliers.add(r.lead_email.toLowerCase());
+          if (r.final_class && HOT_REPLY_CLASSES.includes(r.final_class as ReplyClass)) b.positive++;
+          if (r.final_class === "unsubscribe") b.unsub++;
+          if (r.final_class === "meeting_booked") b.meetings++;
+        }
+
+        if (byDay.size > 0) {
+          const rows = [...byDay.entries()].map(([snapshot_date, b]) => {
+            const uniqueReplies = b.repliers.size || b.replies;
+            return {
+              campaign_id: nc.id,
+              snapshot_date,
+              total_leads: 0,
+              emails_sent: b.sent,
+              replies: b.replies,
+              unique_replies: uniqueReplies,
+              positive_replies: b.positive,
+              bounces: b.bounces,
+              unsubscribes: b.unsub,
+              meetings_booked: b.meetings,
+              new_leads_contacted: b.newLeads,
+              reply_rate: b.sent > 0 ? Number(((uniqueReplies / b.sent) * 100).toFixed(2)) : 0,
+              positive_reply_rate: uniqueReplies > 0 ? Number(((b.positive / uniqueReplies) * 100).toFixed(2)) : 0,
+              bounce_rate: b.sent > 0 ? Number(((b.bounces / b.sent) * 100).toFixed(2)) : 0,
+              unsubscribe_rate: b.sent > 0 ? Number(((b.unsub / b.sent) * 100).toFixed(2)) : 0,
+            };
+          });
+          const { error: upsertErr } = await admin
+            .from("campaign_snapshots")
+            .upsert(rows, { onConflict: "campaign_id,snapshot_date" });
+          if (upsertErr) throw upsertErr;
+        }
+        totalNativeSynced++;
+      } catch (err) {
+        console.error(`[cron/sync-analytics] native snapshot sync failed for ${nc.id}:`, err);
+      }
+    }
+  }
+
   return NextResponse.json({
     synced: totalSynced,
     discovered: totalDiscovered,
     status_updated: totalStatusUpdated,
     contacts_synced: totalContactsSynced,
     contacts_linked_to_campaigns: totalContactsLinked,
+    native_synced: totalNativeSynced,
   });
 }
