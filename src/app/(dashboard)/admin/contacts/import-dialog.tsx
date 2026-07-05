@@ -125,6 +125,23 @@ const VALID_STAGES: ProspectStage[] = [
   "lost",
 ];
 
+// Normalized headers that land in a dedicated contact column. Anything else
+// in the CSV is kept as a custom merge variable (contacts.custom_fields), so
+// a sequence can reference {{Property Address}}, {{Sold Date}}, etc.
+const STANDARD_FIELDS = new Set([
+  "first_name",
+  "last_name",
+  "email",
+  "company_name",
+  "title",
+  "phone",
+  "linkedin_url",
+  "tags",
+  "intro_line",
+  "notes",
+  "pipeline_stage",
+]);
+
 function normalizeHeader(h: string): string {
   const key = h.trim().toLowerCase().replace(/_/g, " ");
   return HEADER_ALIASES[key] ?? key.replace(/\s+/g, "_");
@@ -150,6 +167,9 @@ type ParsedRow = {
   intro_line: string | null;
   notes: string | null;
   pipeline_stage: ProspectStage | null;
+  // Extra CSV columns that don't map to a standard field, keyed by their
+  // original header (e.g. { "Property Address": "123 Oak St", ... }).
+  custom_fields: Record<string, string>;
 };
 
 type PreviewState = {
@@ -161,9 +181,17 @@ type PreviewState = {
 function rowsFromCSV(text: string): PreviewState["rows"] | { error: string } {
   const grid = parseCSV(text);
   if (grid.length < 2) return { error: "CSV must have a header row and at least one data row." };
-  const headers = grid[0].map(normalizeHeader);
+  const rawHeaders = grid[0];
+  const headers = rawHeaders.map(normalizeHeader);
   const emailIdx = headers.indexOf("email");
   if (emailIdx < 0) return { error: "CSV is missing a required 'email' column." };
+
+  // Columns that aren't a standard field (and have a non-empty header)
+  // become custom merge variables.
+  const customIdxs = headers
+    .map((h, i) => ({ h, i }))
+    .filter(({ h, i }) => !STANDARD_FIELDS.has(h) && (rawHeaders[i] ?? "").trim())
+    .map(({ i }) => i);
 
   const out: ParsedRow[] = [];
   for (let r = 1; r < grid.length; r++) {
@@ -178,6 +206,11 @@ function rowsFromCSV(text: string): PreviewState["rows"] | { error: string } {
     const stage: ProspectStage | null = (VALID_STAGES as string[]).includes(stageRaw)
       ? (stageRaw as ProspectStage)
       : null;
+    const custom_fields: Record<string, string> = {};
+    for (const i of customIdxs) {
+      const val = (row[i] ?? "").trim();
+      if (val) custom_fields[rawHeaders[i].trim()] = val;
+    }
     out.push({
       first_name: get("first_name") || null,
       last_name: get("last_name") || null,
@@ -190,6 +223,7 @@ function rowsFromCSV(text: string): PreviewState["rows"] | { error: string } {
       intro_line: get("intro_line") || null,
       notes: get("notes") || null,
       pipeline_stage: stage,
+      custom_fields,
     });
   }
   return out;
@@ -303,6 +337,7 @@ export function ImportContactsDialog({
           // it yet, so drop anything in that column on LeadStart imports.
           intro_line: ownerView === "client" ? r.intro_line : null,
           enrichment_data: {},
+          custom_fields: r.custom_fields,
           tags: r.tags,
           status: "new" as ContactStatus,
           source: "csv-import",
@@ -390,7 +425,8 @@ export function ImportContactsDialog({
                 {ownerView === "leadstart"
                   ? ", pipeline_stage"
                   : ", intro_line"}
-                .
+                . Any other columns are saved as custom variables you can use
+                in sequence copy (e.g. <code className="font-mono">{`{{Property Address}}`}</code>).
               </p>
             </label>
           )}

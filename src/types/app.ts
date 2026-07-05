@@ -363,6 +363,10 @@ export interface Contact {
   linkedin_url: string | null;
   intro_line: string | null;
   enrichment_data: Record<string, unknown>;
+  // Arbitrary per-contact merge variables for sequence copy (e.g.
+  // PropertyAddress, SoldDate). The CSV importer drops any non-standard
+  // column here; the native sender resolves {{tokens}} against it.
+  custom_fields: Record<string, unknown>;
   tags: string[];
   status: ContactStatus;
   source: string | null;

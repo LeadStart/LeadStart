@@ -246,7 +246,7 @@ export async function GET(request: NextRequest) {
     }
 
     // ---- Render subject + body ----
-    const bodyText = renderTemplate(step.body_template ?? "", contact);
+    const bodyText = renderTemplate(step.body_template ?? "", contact, mailbox);
     if (!bodyText) {
       await markEnrollmentFailed(admin, enrollment.id, "Rendered email body is empty.");
       results.push({ enrollment_id: enrollment.id, result: "failed_empty_body" });
@@ -254,15 +254,20 @@ export async function GET(request: NextRequest) {
     }
     let subject: string;
     if (enrollment.current_step_index === 0) {
-      subject = renderTemplate(step.subject_template ?? "", contact);
+      subject = renderTemplate(step.subject_template ?? "", contact, mailbox);
       if (!subject) {
         await markEnrollmentFailed(admin, enrollment.id, "Step 0 has no subject.");
         results.push({ enrollment_id: enrollment.id, result: "failed_no_subject" });
         continue;
       }
+    } else if ((step.subject_template ?? "").trim()) {
+      // This follow-up carries its own subject line — send under it (still
+      // threaded via References + threadId). Lets a sequence vary the subject
+      // per step instead of forcing every follow-up to "Re: <first subject>".
+      subject = renderTemplate(step.subject_template ?? "", contact, mailbox);
     } else {
       const step0 = steps?.get(0);
-      const baseSubject = renderTemplate(step0?.subject_template ?? "", contact) || "(no subject)";
+      const baseSubject = renderTemplate(step0?.subject_template ?? "", contact, mailbox) || "(no subject)";
       subject = baseSubject.toLowerCase().startsWith("re:") ? baseSubject : `Re: ${baseSubject}`;
     }
 
@@ -387,17 +392,70 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({ status: "ok", sent, results });
 }
 
-// {{first_name}} / {{last_name}} / {{company}} / {{title}} / {{intro_line}} /
-// {{email}} merge. Superset of the LinkedIn worker's tags — email copy
-// commonly personalizes with the enriched intro line.
-function renderTemplate(template: string, contact: Contact): string {
+// Fold a variable name to a comparison key: lowercase, drop everything that
+// isn't a letter or digit. So "Property Address", "property_address" and
+// "PropertyAddress" all collapse to "propertyaddress" — the operator doesn't
+// have to match the CSV header's exact casing/spacing in the sequence copy.
+function normalizeVarKey(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+// Render sequence copy against a contact + the sending mailbox. Resolves
+// {{token}} placeholders case/format-insensitively, in priority order:
+//
+//   1. Sender identity from the sending inbox — {{YourName}} / {{sender_name}}
+//      resolve to the mailbox's display name (fallback: the address local
+//      part). This is what keeps a rotating-inbox signature correct: a send
+//      from molly@ signs "Molly Anderson", from jessica@ "Jessica Masterson".
+//   2. Standard contact columns (first_name, last_name, company, title,
+//      intro_line, email, phone, full_name).
+//   3. Anything the operator imported into contacts.custom_fields
+//      (e.g. PropertyAddress, SoldDate) — arbitrary per-recipient merge data.
+//
+// A token that matches nothing is left in place unchanged (same stance as the
+// original fixed-tag renderer) so a typo'd placeholder never silently blanks
+// a line of copy — it shows up in a preview instead.
+function renderTemplate(
+  template: string,
+  contact: Contact,
+  mailbox: NativeMailbox,
+): string {
+  const senderName =
+    mailbox.display_name?.trim() || mailbox.email_address.split("@")[0];
+
+  // Keys are already in normalizeVarKey() form (lowercase, alnum-only).
+  const standard: Record<string, string> = {
+    firstname: contact.first_name ?? "",
+    lastname: contact.last_name ?? "",
+    fullname: [contact.first_name, contact.last_name].filter(Boolean).join(" "),
+    company: contact.company_name ?? "",
+    companyname: contact.company_name ?? "",
+    title: contact.title ?? "",
+    introline: contact.intro_line ?? "",
+    intro: contact.intro_line ?? "",
+    email: contact.email ?? "",
+    phone: contact.phone ?? "",
+    yourname: senderName,
+    sendername: senderName,
+    myname: senderName,
+  };
+
+  const custom: Record<string, string> = {};
+  const cf = contact.custom_fields;
+  if (cf && typeof cf === "object") {
+    for (const [k, v] of Object.entries(cf)) {
+      if (v == null) continue;
+      custom[normalizeVarKey(k)] = typeof v === "string" ? v : String(v);
+    }
+  }
+
   return template
-    .replaceAll("{{first_name}}", contact.first_name ?? "")
-    .replaceAll("{{last_name}}", contact.last_name ?? "")
-    .replaceAll("{{company}}", contact.company_name ?? "")
-    .replaceAll("{{title}}", contact.title ?? "")
-    .replaceAll("{{intro_line}}", contact.intro_line ?? "")
-    .replaceAll("{{email}}", contact.email ?? "")
+    .replace(/\{\{\s*([^{}]+?)\s*\}\}/g, (whole, rawName: string) => {
+      const key = normalizeVarKey(rawName);
+      if (key in standard) return standard[key];
+      if (key in custom) return custom[key];
+      return whole; // unknown token: leave untouched
+    })
     .trim();
 }
 

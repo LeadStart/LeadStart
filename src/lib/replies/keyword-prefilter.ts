@@ -66,14 +66,40 @@ const REFERRAL_PATTERNS: RegExp[] = [
   /\bintroduc(e|ing)\s+you\s+to\b/i,
 ];
 
-// Unsubscribe / remove-me phrases.
+// Opt-out / unsubscribe language. This is the compliance-critical filter: a
+// match here becomes a HARD override in decide.ts → final_class "unsubscribe"
+// → pipeline.ts flips contacts.status to 'unsubscribed', a permanent,
+// org-wide suppression across every channel (email, LinkedIn, native).
+//
+// Design goal: catch the real opt-outs — "stop", "no more", "remove me", and
+// their variations — WITHOUT firing on an interested lead who happens to use
+// the word "stop" ("stop by my office", "Stop, this is amazing!"). So bare
+// "stop"/"no more" only count when they stand alone on their line (SMS-style
+// opt-out) or are attached to a communication target; ambiguous mid-sentence
+// "stop" is left for Claude to judge. Patterns are case-insensitive; the
+// line-anchored ones use (^|\n)…(\r?\n|$) so a quoted thread below the reply
+// doesn't defeat the match.
 const UNSUBSCRIBE_PATTERNS: RegExp[] = [
-  /\bunsubscribe\b/i,
+  // --- Explicit opt-out vocabulary ---
+  /\bunsubscri/i, // unsubscribe / unsubscription / "unsubscribe me"
   /\bremove\s+me\b/i,
+  /\bremove\s+(me\s+)?from\s+(your\s+)?(list|mailing|email)/i,
   /\btake\s+me\s+off\b/i,
-  /\bstop\s+(emailing|contacting)\b/i,
-  /\bdo\s+not\s+(contact|email)\s+me\b/i,
-  /\bopt\s+out\b/i,
+  /\bopt(?:ing)?\s*-?\s*out\b/i, // opt out / opt-out / opting out
+  /\b(do\s+not|don'?t|please\s+do\s+not|please\s+don'?t)\s+(contact|email|e-?mail|message|text|reach\s+out)\b/i,
+
+  // --- "stop" + a communication target: unambiguous opt-out ---
+  /\bstop\s+(emailing|e-?mailing|mailing|messaging|texting|contacting|reaching|sending|soliciting|bothering|harassing|spamming|follow(ing)?\s*[-\s]?up)/i,
+  /\bstop\s+(all\s+|sending\s+(me\s+)?|these\s+|the\s+|your\s+|any\s+(more\s+)?)?(e-?mail|message|text|contact|communication|correspondence|outreach|follow[\s-]?ups?)/i,
+
+  // --- Bare "stop" that IS the reply (or its own line). Optional
+  // please/just/kindly prefix; must be terminal, so "stop by my office" and
+  // "Stop, this is amazing!" do NOT match. ---
+  /(^|\n)[\s>*]*(please\s+|just\s+|kindly\s+)?stop[.!]*\s*(\r?\n|$)/i,
+
+  // --- "no more" of us: with a communication noun, or standing alone ---
+  /\bno\s+more\s+(e-?mail|message|text|contact|communication|correspondence|outreach|follow[\s-]?ups?|of\s+(these|this|them|those|your))/i,
+  /(^|\n)[\s>*]*no\s+more[.!]*\s*(\r?\n|$)/i,
 ];
 
 // Out-of-office auto-reply markers. OOO replies tend to mention specific
