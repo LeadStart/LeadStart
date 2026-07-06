@@ -31,6 +31,7 @@ import { ArrowLeft, Inbox, Upload, AlertCircle, CheckCircle2 } from "lucide-reac
 import { CampaignImportPanel } from "./import-panel";
 import { NativeSequenceCard } from "./native-sequence-card";
 import { CampaignLifecycleButton } from "./campaign-lifecycle-button";
+import { DeliverabilityCard } from "./deliverability-card";
 import { CampaignContactsTable } from "./contacts-table";
 import { PacingEditor } from "./pacing-editor";
 import { TagsEditor } from "./tags-editor";
@@ -380,6 +381,8 @@ export default async function AdminCampaignDetailPage({
             initialSteps={nativeStats.steps}
             initialWindow={sendWindow}
           />
+
+          <DeliverabilityCard campaignId={campaign.id} />
         </>
       )}
 
