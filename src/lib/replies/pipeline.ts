@@ -127,20 +127,43 @@ export async function runReplyPipeline(
     return { skipped: true, skippedReason: "classification_write_failed" };
   }
 
-  // --- 4b. Feed the org-wide suppression signal ---
-  // An unsubscribe reply blocks the contact from every channel's future
-  // sends (contacts.status is the shared block list). Channel-agnostic:
-  // benefits Salesforge, LinkedIn, and native email alike. lead_email is a
-  // synthetic id for LinkedIn (no real email), so that update simply matches
-  // no contact — harmless.
+  // --- 4b. Suppression on opt-out ---
+  // Record a per-CLIENT DNC entry so the opt-out is scoped to the brand the
+  // person replied to: a "stop" to David Cabrera's outreach blocks David's
+  // campaigns only, not another client who happens to share the contact. The
+  // native sender enforces this list per campaign.client_id before each send.
+  //
+  // For non-native channels we ALSO keep the legacy global
+  // contacts.status='unsubscribed' flip, because the Salesforge / LinkedIn
+  // suppression paths still read it. The native channel relies solely on the
+  // per-client DNC list and does NOT set the global flag — that global flip
+  // was exactly the "everyone gets blocked" behavior we're moving away from.
   if (decision.final_class === "unsubscribe" && reply.lead_email) {
-    const { error: suppressError } = await admin
-      .from("contacts")
-      .update({ status: "unsubscribed" })
-      .eq("organization_id", reply.organization_id)
-      .ilike("email", escapeLikePattern(reply.lead_email));
-    if (suppressError) {
-      console.error("[pipeline] Failed to mark contact unsubscribed:", suppressError);
+    const email = reply.lead_email.trim().toLowerCase();
+    const { error: dncError } = await admin.from("dnc_entries").upsert(
+      {
+        organization_id: reply.organization_id,
+        client_id: reply.client_id,
+        email,
+        reason: "unsubscribe",
+        source_channel: reply.source_channel,
+        source_reply_id: reply.id,
+      },
+      { onConflict: "organization_id,client_id,email", ignoreDuplicates: true },
+    );
+    if (dncError) {
+      console.error("[pipeline] Failed to write DNC entry:", dncError);
+    }
+
+    if (reply.source_channel !== "native_email") {
+      const { error: suppressError } = await admin
+        .from("contacts")
+        .update({ status: "unsubscribed" })
+        .eq("organization_id", reply.organization_id)
+        .ilike("email", escapeLikePattern(reply.lead_email));
+      if (suppressError) {
+        console.error("[pipeline] Failed to mark contact unsubscribed:", suppressError);
+      }
     }
   }
 

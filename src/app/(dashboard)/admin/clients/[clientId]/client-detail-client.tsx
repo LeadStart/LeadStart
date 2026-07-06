@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { ClientUsersSection } from "./client-users-section";
 import { ReplyRoutingSection } from "./reply-routing-section";
 import { LinkedinSection } from "./linkedin-section";
+import { DncSection } from "./dnc-section";
 import {
   ArrowLeft,
   ArrowRight,
@@ -187,6 +188,8 @@ export function ClientDetailClient({
       />
 
       <ReplyRoutingSection client={client} onSaved={refresh} />
+
+      <DncSection clientId={clientId} clientName={client.name} />
 
       <LinkedinSection client={client} onChanged={refresh} />
 

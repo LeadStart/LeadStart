@@ -129,6 +129,37 @@ export async function GET(request: NextRequest) {
   const contactMap = new Map<string, Contact>();
   for (const c of (contactsData ?? []) as Contact[]) contactMap.set(c.id, c);
 
+  // Per-client DNC prefetch. An opt-out is scoped to the client the person
+  // replied to, so a send is blocked only when the contact's email is on THIS
+  // campaign's client's DNC list (or an org-wide entry with client_id NULL).
+  // Bounded by the tick's contact set → a small IN-list query.
+  const orgIds = [...new Set([...campaignMap.values()].map((c) => c.organization_id))];
+  const dncEmails = [
+    ...new Set(
+      [...contactMap.values()]
+        .map((c) => c.email?.trim().toLowerCase())
+        .filter((e): e is string => !!e),
+    ),
+  ];
+  // email -> set of blocked client_ids ("*" = org-wide, i.e. client_id NULL).
+  const dncByEmail = new Map<string, Set<string>>();
+  if (dncEmails.length > 0 && orgIds.length > 0) {
+    const { data: dncRows } = await admin
+      .from("dnc_entries")
+      .select("client_id, email")
+      .in("organization_id", orgIds)
+      .in("email", dncEmails);
+    for (const row of (dncRows ?? []) as { client_id: string | null; email: string }[]) {
+      const key = row.email.trim().toLowerCase();
+      let s = dncByEmail.get(key);
+      if (!s) {
+        s = new Set();
+        dncByEmail.set(key, s);
+      }
+      s.add(row.client_id ?? "*");
+    }
+  }
+
   // Campaign → mailbox pool.
   const { data: poolData } = await admin
     .from("campaign_mailboxes")
@@ -239,6 +270,16 @@ export async function GET(request: NextRequest) {
     if (contact.status === "bounced" || contact.status === "unsubscribed") {
       await markEnrollmentFailed(admin, enrollment.id, `Contact is ${contact.status}.`);
       results.push({ enrollment_id: enrollment.id, result: `suppressed_${contact.status}` });
+      continue;
+    }
+    // Per-client DNC: skip if this contact opted out of THIS campaign's client
+    // (or an org-wide entry). Scoped so another client sharing the contact is
+    // unaffected — that's the whole point of the per-client list.
+    const emailKey = contact.email.trim().toLowerCase();
+    const dncClients = dncByEmail.get(emailKey);
+    if (dncClients && (dncClients.has(campaign.client_id ?? "*") || dncClients.has("*"))) {
+      await markEnrollmentFailed(admin, enrollment.id, "Contact is on the client's DNC list.");
+      results.push({ enrollment_id: enrollment.id, result: "suppressed_dnc" });
       continue;
     }
 
