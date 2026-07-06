@@ -30,6 +30,7 @@ import {
 import { ArrowLeft, Inbox, Upload, AlertCircle, CheckCircle2 } from "lucide-react";
 import { CampaignImportPanel } from "./import-panel";
 import { NativeSequenceCard } from "./native-sequence-card";
+import { CampaignLifecycleButton } from "./campaign-lifecycle-button";
 import { CampaignContactsTable } from "./contacts-table";
 import { PacingEditor } from "./pacing-editor";
 import { TagsEditor } from "./tags-editor";
@@ -180,17 +181,25 @@ export default async function AdminCampaignDetailPage({
                 </p>
               )}
             </div>
-            <Badge
-              className={
-                campaign.status === "active"
-                  ? "bg-emerald-500/20 text-emerald-900 border-0"
-                  : campaign.status === "paused"
-                    ? "bg-amber-500/20 text-amber-900 border-0"
-                    : "bg-white/40 text-[#0f172a]/70 border-0"
-              }
-            >
-              {campaign.status}
-            </Badge>
+            <div className="flex flex-col items-end gap-2 shrink-0">
+              <Badge
+                className={
+                  campaign.status === "active"
+                    ? "bg-emerald-500/20 text-emerald-900 border-0"
+                    : campaign.status === "paused"
+                      ? "bg-amber-500/20 text-amber-900 border-0"
+                      : "bg-white/40 text-[#0f172a]/70 border-0"
+                }
+              >
+                {campaign.status}
+              </Badge>
+              <CampaignLifecycleButton
+                campaignId={campaign.id}
+                campaignName={campaign.name}
+                status={campaign.status}
+                sourceChannel={campaign.source_channel}
+              />
+            </div>
           </div>
           <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-[rgba(107,114,255,0.06)]" />
         </div>
