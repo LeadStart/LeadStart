@@ -31,8 +31,9 @@ export const maxDuration = 60;
 export const dynamic = "force-dynamic";
 
 const MAILBOXES_PER_TICK = 10;
-// Global budget across all mailboxes this tick — counts processed messages
-// (each reply may run the Haiku classifier ≈ 1s), keeping us under 60s.
+// Global budget across all mailboxes this tick. Classification is now
+// deterministic keyword matching (no model call), so each message is cheap;
+// the cap mainly bounds Gmail API calls per run. Runs every minute.
 const MAX_MESSAGES_PER_TICK = 40;
 // Re-read window overlap. Dedup on (organization_id, gmail_message_id) makes
 // re-reading the last few minutes of mail harmless.

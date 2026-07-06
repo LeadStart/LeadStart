@@ -18,6 +18,11 @@ import { sendHotLeadNotification } from "@/lib/notifications/send-hot-lead";
 import { MissingAnthropicKeyError } from "@/lib/ai/client";
 import { escapeLikePattern } from "@/lib/utils";
 
+// Keyword-only classification (owner decision): the deterministic prefilter
+// is the classifier and the Claude Haiku second pass is off. Flip this back to
+// true to re-enable the model layer (decide.ts already merges both).
+const USE_CLAUDE_CLASSIFIER = false;
+
 export interface RunReplyPipelineResult {
   skipped: boolean;              // true if row missing, already classified, or body missing
   skippedReason?: string;
@@ -82,23 +87,25 @@ export async function runReplyPipeline(
     client = clientData as unknown as Client;
   }
 
-  // --- 3. Three-layer classification ---
+  // --- 3. Classification (keyword prefilter is primary; Claude off) ---
   const prefilter = runKeywordPrefilter(reply.body_text, reply.from_address);
 
-  // Claude can fail (API down, rate-limit, key missing). decide.ts handles
-  // null claude gracefully by falling back to prefilter or needs_review.
   let claude: ClassifierOutput | null = null;
-  try {
-    claude = await classifyReply({
-      body: reply.body_text,
-      prefilter,
-      persona_name: client?.persona_name ?? null,
-    });
-  } catch (err) {
-    if (err instanceof MissingAnthropicKeyError) {
-      console.warn("[pipeline] ANTHROPIC_API_KEY missing — running without Claude");
-    } else {
-      console.error("[pipeline] Claude classifier failed:", err);
+  if (USE_CLAUDE_CLASSIFIER) {
+    // decide.ts handles a null claude gracefully (falls back to the prefilter
+    // suggestion, else needs_review), so any failure here is non-fatal.
+    try {
+      claude = await classifyReply({
+        body: reply.body_text,
+        prefilter,
+        persona_name: client?.persona_name ?? null,
+      });
+    } catch (err) {
+      if (err instanceof MissingAnthropicKeyError) {
+        console.warn("[pipeline] ANTHROPIC_API_KEY missing — running without Claude");
+      } else {
+        console.error("[pipeline] Claude classifier failed:", err);
+      }
     }
   }
 

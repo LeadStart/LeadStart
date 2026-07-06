@@ -47,7 +47,7 @@
     },
     {
       "path": "/app/api/cron/poll-native-replies",
-      "schedule": "7,22,37,52 * * * *"
+      "schedule": "* * * * *"
     },
     {
       "path": "/app/api/cron/dispatch-salesforge-enrollments",

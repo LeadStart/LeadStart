@@ -25,14 +25,20 @@ export interface PrefilterResult {
   reason: string | null;
 }
 
-// Subset of ReplyClass that the prefilter can confidently assert on its own.
-// We stay conservative: only classes where a deterministic text match is
-// sufficient (no nuance). Everything else defers to Claude.
+// Classes the prefilter can assert on its own. This is now the primary
+// classifier (the Claude layer is disabled — see pipeline.ts), so it covers
+// the full set of common outcomes. Anything it can't match confidently falls
+// through to needs_review, so the owner triages rather than the client being
+// alerted on a guess.
 export type PrefilterSuggestedClass =
   | "wrong_person_no_referral"
   | "referral_forward"
   | "unsubscribe"
-  | "ooo";
+  | "ooo"
+  | "not_interested"
+  | "meeting_booked"
+  | "true_interest"
+  | "qualifying_question";
 
 // Sender-address-aware email extraction. Email-regex matches are cheap and
 // robust; we lowercase for the sender comparison but preserve original case
@@ -113,6 +119,98 @@ const OOO_PATTERNS: RegExp[] = [
   /\breturn(ing)?\s+(to\s+the\s+office\s+)?on\b/i,
 ];
 
+// Clear rejections (NOT opt-outs — the person is declining but not demanding
+// removal). Kept precise so soft/ambiguous replies ("maybe later") fall
+// through to needs_review instead of being wrongly killed. Checked BEFORE the
+// positive patterns so "not interested" never reads as "interested".
+const NOT_INTERESTED_PATTERNS: RegExp[] = [
+  /\bnot\s+interested\b/i,
+  /\bno\s+interest\b/i,
+  /\bno[,\s]+(thanks?|thank\s+you)\b/i,
+  /\bnot\s+(a\s+)?(good\s+)?fit\b/i,
+  /\bnot\s+for\s+(me|us)\b/i,
+  /\bnot\s+looking\s+(for|to|at)\b/i,
+  /\bnot\s+something\s+(i'?m|we'?re|i\s+am|we\s+are)\s+(interested|looking)\b/i,
+  /\bwe(?:'re| are)\s+(all\s+set|good|not\s+interested|happy\s+with\s+our|already)\b/i,
+  /\balready\s+(have|got|use|using|working\s+with|have\s+a|partnered)\b/i,
+  /\b(wouldn'?t|would\s+not|won'?t|will\s+not|not)\s+(be\s+)?interested\b/i,
+  /\b(don'?t|do\s+not)\s+think\s+(this|it|that|we|i|you)\b/i,
+  /\b(i'?ll|we'?ll)\s+pass\b(?!\s+(this|it|that|along|by|to|on)\b)/i,
+  /(^|\n)[\s>*]*pass[\s.!]*(\r?\n|$)/i, // bare "pass" (the sequence invites "reply pass")
+];
+
+// Strong scheduling signals → a meeting is (near) booked.
+const MEETING_PATTERNS: RegExp[] = [
+  /\b(calendly|cal\.com|savvycal|chilipiper|meetings?\.hubspot|hubspot\.com\/meetings|zcal\.co|acuityscheduling|calendar\.app\.google)\b/i,
+  /\b(booked|scheduled|grabbed|picked|found|reserved)\s+(a\s+|some\s+)?(time|slot|call|meeting|spot)\b/i,
+  /\b(sent|sending|shared)\s+(you\s+)?(a\s+|an\s+)?(calendar\s+)?invite\b/i,
+  /\b(added|put)\s+(it\s+|you\s+)?(on|to)\s+(the\s+|your\s+|my\s+)?calendar\b/i,
+  /\bon\s+your\s+(calendar|calendly|schedule)\b/i,
+  /\bcalendar\s+invite\b/i,
+  /\bbook\s+(a\s+)?time\s+(here|below|via|through)\b/i,
+];
+
+// Positive intent → true_interest. Precise phrases; a negation is caught first
+// by NOT_INTERESTED_PATTERNS above (ordering in runKeywordPrefilter).
+const INTEREST_PATTERNS: RegExp[] = [
+  /\b(i'?m|we'?re|i\s+am|we\s+are|i'?d\s+be|we'?d\s+be)\s+(very\s+|quite\s+|definitely\s+)?interested\b/i,
+  /\b(sounds?|looks?|seems?)\s+(good|great|interesting|promising|worth)\b/i,
+  /\btell\s+me\s+more\b/i,
+  /\b(learn|hear|know)\s+more\b/i,
+  /\bmore\s+(info|information|details)\b/i,
+  /\bsend\s+(me\s+)?(more\s+|the\s+|over\s+)?(info|information|details|it\s+over)\b/i,
+  /\blet'?s\s+(talk|chat|connect|discuss|set\s+up|schedule|find\s+a\s+time|hop\s+on|do\s+it|jump\s+on)\b/i,
+  /\bhappy\s+to\s+(chat|talk|connect|learn|discuss|hop\s+on|jump\s+on)\b/i,
+  /\bopen\s+to\s+(it|chatting|talking|learning|a\s+(call|chat|conversation|quick\s+chat))\b/i,
+  /\bworth\s+a\s+(chat|call|conversation|quick\s+(chat|call)|look|discussion)\b/i,
+  /\b(call|reach|contact)\s+me\b/i,
+  /\bgive\s+me\s+a\s+(call|ring|shout)\b/i,
+  /\b(schedule|set\s+up|book|grab)\s+(a\s+|some\s+)?(call|time|meeting|chat|conversation|demo|coffee|15|30)\b/i,
+  /\bwhat\s+(times?|days?)\s+(work|are\s+you|do\s+you\s+have)\b/i,
+  /\b(your|some)\s+availability\b/i,
+  /\bwhen\s+(are|can|would)\s+(you|we)\b/i,
+  /\bcurious\s+(to|about|how)\b/i,
+  /\bkeen\s+to\b/i,
+  /\bhow\s+much\s+(is|does|would|for)\b/i,
+  /\bwhat'?s\s+(the\s+)?(cost|price|pricing|investment|catch)\b/i,
+  /\bhow\s+does\s+(it|this)\s+work\b/i,
+  /(^|\n)[\s>*]*(yes|yep|yeah|sure|interested|i'?m\s+in|sounds\s+good|let'?s\s+(talk|chat))[\s.!]*(\r?\n|$)/i,
+];
+
+// Any other genuine question → qualifying_question (still a hot class).
+const QUESTION_PATTERNS: RegExp[] = [
+  /\bhow\s+(does|do|would|can|many|long|exactly)\b/i,
+  /\bwhat\s+(is|are|do|does|would|kind|type|exactly|about)\b/i,
+  /\b(can|could|would)\s+you\s+(tell|explain|send|share|elaborate|provide|clarify)\b/i,
+  /\bdo\s+you\s+(have|offer|work|support|handle|do)\b/i,
+  /\?\s*$/, // the reply ends on a question
+];
+
+// Cut the quoted thread off the bottom of a reply before we classify it. The
+// quoted original carries OUR outbound copy (e.g. "schedule a complimentary
+// conversation") and both parties' addresses, which would otherwise poison
+// the keyword match. We classify only the fresh text above the first quote
+// boundary; if the whole message is a quote, fall back to the full text.
+function stripQuotedReply(text: string): string {
+  const lines = text.split(/\r?\n/);
+  const boundary: RegExp[] = [
+    /^\s*On\b.+\bwrote:\s*$/i, // "On Mon, Jul 6, X <..> wrote:"
+    /^\s*-{2,}\s*Original Message\s*-{2,}/i,
+    /^\s*_{10,}\s*$/, // Outlook divider
+    /^\s*From:\s.*@/i, // forwarded/quoted header block
+    /^\s*>{1,}/, // quoted line
+  ];
+  let cut = lines.length;
+  for (let i = 0; i < lines.length; i++) {
+    if (boundary.some((re) => re.test(lines[i]))) {
+      cut = i;
+      break;
+    }
+  }
+  const top = lines.slice(0, cut).join("\n").trim();
+  return top.length > 0 ? top : text.trim();
+}
+
 function matchAny(text: string, patterns: RegExp[]): RegExp | null {
   for (const p of patterns) if (p.test(text)) return p;
   return null;
@@ -150,7 +248,8 @@ export function runKeywordPrefilter(
   body: string | null | undefined,
   senderEmail: string | null | undefined
 ): PrefilterResult {
-  const text = (body || "").trim();
+  // Classify only the fresh reply text, not the quoted thread beneath it.
+  const text = stripQuotedReply(body || "");
   if (!text) {
     return { flags: [], embedded_emails: [], suggested_class: null, reason: null };
   }
@@ -162,32 +261,53 @@ export function runKeywordPrefilter(
   const referralHit = matchAny(text, REFERRAL_PATTERNS);
   const unsubscribeHit = matchAny(text, UNSUBSCRIBE_PATTERNS);
   const oooHit = matchAny(text, OOO_PATTERNS);
+  const notInterestedHit = matchAny(text, NOT_INTERESTED_PATTERNS);
+  const meetingHit = matchAny(text, MEETING_PATTERNS);
+  const interestHit = matchAny(text, INTEREST_PATTERNS);
+  const questionHit = matchAny(text, QUESTION_PATTERNS);
 
   if (wrongPersonHit) flags.push("wrong_person_phrase");
   if (referralHit) flags.push("referral_phrase");
   if (embedded.length > 0) flags.push("referral_email_present");
   if (unsubscribeHit) flags.push("unsubscribe_phrase");
   if (oooHit) flags.push("ooo_phrase");
+  if (notInterestedHit) flags.push("not_interested_phrase");
+  if (meetingHit) flags.push("meeting_phrase");
+  if (interestHit) flags.push("interest_phrase");
+  if (questionHit) flags.push("question_phrase");
 
-  // Priority order for suggested_class, from most confident to least.
-  // Each is deliberately conservative — Claude still gets to confirm or
-  // override in the decide.ts merger.
+  // Priority order, most-certain → least; first match wins. Anything that
+  // doesn't clearly match stays null → needs_review in decide.ts, so a human
+  // triages rather than the client being alerted (or a lead killed) on a guess.
   let suggested_class: PrefilterSuggestedClass | null = null;
   let reason: string | null = null;
 
   if (unsubscribeHit && !referralHit) {
     suggested_class = "unsubscribe";
-    reason = `Unsubscribe phrase matched: ${unsubscribeHit.source}`;
-  } else if (oooHit && !wrongPersonHit && !referralHit) {
+    reason = "Opt-out phrase matched";
+  } else if (oooHit && !wrongPersonHit && !referralHit && !interestHit && !meetingHit) {
+    // Only OOO when there's no competing positive signal — "out until Monday,
+    // let's connect then" is a warm lead, not a dead auto-reply.
     suggested_class = "ooo";
-    reason = `Out-of-office phrase matched: ${oooHit.source}`;
+    reason = "Out-of-office phrase matched";
   } else if ((wrongPersonHit || referralHit) && embedded.length > 0) {
-    // Wrong-person + email-in-body = almost certainly a referral forward.
     suggested_class = "referral_forward";
     reason = `Handoff phrase + embedded email address${embedded.length > 1 ? "es" : ""}`;
   } else if (wrongPersonHit && embedded.length === 0) {
     suggested_class = "wrong_person_no_referral";
-    reason = `Wrong-person phrase matched, no forwarding address provided`;
+    reason = "Wrong-person phrase, no forwarding address";
+  } else if (notInterestedHit) {
+    suggested_class = "not_interested";
+    reason = "Not-interested phrase matched";
+  } else if (meetingHit) {
+    suggested_class = "meeting_booked";
+    reason = "Meeting / scheduling signal matched";
+  } else if (interestHit) {
+    suggested_class = "true_interest";
+    reason = "Positive-intent phrase matched";
+  } else if (questionHit) {
+    suggested_class = "qualifying_question";
+    reason = "Question detected";
   }
 
   return {
