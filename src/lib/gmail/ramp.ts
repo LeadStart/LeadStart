@@ -1,18 +1,27 @@
 // Pure send-pacing math for the native email channel. "Ramp as data": a
-// brand-new inbox starts at a low daily cap and steps up weekly, computed
-// from ramp_started_at + max_daily_cap on the mailbox row. No vendor warmup
-// product, no state machine — just arithmetic the worker calls each tick.
+// brand-new inbox starts at a low daily cap and steps up as it ACTUALLY sends
+// — the cap is a function of the mailbox's cumulative send count, not calendar
+// time. So a paused or idle inbox stays early in the ramp until it truly warms
+// up; pausing an inbox for weeks can no longer fast-forward it to full volume.
+// No vendor warmup product, no state machine — just arithmetic over the send
+// count the worker passes in each tick.
 //
-// Owner-chosen defaults (2026-07-02): steady state 20 cold sends/day per
-// Google inbox; new-inbox ramp 5 → 10 → 15 → 20 over the first three weeks;
-// send only Mon–Fri, 8am–5pm Eastern.
+// Owner-chosen defaults: steady state 20 cold sends/day per Google inbox;
+// warmup 5 → 10 → 15 → 20, each stage lasting ~one business-week of sending at
+// that stage's cap. Send window is Mon–Fri business hours (per campaign).
 
 export const DEFAULT_MAX_DAILY_CAP = 20;
 
-// Cap for weeks 0, 1, 2 after ramp_started_at. Week 3+ uses max_daily_cap.
-// Each step is also clamped to max_daily_cap, so a mailbox whose steady
-// state is below a ramp value never exceeds its own ceiling.
-export const RAMP_STEPS = [5, 10, 15];
+// Warmup stages, in order: { cap: sends/day at this stage; graduateAt:
+// cumulative sends at which the mailbox leaves this stage }. 5/day for a
+// business-week (5×5 = 25) → 10/day (+50 ⇒ 75) → 15/day (+75 ⇒ 150) → then the
+// mailbox's own max_daily_cap. Each cap is clamped to max_daily_cap, so a
+// mailbox whose ceiling is below a stage value never exceeds it.
+export const RAMP_STAGES: { cap: number; graduateAt: number }[] = [
+  { cap: 5, graduateAt: 25 },
+  { cap: 10, graduateAt: 75 },
+  { cap: 15, graduateAt: 150 },
+];
 
 export interface SendWindowConfig {
   timezone: string;
@@ -49,35 +58,41 @@ export function resolveSendWindow(campaign: {
 }
 
 export interface RampMailbox {
-  ramp_started_at: string; // 'YYYY-MM-DD'
   max_daily_cap: number;
   daily_cap_override: number | null;
 }
 
-function weeksSince(dateStr: string, now: number): number {
-  const started = Date.parse(dateStr);
-  if (!Number.isFinite(started)) return RAMP_STEPS.length; // treat unknown as fully ramped
-  const days = Math.floor((now - started) / 86_400_000);
-  if (days < 0) return 0; // future date → treat as brand new
-  return Math.floor(days / 7);
-}
-
 /**
- * The number of cold sends this mailbox may make today. A non-null
- * daily_cap_override wins outright; otherwise ramp toward max_daily_cap.
+ * The number of cold sends this mailbox may make today, given how many emails
+ * it has already sent all-time (`totalSent`, from native_sends). A non-null
+ * daily_cap_override wins outright; otherwise the cap steps up with cumulative
+ * send volume — so an inbox that hasn't sent stays at the low starting cap.
  */
-export function effectiveDailyCap(mb: RampMailbox, now: number = Date.now()): number {
+export function effectiveDailyCap(mb: RampMailbox, totalSent: number): number {
   if (mb.daily_cap_override != null) return Math.max(0, mb.daily_cap_override);
-  const week = weeksSince(mb.ramp_started_at, now);
-  if (week < RAMP_STEPS.length) {
-    return Math.min(mb.max_daily_cap, RAMP_STEPS[week]);
+  for (const stage of RAMP_STAGES) {
+    if (totalSent < stage.graduateAt) return Math.min(mb.max_daily_cap, stage.cap);
   }
   return mb.max_daily_cap;
 }
 
-/** Human-facing "week N of ramp" for the mailboxes admin table (1-indexed). */
-export function rampWeek(mb: RampMailbox, now: number = Date.now()): number {
-  return weeksSince(mb.ramp_started_at, now) + 1;
+/**
+ * Human-facing ramp position for the mailboxes admin table: the warmup stage
+ * (1-indexed), the total number of stages (warmup + steady), and whether the
+ * mailbox is fully warmed (past the last warmup stage).
+ */
+export function rampStage(totalSent: number): {
+  stage: number;
+  stages: number;
+  warmed: boolean;
+} {
+  const stages = RAMP_STAGES.length + 1; // warmup stages + steady state
+  for (let i = 0; i < RAMP_STAGES.length; i++) {
+    if (totalSent < RAMP_STAGES[i].graduateAt) {
+      return { stage: i + 1, stages, warmed: false };
+    }
+  }
+  return { stage: stages, stages, warmed: true };
 }
 
 /**

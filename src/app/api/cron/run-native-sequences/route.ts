@@ -200,6 +200,20 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  // Cumulative all-time sends per mailbox — drives the volume-based warmup ramp
+  // (effectiveDailyCap). Count-only (head:true) so no rows transfer; a paused
+  // inbox that hasn't sent stays at the low starting cap until it warms up.
+  const totalSent: Record<string, number> = {};
+  await Promise.all(
+    [...referencedMailboxIds].map(async (id) => {
+      const { count } = await admin
+        .from("native_sends")
+        .select("id", { count: "exact", head: true })
+        .eq("mailbox_id", id);
+      totalSent[id] = count ?? 0;
+    }),
+  );
+
   // Per-tick per-mailbox counter (in addition to the daily count above).
   const inTick: Record<string, number> = {};
   const gmailByOrg = new Map<string, GmailClient | null>();
@@ -208,7 +222,7 @@ export async function GET(request: NextRequest) {
   const inWindowByCampaign = new Map<string, boolean>();
 
   const remaining = (mb: NativeMailbox) =>
-    effectiveDailyCap(mb) - (sentToday[mb.id] ?? 0) - (inTick[mb.id] ?? 0);
+    effectiveDailyCap(mb, totalSent[mb.id] ?? 0) - (sentToday[mb.id] ?? 0) - (inTick[mb.id] ?? 0);
   const eligible = (mb: NativeMailbox) =>
     mb.status === "active" && remaining(mb) > 0 && (inTick[mb.id] ?? 0) < PER_MAILBOX_PER_TICK;
 

@@ -16,7 +16,7 @@ import {
 } from "@/lib/gmail/client";
 import {
   effectiveDailyCap,
-  rampWeek,
+  rampStage,
   startOfLocalDay,
   DEFAULT_MAX_DAILY_CAP,
 } from "@/lib/gmail/ramp";
@@ -81,13 +81,30 @@ export async function GET() {
     }
   }
 
-  const enriched = mailboxes.map((mb) => ({
-    ...mb,
-    sent_today: sentToday[mb.id] ?? 0,
-    bounced_7d: bounced7d[mb.id] ?? 0,
-    effective_daily_cap: effectiveDailyCap(mb),
-    ramp_week: rampWeek(mb),
-  }));
+  // Cumulative all-time sends per mailbox drive the volume-based warmup ramp.
+  // Count-only queries (head:true), one per mailbox, run in parallel.
+  const totalSent: Record<string, number> = {};
+  await Promise.all(
+    mailboxes.map(async (mb) => {
+      const { count } = await admin
+        .from("native_sends")
+        .select("id", { count: "exact", head: true })
+        .eq("mailbox_id", mb.id);
+      totalSent[mb.id] = count ?? 0;
+    }),
+  );
+
+  const enriched = mailboxes.map((mb) => {
+    const ts = totalSent[mb.id] ?? 0;
+    return {
+      ...mb,
+      sent_today: sentToday[mb.id] ?? 0,
+      bounced_7d: bounced7d[mb.id] ?? 0,
+      effective_daily_cap: effectiveDailyCap(mb, ts),
+      total_sent: ts,
+      warmed: rampStage(ts).warmed,
+    };
+  });
 
   return NextResponse.json({ mailboxes: enriched });
 }

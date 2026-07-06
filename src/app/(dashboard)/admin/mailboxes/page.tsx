@@ -24,7 +24,8 @@ type MailboxRow = NativeMailbox & {
   sent_today: number;
   bounced_7d: number;
   effective_daily_cap: number;
-  ramp_week: number;
+  total_sent: number;
+  warmed: boolean;
 };
 
 type Banner = { kind: "success" | "error"; message: string } | null;
@@ -167,7 +168,8 @@ export default function MailboxesPage() {
           </h1>
           <p className="text-sm text-[#0f172a]/60 mt-1">
             Google Workspace inboxes LeadStart sends from directly. New inboxes
-            ramp up automatically (5 → 10 → 15 → cap over three weeks).
+            ramp up automatically as they send (5 → 10 → 15 → cap), so a paused
+            inbox never skips its warmup.
           </p>
         </div>
         <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-[rgba(107,114,255,0.06)]" />
@@ -302,8 +304,14 @@ export default function MailboxesPage() {
                       <td className="py-3 px-3">
                         <StatusBadge status={mb.status} />
                       </td>
-                      <td className="py-3 px-3 text-muted-foreground">
-                        Week {mb.ramp_week}
+                      <td className="py-3 px-3">
+                        {mb.warmed ? (
+                          <span className="text-emerald-600 font-medium">Warmed</span>
+                        ) : (
+                          <span className="text-muted-foreground">
+                            Warming · {mb.total_sent} sent
+                          </span>
+                        )}
                       </td>
                       <td className="py-3 px-3">
                         <span className="font-medium">{mb.sent_today}</span>
