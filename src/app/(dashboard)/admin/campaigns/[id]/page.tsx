@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/table";
 import { ArrowLeft, Inbox, Upload, AlertCircle, CheckCircle2 } from "lucide-react";
 import { CampaignImportPanel } from "./import-panel";
+import { NativeSequenceCard } from "./native-sequence-card";
 import { CampaignContactsTable } from "./contacts-table";
 import { PacingEditor } from "./pacing-editor";
 import { TagsEditor } from "./tags-editor";
@@ -67,7 +68,8 @@ export default async function AdminCampaignDetailPage({
   }
 
   const campaign = campaignRow as Campaign;
-  const sendSchedule = formatSendWindow(resolveSendWindow(campaign));
+  const sendWindow = resolveSendWindow(campaign);
+  const sendSchedule = formatSendWindow(sendWindow);
   // The queue-state counts go through the admin client because the
   // client-scoped supabase respects RLS that would hide queue rows from
   // the owner if any policy is misconfigured. Admin client is fine here
@@ -364,51 +366,11 @@ export default async function AdminCampaignDetailPage({
             </CardContent>
           </Card>
 
-          <Card className="border-border/50 shadow-sm">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">Sequence</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {nativeStats.steps.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No steps configured.</p>
-              ) : (
-                <ol className="space-y-3">
-                  {nativeStats.steps.map((s, i) => {
-                    // Mirror the sender's subject logic (run-native-sequences):
-                    // step 0 uses its own subject; a follow-up uses its own
-                    // subject when set, else threads as "Re: <first subject>".
-                    const firstSubject = nativeStats.steps[0]?.subject || "(no subject)";
-                    const subject =
-                      i === 0
-                        ? s.subject || "(no subject)"
-                        : s.subject.trim()
-                          ? s.subject
-                          : `Re: ${firstSubject}`;
-                    return (
-                      <li key={i} className="flex gap-3 text-sm">
-                        <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-[#EA4335] px-2 text-xs font-bold text-white shrink-0">
-                          {i + 1}
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          <p className="font-medium text-[#0f172a]">{subject}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {s.wait_days === 0
-                              ? "Sends immediately"
-                              : `Waits ${s.wait_days} day${s.wait_days === 1 ? "" : "s"} after the previous step`}
-                          </p>
-                          {s.body && (
-                            <pre className="mt-2 whitespace-pre-wrap break-words rounded-md border border-border/40 bg-muted/30 p-3 font-sans text-xs leading-relaxed text-[#334155]">
-                              {s.body}
-                            </pre>
-                          )}
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ol>
-              )}
-            </CardContent>
-          </Card>
+          <NativeSequenceCard
+            campaignId={campaign.id}
+            initialSteps={nativeStats.steps}
+            initialWindow={sendWindow}
+          />
         </>
       )}
 
