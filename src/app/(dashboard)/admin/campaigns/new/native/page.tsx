@@ -25,6 +25,7 @@ import { ArrowLeft, ArrowDown, ArrowUp, Plus, Trash2, Save } from "lucide-react"
 import Link from "next/link";
 import { appUrl } from "@/lib/api-url";
 import { useUser } from "@/hooks/use-user";
+import { StepCopyCheck } from "@/components/campaigns/step-copy-check";
 import type { Client, NativeMailbox } from "@/types/app";
 
 type StepDraft = {
@@ -349,6 +350,15 @@ export default function NewNativeCampaignPage() {
                       placeholder="Plain text. Placeholders: {{first_name}} {{last_name}} {{company}} {{title}} {{intro_line}}"
                       value={step.body_template}
                       onChange={(e) => updateStep(i, "body_template", e.target.value)}
+                    />
+                    <StepCopyCheck
+                      subject={i === 0 ? step.subject_template : ""}
+                      body={step.body_template}
+                      clientId={clientId || undefined}
+                      onApplySpintax={(n) => {
+                        if (i === 0 && n.subject !== null) updateStep(i, "subject_template", n.subject);
+                        updateStep(i, "body_template", n.body);
+                      }}
                     />
                   </div>
                 </div>

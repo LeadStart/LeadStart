@@ -28,6 +28,8 @@ import { GmailClient, GmailConfigError, GmailAuthError, GmailPermanentError, Gma
 import { loadGmailClientForOrg } from "@/lib/gmail/org";
 import { buildRawEmail, generateMessageId } from "@/lib/gmail/mime";
 import { effectiveDailyCap, isInSendWindow, resolveSendWindow, startOfLocalDay } from "@/lib/gmail/ramp";
+import { renderSpintax } from "@/lib/spintax";
+import { buildTokenMap, applyTokens } from "@/lib/native/tokens";
 import type {
   CampaignEnrollment,
   CampaignStep,
@@ -316,7 +318,12 @@ export async function GET(request: NextRequest) {
     }
 
     // ---- Render subject + body ----
-    const bodyText = renderTemplate(step.body_template ?? "", contact, mailbox);
+    const bodyText = renderTemplate(
+      step.body_template ?? "",
+      contact,
+      mailbox,
+      `${contact.id}:${enrollment.current_step_index}:body`,
+    );
     if (!bodyText) {
       await markEnrollmentFailed(admin, enrollment.id, "Rendered email body is empty.");
       results.push({ enrollment_id: enrollment.id, result: "failed_empty_body" });
@@ -324,7 +331,12 @@ export async function GET(request: NextRequest) {
     }
     let subject: string;
     if (enrollment.current_step_index === 0) {
-      subject = renderTemplate(step.subject_template ?? "", contact, mailbox);
+      subject = renderTemplate(
+        step.subject_template ?? "",
+        contact,
+        mailbox,
+        `${contact.id}:0:subject`,
+      );
       if (!subject) {
         await markEnrollmentFailed(admin, enrollment.id, "Step 0 has no subject.");
         results.push({ enrollment_id: enrollment.id, result: "failed_no_subject" });
@@ -334,10 +346,24 @@ export async function GET(request: NextRequest) {
       // This follow-up carries its own subject line — send under it (still
       // threaded via References + threadId). Lets a sequence vary the subject
       // per step instead of forcing every follow-up to "Re: <first subject>".
-      subject = renderTemplate(step.subject_template ?? "", contact, mailbox);
+      subject = renderTemplate(
+        step.subject_template ?? "",
+        contact,
+        mailbox,
+        `${contact.id}:${enrollment.current_step_index}:subject`,
+      );
     } else {
       const step0 = steps?.get(0);
-      const baseSubject = renderTemplate(step0?.subject_template ?? "", contact, mailbox) || "(no subject)";
+      // Re: fallback — re-render STEP 0's subject with STEP 0's seed key (index
+      // 0, NOT the sending step index) so the threaded subject is byte-identical
+      // to the original send ("Re: Quick question", never "Re: Fast question").
+      const baseSubject =
+        renderTemplate(
+          step0?.subject_template ?? "",
+          contact,
+          mailbox,
+          `${contact.id}:0:subject`,
+        ) || "(no subject)";
       subject = baseSubject.toLowerCase().startsWith("re:") ? baseSubject : `Re: ${baseSubject}`;
     }
 
@@ -462,14 +488,6 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({ status: "ok", sent, results });
 }
 
-// Fold a variable name to a comparison key: lowercase, drop everything that
-// isn't a letter or digit. So "Property Address", "property_address" and
-// "PropertyAddress" all collapse to "propertyaddress" — the operator doesn't
-// have to match the CSV header's exact casing/spacing in the sequence copy.
-function normalizeVarKey(name: string): string {
-  return name.toLowerCase().replace(/[^a-z0-9]/g, "");
-}
-
 // Render sequence copy against a contact + the sending mailbox. Resolves
 // {{token}} placeholders case/format-insensitively, in priority order:
 //
@@ -489,44 +507,23 @@ function renderTemplate(
   template: string,
   contact: Contact,
   mailbox: NativeMailbox,
+  spinKey?: string,
 ): string {
+  // ORDERING IS LOAD-BEARING: resolve spintax BEFORE token substitution.
+  // Token values come from operator-imported contact custom_fields (CSV data)
+  // that may contain { | } characters; feeding those into the spintax parser
+  // would corrupt the render. Spintax-first only ever parses author-written
+  // template text, and a {{token}} chosen inside a spin branch still gets
+  // filled by the token pass below.
+  const source = spinKey ? renderSpintax(template, spinKey) : template;
+
   const senderName =
     mailbox.display_name?.trim() || mailbox.email_address.split("@")[0];
 
-  // Keys are already in normalizeVarKey() form (lowercase, alnum-only).
-  const standard: Record<string, string> = {
-    firstname: contact.first_name ?? "",
-    lastname: contact.last_name ?? "",
-    fullname: [contact.first_name, contact.last_name].filter(Boolean).join(" "),
-    company: contact.company_name ?? "",
-    companyname: contact.company_name ?? "",
-    title: contact.title ?? "",
-    introline: contact.intro_line ?? "",
-    intro: contact.intro_line ?? "",
-    email: contact.email ?? "",
-    phone: contact.phone ?? "",
-    yourname: senderName,
-    sendername: senderName,
-    myname: senderName,
-  };
-
-  const custom: Record<string, string> = {};
-  const cf = contact.custom_fields;
-  if (cf && typeof cf === "object") {
-    for (const [k, v] of Object.entries(cf)) {
-      if (v == null) continue;
-      custom[normalizeVarKey(k)] = typeof v === "string" ? v : String(v);
-    }
-  }
-
-  return template
-    .replace(/\{\{\s*([^{}]+?)\s*\}\}/g, (whole, rawName: string) => {
-      const key = normalizeVarKey(rawName);
-      if (key in standard) return standard[key];
-      if (key in custom) return custom[key];
-      return whole; // unknown token: leave untouched
-    })
-    .trim();
+  // buildTokenMap / applyTokens are the shared source of truth (also used by the
+  // builder preview), keeping the send and the preview byte-identical.
+  const map = buildTokenMap(contact, senderName);
+  return applyTokens(source, map).trim();
 }
 
 async function markEnrollmentFailed(

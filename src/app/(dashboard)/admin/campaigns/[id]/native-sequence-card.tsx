@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Pencil, Plus, Trash2, ArrowUp, ArrowDown, Save, X, Loader2, Clock } from "lucide-react";
 import { appUrl } from "@/lib/api-url";
 import { formatSendWindow, type SendWindowConfig } from "@/lib/gmail/ramp";
+import { StepCopyCheck } from "@/components/campaigns/step-copy-check";
 
 interface StepDraft {
   subject: string;
@@ -295,6 +296,12 @@ export function NativeSequenceCard({
                       placeholder="Placeholders: {{FirstName}} {{PropertyAddress}} {{SoldDate}} {{YourName}}"
                       value={s.body}
                       onChange={(e) => updateStep(i, { body: e.target.value })}
+                    />
+                    <StepCopyCheck
+                      subject={s.subject}
+                      body={s.body}
+                      campaignId={campaignId}
+                      onApplySpintax={(n) => updateStep(i, { subject: n.subject ?? s.subject, body: n.body })}
                     />
                   </div>
                 </div>

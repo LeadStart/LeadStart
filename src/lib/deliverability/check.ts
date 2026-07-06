@@ -9,6 +9,13 @@
 
 import { resolveTxt } from "node:dns/promises";
 
+// The copy scorer lives in a client-safe sibling (no node: imports) so the
+// builder UI can import it without pulling node:dns into the client bundle.
+// Re-exported here so existing consumers of "@/lib/deliverability/check" keep
+// resolving unchanged.
+export { scoreCopy, findSpamMatches } from "./copy";
+export type { CopyIssue, CopyScore, StepCopyResult, SpamMatch } from "./copy";
+
 export type AuthStatus = "pass" | "warn" | "fail";
 export interface AuthCheck {
   status: AuthStatus;
@@ -66,65 +73,6 @@ export async function checkDomainAuth(domain: string): Promise<DomainAuth> {
   }
 
   return { domain, spf, dkim, dmarc: dmarcCheck };
-}
-
-export interface CopyIssue {
-  severity: "warn" | "info";
-  message: string;
-}
-export interface CopyScore {
-  score: number; // 0–100, higher = cleaner
-  issues: CopyIssue[];
-}
-
-// Classic spam-trigger phrases for cold B2B email. Not exhaustive — the point
-// is to catch the obvious offenders, not to be a filter emulator.
-const SPAM_PHRASES = [
-  "free", "guarantee", "risk-free", "act now", "limited time", "click here",
-  "buy now", "order now", "100% free", "no obligation", "winner", "cash bonus",
-  "earn money", "make money", "extra income", "$$$", "cheap", "lowest price",
-  "credit card", "why pay more", "double your", "this isn't spam",
-];
-
-/** Heuristic spam-signal score for the whole sequence's copy. */
-export function scoreCopy(steps: { subject: string; body: string }[]): CopyScore {
-  const issues: CopyIssue[] = [];
-  const joined = steps.map((s) => `${s.subject}\n${s.body}`).join("\n");
-  const lower = joined.toLowerCase();
-
-  const linkCount = (joined.match(/https?:\/\//g) || []).length;
-  if (linkCount > 2) {
-    issues.push({ severity: "warn", message: `${linkCount} links across the sequence — cold email lands best with 0–1.` });
-  }
-
-  const foundPhrases = SPAM_PHRASES.filter((p) => lower.includes(p));
-  if (foundPhrases.length > 0) {
-    issues.push({
-      severity: "warn",
-      message: `Spam-trigger phrases present: ${foundPhrases.slice(0, 6).join(", ")}${foundPhrases.length > 6 ? "…" : ""}.`,
-    });
-  }
-
-  steps.forEach((s, i) => {
-    const capsWords = s.subject.split(/\s+/).filter((w) => w.length > 2 && w === w.toUpperCase() && /[A-Z]/.test(w));
-    if (capsWords.length >= 2) {
-      issues.push({ severity: "warn", message: `Step ${i + 1} subject uses ALL-CAPS words.` });
-    }
-  });
-
-  if (/[!?]{2,}/.test(joined)) {
-    issues.push({ severity: "info", message: "Repeated !!/?? punctuation reads as spammy." });
-  }
-  steps.forEach((s, i) => {
-    if (s.body.trim().length < 40) {
-      issues.push({ severity: "info", message: `Step ${i + 1} body is very short.` });
-    }
-  });
-
-  const warns = issues.filter((x) => x.severity === "warn").length;
-  const infos = issues.filter((x) => x.severity === "info").length;
-  const score = Math.max(0, 100 - warns * 15 - infos * 5);
-  return { score, issues };
 }
 
 /** Pull the domain out of an email address (lowercased). */

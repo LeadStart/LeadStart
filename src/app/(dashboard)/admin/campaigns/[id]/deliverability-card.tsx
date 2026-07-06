@@ -14,8 +14,58 @@ type AuthStatus = "pass" | "warn" | "fail";
 interface AuthCheck { status: AuthStatus; detail: string; }
 interface DomainAuth { domain: string; spf: AuthCheck; dkim: AuthCheck; dmarc: AuthCheck; }
 interface CopyIssue { severity: "warn" | "info"; message: string; }
-interface CopyScore { score: number; issues: CopyIssue[]; }
+interface SpamMatch {
+  phrase: string;
+  category: string;
+  severity: "high" | "med" | "low";
+  alternatives?: string[];
+  field: "subject" | "body";
+  inSpintax: boolean;
+}
+interface StepCopyResult {
+  stepIndex: number;
+  score: number;
+  issues: CopyIssue[];
+  matches: SpamMatch[];
+}
+// perStep is optional so responses that predate the per-step breakdown still parse.
+interface CopyScore { score: number; issues: CopyIssue[]; perStep?: StepCopyResult[]; }
 interface Result { domains: DomainAuth[]; copy: CopyScore; }
+
+function scoreBand(score: number): string {
+  return score >= 85 ? "text-emerald-600" : score >= 60 ? "text-amber-600" : "text-red-600";
+}
+
+function IssueRow({ iss }: { iss: CopyIssue }) {
+  return (
+    <li className="flex items-start gap-1.5 text-xs text-muted-foreground">
+      {iss.severity === "warn" ? (
+        <AlertTriangle size={12} className="text-amber-600 mt-0.5 shrink-0" />
+      ) : (
+        <AlertTriangle size={12} className="text-slate-400 mt-0.5 shrink-0" />
+      )}
+      {iss.message}
+    </li>
+  );
+}
+
+function MatchChip({ m }: { m: SpamMatch }) {
+  const tone =
+    m.severity === "high"
+      ? "bg-red-50 text-red-700 border-red-200"
+      : m.severity === "med"
+        ? "bg-amber-50 text-amber-700 border-amber-200"
+        : "bg-slate-50 text-slate-600 border-slate-200";
+  return (
+    <span className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[11px] ${tone}`}>
+      <span className="font-medium">{m.phrase}</span>
+      {m.alternatives && m.alternatives.length > 0 && (
+        <span className="opacity-80">→ {m.alternatives[0]}</span>
+      )}
+      {m.inSpintax && <span className="opacity-60">(in a spintax option)</span>}
+    </span>
+  );
+}
 
 function StatusIcon({ status }: { status: AuthStatus }) {
   if (status === "pass") return <CheckCircle2 size={14} className="text-emerald-600 shrink-0" />;
@@ -115,16 +165,43 @@ export function DeliverabilityCard({ campaignId }: { campaignId: string }) {
                 ) : (
                   <ul className="mt-2 space-y-1">
                     {result.copy.issues.map((iss, i) => (
-                      <li key={i} className="flex items-start gap-1.5 text-xs text-muted-foreground">
-                        {iss.severity === "warn" ? (
-                          <AlertTriangle size={12} className="text-amber-600 mt-0.5 shrink-0" />
-                        ) : (
-                          <AlertTriangle size={12} className="text-slate-400 mt-0.5 shrink-0" />
-                        )}
-                        {iss.message}
-                      </li>
+                      <IssueRow key={i} iss={iss} />
                     ))}
                   </ul>
+                )}
+
+                {result.copy.perStep && result.copy.perStep.length > 0 && (
+                  <div className="mt-3 space-y-2 border-t border-border/50 pt-3">
+                    {result.copy.perStep.map((step) => (
+                      <div key={step.stepIndex} className="rounded-md border border-border/40 p-2.5">
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs font-medium">Step {step.stepIndex + 1}</p>
+                          <span className={`text-sm font-semibold ${scoreBand(step.score)}`}>
+                            {step.score}/100
+                          </span>
+                        </div>
+                        {step.issues.length > 0 && (
+                          <ul className="mt-1.5 space-y-1">
+                            {step.issues.map((iss, i) => (
+                              <IssueRow key={i} iss={iss} />
+                            ))}
+                          </ul>
+                        )}
+                        {step.matches.length > 0 && (
+                          <div className="mt-1.5 flex flex-wrap gap-1">
+                            {step.matches.map((m, i) => (
+                              <MatchChip key={i} m={m} />
+                            ))}
+                          </div>
+                        )}
+                        {step.issues.length === 0 && step.matches.length === 0 && (
+                          <p className="text-xs text-emerald-700 mt-1 inline-flex items-center gap-1">
+                            <CheckCircle2 size={12} /> Clean.
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
             </>
