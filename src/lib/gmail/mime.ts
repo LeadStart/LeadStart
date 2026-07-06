@@ -2,9 +2,14 @@
 // native email channel. Pure functions, no network — same style as
 // src/lib/replies/ingest-salesforge.ts and keyword-prefilter.ts.
 //
-// Deliverability-first: we build plain-text-only messages (no HTML part,
-// no tracking pixel, no rewritten links) and append NOTHING to the body —
-// any opt-out language lives in the sequence copy the operator writes.
+// Deliverability-first: still NO tracking pixel, NO rewritten links, and we
+// append NOTHING to the body — any opt-out language lives in the sequence copy.
+// We send multipart/alternative (a plain-text part + a minimal HTML part)
+// rather than plain-text-only, because Gmail hard-wraps plain text at ~78
+// chars AND ignores format=flowed, so a plain-text-only body renders as an
+// ugly narrow wrapped column. The HTML part is just paragraphs — no images,
+// no CSS beyond a system font — so it reflows naturally on every client while
+// keeping the plain part as a fallback.
 
 import { randomUUID } from "node:crypto";
 import type { GmailMessage, GmailPayloadPart, GmailHeader } from "./client";
@@ -60,12 +65,55 @@ function base64url(input: string): string {
     .replace(/=+$/, "");
 }
 
+// text/plain part, RFC 3676 format=flowed: wrap long paragraphs into <=72-char
+// lines where each continued line ends in a trailing SPACE, so flowed-aware
+// clients reflow to any width. (Gmail ignores this, which is why we also send
+// HTML — but it's the correct plain-text fallback for clients that honor it.)
+function toFlowed(text: string, width = 72): string {
+  const out: string[] = [];
+  for (const src of text.split(/\r?\n/)) {
+    if (src.length === 0) {
+      out.push(""); // blank line = hard paragraph break
+      continue;
+    }
+    const line = /^(>| |From )/.test(src) ? ` ${src}` : src; // space-stuffing
+    const chunks: string[] = [];
+    let cur = "";
+    for (const w of line.split(" ")) {
+      if (cur === "") cur = w;
+      else if (`${cur} ${w}`.length <= width) cur += ` ${w}`;
+      else {
+        chunks.push(cur);
+        cur = w;
+      }
+    }
+    if (cur !== "") chunks.push(cur);
+    chunks.forEach((c, i) => out.push(i < chunks.length - 1 ? `${c} ` : c));
+  }
+  return out.join("\r\n");
+}
+
+// Minimal text/html part: HTML-escape, map blank lines to paragraph spacing
+// and single newlines to <br>. No images, no tracking, no links added — just
+// reflowable text in a system font.
+function textToHtml(text: string): string {
+  const esc = (s: string) =>
+    s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const paras = text
+    .split(/\r?\n\r?\n/)
+    .map((p) => `<p style="margin:0 0 14px;">${esc(p).replace(/\r?\n/g, "<br>")}</p>`)
+    .join("");
+  return `<div style="font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif;font-size:14px;line-height:1.5;color:#1f2937;">${paras}</div>`;
+}
+
 /**
- * Build a plain-text email and return it base64url-encoded, ready to hand
- * to GmailClient.sendMessage(). Adds In-Reply-To/References only when
- * threading a follow-up.
+ * Build a multipart/alternative (plain-text + HTML) email, base64url-encoded
+ * and ready for GmailClient.sendMessage(). Adds In-Reply-To/References only
+ * when threading a follow-up. Callers pass just plain `bodyText`; the HTML
+ * part is derived from it.
  */
 export function buildRawEmail(params: BuildEmailParams): string {
+  const boundary = `b_${randomUUID().replace(/-/g, "")}`;
   const headers: string[] = [
     `From: ${formatFrom(params.fromEmail, params.fromName)}`,
     `To: ${params.to}`,
@@ -74,14 +122,26 @@ export function buildRawEmail(params: BuildEmailParams): string {
     `Message-ID: ${params.messageId}`,
     `Date: ${new Date().toUTCString()}`,
     `MIME-Version: 1.0`,
-    `Content-Type: text/plain; charset="UTF-8"`,
-    `Content-Transfer-Encoding: base64`,
+    `Content-Type: multipart/alternative; boundary="${boundary}"`,
   ];
   if (params.inReplyTo) headers.push(`In-Reply-To: ${params.inReplyTo}`);
   if (params.references) headers.push(`References: ${params.references}`);
 
-  const raw = `${headers.join("\r\n")}\r\n\r\n${base64Body(params.bodyText)}`;
-  return base64url(raw);
+  const body = [
+    `--${boundary}`,
+    `Content-Type: text/plain; charset="UTF-8"; format=flowed`,
+    `Content-Transfer-Encoding: base64`,
+    ``,
+    base64Body(toFlowed(params.bodyText)),
+    `--${boundary}`,
+    `Content-Type: text/html; charset="UTF-8"`,
+    `Content-Transfer-Encoding: base64`,
+    ``,
+    base64Body(textToHtml(params.bodyText)),
+    `--${boundary}--`,
+  ].join("\r\n");
+
+  return base64url(`${headers.join("\r\n")}\r\n\r\n${body}`);
 }
 
 // ---------- Inbound parsing ----------
