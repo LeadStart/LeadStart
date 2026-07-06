@@ -671,6 +671,12 @@ export interface LeadReply {
   reclassified_at: string | null;
   reclassified_from: ReplyClass | null;
 
+  // Exclude this reply/lead from the client's stats (migration 00060). The
+  // native analytics roll-up skips excluded rows when recomputing snapshots.
+  excluded_from_stats: boolean;
+  excluded_at: string | null;
+  excluded_by: string | null;
+
   // Send (manual reply composed by the client via /api/replies/[id]/send)
   status: ReplyStatus;
   final_body_text: string | null;

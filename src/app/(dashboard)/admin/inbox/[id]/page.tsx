@@ -15,6 +15,7 @@ import {
 import type { LeadReply } from "@/types/app";
 import { CLASS_META, OUTCOME_META, timeSince, formatBody } from "@/lib/replies/ui";
 import { ReclassifyForm } from "./reclassify-form";
+import { ExcludeToggle } from "./exclude-toggle";
 
 // Detail-page columns. Skips the heavy stuff a single-row read doesn't
 // need: raw_payload + body_html (we render body_text), final_body_*
@@ -27,7 +28,7 @@ const REPLY_DETAIL_COLUMNS =
   "claude_class, claude_confidence, claude_reason, " +
   "keyword_flags, referral_contact, " +
   "outcome, outcome_notes, outcome_logged_at, " +
-  "reclassified_from, reclassified_at, " +
+  "reclassified_from, reclassified_at, excluded_from_stats, " +
   "client:client_id(name, notification_email)";
 
 type DetailReply = Pick<
@@ -55,6 +56,7 @@ type DetailReply = Pick<
   | "outcome_logged_at"
   | "reclassified_from"
   | "reclassified_at"
+  | "excluded_from_stats"
 > & {
   client: { name: string; notification_email: string | null } | null;
 };
@@ -264,10 +266,14 @@ export default async function AdminReplyDetailPage({
       </Card>
 
       <Card className="border-border/50 shadow-sm">
-        <CardContent className="px-5 py-4">
+        <CardContent className="px-5 py-4 space-y-4">
           <ReclassifyForm
             replyId={reply.id}
             currentClass={reply.final_class}
+          />
+          <ExcludeToggle
+            replyId={reply.id}
+            initialExcluded={reply.excluded_from_stats}
           />
         </CardContent>
       </Card>

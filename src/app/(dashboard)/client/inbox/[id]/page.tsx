@@ -59,6 +59,7 @@ export default function ReplyDossierPage() {
   const [outcomeNotes, setOutcomeNotes] = useState("");
   const [savingOutcome, setSavingOutcome] = useState(false);
   const [outcomeSaved, setOutcomeSaved] = useState(false);
+  const [excludeSaving, setExcludeSaving] = useState(false);
 
   // Portal-reply composer state
   const [composerOpen, setComposerOpen] = useState(false);
@@ -163,6 +164,24 @@ export default function ReplyDossierPage() {
       }
     } finally {
       setSavingOutcome(false);
+    }
+  }
+
+  async function handleToggleExclude() {
+    if (!reply) return;
+    const next = !reply.excluded_from_stats;
+    setExcludeSaving(true);
+    try {
+      const res = await fetch(appUrl(`/api/replies/${reply.id}/exclude`), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ excluded: next }),
+      });
+      if (res.ok) {
+        setReply((prev) => prev && { ...prev, excluded_from_stats: next });
+      }
+    } finally {
+      setExcludeSaving(false);
     }
   }
 
@@ -382,6 +401,29 @@ export default function ReplyDossierPage() {
               {savingOutcome ? "Saving..." : reply.outcome ? "Update" : "Log outcome"}
             </button>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Exclude from stats */}
+      <Card className={reply.excluded_from_stats ? "border-amber-200 bg-amber-50/40" : "border-border/50 shadow-sm"}>
+        <CardContent className="px-5 py-3 flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-foreground">
+              {reply.excluded_from_stats ? "Excluded from your stats" : "Counted in your stats"}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {reply.excluded_from_stats
+                ? "This lead isn't counted in your dashboard or reports."
+                : "Not a real lead? Exclude it so it doesn't count toward your metrics."}
+            </p>
+          </div>
+          <button
+            onClick={handleToggleExclude}
+            disabled={excludeSaving}
+            className="btn-secondary-white px-3 py-1.5 text-xs shrink-0 cursor-pointer disabled:opacity-50"
+          >
+            {excludeSaving ? "…" : reply.excluded_from_stats ? "Include" : "Exclude"}
+          </button>
         </CardContent>
       </Card>
 

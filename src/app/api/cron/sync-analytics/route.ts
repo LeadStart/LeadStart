@@ -586,6 +586,7 @@ export async function GET(request: NextRequest) {
             .select("received_at, final_class, lead_email")
             .eq("campaign_id", nc.id)
             .eq("source_channel", "native_email")
+            .eq("excluded_from_stats", false) // excluded leads don't count
             .order("id", { ascending: true })
             .range(from, from + 999);
           if (error) throw error;
