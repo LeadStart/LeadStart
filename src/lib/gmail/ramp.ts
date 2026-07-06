@@ -14,12 +14,39 @@ export const DEFAULT_MAX_DAILY_CAP = 20;
 // state is below a ramp value never exceeds its own ceiling.
 export const RAMP_STEPS = [5, 10, 15];
 
-export const SEND_WINDOW = {
+export interface SendWindowConfig {
+  timezone: string;
+  startHour: number; // inclusive
+  endHour: number; // exclusive
+  weekdaysOnly: boolean;
+}
+
+// Global default window, used when a campaign hasn't overridden it (migration
+// 00058 added per-campaign columns). Owner default (2026-07-02): Mon–Fri
+// 8am–5pm Eastern.
+export const SEND_WINDOW: SendWindowConfig = {
   timezone: "America/New_York",
-  startHour: 8, // inclusive
-  endHour: 17, // exclusive (last send fires before 5pm ET)
+  startHour: 8,
+  endHour: 17, // exclusive (last send fires before 5pm)
   weekdaysOnly: true,
-} as const;
+};
+
+// Build a full window from a campaign's (possibly-null) override columns,
+// falling back to the global default per field. Any NULL column inherits the
+// default, so a campaign that only sets a timezone still gets 8–5 weekdays.
+export function resolveSendWindow(campaign: {
+  send_timezone?: string | null;
+  send_start_hour?: number | null;
+  send_end_hour?: number | null;
+  send_weekdays_only?: boolean | null;
+}): SendWindowConfig {
+  return {
+    timezone: campaign.send_timezone ?? SEND_WINDOW.timezone,
+    startHour: campaign.send_start_hour ?? SEND_WINDOW.startHour,
+    endHour: campaign.send_end_hour ?? SEND_WINDOW.endHour,
+    weekdaysOnly: campaign.send_weekdays_only ?? SEND_WINDOW.weekdaysOnly,
+  };
+}
 
 export interface RampMailbox {
   ramp_started_at: string; // 'YYYY-MM-DD'
@@ -75,13 +102,40 @@ export function startOfLocalDay(now: number = Date.now()): number {
   return now - msSinceMidnight;
 }
 
+// Human-readable label for a send window, e.g. "Mon–Fri, 8 AM – 5 PM Pacific
+// time". Used on the campaign detail page. endHour is exclusive but reads
+// naturally as the closing time (17 -> "5 PM").
+const TZ_LABELS: Record<string, string> = {
+  "America/Los_Angeles": "Pacific",
+  "America/Denver": "Mountain",
+  "America/Phoenix": "Arizona",
+  "America/Chicago": "Central",
+  "America/New_York": "Eastern",
+};
+export function formatSendWindow(w: SendWindowConfig): string {
+  const fmtHour = (h: number) => {
+    const hr = ((h % 24) + 24) % 24;
+    const period = hr < 12 || hr === 24 ? "AM" : "PM";
+    const twelve = hr % 12 === 0 ? 12 : hr % 12;
+    return `${twelve} ${period}`;
+  };
+  const days = w.weekdaysOnly ? "Mon–Fri" : "Every day";
+  const tz = TZ_LABELS[w.timezone] ? `${TZ_LABELS[w.timezone]} time` : w.timezone;
+  return `${days}, ${fmtHour(w.startHour)} – ${fmtHour(w.endHour)} ${tz}`;
+}
+
 /**
- * True when `now` falls inside the Mon–Fri 8am–5pm ET send window. Uses the
- * built-in Intl timezone database (no date-fns tz dep, which isn't installed).
+ * True when `now` falls inside the given send window (defaults to the global
+ * SEND_WINDOW). Pass a per-campaign window from resolveSendWindow() to honor a
+ * campaign's own hours/timezone. Uses the built-in Intl timezone database (no
+ * date-fns tz dep, which isn't installed).
  */
-export function isInSendWindow(now: Date = new Date()): boolean {
+export function isInSendWindow(
+  now: Date = new Date(),
+  window: SendWindowConfig = SEND_WINDOW,
+): boolean {
   const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: SEND_WINDOW.timezone,
+    timeZone: window.timezone,
     weekday: "short",
     hour: "2-digit",
     hour12: false,
@@ -91,8 +145,8 @@ export function isInSendWindow(now: Date = new Date()): boolean {
   const hourRaw = parts.find((p) => p.type === "hour")?.value ?? "0";
   const hour = Number(hourRaw) % 24; // Intl can render midnight as "24"
 
-  if (SEND_WINDOW.weekdaysOnly && (weekday === "Sat" || weekday === "Sun")) {
+  if (window.weekdaysOnly && (weekday === "Sat" || weekday === "Sun")) {
     return false;
   }
-  return hour >= SEND_WINDOW.startHour && hour < SEND_WINDOW.endHour;
+  return hour >= window.startHour && hour < window.endHour;
 }

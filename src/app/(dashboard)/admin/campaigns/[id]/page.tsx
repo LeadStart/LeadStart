@@ -11,6 +11,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { KPICard } from "@/components/charts/kpi-card";
 import { DailyChart } from "@/components/charts/daily-chart";
 import { calculateMetrics } from "@/lib/kpi/calculator";
+import { resolveSendWindow, formatSendWindow } from "@/lib/gmail/ramp";
 import {
   Card,
   CardContent,
@@ -66,6 +67,7 @@ export default async function AdminCampaignDetailPage({
   }
 
   const campaign = campaignRow as Campaign;
+  const sendSchedule = formatSendWindow(resolveSendWindow(campaign));
   // The queue-state counts go through the admin client because the
   // client-scoped supabase respects RLS that would hide queue rows from
   // the owner if any policy is misconfigured. Admin client is fine here
@@ -314,9 +316,8 @@ export default async function AdminCampaignDetailPage({
               <div>
                 <CardTitle className="text-base">Native email</CardTitle>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Sends directly from your Google inboxes on the{" "}
-                  <code>run-native-sequences</code> cron (every 15 min, Mon–Fri
-                  business hours ET).
+                  Sends directly from your Google inboxes, checked every 15 min.
+                  Sending schedule: <span className="font-medium text-foreground">{sendSchedule}</span>.
                 </p>
               </div>
             </CardHeader>
@@ -371,22 +372,39 @@ export default async function AdminCampaignDetailPage({
               {nativeStats.steps.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No steps configured.</p>
               ) : (
-                <ol className="space-y-2">
-                  {nativeStats.steps.map((s, i) => (
-                    <li key={i} className="flex gap-3 text-sm">
-                      <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-[#EA4335] px-2 text-xs font-bold text-white shrink-0">
-                        {i + 1}
-                      </span>
-                      <div>
-                        <p className="font-medium text-[#0f172a]">
-                          {i === 0 ? (s.subject || "(no subject)") : "Re: (same thread)"}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {s.wait_days === 0 ? "Sends immediately" : `Waits ${s.wait_days} day${s.wait_days === 1 ? "" : "s"}`}
-                        </p>
-                      </div>
-                    </li>
-                  ))}
+                <ol className="space-y-3">
+                  {nativeStats.steps.map((s, i) => {
+                    // Mirror the sender's subject logic (run-native-sequences):
+                    // step 0 uses its own subject; a follow-up uses its own
+                    // subject when set, else threads as "Re: <first subject>".
+                    const firstSubject = nativeStats.steps[0]?.subject || "(no subject)";
+                    const subject =
+                      i === 0
+                        ? s.subject || "(no subject)"
+                        : s.subject.trim()
+                          ? s.subject
+                          : `Re: ${firstSubject}`;
+                    return (
+                      <li key={i} className="flex gap-3 text-sm">
+                        <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-[#EA4335] px-2 text-xs font-bold text-white shrink-0">
+                          {i + 1}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium text-[#0f172a]">{subject}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {s.wait_days === 0
+                              ? "Sends immediately"
+                              : `Waits ${s.wait_days} day${s.wait_days === 1 ? "" : "s"} after the previous step`}
+                          </p>
+                          {s.body && (
+                            <pre className="mt-2 whitespace-pre-wrap break-words rounded-md border border-border/40 bg-muted/30 p-3 font-sans text-xs leading-relaxed text-[#334155]">
+                              {s.body}
+                            </pre>
+                          )}
+                        </div>
+                      </li>
+                    );
+                  })}
                 </ol>
               )}
             </CardContent>
@@ -550,7 +568,7 @@ interface NativeStats {
   replied: number;
   enrollments: { active: number; completed: number; replied: number; failed: number };
   mailboxes: { email: string; status: string }[];
-  steps: { subject: string; wait_days: number }[];
+  steps: { subject: string; body: string; wait_days: number }[];
 }
 
 async function nativeStatsFor(
@@ -561,7 +579,7 @@ async function nativeStatsFor(
     admin.from("native_sends").select("id", { count: "exact", head: true }).eq("campaign_id", campaignId),
     admin.from("native_sends").select("id", { count: "exact", head: true }).eq("campaign_id", campaignId).eq("status", "bounced"),
     admin.from("lead_replies").select("id", { count: "exact", head: true }).eq("campaign_id", campaignId).eq("source_channel", "native_email"),
-    admin.from("campaign_steps").select("step_index, subject_template, wait_days").eq("campaign_id", campaignId).order("step_index", { ascending: true }),
+    admin.from("campaign_steps").select("step_index, subject_template, body_template, wait_days").eq("campaign_id", campaignId).order("step_index", { ascending: true }),
     admin.from("campaign_mailboxes").select("mailbox_id").eq("campaign_id", campaignId),
     admin.from("campaign_enrollments").select("status").eq("campaign_id", campaignId),
   ]);
@@ -588,8 +606,9 @@ async function nativeStatsFor(
     }));
   }
 
-  const steps = ((stepsRes.data ?? []) as { subject_template: string | null; wait_days: number }[]).map((s) => ({
+  const steps = ((stepsRes.data ?? []) as { subject_template: string | null; body_template: string | null; wait_days: number }[]).map((s) => ({
     subject: s.subject_template ?? "",
+    body: s.body_template ?? "",
     wait_days: s.wait_days,
   }));
 

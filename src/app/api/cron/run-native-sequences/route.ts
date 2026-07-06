@@ -27,7 +27,7 @@ import { checkCronAuth } from "@/lib/security/cron-auth";
 import { GmailClient, GmailConfigError, GmailAuthError, GmailPermanentError, GmailRateLimitError, GmailTransientError } from "@/lib/gmail/client";
 import { loadGmailClientForOrg } from "@/lib/gmail/org";
 import { buildRawEmail, generateMessageId } from "@/lib/gmail/mime";
-import { effectiveDailyCap, isInSendWindow, startOfLocalDay } from "@/lib/gmail/ramp";
+import { effectiveDailyCap, isInSendWindow, resolveSendWindow, startOfLocalDay } from "@/lib/gmail/ramp";
 import type {
   CampaignEnrollment,
   CampaignStep,
@@ -56,18 +56,22 @@ type CampaignRow = {
   status: string;
   source_channel: string;
   name: string;
+  send_timezone: string | null;
+  send_start_hour: number | null;
+  send_end_hour: number | null;
+  send_weekdays_only: boolean | null;
 };
 
 export async function GET(request: NextRequest) {
   const authError = checkCronAuth(request);
   if (authError) return authError;
 
-  // Outside the Mon–Fri business-hours window, do nothing. The cron still
-  // fires all day; out-of-window ticks are near-instant no-ops.
-  if (!isInSendWindow()) {
-    return NextResponse.json({ status: "outside_window" });
-  }
-
+  // Send windows are now per-campaign (migration 00058), so the global
+  // "outside window" bail moved into the loop below — each enrollment is
+  // gated on its OWN campaign's window (timezone + hours). The cron still
+  // fires all day; ticks where every due campaign is out of window fetch a
+  // little and then send nothing.
+  const tickNow = new Date();
   const admin = createAdminClient();
 
   // Active enrollments on native_email campaigns only — filtered in SQL via
@@ -97,7 +101,7 @@ export async function GET(request: NextRequest) {
 
   const { data: campaignsData } = await admin
     .from("campaigns")
-    .select("id, organization_id, client_id, status, source_channel, name")
+    .select("id, organization_id, client_id, status, source_channel, name, send_timezone, send_start_hour, send_end_hour, send_weekdays_only")
     .in("id", campaignIds);
   const campaignMap = new Map<string, CampaignRow>();
   for (const c of (campaignsData ?? []) as CampaignRow[]) campaignMap.set(c.id, c);
@@ -168,6 +172,9 @@ export async function GET(request: NextRequest) {
   // Per-tick per-mailbox counter (in addition to the daily count above).
   const inTick: Record<string, number> = {};
   const gmailByOrg = new Map<string, GmailClient | null>();
+  // Cache each campaign's "is it in its send window right now" so we compute
+  // the Intl/timezone math once per campaign per tick, not once per enrollment.
+  const inWindowByCampaign = new Map<string, boolean>();
 
   const remaining = (mb: NativeMailbox) =>
     effectiveDailyCap(mb) - (sentToday[mb.id] ?? 0) - (inTick[mb.id] ?? 0);
@@ -184,6 +191,14 @@ export async function GET(request: NextRequest) {
     if (!campaign || campaign.status !== "active" || campaign.source_channel !== "native_email") {
       continue;
     }
+
+    // Gate on THIS campaign's send window (its own timezone + hours; falls
+    // back to the global ET default when unset). Out-of-window campaigns are
+    // skipped this tick and retried on a later one inside their window.
+    if (!inWindowByCampaign.has(campaign.id)) {
+      inWindowByCampaign.set(campaign.id, isInSendWindow(tickNow, resolveSendWindow(campaign)));
+    }
+    if (!inWindowByCampaign.get(campaign.id)) continue;
 
     const steps = stepsByCampaign.get(campaign.id);
     const step = steps?.get(enrollment.current_step_index);

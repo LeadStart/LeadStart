@@ -144,6 +144,12 @@ export interface Campaign {
   // Channel discriminator. 'linkedin' for Unipile-driven sequences;
   // 'salesforge' for the email channel.
   source_channel: SourceChannel;
+  // Per-campaign native-email send window (migration 00058). NULL on any
+  // field = inherit the global default (Mon–Fri 8am–5pm America/New_York).
+  send_timezone: string | null;
+  send_start_hour: number | null;
+  send_end_hour: number | null;
+  send_weekdays_only: boolean | null;
   // Per-campaign Unipile account binding (migration 00046). Defaults to
   // clients.unipile_account_id but lives on the campaign so accounts can
   // rotate without invalidating campaign history.
