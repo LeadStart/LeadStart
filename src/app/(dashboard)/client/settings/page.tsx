@@ -25,16 +25,31 @@ import {
   AlertCircle,
 } from "lucide-react";
 import type { Client } from "@/types/app";
+import { WEEKDAY_LABELS, COMMON_TIMEZONES, describeSchedule } from "@/lib/kpi/schedule";
 
 const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-// Same cadence options admin uses — keep the two surfaces in sync.
-const CADENCE_OPTIONS = [
-  { value: 0, label: "Off" },
-  { value: 7, label: "Weekly" },
-  { value: 14, label: "Bi-weekly" },
-  { value: 30, label: "Monthly" },
+// The four frequency choices a client can pick. "" = Off (reports paused).
+const FREQUENCY_OPTIONS: { value: "" | "weekly" | "biweekly" | "monthly"; label: string }[] = [
+  { value: "", label: "Off" },
+  { value: "weekly", label: "Weekly" },
+  { value: "biweekly", label: "Bi-weekly" },
+  { value: "monthly", label: "Monthly" },
 ];
+
+// The browser's timezone, falling back to Eastern if it can't be resolved.
+function browserTimezone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || "America/New_York";
+  } catch {
+    return "America/New_York";
+  }
+}
+
+// Today as YYYY-MM-DD (used to stamp a fresh biweekly anchor).
+function todayISODate(): string {
+  return new Date().toISOString().slice(0, 10);
+}
 
 type SaveState = "idle" | "saving" | "saved" | "error";
 
@@ -182,7 +197,11 @@ export default function ClientSettingsPage() {
   });
 
   const [reportsForm, setReportsForm] = useState({
-    report_interval_days: 0,
+    report_frequency: "" as "" | "weekly" | "biweekly" | "monthly",
+    report_day_of_week: 1,
+    report_day_of_month: 1,
+    report_time_of_day: "09:00",
+    report_timezone: "America/New_York",
     report_recipients: [] as string[],
   });
 
@@ -217,7 +236,13 @@ export default function ClientSettingsPage() {
           notification_cc_emails: c.notification_cc_emails ?? [],
         });
         setReportsForm({
-          report_interval_days: c.report_interval_days ?? 0,
+          // When a value is null, default it so a client can pick a frequency
+          // and go without configuring every field by hand.
+          report_frequency: (c.report_frequency ?? "") as "" | "weekly" | "biweekly" | "monthly",
+          report_day_of_week: c.report_day_of_week ?? 1,
+          report_day_of_month: c.report_day_of_month ?? 1,
+          report_time_of_day: c.report_time_of_day ?? "09:00",
+          report_timezone: c.report_timezone ?? browserTimezone(),
           report_recipients: c.report_recipients ?? [],
         });
         setSignatureForm({ signature_block: c.signature_block ?? "" });
@@ -339,15 +364,41 @@ export default function ClientSettingsPage() {
 
   async function handleSaveReports() {
     setReportsStatus({ state: "saving" });
-    const interval = reportsForm.report_interval_days;
+    const freq = reportsForm.report_frequency;
+    const isWeeklyish = freq === "weekly" || freq === "biweekly";
+
+    // Only stamp a fresh biweekly anchor when the client is NEWLY switching to
+    // biweekly — so saving other changes later doesn't re-anchor and shift the
+    // cadence out from under them.
+    const newlyBiweekly = freq === "biweekly" && client?.report_frequency !== "biweekly";
+
     const result = await patchClient({
-      report_interval_days: interval > 0 ? interval : null,
+      report_frequency: freq || null,
+      report_day_of_week: isWeeklyish ? reportsForm.report_day_of_week : null,
+      report_day_of_month: freq === "monthly" ? reportsForm.report_day_of_month : null,
+      report_time_of_day: freq ? reportsForm.report_time_of_day : null,
+      report_timezone: freq ? reportsForm.report_timezone : null,
       report_recipients: reportsForm.report_recipients,
+      ...(newlyBiweekly ? { report_schedule_start: todayISODate() } : {}),
     });
     if (!result.ok) {
       setReportsStatus({ state: "error", message: result.error });
       return;
     }
+    // Reflect the saved schedule locally so the biweekly-anchor guard and the
+    // Off/On badge stay in sync without a re-fetch.
+    setClient((prev) =>
+      prev
+        ? {
+            ...prev,
+            report_frequency: freq || null,
+            report_day_of_week: isWeeklyish ? reportsForm.report_day_of_week : null,
+            report_day_of_month: freq === "monthly" ? reportsForm.report_day_of_month : null,
+            report_time_of_day: freq ? reportsForm.report_time_of_day : null,
+            report_timezone: freq ? reportsForm.report_timezone : null,
+          }
+        : prev
+    );
     setReportsStatus({ state: "saved" });
     setTimeout(() => setReportsStatus({ state: "idle" }), 2500);
   }
@@ -365,10 +416,23 @@ export default function ClientSettingsPage() {
     setTimeout(() => setSignatureStatus({ state: "idle" }), 2500);
   }
 
-  const cadenceLabel = useMemo(() => {
-    const opt = CADENCE_OPTIONS.find((o) => o.value === reportsForm.report_interval_days);
-    return opt?.label ?? "Custom";
-  }, [reportsForm.report_interval_days]);
+  // Live plain-language description of the schedule the client is editing,
+  // e.g. "Every Monday at 09:00 (America/New_York)". null when reports are off.
+  const scheduleSummary = useMemo(
+    () =>
+      describeSchedule({
+        report_frequency: reportsForm.report_frequency || null,
+        report_day_of_week: reportsForm.report_day_of_week,
+        report_day_of_month: reportsForm.report_day_of_month,
+        report_time_of_day: reportsForm.report_time_of_day,
+        report_timezone: reportsForm.report_timezone,
+      }),
+    [reportsForm]
+  );
+
+  const cadenceBadge = reportsForm.report_frequency
+    ? FREQUENCY_OPTIONS.find((o) => o.value === reportsForm.report_frequency)?.label ?? "On"
+    : "Off";
 
   if (contextLoading || loading) {
     return (
@@ -596,21 +660,21 @@ export default function ClientSettingsPage() {
           </div>
           <CardTitle className="text-base flex-1">Reports</CardTitle>
           <Badge variant="secondary" className="badge-slate text-[10px]">
-            {cadenceLabel}
+            {cadenceBadge}
           </Badge>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-1.5">
             <Label>Delivery cadence</Label>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              {CADENCE_OPTIONS.map((opt) => {
-                const selected = reportsForm.report_interval_days === opt.value;
+              {FREQUENCY_OPTIONS.map((opt) => {
+                const selected = reportsForm.report_frequency === opt.value;
                 return (
                   <button
-                    key={opt.value}
+                    key={opt.value || "off"}
                     type="button"
                     onClick={() =>
-                      setReportsForm((p) => ({ ...p, report_interval_days: opt.value }))
+                      setReportsForm((p) => ({ ...p, report_frequency: opt.value }))
                     }
                     disabled={reportsStatus.state === "saving"}
                     className={`text-sm px-3 py-2.5 rounded-lg border transition-colors cursor-pointer ${
@@ -628,6 +692,102 @@ export default function ClientSettingsPage() {
               How often we email your KPI report. &ldquo;Off&rdquo; pauses all scheduled sends.
             </p>
           </div>
+
+          {reportsForm.report_frequency !== "" && (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              {(reportsForm.report_frequency === "weekly" ||
+                reportsForm.report_frequency === "biweekly") && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="report_day_of_week">Day of week</Label>
+                  <select
+                    id="report_day_of_week"
+                    value={reportsForm.report_day_of_week}
+                    onChange={(e) =>
+                      setReportsForm((p) => ({
+                        ...p,
+                        report_day_of_week: Number(e.target.value),
+                      }))
+                    }
+                    disabled={reportsStatus.state === "saving"}
+                    className="w-full rounded-lg border border-border/60 bg-card px-3 py-2 text-sm outline-none focus:border-[#2E37FE] disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer"
+                  >
+                    {WEEKDAY_LABELS.map((d) => (
+                      <option key={d.value} value={d.value}>
+                        {d.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {reportsForm.report_frequency === "monthly" && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="report_day_of_month">Day of month</Label>
+                  <select
+                    id="report_day_of_month"
+                    value={reportsForm.report_day_of_month}
+                    onChange={(e) =>
+                      setReportsForm((p) => ({
+                        ...p,
+                        report_day_of_month: Number(e.target.value),
+                      }))
+                    }
+                    disabled={reportsStatus.state === "saving"}
+                    className="w-full rounded-lg border border-border/60 bg-card px-3 py-2 text-sm outline-none focus:border-[#2E37FE] disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer"
+                  >
+                    {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => (
+                      <option key={d} value={d}>
+                        {d}
+                      </option>
+                    ))}
+                    <option value={-1}>Last day of month</option>
+                  </select>
+                </div>
+              )}
+
+              <div className="space-y-1.5">
+                <Label htmlFor="report_time_of_day">Time of day</Label>
+                <Input
+                  id="report_time_of_day"
+                  type="time"
+                  value={reportsForm.report_time_of_day}
+                  onChange={(e) =>
+                    setReportsForm((p) => ({ ...p, report_time_of_day: e.target.value }))
+                  }
+                  disabled={reportsStatus.state === "saving"}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="report_timezone">Timezone</Label>
+                <select
+                  id="report_timezone"
+                  value={reportsForm.report_timezone}
+                  onChange={(e) =>
+                    setReportsForm((p) => ({ ...p, report_timezone: e.target.value }))
+                  }
+                  disabled={reportsStatus.state === "saving"}
+                  className="w-full rounded-lg border border-border/60 bg-card px-3 py-2 text-sm outline-none focus:border-[#2E37FE] disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer"
+                >
+                  {COMMON_TIMEZONES.map((tz) => (
+                    <option key={tz.value} value={tz.value}>
+                      {tz.label}
+                    </option>
+                  ))}
+                  {/* Preserve a saved tz that isn't in the common list. */}
+                  {!COMMON_TIMEZONES.some((tz) => tz.value === reportsForm.report_timezone) && (
+                    <option value={reportsForm.report_timezone}>
+                      {reportsForm.report_timezone}
+                    </option>
+                  )}
+                </select>
+              </div>
+            </div>
+          )}
+
+          <p className="text-[13px] font-medium text-[#0f172a]">
+            {scheduleSummary ? scheduleSummary : "Reports are off."}
+          </p>
 
           <div className="space-y-1.5">
             <Label>Recipients</Label>

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const FREQUENCIES = new Set(["weekly", "biweekly", "monthly"]);
@@ -12,7 +13,35 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "client_id required" }, { status: 400 });
   }
 
+  // Auth: an owner or VA in the SAME org as the target client. (This route
+  // previously had NO auth — anyone who knew a client_id could rewrite that
+  // client's report schedule.)
+  const supabase = await createServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  const role = user.app_metadata?.role;
+  if (role !== "owner" && role !== "va") {
+    return NextResponse.json({ error: "Owner or VA role required" }, { status: 403 });
+  }
+
   const admin = createAdminClient();
+
+  const { data: clientRow } = await admin
+    .from("clients")
+    .select("organization_id")
+    .eq("id", client_id)
+    .maybeSingle();
+  if (!clientRow) {
+    return NextResponse.json({ error: "Client not found" }, { status: 404 });
+  }
+  if ((clientRow as { organization_id: string }).organization_id !== user.app_metadata?.organization_id) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   const update: Record<string, unknown> = {};
 
   if (body.frequency !== undefined) {

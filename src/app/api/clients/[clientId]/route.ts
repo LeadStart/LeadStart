@@ -57,6 +57,12 @@ interface PatchBody {
   signature_block?: string | null;
   report_interval_days?: number | null;
   report_recipients?: string[] | null;
+  report_frequency?: string | null;
+  report_day_of_week?: number | null;
+  report_day_of_month?: number | null;
+  report_time_of_day?: string | null;
+  report_timezone?: string | null;
+  report_schedule_start?: string | null;
 }
 
 // Fields a logged-in client is allowed to edit on their own client record.
@@ -68,7 +74,17 @@ const CLIENT_EDITABLE: (keyof PatchBody)[] = [
   "signature_block",
   "report_interval_days",
   "report_recipients",
+  "report_frequency",
+  "report_day_of_week",
+  "report_day_of_month",
+  "report_time_of_day",
+  "report_timezone",
+  "report_schedule_start",
 ];
+
+// Report-schedule validation constants (mirrors admin/report-schedule route).
+const REPORT_FREQUENCIES = new Set(["weekly", "biweekly", "monthly"]);
+const REPORT_TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 const OWNER_ONLY: (keyof PatchBody)[] = [
   "auto_notify_classes",
@@ -246,6 +262,111 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
       );
     } else {
       update.report_interval_days = body.report_interval_days;
+    }
+  }
+
+  // --- Real report schedule (the columns the send-reports cron actually reads).
+  if (allowedFields.includes("report_frequency") && body.report_frequency !== undefined) {
+    const freq = body.report_frequency;
+    if (freq === null || freq === "" || freq === "off") {
+      // Turning reports off clears the day fields too, matching the admin route.
+      update.report_frequency = null;
+      update.report_day_of_week = null;
+      update.report_day_of_month = null;
+    } else if (typeof freq === "string" && REPORT_FREQUENCIES.has(freq)) {
+      update.report_frequency = freq;
+    } else {
+      return NextResponse.json(
+        { error: `report_frequency must be one of weekly, biweekly, monthly (or null to turn off).` },
+        { status: 400 }
+      );
+    }
+  }
+
+  if (allowedFields.includes("report_day_of_week") && body.report_day_of_week !== undefined) {
+    if (body.report_day_of_week === null) {
+      update.report_day_of_week = null;
+    } else if (
+      typeof body.report_day_of_week !== "number" ||
+      !Number.isInteger(body.report_day_of_week) ||
+      body.report_day_of_week < 0 ||
+      body.report_day_of_week > 6
+    ) {
+      return NextResponse.json(
+        { error: "report_day_of_week must be an integer 0-6 (Sunday=0), or null." },
+        { status: 400 }
+      );
+    } else {
+      update.report_day_of_week = body.report_day_of_week;
+    }
+  }
+
+  if (allowedFields.includes("report_day_of_month") && body.report_day_of_month !== undefined) {
+    if (body.report_day_of_month === null) {
+      update.report_day_of_month = null;
+    } else if (
+      typeof body.report_day_of_month !== "number" ||
+      !Number.isInteger(body.report_day_of_month) ||
+      !((body.report_day_of_month >= 1 && body.report_day_of_month <= 28) || body.report_day_of_month === -1)
+    ) {
+      return NextResponse.json(
+        { error: "report_day_of_month must be an integer 1-28, or -1 (last day of month), or null." },
+        { status: 400 }
+      );
+    } else {
+      update.report_day_of_month = body.report_day_of_month;
+    }
+  }
+
+  if (allowedFields.includes("report_time_of_day") && body.report_time_of_day !== undefined) {
+    const time = body.report_time_of_day;
+    if (time === null || time === "") {
+      update.report_time_of_day = null;
+    } else if (typeof time === "string" && REPORT_TIME_RE.test(time)) {
+      update.report_time_of_day = time;
+    } else {
+      return NextResponse.json(
+        { error: "report_time_of_day must be 'HH:MM' (24-hour), or null." },
+        { status: 400 }
+      );
+    }
+  }
+
+  if (allowedFields.includes("report_timezone") && body.report_timezone !== undefined) {
+    const tz = body.report_timezone;
+    if (tz === null || tz === "") {
+      update.report_timezone = null;
+    } else if (typeof tz === "string") {
+      try {
+        new Intl.DateTimeFormat("en-US", { timeZone: tz });
+        update.report_timezone = tz;
+      } catch {
+        return NextResponse.json(
+          { error: `report_timezone must be a valid IANA timezone (got '${tz}').` },
+          { status: 400 }
+        );
+      }
+    } else {
+      return NextResponse.json(
+        { error: "report_timezone must be a valid IANA timezone string, or null." },
+        { status: 400 }
+      );
+    }
+  }
+
+  if (allowedFields.includes("report_schedule_start") && body.report_schedule_start !== undefined) {
+    // Biweekly anchor: a real YYYY-MM-DD date, or null. Validated so a malformed
+    // anchor can't quietly break the client's own cadence (NaN → always off-week).
+    const anchor = body.report_schedule_start;
+    if (anchor === null || anchor === "") {
+      update.report_schedule_start = null;
+    } else if (typeof anchor === "string" && /^\d{4}-\d{2}-\d{2}$/.test(anchor) && !Number.isNaN(Date.parse(anchor))) {
+      update.report_schedule_start = anchor;
+    } else {
+      return NextResponse.json(
+        { error: "report_schedule_start must be a 'YYYY-MM-DD' date, or null." },
+        { status: 400 }
+      );
     }
   }
 
