@@ -123,7 +123,7 @@ export default function BulkOpsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="relative overflow-hidden rounded-[20px] p-5 sm:p-7" style={{ background: "linear-gradient(135deg, #EDEEFF 0%, #D1D3FF 50%, #fff 100%)", border: "1px solid rgba(46,55,254,0.2)" }}>
+      <div className="relative overflow-hidden rounded-[12px] p-5 sm:p-7" style={{ background: "#EDEEFF", border: "1px solid #e2e8f0" }}>
         <p className="text-xs font-medium text-[#64748b]">Salesforge</p>
         <h1 className="text-[20px] sm:text-[22px] font-bold mt-1">Bulk pause / resume</h1>
         <p className="text-sm text-[#0f172a]/60 mt-1">

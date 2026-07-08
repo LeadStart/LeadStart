@@ -58,8 +58,8 @@ export function QuoteLayout({
         className="relative overflow-hidden rounded-2xl p-5 sm:p-6"
         style={{
           background:
-            "linear-gradient(135deg, #EDEEFF 0%, #D1D3FF 50%, #fff 100%)",
-          border: "1px solid rgba(46,55,254,0.2)",
+            "#EDEEFF",
+          border: "1px solid #e2e8f0",
         }}
       >
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -83,7 +83,7 @@ export function QuoteLayout({
             </p>
           </div>
         </div>
-        <div className="mt-4 pt-4 border-t border-[rgba(46,55,254,0.15)] text-xs sm:text-sm">
+        <div className="mt-4 pt-4 border-t border-[#e2e8f0] text-xs sm:text-sm">
           <p className="text-[#64748b]">Prepared for</p>
           <p className="mt-0.5 font-semibold text-base">
             {contactName || "(no contact selected)"}

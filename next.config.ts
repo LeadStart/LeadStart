@@ -2,6 +2,11 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   basePath: "/app",
+  // Pin the workspace root: a stray package-lock.json in a parent folder makes
+  // Turbopack infer the wrong root and fail to resolve node_modules (tailwindcss).
+  turbopack: {
+    root: import.meta.dirname,
+  },
   typescript: {
     // Demo-mode mock client causes deep type inference issues.
     // Will be resolved once real Supabase client is wired up.
