@@ -97,7 +97,8 @@
   --chart-3: #EF4444;
   --chart-4: #F59E0B;
   --chart-5: #8B5CF6;
-  --radius: 1.25rem;
+  --radius: 0.75rem;
+  --shadow-overlay: 0 12px 28px rgba(15, 23, 42, 0.12);
   --sidebar: #ffffff;
   --sidebar-foreground: #0f172a;
   --sidebar-primary: #2E37FE;
@@ -151,49 +152,17 @@
 
 /* Brand gradient utilities — Clean Modern Blue */
 @layer utilities {
-  .bg-brand-gradient {
-    background: linear-gradient(135deg, #EDEEFF 0%, #D1D3FF 50%, #ffffff 100%);
-  }
-  .bg-brand-gradient-subtle {
-    background: linear-gradient(135deg, #f8fafc, #EDEEFF, #f1f5f9);
-  }
-  .text-brand-gradient {
-    background: linear-gradient(135deg, #2E37FE, #0F1880);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-  }
-  .shadow-brand {
-    box-shadow: 4px 4px 12px rgba(15,23,42,0.06), -2px -2px 8px rgba(255,255,255,0.9);
-  }
-  .shadow-brand-lg {
-    box-shadow: 0 12px 28px rgba(46,55,254,0.12);
-  }
-  .border-brand-subtle {
-    border-color: rgba(46,55,254,0.2);
-  }
-
-
-  /* Neumorphic shadow (light) */
-  .shadow-neumorphic {
-    box-shadow: 4px 4px 12px rgba(15,23,42,0.06), -2px -2px 8px rgba(255,255,255,0.9);
-  }
-
-  /* Hero section gradient */
-  .bg-hero-gradient {
-    background: linear-gradient(135deg, #EDEEFF 0%, #D1D3FF 50%, #ffffff 100%);
-  }
-
-  /* Sidebar gradient */
-  .bg-sidebar-gradient {
-    background: linear-gradient(180deg, #ffffff 0%, #6B72FF 100%);
-  }
-
-  /* Blue button gradient with glow */
-  .bg-button-primary {
-    background: linear-gradient(135deg, #6B72FF 0%, #1C24B8 100%);
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.25), 0 0 22px rgba(46,55,254,0.35), 0 4px 14px rgba(28,36,184,0.28);
-  }
+  /* Flattened: gradients/glows → solid brand tints (STRUCTURE v2). Brand hues preserved. */
+  .bg-brand-gradient { background: var(--color-brand-50); }
+  .bg-brand-gradient-subtle { background: var(--muted); }
+  .text-brand-gradient { color: var(--primary); -webkit-text-fill-color: currentColor; }
+  .shadow-brand { box-shadow: none; }
+  .shadow-brand-lg { box-shadow: var(--shadow-overlay); }
+  .border-brand-subtle { border-color: var(--border); }
+  .shadow-neumorphic { box-shadow: none; }
+  .bg-hero-gradient { background: var(--color-brand-50); }
+  .bg-sidebar-gradient { background: var(--sidebar); }
+  .bg-button-primary { background: var(--primary); box-shadow: none; }
 
 }
 
@@ -224,13 +193,10 @@
 /* No hover state — cards are static containers. */
 [data-slot="card"] {
   position: relative;
-  border-radius: 20px !important;
-  border: 1px solid #e2e8f0 !important;
-  background: linear-gradient(180deg, #EDEEFF 0%, #fff 40%) !important;
-  box-shadow:
-    inset 0 1px 0 rgba(255,255,255,0.9),
-    inset 0 0 0 1px rgba(46,55,254,0.18),
-    0 4px 14px rgba(46,55,254,0.12) !important;
+  border-radius: 12px !important;
+  border: 1px solid var(--border) !important;
+  background: var(--card) !important;
+  box-shadow: none !important;
   overflow: hidden;
 }
 
@@ -249,106 +215,61 @@
 /* --- Primary button — blue gradient + glow + white text --------------- */
 /* Base shadow is static; hover glow rides on ::after opacity so the compositor
    handles the fade instead of repainting a multi-layer shadow stack. */
-.btn-blue {
-  position: relative;
-  isolation: isolate;
-  background: linear-gradient(135deg, #6B72FF 0%, #1C24B8 100%) !important;
-  color: #fff !important;
-  border: none !important;
-  box-shadow: 0 4px 14px rgba(28,36,184,0.28) !important;
-  border-radius: 10px !important;
-  transition: transform 0.2s, filter 0.2s;
-}
-.btn-blue::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: 10px;
-  box-shadow: 0 0 28px rgba(46,55,254,0.45), 0 6px 18px rgba(28,36,184,0.35);
-  opacity: 0;
-  transition: opacity 0.2s;
-  pointer-events: none;
-  z-index: -1;
-}
-.btn-blue:hover {
-  filter: brightness(1.08);
-  transform: translateY(-1px);
-}
-.btn-blue:hover::after { opacity: 1; }
-.btn-blue:active { transform: translateY(0); }
-
-/* Secondary button — white neumorphic */
-.btn-secondary-white {
-  background: #ffffff !important;
-  border: 1px solid #e2e8f0 !important;
-  color: #334155 !important;
-  box-shadow: 2px 2px 6px rgba(15,23,42,0.04), -1px -1px 4px rgba(255,255,255,0.8) !important;
-  border-radius: 10px !important;
-}
-.btn-secondary-white:hover {
-  border-color: #cbd5e1 !important;
-  background: #f8fafc !important;
-  box-shadow: 3px 3px 8px rgba(15,23,42,0.06), -2px -2px 6px rgba(255,255,255,1) !important;
-}
-
-/* Keep old class names as aliases for bulk compatibility */
+/* Primary button — solid brand pill, no gradient/glow (flat) */
+.btn-blue,
 .btn-gold {
-  position: relative;
-  isolation: isolate;
-  background: linear-gradient(135deg, #6B72FF 0%, #1C24B8 100%) !important;
+  background: var(--primary) !important;
   color: #fff !important;
   border: none !important;
-  box-shadow: 0 4px 14px rgba(28,36,184,0.28) !important;
-  border-radius: 10px !important;
-  transition: transform 0.2s, filter 0.2s;
+  box-shadow: none !important;
+  border-radius: 9999px !important;
+  transition: background 0.15s;
 }
-.btn-gold::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: 10px;
-  box-shadow: 0 0 28px rgba(46,55,254,0.45), 0 6px 18px rgba(28,36,184,0.35);
-  opacity: 0;
-  transition: opacity 0.2s;
-  pointer-events: none;
-  z-index: -1;
-}
-.btn-gold:hover {
-  filter: brightness(1.08);
-  transform: translateY(-1px);
-}
-.btn-gold:hover::after { opacity: 1; }
+.btn-blue::after,
+.btn-gold::after { display: none !important; }
+.btn-blue:hover,
+.btn-gold:hover { background: #1C24B8 !important; }
+.btn-blue:active,
+.btn-gold:active { transform: translateY(1px); }
+
+/* Secondary button — flat hairline pill */
+.btn-secondary-white,
 .btn-dark {
-  background: #ffffff !important;
-  border: 1px solid #e2e8f0 !important;
-  color: #334155 !important;
-  box-shadow: 2px 2px 6px rgba(15,23,42,0.04), -1px -1px 4px rgba(255,255,255,0.8) !important;
-  border-radius: 10px !important;
+  background: var(--card) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--secondary-foreground) !important;
+  box-shadow: none !important;
+  border-radius: 9999px !important;
 }
+.btn-secondary-white:hover,
 .btn-dark:hover {
-  border-color: #cbd5e1 !important;
-  background: #f8fafc !important;
-  box-shadow: 3px 3px 8px rgba(15,23,42,0.06), -2px -2px 6px rgba(255,255,255,1) !important;
+  border-color: var(--border) !important;
+  background: var(--muted) !important;
+  box-shadow: none !important;
 }
+
+/* Every shadcn button is a pill (STRUCTURE v2) */
+[data-slot="button"] { border-radius: 9999px !important; }
 
 /* --- Input / Textarea / Select — gradient border + blue glow ---------- */
 [data-slot="input"],
 [data-slot="textarea"] {
-  border: 2px solid transparent !important;
-  background: linear-gradient(#fff, #fff) padding-box, linear-gradient(135deg, #6B72FF, #D1D3FF) border-box !important;
-  border-radius: 12px !important;
-  color: #0f172a !important;
+  border: 1px solid var(--input) !important;
+  background: var(--card) !important;
+  border-radius: 8px !important;
+  color: var(--foreground) !important;
 }
 [data-slot="input"]:focus,
 [data-slot="input"]:focus-visible,
 [data-slot="textarea"]:focus,
 [data-slot="textarea"]:focus-visible {
-  background: linear-gradient(#fff, #fff) padding-box, linear-gradient(135deg, #2E37FE, #6B72FF) border-box !important;
-  box-shadow: 0 0 12px rgba(46,55,254,0.15) !important;
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 0 3px rgba(46, 55, 254, 0.15) !important;
+  outline: none !important;
 }
 [data-slot="input"]::placeholder,
 [data-slot="textarea"]::placeholder {
-  color: #94a3b8;
+  color: var(--muted-foreground);
 }
 
 /* --- Table — seamless inside card, blue zebra rows, blue-tinted header */
@@ -366,9 +287,9 @@
   padding: 16px 20px !important;
 }
 [data-slot="table-header"] [data-slot="table-row"] {
-  background: linear-gradient(180deg, #D1D3FF 0%, #EDEEFF 100%) !important;
-  border-bottom: 1px solid rgba(46,55,254,0.25);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.9);
+  background: var(--muted) !important;
+  border-bottom: 1px solid var(--border);
+  box-shadow: none;
 }
 [data-slot="table-head"] {
   background: transparent !important;
@@ -376,19 +297,17 @@
   font-weight: 600 !important;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: #64748b !important;
-  padding: 10px 12px !important;
+  color: var(--muted-foreground) !important;
+  padding: 10px 16px !important;
 }
-[data-slot="table-body"] [data-slot="table-row"]:nth-child(odd) {
-  background: #EDEEFF !important;
-}
-[data-slot="table-body"] [data-slot="table-row"]:nth-child(even) {
-  background: #D1D3FF !important;
+[data-slot="table-body"] [data-slot="table-row"] {
+  background: var(--card) !important;
+  border-bottom: 1px solid var(--border);
 }
 [data-slot="table-body"] [data-slot="table-cell"] {
-  color: #334155 !important;
+  color: var(--secondary-foreground) !important;
   border-bottom: none !important;
-  padding: 12px !important;
+  padding: 12px 16px !important;
   font-size: 13px;
 }
 /* Badge color placeholder — real rule moved below font-weight rules */
@@ -400,7 +319,7 @@
   color: #2E37FE !important;
 }
 [data-slot="table-body"] [data-slot="table-row"]:hover {
-  background: rgba(46,55,254,0.12) !important;
+  background: var(--muted) !important;
 }
 /* Table cell text cascade — exclude badges and elements that explicitly request white text (e.g. avatar bubbles with a solid colored bg) */
 [data-slot="table-body"] [data-slot="table-cell"] strong:not([data-slot="badge"]):not([data-slot="button"]):not(.badge-green):not(.badge-amber):not(.badge-red):not(.badge-blue):not(.badge-purple):not(.badge-slate):not(.text-white),
@@ -414,51 +333,45 @@
 }
 
 /* --- Badge — gradient fill + colored glow shadow ---------------------- */
+/* Flat tinted semantic badges — light fill + colored text + hairline, no gradient/glow */
 .badge-green {
-  background: linear-gradient(135deg, #10B981, #047857) !important;
-  color: #fff !important; border: none !important;
-  box-shadow: 0 3px 10px rgba(4,120,87,0.35) !important;
+  background: var(--color-success-light) !important;
+  color: var(--color-success) !important;
+  border: 1px solid rgba(5,150,105,0.25) !important;
+  box-shadow: none !important;
 }
 .badge-amber {
-  background: linear-gradient(135deg, #f59e0b, #b45309) !important;
-  color: #fff !important; border: none !important;
-  box-shadow: 0 3px 10px rgba(180,83,9,0.35) !important;
+  background: var(--color-warning-light) !important;
+  color: var(--color-warning) !important;
+  border: 1px solid rgba(180,83,9,0.25) !important;
+  box-shadow: none !important;
 }
 .badge-red {
-  background: linear-gradient(135deg, #ef4444, #b91c1c) !important;
-  color: #fff !important; border: none !important;
-  box-shadow: 0 3px 10px rgba(185,28,28,0.35) !important;
+  background: var(--color-danger-light) !important;
+  color: var(--color-danger) !important;
+  border: 1px solid rgba(185,28,28,0.25) !important;
+  box-shadow: none !important;
 }
 .badge-blue {
-  background: linear-gradient(135deg, #6B72FF, #1C24B8) !important;
-  color: #fff !important; border: none !important;
-  box-shadow: 0 3px 10px rgba(46,55,254,0.35) !important;
+  background: var(--color-brand-50) !important;
+  color: var(--color-brand-500) !important;
+  border: 1px solid rgba(46,55,254,0.25) !important;
+  box-shadow: none !important;
 }
 .badge-purple {
-  background: linear-gradient(135deg, #a78bfa, #7c3aed) !important;
-  color: #fff !important; border: none !important;
-  box-shadow: 0 3px 10px rgba(124,58,237,0.35) !important;
+  background: #f3e8ff !important;
+  color: #7c3aed !important;
+  border: 1px solid rgba(124,58,237,0.25) !important;
+  box-shadow: none !important;
 }
 .badge-slate {
-  background: linear-gradient(135deg, #2dd4bf, #0d9488) !important;
-  color: #fff !important; border: none !important;
-  box-shadow: 0 3px 10px rgba(13,148,136,0.35) !important;
+  background: #f0fdfa !important;
+  color: #0d9488 !important;
+  border: 1px solid rgba(13,148,136,0.25) !important;
+  box-shadow: none !important;
 }
-/* Badges in table cells — MUST come after font-weight rules to win cascade */
-[data-slot="table-body"] [data-slot="table-cell"] .badge-green,
-[data-slot="table-body"] [data-slot="table-cell"] .badge-amber,
-[data-slot="table-body"] [data-slot="table-cell"] .badge-red,
-[data-slot="table-body"] [data-slot="table-cell"] .badge-blue,
-[data-slot="table-body"] [data-slot="table-cell"] .badge-purple,
-[data-slot="table-body"] [data-slot="table-cell"] .badge-slate,
-[data-slot="table-body"] [data-slot="table-cell"] [data-slot="badge"].badge-green,
-[data-slot="table-body"] [data-slot="table-cell"] [data-slot="badge"].badge-amber,
-[data-slot="table-body"] [data-slot="table-cell"] [data-slot="badge"].badge-red,
-[data-slot="table-body"] [data-slot="table-cell"] [data-slot="badge"].badge-blue,
-[data-slot="table-body"] [data-slot="table-cell"] [data-slot="badge"].badge-purple,
-[data-slot="table-body"] [data-slot="table-cell"] [data-slot="badge"].badge-slate {
-  color: #fff !important;
-}
+/* Flat badges keep their own tinted text color inside table cells (the
+   font-weight cascade above already excludes .badge-* selectors). */
 
 /* --- Nav notch — blue arrow hover + active indicator ------------------ */
 
@@ -538,48 +451,40 @@
 }
 
 /* --- Stat card — light blue gradient tile ----------------------------- */
-[data-slot="card"].stat-card-blue {
-  background: linear-gradient(180deg, #D1D3FF 0%, #EDEEFF 100%) !important;
-  border: 1px solid rgba(46,55,254,0.25) !important;
-  border-radius: 12px !important;
-  box-shadow:
-    inset 0 1px 0 rgba(255,255,255,0.9),
-    inset 0 0 0 1px rgba(46,55,254,0.15),
-    0 4px 12px rgba(46,55,254,0.12) !important;
-}
-[data-slot="card"].stat-card-blue [data-slot="card-content"] {
-  color: #0f172a;
-}
-[data-slot="card"].stat-card-blue svg {
-  color: #2E37FE;
-}
-/* Keep old class as alias */
+/* Stat tiles — flat brand-tinted, hairline, no gradient/glow */
+[data-slot="card"].stat-card-blue,
 [data-slot="card"].stat-card-gold {
-  background: linear-gradient(180deg, #D1D3FF 0%, #EDEEFF 100%) !important;
-  border: 1px solid rgba(46,55,254,0.25) !important;
+  background: var(--color-brand-50) !important;
+  border: 1px solid var(--border) !important;
   border-radius: 12px !important;
-  box-shadow:
-    inset 0 1px 0 rgba(255,255,255,0.9),
-    inset 0 0 0 1px rgba(46,55,254,0.15),
-    0 4px 12px rgba(46,55,254,0.12) !important;
+  box-shadow: none !important;
 }
-[data-slot="card"].stat-card-gold * {
-  color: #0f172a !important;
-  text-shadow: none;
+[data-slot="card"].stat-card-blue [data-slot="card-content"],
+[data-slot="card"].stat-card-gold [data-slot="card-content"] {
+  color: var(--foreground);
 }
+[data-slot="card"].stat-card-blue svg,
 [data-slot="card"].stat-card-gold svg {
-  color: #2E37FE !important;
+  color: var(--primary) !important;
 }
 
-/* --- Aurora ambient background --------------------------------------- */
-body::before {
-  content: '';
-  position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
-  pointer-events: none;
-  z-index: 0;
-  background:
-    radial-gradient(ellipse 60% 40% at 18% 30%, rgba(107,114,255,0.12) 0%, transparent 55%),
-    radial-gradient(ellipse 50% 35% at 78% 22%, rgba(107,114,255,0.08) 0%, transparent 55%),
-    radial-gradient(ellipse 70% 45% at 50% 85%, rgba(107,114,255,0.1) 0%, transparent 55%);
+/* --- Aurora ambient background removed — flat surfaces (STRUCTURE v2) --- */
+
+/* --- Nav — flat active/hover; notch mask + gradient/glow neutralized ---- */
+.nav-notch-hover::before,
+.nav-notch-active::before { display: none !important; }
+.nav-notch-hover {
+  border-radius: 8px;
+  transition: background 0.15s, color 0.15s;
+}
+.nav-notch-hover:hover {
+  background: var(--color-brand-50) !important;
+  color: var(--primary) !important;
+}
+.nav-notch-active {
+  background: var(--primary) !important;
+  color: #fff !important;
+  font-weight: 600;
+  border-radius: 8px;
+  filter: none !important;
 }

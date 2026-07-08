@@ -121,7 +121,7 @@ function UpdatePasswordForm() {
 
   return (
     <div className="flex min-h-screen">
-      <div className="hidden lg:flex lg:w-[58%] items-center justify-center relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #EDEEFF 0%, #D1D3FF 50%, #fff 100%)', WebkitMaskImage: 'linear-gradient(to right, #000 60%, transparent 100%)', maskImage: 'linear-gradient(to right, #000 60%, transparent 100%)' }}>
+      <div className="hidden lg:flex lg:w-[58%] items-center justify-center relative overflow-hidden" style={{ background: '#EDEEFF', WebkitMaskImage: 'linear-gradient(to right, #000 60%, transparent 100%)', maskImage: 'linear-gradient(to right, #000 60%, transparent 100%)' }}>
         <div className="relative z-10 max-w-md px-8 text-[#0f172a]">
           <div className="mb-8">
             <Image src={leadstartLogo} alt="LeadStart" priority className="h-16 w-auto" />
@@ -131,8 +131,8 @@ function UpdatePasswordForm() {
             Choose a strong password to secure your LeadStart account.
           </p>
         </div>
-        <div className="absolute -top-20 -right-20 h-64 w-64 rounded-full bg-[rgba(107,114,255,0.06)]" />
-        <div className="absolute -bottom-16 -left-16 h-48 w-48 rounded-full bg-[rgba(107,114,255,0.06)]" />
+        <div className="absolute -top-20 -right-20 h-64 w-64 rounded-full bg-transparent" />
+        <div className="absolute -bottom-16 -left-16 h-48 w-48 rounded-full bg-transparent" />
       </div>
 
       <div className="flex w-full lg:w-[42%] items-center justify-center bg-background px-4">

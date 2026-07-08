@@ -88,10 +88,9 @@ export function Sidebar({ role, open = false, onClose }: { role: AppRole; open?:
           "fixed inset-y-0 left-0 z-50 flex h-full w-64 flex-col overflow-hidden border-r border-[#e2e8f0] transition-transform duration-300 lg:static lg:translate-x-0 lg:transition-none lg:overflow-visible",
           open ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         )}
-        style={{ background: 'linear-gradient(180deg, #ffffff 0%, #6B72FF 100%)', boxShadow: '3px 0 12px rgba(15,23,42,0.06), 1px 0 3px rgba(15,23,42,0.03)' }}
+        style={{ background: '#ffffff' }}
       >
-      {/* Sidebar shadow cast into content area (desktop only) */}
-      <div className="absolute top-0 bottom-0 w-8 pointer-events-none z-0 hidden lg:block" style={{ right: '-32px', background: 'linear-gradient(90deg, rgba(15,23,42,0.12) 0%, rgba(28,36,184,0.03) 60%, transparent 100%)' }} />
+      {/* Sidebar cast-shadow removed — flat (the hairline border-r carries the edge) */}
 
       {/* Brand header */}
       <div className="relative flex h-24 items-center justify-center px-6 border-b border-[#e2e8f0]">
