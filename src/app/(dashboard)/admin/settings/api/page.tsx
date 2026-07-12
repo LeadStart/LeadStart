@@ -688,240 +688,6 @@ export default function IntegrationsPage() {
         <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-[rgba(107,114,255,0.06)]" />
       </div>
 
-      {/* Salesforge — primary email channel (migration 00049) */}
-      <Card className="border-border/50 shadow-sm">
-        <CardHeader className="flex flex-row items-center gap-2 pb-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#0EA5E9]">
-            <Send size={16} className="text-white" />
-          </div>
-          <div>
-            <CardTitle className="text-base">Salesforge</CardTitle>
-            <p className="text-xs text-muted-foreground">
-              Primary email channel. Pick a workspace and default product after entering your key.
-            </p>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-1">
-            <Label htmlFor="salesforgeKey" className="text-sm font-medium">
-              API Key
-            </Label>
-            <Input
-              id="salesforgeKey"
-              type="password"
-              value={salesforgeKey}
-              onChange={(e) => setSalesforgeKey(e.target.value)}
-              placeholder="Salesforge workspace API key"
-            />
-            <p className="text-[11px] text-muted-foreground">
-              Find at <span className="font-mono">app.salesforge.ai</span> →
-              Workspace settings → API. The header is sent as the raw key
-              (not <span className="font-mono">Bearer</span>-prefixed).
-            </p>
-          </div>
-
-          {salesforgeWorkspaces.length > 0 && (
-            <div className="space-y-1">
-              <Label className="text-sm font-medium">Workspace</Label>
-              <Select
-                value={salesforgeWorkspaceId}
-                onValueChange={(v) => {
-                  if (!v) return;
-                  setSalesforgeWorkspaceId(v);
-                  setSalesforgeProductId("");
-                  setSalesforgeProducts([]);
-                  void handleLoadProducts(v);
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Pick a workspace" />
-                </SelectTrigger>
-                <SelectContent>
-                  {salesforgeWorkspaces.map((w) => (
-                    <SelectItem key={w.id} value={w.id}>
-                      {w.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-
-          {salesforgeProducts.length > 0 && (
-            <div className="space-y-1">
-              <Label className="text-sm font-medium">Default product</Label>
-              <Select
-                value={salesforgeProductId}
-                onValueChange={(v) => v && setSalesforgeProductId(v)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Pick a default product" />
-                </SelectTrigger>
-                <SelectContent>
-                  {salesforgeProducts.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-
-          <div className="flex flex-wrap gap-2 items-center">
-            <Button
-              onClick={handleSaveSalesforge}
-              disabled={savingSalesforge}
-              style={{ background: "#2E37FE" }}
-            >
-              {savingSalesforge ? "Saving..." : "Save Salesforge Setup"}
-            </Button>
-            <Button
-              variant="outline"
-              onClick={handleTestSalesforge}
-              disabled={testingSalesforge || !salesforgeKey}
-            >
-              {testingSalesforge ? "Testing..." : "Test Connection"}
-            </Button>
-            {salesforgeWorkspaces.length === 0 && salesforgeKey && (
-              <Button
-                variant="outline"
-                onClick={handleLoadWorkspaces}
-                disabled={loadingWorkspaces}
-              >
-                {loadingWorkspaces ? "Loading..." : "Load Workspaces"}
-              </Button>
-            )}
-            {loadingProducts && (
-              <span className="text-xs text-muted-foreground">Loading products…</span>
-            )}
-            {salesforgeSaved && (
-              <span className="text-sm text-emerald-600 flex items-center gap-1">
-                <CheckCircle size={14} /> Saved
-              </span>
-            )}
-          </div>
-
-          {salesforgeTestResult?.kind === "success" && (
-            <div className="flex items-center gap-2 rounded-lg bg-emerald-50 border border-emerald-200 p-3">
-              <CheckCircle size={16} className="text-emerald-500" />
-              <span className="text-sm font-medium text-emerald-700">
-                Connection successful
-              </span>
-            </div>
-          )}
-          {salesforgeTestResult?.kind === "fail" && (
-            <div className="flex items-center gap-2 rounded-lg bg-red-50 border border-red-200 p-3">
-              <XCircle size={16} className="text-red-500" />
-              <span className="text-sm font-medium text-red-700">
-                {salesforgeTestResult.message}
-              </span>
-            </div>
-          )}
-
-          {/* Mailbox connect — the one operation Salesforge doesn't expose
-              via API (Gmail/Outlook OAuth requires their hosted page).
-              Open Salesforge in a new tab; the user navigates to
-              Senders & Mailboxes → Connect from there. */}
-          <div className="border-t border-border/60 pt-4 mt-4 space-y-2">
-            <p className="text-sm font-medium">Connect a sending mailbox</p>
-            <p className="text-[11px] text-muted-foreground">
-              The OAuth flow for Gmail/Outlook can&apos;t be done via API,
-              so this is the one trip back to Salesforge&apos;s dashboard.
-              Open Salesforge → Senders &amp; Mailboxes → Connect. The new
-              mailbox auto-syncs back into LeadStart within a minute.
-            </p>
-            <a
-              href={(() => {
-                const ws = salesforgeWorkspaces.find(
-                  (w) => w.id === salesforgeWorkspaceId,
-                ) as { slug?: string } | undefined;
-                return ws?.slug
-                  ? `https://app.salesforge.ai/${ws.slug}/senders`
-                  : "https://app.salesforge.ai";
-              })()}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 rounded-md px-3 py-2 text-sm font-medium text-white bg-[#EA580C] hover:bg-[#c2410c] transition-colors"
-            >
-              Connect mailbox in Salesforge
-              <ExternalLink size={14} />
-            </a>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Warmforge — Salesforge's mailbox-warming sister product (migration 00049) */}
-      <Card className="border-border/50 shadow-sm">
-        <CardHeader className="flex flex-row items-center gap-2 pb-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#EA580C]">
-            <Flame size={16} className="text-white" />
-          </div>
-          <div>
-            <CardTitle className="text-base">Warmforge</CardTitle>
-            <p className="text-xs text-muted-foreground">
-              Inbox-warming sister product to Salesforge. Mailboxes auto-sync
-              from Salesforge — only the API key is needed here.
-            </p>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-1">
-            <Label htmlFor="warmforgeKey" className="text-sm font-medium">
-              API Key
-            </Label>
-            <Input
-              id="warmforgeKey"
-              type="password"
-              value={warmforgeKey}
-              onChange={(e) => setWarmforgeKey(e.target.value)}
-              placeholder="Warmforge API key"
-            />
-            <p className="text-[11px] text-muted-foreground">
-              Find at <span className="font-mono">app.warmforge.ai</span> →
-              Settings → API.
-            </p>
-          </div>
-          <div className="flex gap-2 items-center">
-            <Button
-              onClick={handleSaveWarmforge}
-              disabled={savingWarmforge}
-              style={{ background: "#2E37FE" }}
-            >
-              {savingWarmforge ? "Saving..." : "Save Key"}
-            </Button>
-            <Button
-              variant="outline"
-              onClick={handleTestWarmforge}
-              disabled={testingWarmforge || !warmforgeKey}
-            >
-              {testingWarmforge ? "Testing..." : "Test Connection"}
-            </Button>
-            {warmforgeSaved && (
-              <span className="text-sm text-emerald-600 flex items-center gap-1">
-                <CheckCircle size={14} /> Saved
-              </span>
-            )}
-          </div>
-          {warmforgeTestResult?.kind === "success" && (
-            <div className="flex items-center gap-2 rounded-lg bg-emerald-50 border border-emerald-200 p-3">
-              <CheckCircle size={16} className="text-emerald-500" />
-              <span className="text-sm font-medium text-emerald-700">
-                Connection successful
-              </span>
-            </div>
-          )}
-          {warmforgeTestResult?.kind === "fail" && (
-            <div className="flex items-center gap-2 rounded-lg bg-red-50 border border-red-200 p-3">
-              <XCircle size={16} className="text-red-500" />
-              <span className="text-sm font-medium text-red-700">
-                {warmforgeTestResult.message}
-              </span>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
       {/* Inbox health — Spamhaus blocklist key + auto-pause threshold (migration 00061) */}
       <Card className="border-border/50 shadow-sm">
         <CardHeader className="flex flex-row items-center gap-2 pb-3">
@@ -931,8 +697,8 @@ export default function IntegrationsPage() {
           <div>
             <CardTitle className="text-base">Inbox health</CardTitle>
             <p className="text-xs text-muted-foreground">
-              Scores every sending mailbox each hour from DNS, blacklist, bounce,
-              and warmup signals. Can take a mailbox offline automatically when it
+              Scores every sending mailbox each hour from DNS, blacklist, and
+              bounce signals. Can take a mailbox offline automatically when it
               degrades.
             </p>
           </div>
@@ -1477,7 +1243,7 @@ export default function IntegrationsPage() {
           </div>
           <div>
             <CardTitle className="text-base">Data Sync Schedule</CardTitle>
-            <p className="text-xs text-muted-foreground">Control when campaign analytics are pulled from Salesforge</p>
+            <p className="text-xs text-muted-foreground">Control when campaign analytics are refreshed</p>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -1516,7 +1282,7 @@ export default function IntegrationsPage() {
                 Eastern Time (ET)
               </Badge>
             </div>
-            <p className="text-[11px] text-muted-foreground">Pulls latest campaign data from Salesforge for all active campaigns</p>
+            <p className="text-[11px] text-muted-foreground">Refreshes analytics for all active campaigns</p>
           </div>
 
           <div className="flex items-center gap-3 pt-2">

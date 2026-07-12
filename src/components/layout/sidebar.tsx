@@ -47,10 +47,6 @@ const adminNav: NavItem[] = [
 
 const adminSendingNav: NavItem[] = [
   { href: "/admin/mailboxes", label: "Mailboxes", icon: <Inbox size={18} /> },
-  { href: "/admin/salesforge/metrics", label: "Workspace metrics", icon: <TrendingUp size={18} /> },
-  { href: "/admin/salesforge/bulk", label: "Bulk actions", icon: <Layers size={18} /> },
-  { href: "/admin/salesforge/dnc", label: "DNC list", icon: <ShieldOff size={18} /> },
-  { href: "/admin/salesforge/custom-vars", label: "Custom variables", icon: <Variable size={18} /> },
 ];
 
 const adminSettingsNav: NavItem[] = [

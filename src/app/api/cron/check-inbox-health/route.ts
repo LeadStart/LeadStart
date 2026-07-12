@@ -1,9 +1,8 @@
 // GET /app/api/cron/check-inbox-health — runs hourly at :30 (vercel.json).
 //
-// Scores every native (Gmail) sending mailbox 0–100 from free / already-paid
-// signals — live SPF/DKIM/DMARC/MX DNS, the Spamhaus domain blocklist, the
-// 7-day hard-bounce rate from native_sends, and Warmforge's per-mailbox heat
-// score + blacklist + warmup placement — then:
+// Scores every native (Gmail) sending mailbox 0–100 from free signals — live
+// SPF/DKIM/DMARC/MX DNS, the Spamhaus domain blocklist, and the 7-day
+// hard-bounce rate from native_sends — then:
 //   - writes the denormalized score onto native_mailboxes (always),
 //   - inserts a mailbox_health_checks snapshot ONLY when the score changed or
 //     an action was taken (keeps that table a transition timeline),
@@ -27,8 +26,6 @@ import type { AuthCheck, DomainAuth } from "@/lib/deliverability/check";
 import { checkDbl } from "@/lib/deliverability/dnsbl";
 import type { DblResult } from "@/lib/deliverability/dnsbl";
 import { computeInboxHealth, summarizeIssues } from "@/lib/deliverability/inbox-health";
-import { WarmforgeClient } from "@/lib/warmforge/client";
-import type { WarmforgeMailbox } from "@/lib/warmforge/types";
 import { enqueueOwnerAlert } from "@/lib/notifications/owner-alerts";
 import type { NativeMailbox } from "@/types/app";
 
@@ -41,7 +38,6 @@ export const maxDuration = 60;
 
 interface OrgSettings {
   id: string;
-  warmforge_api_key: string | null;
   spamhaus_dqs_key: string | null;
   inbox_health_offline_threshold: number | null;
 }
@@ -74,7 +70,7 @@ export async function GET(request: NextRequest) {
   const orgIds = Array.from(new Set(mailboxes.map((m) => m.organization_id)));
   const { data: orgRows, error: orgError } = await admin
     .from("organizations")
-    .select("id, warmforge_api_key, spamhaus_dqs_key, inbox_health_offline_threshold")
+    .select("id, spamhaus_dqs_key, inbox_health_offline_threshold")
     .in("id", orgIds);
   if (orgError) {
     return NextResponse.json({ error: orgError.message }, { status: 500 });
@@ -102,10 +98,9 @@ export async function GET(request: NextRequest) {
     statsByMailbox.set(s.mailbox_id, cur);
   }
 
-  // Per-run caches: DNS/DBL keyed by org+domain (a domain's listing/auth is the
-  // same for every mailbox on it); one Warmforge client per org.
+  // Per-run cache: DNS/DBL keyed by org+domain (a domain's listing/auth is the
+  // same for every mailbox on it).
   const domainCache = new Map<string, { domainAuth: DomainAuth; mx: AuthCheck; dbl: DblResult }>();
-  const wfClientByOrg = new Map<string, WarmforgeClient | null>();
 
   const tally = {
     mailboxes: mailboxes.length,
@@ -113,7 +108,6 @@ export async function GET(request: NextRequest) {
     snapshots: 0,
     auto_paused: 0,
     degraded_alerts: 0,
-    warmforge_unavailable: 0,
     errors: 0,
   };
 
@@ -135,33 +129,11 @@ export async function GET(request: NextRequest) {
         domainCache.set(cacheKey, signals);
       }
 
-      // Warmforge per-mailbox (any failure → treat as unavailable, score on the
-      // rest; those components read "unchecked").
-      let warmforge: WarmforgeMailbox | null = null;
-      if (org) {
-        if (!wfClientByOrg.has(org.id)) {
-          wfClientByOrg.set(
-            org.id,
-            org.warmforge_api_key ? new WarmforgeClient(org.warmforge_api_key) : null,
-          );
-        }
-        const wf = wfClientByOrg.get(org.id);
-        if (wf) {
-          try {
-            warmforge = await wf.getMailbox(mb.email_address);
-          } catch {
-            warmforge = null;
-            tally.warmforge_unavailable += 1;
-          }
-        }
-      }
-
       const health = computeInboxHealth({
         dbl: signals.dbl,
         domainAuth: signals.domainAuth,
         mx: signals.mx,
         bounces: statsByMailbox.get(mb.id) ?? null,
-        warmforge,
       });
 
       const prevScore = mb.health_score;
@@ -222,7 +194,7 @@ export async function GET(request: NextRequest) {
           subject: `Mailbox ${mb.email_address} was taken offline (health ${health.score})`,
           summary:
             `${mb.email_address} scored ${health.score} on two checks in a row, below the ${threshold} offline threshold, ` +
-            `so it was paused automatically. It has stopped sending — Warmforge warmup keeps running. ` +
+            `so it was paused automatically and has stopped sending. ` +
             (topIssues ? `${topIssues} ` : "") +
             `Resume it from Admin → Mailboxes once it recovers.`,
           context: {

@@ -57,13 +57,8 @@ export default function AllCampaignsPage() {
             </p>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
-            <Link href="/admin/campaigns/new/salesforge">
-              <Button size="sm" className="gap-2">
-                <Plus size={14} /> New Salesforge campaign
-              </Button>
-            </Link>
             <Link href="/admin/campaigns/new/native">
-              <Button size="sm" variant="outline" className="gap-2">
+              <Button size="sm" className="gap-2">
                 <Plus size={14} /> New email campaign
               </Button>
             </Link>

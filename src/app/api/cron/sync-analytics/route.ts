@@ -41,10 +41,9 @@ export async function GET(request: NextRequest) {
     .from("organizations")
     .select("*")
     .not("salesforge_api_key", "is", null);
-
-  if (!orgs || orgs.length === 0) {
-    return NextResponse.json({ error: "No organizations with Salesforge API keys" }, { status: 400 });
-  }
+  // No early return when this is empty. Salesforge has been disconnected, so
+  // this list is normally empty now — but the native-email analytics block
+  // below MUST still run (it reads only local tables, independent of this loop).
 
   let totalSynced = 0;
   let totalDiscovered = 0;
@@ -53,7 +52,7 @@ export async function GET(request: NextRequest) {
   let totalContactsLinked = 0;
   let totalNativeSynced = 0;
 
-  for (const org of orgs) {
+  for (const org of orgs ?? []) {
     // Walk source_channel='salesforge' campaigns and refresh their
     // analytics. Salesforge legacy does not expose step-level metrics,
     // so campaign_step_metrics rows are not written for this channel.
@@ -542,11 +541,9 @@ export async function GET(request: NextRequest) {
   // rows the client portal + KPI calculator already render, so no portal
   // changes are needed — a native campaign just starts showing real numbers.
   //
-  // Runs independently of the Salesforge org loop above (all inputs are local
-  // tables, no API key needed). It does sit after the "no Salesforge orgs"
-  // early return — always fine for this deployment since the agency org holds
-  // the Salesforge key; if a Salesforge-less org ever needs native analytics,
-  // lift this block above that return.
+  // Runs independently of the Salesforge loop above (all inputs are local
+  // tables, no API key needed) — which is why it keeps working now that
+  // Salesforge is disconnected and the loop above iterates nothing.
   {
     let nativeQuery = admin
       .from("campaigns")
