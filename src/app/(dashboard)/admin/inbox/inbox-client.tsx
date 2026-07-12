@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -20,12 +20,18 @@ import {
   ArrowRight,
   AlertTriangle,
   CheckCircle2,
+  MessageSquare,
+  Archive,
 } from "lucide-react";
 import type { ReplyClass, ReplyOutcome, ReplyStatus } from "@/types/app";
 import {
   CLASS_META,
+  REPLY_CATEGORIES,
+  categoryForClass,
+  replySnippet,
   isReplyActionable,
   timeSinceShort,
+  type ReplyCategoryKey,
 } from "@/lib/replies/ui";
 
 // Narrowed row shape for the inbox list. Columns must match the server
@@ -40,6 +46,8 @@ export interface InboxRowReply {
   lead_name: string | null;
   lead_company: string | null;
   lead_title: string | null;
+  subject: string | null;
+  body_text: string | null;
   outcome: ReplyOutcome | null;
   outcome_logged_at: string | null;
   status: ReplyStatus;
@@ -47,17 +55,46 @@ export interface InboxRowReply {
 }
 
 type FilterClient = "all" | string;
-type FilterClass = "all" | "hot" | "needs_review" | "silent" | ReplyClass;
+type FocusCategory = "all" | ReplyCategoryKey;
 
 const INBOX_PAGE_SIZE = 25;
+// How many rows to preview per category when showing every section at once.
+const SECTION_PREVIEW = 6;
+
+// Per-category icon + accent for section headers and row dots.
+const CATEGORY_UI: Record<
+  ReplyCategoryKey,
+  { icon: ReactNode; dot: string; ring: string }
+> = {
+  hot: {
+    icon: <Phone size={14} />,
+    dot: "bg-[#2E37FE]/10 text-[#2E37FE]",
+    ring: "text-[#2E37FE]",
+  },
+  objection: {
+    icon: <MessageSquare size={14} />,
+    dot: "bg-amber-100 text-amber-700",
+    ring: "text-amber-600",
+  },
+  review: {
+    icon: <AlertTriangle size={14} />,
+    dot: "bg-amber-100 text-amber-700",
+    ring: "text-amber-600",
+  },
+  silent: {
+    icon: <Archive size={14} />,
+    dot: "bg-muted text-muted-foreground",
+    ring: "text-muted-foreground",
+  },
+};
 
 export function InboxClient({ replies }: { replies: InboxRowReply[] }) {
   const [filterClient, setFilterClient] = useState<FilterClient>("all");
-  const [filterClass, setFilterClass] = useState<FilterClass>("hot");
+  const [focus, setFocus] = useState<FocusCategory>("all");
   const [page, setPage] = useState(1);
   useEffect(() => {
     setPage(1);
-  }, [filterClient, filterClass]);
+  }, [filterClient, focus]);
 
   const clientOptions = useMemo(() => {
     const seen = new Map<string, string>();
@@ -72,48 +109,40 @@ export function InboxClient({ replies }: { replies: InboxRowReply[] }) {
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [replies]);
 
-  const filtered = useMemo(() => {
-    return replies.filter((r) => {
-      if (filterClient !== "all" && r.client_id !== filterClient) return false;
-      if (filterClass === "all") return true;
-      if (filterClass === "hot")
-        return r.final_class && CLASS_META[r.final_class]?.urgent;
-      if (filterClass === "needs_review")
-        return r.final_class === "needs_review";
-      if (filterClass === "silent") {
-        return (
-          r.final_class &&
-          !CLASS_META[r.final_class].urgent &&
-          r.final_class !== "needs_review"
-        );
-      }
-      return r.final_class === filterClass;
-    });
-  }, [replies, filterClient, filterClass]);
+  // Everything downstream (stats, sections, counts) reflects the client filter.
+  const scoped = useMemo(
+    () =>
+      filterClient === "all"
+        ? replies
+        : replies.filter((r) => r.client_id === filterClient),
+    [replies, filterClient],
+  );
 
-  const totalHot = replies.filter(
-    (r) => r.final_class && CLASS_META[r.final_class].urgent,
-  ).length;
-  const needsReview = replies.filter(
-    (r) => r.final_class === "needs_review",
-  ).length;
-  const unresolved1h = replies.filter((r) => {
-    return (
+  // Group the scoped replies by category, preserving the server's
+  // newest-first order within each bucket.
+  const byCategory = useMemo(() => {
+    const map: Record<ReplyCategoryKey, InboxRowReply[]> = {
+      hot: [],
+      objection: [],
+      review: [],
+      silent: [],
+    };
+    for (const r of scoped) map[categoryForClass(r.final_class)].push(r);
+    return map;
+  }, [scoped]);
+
+  const totalHot = byCategory.hot.length;
+  const needsReview = byCategory.review.length;
+  const unresolved1h = scoped.filter(
+    (r) =>
       isReplyActionable(r) &&
-      Date.now() - new Date(r.received_at).getTime() > 60 * 60 * 1000
-    );
-  }).length;
-  const resolvedToday = replies.filter((r) => {
-    if (!r.outcome_logged_at) return false;
-    return (
-      Date.now() - new Date(r.outcome_logged_at).getTime() < 24 * 60 * 60 * 1000
-    );
-  }).length;
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length / INBOX_PAGE_SIZE));
-  const safePage = Math.min(page, totalPages);
-  const pageStart = (safePage - 1) * INBOX_PAGE_SIZE;
-  const pageRows = filtered.slice(pageStart, pageStart + INBOX_PAGE_SIZE);
+      Date.now() - new Date(r.received_at).getTime() > 60 * 60 * 1000,
+  ).length;
+  const resolvedToday = scoped.filter(
+    (r) =>
+      r.outcome_logged_at &&
+      Date.now() - new Date(r.outcome_logged_at).getTime() < 24 * 60 * 60 * 1000,
+  ).length;
 
   return (
     <div className="space-y-6">
@@ -138,8 +167,8 @@ export function InboxClient({ replies }: { replies: InboxRowReply[] }) {
             Inbox Oversight
           </h1>
           <p className="text-sm text-[#0f172a]/60 mt-1">
-            Every classified reply across all clients. Clients act; you observe,
-            coach, and reclassify misses.
+            Every inbound reply across all clients, grouped by what it needs.
+            Clients act; you observe, coach, and reclassify misses.
           </p>
         </div>
         <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-[rgba(107,114,255,0.06)]" />
@@ -173,7 +202,7 @@ export function InboxClient({ replies }: { replies: InboxRowReply[] }) {
         />
       </div>
 
-      {/* Filters */}
+      {/* Filters: client + category pills */}
       <div className="flex flex-wrap gap-2 items-center">
         <Select
           value={filterClient}
@@ -184,9 +213,7 @@ export function InboxClient({ replies }: { replies: InboxRowReply[] }) {
               {(value) => {
                 if (typeof value !== "string" || !value || value === "all")
                   return "All clients";
-                return (
-                  clientOptions.find((c) => c.id === value)?.name ?? value
-                );
+                return clientOptions.find((c) => c.id === value)?.name ?? value;
               }}
             </SelectValue>
           </SelectTrigger>
@@ -199,159 +226,276 @@ export function InboxClient({ replies }: { replies: InboxRowReply[] }) {
             ))}
           </SelectContent>
         </Select>
-        <Select
-          value={filterClass}
-          onValueChange={(v) => setFilterClass((v as FilterClass) || "hot")}
-        >
-          <SelectTrigger className="h-9 w-[180px] text-xs font-medium">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="hot">Hot only</SelectItem>
-            <SelectItem value="all">All classes</SelectItem>
-            <SelectItem value="needs_review">Needs review</SelectItem>
-            <SelectItem value="silent">Silent (OOO, wrong, etc.)</SelectItem>
-            <SelectItem value="true_interest">Interested</SelectItem>
-            <SelectItem value="meeting_booked">Meeting Booked</SelectItem>
-            <SelectItem value="qualifying_question">Has Question</SelectItem>
-            <SelectItem value="referral_forward">Referral</SelectItem>
-            <SelectItem value="objection_price">Price Concern</SelectItem>
-            <SelectItem value="objection_timing">Timing Concern</SelectItem>
-          </SelectContent>
-        </Select>
-        <span className="text-xs text-muted-foreground ml-1">
-          {filtered.length} shown
-        </span>
+
+        <div className="flex flex-wrap gap-1.5">
+          <CategoryPill
+            active={focus === "all"}
+            onClick={() => setFocus("all")}
+            label="All"
+            count={scoped.length}
+          />
+          {REPLY_CATEGORIES.map((cat) => (
+            <CategoryPill
+              key={cat.key}
+              active={focus === cat.key}
+              onClick={() => setFocus(cat.key)}
+              label={cat.label}
+              count={byCategory[cat.key].length}
+            />
+          ))}
+        </div>
       </div>
 
       {/* List */}
-      {filtered.length === 0 ? (
-        <Card className="border-border/50 shadow-sm">
-          <CardContent className="py-12 text-center">
-            <div className="flex justify-center mb-3">
-              <div className="h-12 w-12 rounded-full bg-[#2E37FE] flex items-center justify-center">
-                <InboxIcon size={24} className="text-white" />
-              </div>
-            </div>
-            <p className="text-muted-foreground font-medium">
-              No replies match this filter
-            </p>
-            <p className="text-sm text-muted-foreground">
-              Try loosening the filter or waiting for fresh data.
-            </p>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="space-y-2">
-          {pageRows.map((reply) => {
-            const meta = reply.final_class
-              ? CLASS_META[reply.final_class]
-              : null;
-            const minutesOld = Math.floor(
-              (Date.now() - new Date(reply.received_at).getTime()) / 60000,
-            );
-            const isStale = isReplyActionable(reply) && minutesOld > 60;
-
-            return (
-              <Link
-                key={reply.id}
-                href={`/admin/inbox/${reply.id}`}
-                className="block group"
-              >
-                <Card className="border-border/50 shadow-sm transition-all group-hover:border-[#2E37FE]/30">
-                  <CardContent className="flex items-center gap-4 px-4 py-3">
-                    <div
-                      className={`flex h-8 w-8 items-center justify-center rounded-full shrink-0 ${
-                        meta?.urgent
-                          ? "bg-[#2E37FE]/10 text-[#2E37FE]"
-                          : reply.final_class === "needs_review"
-                            ? "bg-amber-100 text-amber-700"
-                            : "bg-muted text-muted-foreground"
-                      }`}
+      {scoped.length === 0 ? (
+        <EmptyState />
+      ) : focus === "all" ? (
+        // Segmented overview: every non-empty category as its own section.
+        <div className="space-y-7">
+          {REPLY_CATEGORIES.filter((c) => byCategory[c.key].length > 0).map(
+            (cat) => {
+              const rows = byCategory[cat.key];
+              const preview = rows.slice(0, SECTION_PREVIEW);
+              return (
+                <section key={cat.key} className="space-y-2">
+                  <SectionHeader
+                    categoryKey={cat.key}
+                    label={cat.label}
+                    blurb={cat.blurb}
+                    count={rows.length}
+                    onViewAll={
+                      rows.length > SECTION_PREVIEW
+                        ? () => setFocus(cat.key)
+                        : undefined
+                    }
+                  />
+                  {preview.map((reply) => (
+                    <ReplyRow key={reply.id} reply={reply} />
+                  ))}
+                  {rows.length > SECTION_PREVIEW && (
+                    <button
+                      onClick={() => setFocus(cat.key)}
+                      className="text-xs font-medium text-[#2E37FE] hover:underline cursor-pointer pl-1"
                     >
-                      {meta?.urgent ? (
-                        <Phone size={14} />
-                      ) : reply.final_class === "needs_review" ? (
-                        <AlertTriangle size={14} />
-                      ) : (
-                        <InboxIcon size={14} />
-                      )}
-                    </div>
-
-                    <div className="w-32 shrink-0 hidden md:block">
-                      <p className="text-xs text-muted-foreground truncate">
-                        {reply.client?.name || "—"}
-                      </p>
-                    </div>
-
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="font-medium text-sm truncate">
-                          {reply.lead_name || reply.lead_email}
-                        </p>
-                        {isStale && (
-                          <Badge
-                            variant="secondary"
-                            className="badge-red text-[9px] shrink-0"
-                          >
-                            stale
-                          </Badge>
-                        )}
-                      </div>
-                      <p className="text-xs text-muted-foreground truncate">
-                        {reply.lead_company}
-                        {reply.lead_title && (
-                          <span> · {reply.lead_title}</span>
-                        )}
-                      </p>
-                    </div>
-
-                    <div className="shrink-0 hidden sm:block">
-                      {meta && (
-                        <Badge
-                          variant="secondary"
-                          className={`${meta.badge} text-[10px]`}
-                        >
-                          {meta.label}
-                        </Badge>
-                      )}
-                    </div>
-
-                    <div className="shrink-0 w-16 text-right hidden lg:block">
-                      {reply.outcome ? (
-                        <Badge
-                          variant="secondary"
-                          className="badge-slate text-[9px]"
-                        >
-                          {reply.outcome.replace(/_/g, " ")}
-                        </Badge>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
-                      )}
-                    </div>
-
-                    <div className="shrink-0 flex items-center gap-1 text-xs text-muted-foreground w-12 justify-end">
-                      <Clock size={10} />
-                      <span>{timeSinceShort(reply.received_at)}</span>
-                    </div>
-
-                    <ArrowRight
-                      size={14}
-                      className="text-muted-foreground opacity-0 group-hover:opacity-100 shrink-0"
-                    />
-                  </CardContent>
-                </Card>
-              </Link>
-            );
-          })}
-          <PaginationControls
-            currentPage={safePage}
-            totalItems={filtered.length}
-            pageSize={INBOX_PAGE_SIZE}
-            onPageChange={setPage}
-          />
+                      View all {rows.length} →
+                    </button>
+                  )}
+                </section>
+              );
+            },
+          )}
         </div>
+      ) : (
+        // Focused category: flat, paginated.
+        <FocusedList
+          rows={byCategory[focus]}
+          categoryKey={focus}
+          page={page}
+          onPageChange={setPage}
+        />
       )}
     </div>
+  );
+}
+
+function CategoryPill({
+  active,
+  onClick,
+  label,
+  count,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  count: number;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer border ${
+        active
+          ? "bg-[#2E37FE]/15 text-[#2E37FE] border-[#2E37FE]/25"
+          : "bg-muted/50 text-muted-foreground border-transparent hover:bg-muted"
+      }`}
+    >
+      {label}
+      <span
+        className={`tabular-nums ${active ? "text-[#2E37FE]" : "text-muted-foreground/70"}`}
+      >
+        {count}
+      </span>
+    </button>
+  );
+}
+
+function SectionHeader({
+  categoryKey,
+  label,
+  blurb,
+  count,
+  onViewAll,
+}: {
+  categoryKey: ReplyCategoryKey;
+  label: string;
+  blurb: string;
+  count: number;
+  onViewAll?: () => void;
+}) {
+  const ui = CATEGORY_UI[categoryKey];
+  return (
+    <div className="flex items-end justify-between gap-3">
+      <div className="flex items-center gap-2 min-w-0">
+        <span className={`shrink-0 ${ui.ring}`}>{ui.icon}</span>
+        <h2 className="text-sm font-bold text-foreground">{label}</h2>
+        <Badge variant="secondary" className="badge-slate text-[10px] shrink-0">
+          {count}
+        </Badge>
+        <span className="text-xs text-muted-foreground truncate hidden sm:inline">
+          · {blurb}
+        </span>
+      </div>
+      {onViewAll && (
+        <button
+          onClick={onViewAll}
+          className="text-xs font-medium text-[#2E37FE] hover:underline cursor-pointer shrink-0"
+        >
+          View all →
+        </button>
+      )}
+    </div>
+  );
+}
+
+function FocusedList({
+  rows,
+  categoryKey,
+  page,
+  onPageChange,
+}: {
+  rows: InboxRowReply[];
+  categoryKey: ReplyCategoryKey;
+  page: number;
+  onPageChange: (p: number) => void;
+}) {
+  const cat = REPLY_CATEGORIES.find((c) => c.key === categoryKey)!;
+  const totalPages = Math.max(1, Math.ceil(rows.length / INBOX_PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const start = (safePage - 1) * INBOX_PAGE_SIZE;
+  const pageRows = rows.slice(start, start + INBOX_PAGE_SIZE);
+
+  return (
+    <div className="space-y-2">
+      <SectionHeader
+        categoryKey={categoryKey}
+        label={cat.label}
+        blurb={cat.blurb}
+        count={rows.length}
+      />
+      {pageRows.map((reply) => (
+        <ReplyRow key={reply.id} reply={reply} />
+      ))}
+      <PaginationControls
+        currentPage={safePage}
+        totalItems={rows.length}
+        pageSize={INBOX_PAGE_SIZE}
+        onPageChange={onPageChange}
+      />
+    </div>
+  );
+}
+
+function ReplyRow({ reply }: { reply: InboxRowReply }) {
+  const meta = reply.final_class ? CLASS_META[reply.final_class] : null;
+  const catUi = CATEGORY_UI[categoryForClass(reply.final_class)];
+  const minutesOld = Math.floor(
+    (Date.now() - new Date(reply.received_at).getTime()) / 60000,
+  );
+  const isStale = isReplyActionable(reply) && minutesOld > 60;
+  const snippet = replySnippet(reply.body_text, reply.subject);
+
+  return (
+    <Link href={`/admin/inbox/${reply.id}`} className="block group">
+      <Card className="border-border/50 shadow-sm transition-all group-hover:border-[#2E37FE]/30">
+        <CardContent className="flex items-start gap-4 px-4 py-3">
+          <div
+            className={`flex h-8 w-8 items-center justify-center rounded-full shrink-0 mt-0.5 ${catUi.dot}`}
+          >
+            {catUi.icon}
+          </div>
+
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <p className="font-medium text-sm truncate">
+                {reply.lead_name || reply.lead_email}
+              </p>
+              {isStale && (
+                <Badge
+                  variant="secondary"
+                  className="badge-red text-[9px] shrink-0"
+                >
+                  stale
+                </Badge>
+              )}
+              {meta && (
+                <Badge
+                  variant="secondary"
+                  className={`${meta.badge} text-[10px] shrink-0 hidden sm:inline-flex`}
+                >
+                  {meta.label}
+                </Badge>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground truncate">
+              {reply.client?.name || "—"}
+              {reply.lead_company && <span> · {reply.lead_company}</span>}
+              {reply.lead_title && <span> · {reply.lead_title}</span>}
+            </p>
+            {snippet && (
+              <p className="text-sm text-muted-foreground/90 truncate mt-1">
+                {snippet}
+              </p>
+            )}
+          </div>
+
+          <div className="shrink-0 w-16 text-right hidden lg:block">
+            {reply.outcome ? (
+              <Badge variant="secondary" className="badge-slate text-[9px]">
+                {reply.outcome.replace(/_/g, " ")}
+              </Badge>
+            ) : (
+              <span className="text-xs text-muted-foreground">—</span>
+            )}
+          </div>
+
+          <div className="shrink-0 flex items-center gap-1 text-xs text-muted-foreground w-12 justify-end mt-0.5">
+            <Clock size={10} />
+            <span>{timeSinceShort(reply.received_at)}</span>
+          </div>
+
+          <ArrowRight
+            size={14}
+            className="text-muted-foreground opacity-0 group-hover:opacity-100 shrink-0 mt-1"
+          />
+        </CardContent>
+      </Card>
+    </Link>
+  );
+}
+
+function EmptyState() {
+  return (
+    <Card className="border-border/50 shadow-sm">
+      <CardContent className="py-12 text-center">
+        <div className="flex justify-center mb-3">
+          <div className="h-12 w-12 rounded-full bg-[#2E37FE] flex items-center justify-center">
+            <InboxIcon size={24} className="text-white" />
+          </div>
+        </div>
+        <p className="text-muted-foreground font-medium">No replies yet</p>
+        <p className="text-sm text-muted-foreground">
+          Inbound replies to your campaigns will show up here as they land.
+        </p>
+      </CardContent>
+    </Card>
   );
 }

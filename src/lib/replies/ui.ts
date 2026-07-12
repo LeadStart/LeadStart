@@ -24,6 +24,63 @@ export const CLASS_META: Record<ReplyClass, ReplyClassMeta> = {
   needs_review:             { label: "Needs Review",      badge: "badge-amber",  urgent: false },
 };
 
+// ===== Category segmentation =====
+// The inbox groups replies into a handful of action buckets so the owner/VA
+// can skim "what needs a call" vs "what's just noise" at a glance. Every
+// ReplyClass belongs to exactly one category; order is priority (hottest
+// first). Keep this the single source of truth for both inbox surfaces.
+
+export type ReplyCategoryKey = "hot" | "objection" | "review" | "silent";
+
+export interface ReplyCategoryMeta {
+  key: ReplyCategoryKey;
+  label: string;
+  blurb: string;
+  classes: ReplyClass[];
+}
+
+export const REPLY_CATEGORIES: ReplyCategoryMeta[] = [
+  {
+    key: "hot",
+    label: "Hot — call now",
+    blurb: "Interested, booked, asking, or referring",
+    classes: ["true_interest", "meeting_booked", "qualifying_question", "referral_forward"],
+  },
+  {
+    key: "objection",
+    label: "Objections",
+    blurb: "Price or timing pushback — worth a reply",
+    classes: ["objection_price", "objection_timing"],
+  },
+  {
+    key: "review",
+    label: "Needs review",
+    blurb: "Classifier wasn't sure — take a look",
+    classes: ["needs_review"],
+  },
+  {
+    key: "silent",
+    label: "No action needed",
+    blurb: "Out of office, wrong person, not interested, opt-out",
+    classes: ["wrong_person_no_referral", "ooo", "not_interested", "unsubscribe"],
+  },
+];
+
+// class → category. Unclassified rows (final_class null, e.g. status 'new'
+// before the classifier ran) surface under "Needs review" so they're not lost.
+const CATEGORY_BY_CLASS: Record<ReplyClass, ReplyCategoryKey> = REPLY_CATEGORIES.reduce(
+  (acc, cat) => {
+    for (const cls of cat.classes) acc[cls] = cat.key;
+    return acc;
+  },
+  {} as Record<ReplyClass, ReplyCategoryKey>,
+);
+
+export function categoryForClass(cls: ReplyClass | null): ReplyCategoryKey {
+  if (!cls) return "review";
+  return CATEGORY_BY_CLASS[cls] ?? "review";
+}
+
 export interface OutcomeOption {
   value: ReplyOutcome;
   label: string;
@@ -83,6 +140,39 @@ export function formatBody(text: string | null): string {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/\n/g, "<br>");
+}
+
+// One-line preview of a reply for list views. Strips the quoted original
+// (">" lines and the "On <date> … wrote:" / "Original Message" / Outlook
+// divider tails) so we show what the person actually wrote, then collapses
+// whitespace and truncates. Falls back to the subject when the body is empty
+// (HTML-only replies can land with no plain-text body).
+export function replySnippet(
+  bodyText: string | null,
+  subject: string | null = null,
+  max = 140,
+): string {
+  let t = bodyText ?? "";
+  // Cut everything from the first quoted-original marker onward.
+  const markers = [
+    /\nOn .+ wrote:/i,
+    /\n-+\s*Original Message\s*-+/i,
+    /\n_{5,}/, // Outlook reply divider
+  ];
+  for (const re of markers) {
+    const idx = t.search(re);
+    if (idx > 0) t = t.slice(0, idx);
+  }
+  // Drop any remaining quoted lines.
+  t = t
+    .split("\n")
+    .filter((line) => !line.trim().startsWith(">"))
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!t) t = (subject ?? "").replace(/\s+/g, " ").trim();
+  if (t.length <= max) return t;
+  return t.slice(0, max).replace(/\s+\S*$/, "") + "…";
 }
 
 /**
