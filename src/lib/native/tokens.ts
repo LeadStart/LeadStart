@@ -95,6 +95,71 @@ export function applyTokens(
   });
 }
 
+// Sender-identity tokens: resolved from the sending mailbox, never from the
+// contact, so they are excluded when computing which fields a CSV must supply.
+// Keys in normalizeVarKey() form; must stay in sync with buildTokenMap above.
+export const SENDER_TOKEN_KEYS: ReadonlySet<string> = new Set([
+  "yourname",
+  "sendername",
+  "myname",
+]);
+
+// Which contact columns satisfy each standard token (normalizeVarKey form).
+// Mirrors the keys buildTokenMap derives from contact columns — if a token
+// key is listed here, mapping a CSV column to the named field(s) fills it.
+export const STANDARD_TOKEN_FIELDS: Record<string, string[]> = {
+  firstname: ["first_name"],
+  lastname: ["last_name"],
+  fullname: ["first_name", "last_name"],
+  company: ["company_name"],
+  companyname: ["company_name"],
+  title: ["title"],
+  introline: ["intro_line"],
+  intro: ["intro_line"],
+  email: ["email"],
+  phone: ["phone"],
+};
+
+export interface CampaignTokenInfo {
+  /** Tokens satisfied by standard contact columns. token = first raw spelling seen. */
+  standard: { token: string; key: string; fields: string[] }[];
+  /** Tokens that must come from contacts.custom_fields. */
+  custom: { token: string; key: string }[];
+}
+
+// Extract the distinct {{token}} set a campaign's templates actually use,
+// classified standard vs custom, sender tokens excluded. The scan pattern is
+// byte-identical to applyTokens' so extraction and send-time substitution
+// can never disagree about what counts as a token. Deduped by normalized key
+// in first-appearance order; single-brace spintax {a|b} never matches.
+export function extractCampaignTokens(
+  templates: (string | null | undefined)[],
+): CampaignTokenInfo {
+  const standard: CampaignTokenInfo["standard"] = [];
+  const custom: CampaignTokenInfo["custom"] = [];
+  const seen = new Set<string>();
+
+  for (const text of templates) {
+    if (!text) continue;
+    for (const m of text.matchAll(/\{\{\s*([^{}]+?)\s*\}\}/g)) {
+      const token = m[1];
+      const key = normalizeVarKey(token);
+      if (!key || seen.has(key) || SENDER_TOKEN_KEYS.has(key)) continue;
+      seen.add(key);
+      // Object.hasOwn, not `key in`, so a token normalizing to an
+      // Object.prototype member ("constructor", "tostring", "valueof")
+      // isn't miscounted as a standard field.
+      if (Object.hasOwn(STANDARD_TOKEN_FIELDS, key)) {
+        standard.push({ token, key, fields: STANDARD_TOKEN_FIELDS[key] });
+      } else {
+        custom.push({ token, key });
+      }
+    }
+  }
+
+  return { standard, custom };
+}
+
 // Realistic sample values for the STANDARD keys, used when a campaign has no
 // real contact to preview against (brand-new campaign, client with no contacts).
 // Keys are in normalizeVarKey() form.

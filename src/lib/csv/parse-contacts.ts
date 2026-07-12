@@ -6,6 +6,7 @@
 // and row-to-payload normalization.
 
 import type { ProspectStage } from "@/types/app";
+import { normalizeVarKey } from "@/lib/native/tokens";
 
 // Minimal RFC4180-ish CSV parser. Handles quoted fields with commas and
 // escaped quotes (""). Good enough for Apollo / LinkedIn / Sheets exports.
@@ -222,6 +223,79 @@ export function rowsWithMapping(
   return out;
 }
 
+// Mapping targets prefixed with this map into contacts.custom_fields instead
+// of a standard column: "custom:PropertyAddress" stores the cell under the
+// JSONB key "PropertyAddress". The native renderer matches custom_fields keys
+// normalizeVarKey-insensitively, so the spelling only affects inspection.
+export const CUSTOM_TARGET_PREFIX = "custom:";
+
+export type ParsedContactRowWithCustom = ParsedContactRow & {
+  custom_fields: Record<string, string>;
+};
+
+// Like rowsWithMapping, but also honors "custom:<Key>" targets, landing them
+// in custom_fields (empty cells omitted). Kept separate so the shipped admin
+// Salesforge panel's rowsWithMapping contract stays untouched.
+export function rowsWithMappingAndCustom(
+  grid: string[][],
+  mapping: Record<string, string>,
+): ParsedContactRowWithCustom[] {
+  if (grid.length < 2) return [];
+
+  const rawHeaders = grid[0].map((h) => h.trim());
+  const fieldToCol: Record<string, number> = {};
+  const customCols: { col: number; key: string }[] = [];
+  for (let i = 0; i < rawHeaders.length; i++) {
+    const target = mapping[rawHeaders[i]];
+    if (!target) continue;
+    if (target.startsWith(CUSTOM_TARGET_PREFIX)) {
+      const key = target.slice(CUSTOM_TARGET_PREFIX.length).trim();
+      if (key) customCols.push({ col: i, key });
+    } else {
+      fieldToCol[target] = i;
+    }
+  }
+
+  if (fieldToCol.email === undefined) return [];
+
+  const out: ParsedContactRowWithCustom[] = [];
+  for (let r = 1; r < grid.length; r++) {
+    const row = grid[r];
+    const get = (field: string) => {
+      const i = fieldToCol[field];
+      return i !== undefined ? (row[i] ?? "").trim() : "";
+    };
+    const email = get("email");
+    if (!email || !email.includes("@")) continue;
+    const stageRaw = get("pipeline_stage").toLowerCase();
+    const stage: ProspectStage | null = (VALID_STAGES as string[]).includes(
+      stageRaw,
+    )
+      ? (stageRaw as ProspectStage)
+      : null;
+    const custom_fields: Record<string, string> = {};
+    for (const { col, key } of customCols) {
+      const v = (row[col] ?? "").trim();
+      if (v) custom_fields[key] = v;
+    }
+    out.push({
+      first_name: get("first_name") || null,
+      last_name: get("last_name") || null,
+      email,
+      company_name: get("company_name") || null,
+      title: get("title") || null,
+      phone: get("phone") || null,
+      linkedin_url: get("linkedin_url") || null,
+      tags: splitTags(get("tags")),
+      intro_line: get("intro_line") || null,
+      notes: get("notes") || null,
+      pipeline_stage: stage,
+      custom_fields,
+    });
+  }
+  return out;
+}
+
 // LeadStart contact fields available as mapping targets.
 export const MAPPING_TARGETS: { value: string; label: string }[] = [
   { value: "email", label: "Email" },
@@ -237,6 +311,51 @@ export const MAPPING_TARGETS: { value: string; label: string }[] = [
 ];
 
 const VALID_TARGET_SET = new Set(MAPPING_TARGETS.map((f) => f.value));
+
+// Like buildInitialMapping, but target-aware for a campaign's own merge
+// variables: priority is saved mapping (custom: entries re-matched by
+// normalized key so a re-spelled template token still hits) → HEADER_ALIASES
+// auto-detect → header folding to a campaign token key → unmapped. One CSV
+// column per target, same as buildInitialMapping.
+export function buildInitialMappingForTargets(
+  csvHeaders: string[],
+  savedMapping: Record<string, string> | null,
+  customTokens: { token: string; key: string }[],
+): Record<string, string> {
+  const customByKey = new Map(customTokens.map((t) => [t.key, t]));
+  const mapping: Record<string, string> = {};
+  const used = new Set<string>();
+
+  const claim = (header: string, target: string): boolean => {
+    if (used.has(target)) return false;
+    mapping[header] = target;
+    used.add(target);
+    return true;
+  };
+
+  for (const header of csvHeaders) {
+    // Object.hasOwn + string guard: savedMapping is JSON from the DB, so a
+    // header named "constructor" must not resolve to a prototype member, and
+    // a non-string value must not reach .startsWith().
+    if (savedMapping && Object.hasOwn(savedMapping, header)) {
+      const saved = savedMapping[header];
+      if (typeof saved === "string" && saved.startsWith(CUSTOM_TARGET_PREFIX)) {
+        const key = normalizeVarKey(saved.slice(CUSTOM_TARGET_PREFIX.length));
+        const tok = customByKey.get(key);
+        if (tok && claim(header, CUSTOM_TARGET_PREFIX + tok.token)) continue;
+      } else if (VALID_TARGET_SET.has(saved) && claim(header, saved)) {
+        continue;
+      }
+    }
+    const normalized = normalizeHeader(header);
+    if (VALID_TARGET_SET.has(normalized) && claim(header, normalized)) continue;
+    const tok = customByKey.get(normalizeVarKey(header));
+    if (tok && claim(header, CUSTOM_TARGET_PREFIX + tok.token)) continue;
+    mapping[header] = "";
+  }
+
+  return mapping;
+}
 
 // Build initial column mapping from CSV headers, using a saved mapping
 // first, then falling back to HEADER_ALIASES auto-detection.

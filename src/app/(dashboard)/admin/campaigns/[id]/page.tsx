@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/table";
 import { ArrowLeft, Inbox, Upload, AlertCircle, CheckCircle2 } from "lucide-react";
 import { CampaignImportPanel } from "./import-panel";
+import { NativeImportPanel } from "@/components/campaigns/native-import-panel";
 import { NativeSequenceCard } from "./native-sequence-card";
 import { CampaignLifecycleButton } from "./campaign-lifecycle-button";
 import { DeliverabilityCard } from "./deliverability-card";
@@ -373,6 +374,26 @@ export default async function AdminCampaignDetailPage({
                   </div>
                 )}
               </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-border/50 shadow-sm">
+            <CardHeader className="flex flex-row items-center gap-2 pb-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]">
+                <Upload size={16} className="text-white" />
+              </div>
+              <div className="flex-1">
+                <CardTitle className="text-base">Import contacts</CardTitle>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Upload a CSV — contacts enroll immediately and the sender
+                  works through them at the mailbox caps. Columns can map to
+                  this campaign&apos;s own {"{{variables}}"} as well as the
+                  standard contact fields.
+                </p>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <NativeImportPanel campaignId={campaign.id} />
             </CardContent>
           </Card>
 

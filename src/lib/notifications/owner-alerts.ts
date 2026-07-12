@@ -38,7 +38,8 @@ export type OwnerAlertKind =
   | "email_complaint"
   | "hot_lead_persistent_failure"
   | "inbox_health_degraded"
-  | "inbox_health_auto_paused";
+  | "inbox_health_auto_paused"
+  | "client_csv_upload";
 
 export interface OwnerAlertInput {
   admin: ReturnType<typeof createAdminClient>;
@@ -251,6 +252,7 @@ const KIND_LABEL: Record<OwnerAlertKind, string> = {
   hot_lead_persistent_failure: "Hot-lead notification permanently failed",
   inbox_health_degraded: "Mailbox health critical",
   inbox_health_auto_paused: "Mailbox auto-paused (health)",
+  client_csv_upload: "Client CSV upload",
 };
 
 const KIND_COLOR: Record<OwnerAlertKind, string> = {
@@ -260,6 +262,8 @@ const KIND_COLOR: Record<OwnerAlertKind, string> = {
   hot_lead_persistent_failure: "#b91c1c",
   inbox_health_degraded: "#c2410c",
   inbox_health_auto_paused: "#b91c1c",
+  // Informational (not a failure): client self-service activity.
+  client_csv_upload: "#2563eb",
 };
 
 function renderEventCard(input: {
@@ -317,9 +321,10 @@ function buildDigestHtml(rows: OwnerAlertRow[]): string {
   </p>
   ${cards}
   <p style="margin:16px 0 0;color:#666;font-size:12px;">
-    These events failed in a way that won't auto-recover (hard bounces, spam
-    complaints, or persistent send failures). Soft bounces and transient
-    errors are not included — Resend and the retry cron handle those.
+    Failure events here won't auto-recover (hard bounces, spam complaints,
+    or persistent send failures) — soft bounces and transient errors are
+    handled by Resend and the retry cron. Informational events (like client
+    CSV uploads) are included for visibility.
   </p>
 </div>`.trim();
 }

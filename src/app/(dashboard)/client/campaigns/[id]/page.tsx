@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ArrowLeft, TrendingUp } from "lucide-react";
 import { LinkedinClientCampaign } from "./linkedin-client-campaign";
+import { NativeImportPanel } from "@/components/campaigns/native-import-panel";
 import type { Campaign, CampaignSnapshot } from "@/types/app";
 
 const supabase = createClient();
@@ -139,6 +140,21 @@ export default function ClientCampaignPage({
           <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-[rgba(107,114,255,0.06)]" />
         </div>
       </div>
+
+      {/* Self-service CSV import — active native email campaigns only */}
+      {typedCampaign.source_channel === "native_email" &&
+        typedCampaign.status === "active" && (
+          <Card className="border-border/50 shadow-sm p-5">
+            <h2 className="text-[15px] font-semibold text-[#0f172a] mb-1">
+              Add contacts to this campaign
+            </h2>
+            <p className="text-xs text-muted-foreground mb-4">
+              Upload a CSV of people to reach. Map your columns once — the
+              mapping is remembered for your next upload.
+            </p>
+            <NativeImportPanel campaignId={typedCampaign.id} />
+          </Card>
+        )}
 
       {/* Campaign Performance with date picker */}
       <div className="flex items-center justify-between mb-3">
