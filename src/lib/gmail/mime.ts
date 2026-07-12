@@ -50,6 +50,17 @@ function formatFrom(email: string, name?: string | null): string {
   return `${encodeHeaderWord(name)} <${email}>`;
 }
 
+// Header values that are NOT RFC 2047-encoded (To/Cc/In-Reply-To/References)
+// must never contain CR/LF or other control chars — a smuggled CRLF would
+// inject arbitrary headers (e.g. Bcc:) into the raw message. Contact emails
+// are validated at import, but recipients also arrive from other paths
+// (portal reply CC lists, historical rows), so strip at the sink too.
+// Subject and From display-name are already safe: encodeHeaderWord base64-
+// encodes any value containing chars outside \x20-\x7E, which includes CRLF.
+function sanitizeAddrHeader(value: string): string {
+  return value.replace(/[\x00-\x1F\x7F]/g, "").trim();
+}
+
 // Base64-encode the body wrapped at 76 chars/CRLF. Guarantees RFC 5322
 // line-length compliance and clean UTF-8 regardless of paragraph length.
 function base64Body(text: string): string {
@@ -115,17 +126,19 @@ function textToHtml(text: string): string {
 export function buildRawEmail(params: BuildEmailParams): string {
   const boundary = `b_${randomUUID().replace(/-/g, "")}`;
   const headers: string[] = [
-    `From: ${formatFrom(params.fromEmail, params.fromName)}`,
-    `To: ${params.to}`,
-    ...(params.cc && params.cc.length > 0 ? [`Cc: ${params.cc.join(", ")}`] : []),
+    `From: ${formatFrom(sanitizeAddrHeader(params.fromEmail), params.fromName)}`,
+    `To: ${sanitizeAddrHeader(params.to)}`,
+    ...(params.cc && params.cc.length > 0
+      ? [`Cc: ${params.cc.map(sanitizeAddrHeader).join(", ")}`]
+      : []),
     `Subject: ${encodeHeaderWord(params.subject)}`,
     `Message-ID: ${params.messageId}`,
     `Date: ${new Date().toUTCString()}`,
     `MIME-Version: 1.0`,
     `Content-Type: multipart/alternative; boundary="${boundary}"`,
   ];
-  if (params.inReplyTo) headers.push(`In-Reply-To: ${params.inReplyTo}`);
-  if (params.references) headers.push(`References: ${params.references}`);
+  if (params.inReplyTo) headers.push(`In-Reply-To: ${sanitizeAddrHeader(params.inReplyTo)}`);
+  if (params.references) headers.push(`References: ${sanitizeAddrHeader(params.references)}`);
 
   const body = [
     `--${boundary}`,
