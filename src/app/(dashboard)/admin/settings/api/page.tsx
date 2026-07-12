@@ -34,6 +34,7 @@ import {
   Flame,
   ExternalLink,
   AtSign,
+  Activity,
 } from "lucide-react";
 import type { Organization } from "@/types/app";
 import { appUrl } from "@/lib/api-url";
@@ -169,6 +170,17 @@ export default function IntegrationsPage() {
     { kind: "success" } | { kind: "fail"; message: string } | null
   >(null);
 
+  // Inbox health (migration 00061): Spamhaus DQS key for domain-blocklist
+  // checks + the auto-pause offline threshold (blank = alert-only).
+  const [spamhausKey, setSpamhausKey] = useState("");
+  const [offlineThreshold, setOfflineThreshold] = useState("");
+  const [savingInboxHealth, setSavingInboxHealth] = useState(false);
+  const [inboxHealthSaved, setInboxHealthSaved] = useState(false);
+  const [testingSpamhaus, setTestingSpamhaus] = useState(false);
+  const [spamhausTestResult, setSpamhausTestResult] = useState<
+    { kind: "success" } | { kind: "fail"; message: string } | null
+  >(null);
+
   useEffect(() => {
     if (!organizationId) return;
     const supabase = createClient();
@@ -221,6 +233,18 @@ export default function IntegrationsPage() {
           if (sfOrg.salesforge_default_product_id)
             setSalesforgeProductId(sfOrg.salesforge_default_product_id);
           if (sfOrg.warmforge_api_key) setWarmforgeKey(sfOrg.warmforge_api_key);
+          // Inbox health (migration 00061). Separate cast — same reason as above.
+          const ihOrg = data as {
+            spamhaus_dqs_key?: string | null;
+            inbox_health_offline_threshold?: number | null;
+          };
+          if (ihOrg.spamhaus_dqs_key) setSpamhausKey(ihOrg.spamhaus_dqs_key);
+          if (
+            ihOrg.inbox_health_offline_threshold !== null &&
+            ihOrg.inbox_health_offline_threshold !== undefined
+          ) {
+            setOfflineThreshold(String(ihOrg.inbox_health_offline_threshold));
+          }
           // Native email service account (migration 00056).
           const gmOrg = data as {
             gmail_service_account_email?: string | null;
@@ -599,6 +623,57 @@ export default function IntegrationsPage() {
     }
   }
 
+  async function handleSaveInboxHealth() {
+    if (!organizationId) return;
+    setSavingInboxHealth(true);
+    setInboxHealthSaved(false);
+    // Blank threshold → NULL (alert-only). A number is clamped to 1–100.
+    const raw = offlineThreshold.trim();
+    let threshold: number | null = null;
+    if (raw !== "") {
+      const n = Math.round(Number(raw));
+      threshold = Number.isFinite(n) ? Math.min(100, Math.max(1, n)) : null;
+    }
+    const supabase = createClient();
+    await supabase
+      .from("organizations")
+      .update({
+        spamhaus_dqs_key: spamhausKey.trim() || null,
+        inbox_health_offline_threshold: threshold,
+      })
+      .eq("id", organizationId);
+    // Reflect the clamped value back into the field.
+    setOfflineThreshold(threshold === null ? "" : String(threshold));
+    setInboxHealthSaved(true);
+    setSavingInboxHealth(false);
+    setTimeout(() => setInboxHealthSaved(false), 3000);
+  }
+
+  async function handleTestSpamhaus() {
+    setTestingSpamhaus(true);
+    setSpamhausTestResult(null);
+    try {
+      const res = await fetch(appUrl("/api/admin/spamhaus/test"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dqs_key: spamhausKey }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setSpamhausTestResult({ kind: "success" });
+      } else {
+        setSpamhausTestResult({ kind: "fail", message: data.error ?? "Key check failed" });
+      }
+    } catch (err) {
+      setSpamhausTestResult({
+        kind: "fail",
+        message: err instanceof Error ? err.message : "Key check failed",
+      });
+    } finally {
+      setTestingSpamhaus(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -841,6 +916,99 @@ export default function IntegrationsPage() {
               <XCircle size={16} className="text-red-500" />
               <span className="text-sm font-medium text-red-700">
                 {warmforgeTestResult.message}
+              </span>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Inbox health — Spamhaus blocklist key + auto-pause threshold (migration 00061) */}
+      <Card className="border-border/50 shadow-sm">
+        <CardHeader className="flex flex-row items-center gap-2 pb-3">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-600">
+            <Activity size={16} className="text-white" />
+          </div>
+          <div>
+            <CardTitle className="text-base">Inbox health</CardTitle>
+            <p className="text-xs text-muted-foreground">
+              Scores every sending mailbox each hour from DNS, blacklist, bounce,
+              and warmup signals. Can take a mailbox offline automatically when it
+              degrades.
+            </p>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-1">
+            <Label htmlFor="spamhausKey" className="text-sm font-medium">
+              Spamhaus DQS key
+            </Label>
+            <Input
+              id="spamhausKey"
+              type="password"
+              value={spamhausKey}
+              onChange={(e) => setSpamhausKey(e.target.value)}
+              placeholder="Spamhaus Data Query Service key"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Free key from <span className="font-mono">spamhaus.com</span> → Data
+              Query Service. Used to check sending domains against the domain
+              blocklist. Leave blank to skip the blacklist check.
+            </p>
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="offlineThreshold" className="text-sm font-medium">
+              Auto-pause threshold
+            </Label>
+            <Input
+              id="offlineThreshold"
+              type="number"
+              min={1}
+              max={100}
+              value={offlineThreshold}
+              onChange={(e) => setOfflineThreshold(e.target.value)}
+              placeholder="Leave blank to only alert"
+              className="max-w-[220px]"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Pause a mailbox automatically when its score stays below this number
+              for two checks in a row. Leave blank to only alert — mailboxes are
+              never paused automatically. 50 is a sensible starting point.
+            </p>
+          </div>
+          <div className="flex gap-2 items-center">
+            <Button
+              onClick={handleSaveInboxHealth}
+              disabled={savingInboxHealth}
+              style={{ background: "#2E37FE" }}
+            >
+              {savingInboxHealth ? "Saving..." : "Save"}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleTestSpamhaus}
+              disabled={testingSpamhaus || !spamhausKey}
+            >
+              {testingSpamhaus ? "Testing..." : "Test key"}
+            </Button>
+            {inboxHealthSaved && (
+              <span className="text-sm text-emerald-600 flex items-center gap-1">
+                <CheckCircle size={14} /> Saved
+              </span>
+            )}
+          </div>
+          {spamhausTestResult?.kind === "success" && (
+            <div className="flex items-center gap-2 rounded-lg bg-emerald-50 border border-emerald-200 p-3">
+              <CheckCircle size={16} className="text-emerald-500" />
+              <span className="text-sm font-medium text-emerald-700">
+                Key works — the test domain came back listed as expected.
+              </span>
+            </div>
+          )}
+          {spamhausTestResult?.kind === "fail" && (
+            <div className="flex items-center gap-2 rounded-lg bg-red-50 border border-red-200 p-3">
+              <XCircle size={16} className="text-red-500" />
+              <span className="text-sm font-medium text-red-700">
+                {spamhausTestResult.message}
               </span>
             </div>
           )}

@@ -36,7 +36,9 @@ export type OwnerAlertKind =
   | "report_send_error"
   | "email_hard_bounce"
   | "email_complaint"
-  | "hot_lead_persistent_failure";
+  | "hot_lead_persistent_failure"
+  | "inbox_health_degraded"
+  | "inbox_health_auto_paused";
 
 export interface OwnerAlertInput {
   admin: ReturnType<typeof createAdminClient>;
@@ -247,6 +249,8 @@ const KIND_LABEL: Record<OwnerAlertKind, string> = {
   email_hard_bounce: "Email hard bounce",
   email_complaint: "Spam complaint",
   hot_lead_persistent_failure: "Hot-lead notification permanently failed",
+  inbox_health_degraded: "Mailbox health critical",
+  inbox_health_auto_paused: "Mailbox auto-paused (health)",
 };
 
 const KIND_COLOR: Record<OwnerAlertKind, string> = {
@@ -254,6 +258,8 @@ const KIND_COLOR: Record<OwnerAlertKind, string> = {
   email_hard_bounce: "#b91c1c",
   email_complaint: "#c2410c",
   hot_lead_persistent_failure: "#b91c1c",
+  inbox_health_degraded: "#c2410c",
+  inbox_health_auto_paused: "#b91c1c",
 };
 
 function renderEventCard(input: {

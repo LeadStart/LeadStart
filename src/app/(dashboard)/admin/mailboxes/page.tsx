@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,9 +16,11 @@ import {
   CheckCircle,
   XCircle,
   AlertTriangle,
+  ChevronDown,
 } from "lucide-react";
 import { appUrl } from "@/lib/api-url";
-import type { NativeMailbox } from "@/types/app";
+import { bandBadgeClass, bandLabel } from "@/lib/deliverability/inbox-health";
+import type { HealthComponent, NativeMailbox } from "@/types/app";
 
 type MailboxRow = NativeMailbox & {
   sent_today: number;
@@ -43,6 +45,9 @@ export default function MailboxesPage() {
 
   // Per-row in-flight action guard (mailbox id → true)
   const [busy, setBusy] = useState<Record<string, boolean>>({});
+
+  // Which mailbox's health breakdown is expanded (only one at a time).
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -281,6 +286,7 @@ export default function MailboxesPage() {
                   <tr className="border-b text-left text-xs text-muted-foreground">
                     <th className="py-2 pr-3 font-medium">Mailbox</th>
                     <th className="py-2 px-3 font-medium">Status</th>
+                    <th className="py-2 px-3 font-medium">Health</th>
                     <th className="py-2 px-3 font-medium">Ramp</th>
                     <th className="py-2 px-3 font-medium">Today</th>
                     <th className="py-2 px-3 font-medium">Bounces 7d</th>
@@ -289,7 +295,8 @@ export default function MailboxesPage() {
                 </thead>
                 <tbody>
                   {mailboxes.map((mb) => (
-                    <tr key={mb.id} className="border-b last:border-0 align-middle">
+                    <Fragment key={mb.id}>
+                    <tr className="border-b last:border-0 align-middle">
                       <td className="py-3 pr-3">
                         <div className="font-medium text-[#0f172a]">{mb.email_address}</div>
                         {mb.display_name && (
@@ -300,9 +307,47 @@ export default function MailboxesPage() {
                             <AlertTriangle size={12} /> {mb.last_error}
                           </div>
                         )}
+                        {mb.status === "paused" && mb.health_paused_at && (
+                          <div className="text-xs text-amber-600 flex items-center gap-1 mt-0.5">
+                            <AlertTriangle size={12} /> Paused automatically by the health check — resume when it recovers.
+                          </div>
+                        )}
                       </td>
                       <td className="py-3 px-3">
                         <StatusBadge status={mb.status} />
+                      </td>
+                      <td className="py-3 px-3">
+                        {mb.health_score == null ? (
+                          <span
+                            className="text-muted-foreground"
+                            title="First health check runs within the hour."
+                          >
+                            —
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setExpandedId((cur) => (cur === mb.id ? null : mb.id))
+                            }
+                            className="inline-flex items-center gap-1.5 cursor-pointer"
+                            title="Show the health breakdown"
+                          >
+                            <span className="font-semibold text-[#0f172a]">{mb.health_score}</span>
+                            {mb.health_band && (
+                              <Badge
+                                variant="secondary"
+                                className={`${bandBadgeClass(mb.health_band)} text-[10px]`}
+                              >
+                                {bandLabel(mb.health_band)}
+                              </Badge>
+                            )}
+                            <ChevronDown
+                              size={12}
+                              className={`text-muted-foreground transition-transform ${expandedId === mb.id ? "rotate-180" : ""}`}
+                            />
+                          </button>
+                        )}
                       </td>
                       <td className="py-3 px-3">
                         {mb.warmed ? (
@@ -354,6 +399,31 @@ export default function MailboxesPage() {
                         </div>
                       </td>
                     </tr>
+                    {expandedId === mb.id && mb.health_components && (
+                      <tr className="bg-slate-50/60 border-b last:border-0">
+                        <td colSpan={7} className="px-3 py-3">
+                          <div className="space-y-1.5">
+                            {mb.health_components.map((c) => (
+                              <div key={c.key} className="flex items-start gap-2 text-xs">
+                                <span
+                                  className={`mt-1 h-2 w-2 rounded-full shrink-0 ${dotClass(c.status)}`}
+                                />
+                                <span className="font-medium text-[#0f172a] w-44 shrink-0">
+                                  {c.label}
+                                </span>
+                                <span className="text-muted-foreground">{c.detail}</span>
+                              </div>
+                            ))}
+                            {mb.health_checked_at && (
+                              <p className="text-[11px] text-muted-foreground pt-1">
+                                Last checked {new Date(mb.health_checked_at).toLocaleString()}.
+                              </p>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                    </Fragment>
                   ))}
                 </tbody>
               </table>
@@ -363,6 +433,19 @@ export default function MailboxesPage() {
       </Card>
     </div>
   );
+}
+
+function dotClass(status: HealthComponent["status"]): string {
+  switch (status) {
+    case "ok":
+      return "bg-emerald-500";
+    case "warn":
+      return "bg-amber-500";
+    case "bad":
+      return "bg-red-500";
+    case "unchecked":
+      return "bg-slate-300";
+  }
 }
 
 function StatusBadge({ status }: { status: NativeMailbox["status"] }) {

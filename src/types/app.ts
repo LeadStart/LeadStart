@@ -13,6 +13,10 @@ export type CampaignStatus = "active" | "paused" | "completed" | "draft";
 
 export type KPIHealth = "good" | "warning" | "bad";
 
+// Per-mailbox inbox-health band (migration 00061). Parallels KPIHealth but
+// named for the mailbox-health domain: healthy / watch / critical.
+export type HealthBand = "healthy" | "watch" | "critical";
+
 export interface Organization {
   id: string;
   name: string;
@@ -715,11 +719,55 @@ export interface NativeMailbox {
   last_error: string | null;
   last_error_at: string | null;
   last_polled_at: string | null;
+  // Inbox-health scoring (migration 00061). Denormalized "current" values,
+  // refreshed by /api/cron/check-inbox-health. Null until the first check.
+  // health_paused_at is set only when the health check auto-pauses the mailbox
+  // (cleared on manual resume), so an automatic bench reads distinctly from a
+  // manual pause.
+  health_score: number | null;
+  health_band: HealthBand | null;
+  health_components: HealthComponent[] | null;
+  health_checked_at: string | null;
+  health_paused_at: string | null;
   created_at: string;
   updated_at: string;
 }
 
 export type NativeSendStatus = "sent" | "bounced";
+
+// One inbox-health snapshot (migration 00061). Inserted only when a mailbox's
+// score changes or an action is taken, so the table is a transition timeline.
+// `components` is the per-signal breakdown the admin UI renders.
+export interface MailboxHealthCheck {
+  id: string;
+  organization_id: string;
+  mailbox_id: string;
+  checked_at: string;
+  score: number;
+  band: HealthBand;
+  components: HealthComponent[];
+  action: string | null;
+}
+
+// A single scored signal inside a health check. The scorer
+// (src/lib/deliverability/inbox-health.ts) imports this type and produces
+// these; they persist verbatim into mailbox_health_checks.components.
+export type HealthComponentStatus = "ok" | "warn" | "bad" | "unchecked";
+export interface HealthComponent {
+  key:
+    | "blacklist"
+    | "spf"
+    | "dkim"
+    | "dmarc"
+    | "mx"
+    | "bounce_rate"
+    | "heat_score"
+    | "warmup_placement";
+  label: string;
+  status: HealthComponentStatus;
+  deduction: number;
+  detail: string;
+}
 
 // Append-only send log — one row per successful send. Doubles as the
 // per-mailbox daily-cap counter, the sent/bounced metric source, and the

@@ -52,6 +52,10 @@
     {
       "path": "/app/api/cron/dispatch-salesforge-enrollments",
       "schedule": "0 12 * * *"
+    },
+    {
+      "path": "/app/api/cron/check-inbox-health",
+      "schedule": "30 * * * *"
     }
   ]
 }

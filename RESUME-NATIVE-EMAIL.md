@@ -54,7 +54,7 @@ In **local dev**, any route importing the reply pipeline (`poll-native-replies`,
 
 ## Deferred (Phase 4)
 
-Portal reply-send native branch (replaces the 501 at [`replies/[id]/send`](src/app/api/replies/[id]/send/route.ts) — **must ship before a client replies via the portal**; until then, reply from Gmail directly) · SMTP/IMAP connector · from-address reply matching · per-mailbox timezones · auto-benching on bounce rate.
+Portal reply-send native branch (replaces the 501 at [`replies/[id]/send`](src/app/api/replies/[id]/send/route.ts) — **must ship before a client replies via the portal**; until then, reply from Gmail directly) · SMTP/IMAP connector · from-address reply matching · per-mailbox timezones · ~~auto-benching on bounce rate~~ **shipped** as the inbox-health scoring system (migration 00061, `/api/cron/check-inbox-health`): hourly per-mailbox health score from DNS + Spamhaus DBL + 7-day bounce rate + Warmforge; auto-pauses below a per-org threshold after two consecutive sub-threshold checks.
 
 Separate follow-up (not this project): the Unipile webhook upserts against 00046's *partial* unique index — fix to a regular UNIQUE before the LinkedIn channel activates.
 

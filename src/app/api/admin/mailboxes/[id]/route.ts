@@ -59,10 +59,13 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: "Invalid status" }, { status: 400 });
     }
     update.status = body.status;
-    // Clearing an error state also clears the stale message.
+    // Clearing an error state also clears the stale message. Resuming also
+    // clears the auto-pause marker so the mailbox no longer reads as
+    // "paused by the health check".
     if (body.status === "active") {
       update.last_error = null;
       update.last_error_at = null;
+      update.health_paused_at = null;
     }
   }
   if (body.max_daily_cap !== undefined && body.max_daily_cap !== null) {

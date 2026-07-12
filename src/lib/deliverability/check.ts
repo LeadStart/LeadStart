@@ -7,7 +7,7 @@
 // live so early sends don't land in spam. Sending routes through Google's IPs,
 // so authentication + list hygiene + copy are the levers that actually matter.
 
-import { resolveTxt } from "node:dns/promises";
+import { resolveTxt, resolveMx } from "node:dns/promises";
 
 // The copy scorer lives in a client-safe sibling (no node: imports) so the
 // builder UI can import it without pulling node:dns into the client bundle.
@@ -73,6 +73,31 @@ export async function checkDomainAuth(domain: string): Promise<DomainAuth> {
   }
 
   return { domain, spf, dkim, dmarc: dmarcCheck };
+}
+
+/**
+ * Live MX check for a sending domain. A domain with no MX records can't
+ * receive the bounce reports and replies our poller depends on, and is a
+ * strong signal something is misconfigured. Kept separate from DomainAuth
+ * (not folded into checkDomainAuth) so the campaign deliverability card, which
+ * consumes DomainAuth, is unaffected — only the inbox-health cron calls this.
+ */
+export async function checkMx(domain: string): Promise<AuthCheck> {
+  try {
+    const rows = await resolveMx(domain);
+    if (rows.length > 0) {
+      return {
+        status: "pass",
+        detail: `MX present (${rows.length} record${rows.length === 1 ? "" : "s"}).`,
+      };
+    }
+  } catch {
+    // NXDOMAIN / ENODATA / timeout — treat as missing, same stance as txt().
+  }
+  return {
+    status: "fail",
+    detail: "No MX records — replies and bounce reports can't reach this domain.",
+  };
 }
 
 /** Pull the domain out of an email address (lowercased). */
