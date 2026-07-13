@@ -6,21 +6,48 @@
 // No vendor warmup product, no state machine — just arithmetic over the send
 // count the worker passes in each tick.
 //
-// Owner-chosen defaults: steady state 20 cold sends/day per Google inbox;
-// warmup 5 → 10 → 15 → 20, each stage lasting ~one business-week of sending at
-// that stage's cap. Send window is Mon–Fri business hours (per campaign).
+// Owner-chosen cadence: a new inbox opens at 5 cold sends/day and gains +1/day
+// as it warms — 5 → 6 → 7 → … → 20 — capping at 20/day, the steady state. The
+// ramp is expressed as cumulative-send thresholds (below) rather than calendar
+// days so it stays "ramp as data": when an inbox sends its full allotment each
+// day the cap climbs by exactly one per day, but an idle/paused inbox holds its
+// place instead of fast-forwarding. 20/day per inbox is a HARD ceiling nothing
+// may exceed — not a per-mailbox max, not an override (see
+// ABSOLUTE_MAX_DAILY_CAP). Send window is Mon–Fri business hours (per campaign).
+
+// The absolute per-inbox daily send ceiling. This is a safety invariant, not a
+// tunable default: no mailbox may EVER send more than this many cold emails in
+// one day, regardless of its max_daily_cap or daily_cap_override.
+// effectiveDailyCap() clamps every path to it, so the guarantee holds even
+// against a stale/oversized DB value.
+export const ABSOLUTE_MAX_DAILY_CAP = 20;
 
 export const DEFAULT_MAX_DAILY_CAP = 20;
 
 // Warmup stages, in order: { cap: sends/day at this stage; graduateAt:
-// cumulative sends at which the mailbox leaves this stage }. 5/day for a
-// business-week (5×5 = 25) → 10/day (+50 ⇒ 75) → 15/day (+75 ⇒ 150) → then the
-// mailbox's own max_daily_cap. Each cap is clamped to max_daily_cap, so a
-// mailbox whose ceiling is below a stage value never exceeds it.
+// cumulative sends at which the mailbox leaves it }. Each graduateAt is the
+// running total of every cap up to and including this stage (5, 5+6, 5+6+7, …),
+// so an inbox that sends its full cap every day advances exactly one stage per
+// day: 5 → 6 → 7 → … → 19, then it graduates to its own max_daily_cap
+// (default 20 = ABSOLUTE_MAX_DAILY_CAP). Each cap is clamped to the mailbox's
+// ceiling, so a mailbox whose max is below a stage value never exceeds it and
+// simply holds there.
 export const RAMP_STAGES: { cap: number; graduateAt: number }[] = [
-  { cap: 5, graduateAt: 25 },
-  { cap: 10, graduateAt: 75 },
-  { cap: 15, graduateAt: 150 },
+  { cap: 5, graduateAt: 5 },
+  { cap: 6, graduateAt: 11 },
+  { cap: 7, graduateAt: 18 },
+  { cap: 8, graduateAt: 26 },
+  { cap: 9, graduateAt: 35 },
+  { cap: 10, graduateAt: 45 },
+  { cap: 11, graduateAt: 56 },
+  { cap: 12, graduateAt: 68 },
+  { cap: 13, graduateAt: 81 },
+  { cap: 14, graduateAt: 95 },
+  { cap: 15, graduateAt: 110 },
+  { cap: 16, graduateAt: 126 },
+  { cap: 17, graduateAt: 143 },
+  { cap: 18, graduateAt: 161 },
+  { cap: 19, graduateAt: 180 },
 ];
 
 export interface SendWindowConfig {
@@ -65,15 +92,22 @@ export interface RampMailbox {
 /**
  * The number of cold sends this mailbox may make today, given how many emails
  * it has already sent all-time (`totalSent`, from native_sends). A non-null
- * daily_cap_override wins outright; otherwise the cap steps up with cumulative
- * send volume — so an inbox that hasn't sent stays at the low starting cap.
+ * daily_cap_override bypasses the ramp; otherwise the cap steps up with
+ * cumulative send volume — so an inbox that hasn't sent stays at the low
+ * starting cap. EVERY path is clamped to ABSOLUTE_MAX_DAILY_CAP (and to the
+ * mailbox's own max_daily_cap), so the result can never exceed 20/day — this
+ * function is the single chokepoint the send worker reads, so the hard cap is
+ * enforced here even if a bad value reaches the DB.
  */
 export function effectiveDailyCap(mb: RampMailbox, totalSent: number): number {
-  if (mb.daily_cap_override != null) return Math.max(0, mb.daily_cap_override);
-  for (const stage of RAMP_STAGES) {
-    if (totalSent < stage.graduateAt) return Math.min(mb.max_daily_cap, stage.cap);
+  const ceiling = Math.min(mb.max_daily_cap, ABSOLUTE_MAX_DAILY_CAP);
+  if (mb.daily_cap_override != null) {
+    return Math.max(0, Math.min(ceiling, mb.daily_cap_override));
   }
-  return mb.max_daily_cap;
+  for (const stage of RAMP_STAGES) {
+    if (totalSent < stage.graduateAt) return Math.min(ceiling, stage.cap);
+  }
+  return ceiling;
 }
 
 /**

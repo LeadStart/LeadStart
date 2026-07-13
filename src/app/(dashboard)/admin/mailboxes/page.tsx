@@ -173,8 +173,9 @@ export default function MailboxesPage() {
           </h1>
           <p className="text-sm text-[#0f172a]/60 mt-1">
             Google Workspace inboxes LeadStart sends from directly. New inboxes
-            ramp up automatically as they send (5 → 10 → 15 → cap), so a paused
-            inbox never skips its warmup.
+            ramp up automatically as they send — 5/day, then +1 each day up to a
+            20/day cap — so a paused inbox never skips its warmup. No inbox ever
+            sends more than 20/day.
           </p>
         </div>
         <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-[rgba(107,114,255,0.06)]" />
@@ -244,12 +245,13 @@ export default function MailboxesPage() {
             </div>
             <div className="space-y-1 sm:col-span-1">
               <Label htmlFor="newCap" className="text-sm font-medium">
-                Daily cap
+                Daily cap (max 20)
               </Label>
               <Input
                 id="newCap"
                 type="number"
                 min={1}
+                max={20}
                 value={newCap}
                 onChange={(e) => setNewCap(e.target.value)}
               />

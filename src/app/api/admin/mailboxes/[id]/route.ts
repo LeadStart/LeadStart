@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { ABSOLUTE_MAX_DAILY_CAP } from "@/lib/gmail/ramp";
 import type { NativeMailbox } from "@/types/app";
 
 interface RouteParams {
@@ -71,11 +72,15 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
   if (body.max_daily_cap !== undefined && body.max_daily_cap !== null) {
     const cap = Math.floor(body.max_daily_cap);
     if (cap <= 0) return NextResponse.json({ error: "max_daily_cap must be positive" }, { status: 400 });
-    update.max_daily_cap = cap;
+    // Clamp to the absolute per-inbox ceiling — an inbox can never send >20/day.
+    update.max_daily_cap = Math.min(cap, ABSOLUTE_MAX_DAILY_CAP);
   }
   if (body.daily_cap_override !== undefined) {
+    // The override bypasses the ramp but is still bounded by the hard ceiling.
     update.daily_cap_override =
-      body.daily_cap_override === null ? null : Math.max(0, Math.floor(body.daily_cap_override));
+      body.daily_cap_override === null
+        ? null
+        : Math.min(Math.max(0, Math.floor(body.daily_cap_override)), ABSOLUTE_MAX_DAILY_CAP);
   }
   if (body.display_name !== undefined) update.display_name = body.display_name?.trim() || null;
   if (body.client_id !== undefined) update.client_id = body.client_id || null;

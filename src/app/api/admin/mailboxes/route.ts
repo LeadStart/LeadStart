@@ -19,6 +19,7 @@ import {
   rampStage,
   startOfLocalDay,
   DEFAULT_MAX_DAILY_CAP,
+  ABSOLUTE_MAX_DAILY_CAP,
 } from "@/lib/gmail/ramp";
 import type { NativeMailbox } from "@/types/app";
 
@@ -160,7 +161,7 @@ export async function POST(req: NextRequest) {
     client_id: body.client_id || null,
     max_daily_cap:
       typeof body.max_daily_cap === "number" && body.max_daily_cap > 0
-        ? Math.floor(body.max_daily_cap)
+        ? Math.min(Math.floor(body.max_daily_cap), ABSOLUTE_MAX_DAILY_CAP)
         : DEFAULT_MAX_DAILY_CAP,
     ramp_started_at: body.ramp_started_at || undefined, // let the DB default to CURRENT_DATE
   };
