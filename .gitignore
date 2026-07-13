@@ -47,5 +47,8 @@ leads*.json
 # Generated email-template previews (output of scripts/render-*.mjs)
 public/hot-lead-email-preview.html
 
+# Local data-op backups (durable rollback files; never committed)
+/backups/
+
 # Claude Code personal overrides (team-wide config lives in .claude/settings.json)
 .claude/settings.local.json
