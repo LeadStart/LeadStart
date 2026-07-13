@@ -27,7 +27,16 @@ import { checkCronAuth } from "@/lib/security/cron-auth";
 import { GmailClient, GmailConfigError, GmailAuthError, GmailPermanentError, GmailRateLimitError, GmailTransientError } from "@/lib/gmail/client";
 import { loadGmailClientForOrg } from "@/lib/gmail/org";
 import { buildRawEmail, generateMessageId } from "@/lib/gmail/mime";
-import { effectiveDailyCap, isInSendWindow, resolveSendWindow, startOfLocalDay } from "@/lib/gmail/ramp";
+import {
+  effectiveDailyCap,
+  isInSendWindow,
+  resolveSendWindow,
+  startOfLocalDay,
+  resolveDailyNewLeadsCap,
+  minutesUntilWindowClose,
+  sendSpacingMinutes,
+  type SendWindowConfig,
+} from "@/lib/gmail/ramp";
 import { renderSpintax } from "@/lib/spintax";
 import { buildTokenMap, applyTokens } from "@/lib/native/tokens";
 import type {
@@ -43,12 +52,12 @@ export const dynamic = "force-dynamic";
 
 // Global per-tick send budget. Each send is ~2 Gmail calls (send + Message-ID
 // read-back) ≈ 1-2s, so 20 sends stays well under the 60s function budget.
-// With 15-min ticks over the 9-hour window (~36 ticks) this is far more
-// throughput than the per-mailbox daily caps will ever allow.
 const SENDS_PER_TICK = 20;
-// Spread each mailbox's daily allotment across ticks instead of firing its
-// whole remaining cap in one burst.
-const PER_MAILBOX_PER_TICK = 5;
+// At most one send per inbox per tick. The cron runs every 5 min (= the minimum
+// send gap), and each inbox is additionally gated on a dynamic spacing interval
+// (sendSpacingMinutes) so its daily allotment is spread across the whole send
+// window instead of fired in a burst.
+const PER_MAILBOX_PER_TICK = 1;
 
 type EnrollmentRow = CampaignEnrollment;
 type CampaignRow = {
@@ -62,6 +71,7 @@ type CampaignRow = {
   send_start_hour: number | null;
   send_end_hour: number | null;
   send_weekdays_only: boolean | null;
+  daily_new_leads_cap: number | null;
 };
 
 export async function GET(request: NextRequest) {
@@ -84,7 +94,11 @@ export async function GET(request: NextRequest) {
     .select("*, campaigns!inner(source_channel)")
     .eq("status", "active")
     .eq("campaigns.source_channel", "native_email")
-    .order("last_action_at", { ascending: true, nullsFirst: true })
+    // Follow-ups first: enrollments that have already sent (last_action_at NOT
+    // NULL) go oldest-due first, ahead of brand-new step-0 enrollments
+    // (last_action_at NULL, oldest-created first). So a big new-contact import
+    // never delays in-flight threads.
+    .order("last_action_at", { ascending: true, nullsFirst: false })
     .order("created_at", { ascending: true })
     .limit(SENDS_PER_TICK * 3);
 
@@ -103,7 +117,7 @@ export async function GET(request: NextRequest) {
 
   const { data: campaignsData } = await admin
     .from("campaigns")
-    .select("id, organization_id, client_id, status, source_channel, name, send_timezone, send_start_hour, send_end_hour, send_weekdays_only")
+    .select("id, organization_id, client_id, status, source_channel, name, send_timezone, send_start_hour, send_end_hour, send_weekdays_only, daily_new_leads_cap")
     .in("id", campaignIds);
   const campaignMap = new Map<string, CampaignRow>();
   for (const c of (campaignsData ?? []) as CampaignRow[]) campaignMap.set(c.id, c);
@@ -188,17 +202,41 @@ export async function GET(request: NextRequest) {
     for (const mb of (mbData ?? []) as NativeMailbox[]) mailboxMap.set(mb.id, mb);
   }
 
-  // Sends already made today, per mailbox (ET-day boundary, matching the cap).
+  // Sends already made today, per mailbox (ET-day boundary, matching the cap) —
+  // both the count (for the daily cap) and the most-recent send time (for the
+  // pacing gate below).
   const dayStart = new Date(startOfLocalDay()).toISOString();
   const sentToday: Record<string, number> = {};
+  const lastSentTodayMs: Record<string, number> = {};
   if (referencedMailboxIds.size > 0) {
     const { data: sendRows } = await admin
       .from("native_sends")
-      .select("mailbox_id")
+      .select("mailbox_id, sent_at")
       .in("mailbox_id", [...referencedMailboxIds])
       .gte("sent_at", dayStart);
-    for (const s of (sendRows ?? []) as { mailbox_id: string }[]) {
+    for (const s of (sendRows ?? []) as { mailbox_id: string; sent_at: string | null }[]) {
       sentToday[s.mailbox_id] = (sentToday[s.mailbox_id] ?? 0) + 1;
+      if (s.sent_at) {
+        const t = Date.parse(s.sent_at);
+        if (!(s.mailbox_id in lastSentTodayMs) || t > lastSentTodayMs[s.mailbox_id]) {
+          lastSentTodayMs[s.mailbox_id] = t;
+        }
+      }
+    }
+  }
+
+  // New leads (step-0 first-touches) already sent today, per campaign — drives
+  // the per-campaign daily new-leads cap. Follow-ups are not counted here.
+  const newLeadsToday: Record<string, number> = {};
+  {
+    const { data: newLeadRows } = await admin
+      .from("native_sends")
+      .select("campaign_id")
+      .in("campaign_id", campaignIds)
+      .eq("step_index", 0)
+      .gte("sent_at", dayStart);
+    for (const r of (newLeadRows ?? []) as { campaign_id: string }[]) {
+      newLeadsToday[r.campaign_id] = (newLeadsToday[r.campaign_id] ?? 0) + 1;
     }
   }
 
@@ -218,15 +256,39 @@ export async function GET(request: NextRequest) {
 
   // Per-tick per-mailbox counter (in addition to the daily count above).
   const inTick: Record<string, number> = {};
+  // Per-tick per-campaign new-lead counter (added to newLeadsToday).
+  const newLeadsInTick: Record<string, number> = {};
   const gmailByOrg = new Map<string, GmailClient | null>();
-  // Cache each campaign's "is it in its send window right now" so we compute
-  // the Intl/timezone math once per campaign per tick, not once per enrollment.
+  // Cache each campaign's resolved send window + "in window right now" so the
+  // Intl/timezone math runs once per campaign per tick, not per enrollment.
+  const windowByCampaign = new Map<string, SendWindowConfig>();
   const inWindowByCampaign = new Map<string, boolean>();
+  const windowFor = (c: CampaignRow): SendWindowConfig => {
+    let w = windowByCampaign.get(c.id);
+    if (!w) {
+      w = resolveSendWindow(c);
+      windowByCampaign.set(c.id, w);
+    }
+    return w;
+  };
 
   const remaining = (mb: NativeMailbox) =>
     effectiveDailyCap(mb, totalSent[mb.id] ?? 0) - (sentToday[mb.id] ?? 0) - (inTick[mb.id] ?? 0);
-  const eligible = (mb: NativeMailbox) =>
-    mb.status === "active" && remaining(mb) > 0 && (inTick[mb.id] ?? 0) < PER_MAILBOX_PER_TICK;
+  // Spacing gate: an inbox that already sent today must wait out its dynamic
+  // interval (day's remaining allotment spread over the window's remaining time,
+  // floored at 5 min) before sending again. Its first send of the day is ungated.
+  const paced = (mb: NativeMailbox, campaign: CampaignRow): boolean => {
+    const last = lastSentTodayMs[mb.id];
+    if (last == null) return true;
+    const windowLeft = minutesUntilWindowClose(tickNow, windowFor(campaign));
+    const gapMin = sendSpacingMinutes(windowLeft, remaining(mb));
+    return (tickNow.getTime() - last) / 60000 >= gapMin;
+  };
+  const eligible = (mb: NativeMailbox, campaign: CampaignRow) =>
+    mb.status === "active" &&
+    remaining(mb) > 0 &&
+    (inTick[mb.id] ?? 0) < PER_MAILBOX_PER_TICK &&
+    paced(mb, campaign);
 
   let sent = 0;
   const results: Array<{ enrollment_id: string; result: string }> = [];
@@ -243,7 +305,7 @@ export async function GET(request: NextRequest) {
     // back to the global ET default when unset). Out-of-window campaigns are
     // skipped this tick and retried on a later one inside their window.
     if (!inWindowByCampaign.has(campaign.id)) {
-      inWindowByCampaign.set(campaign.id, isInSendWindow(tickNow, resolveSendWindow(campaign)));
+      inWindowByCampaign.set(campaign.id, isInSendWindow(tickNow, windowFor(campaign)));
     }
     if (!inWindowByCampaign.get(campaign.id)) continue;
 
@@ -299,19 +361,32 @@ export async function GET(request: NextRequest) {
       continue;
     }
 
+    // Per-campaign new-leads/day cap: a step-0 first-touch only fires while the
+    // campaign is under its daily new-lead ceiling. Follow-ups (step 1+) are
+    // never gated by this, so nurturing continues even at the cap. Leaves the
+    // enrollment active to retry once the day's count resets.
+    if (enrollment.current_step_index === 0) {
+      const newLeadCap = resolveDailyNewLeadsCap(campaign);
+      const usedNewLeads = (newLeadsToday[campaign.id] ?? 0) + (newLeadsInTick[campaign.id] ?? 0);
+      if (usedNewLeads >= newLeadCap) {
+        results.push({ enrollment_id: enrollment.id, result: "new_leads_cap_reached" });
+        continue;
+      }
+    }
+
     // ---- Pick the mailbox ----
     let mailbox: NativeMailbox | undefined;
     if (enrollment.native_mailbox_id) {
       // Sticky: this enrollment already threads through one mailbox. If it's
-      // ineligible this tick (paused, error, or at cap), wait — never
-      // reroute mid-thread (breaks threading + SPF alignment).
+      // ineligible this tick (paused, error, at cap, or not yet due per the
+      // spacing gate), wait — never reroute mid-thread (breaks threading + SPF).
       mailbox = mailboxMap.get(enrollment.native_mailbox_id);
-      if (!mailbox || !eligible(mailbox)) continue;
+      if (!mailbox || !eligible(mailbox, campaign)) continue;
     } else {
       // Step 0: choose the least-loaded eligible mailbox in the pool.
       const pool = (poolByCampaign.get(campaign.id) ?? [])
         .map((id) => mailboxMap.get(id))
-        .filter((mb): mb is NativeMailbox => !!mb && eligible(mb));
+        .filter((mb): mb is NativeMailbox => !!mb && eligible(mb, campaign));
       if (pool.length === 0) continue; // nothing available this tick
       pool.sort((a, b) => remaining(b) - remaining(a) || (inTick[a.id] ?? 0) - (inTick[b.id] ?? 0));
       mailbox = pool[0];
@@ -481,6 +556,11 @@ export async function GET(request: NextRequest) {
 
     sentToday[mailbox.id] = (sentToday[mailbox.id] ?? 0) + 1;
     inTick[mailbox.id] = (inTick[mailbox.id] ?? 0) + 1;
+    lastSentTodayMs[mailbox.id] = tickNow.getTime();
+    // Count this first-touch against the campaign's new-leads/day cap.
+    if (enrollment.current_step_index === 0) {
+      newLeadsInTick[campaign.id] = (newLeadsInTick[campaign.id] ?? 0) + 1;
+    }
     sent++;
     results.push({ enrollment_id: enrollment.id, result: hasNext ? "advanced" : "completed" });
   }

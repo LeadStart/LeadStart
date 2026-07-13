@@ -42,21 +42,25 @@ export function NativeSequenceCard({
   campaignId,
   initialSteps,
   initialWindow,
+  initialNewLeadsCap,
 }: {
   campaignId: string;
   initialSteps: StepDraft[];
   initialWindow: SendWindowConfig;
+  initialNewLeadsCap: number;
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [steps, setSteps] = useState<StepDraft[]>(initialSteps);
   const [win, setWin] = useState<SendWindowConfig>(initialWindow);
+  const [newLeadsCap, setNewLeadsCap] = useState<number>(initialNewLeadsCap);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   function resetAndClose() {
     setSteps(initialSteps);
     setWin(initialWindow);
+    setNewLeadsCap(initialNewLeadsCap);
     setError(null);
     setEditing(false);
   }
@@ -102,6 +106,7 @@ export function NativeSequenceCard({
           send_start_hour: win.startHour,
           send_end_hour: win.endHour,
           send_weekdays_only: win.weekdaysOnly,
+          daily_new_leads_cap: newLeadsCap,
         }),
       });
       const data = (await res.json()) as { error?: string };
@@ -127,7 +132,10 @@ export function NativeSequenceCard({
           <div>
             <CardTitle className="text-base">Sequence &amp; schedule</CardTitle>
             <p className="text-xs text-muted-foreground mt-0.5 inline-flex items-center gap-1">
-              <Clock size={12} /> {formatSendWindow(win)}
+              <Clock size={12} /> {formatSendWindow(win)} ·{" "}
+              {newLeadsCap === 0
+                ? "new leads paused"
+                : `up to ${newLeadsCap} new lead${newLeadsCap === 1 ? "" : "s"}/day`}
             </p>
           </div>
           <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setEditing(true)}>
@@ -244,6 +252,24 @@ export function NativeSequenceCard({
                 Weekdays only
               </label>
             </div>
+          </div>
+          <div className="flex items-end gap-3 pt-1">
+            <div className="space-y-1 w-32 shrink-0">
+              <Label className="text-xs">New leads / day</Label>
+              <Input
+                type="number"
+                min={0}
+                max={1000}
+                value={newLeadsCap}
+                onChange={(e) =>
+                  setNewLeadsCap(Math.max(0, Math.min(1000, Math.floor(Number(e.target.value) || 0))))
+                }
+              />
+            </div>
+            <p className="text-[11px] text-muted-foreground pb-2">
+              New first-touches started per day on this campaign. Follow-ups aren&apos;t
+              limited by this — set 0 to pause new leads while replies keep sending.
+            </p>
           </div>
           <p className="text-[11px] text-muted-foreground">{formatSendWindow(win)}</p>
         </div>

@@ -50,6 +50,23 @@ export const RAMP_STAGES: { cap: number; graduateAt: number }[] = [
   { cap: 19, graduateAt: 180 },
 ];
 
+// Per-campaign cap on how many BRAND-NEW leads (step-0 first-touches) may start
+// the sequence per day, independent of inbox capacity — so a big import can't
+// crowd out follow-ups and new-lead velocity is controllable per campaign.
+// Follow-ups (step 1+) are never limited by this. NULL on a campaign inherits
+// this default (migration 00064); 0 pauses new leads while follow-ups continue.
+export const DEFAULT_DAILY_NEW_LEADS_CAP = 20;
+
+// Resolve a campaign's effective new-leads/day cap: its own value, or the
+// global default when unset. Same "NULL = inherit default" shape as
+// resolveSendWindow below.
+export function resolveDailyNewLeadsCap(campaign: {
+  daily_new_leads_cap?: number | null;
+}): number {
+  const v = campaign.daily_new_leads_cap;
+  return v == null ? DEFAULT_DAILY_NEW_LEADS_CAP : Math.max(0, v);
+}
+
 export interface SendWindowConfig {
   timezone: string;
   startHour: number; // inclusive
@@ -198,4 +215,46 @@ export function isInSendWindow(
     return false;
   }
   return hour >= window.startHour && hour < window.endHour;
+}
+
+// ── Send pacing ───────────────────────────────────────────────────────────
+// Sends from one inbox are spread across its send window instead of fired in a
+// burst. The gap between two sends from the same inbox is the day's remaining
+// allotment spread evenly over the time left in the window, floored at
+// MIN_SEND_GAP_MINUTES so an inbox never sends faster than that.
+
+export const MIN_SEND_GAP_MINUTES = 5;
+
+// Minutes from `now` until the send window closes TODAY, in the window's
+// timezone. 0 once at/after the end hour, or on a non-send weekday.
+export function minutesUntilWindowClose(
+  now: Date = new Date(),
+  window: SendWindowConfig = SEND_WINDOW,
+): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: window.timezone,
+    weekday: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(now);
+  const weekday = parts.find((p) => p.type === "weekday")?.value ?? "";
+  if (window.weekdaysOnly && (weekday === "Sat" || weekday === "Sun")) return 0;
+  const hour = Number(parts.find((p) => p.type === "hour")?.value ?? "0") % 24;
+  const minute = Number(parts.find((p) => p.type === "minute")?.value ?? "0");
+  return Math.max(0, window.endHour * 60 - (hour * 60 + minute));
+}
+
+// The minimum minutes that must elapse between two sends from one inbox: spread
+// `remainingSends` evenly over the `remainingWindowMinutes` left today, but
+// never tighter than MIN_SEND_GAP_MINUTES. Returns Infinity when nothing is
+// left to send (so the caller never fires). When the window is too short to fit
+// the remaining sends at the 5-min floor, the floor wins — throughput is capped
+// rather than the spacing violated (the worker logs when this happens).
+export function sendSpacingMinutes(
+  remainingWindowMinutes: number,
+  remainingSends: number,
+): number {
+  if (remainingSends <= 0) return Infinity;
+  return Math.max(MIN_SEND_GAP_MINUTES, remainingWindowMinutes / remainingSends);
 }

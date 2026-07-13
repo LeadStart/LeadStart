@@ -43,7 +43,7 @@
     },
     {
       "path": "/app/api/cron/run-native-sequences",
-      "schedule": "*/15 * * * *"
+      "schedule": "*/5 * * * *"
     },
     {
       "path": "/app/api/cron/poll-native-replies",

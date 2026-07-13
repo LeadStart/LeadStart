@@ -10,7 +10,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { KPICard } from "@/components/charts/kpi-card";
 import { DailyChart } from "@/components/charts/daily-chart";
 import { calculateMetrics } from "@/lib/kpi/calculator";
-import { resolveSendWindow, formatSendWindow } from "@/lib/gmail/ramp";
+import { resolveSendWindow, formatSendWindow, resolveDailyNewLeadsCap } from "@/lib/gmail/ramp";
 import {
   Card,
   CardContent,
@@ -262,6 +262,7 @@ export default async function AdminCampaignDetailPage({
             campaignId={campaign.id}
             initialSteps={nativeStats.steps}
             initialWindow={sendWindow}
+            initialNewLeadsCap={resolveDailyNewLeadsCap(campaign)}
           />
 
           <DeliverabilityCard campaignId={campaign.id} />

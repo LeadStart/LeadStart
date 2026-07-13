@@ -131,6 +131,10 @@ export interface Campaign {
   send_start_hour: number | null;
   send_end_hour: number | null;
   send_weekdays_only: boolean | null;
+  // Per-campaign cap on new leads (step-0 first-touches) started per day
+  // (migration 00064). NULL = inherit DEFAULT_DAILY_NEW_LEADS_CAP; 0 pauses new
+  // leads while follow-ups keep flowing. Follow-ups are never limited by this.
+  daily_new_leads_cap: number | null;
   // Per-campaign Unipile account binding (migration 00046). Defaults to
   // clients.unipile_account_id but lives on the campaign so accounts can
   // rotate without invalidating campaign history.

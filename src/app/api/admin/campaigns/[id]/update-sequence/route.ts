@@ -26,6 +26,7 @@ interface Body {
   send_start_hour?: number | null;
   send_end_hour?: number | null;
   send_weekdays_only?: boolean | null;
+  daily_new_leads_cap?: number | null;
 }
 
 const KNOWN_TZ = new Set([
@@ -108,6 +109,18 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "Start hour must be before end hour" }, { status: 400 });
   }
 
+  // ---- Validate new-leads/day cap (optional; NULL = inherit default) ----
+  const newLeadsCap = body.daily_new_leads_cap ?? null;
+  if (
+    newLeadsCap !== null &&
+    (!Number.isInteger(newLeadsCap) || newLeadsCap < 0 || newLeadsCap > 1000)
+  ) {
+    return NextResponse.json(
+      { error: "New leads per day must be a whole number 0–1000" },
+      { status: 400 },
+    );
+  }
+
   // ---- Replace steps ----
   const { error: delErr } = await admin.from("campaign_steps").delete().eq("campaign_id", campaignId);
   if (delErr) {
@@ -135,11 +148,12 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       send_start_hour: startH,
       send_end_hour: endH,
       send_weekdays_only: body.send_weekdays_only ?? null,
+      daily_new_leads_cap: newLeadsCap,
       updated_at: new Date().toISOString(),
     })
     .eq("id", campaignId);
   if (updErr) {
-    return NextResponse.json({ error: "Steps saved, but the send window failed to update" }, { status: 500 });
+    return NextResponse.json({ error: "Steps saved, but the schedule failed to update" }, { status: 500 });
   }
 
   return NextResponse.json({ ok: true, steps: stepRows.length });
