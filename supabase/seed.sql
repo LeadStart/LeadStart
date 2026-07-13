@@ -21,7 +21,7 @@ INSERT INTO public.clients (id, organization_id, name, contact_email) VALUES
   ('00000000-0000-0000-0000-000000000010', '00000000-0000-0000-0000-000000000001', 'Acme Corp', 'john@acmecorp.com'),
   ('00000000-0000-0000-0000-000000000011', '00000000-0000-0000-0000-000000000001', 'TechStartup Inc', 'sarah@techstartup.io');
 
--- Sample campaigns (replace instantly_campaign_id with real IDs from your Instantly account)
-INSERT INTO public.campaigns (id, client_id, organization_id, instantly_campaign_id, name, status) VALUES
-  ('00000000-0000-0000-0000-000000000020', '00000000-0000-0000-0000-000000000010', '00000000-0000-0000-0000-000000000001', 'REPLACE_WITH_REAL_ID_1', 'Acme Corp - Q1 Outreach', 'active'),
-  ('00000000-0000-0000-0000-000000000021', '00000000-0000-0000-0000-000000000011', '00000000-0000-0000-0000-000000000001', 'REPLACE_WITH_REAL_ID_2', 'TechStartup - Decision Makers', 'active');
+-- Sample campaigns
+INSERT INTO public.campaigns (id, client_id, organization_id, name, status) VALUES
+  ('00000000-0000-0000-0000-000000000020', '00000000-0000-0000-0000-000000000010', '00000000-0000-0000-0000-000000000001', 'Acme Corp - Q1 Outreach', 'active'),
+  ('00000000-0000-0000-0000-000000000021', '00000000-0000-0000-0000-000000000011', '00000000-0000-0000-0000-000000000001', 'TechStartup - Decision Makers', 'active');

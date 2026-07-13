@@ -33,7 +33,7 @@ jobs:
       # Lint + Typecheck both have pre-existing baseline errors as of
       # commit 02fdead (26 lint errors, 12 TS errors across billing /
       # clients / inbox-health / reports / tasks / use-user / use-sort /
-      # instantly client / topbar). Left non-blocking so CI can land
+      # topbar). Left non-blocking so CI can land
       # without a drive-by cleanup — each step still runs and surfaces
       # issues in its log, so regressions are visible. Flip
       # `continue-on-error` to `false` on each step once the baseline

@@ -1,6 +1,6 @@
 // Plain-text RFC 5322 builder + inbound Gmail message parser for the
 // native email channel. Pure functions, no network — same style as
-// src/lib/replies/ingest-salesforge.ts and keyword-prefilter.ts.
+// src/lib/replies/keyword-prefilter.ts.
 //
 // Deliverability-first: still NO tracking pixel, NO rewritten links, and we
 // append NOTHING to the body — any opt-out language lives in the sequence copy.

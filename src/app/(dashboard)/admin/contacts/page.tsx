@@ -1262,7 +1262,7 @@ export default function ContactsPage() {
                     ? clientMap.get(commonClientId)
                     : "this client"}
                 </span>
-                . Contacts will be queued and enrolled into the Salesforge sequence at the campaign&apos;s daily cap.
+                . Contacts will be assigned to the campaign and enrolled into its sending sequence.
               </p>
               <Select
                 value={selectedCampaignId}

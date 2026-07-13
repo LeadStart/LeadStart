@@ -54,7 +54,7 @@ Reply with overrides or "use defaults" to lock these in, then I'll start commit 
 - Every mutation route that creates/modifies billing state must use `createAdminClient()` + verify caller's org role before hitting Stripe.
 - Stripe webhook must verify `Stripe-Signature` header; never trust payload without verification.
 - HMAC-signed quote URLs so the public `/quote/[id]` page cannot be enumerated or accessed without the token.
-- Rotate any Stripe keys that end up in git history, same policy as the Instantly key on `scripts/backfill-emails.mjs:9`.
+- Rotate any Stripe keys that end up in git history — treat a committed secret as compromised and cycle it immediately.
 
 ### Next step when resuming
 **Commit #1**: migration + types + demo mock data. Renders the new Billing UI structure against mock data, zero external services needed. Safe opener matching the AI-reply pattern.

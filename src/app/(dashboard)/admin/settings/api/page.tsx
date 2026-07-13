@@ -136,39 +136,11 @@ export default function IntegrationsPage() {
     "success" | "fail" | null
   >(null);
 
-  // Salesforge (primary email channel — migration 00049)
-  const [salesforgeKey, setSalesforgeKey] = useState("");
-  const [salesforgeWorkspaceId, setSalesforgeWorkspaceId] = useState("");
-  const [salesforgeProductId, setSalesforgeProductId] = useState("");
-  const [salesforgeWorkspaces, setSalesforgeWorkspaces] = useState<
-    { id: string; name: string }[]
-  >([]);
-  const [salesforgeProducts, setSalesforgeProducts] = useState<
-    { id: string; name: string }[]
-  >([]);
-  const [loadingWorkspaces, setLoadingWorkspaces] = useState(false);
-  const [loadingProducts, setLoadingProducts] = useState(false);
-  const [savingSalesforge, setSavingSalesforge] = useState(false);
-  const [salesforgeSaved, setSalesforgeSaved] = useState(false);
-  const [testingSalesforge, setTestingSalesforge] = useState(false);
-  const [salesforgeTestResult, setSalesforgeTestResult] = useState<
-    { kind: "success"; me?: Record<string, unknown> } | { kind: "fail"; message: string } | null
-  >(null);
-
   // Native email — Google service account w/ domain-wide delegation (migration 00056)
   const [gmailSaEmail, setGmailSaEmail] = useState("");
   const [gmailSaKey, setGmailSaKey] = useState("");
   const [savingGmail, setSavingGmail] = useState(false);
   const [gmailSaved, setGmailSaved] = useState(false);
-
-  // Warmforge (Salesforge's mailbox-warming sister product — migration 00049)
-  const [warmforgeKey, setWarmforgeKey] = useState("");
-  const [savingWarmforge, setSavingWarmforge] = useState(false);
-  const [warmforgeSaved, setWarmforgeSaved] = useState(false);
-  const [testingWarmforge, setTestingWarmforge] = useState(false);
-  const [warmforgeTestResult, setWarmforgeTestResult] = useState<
-    { kind: "success" } | { kind: "fail"; message: string } | null
-  >(null);
 
   // Inbox health (migration 00061): Spamhaus DQS key for domain-blocklist
   // checks + the auto-pause offline threshold (blank = alert-only).
@@ -218,21 +190,6 @@ export default function IntegrationsPage() {
           if (dmOrg.perplexity_api_key) setPerplexityKey(dmOrg.perplexity_api_key);
           if (dmOrg.unipile_api_key) setUnipileKey(dmOrg.unipile_api_key);
           if (dmOrg.unipile_dsn) setUnipileDsn(dmOrg.unipile_dsn);
-          // Salesforge + Warmforge (migration 00049). Read through a
-          // separate cast since Organization may not yet enumerate them
-          // in the compile-time type until app.ts is regenerated.
-          const sfOrg = data as {
-            salesforge_api_key?: string | null;
-            salesforge_workspace_id?: string | null;
-            salesforge_default_product_id?: string | null;
-            warmforge_api_key?: string | null;
-          };
-          if (sfOrg.salesforge_api_key) setSalesforgeKey(sfOrg.salesforge_api_key);
-          if (sfOrg.salesforge_workspace_id)
-            setSalesforgeWorkspaceId(sfOrg.salesforge_workspace_id);
-          if (sfOrg.salesforge_default_product_id)
-            setSalesforgeProductId(sfOrg.salesforge_default_product_id);
-          if (sfOrg.warmforge_api_key) setWarmforgeKey(sfOrg.warmforge_api_key);
           // Inbox health (migration 00061). Separate cast — same reason as above.
           const ihOrg = data as {
             spamhaus_dqs_key?: string | null;
@@ -481,92 +438,6 @@ export default function IntegrationsPage() {
     }
   }
 
-  async function handleTestSalesforge() {
-    setTestingSalesforge(true);
-    setSalesforgeTestResult(null);
-    try {
-      const res = await fetch(appUrl("/api/admin/salesforge/test"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ api_key: salesforgeKey }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setSalesforgeTestResult({ kind: "success", me: data.me });
-        // Auto-load workspaces on a successful test so the dropdown
-        // is ready without a second click.
-        await handleLoadWorkspaces();
-      } else {
-        setSalesforgeTestResult({ kind: "fail", message: data.error ?? "Connection failed" });
-      }
-    } catch (err) {
-      setSalesforgeTestResult({
-        kind: "fail",
-        message: err instanceof Error ? err.message : "Connection failed",
-      });
-    } finally {
-      setTestingSalesforge(false);
-    }
-  }
-
-  async function handleLoadWorkspaces() {
-    if (!salesforgeKey) return;
-    setLoadingWorkspaces(true);
-    try {
-      const res = await fetch(appUrl("/api/admin/salesforge/workspaces"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ api_key: salesforgeKey }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setSalesforgeWorkspaces(data.workspaces ?? []);
-      }
-    } catch (err) {
-      console.error("Failed to load Salesforge workspaces:", err);
-    } finally {
-      setLoadingWorkspaces(false);
-    }
-  }
-
-  async function handleLoadProducts(workspaceId: string) {
-    if (!salesforgeKey || !workspaceId) return;
-    setLoadingProducts(true);
-    try {
-      const res = await fetch(appUrl("/api/admin/salesforge/products"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ api_key: salesforgeKey, workspace_id: workspaceId }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setSalesforgeProducts(data.products ?? []);
-      }
-    } catch (err) {
-      console.error("Failed to load Salesforge products:", err);
-    } finally {
-      setLoadingProducts(false);
-    }
-  }
-
-  async function handleSaveSalesforge() {
-    if (!organizationId) return;
-    setSavingSalesforge(true);
-    setSalesforgeSaved(false);
-    const supabase = createClient();
-    await supabase
-      .from("organizations")
-      .update({
-        salesforge_api_key: salesforgeKey || null,
-        salesforge_workspace_id: salesforgeWorkspaceId || null,
-        salesforge_default_product_id: salesforgeProductId || null,
-      })
-      .eq("id", organizationId);
-    setSalesforgeSaved(true);
-    setSavingSalesforge(false);
-    setTimeout(() => setSalesforgeSaved(false), 3000);
-  }
-
   async function handleSaveGmail() {
     if (!organizationId) return;
     setSavingGmail(true);
@@ -582,45 +453,6 @@ export default function IntegrationsPage() {
     setGmailSaved(true);
     setSavingGmail(false);
     setTimeout(() => setGmailSaved(false), 3000);
-  }
-
-  async function handleSaveWarmforge() {
-    if (!organizationId) return;
-    setSavingWarmforge(true);
-    setWarmforgeSaved(false);
-    const supabase = createClient();
-    await supabase
-      .from("organizations")
-      .update({ warmforge_api_key: warmforgeKey || null })
-      .eq("id", organizationId);
-    setWarmforgeSaved(true);
-    setSavingWarmforge(false);
-    setTimeout(() => setWarmforgeSaved(false), 3000);
-  }
-
-  async function handleTestWarmforge() {
-    setTestingWarmforge(true);
-    setWarmforgeTestResult(null);
-    try {
-      const res = await fetch(appUrl("/api/admin/warmforge/test"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ api_key: warmforgeKey }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setWarmforgeTestResult({ kind: "success" });
-      } else {
-        setWarmforgeTestResult({ kind: "fail", message: data.error ?? "Connection failed" });
-      }
-    } catch (err) {
-      setWarmforgeTestResult({
-        kind: "fail",
-        message: err instanceof Error ? err.message : "Connection failed",
-      });
-    } finally {
-      setTestingWarmforge(false);
-    }
   }
 
   async function handleSaveInboxHealth() {

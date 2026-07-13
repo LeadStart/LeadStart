@@ -1,6 +1,6 @@
-// POST /api/replies/[id]/send — send the client's edited reply through the
-// reply's own channel (Salesforge or native Gmail) and CC the client's
-// notification email so the thread lives in their inbox.
+// POST /api/replies/[id]/send — send the client's edited reply back through the
+// native Gmail mailbox that received it, threaded into the same conversation,
+// and CC the client's notification email so the thread lives in their inbox.
 //
 // Flow:
 //   1. Auth + access check (client_users or admin/VA in the org).
@@ -16,7 +16,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { SalesforgeClient } from "@/lib/salesforge/client";
 import { computeIdempotencyKey } from "@/lib/replies/send";
 import { loadGmailClientForOrg } from "@/lib/gmail/org";
 import { buildRawEmail, generateMessageId } from "@/lib/gmail/mime";
@@ -73,7 +72,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   const { data: preRow, error: preLoadErr } = await admin
     .from("lead_replies")
     .select(
-      "id, organization_id, client_id, status, source_channel, salesforge_email_id, salesforge_mailbox_id, gmail_thread_id, gmail_message_id, native_mailbox_id, lead_email, from_address, subject, client:client_id(notification_email, notification_cc_emails)"
+      "id, organization_id, client_id, status, source_channel, gmail_thread_id, gmail_message_id, native_mailbox_id, lead_email, from_address, subject, client:client_id(notification_email, notification_cc_emails)"
     )
     .eq("id", id)
     .maybeSingle();
@@ -90,8 +89,6 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     client_id: string;
     status: LeadReply["status"];
     source_channel: SourceChannel;
-    salesforge_email_id: string | null;
-    salesforge_mailbox_id: string | null;
     gmail_thread_id: string | null;
     gmail_message_id: string | null;
     native_mailbox_id: string | null;
@@ -122,8 +119,8 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     }
   }
 
-  // ─── Per-channel precondition checks ───────────────────────────────────
-  if (pre.source_channel !== "salesforge" && pre.source_channel !== "native_email") {
+  // ─── Precondition check (native email is the only sendable channel) ─────
+  if (pre.source_channel !== "native_email") {
     return NextResponse.json(
       {
         error: `Sending replies from the ${pre.source_channel} channel is not supported from the portal.`,
@@ -131,58 +128,14 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       { status: 501 }
     );
   }
-  if (pre.source_channel === "salesforge") {
-    if (!pre.salesforge_email_id || !pre.salesforge_mailbox_id) {
-      return NextResponse.json(
-        {
-          error:
-            "This reply is missing the Salesforge metadata needed to send (salesforge_email_id / salesforge_mailbox_id). Check the webhook ingest.",
-        },
-        { status: 412 }
-      );
-    }
-  } else {
-    // native_email
-    if (!pre.native_mailbox_id || !pre.gmail_thread_id) {
-      return NextResponse.json(
-        {
-          error:
-            "This reply is missing the Gmail metadata needed to send (native_mailbox_id / gmail_thread_id).",
-        },
-        { status: 412 }
-      );
-    }
-  }
-
-  // Salesforge sends need org-level workspace creds up front. Native email
-  // resolves its client lazily at send time (loadGmailClientForOrg).
-  let salesforgeCreds: { apiKey: string; workspaceId: string } | null = null;
-  if (pre.source_channel === "salesforge") {
-    const { data: orgRow, error: orgErr } = await admin
-      .from("organizations")
-      .select("salesforge_api_key, salesforge_workspace_id")
-      .eq("id", pre.organization_id)
-      .maybeSingle();
-    if (orgErr || !orgRow) {
-      return NextResponse.json({ error: "Organization not found" }, { status: 404 });
-    }
-    const org = orgRow as {
-      salesforge_api_key: string | null;
-      salesforge_workspace_id: string | null;
-    };
-    if (!org.salesforge_api_key) {
-      return NextResponse.json(
-        { error: "Salesforge API key is not configured for this organization." },
-        { status: 500 }
-      );
-    }
-    if (!org.salesforge_workspace_id) {
-      return NextResponse.json(
-        { error: "Salesforge workspace is not configured for this organization." },
-        { status: 500 }
-      );
-    }
-    salesforgeCreds = { apiKey: org.salesforge_api_key, workspaceId: org.salesforge_workspace_id };
+  if (!pre.native_mailbox_id || !pre.gmail_thread_id) {
+    return NextResponse.json(
+      {
+        error:
+          "This reply is missing the Gmail metadata needed to send (native_mailbox_id / gmail_thread_id).",
+      },
+      { status: 412 }
+    );
   }
 
   // ─── Atomic claim: only one send wins ──────────────────────────────────
@@ -224,21 +177,10 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   }
   const cc = ccSet.size > 0 ? Array.from(ccSet) : undefined;
 
-  // ─── Send via the reply's channel ──────────────────────────────────────
+  // ─── Send via the native Gmail mailbox that received the reply ─────────
   let sentExternalId: string | null = null;
   try {
-    if (pre.source_channel === "salesforge") {
-      const salesforge = new SalesforgeClient(salesforgeCreds!.apiKey);
-      const sentEmail = await salesforge.replyToEmail(
-        salesforgeCreds!.workspaceId,
-        pre.salesforge_mailbox_id!,
-        pre.salesforge_email_id!,
-        { body_text, body_html, cc_addresses: cc }
-      );
-      sentExternalId = sentEmail.id;
-    } else {
-      sentExternalId = await sendNativeReply(admin, pre, body_text, cc);
-    }
+    sentExternalId = await sendNativeReply(admin, pre, body_text, cc);
   } catch (err) {
     console.error("[replies/send] channel send failed:", err);
     await admin

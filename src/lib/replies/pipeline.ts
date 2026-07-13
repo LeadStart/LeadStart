@@ -141,8 +141,8 @@ export async function runReplyPipeline(
   // native sender enforces this list per campaign.client_id before each send.
   //
   // For non-native channels we ALSO keep the legacy global
-  // contacts.status='unsubscribed' flip, because the Salesforge / LinkedIn
-  // suppression paths still read it. The native channel relies solely on the
+  // contacts.status='unsubscribed' flip, because the LinkedIn
+  // suppression path still reads it. The native channel relies solely on the
   // per-client DNC list and does NOT set the global flag — that global flip
   // was exactly the "everyone gets blocked" behavior we're moving away from.
   if (decision.final_class === "unsubscribe" && reply.lead_email) {

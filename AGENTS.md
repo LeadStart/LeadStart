@@ -24,6 +24,6 @@ If you see a 404 on a non-API route, check (a) whether you're hitting an `/app` 
 - **`middleware` file convention is deprecated**: Repo-wide deprecation notice. Migrating to `proxy.ts` is its own task; ignore for now.
 - **Strict-null-checks errors in `inbox-health/page.tsx` and a few other pages**: pre-existing project-wide pattern issues. The build passes anyway because `next.config.ts` has `typescript.ignoreBuildErrors: true`. Don't try to fix these unless you're in a file you're already editing — they're not blocking.
 
-# Salesforge / Warmforge
+# Email channel — native Gmail API
 
-Migration is documented in [docs/salesforge-api-reference.md](docs/salesforge-api-reference.md). One thing to know up front: **Salesforge's API has zero write endpoints for mailboxes** — adding a sender mailbox requires their hosted OAuth flow at app.salesforge.ai. Everything else (sequences, contacts, sending, replies, validation, DNC, analytics) is wired through LeadStart.
+Salesforge and Warmforge have been removed entirely. The native Gmail-API channel is the sole email path: sequences, contacts, sending, replies, and analytics all run through LeadStart's own code in `src/lib/gmail/` (+ `src/lib/native/`), with the `run-native-sequences` cron sending on the per-mailbox warmup ramp and `poll-native-replies` ingesting inbound replies. The LinkedIn/Unipile channel stays as a dormant, code-complete parallel channel (gated on activation).

@@ -34,7 +34,7 @@ Do not skip this even if the session appears to be a continuation — a differen
 # LeadStart — Cold Email CMS Platform
 
 ## What This Is
-A Next.js 16 app for managing cold email campaigns via Salesforge.ai. Two dashboards:
+A Next.js 16 app for managing cold email campaigns via a native Gmail-API channel. Two dashboards:
 - **Admin** (`/admin/*`) — Owner/VA view for managing all clients, campaigns, billing, reports
 - **Client** (`/client/*`) — Client-facing portal showing their campaigns, activity, reports, feedback
 
@@ -56,7 +56,6 @@ npm run dev
 - Recharts for data visualization
 - Supabase (auth + database) — migrations in `supabase/migrations/`
 - Resend + React Email for transactional emails
-- Salesforge.ai API for campaign data (`src/lib/salesforge/`) — discovery cron pulls sequences; daily dispatcher enrolls contacts at a per-campaign cap
-- Warmforge.ai API for inbox warmup (`src/lib/warmforge/`)
+- Native email via the Gmail API (`src/lib/gmail/` + `src/lib/native/`) — the sole email channel; `run-native-sequences` cron sends with the per-mailbox warmup ramp in `src/lib/gmail/ramp.ts`, and `poll-native-replies` ingests replies
 - Unipile API for the LinkedIn channel (`src/lib/unipile/`) — gated on activation
 - Stripe for billing (placeholder, not wired)

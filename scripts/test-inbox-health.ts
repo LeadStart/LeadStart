@@ -49,17 +49,10 @@ console.log("\n■ perfect signals → 100 / healthy");
     domainAuth: goodDns,
     mx: ok(),
     bounces: { sent7d: 100, bounced7d: 1 },
-    warmforge: {
-      email: "a@example.com",
-      heat_score: 90,
-      blacklisted: false,
-      warmup_landed_inbox: 95,
-      warmup_landed_spam: 5,
-    },
   });
   assert(r.score === 100, `score is 100 (got ${r.score})`);
   assert(r.band === "healthy", `band is healthy (got ${r.band})`);
-  assert(r.components.length === 8, `all 8 components present (got ${r.components.length})`);
+  assert(r.components.length === 6, `all 6 components present (got ${r.components.length})`);
 }
 
 // ---------- 2. DBL-listed alone ----------
@@ -70,7 +63,6 @@ console.log("\n■ DBL-listed alone → 40 / critical");
     domainAuth: goodDns,
     mx: ok(),
     bounces: { sent7d: 100, bounced7d: 1 },
-    warmforge: null,
   });
   assert(r.score === 40, `score is 40 (got ${r.score})`);
   assert(r.band === "critical", `band is critical (got ${r.band})`);
@@ -86,7 +78,6 @@ console.log("\n■ >10% bounce alone → 40 / critical");
     domainAuth: goodDns,
     mx: ok(),
     bounces: { sent7d: 50, bounced7d: 6 }, // 12%
-    warmforge: null,
   });
   assert(r.score === 40, `score is 40 (got ${r.score})`);
   assert(r.band === "critical", `band is critical (got ${r.band})`);
@@ -100,7 +91,6 @@ console.log("\n■ 3% bounce on 100 sends → 85 / healthy");
     domainAuth: goodDns,
     mx: ok(),
     bounces: { sent7d: 100, bounced7d: 3 },
-    warmforge: null,
   });
   assert(r.score === 85, `score is 85 (got ${r.score})`);
   assert(r.band === "healthy", `band is healthy (got ${r.band})`);
@@ -114,7 +104,6 @@ console.log("\n■ 19 sends → bounce unchecked, no deduction");
     domainAuth: goodDns,
     mx: ok(),
     bounces: { sent7d: 19, bounced7d: 5 },
-    warmforge: null,
   });
   const bounce = r.components.find((c) => c.key === "bounce_rate");
   assert(bounce?.status === "unchecked" && bounce.deduction === 0, "bounce is unchecked at 19 sends");
@@ -129,7 +118,6 @@ console.log("\n■ total DNS resolver outage → exactly 50 / watch");
     domainAuth: { domain: "x.com", spf: bad(), dkim: warn(), dmarc: bad() },
     mx: bad(),
     bounces: null,
-    warmforge: null,
   });
   assert(r.score === 50, `score is exactly 50 (got ${r.score})`);
   assert(r.band === "watch", `band is watch (got ${r.band})`);
@@ -156,21 +144,6 @@ console.log("\n■ band boundaries");
   assert(bandForScore(50) === "watch", "50 → watch");
   assert(bandForScore(49) === "critical", "49 → critical");
   assert(bandForScore(0) === "critical", "0 → critical");
-}
-
-// ---------- 9. Warmforge blacklist without a DBL key ----------
-console.log("\n■ Warmforge-reported blacklist still trips the blacklist component");
-{
-  const r = computeInboxHealth({
-    dbl: { status: "unchecked", detail: "no key" },
-    domainAuth: goodDns,
-    mx: ok(),
-    bounces: null,
-    warmforge: { email: "a@example.com", blacklisted: true, blacklists: ["spamhaus"] },
-  });
-  const bl = r.components.find((c) => c.key === "blacklist");
-  assert(bl?.status === "bad" && bl.deduction === 60, "Warmforge blacklist → bad, -60");
-  assert(r.score === 40 && r.band === "critical", `score 40 / critical (got ${r.score}/${r.band})`);
 }
 
 // ---------- Summary ----------

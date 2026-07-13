@@ -1,11 +1,9 @@
 "use client";
 
 // CSV import panel for NATIVE EMAIL campaigns, mounted on both the client
-// portal and the admin campaign detail page. Unlike the admin Salesforge
-// panel (admin/campaigns/[id]/import-panel.tsx, whose mapping-table/preview
-// structure this copies), every read and write goes through
-// /api/campaigns/[id]/client-import — no direct browser Supabase access, so
-// it works for client-role users after the contacts RLS lockdown.
+// portal and the admin campaign detail page. Every read and write goes
+// through /api/campaigns/[id]/client-import — no direct browser Supabase
+// access, so it works for client-role users after the contacts RLS lockdown.
 //
 // Mapping targets are campaign-aware: the standard contact fields PLUS the
 // {{tokens}} this campaign's templates actually use (fetched from the GET

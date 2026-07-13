@@ -1,8 +1,7 @@
 // Hand-rolled Gmail API client using a Google service account with
 // domain-wide delegation (DWD). No googleapis / google-auth-library dep —
 // the whole thing is a JWT signed with node:crypto plus fetch(), the same
-// hand-rolled-client convention as src/lib/salesforge/client.ts and
-// src/lib/unipile/client.ts.
+// hand-rolled API-client convention as src/lib/unipile/client.ts.
 //
 // Why DWD instead of the usual OAuth consent flow: the sending inboxes are
 // client-owned Google Workspace accounts on domains the operator controls.

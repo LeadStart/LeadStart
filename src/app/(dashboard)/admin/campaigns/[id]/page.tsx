@@ -1,9 +1,8 @@
 // Top-level campaign detail page. Orphan-safe (works regardless of
-// client_id). For source_channel='salesforge' campaigns this renders the
-// queue state + an inline CSV import panel feeding the throttled
-// enrollment queue. Per-client detail at
-// /admin/clients/[clientId]/campaigns/[campaignId] is the older view —
-// this one is what list rows link to from /admin/campaigns.
+// client_id). For native_email campaigns this renders send/reply stats, the
+// mailbox pool, an inline CSV import panel, and the sequence editor. Per-client
+// detail at /admin/clients/[clientId]/campaigns/[campaignId] is the older view
+// — this one is what list rows link to from /admin/campaigns.
 
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
@@ -28,19 +27,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ArrowLeft, Inbox, Upload, AlertCircle, CheckCircle2 } from "lucide-react";
-import { CampaignImportPanel } from "./import-panel";
 import { NativeImportPanel } from "@/components/campaigns/native-import-panel";
 import { NativeSequenceCard } from "./native-sequence-card";
 import { CampaignLifecycleButton } from "./campaign-lifecycle-button";
 import { DeliverabilityCard } from "./deliverability-card";
-import { CampaignContactsTable } from "./contacts-table";
-import { PacingEditor } from "./pacing-editor";
-import { TagsEditor } from "./tags-editor";
-import { CustomVarMapping } from "./custom-var-mapping";
-import { PurgeQueuedButton } from "./purge-queued-button";
 import type { Campaign, CampaignSnapshot, Client } from "@/types/app";
-
-const DEFAULT_DAILY_CAP = 66;
 
 const SNAPSHOT_COLUMNS =
   "id, campaign_id, snapshot_date, total_leads, emails_sent, replies, " +
@@ -79,7 +70,7 @@ export default async function AdminCampaignDetailPage({
   // since the page is already owner-gated by the dashboard layout.
   const admin = createAdminClient();
 
-  const [clientRes, snapshotsRes, clientsForLinkRes, queueCountsRes] =
+  const [clientRes, snapshotsRes, clientsForLinkRes] =
     await Promise.all([
       campaign.client_id
         ? supabase
@@ -102,13 +93,6 @@ export default async function AdminCampaignDetailPage({
             .select("id, name")
             .eq("organization_id", campaign.organization_id)
             .order("name"),
-      campaign.source_channel === "salesforge"
-        ? queueCountsFor(admin, campaignId)
-        : Promise.resolve({
-            pending: 0,
-            sent_today: 0,
-            failed: 0,
-          }),
     ]);
 
   const client = clientRes.data as { id: string; name: string } | null;
@@ -117,18 +101,11 @@ export default async function AdminCampaignDetailPage({
     Client,
     "id" | "name"
   >[];
-  const queue = queueCountsRes as {
-    pending: number;
-    sent_today: number;
-    failed: number;
-  };
 
   const metrics = calculateMetrics(snapshots, "lifetime");
-  const cap = campaign.salesforge_daily_contact_cap ?? DEFAULT_DAILY_CAP;
-  const drainDays = cap > 0 ? Math.ceil(queue.pending / cap) : null;
 
-  // Native email campaigns don't have Salesforge snapshots — pull their
-  // stats straight from native_sends / lead_replies / campaign_enrollments.
+  // Native email campaigns pull their stats straight from
+  // native_sends / lead_replies / campaign_enrollments.
   const nativeStats =
     campaign.source_channel === "native_email"
       ? await nativeStatsFor(admin, campaignId)
@@ -161,11 +138,6 @@ export default async function AdminCampaignDetailPage({
                 {campaign.source_channel}
               </p>
               <h1 className="text-2xl font-bold mt-1">{campaign.name}</h1>
-              {campaign.salesforge_sequence_id && (
-                <p className="text-xs text-[#0f172a]/50 font-mono mt-1">
-                  Sequence {campaign.salesforge_sequence_id}
-                </p>
-              )}
               {client ? (
                 <p className="text-sm text-[#0f172a]/70 mt-2">
                   Linked to{" "}
@@ -206,117 +178,6 @@ export default async function AdminCampaignDetailPage({
           <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-[rgba(107,114,255,0.06)]" />
         </div>
       </div>
-
-      {/* Salesforge-specific: enrollment queue state + import panel */}
-      {campaign.source_channel === "salesforge" && (
-        <>
-          <Card className="border-border/50 shadow-sm">
-            <CardHeader className="flex flex-row items-start gap-2 pb-3">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]">
-                <Inbox size={16} className="text-white" />
-              </div>
-              <div className="flex-1">
-                <CardTitle className="text-base">Enrollment queue</CardTitle>
-                <p className="text-xs text-muted-foreground mt-0.5 inline-flex items-center gap-1.5 flex-wrap">
-                  <span>
-                    Cron drains pending rows daily at 12:00 UTC ≈ 5am Pacific at{" "}
-                    <strong>{cap}/day</strong>
-                    {campaign.salesforge_daily_contact_cap == null && (
-                      <> (default)</>
-                    )}
-                    {" — "}
-                  </span>
-                  <PacingEditor
-                    campaignId={campaign.id}
-                    currentCap={campaign.salesforge_daily_contact_cap}
-                  />
-                </p>
-                <p className="text-xs text-muted-foreground mt-1 inline-flex items-center gap-1.5 flex-wrap">
-                  <span>
-                    Salesforge tags pushed with each contact:{" "}
-                    <strong>
-                      {campaign.salesforge_default_tags &&
-                      campaign.salesforge_default_tags.length > 0
-                        ? campaign.salesforge_default_tags.join(", ")
-                        : "leadstart (default)"}
-                    </strong>
-                    {" — "}
-                  </span>
-                  <TagsEditor
-                    campaignId={campaign.id}
-                    currentTags={campaign.salesforge_default_tags}
-                  />
-                </p>
-              </div>
-              {queue.pending > 0 && (
-                <PurgeQueuedButton
-                  campaignId={campaign.id}
-                  pendingCount={queue.pending}
-                />
-              )}
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-3 gap-4">
-                <QueueStat
-                  label="Pending"
-                  value={queue.pending}
-                  color="text-[#2E37FE]"
-                  hint={
-                    queue.pending > 0 && drainDays
-                      ? `~${drainDays} day${drainDays === 1 ? "" : "s"} to drain`
-                      : null
-                  }
-                />
-                <QueueStat
-                  label="Sent today"
-                  value={queue.sent_today}
-                  color="text-emerald-600"
-                  hint={`cap: ${cap}/day`}
-                />
-                <QueueStat
-                  label="Failed"
-                  value={queue.failed}
-                  color={queue.failed > 0 ? "text-red-600" : "text-muted-foreground"}
-                  hint={queue.failed > 0 ? "check the queue table" : null}
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-border/50 shadow-sm">
-            <CardHeader className="flex flex-row items-center gap-2 pb-3">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]">
-                <Upload size={16} className="text-white" />
-              </div>
-              <div className="flex-1">
-                <CardTitle className="text-base">Import contacts</CardTitle>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Upload a CSV — contacts land in the queue and enroll at the
-                  daily cap above. Required column: <code>email</code>. Optional:
-                  first_name, last_name, company, title, phone, linkedin_url,
-                  tags, notes.
-                </p>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <CampaignImportPanel
-                campaignId={campaign.id}
-                campaignName={campaign.name}
-                organizationId={campaign.organization_id}
-                clientId={campaign.client_id}
-                savedMapping={campaign.csv_column_mapping ?? null}
-              />
-            </CardContent>
-          </Card>
-
-          <CustomVarMapping
-            campaignId={campaign.id}
-            currentMapping={campaign.salesforge_custom_var_mapping}
-          />
-
-          <CampaignContactsTable campaignId={campaign.id} />
-        </>
-      )}
 
       {/* Native email: send/reply stats, enrollment progress, mailbox pool, sequence */}
       {nativeStats && (
@@ -426,9 +287,9 @@ export default async function AdminCampaignDetailPage({
         </Card>
       )}
 
-      {/* KPIs + chart — Salesforge/LinkedIn snapshot metrics. Native email
-          has its own stats card above (no campaign_snapshots), so skip this
-          empty section for it. */}
+      {/* KPIs + chart — snapshot metrics for non-native channels (LinkedIn).
+          Native email has its own stats card above (no campaign_snapshots),
+          so skip this empty section for it. */}
       {campaign.source_channel !== "native_email" && (
       <>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -463,9 +324,7 @@ export default async function AdminCampaignDetailPage({
         <CardContent>
           {snapshots.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No data synced yet. Salesforge analytics populate once the
-              sequence has status=&quot;active&quot; (the hourly sync only
-              pulls active sequences).
+              No data synced yet.
             </p>
           ) : (
             <Table>
@@ -521,40 +380,6 @@ function QueueStat({
       {hint && <p className="text-xs text-muted-foreground mt-1">{hint}</p>}
     </div>
   );
-}
-
-async function queueCountsFor(
-  admin: ReturnType<typeof createAdminClient>,
-  campaignId: string,
-): Promise<{ pending: number; sent_today: number; failed: number }> {
-  const startOfDayUtc = new Date();
-  startOfDayUtc.setUTCHours(0, 0, 0, 0);
-  const startIso = startOfDayUtc.toISOString();
-
-  const [pending, sentToday, failed] = await Promise.all([
-    admin
-      .from("salesforge_enrollment_queue")
-      .select("id", { count: "exact", head: true })
-      .eq("campaign_id", campaignId)
-      .eq("status", "pending"),
-    admin
-      .from("salesforge_enrollment_queue")
-      .select("id", { count: "exact", head: true })
-      .eq("campaign_id", campaignId)
-      .eq("status", "sent")
-      .gte("processed_at", startIso),
-    admin
-      .from("salesforge_enrollment_queue")
-      .select("id", { count: "exact", head: true })
-      .eq("campaign_id", campaignId)
-      .eq("status", "failed"),
-  ]);
-
-  return {
-    pending: pending.count ?? 0,
-    sent_today: sentToday.count ?? 0,
-    failed: failed.count ?? 0,
-  };
 }
 
 interface NativeStats {

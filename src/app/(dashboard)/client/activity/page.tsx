@@ -45,7 +45,7 @@ export default function ClientActivityPage() {
 
   // Activity feed temporarily empty — the old query joined webhook_events
   // to campaigns via campaign_instantly_id (dropped in migration 00051).
-  // Rebuild against the Salesforge webhook event stream once we wire a
+  // Rebuild against the native email event stream once we wire a
   // campaign_id FK into webhook_events.
   useEffect(() => {
     if (contextLoading || !client) return;

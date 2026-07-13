@@ -1,11 +1,9 @@
-// POST /api/admin/campaigns/[id]/resume — resume a paused campaign on
-// its upstream provider (Salesforge) and mark our campaigns row active
-// again. Owner or VA.
+// POST /api/admin/campaigns/[id]/resume — mark a paused campaign 'active'
+// again so the cron workers pick it back up. Owner or VA.
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { SalesforgeClient } from "@/lib/salesforge/client";
 import type { SourceChannel } from "@/types/app";
 
 export async function POST(
@@ -32,9 +30,7 @@ export async function POST(
   const admin = createAdminClient();
   const { data: campaign } = await admin
     .from("campaigns")
-    .select(
-      "id, organization_id, source_channel, salesforge_sequence_id, name, status",
-    )
+    .select("id, organization_id, source_channel, name, status")
     .eq("id", campaignId)
     .maybeSingle();
   const c = campaign as
@@ -42,7 +38,6 @@ export async function POST(
         id: string;
         organization_id: string;
         source_channel: SourceChannel;
-        salesforge_sequence_id: string | null;
         name: string;
         status: string | null;
       }
@@ -54,58 +49,13 @@ export async function POST(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const { data: org } = await admin
-    .from("organizations")
-    .select("salesforge_api_key, salesforge_workspace_id")
-    .eq("id", c.organization_id)
-    .maybeSingle();
-  const orgRow = org as
-    | {
-        salesforge_api_key: string | null;
-        salesforge_workspace_id: string | null;
-      }
-    | null;
-
-  try {
-    if (c.source_channel === "salesforge") {
-      if (!c.salesforge_sequence_id) {
-        return NextResponse.json(
-          { error: "Campaign has no Salesforge sequence id — cannot resume remotely." },
-          { status: 400 },
-        );
-      }
-      if (!orgRow?.salesforge_api_key) {
-        return NextResponse.json(
-          { error: "Salesforge API key not set on organization." },
-          { status: 400 },
-        );
-      }
-      if (!orgRow?.salesforge_workspace_id) {
-        return NextResponse.json(
-          { error: "Salesforge workspace not set on organization." },
-          { status: 400 },
-        );
-      }
-      const client = new SalesforgeClient(orgRow.salesforge_api_key);
-      await client.resumeSequence(orgRow.salesforge_workspace_id, c.salesforge_sequence_id);
-    } else if (c.source_channel === "native_email" || c.source_channel === "linkedin") {
-      // Local channels have no upstream sequencer to resume — the status flip
-      // below to 'active' is enough for the cron workers to pick it up again.
-    } else {
-      return NextResponse.json(
-        { error: `Resume is not supported for ${c.source_channel} campaigns yet.` },
-        { status: 501 },
-      );
-    }
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    console.error(
-      `[admin/campaigns/${campaignId}/resume] upstream call failed:`,
-      err,
-    );
+  // Local channels (native email, LinkedIn) have no upstream sequencer to
+  // resume — flipping the status back to 'active' is enough for the cron
+  // workers to pick it up again.
+  if (c.source_channel !== "native_email" && c.source_channel !== "linkedin") {
     return NextResponse.json(
-      { error: `Upstream rejected the resume: ${message}` },
-      { status: 502 },
+      { error: `Resume is not supported for ${c.source_channel} campaigns yet.` },
+      { status: 501 },
     );
   }
 
@@ -115,17 +65,10 @@ export async function POST(
     .eq("id", campaignId);
   if (updateError) {
     console.error(
-      `[admin/campaigns/${campaignId}/resume] upstream resumed but local update failed:`,
+      `[admin/campaigns/${campaignId}/resume] status update failed:`,
       updateError,
     );
-    return NextResponse.json(
-      {
-        warning:
-          "Resumed upstream but local status update failed. Next sync will reconcile.",
-        error: updateError.message,
-      },
-      { status: 200 },
-    );
+    return NextResponse.json({ error: updateError.message }, { status: 500 });
   }
 
   return NextResponse.json({ success: true, status: "active" });

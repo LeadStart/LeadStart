@@ -234,8 +234,8 @@ export type ParsedContactRowWithCustom = ParsedContactRow & {
 };
 
 // Like rowsWithMapping, but also honors "custom:<Key>" targets, landing them
-// in custom_fields (empty cells omitted). Kept separate so the shipped admin
-// Salesforge panel's rowsWithMapping contract stays untouched.
+// in custom_fields (empty cells omitted). Kept separate so the existing
+// rowsWithMapping contract stays untouched.
 export function rowsWithMappingAndCustom(
   grid: string[][],
   mapping: Record<string, string>,

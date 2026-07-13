@@ -1,8 +1,7 @@
 // POST /api/admin/campaigns/[id]/activate — flip a draft campaign to
 // active. For the local channels (native email / LinkedIn) there is no
 // upstream sequencer to start, so this is a local status change; the cron
-// workers only dispatch campaigns with status='active'. Salesforge
-// campaigns are managed in Salesforge and are not activated here.
+// workers only dispatch campaigns with status='active'.
 // Owner or VA.
 
 import { NextRequest, NextResponse } from "next/server";
@@ -42,7 +41,7 @@ export async function POST(
 
   if (c.source_channel !== "native_email" && c.source_channel !== "linkedin") {
     return NextResponse.json(
-      { error: "Activate is only for native email and LinkedIn campaigns. Salesforge campaigns are managed in Salesforge." },
+      { error: "Activate is only for native email and LinkedIn campaigns." },
       { status: 400 },
     );
   }

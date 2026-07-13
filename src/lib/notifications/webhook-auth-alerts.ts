@@ -1,7 +1,6 @@
 // D1 — 401 alerting on webhook endpoints.
 //
-// Called from /api/webhooks/salesforge, /api/webhooks/unipile, and
-// /api/webhooks/resend whenever a
+// Called from /api/webhooks/unipile and /api/webhooks/resend whenever a
 // request is rejected with 401 for a reason that represents a real auth
 // failure (bad_secret / invalid_signature) — NOT missing env. Missing env
 // is an operator config error and would flood this table; it's handled
@@ -41,8 +40,7 @@ const COOLDOWN_MS = 60 * 60 * 1000;
 
 export type WebhookAuthEndpoint =
   | "/api/webhooks/resend"
-  | "/api/webhooks/unipile"
-  | "/api/webhooks/salesforge";
+  | "/api/webhooks/unipile";
 
 export interface WebhookAuthFailureInput {
   admin: ReturnType<typeof createAdminClient>;

@@ -35,14 +35,6 @@ export interface Organization {
   unipile_api_key: string | null;
   unipile_dsn: string | null;
   unipile_webhook_id: string | null;
-  // Salesforge (migration 00049). One workspace per org; default product
-  // id is used for newly-created sequences. Auth uses the raw key (no
-  // Bearer prefix). Warmforge is Salesforge's mailbox-warming sister
-  // product with its own API key.
-  salesforge_api_key: string | null;
-  salesforge_workspace_id: string | null;
-  salesforge_default_product_id: string | null;
-  warmforge_api_key: string | null;
   // Native email channel (migration 00056). A Google service account with
   // domain-wide delegation; the key impersonates any mailbox on an
   // authorized domain. Same trust boundary as the other org-level keys.
@@ -125,28 +117,13 @@ export interface Campaign {
   // surfaces filter or degrade gracefully when client_id is NULL.
   client_id: string | null;
   organization_id: string;
-  // Salesforge sequence id (migration 00049). Populated for
-  // source_channel='salesforge' rows; null for linkedin.
-  salesforge_sequence_id: string | null;
-  // Per-campaign daily cap on new Salesforge enrollments (migration 00050).
-  // NULL = dispatcher falls back to DEFAULT_DAILY_CAP=66.
-  salesforge_daily_contact_cap: number | null;
-  // Per-campaign Salesforge tags attached to every contact the
-  // dispatcher bulk-creates (migration 00054). NULL or empty array =
-  // dispatcher uses the contact's own tags, or "leadstart" fallback.
-  salesforge_default_tags: string[] | null;
-  // Mapping from Salesforge custom-variable names to LeadStart contact
-  // column names. The dispatcher reads the named column per-contact
-  // and sends it under the Salesforge name in customVars.
-  // Example: { "intro": "intro_line", "notes": "notes" }
-  salesforge_custom_var_mapping: Record<string, string> | null;
   // User-chosen CSV header → LeadStart field mapping, persisted per
   // campaign so re-uploads pre-populate the mapping UI (migration 00055).
   csv_column_mapping: Record<string, string> | null;
   name: string;
   status: CampaignStatus;
-  // Channel discriminator. 'linkedin' for Unipile-driven sequences;
-  // 'salesforge' for the email channel.
+  // Channel discriminator. 'native_email' for the Gmail-API email channel;
+  // 'linkedin' for Unipile-driven sequences.
   source_channel: SourceChannel;
   // Per-campaign native-email send window (migration 00058). NULL on any
   // field = inherit the global default (Mon–Fri 8am–5pm America/New_York).
@@ -352,7 +329,7 @@ export interface WebhookEvent {
   excluded: boolean;
   received_at: string;
   // Channel discriminator (migration 00045). Splits the audit log by
-  // provider so the Events page can filter Salesforge vs Unipile traffic.
+  // channel so the Events page can filter native-email vs LinkedIn traffic.
   source_channel: SourceChannel;
 }
 
@@ -584,7 +561,7 @@ export interface ReplyReferralContact {
   title: string | null;
 }
 
-export type SourceChannel = "linkedin" | "salesforge" | "native_email";
+export type SourceChannel = "linkedin" | "native_email";
 
 export interface LeadReply {
   id: string;
@@ -595,8 +572,8 @@ export interface LeadReply {
   // campaign and a follow-up UPDATE populates client_id.
   client_id: string | null;
   campaign_id: string | null;
-  // Channel discriminator (migration 00045). 'linkedin' for inbound DMs
-  // ingested by the Unipile webhook; 'salesforge' for email replies.
+  // Channel discriminator (migration 00045). 'native_email' for Gmail-API
+  // email replies; 'linkedin' for inbound DMs ingested by the Unipile webhook.
   source_channel: SourceChannel;
 
   // Unipile references (migration 00046). Populated for LinkedIn DMs.
@@ -604,15 +581,6 @@ export interface LeadReply {
   // unipile_chat_id threads messages within a chat.
   unipile_message_id: string | null;
   unipile_chat_id: string | null;
-  // Salesforge references (migration 00049). Populated for
-  // source_channel='salesforge' rows. The trio (workspace, mailbox,
-  // email_id) is what POST .../emails/{em}/reply needs — workspace lives
-  // on organizations, mailbox + email id live here. salesforge_email_id
-  // is org-scoped unique for webhook dedup (Salesforge does not expose
-  // RFC 5322 message-id).
-  salesforge_email_id: string | null;
-  salesforge_thread_id: string | null;
-  salesforge_mailbox_id: string | null;
   // Native email references (migration 00056). Populated for
   // source_channel='native_email' rows. gmail_message_id is org-scoped
   // unique for poller dedup; native_mailbox_id routes the outbound reply
@@ -686,7 +654,7 @@ export interface LeadReply {
   final_body_text: string | null;
   final_body_html: string | null;
   sent_at: string | null;
-  // Outbound provider id (Salesforge email id, etc.) returned from the
+  // Outbound provider id (the Gmail message id, etc.) returned from the
   // reply-send call. Was named sent_instantly_email_id pre-migration 00051.
   sent_external_email_id: string | null;
   error: string | null;

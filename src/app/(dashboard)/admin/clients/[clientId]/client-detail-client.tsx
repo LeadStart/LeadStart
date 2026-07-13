@@ -311,11 +311,6 @@ export function ClientDetailClient({
                           <p className="font-medium text-foreground">
                             {campaign.name}
                           </p>
-                          {campaign.salesforge_sequence_id && (
-                            <p className="text-xs text-muted-foreground font-mono">
-                              {campaign.salesforge_sequence_id}
-                            </p>
-                          )}
                         </div>
                       </div>
                       <div className="flex items-center gap-2">

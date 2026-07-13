@@ -1,6 +1,6 @@
 // Helpers for /api/replies/[id]/send.
 //
-// At present this just exposes computeIdempotencyKey — the Salesforge
+// At present this just exposes computeIdempotencyKey — the
 // request-shaping logic lives inline in the route itself.
 
 import crypto from "node:crypto";

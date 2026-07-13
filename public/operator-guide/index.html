@@ -388,12 +388,12 @@
       </div>
       <div class="card-title">Managing Campaigns</div>
       <div class="card-desc">
-        Sync campaigns from Instantly, link orphaned ones to clients, pause / resume / delete,
+        Create native email campaigns, link them to clients, pause / resume / delete,
         and read the per&#8209;campaign KPI panel.
       </div>
       <div class="card-meta">
-        <span>Sync</span><span class="dot"></span>
-        <span>Link orphans</span><span class="dot"></span>
+        <span>Create</span><span class="dot"></span>
+        <span>Link to client</span><span class="dot"></span>
         <span>Pause/Resume</span>
       </div>
       <div class="arrow">
@@ -408,11 +408,11 @@
       </div>
       <div class="card-title">The Hot&#8209;Lead Reply Pipeline</div>
       <div class="card-desc">
-        End&#8209;to&#8209;end: Instantly webhook → keyword prefilter → Claude classifier →
+        End&#8209;to&#8209;end: Gmail reply polling → keyword prefilter → Claude classifier →
         notification email → client portal dossier → manual reply.
       </div>
       <div class="card-meta">
-        <span>Webhook</span><span class="dot"></span>
+        <span>Poll</span><span class="dot"></span>
         <span>Classify</span><span class="dot"></span>
         <span>Notify</span><span class="dot"></span>
         <span>Triage</span>
@@ -469,7 +469,7 @@
       <div class="card-title">Billing &amp; System Health</div>
       <div class="card-desc">
         Subscriptions and invoices, sending quotes via Stripe, monitoring the webhook
-        event log, and registering the Instantly webhook the very first time.
+        event log, and keeping the native email pipeline healthy.
       </div>
       <div class="card-meta">
         <span>Stripe</span><span class="dot"></span>
@@ -495,9 +495,10 @@
     <p style="margin-top: 8px;">
       <strong>1.</strong> The production URL is <code>leadstart-ebon.vercel.app</code>.
       Anything you do there is live for paying clients.<br>
-      <strong>2.</strong> The Instantly webhook is a one&#8209;time registration on
-      <code>/admin/settings/api</code>. Once flipped on, every reply hits our pipeline. <em>Don't flip it
-      until a test client is set up.</em><br>
+      <strong>2.</strong> Campaigns send from connected Google mailboxes, and replies are
+      polled from those inboxes automatically — there's no webhook to register. A campaign
+      starts sending as soon as it's active, so <em>don't activate one until its mailboxes are
+      connected and warmed.</em><br>
       <strong>3.</strong> Pause / resume / delete on a campaign updates state immediately —
       there is no "undo" prompt.
     </p>
