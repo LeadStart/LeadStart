@@ -555,8 +555,8 @@ export function NativeImportPanel({ campaignId }: { campaignId: string }) {
                 </p>
                 {added > 0 && (
                   <p className={`text-xs ${tone.foot} mt-1`}>
-                    Sending starts automatically within ~15 minutes, during this
-                    campaign&apos;s sending window.
+                    Sending starts automatically within a few minutes, during this
+                    campaign&apos;s sending window, then paces across the day.
                   </p>
                 )}
               </div>

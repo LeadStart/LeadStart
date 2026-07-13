@@ -190,7 +190,7 @@ export default async function AdminCampaignDetailPage({
               <div>
                 <CardTitle className="text-base">Native email</CardTitle>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Sends directly from your Google inboxes, checked every 15 min.
+                  Sends directly from your Google inboxes, paced across the sending window (checked every 5 min).
                   Sending schedule: <span className="font-medium text-foreground">{sendSchedule}</span>.
                 </p>
               </div>
