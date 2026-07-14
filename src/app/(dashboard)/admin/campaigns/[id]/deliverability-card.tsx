@@ -4,11 +4,8 @@
 // demand, runs live SPF/DKIM/DMARC checks per sending domain + a copy
 // spam-score, so the owner can fix issues before activating.
 
-import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { ShieldCheck, CheckCircle2, AlertTriangle, XCircle, Loader2 } from "lucide-react";
-import { appUrl } from "@/lib/api-url";
 
 type AuthStatus = "pass" | "warn" | "fail";
 interface AuthCheck { status: AuthStatus; detail: string; }
@@ -30,7 +27,7 @@ interface StepCopyResult {
 }
 // perStep is optional so responses that predate the per-step breakdown still parse.
 interface CopyScore { score: number; issues: CopyIssue[]; perStep?: StepCopyResult[]; }
-interface Result { domains: DomainAuth[]; copy: CopyScore; }
+export interface DeliverabilityResult { domains: DomainAuth[]; copy: CopyScore; }
 
 function scoreBand(score: number): string {
   return score >= 85 ? "text-emerald-600" : score >= 60 ? "text-amber-600" : "text-red-600";
@@ -83,29 +80,18 @@ function AuthRow({ label, check }: { label: string; check: AuthCheck }) {
   );
 }
 
-export function DeliverabilityCard({ campaignId }: { campaignId: string }) {
-  const [result, setResult] = useState<Result | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function run() {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(appUrl(`/api/admin/campaigns/${campaignId}/deliverability`));
-      const data = (await res.json()) as Result & { error?: string };
-      if (!res.ok) {
-        setError(data.error ?? "Check failed.");
-        return;
-      }
-      setResult(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setLoading(false);
-    }
-  }
-
+// Presentational: state (result/loading/error) is owned by the parent section so
+// the "Run check" trigger can live in the Sequence & schedule card header. The
+// parent only mounts this card once a check has started.
+export function DeliverabilityCard({
+  result,
+  loading,
+  error,
+}: {
+  result: DeliverabilityResult | null;
+  loading: boolean;
+  error: string | null;
+}) {
   const scoreColor = result
     ? result.copy.score >= 85
       ? "text-emerald-600"
@@ -128,10 +114,11 @@ export function DeliverabilityCard({ campaignId }: { campaignId: string }) {
             </p>
           </div>
         </div>
-        <Button variant="outline" size="sm" onClick={run} disabled={loading} className="gap-1.5 shrink-0">
-          {loading ? <Loader2 size={14} className="animate-spin" /> : <ShieldCheck size={14} />}
-          {result ? "Re-run" : "Run check"}
-        </Button>
+        {loading && (
+          <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground shrink-0">
+            <Loader2 size={14} className="animate-spin" /> Running…
+          </span>
+        )}
       </CardHeader>
       {(result || error) && (
         <CardContent className="space-y-4">

@@ -28,9 +28,8 @@ import {
 } from "@/components/ui/table";
 import { ArrowLeft, Inbox, Upload, AlertCircle, CheckCircle2 } from "lucide-react";
 import { NativeImportPanel } from "@/components/campaigns/native-import-panel";
-import { NativeSequenceCard } from "./native-sequence-card";
+import { NativeSequenceSection } from "./native-sequence-section";
 import { CampaignLifecycleButton } from "./campaign-lifecycle-button";
-import { DeliverabilityCard } from "./deliverability-card";
 import type { Campaign, CampaignSnapshot, Client } from "@/types/app";
 
 const SNAPSHOT_COLUMNS =
@@ -258,14 +257,12 @@ export default async function AdminCampaignDetailPage({
             </CardContent>
           </Card>
 
-          <NativeSequenceCard
+          <NativeSequenceSection
             campaignId={campaign.id}
             initialSteps={nativeStats.steps}
             initialWindow={sendWindow}
             initialNewLeadsCap={resolveDailyNewLeadsCap(campaign)}
           />
-
-          <DeliverabilityCard campaignId={campaign.id} />
         </>
       )}
 

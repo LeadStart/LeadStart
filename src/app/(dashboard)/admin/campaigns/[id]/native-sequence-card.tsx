@@ -5,7 +5,7 @@
 // turns every step and the send window into editable fields, persisted via
 // /api/admin/campaigns/[id]/update-sequence.
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,7 +17,7 @@ import { appUrl } from "@/lib/api-url";
 import { formatSendWindow, type SendWindowConfig } from "@/lib/gmail/ramp";
 import { StepCopyCheck } from "@/components/campaigns/step-copy-check";
 
-interface StepDraft {
+export interface StepDraft {
   subject: string;
   body: string;
   wait_days: number;
@@ -43,11 +43,15 @@ export function NativeSequenceCard({
   initialSteps,
   initialWindow,
   initialNewLeadsCap,
+  headerActions,
 }: {
   campaignId: string;
   initialSteps: StepDraft[];
   initialWindow: SendWindowConfig;
   initialNewLeadsCap: number;
+  // Extra controls rendered to the left of Edit in the read-mode header
+  // (e.g. the deliverability "Run check" trigger).
+  headerActions?: ReactNode;
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
@@ -138,9 +142,12 @@ export function NativeSequenceCard({
                 : `up to ${newLeadsCap} new lead${newLeadsCap === 1 ? "" : "s"}/day`}
             </p>
           </div>
-          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setEditing(true)}>
-            <Pencil size={14} /> Edit
-          </Button>
+          <div className="flex items-center gap-2 shrink-0">
+            {headerActions}
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setEditing(true)}>
+              <Pencil size={14} /> Edit
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           {steps.length === 0 ? (
