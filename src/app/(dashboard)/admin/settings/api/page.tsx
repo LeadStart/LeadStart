@@ -136,6 +136,41 @@ export default function IntegrationsPage() {
     "success" | "fail" | null
   >(null);
 
+  // Instantly (email channel — re-added migration 00065)
+  const [instantlyKey, setInstantlyKey] = useState("");
+  const [instantlyWebhookId, setInstantlyWebhookId] = useState<string | null>(null);
+  const [savingInstantly, setSavingInstantly] = useState(false);
+  const [instantlySaved, setInstantlySaved] = useState(false);
+  const [testingInstantly, setTestingInstantly] = useState(false);
+  const [instantlyTestResult, setInstantlyTestResult] = useState<
+    { kind: "success" } | { kind: "fail"; message: string } | null
+  >(null);
+  const [registeringWebhook, setRegisteringWebhook] = useState(false);
+  const [webhookResult, setWebhookResult] = useState<
+    { kind: "success"; already: boolean } | { kind: "fail"; message: string } | null
+  >(null);
+  const [checkingHealth, setCheckingHealth] = useState(false);
+  const [healthResult, setHealthResult] = useState<
+    | {
+        kind: "success";
+        summary: {
+          totalInboxes: number;
+          activeInboxes: number;
+          avgHealthScore: number | null;
+          lowHealthCount: number;
+        };
+        inboxes: {
+          email: string;
+          healthScore: number | null;
+          landedInbox: number | null;
+          landedSpam: number | null;
+          sent30d: number;
+        }[];
+      }
+    | { kind: "fail"; message: string }
+    | null
+  >(null);
+
   // Native email — Google service account w/ domain-wide delegation (migration 00056)
   const [gmailSaEmail, setGmailSaEmail] = useState("");
   const [gmailSaKey, setGmailSaKey] = useState("");
@@ -211,6 +246,13 @@ export default function IntegrationsPage() {
             setGmailSaEmail(gmOrg.gmail_service_account_email);
           if (gmOrg.gmail_service_account_key)
             setGmailSaKey(gmOrg.gmail_service_account_key);
+          // Instantly (email channel — migration 00065).
+          const instOrg = data as {
+            instantly_api_key?: string | null;
+            instantly_webhook_id?: string | null;
+          };
+          if (instOrg.instantly_api_key) setInstantlyKey(instOrg.instantly_api_key);
+          setInstantlyWebhookId(instOrg.instantly_webhook_id ?? null);
         }
       });
   }, [organizationId]);
@@ -435,6 +477,98 @@ export default function IntegrationsPage() {
       setUnipileTestResult("fail");
     } finally {
       setTestingUnipile(false);
+    }
+  }
+
+  async function handleSaveInstantly() {
+    if (!organizationId) return;
+    setSavingInstantly(true);
+    setInstantlySaved(false);
+    const supabase = createClient();
+    await supabase
+      .from("organizations")
+      .update({ instantly_api_key: instantlyKey || null })
+      .eq("id", organizationId);
+    setInstantlySaved(true);
+    setSavingInstantly(false);
+    setTimeout(() => setInstantlySaved(false), 3000);
+  }
+
+  async function handleTestInstantly() {
+    setTestingInstantly(true);
+    setInstantlyTestResult(null);
+    try {
+      const res = await fetch(appUrl("/api/admin/instantly/test"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ api_key: instantlyKey }),
+      });
+      const data = await res.json();
+      setInstantlyTestResult(
+        res.ok
+          ? { kind: "success" }
+          : { kind: "fail", message: data.error ?? "Connection failed" },
+      );
+    } catch (err) {
+      setInstantlyTestResult({
+        kind: "fail",
+        message: err instanceof Error ? err.message : "Connection failed",
+      });
+    } finally {
+      setTestingInstantly(false);
+    }
+  }
+
+  async function handleRegisterInstantlyWebhook() {
+    setRegisteringWebhook(true);
+    setWebhookResult(null);
+    try {
+      const res = await fetch(appUrl("/api/admin/instantly/register-webhook"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setWebhookResult({ kind: "success", already: !!data.already_registered });
+        if (data.webhook_id) setInstantlyWebhookId(data.webhook_id);
+      } else {
+        setWebhookResult({ kind: "fail", message: data.error ?? "Registration failed" });
+      }
+    } catch (err) {
+      setWebhookResult({
+        kind: "fail",
+        message: err instanceof Error ? err.message : "Registration failed",
+      });
+    } finally {
+      setRegisteringWebhook(false);
+    }
+  }
+
+  async function handleCheckInstantlyHealth() {
+    setCheckingHealth(true);
+    setHealthResult(null);
+    try {
+      const res = await fetch(appUrl("/api/admin/instantly/inbox-health"));
+      const data = await res.json();
+      if (res.ok) {
+        setHealthResult({
+          kind: "success",
+          summary: data.summary,
+          inboxes: data.inboxes ?? [],
+        });
+      } else {
+        setHealthResult({
+          kind: "fail",
+          message: data.error ?? "Couldn't load inbox health",
+        });
+      }
+    } catch (err) {
+      setHealthResult({
+        kind: "fail",
+        message: err instanceof Error ? err.message : "Couldn't load inbox health",
+      });
+    } finally {
+      setCheckingHealth(false);
     }
   }
 
@@ -1017,6 +1151,190 @@ export default function IntegrationsPage() {
               </span>
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Instantly — email channel (re-added migration 00065) */}
+      <Card className="border-border/50 shadow-sm">
+        <CardHeader className="flex flex-row items-center gap-2 pb-3">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#5C4EFF]">
+            <Send size={16} className="text-white" />
+          </div>
+          <div>
+            <CardTitle className="text-base">Instantly</CardTitle>
+            <p className="text-xs text-muted-foreground">
+              Email sending channel — link campaigns, push leads, ingest replies
+            </p>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-1">
+            <Label htmlFor="instantlyKey" className="text-sm font-medium">API Key</Label>
+            <Input
+              id="instantlyKey"
+              type="password"
+              value={instantlyKey}
+              onChange={(e) => setInstantlyKey(e.target.value)}
+              placeholder="Enter your Instantly API key"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Find your key at <span className="font-mono">app.instantly.ai</span> → Settings →
+              Integrations → API. Needs campaigns, leads, emails, and webhooks scopes.
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Button onClick={handleSaveInstantly} disabled={savingInstantly} style={{ background: "#2E37FE" }}>
+              {savingInstantly ? "Saving..." : "Save Key"}
+            </Button>
+            <Button variant="outline" onClick={handleTestInstantly} disabled={testingInstantly || !instantlyKey}>
+              {testingInstantly ? "Testing..." : "Test Connection"}
+            </Button>
+            {instantlySaved && (
+              <span className="text-sm text-emerald-600 flex items-center gap-1">
+                <CheckCircle size={14} /> Saved
+              </span>
+            )}
+          </div>
+          {instantlyTestResult?.kind === "success" && (
+            <div className="flex items-center gap-2 rounded-lg bg-emerald-50 border border-emerald-200 p-3">
+              <CheckCircle size={16} className="text-emerald-500" />
+              <span className="text-sm font-medium text-emerald-700">Connection successful</span>
+            </div>
+          )}
+          {instantlyTestResult?.kind === "fail" && (
+            <div className="flex items-center gap-2 rounded-lg bg-red-50 border border-red-200 p-3">
+              <XCircle size={16} className="text-red-500" />
+              <span className="text-sm font-medium text-red-700">{instantlyTestResult.message}</span>
+            </div>
+          )}
+
+          <div className="border-t border-border/60 pt-4 mt-4 space-y-2">
+            <p className="text-sm font-medium flex items-center gap-1.5">
+              <Webhook size={14} /> Reply routing webhook
+            </p>
+            <p className="text-[11px] text-muted-foreground">
+              Registers this app&apos;s webhook with Instantly so inbound replies flow into the
+              inbox, get classified, and trigger hot-lead alerts. Run once after deploying —
+              Instantly can&apos;t reach a localhost URL.
+              {instantlyWebhookId && (
+                <span className="block mt-1 text-emerald-600">
+                  Registered · id <span className="font-mono">{instantlyWebhookId}</span>
+                </span>
+              )}
+            </p>
+            <div className="flex items-center gap-3">
+              <Button
+                onClick={handleRegisterInstantlyWebhook}
+                disabled={registeringWebhook || !!instantlyWebhookId}
+                variant="outline"
+                size="sm"
+              >
+                {registeringWebhook
+                  ? "Registering…"
+                  : instantlyWebhookId
+                    ? "Webhook registered"
+                    : "Register webhook"}
+              </Button>
+              {webhookResult?.kind === "success" && (
+                <span className="text-sm text-emerald-600 flex items-center gap-1">
+                  <CheckCircle size={14} />
+                  {webhookResult.already ? "Already registered" : "Registered"}
+                </span>
+              )}
+              {webhookResult?.kind === "fail" && (
+                <span className="text-sm text-red-600">{webhookResult.message}</span>
+              )}
+            </div>
+          </div>
+
+          <div className="border-t border-border/60 pt-4 mt-4 space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm font-medium flex items-center gap-1.5">
+                <Activity size={14} /> Inbox warmup health
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleCheckInstantlyHealth}
+                disabled={checkingHealth}
+              >
+                {checkingHealth ? "Checking…" : "Check inbox health"}
+              </Button>
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Live warmup score, inbox-vs-spam placement, and 30-day send volume
+              for the sending mailboxes in your Instantly workspace.
+            </p>
+            {healthResult?.kind === "fail" && (
+              <div className="flex items-center gap-2 rounded-lg bg-red-50 border border-red-200 p-3">
+                <XCircle size={16} className="text-red-500" />
+                <span className="text-sm font-medium text-red-700">{healthResult.message}</span>
+              </div>
+            )}
+            {healthResult?.kind === "success" && (
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  <div className="rounded-lg border border-border/60 p-2">
+                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Inboxes</p>
+                    <p className="text-base font-semibold">{healthResult.summary.totalInboxes}</p>
+                  </div>
+                  <div className="rounded-lg border border-border/60 p-2">
+                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Active</p>
+                    <p className="text-base font-semibold">{healthResult.summary.activeInboxes}</p>
+                  </div>
+                  <div className="rounded-lg border border-border/60 p-2">
+                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Avg health</p>
+                    <p className="text-base font-semibold">
+                      {healthResult.summary.avgHealthScore === null ? "—" : healthResult.summary.avgHealthScore}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-border/60 p-2">
+                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Low health</p>
+                    <p className={`text-base font-semibold ${healthResult.summary.lowHealthCount > 0 ? "text-red-600" : ""}`}>
+                      {healthResult.summary.lowHealthCount}
+                    </p>
+                  </div>
+                </div>
+                {healthResult.inboxes.length === 0 ? (
+                  <p className="text-[11px] text-muted-foreground">
+                    No sending inboxes found in the Instantly workspace.
+                  </p>
+                ) : (
+                  <div className="max-h-60 overflow-y-auto rounded-lg border border-border/60 divide-y divide-border/50">
+                    {healthResult.inboxes.map((ib) => (
+                      <div
+                        key={ib.email}
+                        className="flex items-center justify-between gap-3 px-3 py-2 text-xs"
+                      >
+                        <span className="truncate font-mono">{ib.email}</span>
+                        <div className="flex shrink-0 items-center gap-3">
+                          {ib.landedInbox !== null && ib.landedSpam !== null && (
+                            <span className="text-muted-foreground">
+                              inbox {ib.landedInbox} / spam {ib.landedSpam}
+                            </span>
+                          )}
+                          <span className="text-muted-foreground">{ib.sent30d} sent</span>
+                          <span
+                            className={
+                              ib.healthScore === null
+                                ? "text-muted-foreground"
+                                : ib.healthScore < 50
+                                  ? "font-semibold text-red-600"
+                                  : ib.healthScore < 75
+                                    ? "font-semibold text-amber-600"
+                                    : "font-semibold text-emerald-600"
+                            }
+                          >
+                            {ib.healthScore === null ? "—" : ib.healthScore}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </CardContent>
       </Card>
 

@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { SourceChannel } from "@/types/app";
+import { controlInstantlyCampaign } from "@/lib/instantly/campaign-lifecycle";
 
 export async function POST(
   _req: NextRequest,
@@ -28,20 +29,30 @@ export async function POST(
   const admin = createAdminClient();
   const { data: campaign } = await admin
     .from("campaigns")
-    .select("id, organization_id, source_channel, status")
+    .select("id, organization_id, source_channel, instantly_campaign_id, status")
     .eq("id", campaignId)
     .maybeSingle();
   const c = campaign as
-    | { id: string; organization_id: string; source_channel: SourceChannel; status: string | null }
+    | {
+        id: string;
+        organization_id: string;
+        source_channel: SourceChannel;
+        instantly_campaign_id: string | null;
+        status: string | null;
+      }
     | null;
   if (!c) return NextResponse.json({ error: "Campaign not found" }, { status: 404 });
   if (c.organization_id !== user.app_metadata?.organization_id) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  if (c.source_channel !== "native_email" && c.source_channel !== "linkedin") {
+  if (
+    c.source_channel !== "native_email" &&
+    c.source_channel !== "linkedin" &&
+    c.source_channel !== "instantly"
+  ) {
     return NextResponse.json(
-      { error: "Activate is only for native email and LinkedIn campaigns." },
+      { error: "Activate is only for native email, LinkedIn, and Instantly campaigns." },
       { status: 400 },
     );
   }
@@ -77,6 +88,20 @@ export async function POST(
         { error: "This campaign has no steps to send." },
         { status: 400 },
       );
+    }
+  }
+
+  // Instantly campaigns start on Instantly's side — activate upstream before
+  // mirroring the status locally.
+  if (c.source_channel === "instantly") {
+    const result = await controlInstantlyCampaign(
+      admin,
+      c.organization_id,
+      c.instantly_campaign_id,
+      "activate",
+    );
+    if (!result.ok) {
+      return NextResponse.json({ error: result.error }, { status: result.status });
     }
   }
 

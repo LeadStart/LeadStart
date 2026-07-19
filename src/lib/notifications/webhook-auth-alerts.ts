@@ -40,7 +40,8 @@ const COOLDOWN_MS = 60 * 60 * 1000;
 
 export type WebhookAuthEndpoint =
   | "/api/webhooks/resend"
-  | "/api/webhooks/unipile";
+  | "/api/webhooks/unipile"
+  | "/api/webhooks/instantly";
 
 export interface WebhookAuthFailureInput {
   admin: ReturnType<typeof createAdminClient>;

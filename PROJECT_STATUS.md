@@ -1,6 +1,6 @@
 # LeadStart — Project Status
 
-> Last updated: 2026-05-21
+> Last updated: 2026-07-19
 
 ## Current State: Deployed to Production, native-Gmail-only
 
@@ -9,6 +9,8 @@ Live at https://leadstart-ebon.vercel.app (LeadStart Vercel account, auto-deploy
 **Email channel:** native Gmail API (only). Salesforge and Warmforge were removed entirely — schema, code, types, settings, env, docs. The native channel (`src/lib/gmail/` + `src/lib/native/`) handles sequences, sending, and replies. No remaining Salesforge/Warmforge surface.
 
 **LinkedIn channel:** code-complete via Unipile; not yet activated (gated on migrations + Unipile config).
+
+**Instantly channel (re-added 2026-07-19):** code-complete parallel email channel alongside native Gmail; **not live yet** — gated on applying migration `00065`, adding the API key in Settings, deploying, and registering the reply webhook. Native Gmail is unchanged. Full activation checklist + design decisions in [`RESUME-INSTANTLY-CHANNEL.md`](RESUME-INSTANTLY-CHANNEL.md).
 
 ---
 

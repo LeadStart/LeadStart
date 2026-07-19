@@ -81,7 +81,8 @@ export function CampaignRowActions({
 
   const isLocalChannel =
     sourceChannel === "native_email" || sourceChannel === "linkedin";
-  const canActivate = status === "draft" && isLocalChannel;
+  const canActivate =
+    status === "draft" && (isLocalChannel || sourceChannel === "instantly");
   const canPause = status === "active";
   const canResume = status === "paused";
   const confirmEnabled = typedName.trim() === campaignName.trim();

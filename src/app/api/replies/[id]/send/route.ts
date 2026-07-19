@@ -21,6 +21,7 @@ import { loadGmailClientForOrg } from "@/lib/gmail/org";
 import { buildRawEmail, generateMessageId } from "@/lib/gmail/mime";
 import { GmailConfigError, GmailAuthError } from "@/lib/gmail/client";
 import type { LeadReply, SourceChannel } from "@/types/app";
+import { InstantlyClient } from "@/lib/instantly/client";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -72,7 +73,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   const { data: preRow, error: preLoadErr } = await admin
     .from("lead_replies")
     .select(
-      "id, organization_id, client_id, status, source_channel, gmail_thread_id, gmail_message_id, native_mailbox_id, lead_email, from_address, subject, client:client_id(notification_email, notification_cc_emails)"
+      "id, organization_id, client_id, status, source_channel, gmail_thread_id, gmail_message_id, native_mailbox_id, instantly_eaccount, instantly_email_id, lead_email, from_address, subject, client:client_id(notification_email, notification_cc_emails)"
     )
     .eq("id", id)
     .maybeSingle();
@@ -92,6 +93,8 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     gmail_thread_id: string | null;
     gmail_message_id: string | null;
     native_mailbox_id: string | null;
+    instantly_eaccount: string | null;
+    instantly_email_id: string | null;
     lead_email: string | null;
     from_address: string | null;
     subject: string | null;
@@ -119,22 +122,33 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     }
   }
 
-  // ─── Precondition check (native email is the only sendable channel) ─────
-  if (pre.source_channel !== "native_email") {
+  // ─── Precondition check per channel ─────────────────────────────────────
+  if (pre.source_channel === "native_email") {
+    if (!pre.native_mailbox_id || !pre.gmail_thread_id) {
+      return NextResponse.json(
+        {
+          error:
+            "This reply is missing the Gmail metadata needed to send (native_mailbox_id / gmail_thread_id).",
+        },
+        { status: 412 }
+      );
+    }
+  } else if (pre.source_channel === "instantly") {
+    if (!pre.instantly_eaccount || !pre.instantly_email_id) {
+      return NextResponse.json(
+        {
+          error:
+            "This reply is missing the Instantly metadata needed to send (eaccount / email id).",
+        },
+        { status: 412 }
+      );
+    }
+  } else {
     return NextResponse.json(
       {
         error: `Sending replies from the ${pre.source_channel} channel is not supported from the portal.`,
       },
       { status: 501 }
-    );
-  }
-  if (!pre.native_mailbox_id || !pre.gmail_thread_id) {
-    return NextResponse.json(
-      {
-        error:
-          "This reply is missing the Gmail metadata needed to send (native_mailbox_id / gmail_thread_id).",
-      },
-      { status: 412 }
     );
   }
 
@@ -177,10 +191,13 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   }
   const cc = ccSet.size > 0 ? Array.from(ccSet) : undefined;
 
-  // ─── Send via the native Gmail mailbox that received the reply ─────────
+  // ─── Send back through the channel that received the reply ─────────────
   let sentExternalId: string | null = null;
   try {
-    sentExternalId = await sendNativeReply(admin, pre, body_text, cc);
+    sentExternalId =
+      pre.source_channel === "instantly"
+        ? await sendInstantlyReply(admin, pre, body_text, body_html, cc)
+        : await sendNativeReply(admin, pre, body_text, cc);
   } catch (err) {
     console.error("[replies/send] channel send failed:", err);
     await admin
@@ -294,4 +311,56 @@ async function sendNativeReply(
     }
     throw err;
   }
+}
+
+// Send a portal reply back through Instantly's /emails/reply endpoint — from
+// the hosted mailbox (eaccount) that received it, threaded onto the inbound
+// email (reply_to_uuid). Returns the new Instantly email id.
+async function sendInstantlyReply(
+  admin: ReturnType<typeof createAdminClient>,
+  pre: {
+    organization_id: string;
+    instantly_eaccount: string | null;
+    instantly_email_id: string | null;
+    subject: string | null;
+  },
+  bodyText: string,
+  bodyHtml: string | undefined,
+  cc: string[] | undefined,
+): Promise<string> {
+  if (!pre.instantly_eaccount) {
+    throw new Error("This reply is missing the Instantly mailbox (eaccount) to send from.");
+  }
+  if (!pre.instantly_email_id) {
+    throw new Error("This reply is missing the Instantly email id needed to thread the reply.");
+  }
+
+  const { data: org } = await admin
+    .from("organizations")
+    .select("instantly_api_key")
+    .eq("id", pre.organization_id)
+    .maybeSingle();
+  const apiKey =
+    (org as { instantly_api_key: string | null } | null)?.instantly_api_key ||
+    process.env.INSTANTLY_API_KEY ||
+    "";
+  if (!apiKey) {
+    throw new Error("Instantly API key not set for this organization.");
+  }
+
+  const baseSubject = (pre.subject ?? "").trim();
+  const subject = !baseSubject
+    ? "Re: (no subject)"
+    : baseSubject.toLowerCase().startsWith("re:")
+      ? baseSubject
+      : `Re: ${baseSubject}`;
+
+  const email = await new InstantlyClient(apiKey).replyViaEmailsApi({
+    eaccount: pre.instantly_eaccount,
+    reply_to_uuid: pre.instantly_email_id,
+    subject,
+    body: bodyHtml ? { text: bodyText, html: bodyHtml } : { text: bodyText },
+    cc_address_email_list: cc && cc.length > 0 ? cc.join(",") : undefined,
+  });
+  return email.id;
 }

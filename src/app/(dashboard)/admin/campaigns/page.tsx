@@ -9,11 +9,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { calculateMetrics } from "@/lib/kpi/calculator";
-import { Mail, ArrowRight, Plus } from "lucide-react";
+import { Mail, ArrowRight, Plus, RefreshCw } from "lucide-react";
 import { useSort } from "@/hooks/use-sort";
 import { SortableHead } from "@/components/ui/sortable-head";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { CampaignRowActions } from "./campaign-row-actions";
+import { appUrl } from "@/lib/api-url";
+import { toast } from "sonner";
 
 const CAMPAIGNS_PAGE_SIZE = 10;
 
@@ -43,6 +45,33 @@ export default function AllCampaignsPage() {
   const pageStart = (safePage - 1) * CAMPAIGNS_PAGE_SIZE;
   const pageRows = sorted.slice(pageStart, pageStart + CAMPAIGNS_PAGE_SIZE);
 
+  const [syncingInstantly, setSyncingInstantly] = useState(false);
+  async function handleSyncInstantly() {
+    setSyncingInstantly(true);
+    try {
+      const res = await fetch(appUrl("/api/admin/instantly/sync-campaigns"), {
+        method: "POST",
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || `Sync failed (${res.status})`);
+      toast.success(
+        json.synced > 0
+          ? `Synced ${json.synced} Instantly campaign${json.synced === 1 ? "" : "s"}`
+          : "No Instantly campaigns found",
+        json.synced > 0
+          ? { description: "New ones show as “Unlinked” — open each to link a client." }
+          : undefined,
+      );
+      refetch();
+    } catch (err) {
+      toast.error("Couldn't sync Instantly campaigns", {
+        description: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setSyncingInstantly(false);
+    }
+  }
+
   if (loading) return <div className="space-y-6 animate-pulse"><div className="rounded-xl h-36 bg-muted/50" /><div className="rounded-xl h-64 bg-muted/50" /></div>;
 
   return (
@@ -67,6 +96,19 @@ export default function AllCampaignsPage() {
                 <Plus size={14} /> New LinkedIn campaign
               </Button>
             </Link>
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-2"
+              onClick={handleSyncInstantly}
+              disabled={syncingInstantly}
+            >
+              <RefreshCw
+                size={14}
+                className={syncingInstantly ? "animate-spin" : ""}
+              />
+              {syncingInstantly ? "Syncing…" : "Sync Instantly"}
+            </Button>
           </div>
         </div>
         <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-[rgba(107,114,255,0.06)]" />

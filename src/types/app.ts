@@ -40,6 +40,14 @@ export interface Organization {
   // authorized domain. Same trust boundary as the other org-level keys.
   gmail_service_account_email: string | null;
   gmail_service_account_key: string | null;
+  // Instantly (email channel — re-added migration 00065). Campaigns are
+  // authored + sent inside Instantly; LeadStart links to them via the API
+  // key, pushes leads, ingests replies (webhook id set once the reply webhook
+  // is registered), and rolls up analytics. workspace_id is stored for
+  // reference/scoping; null until one-time setup runs.
+  instantly_api_key: string | null;
+  instantly_workspace_id: string | null;
+  instantly_webhook_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -123,7 +131,8 @@ export interface Campaign {
   name: string;
   status: CampaignStatus;
   // Channel discriminator. 'native_email' for the Gmail-API email channel;
-  // 'linkedin' for Unipile-driven sequences.
+  // 'linkedin' for Unipile-driven sequences; 'instantly' for campaigns
+  // authored + sent inside Instantly (LeadStart links + pushes leads).
   source_channel: SourceChannel;
   // Per-campaign native-email send window (migration 00058). NULL on any
   // field = inherit the global default (Mon–Fri 8am–5pm America/New_York).
@@ -139,6 +148,10 @@ export interface Campaign {
   // clients.unipile_account_id but lives on the campaign so accounts can
   // rotate without invalidating campaign history.
   unipile_account_id: string | null;
+  // Instantly campaign id (re-added migration 00065). Set for
+  // source_channel='instantly' campaigns; links a LeadStart campaign to the
+  // Instantly campaign it mirrors, for reply routing + analytics roll-up.
+  instantly_campaign_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -565,7 +578,7 @@ export interface ReplyReferralContact {
   title: string | null;
 }
 
-export type SourceChannel = "linkedin" | "native_email";
+export type SourceChannel = "instantly" | "linkedin" | "native_email";
 
 export interface LeadReply {
   id: string;
@@ -577,7 +590,8 @@ export interface LeadReply {
   client_id: string | null;
   campaign_id: string | null;
   // Channel discriminator (migration 00045). 'native_email' for Gmail-API
-  // email replies; 'linkedin' for inbound DMs ingested by the Unipile webhook.
+  // email replies; 'linkedin' for inbound DMs ingested by the Unipile webhook;
+  // 'instantly' for replies ingested by the Instantly webhook.
   source_channel: SourceChannel;
 
   // Unipile references (migration 00046). Populated for LinkedIn DMs.
@@ -592,6 +606,16 @@ export interface LeadReply {
   gmail_message_id: string | null;
   gmail_thread_id: string | null;
   native_mailbox_id: string | null;
+  // Instantly references (re-added migration 00065). Populated for
+  // source_channel='instantly' replies. instantly_email_id is Instantly's
+  // Email-object UUID — org-scoped unique for webhook dedup, and the
+  // reply_to_uuid when sending a reply back through /emails/reply.
+  // instantly_eaccount is the hosted mailbox that received the reply (passed
+  // back as `eaccount` on send); message/thread ids thread the conversation.
+  instantly_email_id: string | null;
+  instantly_message_id: string | null;
+  instantly_eaccount: string | null;
+  instantly_thread_id: string | null;
 
   // Lead identity
   lead_email: string;
