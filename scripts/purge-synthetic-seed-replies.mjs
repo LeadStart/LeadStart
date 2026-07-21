@@ -15,7 +15,8 @@
  *      Park) — each inserted twice (under "Rainier Facility Solutions" and
  *      "David Cabrera"). source_channel NULL, all dated 2026-04-21.
  *   2. 3 replies under the "Smoke Test" client (2× "Synthetic Smoke", 1×
- *      "Daniel Tuccillo") — seeded by scripts/create-smoke-test-client-user.mjs.
+ *      "Daniel Tuccillo") — seeded by the former
+ *      scripts/create-smoke-test-client-user.mjs (removed in this same cleanup).
  *
  * Real replies (SaaSassins not-interested + David Cabrera native_email
  * unsubscribes/OOO — real domains, real threads) are matched by NEITHER
