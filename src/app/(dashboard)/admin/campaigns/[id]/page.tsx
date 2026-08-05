@@ -10,7 +10,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { KPICard } from "@/components/charts/kpi-card";
 import { DailyChart } from "@/components/charts/daily-chart";
 import { calculateMetrics } from "@/lib/kpi/calculator";
-import { resolveSendWindow, formatSendWindow, resolveDailyNewLeadsCap } from "@/lib/gmail/ramp";
+import { resolveSendWindow, formatSendWindow, resolveDailyNewLeadsCap, projectSequenceCompletion, type CompletionProjection } from "@/lib/gmail/ramp";
 import {
   Card,
   CardContent,
@@ -29,6 +29,7 @@ import {
 import { ArrowLeft, Inbox, Upload, AlertCircle, CheckCircle2 } from "lucide-react";
 import { NativeImportPanel } from "@/components/campaigns/native-import-panel";
 import { NativeSequenceSection } from "./native-sequence-section";
+import { StageFlowCard, type StageRow } from "./stage-flow-card";
 import { CampaignLifecycleButton } from "./campaign-lifecycle-button";
 import type { Campaign, CampaignSnapshot, Client } from "@/types/app";
 
@@ -109,6 +110,42 @@ export default async function AdminCampaignDetailPage({
     campaign.source_channel === "native_email"
       ? await nativeStatsFor(admin, campaignId)
       : null;
+
+  // Stage-flow view model + completion projection for the "Contacts by sending
+  // stage" panel. Resolve each step's display subject (later steps thread as
+  // "Re: <first subject>" when they carry no own subject, matching the sender)
+  // and a human cadence label, then pair with the per-step waiting/sent counts.
+  const stageRows: StageRow[] = [];
+  let projection: CompletionProjection | null = null;
+  if (nativeStats && nativeStats.steps.length > 0) {
+    const firstSubject = nativeStats.steps[0]?.subject || "(no subject)";
+    nativeStats.steps.forEach((s, i) => {
+      const subject =
+        i === 0
+          ? s.subject || "(no subject)"
+          : s.subject.trim()
+            ? s.subject
+            : `Re: ${firstSubject}`;
+      const cadence =
+        s.wait_days === 0
+          ? "Sends immediately"
+          : `Waits ${s.wait_days} day${s.wait_days === 1 ? "" : "s"}${i === 0 ? "" : " after the previous step"}`;
+      stageRows.push({
+        index: i,
+        subject,
+        cadence,
+        waiting: nativeStats.waitingByStep[i] ?? 0,
+        sent: nativeStats.sentByStep[i] ?? 0,
+      });
+    });
+    projection = projectSequenceCompletion({
+      firstTouchesRemaining: nativeStats.waitingByStep[0] ?? 0,
+      dailyNewLeadsCap: resolveDailyNewLeadsCap(campaign),
+      stepWaitDays: nativeStats.steps.map((s) => s.wait_days),
+      waitingByStep: nativeStats.waitingByStep,
+      weekdaysOnly: sendWindow.weekdaysOnly,
+    });
+  }
 
   return (
     <div className="space-y-6">
@@ -236,6 +273,27 @@ export default async function AdminCampaignDetailPage({
               </div>
             </CardContent>
           </Card>
+
+          {stageRows.length > 0 && projection && (
+            <StageFlowCard
+              stages={stageRows}
+              terminal={{
+                replied: nativeStats.enrollments.replied,
+                completed: nativeStats.enrollments.completed,
+                failed: nativeStats.enrollments.failed,
+              }}
+              totals={{
+                active: nativeStats.enrollments.active,
+                enrolled:
+                  nativeStats.enrollments.active +
+                  nativeStats.enrollments.completed +
+                  nativeStats.enrollments.replied +
+                  nativeStats.enrollments.failed,
+                sent: nativeStats.sent,
+              }}
+              projection={projection}
+            />
+          )}
 
           <Card className="border-border/50 shadow-sm">
             <CardHeader className="flex flex-row items-center gap-2 pb-3">
@@ -387,6 +445,10 @@ interface NativeStats {
   enrollments: { active: number; completed: number; replied: number; failed: number };
   mailboxes: { email: string; status: string }[];
   steps: { subject: string; body: string; wait_days: number }[];
+  // Active enrollments bucketed by current_step_index (the next step they'll
+  // receive) and total sends logged per step — the stage-flow funnel data.
+  waitingByStep: number[];
+  sentByStep: number[];
 }
 
 async function nativeStatsFor(
@@ -399,15 +461,47 @@ async function nativeStatsFor(
     admin.from("lead_replies").select("id", { count: "exact", head: true }).eq("campaign_id", campaignId).eq("source_channel", "native_email"),
     admin.from("campaign_steps").select("step_index, subject_template, body_template, wait_days").eq("campaign_id", campaignId).order("step_index", { ascending: true }),
     admin.from("campaign_mailboxes").select("mailbox_id").eq("campaign_id", campaignId),
-    admin.from("campaign_enrollments").select("status").eq("campaign_id", campaignId),
+    admin.from("campaign_enrollments").select("status, current_step_index").eq("campaign_id", campaignId),
   ]);
 
+  const stepRows = (stepsRes.data ?? []) as {
+    step_index: number;
+    subject_template: string | null;
+    body_template: string | null;
+    wait_days: number;
+  }[];
+  const nSteps = stepRows.length;
+
+  // Enrollment status tallies + active-by-current-step buckets (the funnel).
+  // current_step_index is the NEXT step a contact will receive, so an active
+  // enrollment at index i is "waiting for step i+1".
   const enrollments = { active: 0, completed: 0, replied: 0, failed: 0 };
-  for (const row of (enrRes.data ?? []) as { status: string }[]) {
+  const waitingByStep = new Array(nSteps).fill(0) as number[];
+  for (const row of (enrRes.data ?? []) as { status: string; current_step_index: number | null }[]) {
     if (row.status in enrollments) {
       enrollments[row.status as keyof typeof enrollments]++;
     }
+    if (row.status === "active" && nSteps > 0) {
+      const idx = Math.min(Math.max(row.current_step_index ?? 0, 0), nSteps - 1);
+      waitingByStep[idx]++;
+    }
   }
+
+  // Sends logged per step so far — one bounded head-count per step (steps are
+  // few, so this is a handful of count-only queries, no rows transferred).
+  const sentByStep =
+    nSteps > 0
+      ? await Promise.all(
+          stepRows.map((_, i) =>
+            admin
+              .from("native_sends")
+              .select("id", { count: "exact", head: true })
+              .eq("campaign_id", campaignId)
+              .eq("step_index", i)
+              .then((r) => r.count ?? 0),
+          ),
+        )
+      : [];
 
   // Resolve the mailbox pool with a second query rather than a PostgREST
   // embed (embed typing is array-vs-object ambiguous for a to-one FK).
@@ -424,7 +518,7 @@ async function nativeStatsFor(
     }));
   }
 
-  const steps = ((stepsRes.data ?? []) as { subject_template: string | null; body_template: string | null; wait_days: number }[]).map((s) => ({
+  const steps = stepRows.map((s) => ({
     subject: s.subject_template ?? "",
     body: s.body_template ?? "",
     wait_days: s.wait_days,
@@ -437,6 +531,8 @@ async function nativeStatsFor(
     enrollments,
     mailboxes,
     steps,
+    waitingByStep,
+    sentByStep,
   };
 }
 

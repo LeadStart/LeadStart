@@ -258,3 +258,99 @@ export function sendSpacingMinutes(
   if (remainingSends <= 0) return Infinity;
   return Math.max(MIN_SEND_GAP_MINUTES, remainingWindowMinutes / remainingSends);
 }
+
+// ── Completion projection ───────────────────────────────────────────────────
+// Estimate when a native campaign's sequence will finish, from the same levers
+// the send worker actually obeys: the per-campaign new-leads/day cap gates how
+// fast the queued first-touches can start, and each step's wait_days sets the
+// follow-up tail every contact still owes. This is a planning ESTIMATE, not a
+// guarantee — it assumes the current pace holds and no new contacts are imported.
+
+const PROJ_MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+// Advance `from` by `n` days. When weekdaysOnly, only Mon–Fri count toward `n`
+// (weekends are skipped, matching the send window). Pure date arithmetic on a copy.
+function addDays(from: Date, n: number, weekdaysOnly: boolean): Date {
+  const out = new Date(from.getTime());
+  if (n <= 0) return out;
+  if (!weekdaysOnly) {
+    out.setDate(out.getDate() + n);
+    return out;
+  }
+  let added = 0;
+  while (added < n) {
+    out.setDate(out.getDate() + 1);
+    const dow = out.getDay();
+    if (dow !== 0 && dow !== 6) added++;
+  }
+  return out;
+}
+
+export interface CompletionProjection {
+  // projected  — a date is available
+  // paused     — first-touches are queued but the new-leads cap is 0
+  // done       — no active contacts remain
+  // unknown    — no steps configured / nothing to project
+  status: "projected" | "paused" | "done" | "unknown";
+  dateLabel: string | null; // e.g. "Sep 18, 2026"
+  sendingDays: number | null; // business days to clear the first-touch queue
+  weeks: number | null; // approx calendar weeks from now to completion
+  driver: string; // one-line, human explanation of the estimate
+}
+
+export function projectSequenceCompletion(params: {
+  firstTouchesRemaining: number; // active enrollments still at step 0 (never sent)
+  dailyNewLeadsCap: number; // resolveDailyNewLeadsCap(campaign)
+  stepWaitDays: number[]; // wait_days per step, index 0..n-1
+  waitingByStep: number[]; // active enrollments per current_step_index
+  weekdaysOnly: boolean; // from the campaign's send window
+  now?: Date;
+}): CompletionProjection {
+  const { firstTouchesRemaining, dailyNewLeadsCap, stepWaitDays, waitingByStep, weekdaysOnly } = params;
+  const now = params.now ?? new Date();
+  const n = stepWaitDays.length;
+  const totalActive = waitingByStep.reduce((a, b) => a + b, 0);
+
+  if (n === 0)
+    return { status: "unknown", dateLabel: null, sendingDays: null, weeks: null, driver: "No sequence steps configured yet." };
+  if (totalActive === 0)
+    return { status: "done", dateLabel: null, sendingDays: null, weeks: null, driver: "No active contacts remaining — every enrolled contact has finished, replied, or exited." };
+  if (firstTouchesRemaining > 0 && dailyNewLeadsCap <= 0)
+    return { status: "paused", dateLabel: null, sendingDays: null, weeks: null, driver: `${firstTouchesRemaining.toLocaleString()} first-touches are queued, but new leads are paused (0/day) — resume to project a finish date.` };
+
+  // The follow-up tail: the sum of the waits before every step after the first
+  // touch. The last contact to start still owes this many calendar days.
+  const followupTail = stepWaitDays.slice(1).reduce((a, b) => a + b, 0);
+
+  // 1) Contacts already in-flight — the most-behind one (earliest step still
+  //    holding active contacts) owes the waits for all of its remaining steps.
+  let finish = now;
+  for (let i = 1; i < n; i++) {
+    if (waitingByStep[i] > 0) {
+      const remaining = stepWaitDays.slice(i).reduce((a, b) => a + b, 0);
+      const d = addDays(now, remaining, false);
+      if (d.getTime() > finish.getTime()) finish = d;
+    }
+  }
+
+  // 2) Queued first-touch cohort — only when any remain (an empty queue must
+  //    not invent a fresh step-0 contact). The last one starts after the queue
+  //    clears at the new-leads cap, then runs the full follow-up tail.
+  const sendingDays = firstTouchesRemaining > 0 ? Math.ceil(firstTouchesRemaining / dailyNewLeadsCap) : 0;
+  if (firstTouchesRemaining > 0) {
+    const lastStart = addDays(now, sendingDays, weekdaysOnly);
+    const queueFinish = addDays(lastStart, followupTail, false);
+    if (queueFinish.getTime() > finish.getTime()) finish = queueFinish;
+  }
+  const weeks = Math.max(1, Math.round((finish.getTime() - now.getTime()) / (7 * 86_400_000)));
+  const dateLabel = `${PROJ_MONTHS[finish.getMonth()]} ${finish.getDate()}, ${finish.getFullYear()}`;
+
+  const parts: string[] = [];
+  if (firstTouchesRemaining > 0)
+    parts.push(`${firstTouchesRemaining.toLocaleString()} first-touches left ÷ ${dailyNewLeadsCap}/day ≈ ${sendingDays} sending days`);
+  if (followupTail > 0)
+    parts.push(`${firstTouchesRemaining > 0 ? "then a " : "a "}${followupTail}-day follow-up tail`);
+  const driver = parts.length ? parts.join(", ") + "." : "Based on the remaining follow-up cadence.";
+
+  return { status: "projected", dateLabel, sendingDays, weeks, driver };
+}
