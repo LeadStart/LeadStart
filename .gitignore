@@ -50,5 +50,10 @@ public/hot-lead-email-preview.html
 # Local data-op backups (durable rollback files; never committed)
 /backups/
 
+# /mockup skill scratch — mockups are disposable scaffolding, chosen then
+# deleted. They NEVER get committed or pushed (see the mockup skill's
+# non-negotiable rule). Gitignored so it can't happen by accident.
+/mockups/
+
 # Claude Code personal overrides (team-wide config lives in .claude/settings.json)
 .claude/settings.local.json
