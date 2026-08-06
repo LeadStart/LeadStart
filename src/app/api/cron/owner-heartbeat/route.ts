@@ -29,6 +29,9 @@ import {
 // 2026-05-27 in /api/cron/dispatch-salesforge-enrollments (commit 59b8745);
 // applying the same guard to every cron route preemptively.
 export const dynamic = "force-dynamic";
+// The heartbeat now also rolls up per-campaign send/reply/warmup stats, so give
+// the function room for the extra (bounded, parallelized) queries.
+export const maxDuration = 60;
 
 export async function GET(request: NextRequest) {
   const authError = checkCronAuth(request);

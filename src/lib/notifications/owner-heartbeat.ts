@@ -22,7 +22,17 @@
 
 import type { createAdminClient } from "@/lib/supabase/admin";
 import { isClientDueNow } from "@/lib/kpi/schedule";
-import type { Client } from "@/types/app";
+import {
+  effectiveDailyCap,
+  rampStage,
+  resolveDailyNewLeadsCap,
+  resolveSendWindow,
+  minutesUntilWindowClose,
+  startOfLocalDay,
+  projectSequenceCompletion,
+  type CompletionProjection,
+} from "@/lib/gmail/ramp";
+import type { Client, ReplyClass } from "@/types/app";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
@@ -32,6 +42,53 @@ export interface HeartbeatPayload {
   subject: string;
   html: string;
   verdict: HealthVerdict;
+}
+
+// Positive/"hot" reply classes — the unambiguous good-news outcomes, used for
+// the morning summary's reply breakdown. (Which classes actually ping a client
+// is governed per-client by clients.auto_notify_classes; this fixed set just
+// keeps the headline "positive" count stable and channel-agnostic.)
+const POSITIVE_REPLY_CLASSES: ReplyClass[] = [
+  "true_interest",
+  "meeting_booked",
+  "qualifying_question",
+];
+
+// One active native-email campaign's morning line-item. All counts reconcile
+// with the admin campaign detail page (same source columns + projection).
+interface CampaignActivity {
+  id: string;
+  name: string;
+  clientName: string | null;
+  sentYesterday: number; // native_sends logged in the prior ET day
+  scheduledToday: number; // remaining inbox capacity today, capped by active demand
+  active: number;
+  completed: number;
+  replied: number;
+  failed: number;
+  enrolled: number;
+  pctComplete: number; // (completed + replied) / enrolled, 0–100
+  repliesYesterday: number;
+  positiveRepliesYesterday: number;
+  projection: CompletionProjection;
+  waitingByStep: number[]; // active enrollments bucketed by current_step_index
+  stepCount: number;
+  warmingCount: number; // active pool mailboxes not yet fully warmed
+}
+
+interface CampaignTotals {
+  activeCampaigns: number;
+  pausedCampaigns: number;
+  sentYesterday: number;
+  scheduledToday: number;
+  repliesYesterday: number;
+  positiveRepliesYesterday: number;
+}
+
+interface CampaignSection {
+  campaigns: CampaignActivity[];
+  totals: CampaignTotals;
+  error: string | null;
 }
 
 interface HeartbeatSections {
@@ -61,6 +118,7 @@ interface HeartbeatSections {
     ownerCount: number;
     error: string | null;
   };
+  campaignActivity: CampaignSection;
 }
 
 /**
@@ -71,15 +129,23 @@ export async function buildHeartbeat(
   admin: AdminClient,
   now: Date = new Date(),
 ): Promise<HeartbeatPayload> {
-  const [pendingAlerts, recentActivity, deliveryGap, stuck, upcoming, config] =
-    await Promise.all([
-      queryPendingAlerts(admin),
-      queryRecentActivity(admin, now),
-      queryDeliveryGap(admin, now),
-      queryStuckRows(admin, now),
-      queryUpcomingSchedule(admin, now),
-      queryConfig(admin),
-    ]);
+  const [
+    pendingAlerts,
+    recentActivity,
+    deliveryGap,
+    stuck,
+    upcoming,
+    config,
+    campaignActivity,
+  ] = await Promise.all([
+    queryPendingAlerts(admin),
+    queryRecentActivity(admin, now),
+    queryDeliveryGap(admin, now),
+    queryStuckRows(admin, now),
+    queryUpcomingSchedule(admin, now),
+    queryConfig(admin),
+    queryCampaignActivity(admin, now),
+  ]);
 
   const sections: HeartbeatSections = {
     pendingAlerts,
@@ -88,6 +154,7 @@ export async function buildHeartbeat(
     stuck,
     upcoming,
     config,
+    campaignActivity,
   };
   const verdict = computeVerdict(sections);
   const subject = buildSubject(sections, verdict, now);
@@ -324,6 +391,353 @@ async function queryConfig(
   };
 }
 
+// Morning outreach snapshot — the operational half of the heartbeat: every
+// active native-email campaign with yesterday's sends, today's scheduled
+// capacity, reply outcomes, and its sequence/warmup position. Mirrors the
+// admin campaign detail page's math (nativeStatsFor + projectSequenceCompletion)
+// so the numbers reconcile. Wrapped in try/catch so a failure here degrades to
+// an inline notice rather than suppressing the whole heartbeat.
+type CampaignMeta = {
+  id: string;
+  name: string;
+  client_id: string | null;
+  status: string;
+  send_timezone: string | null;
+  send_start_hour: number | null;
+  send_end_hour: number | null;
+  send_weekdays_only: boolean | null;
+  daily_new_leads_cap: number | null;
+};
+
+async function queryCampaignActivity(
+  admin: AdminClient,
+  now: Date,
+): Promise<CampaignSection> {
+  const zero: CampaignTotals = {
+    activeCampaigns: 0,
+    pausedCampaigns: 0,
+    sentYesterday: 0,
+    scheduledToday: 0,
+    repliesYesterday: 0,
+    positiveRepliesYesterday: 0,
+  };
+
+  try {
+    const { data: campRows, error: campErr } = await admin
+      .from("campaigns")
+      .select(
+        "id, name, client_id, status, send_timezone, send_start_hour, send_end_hour, send_weekdays_only, daily_new_leads_cap",
+      )
+      .eq("source_channel", "native_email")
+      .eq("status", "active");
+    if (campErr) return { campaigns: [], totals: zero, error: campErr.message };
+
+    const active = (campRows ?? []) as CampaignMeta[];
+
+    const { count: pausedCount } = await admin
+      .from("campaigns")
+      .select("id", { count: "exact", head: true })
+      .eq("source_channel", "native_email")
+      .eq("status", "paused");
+
+    if (active.length === 0) {
+      return {
+        campaigns: [],
+        totals: { ...zero, pausedCampaigns: pausedCount ?? 0 },
+        error: null,
+      };
+    }
+
+    const ids = active.map((c) => c.id);
+    // ET-day boundaries: yesterday = [start of yesterday, start of today).
+    const todayStartIso = new Date(startOfLocalDay(now.getTime())).toISOString();
+    const yStartIso = new Date(
+      startOfLocalDay(now.getTime() - 86_400_000),
+    ).toISOString();
+
+    const clientIds = [
+      ...new Set(active.map((c) => c.client_id).filter((v): v is string => !!v)),
+    ];
+
+    const [clientsRes, stepsRes, enrRes, sentYRes, repliesYRes, poolRes] =
+      await Promise.all([
+        clientIds.length
+          ? admin.from("clients").select("id, name").in("id", clientIds)
+          : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+        admin
+          .from("campaign_steps")
+          .select("campaign_id, step_index, wait_days")
+          .in("campaign_id", ids)
+          .order("step_index", { ascending: true }),
+        admin
+          .from("campaign_enrollments")
+          .select("campaign_id, status, current_step_index")
+          .in("campaign_id", ids),
+        admin
+          .from("native_sends")
+          .select("campaign_id")
+          .in("campaign_id", ids)
+          .gte("sent_at", yStartIso)
+          .lt("sent_at", todayStartIso),
+        admin
+          .from("lead_replies")
+          .select("campaign_id, final_class")
+          .in("campaign_id", ids)
+          .eq("source_channel", "native_email")
+          .gte("received_at", yStartIso)
+          .lt("received_at", todayStartIso),
+        admin
+          .from("campaign_mailboxes")
+          .select("campaign_id, mailbox_id")
+          .in("campaign_id", ids),
+      ]);
+
+    const clientName = new Map<string, string>();
+    for (const c of (clientsRes.data ?? []) as { id: string; name: string }[]) {
+      clientName.set(c.id, c.name);
+    }
+
+    // Steps grouped per campaign (sorted by step_index for wait-day math).
+    const stepsByCampaign = new Map<string, { wait_days: number }[]>();
+    for (const s of (stepsRes.data ?? []) as {
+      campaign_id: string;
+      step_index: number;
+      wait_days: number;
+    }[]) {
+      const arr = stepsByCampaign.get(s.campaign_id) ?? [];
+      arr.push({ wait_days: s.wait_days });
+      stepsByCampaign.set(s.campaign_id, arr);
+    }
+
+    // Enrollment status tallies + active-by-current-step buckets (the funnel).
+    type Enr = {
+      active: number;
+      completed: number;
+      replied: number;
+      failed: number;
+      waitingByStep: number[];
+    };
+    const enrByCampaign = new Map<string, Enr>();
+    const ensureEnr = (cid: string): Enr => {
+      let e = enrByCampaign.get(cid);
+      if (!e) {
+        const nSteps = (stepsByCampaign.get(cid) ?? []).length;
+        e = {
+          active: 0,
+          completed: 0,
+          replied: 0,
+          failed: 0,
+          waitingByStep: new Array(nSteps).fill(0),
+        };
+        enrByCampaign.set(cid, e);
+      }
+      return e;
+    };
+    for (const r of (enrRes.data ?? []) as {
+      campaign_id: string;
+      status: string;
+      current_step_index: number | null;
+    }[]) {
+      const e = ensureEnr(r.campaign_id);
+      if (r.status === "active") {
+        e.active++;
+        if (e.waitingByStep.length > 0) {
+          const idx = Math.min(
+            Math.max(r.current_step_index ?? 0, 0),
+            e.waitingByStep.length - 1,
+          );
+          e.waitingByStep[idx]++;
+        }
+      } else if (r.status === "completed") e.completed++;
+      else if (r.status === "replied") e.replied++;
+      else if (r.status === "failed") e.failed++;
+    }
+
+    const sentYByCampaign = new Map<string, number>();
+    for (const s of (sentYRes.data ?? []) as { campaign_id: string }[]) {
+      sentYByCampaign.set(
+        s.campaign_id,
+        (sentYByCampaign.get(s.campaign_id) ?? 0) + 1,
+      );
+    }
+
+    const repliesByCampaign = new Map<
+      string,
+      { total: number; positive: number }
+    >();
+    for (const r of (repliesYRes.data ?? []) as {
+      campaign_id: string;
+      final_class: ReplyClass | null;
+    }[]) {
+      const rec = repliesByCampaign.get(r.campaign_id) ?? {
+        total: 0,
+        positive: 0,
+      };
+      rec.total++;
+      if (r.final_class && POSITIVE_REPLY_CLASSES.includes(r.final_class)) {
+        rec.positive++;
+      }
+      repliesByCampaign.set(r.campaign_id, rec);
+    }
+
+    // Mailbox pools → capacity. Fetch each distinct mailbox once, then its
+    // all-time send count (drives the warmup ramp cap) and today's count
+    // (already-spent). Count-only queries — no rows transferred.
+    const poolByCampaign = new Map<string, string[]>();
+    const distinctMb = new Set<string>();
+    for (const p of (poolRes.data ?? []) as {
+      campaign_id: string;
+      mailbox_id: string;
+    }[]) {
+      const arr = poolByCampaign.get(p.campaign_id) ?? [];
+      arr.push(p.mailbox_id);
+      poolByCampaign.set(p.campaign_id, arr);
+      distinctMb.add(p.mailbox_id);
+    }
+    const mbMeta = new Map<
+      string,
+      { status: string; max_daily_cap: number; daily_cap_override: number | null }
+    >();
+    if (distinctMb.size > 0) {
+      const { data: mbData } = await admin
+        .from("native_mailboxes")
+        .select("id, status, max_daily_cap, daily_cap_override")
+        .in("id", [...distinctMb]);
+      for (const m of (mbData ?? []) as {
+        id: string;
+        status: string;
+        max_daily_cap: number;
+        daily_cap_override: number | null;
+      }[]) {
+        mbMeta.set(m.id, {
+          status: m.status,
+          max_daily_cap: m.max_daily_cap,
+          daily_cap_override: m.daily_cap_override,
+        });
+      }
+    }
+    const totalSent = new Map<string, number>();
+    const sentToday = new Map<string, number>();
+    await Promise.all(
+      [...distinctMb].map(async (id) => {
+        const [tot, tod] = await Promise.all([
+          admin
+            .from("native_sends")
+            .select("id", { count: "exact", head: true })
+            .eq("mailbox_id", id),
+          admin
+            .from("native_sends")
+            .select("id", { count: "exact", head: true })
+            .eq("mailbox_id", id)
+            .gte("sent_at", todayStartIso),
+        ]);
+        totalSent.set(id, tot.count ?? 0);
+        sentToday.set(id, tod.count ?? 0);
+      }),
+    );
+
+    const campaigns: CampaignActivity[] = active.map((c) => {
+      const steps = stepsByCampaign.get(c.id) ?? [];
+      const e =
+        enrByCampaign.get(c.id) ??
+        ({
+          active: 0,
+          completed: 0,
+          replied: 0,
+          failed: 0,
+          waitingByStep: new Array(steps.length).fill(0),
+        } as Enr);
+      const enrolled = e.active + e.completed + e.replied + e.failed;
+      const pctComplete =
+        enrolled > 0
+          ? Math.round(((e.completed + e.replied) / enrolled) * 100)
+          : 0;
+
+      const window = resolveSendWindow(c);
+      // Will this campaign send at all today? 0 on weekends (weekdaysOnly) or
+      // once the window has closed — so a Saturday heartbeat honestly shows 0.
+      const sendableToday = minutesUntilWindowClose(now, window) > 0;
+      let capacity = 0;
+      let warmingCount = 0;
+      for (const mbId of poolByCampaign.get(c.id) ?? []) {
+        const m = mbMeta.get(mbId);
+        if (!m || m.status !== "active") continue;
+        const tot = totalSent.get(mbId) ?? 0;
+        if (!rampStage(tot).warmed) warmingCount++;
+        const cap = effectiveDailyCap(
+          { max_daily_cap: m.max_daily_cap, daily_cap_override: m.daily_cap_override },
+          tot,
+        );
+        capacity += Math.max(0, cap - (sentToday.get(mbId) ?? 0));
+      }
+      // Can't send more than we have active contacts, nor more than inbox
+      // capacity — the honest ceiling for the day.
+      const scheduledToday = sendableToday
+        ? Math.min(capacity, e.active)
+        : 0;
+
+      const projection = projectSequenceCompletion({
+        firstTouchesRemaining: e.waitingByStep[0] ?? 0,
+        dailyNewLeadsCap: resolveDailyNewLeadsCap(c),
+        stepWaitDays: steps.map((s) => s.wait_days),
+        waitingByStep: e.waitingByStep,
+        weekdaysOnly: window.weekdaysOnly,
+        now,
+      });
+      const reps = repliesByCampaign.get(c.id) ?? { total: 0, positive: 0 };
+
+      return {
+        id: c.id,
+        name: c.name,
+        clientName: c.client_id ? (clientName.get(c.client_id) ?? null) : null,
+        sentYesterday: sentYByCampaign.get(c.id) ?? 0,
+        scheduledToday,
+        active: e.active,
+        completed: e.completed,
+        replied: e.replied,
+        failed: e.failed,
+        enrolled,
+        pctComplete,
+        repliesYesterday: reps.total,
+        positiveRepliesYesterday: reps.positive,
+        projection,
+        waitingByStep: e.waitingByStep,
+        stepCount: steps.length,
+        warmingCount,
+      };
+    });
+
+    // Busiest first (today + yesterday volume), then by active contact count.
+    campaigns.sort(
+      (a, b) =>
+        b.scheduledToday +
+        b.sentYesterday -
+        (a.scheduledToday + a.sentYesterday) ||
+        b.active - a.active,
+    );
+
+    const totals: CampaignTotals = {
+      activeCampaigns: active.length,
+      pausedCampaigns: pausedCount ?? 0,
+      sentYesterday: campaigns.reduce((s, c) => s + c.sentYesterday, 0),
+      scheduledToday: campaigns.reduce((s, c) => s + c.scheduledToday, 0),
+      repliesYesterday: campaigns.reduce((s, c) => s + c.repliesYesterday, 0),
+      positiveRepliesYesterday: campaigns.reduce(
+        (s, c) => s + c.positiveRepliesYesterday,
+        0,
+      ),
+    };
+
+    return { campaigns, totals, error: null };
+  } catch (err) {
+    return {
+      campaigns: [],
+      totals: zero,
+      error: err instanceof Error ? err.message : "(unknown error)",
+    };
+  }
+}
+
 // ── Rendering ───────────────────────────────────────────────────────────
 
 function escapeHtml(s: string): string {
@@ -351,14 +765,16 @@ function buildSubject(
   verdict: HealthVerdict,
   now: Date,
 ): string {
-  const dateStr = now.toISOString().split("T")[0];
-  const tagline =
-    verdict === "green"
-      ? "all systems OK"
-      : verdict === "yellow"
-        ? `${countSignals(s)} signal${countSignals(s) === 1 ? "" : "s"}`
-        : "action required";
-  return `LeadStart status — ${dateStr} — ${tagline}`;
+  const t = s.campaignActivity.totals;
+  const date = etShortDate(now);
+  if (verdict === "green") {
+    return `Good morning — ${t.sentYesterday} sent yesterday, ${t.scheduledToday} scheduled today (${date})`;
+  }
+  if (verdict === "yellow") {
+    const n = countSignals(s);
+    return `Good morning — ${t.sentYesterday} sent, ${t.scheduledToday} today · ${n} signal${n === 1 ? "" : "s"} to check (${date})`;
+  }
+  return `⚠ Action required — ${t.sentYesterday} sent, ${t.scheduledToday} scheduled today (${date})`;
 }
 
 function countSignals(s: HeartbeatSections): number {
@@ -373,14 +789,183 @@ function countSignals(s: HeartbeatSections): number {
   return n;
 }
 
-function row(label: string, value: string, color = "#111"): string {
-  return `<tr><td style="padding:4px 18px 4px 0;color:#555;font-size:13px;">${escapeHtml(label)}</td><td style="color:${color};font-size:13px;font-weight:500;">${value}</td></tr>`;
-}
-
 function check(value: boolean): string {
   return value
     ? `<span style="color:#15803d;">&#10003;</span>`
     : `<span style="color:#b91c1c;">&#10007;</span>`;
+}
+
+// Short ET date for the subject line, e.g. "Aug 6".
+function etShortDate(now: Date): string {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    month: "short",
+    day: "numeric",
+  }).format(now);
+}
+
+// Absolute admin dashboard URL. NEXT_PUBLIC_APP_URL already includes the /app
+// basePath (see send-hot-lead.ts); fall back to prod so the button never breaks.
+function dashboardUrl(): string {
+  const base = (
+    process.env.NEXT_PUBLIC_APP_URL || "https://leadstart-ebon.vercel.app/app"
+  ).replace(/\/$/, "");
+  return `${base}/admin`;
+}
+
+// One plain-English paragraph leading the email: yesterday's volume, today's
+// plan, replies, and the health verdict.
+function narrativeSummary(s: HeartbeatSections, verdict: HealthVerdict): string {
+  const t = s.campaignActivity.totals;
+  const health = healthPhrase(s, verdict);
+  if (t.activeCampaigns === 0) {
+    const paused =
+      t.pausedCampaigns > 0
+        ? ` ${t.pausedCampaigns} campaign${t.pausedCampaigns === 1 ? " is" : "s are"} paused.`
+        : "";
+    return `No native email campaigns are active right now.${paused} ${health}`;
+  }
+  const camps = `<b style="color:#2E37FE;">${t.activeCampaigns} active campaign${t.activeCampaigns === 1 ? "" : "s"}</b>`;
+  const sentPhrase =
+    t.sentYesterday > 0
+      ? `Yesterday <b style="color:#2E37FE;">${t.sentYesterday.toLocaleString()} email${t.sentYesterday === 1 ? "" : "s"}</b> went out across ${camps}`
+      : `No emails went out yesterday across ${camps}`;
+  const schedPhrase =
+    t.scheduledToday > 0
+      ? `, and <b style="color:#1d4ed8;">${t.scheduledToday.toLocaleString()}</b> ${t.scheduledToday === 1 ? "is" : "are"} scheduled today`
+      : `, and nothing is scheduled to send today`;
+  const replyPhrase =
+    t.repliesYesterday > 0
+      ? ` You got <b style="color:#10b981;">${t.repliesYesterday} repl${t.repliesYesterday === 1 ? "y" : "ies"}</b>${t.positiveRepliesYesterday > 0 ? ` — <b style="color:#10b981;">${t.positiveRepliesYesterday} positive</b>` : ""}.`
+      : ` No replies came in.`;
+  return `${sentPhrase}${schedPhrase}.${replyPhrase} ${health}`;
+}
+
+function healthPhrase(s: HeartbeatSections, verdict: HealthVerdict): string {
+  if (verdict === "green") return `Everything's <b style="color:#059669;">healthy</b>.`;
+  if (verdict === "yellow") {
+    const n = countSignals(s);
+    return `<b style="color:#b45309;">${n} signal${n === 1 ? "" : "s"}</b> need${n === 1 ? "s" : ""} a glance below.`;
+  }
+  return `<b style="color:#b91c1c;">Action required</b> — see system checks below.`;
+}
+
+// One campaign card: progress bar, three stats (sent yesterday / scheduled
+// today / replies), and the active-by-step waterfall.
+function campaignCardHtml(c: CampaignActivity): string {
+  const name = escapeHtml(c.name);
+  const sub = c.clientName
+    ? `<div style="font-size:11px;color:#9194AD;margin-top:1px;">${escapeHtml(c.clientName)}</div>`
+    : "";
+  const warming = c.warmingCount > 0;
+  const chip = warming
+    ? `<span style="font-size:10px;background:#fff7ed;color:#b45309;border-radius:4px;padding:2px 7px;font-weight:600;">warming</span>`
+    : `<span style="font-size:10px;background:#ecfdf5;color:#059669;border-radius:4px;padding:2px 7px;font-weight:600;">active</span>`;
+  const doneBy =
+    c.projection.status === "projected" && c.projection.dateLabel
+      ? `done by <b style="color:#3D3D5C;">${escapeHtml(c.projection.dateLabel)}</b>`
+      : c.projection.status === "paused"
+        ? `<span style="color:#b45309;">new leads paused</span>`
+        : c.projection.status === "done"
+          ? `<span style="color:#059669;">sequence complete</span>`
+          : "";
+  const barColor = warming
+    ? "linear-gradient(90deg,#f59e0b,#b45309)"
+    : "linear-gradient(90deg,#6B72FF,#2E37FE)";
+  const pct = Math.max(2, Math.min(100, c.pctComplete));
+  const totalActive = c.waitingByStep.reduce((a, b) => a + b, 0);
+  const stageLine =
+    c.stepCount > 1 && totalActive > 0
+      ? `<div style="margin-top:12px;padding-top:10px;border-top:1px dashed #E2E3ED;font-size:11px;color:#6B6E8A;">Active by step: ${c.waitingByStep
+          .map((n) => `<b style="color:#3D3D5C;">${n.toLocaleString()}</b>`)
+          .join(' <span style="color:#c3c6d4;">&#8594;</span> ')} <span style="color:#9194AD;">(step 1&#8594;${c.stepCount})</span></div>`
+      : "";
+  const repliesExtra =
+    c.positiveRepliesYesterday > 0
+      ? ` <span style="font-size:9px;color:#059669;">(${c.positiveRepliesYesterday} pos)</span>`
+      : "";
+  const warmNote = warming
+    ? ` · <span style="color:#b45309;">${c.warmingCount} inbox${c.warmingCount === 1 ? "" : "es"} warming</span>`
+    : "";
+  return `
+  <div style="border:1px solid #E2E3ED;border-radius:12px;padding:16px;margin:0 0 12px;">
+    <table width="100%" role="presentation"><tr>
+      <td style="vertical-align:top;"><span style="font-size:15px;font-weight:700;color:#1A1A2E;">${name}</span> ${chip}${sub}</td>
+      <td style="text-align:right;font-size:11.5px;color:#6B6E8A;vertical-align:top;white-space:nowrap;">${doneBy}</td>
+    </tr></table>
+    <div style="margin:10px 0 4px;background:#eef0f5;border-radius:6px;height:8px;overflow:hidden;"><div style="width:${pct}%;height:8px;background:${barColor};border-radius:6px;"></div></div>
+    <p style="margin:0 0 12px;font-size:11px;color:#9194AD;">${c.pctComplete}% of the sequence complete · ${c.active.toLocaleString()} active contacts${warmNote}</p>
+    <table width="100%" role="presentation"><tr>
+      <td width="33%" style="text-align:center;"><div style="font-size:19px;font-weight:800;color:#1A1A2E;">${c.sentYesterday.toLocaleString()}</div><div style="font-size:9.5px;color:#6B6E8A;text-transform:uppercase;letter-spacing:.3px;">Sent yest</div></td>
+      <td width="33%" style="text-align:center;border-left:1px solid #E2E3ED;border-right:1px solid #E2E3ED;"><div style="font-size:19px;font-weight:800;color:#1d4ed8;">${c.scheduledToday.toLocaleString()}</div><div style="font-size:9.5px;color:#6B6E8A;text-transform:uppercase;letter-spacing:.3px;">Today</div></td>
+      <td width="33%" style="text-align:center;"><div style="font-size:19px;font-weight:800;color:#10b981;">${c.repliesYesterday.toLocaleString()}</div><div style="font-size:9.5px;color:#6B6E8A;text-transform:uppercase;letter-spacing:.3px;">Replies${repliesExtra}</div></td>
+    </tr></table>
+    ${stageLine}
+  </div>`;
+}
+
+// The health beacon, folded into one card: a compact all-clear grid when green,
+// or a specific problem list (amber/red) when something needs action. The
+// footnote always carries pipeline throughput + what reports are due.
+function systemChecksHtml(s: HeartbeatSections, verdict: HealthVerdict): string {
+  const dg = s.deliveryGap;
+  const bounced = dg.reportsBounced24h + dg.hotLeadsBounced24h;
+
+  const problems: string[] = [];
+  if (!s.config.resendKeySet) problems.push("RESEND_API_KEY is missing");
+  if (!s.config.resendWebhookSecretSet)
+    problems.push("RESEND_WEBHOOK_SECRET is missing — delivery can't be confirmed");
+  if (s.config.ownerCount === 0) problems.push("no owner profiles configured");
+  if (s.pendingAlerts.count > 0)
+    problems.push(`${s.pendingAlerts.count} alert${s.pendingAlerts.count === 1 ? "" : "s"} pending in the queue`);
+  if (dg.reportsAwaitingConfirmation > 0)
+    problems.push(`${dg.reportsAwaitingConfirmation} report${dg.reportsAwaitingConfirmation === 1 ? "" : "s"} awaiting delivery confirmation`);
+  if (dg.hotLeadsAwaitingConfirmation > 0)
+    problems.push(`${dg.hotLeadsAwaitingConfirmation} hot-lead notification${dg.hotLeadsAwaitingConfirmation === 1 ? "" : "s"} awaiting confirmation`);
+  if (bounced > 0)
+    problems.push(`${bounced} bounce${bounced === 1 ? "" : "s"} in the last 24h`);
+  if (s.stuck.orphanReports > 0)
+    problems.push(`${s.stuck.orphanReports} report${s.stuck.orphanReports === 1 ? "" : "s"} created but never sent`);
+  if (s.stuck.stalledHotLeadRetries > 0)
+    problems.push(`${s.stuck.stalledHotLeadRetries} hot-lead retr${s.stuck.stalledHotLeadRetries === 1 ? "y" : "ies"} stalled`);
+  const queryErr =
+    s.pendingAlerts.error ||
+    s.recentActivity.error ||
+    s.deliveryGap.error ||
+    s.stuck.error ||
+    s.config.error;
+  if (queryErr) problems.push(`a health query failed: ${queryErr}`);
+
+  const dueNames = s.upcoming.dueIn24h.map((d) => escapeHtml(d.name));
+  const footNote = `${s.recentActivity.reportsSent24h} report${s.recentActivity.reportsSent24h === 1 ? "" : "s"} &amp; ${s.recentActivity.hotLeadsSent24h} hot-lead notification${s.recentActivity.hotLeadsSent24h === 1 ? "" : "s"} sent in 24h · ${dueNames.length ? `reports due next 24h: ${dueNames.join(", ")}` : "no reports due next 24h"}`;
+
+  if (verdict === "green" && problems.length === 0) {
+    const cell = (ok: string) =>
+      `<td style="padding:3px 0;font-size:11.5px;color:#047857;">&#10003; ${ok}</td>`;
+    return `
+    <div style="background:#ecfdf5;border:1px solid #a7f3d0;border-radius:12px;padding:16px;">
+      <p style="margin:0 0 10px;font-size:13px;font-weight:700;color:#065f46;">&#10003; System checks — all clear</p>
+      <table width="100%" role="presentation">
+        <tr>${cell("0 pending alerts")}${cell("Delivery confirmed (webhook live)")}</tr>
+        <tr>${cell("0 bounces in 24h")}${cell("0 stuck rows")}</tr>
+        <tr>${cell("Env &amp; keys OK")}${cell(`${s.config.ownerCount} owner profile${s.config.ownerCount === 1 ? "" : "s"}`)}</tr>
+      </table>
+      <p style="margin:10px 0 0;font-size:11px;color:#059669;border-top:1px solid #a7f3d0;padding-top:8px;">${footNote}</p>
+    </div>`;
+  }
+
+  const color = VERDICT_COLOR[verdict];
+  const bg = verdict === "red" ? "#fef2f2" : "#fffbeb";
+  const bd = verdict === "red" ? "#fecaca" : "#fde68a";
+  const items = problems
+    .map((p) => `<li style="margin:0 0 4px;">${escapeHtml(p)}</li>`)
+    .join("");
+  return `
+  <div style="background:${bg};border:1px solid ${bd};border-radius:12px;padding:16px;">
+    <p style="margin:0 0 8px;font-size:13px;font-weight:700;color:${color};">&#9888; ${escapeHtml(VERDICT_LABEL[verdict])} — ${problems.length} thing${problems.length === 1 ? "" : "s"} to look at</p>
+    <ul style="margin:0;padding-left:18px;font-size:12.5px;color:${color};line-height:1.5;">${items}</ul>
+    <p style="margin:10px 0 0;font-size:11px;color:#6B6E8A;border-top:1px solid ${bd};padding-top:8px;">${footNote}</p>
+  </div>`;
 }
 
 function buildHtml(
@@ -388,110 +973,41 @@ function buildHtml(
   verdict: HealthVerdict,
   now: Date,
 ): string {
-  const verdictLabel = VERDICT_LABEL[verdict];
-  const verdictColor = VERDICT_COLOR[verdict];
+  const ca = s.campaignActivity;
+  const eyebrow = `Daily brief · ${etShortDate(now)}`;
+  const summary = narrativeSummary(s, verdict);
 
-  const sectionStyle =
-    "margin:0 0 16px;padding:12px;border:1px solid #e5e7eb;border-radius:6px;";
-  const h3 = (text: string) =>
-    `<h3 style="margin:0 0 8px;font-size:14px;color:#111;">${escapeHtml(text)}</h3>`;
-  const errLine = (err: string | null) =>
-    err
-      ? `<div style="color:#b91c1c;font-size:12px;margin-top:6px;">Query failed: ${escapeHtml(err)}</div>`
-      : "";
+  const campErr = ca.error
+    ? `<div style="margin:0 0 12px;padding:10px 12px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;color:#b91c1c;font-size:12px;">Couldn't load campaign activity: ${escapeHtml(ca.error)}</div>`
+    : "";
 
-  const oldestPending = s.pendingAlerts.oldest
-    ? `<code>${escapeHtml(s.pendingAlerts.oldest)}</code>`
-    : "—";
-
-  const upcomingHtml = s.upcoming.dueIn24h.length
-    ? `<ul style="margin:0;padding-left:20px;font-size:13px;">${s.upcoming.dueIn24h
-        .map(
-          (d) =>
-            `<li>${escapeHtml(d.name)} — <code>${escapeHtml(d.whenIso)}</code></li>`,
-        )
-        .join("")}</ul>`
-    : `<div style="font-size:13px;color:#555;">No reports scheduled in the next 24h.</div>`;
-
-  const reportDeliveryColor =
-    s.deliveryGap.reportsAwaitingConfirmation > 0 ? "#b45309" : "#111";
-  const hotLeadDeliveryColor =
-    s.deliveryGap.hotLeadsAwaitingConfirmation > 0 ? "#b45309" : "#111";
-  const orphanColor = s.stuck.orphanReports > 0 ? "#b45309" : "#111";
-  const stalledColor =
-    s.stuck.stalledHotLeadRetries > 0 ? "#b45309" : "#111";
+  const MAX_CARDS = 8;
+  const cardsHtml = ca.campaigns.length
+    ? ca.campaigns.slice(0, MAX_CARDS).map(campaignCardHtml).join("") +
+      (ca.campaigns.length > MAX_CARDS
+        ? `<p style="margin:0 0 12px;font-size:11.5px;color:#9194AD;text-align:center;">+ ${ca.campaigns.length - MAX_CARDS} more active campaign${ca.campaigns.length - MAX_CARDS === 1 ? "" : "s"} — see the dashboard.</p>`
+        : "")
+    : `<div style="border:1px dashed #E2E3ED;border-radius:12px;padding:20px;text-align:center;color:#6B6E8A;font-size:13px;margin:0 0 12px;">No active native email campaigns right now.</div>`;
 
   return `
-<div style="font-family:system-ui,-apple-system,Segoe UI,sans-serif;color:#111;max-width:680px;">
-  <div style="margin:0 0 16px;padding:12px 16px;background:${verdictColor}10;border-left:4px solid ${verdictColor};border-radius:4px;">
-    <div style="font-size:12px;color:${verdictColor};font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">${escapeHtml(verdictLabel)}</div>
-    <div style="font-size:18px;font-weight:600;color:#111;margin-top:2px;">LeadStart system status</div>
-    <div style="font-size:12px;color:#666;margin-top:2px;">${escapeHtml(now.toISOString())}</div>
+<div style="font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #E2E3ED;max-width:600px;color:#1A1A2E;">
+  <div style="background:linear-gradient(135deg,#6B72FF 0%,#2E37FE 30%,#1C24B8 65%,#0F1880 100%);padding:26px 28px;">
+    <p style="margin:0;color:rgba(255,255,255,0.7);font-size:12px;text-transform:uppercase;letter-spacing:1px;">${escapeHtml(eyebrow)}</p>
+    <h1 style="margin:5px 0 0;color:#ffffff;font-size:23px;font-weight:700;letter-spacing:-0.4px;">Good morning</h1>
   </div>
-
-  <div style="${sectionStyle}">
-    ${h3("Alert queue")}
-    <table style="border-collapse:collapse;">
-      ${row("Pending alerts", String(s.pendingAlerts.count), s.pendingAlerts.count > 0 ? "#b45309" : "#15803d")}
-      ${row("Oldest pending", oldestPending)}
-    </table>
-    ${errLine(s.pendingAlerts.error)}
+  <div style="padding:22px 26px 6px;">
+    <p style="margin:0;font-size:15.5px;line-height:1.65;color:#3D3D5C;">${summary}</p>
   </div>
-
-  <div style="${sectionStyle}">
-    ${h3("24h activity")}
-    <table style="border-collapse:collapse;">
-      ${row("Reports sent", String(s.recentActivity.reportsSent24h))}
-      ${row("Hot-lead notifications sent", String(s.recentActivity.hotLeadsSent24h))}
-    </table>
-    ${errLine(s.recentActivity.error)}
+  <div style="padding:12px 22px 4px;">
+    ${campErr}
+    ${cardsHtml}
   </div>
-
-  <div style="${sectionStyle}">
-    ${h3("Delivery confirmation (last 24h)")}
-    <table style="border-collapse:collapse;">
-      ${row("Reports awaiting confirmation (sent &gt;30min ago, no webhook event)", String(s.deliveryGap.reportsAwaitingConfirmation), reportDeliveryColor)}
-      ${row("Hot-leads awaiting confirmation", String(s.deliveryGap.hotLeadsAwaitingConfirmation), hotLeadDeliveryColor)}
-      ${row("Reports bounced", String(s.deliveryGap.reportsBounced24h), s.deliveryGap.reportsBounced24h > 0 ? "#b91c1c" : "#111")}
-      ${row("Hot-leads bounced", String(s.deliveryGap.hotLeadsBounced24h), s.deliveryGap.hotLeadsBounced24h > 0 ? "#b91c1c" : "#111")}
-    </table>
-    <div style="font-size:12px;color:#666;margin-top:8px;">
-      A persistent non-zero awaiting-confirmation count usually means
-      <code>RESEND_WEBHOOK_SECRET</code> is wrong or the Resend webhook
-      isn't registered.
-    </div>
-    ${errLine(s.deliveryGap.error)}
+  <div style="padding:14px 22px 8px;">
+    ${systemChecksHtml(s, verdict)}
   </div>
-
-  <div style="${sectionStyle}">
-    ${h3("Stuck rows")}
-    <table style="border-collapse:collapse;">
-      ${row("Orphan kpi_reports (created &gt;1h ago, never sent)", String(s.stuck.orphanReports), orphanColor)}
-      ${row("Stalled hot-lead retries (failed, awaiting cron pickup)", String(s.stuck.stalledHotLeadRetries), stalledColor)}
-    </table>
-    ${errLine(s.stuck.error)}
+  <div style="padding:8px 22px 26px;text-align:center;">
+    <a href="${dashboardUrl()}" style="display:inline-block;background:linear-gradient(135deg,#6B72FF,#2E37FE);color:#ffffff;text-decoration:none;padding:13px 30px;border-radius:10px;font-size:14px;font-weight:600;">Open your dashboard &#8594;</a>
+    <p style="margin:14px 0 0;font-size:11px;color:#9194AD;">Sent every morning by LeadStart. If this email stops arriving, the alert pipeline itself is down — check the <code>owner-heartbeat</code> cron logs.</p>
   </div>
-
-  <div style="${sectionStyle}">
-    ${h3("Reports due in the next 24h")}
-    ${upcomingHtml}
-    ${errLine(s.upcoming.error)}
-  </div>
-
-  <div style="${sectionStyle}">
-    ${h3("Config check")}
-    <table style="border-collapse:collapse;">
-      <tr><td style="padding:4px 18px 4px 0;color:#555;font-size:13px;">RESEND_API_KEY</td><td>${check(s.config.resendKeySet)}</td></tr>
-      <tr><td style="padding:4px 18px 4px 0;color:#555;font-size:13px;">RESEND_WEBHOOK_SECRET</td><td>${check(s.config.resendWebhookSecretSet)}</td></tr>
-      <tr><td style="padding:4px 18px 4px 0;color:#555;font-size:13px;">CRON_SECRET</td><td>${check(s.config.cronSecretSet)}</td></tr>
-      <tr><td style="padding:4px 18px 4px 0;color:#555;font-size:13px;">Owner profiles</td><td style="font-size:13px;font-weight:500;">${s.config.ownerCount}</td></tr>
-    </table>
-    ${errLine(s.config.error)}
-  </div>
-
-  <p style="margin:16px 0 0;color:#666;font-size:12px;">
-    If you stop seeing this email, the alert system itself is broken.
-    Investigate the <code>/api/cron/owner-heartbeat</code> Vercel cron logs.
-  </p>
 </div>`.trim();
 }
