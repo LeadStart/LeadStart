@@ -27,6 +27,7 @@ interface Body {
   send_end_hour?: number | null;
   send_weekdays_only?: boolean | null;
   daily_new_leads_cap?: number | null;
+  sending_strategy?: string | null;
 }
 
 const KNOWN_TZ = new Set([
@@ -121,6 +122,16 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     );
   }
 
+  // ---- Validate sending strategy (optional; NULL = inherit default) ----
+  const sendingStrategy = body.sending_strategy ?? null;
+  if (
+    sendingStrategy !== null &&
+    sendingStrategy !== "finish_first" &&
+    sendingStrategy !== "reach_first"
+  ) {
+    return NextResponse.json({ error: "Invalid sending strategy" }, { status: 400 });
+  }
+
   // ---- Replace steps ----
   const { error: delErr } = await admin.from("campaign_steps").delete().eq("campaign_id", campaignId);
   if (delErr) {
@@ -149,6 +160,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       send_end_hour: endH,
       send_weekdays_only: body.send_weekdays_only ?? null,
       daily_new_leads_cap: newLeadsCap,
+      sending_strategy: sendingStrategy,
       updated_at: new Date().toISOString(),
     })
     .eq("id", campaignId);

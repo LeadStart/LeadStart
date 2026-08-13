@@ -38,11 +38,13 @@ export function StageFlowCard({
   terminal,
   totals,
   projection,
+  strategyLabel,
 }: {
   stages: StageRow[];
   terminal: { replied: number; completed: number; failed: number };
   totals: { active: number; enrolled: number; sent: number };
   projection: CompletionProjection;
+  strategyLabel: string;
 }) {
   const maxWaiting = Math.max(1, ...stages.map((s) => s.waiting));
 
@@ -64,7 +66,7 @@ export function StageFlowCard({
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        <CompletionBanner projection={projection} />
+        <CompletionBanner projection={projection} strategyLabel={strategyLabel} />
 
         <div>
           {/* Timeline — connector line runs behind the step badges */}
@@ -145,7 +147,13 @@ export function StageFlowCard({
   );
 }
 
-function CompletionBanner({ projection }: { projection: CompletionProjection }) {
+function CompletionBanner({
+  projection,
+  strategyLabel,
+}: {
+  projection: CompletionProjection;
+  strategyLabel: string;
+}) {
   const isProjected = projection.status === "projected";
   const headline =
     projection.status === "projected"
@@ -181,6 +189,12 @@ function CompletionBanner({ projection }: { projection: CompletionProjection }) 
             style={{ background: "rgba(255,255,255,0.2)" }}
           >
             estimate
+          </span>
+          <span
+            className="rounded-full px-1.5 py-0.5 text-[10px] font-medium tracking-normal"
+            style={{ background: "rgba(255,255,255,0.2)" }}
+          >
+            {strategyLabel}
           </span>
         </p>
         <p className={`${isProjected ? "text-[22px]" : "text-lg"} font-bold leading-tight`}>

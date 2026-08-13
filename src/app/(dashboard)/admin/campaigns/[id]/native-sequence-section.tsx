@@ -10,6 +10,7 @@ import { ShieldCheck, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { appUrl } from "@/lib/api-url";
 import type { SendWindowConfig } from "@/lib/gmail/ramp";
+import type { SendingStrategy } from "@/types/app";
 import { NativeSequenceCard, type StepDraft } from "./native-sequence-card";
 import { DeliverabilityCard, type DeliverabilityResult } from "./deliverability-card";
 
@@ -18,11 +19,13 @@ export function NativeSequenceSection({
   initialSteps,
   initialWindow,
   initialNewLeadsCap,
+  initialStrategy,
 }: {
   campaignId: string;
   initialSteps: StepDraft[];
   initialWindow: SendWindowConfig;
   initialNewLeadsCap: number;
+  initialStrategy: SendingStrategy;
 }) {
   const [result, setResult] = useState<DeliverabilityResult | null>(null);
   const [loading, setLoading] = useState(false);
@@ -55,6 +58,7 @@ export function NativeSequenceSection({
         initialSteps={initialSteps}
         initialWindow={initialWindow}
         initialNewLeadsCap={initialNewLeadsCap}
+        initialStrategy={initialStrategy}
         headerActions={
           <Button
             variant="outline"

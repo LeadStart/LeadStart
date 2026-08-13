@@ -15,6 +15,8 @@
 // may exceed — not a per-mailbox max, not an override (see
 // ABSOLUTE_MAX_DAILY_CAP). Send window is Mon–Fri business hours (per campaign).
 
+import type { SendingStrategy } from "@/types/app";
+
 // The absolute per-inbox daily send ceiling. This is a safety invariant, not a
 // tunable default: no mailbox may EVER send more than this many cold emails in
 // one day, regardless of its max_daily_cap or daily_cap_override.
@@ -65,6 +67,20 @@ export function resolveDailyNewLeadsCap(campaign: {
 }): number {
   const v = campaign.daily_new_leads_cap;
   return v == null ? DEFAULT_DAILY_NEW_LEADS_CAP : Math.max(0, v);
+}
+
+// Default sending strategy for a campaign that hasn't chosen one (migration
+// 00066). 'finish_first' is the behavior every campaign had before the toggle
+// existed, so an un-set campaign is unchanged.
+export const DEFAULT_SENDING_STRATEGY: SendingStrategy = "finish_first";
+
+// Resolve a campaign's effective sending strategy: its own value, or the
+// default when unset/invalid. Same "NULL = inherit default" shape as
+// resolveDailyNewLeadsCap / resolveSendWindow.
+export function resolveSendingStrategy(campaign: {
+  sending_strategy?: string | null;
+}): SendingStrategy {
+  return campaign.sending_strategy === "reach_first" ? "reach_first" : DEFAULT_SENDING_STRATEGY;
 }
 
 export interface SendWindowConfig {
@@ -300,13 +316,16 @@ export interface CompletionProjection {
 
 export function projectSequenceCompletion(params: {
   firstTouchesRemaining: number; // active enrollments still at step 0 (never sent)
-  dailyNewLeadsCap: number; // resolveDailyNewLeadsCap(campaign)
+  firstTouchesPerDay: number; // effective first-touch RATE — finish_first: new-leads cap; reach_first: warmed inbox capacity
+  newLeadsPaused: boolean; // new leads explicitly paused (daily_new_leads_cap = 0); honored in both strategies
   stepWaitDays: number[]; // wait_days per step, index 0..n-1
   waitingByStep: number[]; // active enrollments per current_step_index
   weekdaysOnly: boolean; // from the campaign's send window
+  strategy: SendingStrategy; // drives the driver wording
+  mailboxCount?: number; // active inboxes — annotates the reach_first driver
   now?: Date;
 }): CompletionProjection {
-  const { firstTouchesRemaining, dailyNewLeadsCap, stepWaitDays, waitingByStep, weekdaysOnly } = params;
+  const { firstTouchesRemaining, firstTouchesPerDay, newLeadsPaused, stepWaitDays, waitingByStep, weekdaysOnly, strategy } = params;
   const now = params.now ?? new Date();
   const n = stepWaitDays.length;
   const totalActive = waitingByStep.reduce((a, b) => a + b, 0);
@@ -315,8 +334,12 @@ export function projectSequenceCompletion(params: {
     return { status: "unknown", dateLabel: null, sendingDays: null, weeks: null, driver: "No sequence steps configured yet." };
   if (totalActive === 0)
     return { status: "done", dateLabel: null, sendingDays: null, weeks: null, driver: "No active contacts remaining — every enrolled contact has finished, replied, or exited." };
-  if (firstTouchesRemaining > 0 && dailyNewLeadsCap <= 0)
+  if (firstTouchesRemaining > 0 && newLeadsPaused)
     return { status: "paused", dateLabel: null, sendingDays: null, weeks: null, driver: `${firstTouchesRemaining.toLocaleString()} first-touches are queued, but new leads are paused (0/day) — resume to project a finish date.` };
+  // No sending capacity to start the queue (e.g. reach_first with every inbox
+  // paused/errored). Can't invent a rate, so decline to project a date.
+  if (firstTouchesRemaining > 0 && firstTouchesPerDay <= 0)
+    return { status: "unknown", dateLabel: null, sendingDays: null, weeks: null, driver: "No active sending inboxes — add or resume a mailbox to project a finish date." };
 
   // The follow-up tail: the sum of the waits before every step after the first
   // touch. The last contact to start still owes this many calendar days.
@@ -335,8 +358,8 @@ export function projectSequenceCompletion(params: {
 
   // 2) Queued first-touch cohort — only when any remain (an empty queue must
   //    not invent a fresh step-0 contact). The last one starts after the queue
-  //    clears at the new-leads cap, then runs the full follow-up tail.
-  const sendingDays = firstTouchesRemaining > 0 ? Math.ceil(firstTouchesRemaining / dailyNewLeadsCap) : 0;
+  //    clears at the first-touch rate, then runs the full follow-up tail.
+  const sendingDays = firstTouchesRemaining > 0 ? Math.ceil(firstTouchesRemaining / firstTouchesPerDay) : 0;
   if (firstTouchesRemaining > 0) {
     const lastStart = addDays(now, sendingDays, weekdaysOnly);
     const queueFinish = addDays(lastStart, followupTail, false);
@@ -346,8 +369,15 @@ export function projectSequenceCompletion(params: {
   const dateLabel = `${PROJ_MONTHS[finish.getMonth()]} ${finish.getDate()}, ${finish.getFullYear()}`;
 
   const parts: string[] = [];
-  if (firstTouchesRemaining > 0)
-    parts.push(`${firstTouchesRemaining.toLocaleString()} first-touches left ÷ ${dailyNewLeadsCap}/day ≈ ${sendingDays} sending days`);
+  if (firstTouchesRemaining > 0) {
+    if (strategy === "reach_first") {
+      const mc = params.mailboxCount ?? 0;
+      const boxes = mc > 0 ? ` (${mc} inbox${mc === 1 ? "" : "es"} at current warmup)` : "";
+      parts.push(`${firstTouchesRemaining.toLocaleString()} first-touches ÷ ~${firstTouchesPerDay}/day${boxes} ≈ ${sendingDays} sending days`);
+    } else {
+      parts.push(`${firstTouchesRemaining.toLocaleString()} first-touches left ÷ ${firstTouchesPerDay}/day ≈ ${sendingDays} sending days`);
+    }
+  }
   if (followupTail > 0)
     parts.push(`${firstTouchesRemaining > 0 ? "then a " : "a "}${followupTail}-day follow-up tail`);
   const driver = parts.length ? parts.join(", ") + "." : "Based on the remaining follow-up cadence.";

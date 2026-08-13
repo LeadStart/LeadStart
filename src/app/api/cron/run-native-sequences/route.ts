@@ -33,6 +33,7 @@ import {
   resolveSendWindow,
   startOfLocalDay,
   resolveDailyNewLeadsCap,
+  resolveSendingStrategy,
   minutesUntilWindowClose,
   sendSpacingMinutes,
   type SendWindowConfig,
@@ -72,6 +73,7 @@ type CampaignRow = {
   send_end_hour: number | null;
   send_weekdays_only: boolean | null;
   daily_new_leads_cap: number | null;
+  sending_strategy: string | null;
 };
 
 export async function GET(request: NextRequest) {
@@ -86,27 +88,46 @@ export async function GET(request: NextRequest) {
   const tickNow = new Date();
   const admin = createAdminClient();
 
-  // Active enrollments on native_email campaigns only — filtered in SQL via
-  // an inner join so this worker never overfetches LinkedIn/Salesforge rows
-  // (which would starve throughput once channels run concurrently).
-  const { data: enrollmentsData, error: enrError } = await admin
-    .from("campaign_enrollments")
-    .select("*, campaigns!inner(source_channel)")
-    .eq("status", "active")
-    .eq("campaigns.source_channel", "native_email")
-    // Follow-ups first: enrollments that have already sent (last_action_at NOT
-    // NULL) go oldest-due first, ahead of brand-new step-0 enrollments
-    // (last_action_at NULL, oldest-created first). So a big new-contact import
-    // never delays in-flight threads.
-    .order("last_action_at", { ascending: true, nullsFirst: false })
-    .order("created_at", { ascending: true })
-    .limit(SENDS_PER_TICK * 3);
+  // Active enrollments on native_email campaigns only (filtered in SQL via an
+  // inner join so this worker never overfetches other channels' rows).
+  //
+  // Follow-ups and never-sent leads are fetched in SEPARATE capped queries and
+  // combined, rather than one ordered fetch with a single row cap. The old
+  // single-fetch ordered already-sent rows (last_action_at NOT NULL) ahead of
+  // new step-0 rows, so once a campaign's active in-flight population exceeded
+  // the row cap, brand-new leads never entered the batch and first-touches
+  // stopped sending altogether. Two capped fetches guarantee BOTH classes are
+  // present every tick; the per-campaign strategy sort below (after we know each
+  // campaign's sending_strategy) decides which class wins the day's send slots.
+  const FETCH_LIMIT = SENDS_PER_TICK * 3;
+  const [followupRes, newLeadRes] = await Promise.all([
+    admin
+      .from("campaign_enrollments")
+      .select("*, campaigns!inner(source_channel)")
+      .eq("status", "active")
+      .eq("campaigns.source_channel", "native_email")
+      .not("last_action_at", "is", null)
+      .order("last_action_at", { ascending: true })
+      .limit(FETCH_LIMIT),
+    admin
+      .from("campaign_enrollments")
+      .select("*, campaigns!inner(source_channel)")
+      .eq("status", "active")
+      .eq("campaigns.source_channel", "native_email")
+      .is("last_action_at", null)
+      .order("started_at", { ascending: true })
+      .limit(FETCH_LIMIT),
+  ]);
 
+  const enrError = followupRes.error ?? newLeadRes.error;
   if (enrError) {
     console.error("[cron/native-sequences] enrollment fetch failed:", enrError);
     return NextResponse.json({ error: enrError.message }, { status: 500 });
   }
-  const enrollments = (enrollmentsData ?? []) as unknown as EnrollmentRow[];
+  const enrollments = [
+    ...((followupRes.data ?? []) as unknown as EnrollmentRow[]),
+    ...((newLeadRes.data ?? []) as unknown as EnrollmentRow[]),
+  ];
   if (enrollments.length === 0) {
     return NextResponse.json({ status: "idle" });
   }
@@ -117,10 +138,33 @@ export async function GET(request: NextRequest) {
 
   const { data: campaignsData } = await admin
     .from("campaigns")
-    .select("id, organization_id, client_id, status, source_channel, name, send_timezone, send_start_hour, send_end_hour, send_weekdays_only, daily_new_leads_cap")
+    .select("id, organization_id, client_id, status, source_channel, name, send_timezone, send_start_hour, send_end_hour, send_weekdays_only, daily_new_leads_cap, sending_strategy")
     .in("id", campaignIds);
   const campaignMap = new Map<string, CampaignRow>();
   for (const c of (campaignsData ?? []) as CampaignRow[]) campaignMap.set(c.id, c);
+
+  // Per-campaign strategy ordering. Within a campaign, reach_first processes new
+  // first-touches (last_action_at NULL) before follow-ups; finish_first (the
+  // default) processes follow-ups first. Across campaigns the two classes
+  // interleave by due-ness. Array.sort is stable in V8, so within a rank ties
+  // keep the DB order (oldest-actioned / oldest-started first). This is the ONLY
+  // place strategy changes send order — the loop below is otherwise identical.
+  const enrollmentRank = (e: EnrollmentRow): number => {
+    const strat = resolveSendingStrategy(campaignMap.get(e.campaign_id) ?? {});
+    const isNewLead = e.last_action_at == null;
+    if (strat === "reach_first") return isNewLead ? 0 : 1;
+    return isNewLead ? 1 : 0;
+  };
+  enrollments.sort((a, b) => {
+    const r = enrollmentRank(a) - enrollmentRank(b);
+    if (r !== 0) return r;
+    const ta = a.last_action_at ? Date.parse(a.last_action_at) : 0;
+    const tb = b.last_action_at ? Date.parse(b.last_action_at) : 0;
+    if (ta !== tb) return ta - tb;
+    const sa = a.started_at ? Date.parse(a.started_at) : 0;
+    const sb = b.started_at ? Date.parse(b.started_at) : 0;
+    return sa - sb;
+  });
 
   // Steps, grouped by campaign then step_index.
   const { data: stepsData } = await admin
@@ -361,16 +405,25 @@ export async function GET(request: NextRequest) {
       continue;
     }
 
-    // Per-campaign new-leads/day cap: a step-0 first-touch only fires while the
-    // campaign is under its daily new-lead ceiling. Follow-ups (step 1+) are
-    // never gated by this, so nurturing continues even at the cap. Leaves the
-    // enrollment active to retry once the day's count resets.
+    // Per-campaign new-leads/day gate for step-0 first-touches. A cap of 0
+    // pauses new leads in BOTH strategies (an explicit off switch). Under
+    // finish_first the numeric cap throttles the daily first-touch rate; under
+    // reach_first the cap is NOT a rate limit — first-touches use full warmed
+    // inbox capacity, still bounded by the per-mailbox ceiling in eligible().
+    // Follow-ups (step 1+) are never gated here. Leaves the enrollment active to
+    // retry once the day's count resets.
     if (enrollment.current_step_index === 0) {
       const newLeadCap = resolveDailyNewLeadsCap(campaign);
-      const usedNewLeads = (newLeadsToday[campaign.id] ?? 0) + (newLeadsInTick[campaign.id] ?? 0);
-      if (usedNewLeads >= newLeadCap) {
-        results.push({ enrollment_id: enrollment.id, result: "new_leads_cap_reached" });
+      if (newLeadCap <= 0) {
+        results.push({ enrollment_id: enrollment.id, result: "new_leads_paused" });
         continue;
+      }
+      if (resolveSendingStrategy(campaign) === "finish_first") {
+        const usedNewLeads = (newLeadsToday[campaign.id] ?? 0) + (newLeadsInTick[campaign.id] ?? 0);
+        if (usedNewLeads >= newLeadCap) {
+          results.push({ enrollment_id: enrollment.id, result: "new_leads_cap_reached" });
+          continue;
+        }
       }
     }
 

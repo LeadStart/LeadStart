@@ -12,9 +12,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Pencil, Plus, Trash2, ArrowUp, ArrowDown, Save, X, Loader2, Clock } from "lucide-react";
+import { Pencil, Plus, Trash2, ArrowUp, ArrowDown, Save, X, Loader2, Clock, Route } from "lucide-react";
 import { appUrl } from "@/lib/api-url";
 import { formatSendWindow, type SendWindowConfig } from "@/lib/gmail/ramp";
+import type { SendingStrategy } from "@/types/app";
 import { StepCopyCheck } from "@/components/campaigns/step-copy-check";
 
 export interface StepDraft {
@@ -43,12 +44,14 @@ export function NativeSequenceCard({
   initialSteps,
   initialWindow,
   initialNewLeadsCap,
+  initialStrategy,
   headerActions,
 }: {
   campaignId: string;
   initialSteps: StepDraft[];
   initialWindow: SendWindowConfig;
   initialNewLeadsCap: number;
+  initialStrategy: SendingStrategy;
   // Extra controls rendered to the left of Edit in the read-mode header
   // (e.g. the deliverability "Run check" trigger).
   headerActions?: ReactNode;
@@ -58,6 +61,7 @@ export function NativeSequenceCard({
   const [steps, setSteps] = useState<StepDraft[]>(initialSteps);
   const [win, setWin] = useState<SendWindowConfig>(initialWindow);
   const [newLeadsCap, setNewLeadsCap] = useState<number>(initialNewLeadsCap);
+  const [strategy, setStrategy] = useState<SendingStrategy>(initialStrategy);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -65,6 +69,7 @@ export function NativeSequenceCard({
     setSteps(initialSteps);
     setWin(initialWindow);
     setNewLeadsCap(initialNewLeadsCap);
+    setStrategy(initialStrategy);
     setError(null);
     setEditing(false);
   }
@@ -111,6 +116,7 @@ export function NativeSequenceCard({
           send_end_hour: win.endHour,
           send_weekdays_only: win.weekdaysOnly,
           daily_new_leads_cap: newLeadsCap,
+          sending_strategy: strategy,
         }),
       });
       const data = (await res.json()) as { error?: string };
@@ -135,11 +141,12 @@ export function NativeSequenceCard({
         <CardHeader className="flex flex-row items-center justify-between pb-3">
           <div>
             <CardTitle className="text-base">Sequence &amp; schedule</CardTitle>
-            <p className="text-xs text-muted-foreground mt-0.5 inline-flex items-center gap-1">
+            <p className="text-xs text-muted-foreground mt-0.5 inline-flex flex-wrap items-center gap-1">
               <Clock size={12} /> {formatSendWindow(win)} ·{" "}
               {newLeadsCap === 0
                 ? "new leads paused"
-                : `up to ${newLeadsCap} new lead${newLeadsCap === 1 ? "" : "s"}/day`}
+                : `up to ${newLeadsCap} new lead${newLeadsCap === 1 ? "" : "s"}/day`}{" "}
+              · {strategy === "reach_first" ? "Reach everyone first" : "Finish the sequence first"}
             </p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
@@ -274,11 +281,50 @@ export function NativeSequenceCard({
               />
             </div>
             <p className="text-[11px] text-muted-foreground pb-2">
-              New first-touches started per day on this campaign. Follow-ups aren&apos;t
-              limited by this — set 0 to pause new leads while replies keep sending.
+              {strategy === "reach_first" ? (
+                <>
+                  In <span className="font-medium">Reach everyone first</span> this is only an
+                  on/off — first-touches use full inbox capacity regardless of the number.
+                  Set 0 to pause new leads while replies keep sending.
+                </>
+              ) : (
+                <>
+                  New first-touches started per day on this campaign. Follow-ups aren&apos;t
+                  limited by this — set 0 to pause new leads while replies keep sending.
+                </>
+              )}
             </p>
           </div>
           <p className="text-[11px] text-muted-foreground">{formatSendWindow(win)}</p>
+        </div>
+
+        {/* Sending strategy — how the day's send budget is split between new
+            first-touches and follow-ups. Neither option changes total volume
+            (inbox warmup caps set that); they change which emails win the slots. */}
+        <div className="rounded-lg border border-border/50 p-4 space-y-3">
+          <p className="text-sm font-medium inline-flex items-center gap-1.5">
+            <Route size={14} /> Sending strategy
+          </p>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <StrategyOption
+              active={strategy === "finish_first"}
+              onClick={() => setStrategy("finish_first")}
+              title="Finish the sequence first"
+              desc="Follow-ups get priority; new leads drip in at the cap above. Every contact is walked through the whole sequence. Steady and predictable — slower reach."
+            />
+            <StrategyOption
+              active={strategy === "reach_first"}
+              onClick={() => setStrategy("reach_first")}
+              title="Reach everyone first"
+              desc="New first-touches get priority and use full inbox capacity (the cap above no longer limits the rate). Email #1 reaches the whole list fast; follow-ups fill in behind. Best for time-sensitive intros."
+            />
+          </div>
+          {strategy === "reach_first" && newLeadsCap === 0 && (
+            <p className="text-[11px] text-amber-600">
+              New leads are paused (0/day), so reach-first has nothing to send. Set the
+              New leads/day above to any non-zero value to let first-touches flow.
+            </p>
+          )}
         </div>
 
         {/* Steps */}
@@ -349,5 +395,46 @@ export function NativeSequenceCard({
         {error && <p className="text-sm text-red-600">{error}</p>}
       </CardContent>
     </Card>
+  );
+}
+
+// One selectable strategy card (radio-style). Clicking selects it; the active
+// one gets a brand ring + filled dot.
+function StrategyOption({
+  active,
+  onClick,
+  title,
+  desc,
+}: {
+  active: boolean;
+  onClick: () => void;
+  title: string;
+  desc: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`rounded-lg border p-3 text-left transition-colors ${
+        active
+          ? "border-[#2E37FE] bg-[#2E37FE]/5 ring-1 ring-[#2E37FE]/30"
+          : "border-border/60 hover:border-border"
+      }`}
+    >
+      <span className="flex items-center gap-2">
+        <span
+          className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
+            active ? "border-[#2E37FE]" : "border-muted-foreground/40"
+          }`}
+        >
+          {active && <span className="h-2 w-2 rounded-full bg-[#2E37FE]" />}
+        </span>
+        <span className="text-sm font-semibold text-[#0f172a]">{title}</span>
+      </span>
+      <span className="mt-1.5 block text-[11px] leading-relaxed text-muted-foreground">
+        {desc}
+      </span>
+    </button>
   );
 }

@@ -10,7 +10,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { KPICard } from "@/components/charts/kpi-card";
 import { DailyChart } from "@/components/charts/daily-chart";
 import { calculateMetrics } from "@/lib/kpi/calculator";
-import { resolveSendWindow, formatSendWindow, resolveDailyNewLeadsCap, projectSequenceCompletion, type CompletionProjection } from "@/lib/gmail/ramp";
+import { resolveSendWindow, formatSendWindow, resolveDailyNewLeadsCap, resolveSendingStrategy, effectiveDailyCap, projectSequenceCompletion, type CompletionProjection } from "@/lib/gmail/ramp";
 import {
   Card,
   CardContent,
@@ -64,6 +64,9 @@ export default async function AdminCampaignDetailPage({
   const campaign = campaignRow as Campaign;
   const sendWindow = resolveSendWindow(campaign);
   const sendSchedule = formatSendWindow(sendWindow);
+  const sendingStrategy = resolveSendingStrategy(campaign);
+  const strategyLabel =
+    sendingStrategy === "reach_first" ? "Reach everyone first" : "Finish the sequence first";
   // The queue-state counts go through the admin client because the
   // client-scoped supabase respects RLS that would hide queue rows from
   // the owner if any policy is misconfigured. Admin client is fine here
@@ -138,12 +141,19 @@ export default async function AdminCampaignDetailPage({
         sent: nativeStats.sentByStep[i] ?? 0,
       });
     });
+    const newLeadsCap = resolveDailyNewLeadsCap(campaign);
     projection = projectSequenceCompletion({
       firstTouchesRemaining: nativeStats.waitingByStep[0] ?? 0,
-      dailyNewLeadsCap: resolveDailyNewLeadsCap(campaign),
+      // reach_first drains first-touches at full warmed inbox capacity; finish_first
+      // throttles them to the new-leads/day cap. A cap of 0 pauses either way.
+      firstTouchesPerDay:
+        sendingStrategy === "reach_first" ? nativeStats.dailyInboxCapacity : newLeadsCap,
+      newLeadsPaused: newLeadsCap <= 0,
       stepWaitDays: nativeStats.steps.map((s) => s.wait_days),
       waitingByStep: nativeStats.waitingByStep,
       weekdaysOnly: sendWindow.weekdaysOnly,
+      strategy: sendingStrategy,
+      mailboxCount: nativeStats.activeMailboxCount,
     });
   }
 
@@ -270,6 +280,18 @@ export default async function AdminCampaignDetailPage({
                     ))}
                   </div>
                 )}
+                {nativeStats.activeMailboxCount > 0 && (
+                  <p className="mt-2 text-[11px] text-muted-foreground">
+                    Combined sending capacity:{" "}
+                    <span className="font-medium text-foreground">
+                      ~{nativeStats.dailyInboxCapacity}/day
+                    </span>{" "}
+                    across {nativeStats.activeMailboxCount} active inbox
+                    {nativeStats.activeMailboxCount === 1 ? "" : "es"} (warmup-aware) —
+                    ~{Math.round(nativeStats.dailyInboxCapacity / nativeStats.activeMailboxCount)}/day
+                    per inbox on average.
+                  </p>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -292,6 +314,7 @@ export default async function AdminCampaignDetailPage({
                 sent: nativeStats.sent,
               }}
               projection={projection}
+              strategyLabel={strategyLabel}
             />
           )}
 
@@ -320,6 +343,7 @@ export default async function AdminCampaignDetailPage({
             initialSteps={nativeStats.steps}
             initialWindow={sendWindow}
             initialNewLeadsCap={resolveDailyNewLeadsCap(campaign)}
+            initialStrategy={sendingStrategy}
           />
         </>
       )}
@@ -449,6 +473,11 @@ interface NativeStats {
   // receive) and total sends logged per step — the stage-flow funnel data.
   waitingByStep: number[];
   sentByStep: number[];
+  // Warmup-aware daily send capacity across the ACTIVE inbox pool (sum of each
+  // inbox's current effective cap) + how many inboxes back it. This is the
+  // first-touch rate under reach_first and the honest throughput ceiling.
+  dailyInboxCapacity: number;
+  activeMailboxCount: number;
 }
 
 async function nativeStatsFor(
@@ -504,18 +533,42 @@ async function nativeStatsFor(
       : [];
 
   // Resolve the mailbox pool with a second query rather than a PostgREST
-  // embed (embed typing is array-vs-object ambiguous for a to-one FK).
+  // embed (embed typing is array-vs-object ambiguous for a to-one FK). Also
+  // sum each ACTIVE inbox's current effective cap (effectiveDailyCap over its
+  // all-time send count) into the campaign's warmup-aware daily capacity — the
+  // reach_first first-touch rate and the honest ceiling either way.
   const mailboxIds = ((poolRes.data ?? []) as { mailbox_id: string }[]).map((r) => r.mailbox_id);
   let mailboxes: { email: string; status: string }[] = [];
+  let dailyInboxCapacity = 0;
+  let activeMailboxCount = 0;
   if (mailboxIds.length > 0) {
     const { data: mbData } = await admin
       .from("native_mailboxes")
-      .select("email_address, status")
+      .select("id, email_address, status, max_daily_cap, daily_cap_override")
       .in("id", mailboxIds);
-    mailboxes = ((mbData ?? []) as { email_address: string; status: string }[]).map((m) => ({
-      email: m.email_address,
-      status: m.status,
-    }));
+    const mbs = (mbData ?? []) as {
+      id: string;
+      email_address: string;
+      status: string;
+      max_daily_cap: number;
+      daily_cap_override: number | null;
+    }[];
+    mailboxes = mbs.map((m) => ({ email: m.email_address, status: m.status }));
+    const activeMbs = mbs.filter((m) => m.status === "active");
+    activeMailboxCount = activeMbs.length;
+    const caps = await Promise.all(
+      activeMbs.map(async (m) => {
+        const { count } = await admin
+          .from("native_sends")
+          .select("id", { count: "exact", head: true })
+          .eq("mailbox_id", m.id);
+        return effectiveDailyCap(
+          { max_daily_cap: m.max_daily_cap, daily_cap_override: m.daily_cap_override },
+          count ?? 0,
+        );
+      }),
+    );
+    dailyInboxCapacity = caps.reduce((a, b) => a + b, 0);
   }
 
   const steps = stepRows.map((s) => ({
@@ -533,6 +586,8 @@ async function nativeStatsFor(
     steps,
     waitingByStep,
     sentByStep,
+    dailyInboxCapacity,
+    activeMailboxCount,
   };
 }
 

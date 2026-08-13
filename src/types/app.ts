@@ -118,6 +118,13 @@ export interface ClientUser {
   invite_status: string;
 }
 
+// How a native campaign spends its fixed daily send budget between brand-new
+// first-touches and follow-ups (migration 00066). 'finish_first' (default)
+// prioritizes follow-ups + throttles new leads by daily_new_leads_cap;
+// 'reach_first' prioritizes new first-touches and lets them use full warmed
+// inbox capacity. Resolved against DEFAULT_SENDING_STRATEGY in src/lib/gmail/ramp.ts.
+export type SendingStrategy = "finish_first" | "reach_first";
+
 export interface Campaign {
   id: string;
   // NULL for "orphan" campaigns — rows imported by the discovery cron
@@ -144,6 +151,10 @@ export interface Campaign {
   // (migration 00064). NULL = inherit DEFAULT_DAILY_NEW_LEADS_CAP; 0 pauses new
   // leads while follow-ups keep flowing. Follow-ups are never limited by this.
   daily_new_leads_cap: number | null;
+  // How the send worker allocates the day's budget between new first-touches and
+  // follow-ups (migration 00066). NULL = inherit DEFAULT_SENDING_STRATEGY
+  // ('finish_first'). See SendingStrategy above.
+  sending_strategy: SendingStrategy | null;
   // Per-campaign Unipile account binding (migration 00046). Defaults to
   // clients.unipile_account_id but lives on the campaign so accounts can
   // rotate without invalidating campaign history.
