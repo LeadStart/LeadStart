@@ -26,13 +26,14 @@ import {
   effectiveDailyCap,
   rampStage,
   resolveDailyNewLeadsCap,
+  resolveSendingStrategy,
   resolveSendWindow,
   minutesUntilWindowClose,
   startOfLocalDay,
   projectSequenceCompletion,
   type CompletionProjection,
 } from "@/lib/gmail/ramp";
-import type { Client, ReplyClass } from "@/types/app";
+import type { Client, ReplyClass, HealthBand } from "@/types/app";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
@@ -91,6 +92,29 @@ interface CampaignSection {
   error: string | null;
 }
 
+// One sending inbox's current health (denormalized on native_mailboxes by the
+// hourly check-inbox-health cron).
+interface InboxHealthRow {
+  email: string;
+  score: number | null; // null = never scored yet
+  band: HealthBand | null;
+  status: string; // native_mailboxes.status (active / paused / error)
+  autoPaused: boolean; // health_paused_at set = auto-benched for health
+}
+
+interface InboxHealthSection {
+  total: number;
+  healthy: number;
+  watch: number;
+  critical: number;
+  autoPaused: number;
+  unscored: number;
+  freshestIso: string | null; // most recent health_checked_at across the pool
+  stale: boolean; // freshest check > 3h old (or none) → check-inbox-health cron may be down
+  mailboxes: InboxHealthRow[]; // all, worst-first
+  error: string | null;
+}
+
 interface HeartbeatSections {
   pendingAlerts: { count: number; oldest: string | null; error: string | null };
   recentActivity: {
@@ -119,6 +143,7 @@ interface HeartbeatSections {
     error: string | null;
   };
   campaignActivity: CampaignSection;
+  inboxHealth: InboxHealthSection;
 }
 
 /**
@@ -137,6 +162,7 @@ export async function buildHeartbeat(
     upcoming,
     config,
     campaignActivity,
+    inboxHealth,
   ] = await Promise.all([
     queryPendingAlerts(admin),
     queryRecentActivity(admin, now),
@@ -145,6 +171,7 @@ export async function buildHeartbeat(
     queryUpcomingSchedule(admin, now),
     queryConfig(admin),
     queryCampaignActivity(admin, now),
+    queryInboxHealth(admin, now),
   ]);
 
   const sections: HeartbeatSections = {
@@ -155,6 +182,7 @@ export async function buildHeartbeat(
     upcoming,
     config,
     campaignActivity,
+    inboxHealth,
   };
   const verdict = computeVerdict(sections);
   const subject = buildSubject(sections, verdict, now);
@@ -179,6 +207,9 @@ function computeVerdict(s: HeartbeatSections): HealthVerdict {
   if (s.stuck.orphanReports > 0) return "yellow";
   if (s.stuck.stalledHotLeadRetries > 0) return "yellow";
   if (s.deliveryGap.reportsBounced24h + s.deliveryGap.hotLeadsBounced24h > 0) return "yellow";
+  if (s.inboxHealth.critical > 0) return "yellow";
+  if (s.inboxHealth.autoPaused > 0) return "yellow";
+  if (s.inboxHealth.stale) return "yellow";
 
   return "green";
 }
@@ -391,6 +422,78 @@ async function queryConfig(
   };
 }
 
+// Inbox health — reads the denormalized score the hourly check-inbox-health
+// cron writes onto native_mailboxes (SPF/DKIM/DMARC/MX + Spamhaus DBL + 7-day
+// bounce rate). Summarizes the pool by band, floats any non-healthy / paused /
+// unscored inbox to the top, and flags staleness (a freshest check older than
+// 3h means that cron has likely stopped — the whole point of surfacing this).
+async function queryInboxHealth(
+  admin: AdminClient,
+  now: Date,
+): Promise<InboxHealthSection> {
+  const empty: InboxHealthSection = {
+    total: 0,
+    healthy: 0,
+    watch: 0,
+    critical: 0,
+    autoPaused: 0,
+    unscored: 0,
+    freshestIso: null,
+    stale: false,
+    mailboxes: [],
+    error: null,
+  };
+
+  const { data, error } = await admin
+    .from("native_mailboxes")
+    .select(
+      "email_address, status, health_score, health_band, health_checked_at, health_paused_at",
+    );
+  if (error) return { ...empty, error: error.message };
+
+  const rows = (data ?? []) as {
+    email_address: string;
+    status: string;
+    health_score: number | null;
+    health_band: HealthBand | null;
+    health_checked_at: string | null;
+    health_paused_at: string | null;
+  }[];
+
+  const section: InboxHealthSection = { ...empty, total: rows.length };
+  let freshest = 0;
+  for (const r of rows) {
+    if (r.health_band === "healthy") section.healthy++;
+    else if (r.health_band === "watch") section.watch++;
+    else if (r.health_band === "critical") section.critical++;
+    if (r.health_score == null) section.unscored++;
+    if (r.health_paused_at) section.autoPaused++;
+    if (r.health_checked_at) {
+      const t = Date.parse(r.health_checked_at);
+      if (t > freshest) freshest = t;
+    }
+    section.mailboxes.push({
+      email: r.email_address,
+      score: r.health_score,
+      band: r.health_band,
+      status: r.status,
+      autoPaused: !!r.health_paused_at,
+    });
+  }
+
+  // Worst first: critical → auto-paused → watch → unscored → healthy; then by score.
+  const rank = (m: InboxHealthRow): number =>
+    m.band === "critical" ? 0 : m.autoPaused ? 1 : m.band === "watch" ? 2 : m.score == null ? 3 : 4;
+  section.mailboxes.sort(
+    (a, b) => rank(a) - rank(b) || (a.score ?? 101) - (b.score ?? 101),
+  );
+
+  section.freshestIso = freshest > 0 ? new Date(freshest).toISOString() : null;
+  section.stale =
+    rows.length > 0 && (freshest === 0 || now.getTime() - freshest > 3 * 60 * 60 * 1000);
+  return section;
+}
+
 // Morning outreach snapshot — the operational half of the heartbeat: every
 // active native-email campaign with yesterday's sends, today's scheduled
 // capacity, reply outcomes, and its sequence/warmup position. Mirrors the
@@ -407,6 +510,7 @@ type CampaignMeta = {
   send_end_hour: number | null;
   send_weekdays_only: boolean | null;
   daily_new_leads_cap: number | null;
+  sending_strategy: string | null;
 };
 
 async function queryCampaignActivity(
@@ -426,7 +530,7 @@ async function queryCampaignActivity(
     const { data: campRows, error: campErr } = await admin
       .from("campaigns")
       .select(
-        "id, name, client_id, status, send_timezone, send_start_hour, send_end_hour, send_weekdays_only, daily_new_leads_cap",
+        "id, name, client_id, status, send_timezone, send_start_hour, send_end_hour, send_weekdays_only, daily_new_leads_cap, sending_strategy",
       )
       .eq("source_channel", "native_email")
       .eq("status", "active");
@@ -657,17 +761,21 @@ async function queryCampaignActivity(
       // Will this campaign send at all today? 0 on weekends (weekdaysOnly) or
       // once the window has closed — so a Saturday heartbeat honestly shows 0.
       const sendableToday = minutesUntilWindowClose(now, window) > 0;
-      let capacity = 0;
+      let capacity = 0; // remaining capacity today (drives scheduledToday)
+      let fullCapacity = 0; // full daily cap sum — the reach_first first-touch rate
+      let activeMbCount = 0;
       let warmingCount = 0;
       for (const mbId of poolByCampaign.get(c.id) ?? []) {
         const m = mbMeta.get(mbId);
         if (!m || m.status !== "active") continue;
+        activeMbCount++;
         const tot = totalSent.get(mbId) ?? 0;
         if (!rampStage(tot).warmed) warmingCount++;
         const cap = effectiveDailyCap(
           { max_daily_cap: m.max_daily_cap, daily_cap_override: m.daily_cap_override },
           tot,
         );
+        fullCapacity += cap;
         capacity += Math.max(0, cap - (sentToday.get(mbId) ?? 0));
       }
       // Can't send more than we have active contacts, nor more than inbox
@@ -676,12 +784,19 @@ async function queryCampaignActivity(
         ? Math.min(capacity, e.active)
         : 0;
 
+      // Mirror the campaign detail page: reach_first drains first-touches at full
+      // warmed inbox capacity, finish_first at the new-leads/day cap; 0 pauses.
+      const strategy = resolveSendingStrategy(c);
+      const newLeadsCap = resolveDailyNewLeadsCap(c);
       const projection = projectSequenceCompletion({
         firstTouchesRemaining: e.waitingByStep[0] ?? 0,
-        dailyNewLeadsCap: resolveDailyNewLeadsCap(c),
+        firstTouchesPerDay: strategy === "reach_first" ? fullCapacity : newLeadsCap,
+        newLeadsPaused: newLeadsCap <= 0,
         stepWaitDays: steps.map((s) => s.wait_days),
         waitingByStep: e.waitingByStep,
         weekdaysOnly: window.weekdaysOnly,
+        strategy,
+        mailboxCount: activeMbCount,
         now,
       });
       const reps = repliesByCampaign.get(c.id) ?? { total: 0, positive: 0 };
@@ -786,6 +901,9 @@ function countSignals(s: HeartbeatSections): number {
   if (s.stuck.stalledHotLeadRetries > 0) n++;
   if (s.deliveryGap.reportsBounced24h + s.deliveryGap.hotLeadsBounced24h > 0)
     n++;
+  if (s.inboxHealth.critical > 0) n++;
+  if (s.inboxHealth.autoPaused > 0) n++;
+  if (s.inboxHealth.stale) n++;
   return n;
 }
 
@@ -802,6 +920,15 @@ function etShortDate(now: Date): string {
     month: "short",
     day: "numeric",
   }).format(now);
+}
+
+// Short ET time, e.g. "5:31 PM" — for the "checked at" note on inbox health.
+function etTime(iso: string): string {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(iso));
 }
 
 // Absolute admin dashboard URL. NEXT_PUBLIC_APP_URL already includes the /app
@@ -904,6 +1031,77 @@ function campaignCardHtml(c: CampaignActivity): string {
   </div>`;
 }
 
+// Inbox health card — always shown when there are native mailboxes. A summary
+// chip row (healthy / watch / critical / auto-paused / unscored) over a per-inbox
+// list (worst first) with a colored score. Card tint reflects the worst state so
+// a bad inbox is visible at a glance, and a stale-checks note flags a dead cron.
+function inboxHealthHtml(h: InboxHealthSection): string {
+  if (h.error) {
+    return `<div style="margin:0 0 12px;padding:10px 12px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;color:#b91c1c;font-size:12px;">Couldn't load inbox health: ${escapeHtml(h.error)}</div>`;
+  }
+  if (h.total === 0) return "";
+
+  const bandColor = (b: HealthBand | null): string =>
+    b === "critical" ? "#b91c1c" : b === "watch" ? "#b45309" : b === "healthy" ? "#059669" : "#94a3b8";
+
+  const bad = h.critical > 0 || h.autoPaused > 0 || h.stale;
+  const warn = !bad && (h.watch > 0 || h.unscored > 0);
+  const bg = bad ? "#fef2f2" : warn ? "#fffbeb" : "#ecfdf5";
+  const bd = bad ? "#fecaca" : warn ? "#fde68a" : "#a7f3d0";
+  const titleColor = bad ? "#b91c1c" : warn ? "#b45309" : "#065f46";
+
+  const freshNote = h.stale
+    ? `<span style="color:#b91c1c;font-weight:600;">checks stale &#8212; health cron may be down</span>`
+    : h.freshestIso
+      ? `checked ${escapeHtml(etTime(h.freshestIso))}`
+      : `not yet checked`;
+
+  const chipStyle = (fg: string, bgc: string) =>
+    `font-size:11px;background:${bgc};color:${fg};border-radius:5px;padding:2px 8px;font-weight:600;white-space:nowrap;`;
+  const chips = [
+    h.healthy > 0 ? `<span style="${chipStyle("#059669", "#ecfdf5")}">${h.healthy} healthy</span>` : "",
+    h.watch > 0 ? `<span style="${chipStyle("#b45309", "#fffbeb")}">${h.watch} watch</span>` : "",
+    h.critical > 0 ? `<span style="${chipStyle("#b91c1c", "#fef2f2")}">${h.critical} critical</span>` : "",
+    h.autoPaused > 0 ? `<span style="${chipStyle("#b91c1c", "#fef2f2")}">${h.autoPaused} auto-paused</span>` : "",
+    h.unscored > 0 ? `<span style="${chipStyle("#475569", "#f1f5f9")}">${h.unscored} unscored</span>` : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const MAX = 10;
+  const rows = h.mailboxes
+    .slice(0, MAX)
+    .map((m) => {
+      const color = bandColor(m.band);
+      const scoreTxt = m.score == null ? "&#8212;" : String(m.score);
+      const tag = m.autoPaused
+        ? ` <span style="font-size:10px;color:#b91c1c;">(auto-paused)</span>`
+        : m.status !== "active"
+          ? ` <span style="font-size:10px;color:#9194AD;">(${escapeHtml(m.status)})</span>`
+          : "";
+      return `<tr>
+      <td style="padding:4px 0;font-size:12px;color:#3D3D5C;"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${color};margin-right:7px;"></span>${escapeHtml(m.email)}${tag}</td>
+      <td style="padding:4px 0;text-align:right;font-size:12.5px;font-weight:700;color:${color};white-space:nowrap;">${scoreTxt}</td>
+    </tr>`;
+    })
+    .join("");
+  const more =
+    h.mailboxes.length > MAX
+      ? `<p style="margin:6px 0 0;font-size:11px;color:#9194AD;text-align:center;">+ ${h.mailboxes.length - MAX} more &#8212; see the dashboard.</p>`
+      : "";
+
+  return `
+  <div style="background:${bg};border:1px solid ${bd};border-radius:12px;padding:16px;margin:0 0 12px;">
+    <table width="100%" role="presentation"><tr>
+      <td style="font-size:13px;font-weight:700;color:${titleColor};">Inbox health</td>
+      <td style="text-align:right;font-size:11px;color:#6B6E8A;">${freshNote}</td>
+    </tr></table>
+    <div style="margin:8px 0 10px;line-height:1.9;">${chips}</div>
+    <table width="100%" role="presentation">${rows}</table>
+    ${more}
+  </div>`;
+}
+
 // The health beacon, folded into one card: a compact all-clear grid when green,
 // or a specific problem list (amber/red) when something needs action. The
 // footnote always carries pipeline throughput + what reports are due.
@@ -928,12 +1126,19 @@ function systemChecksHtml(s: HeartbeatSections, verdict: HealthVerdict): string 
     problems.push(`${s.stuck.orphanReports} report${s.stuck.orphanReports === 1 ? "" : "s"} created but never sent`);
   if (s.stuck.stalledHotLeadRetries > 0)
     problems.push(`${s.stuck.stalledHotLeadRetries} hot-lead retr${s.stuck.stalledHotLeadRetries === 1 ? "y" : "ies"} stalled`);
+  if (s.inboxHealth.critical > 0)
+    problems.push(`${s.inboxHealth.critical} sending inbox${s.inboxHealth.critical === 1 ? "" : "es"} scored critical health`);
+  if (s.inboxHealth.autoPaused > 0)
+    problems.push(`${s.inboxHealth.autoPaused} inbox${s.inboxHealth.autoPaused === 1 ? "" : "es"} auto-paused for health`);
+  if (s.inboxHealth.stale)
+    problems.push(`inbox health checks are stale — the check-inbox-health cron may be down`);
   const queryErr =
     s.pendingAlerts.error ||
     s.recentActivity.error ||
     s.deliveryGap.error ||
     s.stuck.error ||
-    s.config.error;
+    s.config.error ||
+    s.inboxHealth.error;
   if (queryErr) problems.push(`a health query failed: ${queryErr}`);
 
   const dueNames = s.upcoming.dueIn24h.map((d) => escapeHtml(d.name));
@@ -1001,6 +1206,9 @@ function buildHtml(
   <div style="padding:12px 22px 4px;">
     ${campErr}
     ${cardsHtml}
+  </div>
+  <div style="padding:0 22px 4px;">
+    ${inboxHealthHtml(s.inboxHealth)}
   </div>
   <div style="padding:14px 22px 8px;">
     ${systemChecksHtml(s, verdict)}
