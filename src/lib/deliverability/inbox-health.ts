@@ -21,9 +21,18 @@
 //   blacklist (DBL listed)                         -60
 //   SPF        fail -15 / warn -5
 //   DKIM       fail -15 / warn -5   (check.ts only ever warns for DKIM)
-//   DMARC      fail -10 / warn -5   (fail = record missing)
+//   DMARC      fail -10 / warn -5   (fail = record missing; warn = p=none,
+//                                    monitoring-only, no spoofing enforcement)
 //   MX         fail -20
-//   bounce 7d  >10% -60 / 5–10% -40 / 2–5% -15   (only when >= 20 sends)
+//   bounce 7d      >10% -60 / 5–10% -40 / 2–5% -15   (only when >= 20 sends)
+//   soft bounce 7d >25% -15 / 10–25% -8   (warn-only; transient, never critical
+//                                          on its own; only when >= 20 sends)
+//   reply signal   0 replies over >= 40 sends/14d  -10  (warn-only; a dead reply
+//                  rate at real volume is the cheapest inbox-placement proxy)
+//
+// The last two are the first *behavioral* signals — everything above them is a
+// config/DNS check that only moves when you edit DNS or get blacklisted, which
+// is why a correctly-configured mailbox otherwise sits at 100 indefinitely.
 //
 // Sanity anchors (used by scripts/test-inbox-health.ts): perfect = 100/healthy;
 // DBL-listed alone = 40/critical; >10% bounces alone = 40/critical; a total DNS
@@ -37,6 +46,11 @@ import type { DblResult } from "./dnsbl";
 export const HEALTHY_MIN = 80;
 export const CRITICAL_MAX = 49; // score <= 49 is critical (i.e. below 50)
 export const MIN_SENT_FOR_BOUNCE_SCORE = 20; // mirrors kpi/step-health MIN_SENT_FOR_ALERT
+// Reply signal needs more volume than bounce rate before a zero-reply run is
+// meaningful — cold-email reply rates are low (~1–5%), so at small samples a
+// zero is just noise. 40 sends over 14 days is the floor below which we say
+// nothing (component reads "unchecked").
+export const MIN_SENT_FOR_REPLY_SIGNAL = 40;
 
 export interface InboxHealthInputs {
   /** Spamhaus DBL result. null/undefined → blacklist via DBL not checked. */
@@ -45,8 +59,17 @@ export interface InboxHealthInputs {
   domainAuth?: DomainAuth | null;
   /** MX from checkMx. null → MX unchecked. */
   mx?: AuthCheck | null;
-  /** 7-day send/bounce counts from native_sends. null → bounce rate unchecked. */
-  bounces?: { sent7d: number; bounced7d: number } | null;
+  /**
+   * 7-day send/bounce counts from native_sends. null → bounce rate unchecked.
+   * softBounced7d is optional: absent → soft-bounce signal unchecked even when
+   * the hard-bounce rate is scored (lets old callers omit it).
+   */
+  bounces?: { sent7d: number; bounced7d: number; softBounced7d?: number } | null;
+  /**
+   * 14-day send + reply counts for this mailbox. sent14d from native_sends,
+   * replied14d from lead_replies (native_email). null → reply signal unchecked.
+   */
+  replies?: { sent14d: number; replied14d: number } | null;
 }
 
 export interface InboxHealthResult {
@@ -56,7 +79,7 @@ export interface InboxHealthResult {
 }
 
 export function computeInboxHealth(inputs: InboxHealthInputs): InboxHealthResult {
-  const { dbl, domainAuth, mx, bounces } = inputs;
+  const { dbl, domainAuth, mx, bounces, replies } = inputs;
 
   const components: HealthComponent[] = [
     blacklistComponent(dbl),
@@ -65,6 +88,8 @@ export function computeInboxHealth(inputs: InboxHealthInputs): InboxHealthResult
     authComponent("dmarc", "DMARC", domainAuth?.dmarc, { fail: 10, warn: 5 }, "DMARC not checked."),
     authComponent("mx", "MX records", mx, { fail: 20, warn: 10 }, "MX not checked."),
     bounceComponent(bounces),
+    softBounceComponent(bounces),
+    replySignalComponent(replies),
   ];
 
   const totalDeduction = components.reduce((sum, c) => sum + c.deduction, 0);
@@ -170,4 +195,85 @@ function bounceComponent(
   if (rate > 0.05) return { key, label, status: "bad", deduction: 40, detail };
   if (rate > 0.02) return { key, label, status: "warn", deduction: 15, detail };
   return { key, label, status: "ok", deduction: 0, detail };
+}
+
+/**
+ * Soft (transient, 4.x.x) bounce rate over the last 7 days. Warn-only by
+ * design: a soft bounce is a temporary failure Gmail retries on its own, so it
+ * never suppresses a contact and never alone drives a mailbox critical. But a
+ * *rising* soft-bounce rate is an early throttling / greylisting signal — the
+ * receiving side deferring our mail — worth a small nudge before it turns into
+ * hard bounces or spam-foldering. Same >= 20-send floor as the hard-bounce
+ * component; unchecked below it or when softBounced7d wasn't supplied.
+ */
+function softBounceComponent(
+  bounces: { sent7d: number; bounced7d: number; softBounced7d?: number } | null | undefined,
+): HealthComponent {
+  const key: HealthComponent["key"] = "soft_bounce_rate";
+  const label = "Soft-bounce rate (7 days)";
+  const soft = bounces?.softBounced7d;
+  const sent = bounces?.sent7d ?? 0;
+  if (!bounces || soft == null || sent < MIN_SENT_FOR_BOUNCE_SCORE) {
+    return {
+      key,
+      label,
+      status: "unchecked",
+      deduction: 0,
+      detail:
+        soft == null
+          ? "Soft-bounce rate not measured."
+          : `Only ${sent} send${sent === 1 ? "" : "s"} in the last 7 days — need ${MIN_SENT_FOR_BOUNCE_SCORE} to score soft-bounce rate.`,
+    };
+  }
+  const rate = soft / sent;
+  const detail = `${soft} of ${sent} sends soft-bounced this week (${(rate * 100).toFixed(1)}%) — transient, not suppressed.`;
+  if (rate > 0.25) return { key, label, status: "warn", deduction: 15, detail };
+  if (rate > 0.1) return { key, label, status: "warn", deduction: 8, detail };
+  return { key, label, status: "ok", deduction: 0, detail };
+}
+
+/**
+ * Reply signal over the last 14 days — the first component that reflects how
+ * recipients *respond*, not how the domain is configured. Rationale: at steady
+ * sending volume, a reply rate that collapses to zero is the cheapest available
+ * proxy for landing in spam (mail that reaches a real inbox eventually draws
+ * replies, OOO auto-responders included; mail that spam-folders draws none).
+ *
+ * Deliberately conservative to avoid false alarms: warn-only, never critical;
+ * unchecked below MIN_SENT_FOR_REPLY_SIGNAL sends (a zero at low volume is
+ * noise); and it only fires on an *absolute zero* — any reply at all reads ok.
+ * It does not score reply-rate deltas, which are too noisy at these volumes.
+ */
+function replySignalComponent(
+  replies: { sent14d: number; replied14d: number } | null | undefined,
+): HealthComponent {
+  const key: HealthComponent["key"] = "reply_signal";
+  const label = "Reply signal (14 days)";
+  const sent = replies?.sent14d ?? 0;
+  if (!replies || sent < MIN_SENT_FOR_REPLY_SIGNAL) {
+    return {
+      key,
+      label,
+      status: "unchecked",
+      deduction: 0,
+      detail: `Only ${sent} send${sent === 1 ? "" : "s"} in the last 14 days — need ${MIN_SENT_FOR_REPLY_SIGNAL} to read the reply signal.`,
+    };
+  }
+  if (replies.replied14d === 0) {
+    return {
+      key,
+      label,
+      status: "warn",
+      deduction: 10,
+      detail: `No replies across ${sent} sends in 14 days — possible inbox-placement issue (check seed/placement before scaling this mailbox).`,
+    };
+  }
+  const rate = replies.replied14d / replies.sent14d;
+  return {
+    key,
+    label,
+    status: "ok",
+    deduction: 0,
+    detail: `${replies.replied14d} repl${replies.replied14d === 1 ? "y" : "ies"} across ${sent} sends in 14 days (${(rate * 100).toFixed(1)}%).`,
+  };
 }

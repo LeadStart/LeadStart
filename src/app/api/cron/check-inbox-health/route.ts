@@ -79,23 +79,69 @@ export async function GET(request: NextRequest) {
     ((orgRows ?? []) as OrgSettings[]).map((o) => [o.id, o]),
   );
 
-  // 3) 7-day send/bounce counts per mailbox, one sweep of native_sends. Same
-  // reasoning as above: a read error here would silently zero every mailbox's
-  // bounce rate, so fail the run instead of scoring on bad data.
-  const sevenDaysAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();
+  // 3) Send stats per mailbox from ONE 14-day sweep of native_sends: the 7-day
+  // hard+soft bounce counts (bounce components) and the 14-day send volume (the
+  // reply signal's denominator). Same reasoning as above: a read error here
+  // would silently zero every mailbox, so fail the run rather than score on bad
+  // data.
+  const now = Date.now();
+  const sevenDaysAgoMs = now - 7 * 86_400_000;
+  const fourteenDaysAgo = new Date(now - 14 * 86_400_000).toISOString();
   const { data: sendRows, error: sendError } = await admin
     .from("native_sends")
-    .select("mailbox_id, status, sent_at")
-    .gte("sent_at", sevenDaysAgo);
+    .select("mailbox_id, status, sent_at, soft_bounced_at")
+    .gte("sent_at", fourteenDaysAgo);
   if (sendError) {
     return NextResponse.json({ error: sendError.message }, { status: 500 });
   }
-  const statsByMailbox = new Map<string, { sent7d: number; bounced7d: number }>();
-  for (const s of (sendRows ?? []) as { mailbox_id: string; status: string }[]) {
-    const cur = statsByMailbox.get(s.mailbox_id) ?? { sent7d: 0, bounced7d: 0 };
-    cur.sent7d += 1;
-    if (s.status === "bounced") cur.bounced7d += 1;
+  interface SendStats {
+    sent7d: number;
+    bounced7d: number;
+    softBounced7d: number;
+    sent14d: number;
+  }
+  const statsByMailbox = new Map<string, SendStats>();
+  for (const s of (sendRows ?? []) as {
+    mailbox_id: string;
+    status: string;
+    sent_at: string;
+    soft_bounced_at: string | null;
+  }[]) {
+    const cur =
+      statsByMailbox.get(s.mailbox_id) ??
+      { sent7d: 0, bounced7d: 0, softBounced7d: 0, sent14d: 0 };
+    cur.sent14d += 1;
+    if (Date.parse(s.sent_at) >= sevenDaysAgoMs) {
+      cur.sent7d += 1;
+      if (s.status === "bounced") cur.bounced7d += 1;
+      if (s.soft_bounced_at) cur.softBounced7d += 1;
+    }
     statsByMailbox.set(s.mailbox_id, cur);
+  }
+
+  // 3b) 14-day native-email reply counts per mailbox, for the reply signal.
+  // Unlike the sweeps above, a read error here does NOT fail the run: the reply
+  // signal is advisory, and — critically — on error we must treat it as
+  // "unchecked", never "zero replies" (which would fire a false placement
+  // warning). replyReadOk gates that: false → pass replies:null (unchecked).
+  const repliesByMailbox = new Map<string, number>();
+  let replyReadOk = true;
+  const { data: replyRows, error: replyError } = await admin
+    .from("lead_replies")
+    .select("native_mailbox_id")
+    .eq("source_channel", "native_email")
+    .gte("received_at", fourteenDaysAgo);
+  if (replyError) {
+    replyReadOk = false;
+    console.error("[cron/check-inbox-health] reply count read failed:", replyError.message);
+  } else {
+    for (const r of (replyRows ?? []) as { native_mailbox_id: string | null }[]) {
+      if (!r.native_mailbox_id) continue;
+      repliesByMailbox.set(
+        r.native_mailbox_id,
+        (repliesByMailbox.get(r.native_mailbox_id) ?? 0) + 1,
+      );
+    }
   }
 
   // Per-run cache: DNS/DBL keyed by org+domain (a domain's listing/auth is the
@@ -129,11 +175,19 @@ export async function GET(request: NextRequest) {
         domainCache.set(cacheKey, signals);
       }
 
+      const stats = statsByMailbox.get(mb.id) ?? null;
       const health = computeInboxHealth({
         dbl: signals.dbl,
         domainAuth: signals.domainAuth,
         mx: signals.mx,
-        bounces: statsByMailbox.get(mb.id) ?? null,
+        bounces: stats
+          ? { sent7d: stats.sent7d, bounced7d: stats.bounced7d, softBounced7d: stats.softBounced7d }
+          : null,
+        // replyReadOk === false → unchecked (never a false "zero replies").
+        replies:
+          replyReadOk && stats
+            ? { sent14d: stats.sent14d, replied14d: repliesByMailbox.get(mb.id) ?? 0 }
+            : null,
       });
 
       const prevScore = mb.health_score;

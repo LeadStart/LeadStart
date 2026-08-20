@@ -768,6 +768,8 @@ export interface HealthComponent {
     | "dmarc"
     | "mx"
     | "bounce_rate"
+    | "soft_bounce_rate"
+    | "reply_signal"
     | "heat_score"
     | "warmup_placement";
   label: string;
@@ -795,6 +797,10 @@ export interface NativeSend {
   bounce_reason: string | null;
   sent_at: string;
   bounced_at: string | null;
+  // Soft (4.x.x, transient) bounce timestamp (migration 00067). Does NOT change
+  // status — soft bounces aren't suppressed — but feeds the inbox-health
+  // soft-bounce signal. Null = no soft bounce observed for this send.
+  soft_bounced_at: string | null;
 }
 
 // Classes that trigger client notification by default.

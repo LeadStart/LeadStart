@@ -69,7 +69,20 @@ export async function checkDomainAuth(domain: string): Promise<DomainAuth> {
     dmarcCheck = { status: "fail", detail: "No DMARC record found." };
   } else {
     const policy = dmarcRec.match(/\bp=(\w+)/i)?.[1]?.toLowerCase() ?? "none";
-    dmarcCheck = { status: "pass", detail: `DMARC present (p=${policy}).` };
+    if (policy === "none") {
+      // A published DMARC record with p=none is monitoring-only: it reports but
+      // enforces nothing, so it gives no spoofing protection and the weakest
+      // deliverability signal of the three policies. Passing SPF+DKIM already
+      // cover authentication; this is a soft nudge to strengthen the policy
+      // once alignment is confirmed, not a hard failure.
+      dmarcCheck = {
+        status: "warn",
+        detail:
+          "DMARC present but p=none (monitoring only — set p=quarantine or p=reject once SPF/DKIM alignment is confirmed to enforce it).",
+      };
+    } else {
+      dmarcCheck = { status: "pass", detail: `DMARC present and enforcing (p=${policy}).` };
+    }
   }
 
   return { domain, spf, dkim, dmarc: dmarcCheck };

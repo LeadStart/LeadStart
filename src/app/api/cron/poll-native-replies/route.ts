@@ -74,7 +74,7 @@ export async function GET(request: NextRequest) {
   const gmailByOrg = new Map<string, GmailClient | null>();
   const clientIdByCampaign = new Map<string, string | null>();
   let processed = 0;
-  const summary = { replies: 0, bounces: 0, dropped: 0 };
+  const summary = { replies: 0, bounces: 0, softBounces: 0, dropped: 0 };
 
   for (const mailbox of mailboxes) {
     if (processed >= MAX_MESSAGES_PER_TICK) break;
@@ -100,7 +100,15 @@ export async function GET(request: NextRequest) {
         : Date.now() - LOOKBACK_MS;
       const afterSec = Math.floor(watermark / 1000);
 
-      const listed = await gmail.listMessages(mailbox.email_address, `in:inbox after:${afterSec}`, 25);
+      // Search inbox AND spam: bounce notices (mailer-daemon DSNs) are
+      // sometimes filtered to spam, and an uncounted bounce is exactly the gap
+      // we're closing. Spam-foldered messages that are NOT bounces are dropped
+      // below (never ingested as replies) so this can't turn spam into leads.
+      const listed = await gmail.listMessages(
+        mailbox.email_address,
+        `(in:inbox OR in:spam) after:${afterSec}`,
+        25,
+      );
 
       for (const entry of listed) {
         if (processed >= MAX_MESSAGES_PER_TICK) break;
@@ -127,10 +135,19 @@ export async function GET(request: NextRequest) {
         if (isBounce(parsed)) {
           // Only permanent (hard) bounces suppress. A soft bounce is a
           // transient failure Gmail retries on its own; suppressing on it
-          // would wrongly kill a reachable lead. Ignore soft bounces —
-          // a persistent one arrives later as a hard DSN.
+          // would wrongly kill a reachable lead. So we don't suppress — but we
+          // DO stamp the send row so inbox-health can surface a rising
+          // soft-bounce rate (an early throttling/greylisting signal). A
+          // persistent failure still arrives later as a hard DSN.
           if (bounceSeverity(parsed) === "soft") {
+            if (sendRow && sendRow.status !== "bounced") {
+              await admin
+                .from("native_sends")
+                .update({ soft_bounced_at: new Date().toISOString() })
+                .eq("id", sendRow.id);
+            }
             processed++;
+            summary.softBounces++;
             continue;
           }
           const recipient = sendRow?.to_email ?? extractFailedRecipient(parsed);
@@ -150,7 +167,35 @@ export async function GET(request: NextRequest) {
                 .eq("id", sendRow.enrollment_id);
             }
           } else if (recipient) {
-            // No thread match but we know who bounced — suppress by email.
+            // No thread match, but the DSN names the failed recipient. This is
+            // the common case where the far end accepts then rejects: the
+            // bounce arrives as a fresh message on its own thread, so the
+            // thread-id lookup missed. Mark the most recent non-bounced send to
+            // that address from this mailbox as bounced so the bounce rate
+            // actually counts it (previously only the contact was suppressed,
+            // undercounting the bounce metric), then suppress the contact.
+            const { data: fallbackSend } = await admin
+              .from("native_sends")
+              .select("id, enrollment_id")
+              .eq("mailbox_id", mailbox.id)
+              .ilike("to_email", escapeLikePattern(recipient))
+              .neq("status", "bounced")
+              .order("sent_at", { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            const fb = fallbackSend as { id: string; enrollment_id: string | null } | null;
+            if (fb) {
+              await admin
+                .from("native_sends")
+                .update({ status: "bounced", bounce_reason: reason, bounced_at: new Date().toISOString() })
+                .eq("id", fb.id);
+              if (fb.enrollment_id) {
+                await admin
+                  .from("campaign_enrollments")
+                  .update({ status: "failed", last_error: "Hard bounce" })
+                  .eq("id", fb.enrollment_id);
+              }
+            }
             await admin
               .from("contacts")
               .update({ status: "bounced" })
@@ -159,6 +204,15 @@ export async function GET(request: NextRequest) {
           }
           processed++;
           summary.bounces++;
+          continue;
+        }
+
+        // Spam-folder guard: we widened the search to include spam only to
+        // catch filtered bounce notices (handled above). A spam-foldered
+        // message that isn't a bounce must never become a "reply" — drop it
+        // before the reply branch regardless of any thread match.
+        if ((msg.labelIds ?? []).includes("SPAM")) {
+          summary.dropped++;
           continue;
         }
 

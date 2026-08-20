@@ -5,11 +5,14 @@
  * relative path (type-only cross-imports are erased at runtime).
  *
  * Anchors (see the weights table in inbox-health.ts):
- *   - perfect signals            → 100 / healthy
+ *   - perfect signals            → 100 / healthy  (8 components)
  *   - DBL-listed alone           → 40  / critical
  *   - >10% bounce alone          → 40  / critical
  *   - 3% bounce on 100 sends     → 85  / healthy
  *   - 19 sends                   → bounce unchecked, no deduction
+ *   - 30% soft bounce on 100     → 85  / healthy (warn -15, never critical)
+ *   - 0 replies on 100 sends/14d → 90  / healthy (warn -10)
+ *   - any reply on 100 sends/14d → reply signal ok, no deduction
  *   - total DNS resolver outage  → exactly 50 / watch
  *   - empty inputs               → 100 / healthy, every component unchecked
  *
@@ -52,7 +55,7 @@ console.log("\n■ perfect signals → 100 / healthy");
   });
   assert(r.score === 100, `score is 100 (got ${r.score})`);
   assert(r.band === "healthy", `band is healthy (got ${r.band})`);
-  assert(r.components.length === 6, `all 6 components present (got ${r.components.length})`);
+  assert(r.components.length === 8, `all 8 components present (got ${r.components.length})`);
 }
 
 // ---------- 2. DBL-listed alone ----------
@@ -133,6 +136,60 @@ console.log("\n■ empty inputs → 100 / healthy, every component unchecked");
     r.components.every((c) => c.status === "unchecked" && c.deduction === 0),
     "all components unchecked with zero deduction",
   );
+}
+
+// ---------- 7a. Soft bounce ----------
+console.log("\n■ 30% soft bounce on 100 sends → warn -15 → 85 / healthy");
+{
+  const r = computeInboxHealth({
+    dbl: { status: "clean", detail: "not listed" },
+    domainAuth: goodDns,
+    mx: ok(),
+    bounces: { sent7d: 100, bounced7d: 0, softBounced7d: 30 },
+  });
+  const soft = r.components.find((c) => c.key === "soft_bounce_rate");
+  assert(soft?.status === "warn" && soft.deduction === 15, "soft bounce is warn, -15");
+  assert(r.score === 85, `score is 85 (got ${r.score})`);
+  assert(r.band === "healthy", `band is healthy — soft bounces never critical alone (got ${r.band})`);
+}
+
+console.log("\n■ soft bounce unchecked when softBounced7d omitted");
+{
+  const r = computeInboxHealth({ bounces: { sent7d: 100, bounced7d: 1 } });
+  const soft = r.components.find((c) => c.key === "soft_bounce_rate");
+  assert(soft?.status === "unchecked" && soft.deduction === 0, "soft bounce unchecked, no deduction");
+}
+
+// ---------- 7b. Reply signal ----------
+console.log("\n■ 0 replies on 100 sends/14d → warn -10 → 90 / healthy");
+{
+  const r = computeInboxHealth({
+    dbl: { status: "clean", detail: "not listed" },
+    domainAuth: goodDns,
+    mx: ok(),
+    bounces: { sent7d: 100, bounced7d: 1 },
+    replies: { sent14d: 100, replied14d: 0 },
+  });
+  const rep = r.components.find((c) => c.key === "reply_signal");
+  assert(rep?.status === "warn" && rep.deduction === 10, "reply signal is warn, -10");
+  assert(r.score === 90, `score is 90 (got ${r.score})`);
+  assert(r.band === "healthy", `band is healthy (got ${r.band})`);
+}
+
+console.log("\n■ any reply on 100 sends/14d → reply signal ok, no deduction");
+{
+  const r = computeInboxHealth({ replies: { sent14d: 100, replied14d: 3 } });
+  const rep = r.components.find((c) => c.key === "reply_signal");
+  assert(rep?.status === "ok" && rep.deduction === 0, "reply signal ok, no deduction");
+  assert(r.score === 100, `score is 100 (got ${r.score})`);
+}
+
+console.log("\n■ 39 sends/14d → reply signal unchecked (below floor)");
+{
+  const r = computeInboxHealth({ replies: { sent14d: 39, replied14d: 0 } });
+  const rep = r.components.find((c) => c.key === "reply_signal");
+  assert(rep?.status === "unchecked" && rep.deduction === 0, "reply signal unchecked below 40 sends");
+  assert(r.score === 100, `score is 100 (got ${r.score})`);
 }
 
 // ---------- 8. Band boundaries ----------
