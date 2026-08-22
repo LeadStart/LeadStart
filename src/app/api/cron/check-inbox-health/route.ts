@@ -1,8 +1,9 @@
 // GET /app/api/cron/check-inbox-health — runs hourly at :30 (vercel.json).
 //
 // Scores every native (Gmail) sending mailbox 0–100 from free signals — live
-// SPF/DKIM/DMARC/MX DNS, the Spamhaus domain blocklist, and the 7-day
-// hard-bounce rate from native_sends — then:
+// SPF/DKIM/DMARC/MX DNS, the Spamhaus domain blocklist, the 7-day hard/soft
+// bounce rates from native_sends, the 14-day reply signal, and the latest
+// seed placement test (migration 00068; the one direct measurement) — then:
 //   - writes the denormalized score onto native_mailboxes (always),
 //   - inserts a mailbox_health_checks snapshot ONLY when the score changed or
 //     an action was taken (keeps that table a transition timeline),
@@ -26,6 +27,11 @@ import type { AuthCheck, DomainAuth } from "@/lib/deliverability/check";
 import { checkDbl } from "@/lib/deliverability/dnsbl";
 import type { DblResult } from "@/lib/deliverability/dnsbl";
 import { computeInboxHealth, summarizeIssues } from "@/lib/deliverability/inbox-health";
+import {
+  latestCompletePlacementTests,
+  placementSignalFromTest,
+} from "@/lib/deliverability/placement-runner";
+import { PLACEMENT_FRESHNESS_DAYS } from "@/lib/deliverability/placement";
 import { enqueueOwnerAlert } from "@/lib/notifications/owner-alerts";
 import type { NativeMailbox } from "@/types/app";
 
@@ -144,6 +150,12 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  // 3c) Latest COMPLETE seed placement test per mailbox, no older than
+  // PLACEMENT_FRESHNESS_DAYS, for the seed_placement component. Advisory like
+  // the reply signal: a read error (or simply no recent test) → unchecked.
+  const placementSince = new Date(now - PLACEMENT_FRESHNESS_DAYS * 86_400_000).toISOString();
+  const placementRead = await latestCompletePlacementTests(admin, placementSince);
+
   // Per-run cache: DNS/DBL keyed by org+domain (a domain's listing/auth is the
   // same for every mailbox on it).
   const domainCache = new Map<string, { domainAuth: DomainAuth; mx: AuthCheck; dbl: DblResult }>();
@@ -188,6 +200,10 @@ export async function GET(request: NextRequest) {
           replyReadOk && stats
             ? { sent14d: stats.sent14d, replied14d: repliesByMailbox.get(mb.id) ?? 0 }
             : null,
+        placement: (() => {
+          const pt = placementRead.byMailbox.get(mb.id);
+          return pt ? placementSignalFromTest(pt) : null;
+        })(),
       });
 
       const prevScore = mb.health_score;

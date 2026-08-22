@@ -182,7 +182,11 @@ export default function IntegrationsPage() {
   // checks + the auto-pause offline threshold (blank = alert-only).
   const [spamhausKey, setSpamhausKey] = useState("");
   const [offlineThreshold, setOfflineThreshold] = useState("");
+  // Seed placement cadence (migration 00068): days between automatic neutral
+  // probes per active mailbox; blank = manual runs only.
+  const [placementInterval, setPlacementInterval] = useState("7");
   const [savingInboxHealth, setSavingInboxHealth] = useState(false);
+  const [inboxHealthError, setInboxHealthError] = useState<string | null>(null);
   const [inboxHealthSaved, setInboxHealthSaved] = useState(false);
   const [testingSpamhaus, setTestingSpamhaus] = useState(false);
   const [spamhausTestResult, setSpamhausTestResult] = useState<
@@ -230,6 +234,7 @@ export default function IntegrationsPage() {
           const ihOrg = data as {
             spamhaus_dqs_key?: string | null;
             inbox_health_offline_threshold?: number | null;
+            placement_test_interval_days?: number | null;
           };
           if (ihOrg.spamhaus_dqs_key) setSpamhausKey(ihOrg.spamhaus_dqs_key);
           if (
@@ -237,6 +242,15 @@ export default function IntegrationsPage() {
             ihOrg.inbox_health_offline_threshold !== undefined
           ) {
             setOfflineThreshold(String(ihOrg.inbox_health_offline_threshold));
+          }
+          // null = manual only (blank field); undefined = column not applied yet
+          // (keep the default so the field isn't misleadingly empty).
+          if (ihOrg.placement_test_interval_days !== undefined) {
+            setPlacementInterval(
+              ihOrg.placement_test_interval_days === null
+                ? ""
+                : String(ihOrg.placement_test_interval_days),
+            );
           }
           // Native email service account (migration 00056).
           const gmOrg = data as {
@@ -601,18 +615,34 @@ export default function IntegrationsPage() {
       const n = Math.round(Number(raw));
       threshold = Number.isFinite(n) ? Math.min(100, Math.max(1, n)) : null;
     }
+    // Blank interval → NULL (manual only). A number is clamped to 1–90 days.
+    const rawInterval = placementInterval.trim();
+    let interval: number | null = null;
+    if (rawInterval !== "") {
+      const n = Math.round(Number(rawInterval));
+      interval = Number.isFinite(n) ? Math.min(90, Math.max(1, n)) : null;
+    }
     const supabase = createClient();
-    await supabase
+    const { error } = await supabase
       .from("organizations")
       .update({
         spamhaus_dqs_key: spamhausKey.trim() || null,
         inbox_health_offline_threshold: threshold,
+        placement_test_interval_days: interval,
       })
       .eq("id", organizationId);
-    // Reflect the clamped value back into the field.
-    setOfflineThreshold(threshold === null ? "" : String(threshold));
-    setInboxHealthSaved(true);
     setSavingInboxHealth(false);
+    if (error) {
+      // Surface it rather than claiming "Saved" — e.g. migration 00068 not
+      // applied yet (unknown column) fails the whole update, key included.
+      setInboxHealthError(error.message);
+      return;
+    }
+    setInboxHealthError(null);
+    // Reflect the clamped values back into the fields.
+    setOfflineThreshold(threshold === null ? "" : String(threshold));
+    setPlacementInterval(interval === null ? "" : String(interval));
+    setInboxHealthSaved(true);
     setTimeout(() => setInboxHealthSaved(false), 3000);
   }
 
@@ -658,9 +688,9 @@ export default function IntegrationsPage() {
           <div>
             <CardTitle className="text-base">Inbox health</CardTitle>
             <p className="text-xs text-muted-foreground">
-              Scores every sending mailbox each hour from DNS, blacklist, and
-              bounce signals. Can take a mailbox offline automatically when it
-              degrades.
+              Scores every sending mailbox each hour from DNS, blacklist, bounce,
+              reply, and seed-placement signals. Can take a mailbox offline
+              automatically when it degrades.
             </p>
           </div>
         </CardHeader>
@@ -702,6 +732,27 @@ export default function IntegrationsPage() {
               never paused automatically. 50 is a sensible starting point.
             </p>
           </div>
+          <div className="space-y-1">
+            <Label htmlFor="placementInterval" className="text-sm font-medium">
+              Automatic placement tests (days)
+            </Label>
+            <Input
+              id="placementInterval"
+              type="number"
+              min={1}
+              max={90}
+              value={placementInterval}
+              onChange={(e) => setPlacementInterval(e.target.value)}
+              placeholder="Leave blank for manual only"
+              className="max-w-[220px]"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Every this-many days, send a neutral probe from each active mailbox to
+              your seed inboxes (Mailboxes → Seed inboxes) and read back whether it
+              landed in Inbox, Promotions, or Spam. Feeds the Seed placement health
+              signal. 7 is the default; leave blank to run tests only by hand.
+            </p>
+          </div>
           <div className="flex gap-2 items-center">
             <Button
               onClick={handleSaveInboxHealth}
@@ -723,6 +774,14 @@ export default function IntegrationsPage() {
               </span>
             )}
           </div>
+          {inboxHealthError && (
+            <div className="flex items-center gap-2 rounded-lg bg-red-50 border border-red-200 p-3">
+              <XCircle size={16} className="text-red-500" />
+              <span className="text-sm font-medium text-red-700">
+                Save failed: {inboxHealthError}
+              </span>
+            </div>
+          )}
           {spamhausTestResult?.kind === "success" && (
             <div className="flex items-center gap-2 rounded-lg bg-emerald-50 border border-emerald-200 p-3">
               <CheckCircle size={16} className="text-emerald-500" />

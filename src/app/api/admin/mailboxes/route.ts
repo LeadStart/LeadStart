@@ -1,5 +1,7 @@
 // GET  /api/admin/mailboxes — list native sending inboxes with per-mailbox
-//                             usage (sent today, bounces 7d, effective cap).
+//                             usage (sent today, bounces 7d, effective cap),
+//                             the latest placement test per mailbox, and the
+//                             org's active seed count (migration 00068).
 // POST /api/admin/mailboxes — register a new inbox. Verifies domain-wide
 //                             delegation live (getProfile) before inserting,
 //                             so a mis-authorized domain fails loudly here
@@ -21,6 +23,7 @@ import {
   DEFAULT_MAX_DAILY_CAP,
   ABSOLUTE_MAX_DAILY_CAP,
 } from "@/lib/gmail/ramp";
+import { latestPlacementTests } from "@/lib/deliverability/placement-runner";
 import type { NativeMailbox } from "@/types/app";
 
 async function requireOwner() {
@@ -83,17 +86,29 @@ export async function GET() {
   }
 
   // Cumulative all-time sends per mailbox drive the volume-based warmup ramp.
-  // Count-only queries (head:true), one per mailbox, run in parallel.
+  // Count-only queries (head:true), one per mailbox, run in parallel — and in
+  // parallel with the placement + seed lookups, which are independent.
   const totalSent: Record<string, number> = {};
-  await Promise.all(
-    mailboxes.map(async (mb) => {
-      const { count } = await admin
-        .from("native_sends")
-        .select("id", { count: "exact", head: true })
-        .eq("mailbox_id", mb.id);
-      totalSent[mb.id] = count ?? 0;
-    }),
-  );
+  const [, latestPlacement, seedCountResult] = await Promise.all([
+    Promise.all(
+      mailboxes.map(async (mb) => {
+        const { count } = await admin
+          .from("native_sends")
+          .select("id", { count: "exact", head: true })
+          .eq("mailbox_id", mb.id);
+        totalSent[mb.id] = count ?? 0;
+      }),
+    ),
+    latestPlacementTests(
+      admin,
+      mailboxes.map((mb) => mb.id),
+    ),
+    admin
+      .from("seed_inboxes")
+      .select("id", { count: "exact", head: true })
+      .eq("organization_id", organizationId)
+      .eq("status", "active"),
+  ]);
 
   const enriched = mailboxes.map((mb) => {
     const ts = totalSent[mb.id] ?? 0;
@@ -104,10 +119,11 @@ export async function GET() {
       effective_daily_cap: effectiveDailyCap(mb, ts),
       total_sent: ts,
       warmed: rampStage(ts).warmed,
+      latest_placement: latestPlacement.get(mb.id) ?? null,
     };
   });
 
-  return NextResponse.json({ mailboxes: enriched });
+  return NextResponse.json({ mailboxes: enriched, seed_count: seedCountResult.count ?? 0 });
 }
 
 interface CreateBody {

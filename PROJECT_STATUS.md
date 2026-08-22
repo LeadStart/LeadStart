@@ -1,6 +1,6 @@
 # LeadStart — Project Status
 
-> Last updated: 2026-07-19
+> Last updated: 2026-08-22
 
 ## Current State: Deployed to Production, native-Gmail-only
 
@@ -23,6 +23,7 @@ Live at https://leadstart-ebon.vercel.app (LeadStart Vercel account, auto-deploy
 - **Sending** via the `run-native-sequences` cron, which dispatches sequence steps under the per-mailbox warmup ramp in `src/lib/gmail/ramp.ts` (ramps daily send volume up gradually per mailbox rather than blasting at full capacity on day one).
 - **Reply ingest** via the `poll-native-replies` cron, which pulls inbound Gmail messages and hands them to the shared reply pipeline for classification + hot-lead notification.
 - **Contact import** via client self-service CSV upload into native campaigns (per-campaign token mapping through `/api/campaigns/[id]/client-import`).
+- **Inbox health + seed placement** (migrations `00061`, `00067`, `00068`): hourly per-mailbox score from DNS/blacklist/bounce/reply signals plus the one *direct* measurement — a placement test that probes seed inboxes we control and reads back Inbox/Promotions/Spam + receiver-side SPF/DKIM/DMARC. Seed panel + per-mailbox tests live on **Admin → Mailboxes**; the `run-placement-tests` cron finalizes open tests and re-probes every active mailbox weekly. **Activation (2026-08-22 build):** apply migration `00068` (Supabase SQL editor), push to deploy, then click **Use sending mailboxes as seeds** on the Mailboxes page. Setup + interpretation in [`docs/native-email-runbook.md`](docs/native-email-runbook.md) §4.
 
 ---
 
@@ -104,6 +105,10 @@ The Claude classifier + Resend hot-lead notification flow now runs against nativ
 | `/api/cron/prune-webhook-events` | 4am UTC | Webhook audit log cleanup |
 | `/api/cron/dispatch-owner-alerts` | every 5 min | Owner alert delivery |
 | `/api/cron/owner-heartbeat` | 1pm UTC | Periodic owner ping |
+| `/api/cron/run-native-sequences` | every 5 min | Native Gmail sequence dispatcher (per-mailbox ramp) |
+| `/api/cron/poll-native-replies` | every minute | Native Gmail reply + bounce ingest |
+| `/api/cron/check-inbox-health` | hourly at :30 | Per-mailbox inbox-health score (DNS, blacklist, bounces, replies, seed placement) |
+| `/api/cron/run-placement-tests` | every 10 min | Finalizes open seed placement tests; starts the weekly automatic probe per mailbox |
 | `/api/webhooks/unipile` | inbound | LinkedIn DM ingest (gated) |
 | `/api/webhooks/resend` | inbound | Email delivery status |
 

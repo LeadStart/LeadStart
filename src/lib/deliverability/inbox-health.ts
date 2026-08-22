@@ -29,19 +29,28 @@
 //                                          on its own; only when >= 20 sends)
 //   reply signal   0 replies over >= 40 sends/14d  -10  (warn-only; a dead reply
 //                  rate at real volume is the cheapest inbox-placement proxy)
+//   seed placement spam >= 50% of seeds -45 / any spam -25 / any missing -10 /
+//                  Promotions majority -5   (latest COMPLETE placement test no
+//                  older than PLACEMENT_FRESHNESS_DAYS; older or none = unchecked)
 //
-// The last two are the first *behavioral* signals — everything above them is a
-// config/DNS check that only moves when you edit DNS or get blacklisted, which
+// Bounce/soft-bounce/reply are *behavioral* signals — everything above them is
+// a config/DNS check that only moves when you edit DNS or get blacklisted, which
 // is why a correctly-configured mailbox otherwise sits at 100 indefinitely.
+// Seed placement is the one DIRECT measurement: a probe sent to inboxes we
+// control and read back via the Gmail API (see ./placement.ts). Its detail
+// also carries the receiver-side SPF/DKIM/DMARC verdicts, which is what turns
+// "the score dipped" into "why": auth failure vs. reputation/content.
 //
 // Sanity anchors (used by scripts/test-inbox-health.ts): perfect = 100/healthy;
 // DBL-listed alone = 40/critical; >10% bounces alone = 40/critical; a total DNS
 // resolver outage (SPF fail + DKIM warn + DMARC fail + MX fail) = exactly
-// 50/watch; empty inputs = 100/healthy with every component "unchecked".
+// 50/watch; 2 of 3 seeds in spam alone = 55/watch; empty inputs = 100/healthy
+// with every component "unchecked".
 
-import type { HealthBand, HealthComponent } from "@/types/app";
+import type { HealthBand, HealthComponent, PlacementAuthSummary } from "@/types/app";
 import type { AuthCheck, DomainAuth } from "./check";
 import type { DblResult } from "./dnsbl";
+import { PLACEMENT_FRESHNESS_DAYS, describeAuthFailures, describeCounts } from "./placement";
 
 export const HEALTHY_MIN = 80;
 export const CRITICAL_MAX = 49; // score <= 49 is critical (i.e. below 50)
@@ -70,16 +79,36 @@ export interface InboxHealthInputs {
    * replied14d from lead_replies (native_email). null → reply signal unchecked.
    */
   replies?: { sent14d: number; replied14d: number } | null;
+  /**
+   * Latest COMPLETE seed placement test for this mailbox, already filtered to
+   * <= PLACEMENT_FRESHNESS_DAYS old by the caller. null → seed placement
+   * unchecked (never "no placement").
+   */
+  placement?: PlacementSignal | null;
+}
+
+// The scorer's view of one completed placement test (built from a
+// placement_tests row by placementSignalFromTest in ./placement-runner.ts).
+export interface PlacementSignal {
+  testedAt: string; // ISO
+  probe: "neutral" | "campaign";
+  seedsTotal: number;
+  inbox: number;
+  promotions: number;
+  spam: number;
+  /** missing + bounced + other */
+  missing: number;
+  authSummary?: PlacementAuthSummary | null;
 }
 
 export interface InboxHealthResult {
   score: number; // clamped 0–100
   band: HealthBand;
-  components: HealthComponent[]; // all 6, always, in fixed order
+  components: HealthComponent[]; // all 9, always, in fixed order
 }
 
 export function computeInboxHealth(inputs: InboxHealthInputs): InboxHealthResult {
-  const { dbl, domainAuth, mx, bounces, replies } = inputs;
+  const { dbl, domainAuth, mx, bounces, replies, placement } = inputs;
 
   const components: HealthComponent[] = [
     blacklistComponent(dbl),
@@ -90,6 +119,7 @@ export function computeInboxHealth(inputs: InboxHealthInputs): InboxHealthResult
     bounceComponent(bounces),
     softBounceComponent(bounces),
     replySignalComponent(replies),
+    seedPlacementComponent(placement),
   ];
 
   const totalDeduction = components.reduce((sum, c) => sum + c.deduction, 0);
@@ -276,4 +306,79 @@ function replySignalComponent(
     deduction: 0,
     detail: `${replies.replied14d} repl${replies.replied14d === 1 ? "y" : "ies"} across ${sent} sends in 14 days (${(rate * 100).toFixed(1)}%).`,
   };
+}
+
+/**
+ * Seed placement — the only component that measures where mail lands rather
+ * than inferring it. Graded on the latest complete test's seed outcomes:
+ * spam is graded hardest (it is the thing every other signal is a proxy for),
+ * "missing" softer (a gateway rejection or a delay — ambiguous until re-run),
+ * and a Promotions majority lightest (delivered, but read as marketing). The
+ * detail names the receiver-side SPF/DKIM/DMARC verdicts so the operator can
+ * tell an authentication problem from a reputation/content one at a glance.
+ * Deliberately sized so that a bad panel alone lands in "watch", not
+ * "critical": a 3–5 seed panel is a strong hint, not a verdict — critical
+ * needs corroboration from bounces, blacklist, or DNS.
+ */
+function seedPlacementComponent(p: PlacementSignal | null | undefined): HealthComponent {
+  const key: HealthComponent["key"] = "seed_placement";
+  const label = "Seed placement";
+  if (!p) {
+    return {
+      key,
+      label,
+      status: "unchecked",
+      deduction: 0,
+      detail: `No placement test in the last ${PLACEMENT_FRESHNESS_DAYS} days — run one from Mailboxes → Seed inboxes to measure where this mailbox actually lands.`,
+    };
+  }
+  const total = p.inbox + p.promotions + p.spam + p.missing;
+  if (total === 0) {
+    return {
+      key,
+      label,
+      status: "unchecked",
+      deduction: 0,
+      detail: "The last placement test had no readable seeds — check the seed panel and re-run.",
+    };
+  }
+  const when = new Date(p.testedAt).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+  const probeLabel = p.probe === "campaign" ? "campaign copy" : "neutral probe";
+  const summary = `${describeCounts({ total, inbox: p.inbox, promotions: p.promotions, spam: p.spam, missing: p.missing })} on ${when} (${probeLabel}).`;
+  const authFailures = describeAuthFailures(p.authSummary);
+  const authNote = authFailures
+    ? ` Receiver-side auth: ${authFailures} — fix authentication before anything else.`
+    : p.authSummary && p.authSummary.checked > 0
+      ? " Receiver-side SPF/DKIM/DMARC passed, so this is reputation or content, not authentication."
+      : "";
+
+  if (p.spam > 0 && p.spam / total >= 0.5) {
+    return { key, label, status: "bad", deduction: 45, detail: `${summary}${authNote}` };
+  }
+  if (p.spam > 0) {
+    return { key, label, status: "bad", deduction: 25, detail: `${summary}${authNote}` };
+  }
+  if (p.missing > 0) {
+    return {
+      key,
+      label,
+      status: "warn",
+      deduction: 10,
+      detail: `${summary} A missing probe usually means a gateway rejection or a delay — re-run before acting on it.${authNote}`,
+    };
+  }
+  if (p.promotions > p.inbox) {
+    return {
+      key,
+      label,
+      status: "warn",
+      deduction: 5,
+      detail: `${summary} Most seeds filed it under Promotions — Gmail reads the message as marketing; try a plainer, more personal first line.`,
+    };
+  }
+  return { key, label, status: "ok", deduction: 0, detail: `${summary}${authNote}` };
 }

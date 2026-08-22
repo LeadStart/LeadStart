@@ -48,6 +48,9 @@ export interface Organization {
   instantly_api_key: string | null;
   instantly_workspace_id: string | null;
   instantly_webhook_id: string | null;
+  // Inbox-placement testing (migration 00068). Days between automatic
+  // neutral probes per active mailbox; NULL = manual runs only.
+  placement_test_interval_days: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -770,12 +773,110 @@ export interface HealthComponent {
     | "bounce_rate"
     | "soft_bounce_rate"
     | "reply_signal"
+    | "seed_placement"
     | "heat_score"
     | "warmup_placement";
   label: string;
   status: HealthComponentStatus;
   deduction: number;
   detail: string;
+}
+
+// ---------- Seed inboxes + placement tests (migration 00068) ----------
+
+export type SeedInboxStatus = "active" | "paused" | "error";
+
+// A Google Workspace inbox we control on a DWD-authorized domain. Sending
+// mailboxes probe it; the placement checker reads it (gmail.readonly) to see
+// where the probe landed. v1 is Workspace-only; the provider column reserves
+// room for IMAP / Microsoft Graph seeds later.
+export interface SeedInbox {
+  id: string;
+  organization_id: string;
+  email_address: string;
+  label: string | null;
+  provider: "google_workspace";
+  status: SeedInboxStatus;
+  last_error: string | null;
+  last_error_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// What a placement test sends: a neutral, realistic note (reputation + auth in
+// isolation) or the first step of the campaign this mailbox is pooled into,
+// rendered with sample merge values (the real copy).
+export type PlacementProbe = "neutral" | "campaign";
+export type PlacementTestStatus = "sending" | "awaiting" | "complete" | "failed";
+export type PlacementResultStatus =
+  | "pending"
+  | "inbox"
+  | "promotions"
+  | "spam"
+  | "other"
+  | "missing"
+  | "bounced"
+  | "send_failed"
+  | "unreadable";
+
+// SPF/DKIM/DMARC verdicts as the RECEIVING side reported them in the probe's
+// Authentication-Results header — the authoritative answer to "did auth pass
+// on delivery", as opposed to our own DNS checks of what's published.
+export interface PlacementAuthResults {
+  spf: string | null;
+  dkim: string | null;
+  dmarc: string | null;
+  raw: string | null;
+}
+
+export interface PlacementAuthSummary {
+  checked: number;
+  spf_fail: number;
+  dkim_fail: number;
+  dmarc_fail: number;
+}
+
+// One probe run per sending mailbox. Counts are denormalized at completion
+// (src/lib/deliverability/placement-runner.ts) so the mailboxes list and the
+// health cron read them without joining results.
+export interface PlacementTest {
+  id: string;
+  organization_id: string;
+  mailbox_id: string;
+  probe: PlacementProbe;
+  campaign_id: string | null;
+  triggered_by: "manual" | "scheduled";
+  status: PlacementTestStatus;
+  subject: string | null;
+  seeds_total: number;
+  inbox_count: number;
+  promotions_count: number;
+  spam_count: number;
+  missing_count: number;
+  auth_summary: PlacementAuthSummary | null;
+  error: string | null;
+  started_at: string;
+  sent_at: string | null;
+  completed_at: string | null;
+}
+
+// One seed's outcome inside a run. labels = the raw Gmail labelIds seen in
+// the seed (INBOX, CATEGORY_PROMOTIONS, SPAM, ...).
+export interface PlacementTestResult {
+  id: string;
+  test_id: string;
+  seed_inbox_id: string | null;
+  seed_email: string;
+  rfc_message_id: string | null;
+  gmail_message_id: string | null;
+  gmail_thread_id: string | null;
+  status: PlacementResultStatus;
+  labels: string[] | null;
+  auth_results: PlacementAuthResults | null;
+  detail: string | null;
+  sent_at: string | null;
+  found_at: string | null;
+  checked_at: string | null;
 }
 
 // Append-only send log — one row per successful send. Doubles as the

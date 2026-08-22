@@ -18,10 +18,24 @@ import {
   XCircle,
   AlertTriangle,
   ChevronDown,
+  FlaskConical,
+  Loader2,
+  Target,
+  X,
 } from "lucide-react";
 import { appUrl } from "@/lib/api-url";
+import { useUser } from "@/hooks/use-user";
 import { bandBadgeClass, bandLabel } from "@/lib/deliverability/inbox-health";
-import type { HealthComponent, NativeMailbox } from "@/types/app";
+import { describeCounts, placementStatusLabel } from "@/lib/deliverability/placement";
+import type {
+  HealthComponent,
+  NativeMailbox,
+  PlacementProbe,
+  PlacementResultStatus,
+  PlacementTest,
+  PlacementTestResult,
+  SeedInbox,
+} from "@/types/app";
 
 type MailboxRow = NativeMailbox & {
   sent_today: number;
@@ -29,12 +43,23 @@ type MailboxRow = NativeMailbox & {
   effective_daily_cap: number;
   total_sent: number;
   warmed: boolean;
+  latest_placement: PlacementTest | null;
+};
+
+type PlacementDetail = {
+  test: PlacementTest | null;
+  results: PlacementTestResult[];
+  seeds_available: number;
 };
 
 type Banner = { kind: "success" | "error"; message: string } | null;
 
+const PLACEMENT_POLL_MS = 10_000;
+
 export default function MailboxesPage() {
+  const { user } = useUser();
   const [mailboxes, setMailboxes] = useState<MailboxRow[]>([]);
+  const [seedCount, setSeedCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [banner, setBanner] = useState<Banner>(null);
 
@@ -47,16 +72,34 @@ export default function MailboxesPage() {
   // Per-row in-flight action guard (mailbox id → true)
   const [busy, setBusy] = useState<Record<string, boolean>>({});
 
-  // Which mailbox's health breakdown is expanded (only one at a time).
+  // Which mailbox's detail (health breakdown + placement) is expanded (one at a time).
   const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  // Inline test-send form (one at a time) — recipient defaults to the login email.
+  const [testOpenId, setTestOpenId] = useState<string | null>(null);
+  const [testTo, setTestTo] = useState("");
+
+  // Placement detail per mailbox (latest test + per-seed results), loaded on
+  // expand and refreshed by polling while a test is running.
+  const [placement, setPlacement] = useState<Record<string, PlacementDetail>>({});
+
+  // Seed panel
+  const [seeds, setSeeds] = useState<SeedInbox[]>([]);
+  const [seedEmail, setSeedEmail] = useState("");
+  const [seedLabel, setSeedLabel] = useState("");
+  const [addingSeed, setAddingSeed] = useState(false);
+  const [importingSeeds, setImportingSeeds] = useState(false);
+  const [seedBusy, setSeedBusy] = useState<Record<string, boolean>>({});
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const res = await fetch(appUrl("/api/admin/mailboxes"));
       const data = await res.json();
-      if (res.ok) setMailboxes(data.mailboxes ?? []);
-      else setBanner({ kind: "error", message: data.error ?? "Failed to load mailboxes" });
+      if (res.ok) {
+        setMailboxes(data.mailboxes ?? []);
+        setSeedCount(data.seed_count ?? 0);
+      } else setBanner({ kind: "error", message: data.error ?? "Failed to load mailboxes" });
     } catch (err) {
       setBanner({ kind: "error", message: err instanceof Error ? err.message : "Failed to load" });
     } finally {
@@ -64,9 +107,54 @@ export default function MailboxesPage() {
     }
   }, []);
 
+  const loadSeeds = useCallback(async () => {
+    try {
+      const res = await fetch(appUrl("/api/admin/seed-inboxes"));
+      const data = await res.json();
+      if (res.ok) {
+        setSeeds(data.seeds ?? []);
+        setSeedCount((data.seeds ?? []).filter((s: SeedInbox) => s.status === "active").length);
+      } else setBanner({ kind: "error", message: data.error ?? "Failed to load seed inboxes" });
+    } catch (err) {
+      setBanner({ kind: "error", message: err instanceof Error ? err.message : "Failed to load seeds" });
+    }
+  }, []);
+
+  // Fetch the latest placement test for one mailbox. The GET itself performs a
+  // check pass when the test is ready to be read, so polling this is what
+  // completes a running test. Also mirrors the test onto the row so the
+  // Placement column updates without a full reload.
+  const loadPlacement = useCallback(async (mailboxId: string) => {
+    try {
+      const res = await fetch(appUrl(`/api/admin/mailboxes/${mailboxId}/placement`));
+      const data = await res.json();
+      if (!res.ok) return;
+      const detail = data as PlacementDetail;
+      setPlacement((p) => ({ ...p, [mailboxId]: detail }));
+      setMailboxes((rows) =>
+        rows.map((r) => (r.id === mailboxId ? { ...r, latest_placement: detail.test } : r)),
+      );
+    } catch {
+      /* transient; next poll retries */
+    }
+  }, []);
+
   useEffect(() => {
     void load();
-  }, [load]);
+    void loadSeeds();
+  }, [load, loadSeeds]);
+
+  // Poll every running test until it completes.
+  useEffect(() => {
+    const running = mailboxes.filter(
+      (m) => m.latest_placement && ["sending", "awaiting"].includes(m.latest_placement.status),
+    );
+    if (running.length === 0) return;
+    const timer = setInterval(() => {
+      for (const m of running) void loadPlacement(m.id);
+    }, PLACEMENT_POLL_MS);
+    return () => clearInterval(timer);
+  }, [mailboxes, loadPlacement]);
 
   async function handleAdd() {
     if (!newEmail.trim()) return;
@@ -122,26 +210,75 @@ export default function MailboxesPage() {
     });
   }
 
-  async function handleTest(mb: MailboxRow) {
+  function openTest(mb: MailboxRow) {
+    setBanner(null);
+    if (testOpenId === mb.id) {
+      setTestOpenId(null);
+      return;
+    }
+    setTestOpenId(mb.id);
+    setTestTo(user?.email ?? "");
+  }
+
+  async function submitTest(mb: MailboxRow) {
     setBanner(null);
     await withBusy(mb.id, async () => {
       const res = await fetch(appUrl(`/api/admin/mailboxes/${mb.id}/test`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ to: testTo.trim() }),
       });
       const data = await res.json();
       if (res.ok) {
         setBanner({
           kind: "success",
-          message: `Test email sent from ${mb.email_address} to ${data.to}.`,
+          message: `Test email sent from ${mb.email_address} to ${data.to} with the subject “${data.subject}”. Open that inbox and check whether it landed in Inbox, Promotions, or Spam.`,
         });
-        await load();
+        setTestOpenId(null);
       } else {
         setBanner({ kind: "error", message: data.error ?? "Test send failed" });
         await load();
       }
     });
+  }
+
+  async function handlePlacement(mb: MailboxRow, probe: PlacementProbe) {
+    setBanner(null);
+    await withBusy(mb.id, async () => {
+      const res = await fetch(appUrl(`/api/admin/mailboxes/${mb.id}/placement`), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ probe }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        const test = data.test as PlacementTest;
+        const results = (data.results ?? []) as PlacementTestResult[];
+        setPlacement((p) => ({
+          ...p,
+          [mb.id]: { test, results, seeds_available: p[mb.id]?.seeds_available ?? results.length },
+        }));
+        setMailboxes((rows) => rows.map((r) => (r.id === mb.id ? { ...r, latest_placement: test } : r)));
+        setExpandedId(mb.id);
+        const sent = results.filter((r) => r.status === "pending").length;
+        setBanner(
+          test.status === "failed"
+            ? { kind: "error", message: test.error ?? "Placement test failed to send." }
+            : {
+                kind: "success",
+                message: `Placement test started — ${probe === "campaign" ? "campaign copy" : "a neutral probe"} sent from ${mb.email_address} to ${sent} seed inbox${sent === 1 ? "" : "es"}. Results land below in about a minute.`,
+              },
+        );
+      } else {
+        setBanner({ kind: "error", message: data.error ?? "Placement test failed to start" });
+      }
+    });
+  }
+
+  function toggleExpanded(mb: MailboxRow) {
+    const next = expandedId === mb.id ? null : mb.id;
+    setExpandedId(next);
+    if (next && !placement[mb.id]) void loadPlacement(mb.id);
   }
 
   async function handleDelete(mb: MailboxRow) {
@@ -154,12 +291,103 @@ export default function MailboxesPage() {
     });
   }
 
+  // ---- Seed panel actions ----
+
+  async function handleAddSeed() {
+    if (!seedEmail.trim()) return;
+    setAddingSeed(true);
+    setBanner(null);
+    try {
+      const res = await fetch(appUrl("/api/admin/seed-inboxes"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email_address: seedEmail.trim(), label: seedLabel.trim() || undefined }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setBanner({ kind: "success", message: `Added seed inbox ${seedEmail.trim()} — delegation verified.` });
+        setSeedEmail("");
+        setSeedLabel("");
+        await loadSeeds();
+      } else {
+        setBanner({ kind: "error", message: data.error ?? "Failed to add seed inbox" });
+      }
+    } catch (err) {
+      setBanner({ kind: "error", message: err instanceof Error ? err.message : "Failed to add seed" });
+    } finally {
+      setAddingSeed(false);
+    }
+  }
+
+  async function handleImportSeeds() {
+    setImportingSeeds(true);
+    setBanner(null);
+    try {
+      const res = await fetch(appUrl("/api/admin/seed-inboxes"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ import_sending_mailboxes: true }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        const n = data.imported ?? 0;
+        setBanner({
+          kind: "success",
+          message:
+            n > 0
+              ? `Added ${n} sending mailbox${n === 1 ? "" : "es"} as seed inbox${n === 1 ? "" : "es"}. Mailboxes on different domains can now probe each other.`
+              : "Every sending mailbox is already a seed inbox.",
+        });
+        await loadSeeds();
+      } else {
+        setBanner({ kind: "error", message: data.error ?? "Import failed" });
+      }
+    } catch (err) {
+      setBanner({ kind: "error", message: err instanceof Error ? err.message : "Import failed" });
+    } finally {
+      setImportingSeeds(false);
+    }
+  }
+
+  async function withSeedBusy(id: string, fn: () => Promise<void>) {
+    setSeedBusy((b) => ({ ...b, [id]: true }));
+    try {
+      await fn();
+    } finally {
+      setSeedBusy((b) => ({ ...b, [id]: false }));
+    }
+  }
+
+  async function handleToggleSeed(seed: SeedInbox) {
+    const next = seed.status === "active" ? "paused" : "active";
+    await withSeedBusy(seed.id, async () => {
+      const res = await fetch(appUrl(`/api/admin/seed-inboxes/${seed.id}`), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: next }),
+      });
+      const data = await res.json();
+      if (res.ok) await loadSeeds();
+      else setBanner({ kind: "error", message: data.error ?? "Update failed" });
+    });
+  }
+
+  async function handleDeleteSeed(seed: SeedInbox) {
+    if (!confirm(`Remove seed inbox ${seed.email_address}?`)) return;
+    await withSeedBusy(seed.id, async () => {
+      const res = await fetch(appUrl(`/api/admin/seed-inboxes/${seed.id}`), { method: "DELETE" });
+      const data = await res.json();
+      if (res.ok) await loadSeeds();
+      else setBanner({ kind: "error", message: data.error ?? "Delete failed" });
+    });
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader
         eyebrow="Sending"
         title="Mailboxes"
-        subtitle="Google Workspace inboxes LeadStart sends from directly. New inboxes ramp up automatically as they send — 5/day, then +1 each day up to a 20/day cap — so a paused inbox never skips its warmup. No inbox ever sends more than 20/day."
+        subtitle="Google Workspace inboxes LeadStart sends from directly. New inboxes ramp up automatically as they send — 5/day, then +1 each day up to a 20/day cap — so a paused inbox never skips its warmup. Seed placement tests show where each inbox's mail actually lands."
       />
 
       {banner && (
@@ -273,6 +501,7 @@ export default function MailboxesPage() {
                     <th className="py-2 px-3 font-medium">Ramp</th>
                     <th className="py-2 px-3 font-medium">Today</th>
                     <th className="py-2 px-3 font-medium">Bounces 7d</th>
+                    <th className="py-2 px-3 font-medium">Placement</th>
                     <th className="py-2 pl-3 font-medium text-right">Actions</th>
                   </tr>
                 </thead>
@@ -310,11 +539,9 @@ export default function MailboxesPage() {
                         ) : (
                           <button
                             type="button"
-                            onClick={() =>
-                              setExpandedId((cur) => (cur === mb.id ? null : mb.id))
-                            }
+                            onClick={() => toggleExpanded(mb)}
                             className="inline-flex items-center gap-1.5 cursor-pointer"
-                            title="Show the health breakdown"
+                            title="Show the health breakdown and placement results"
                           >
                             <span className="font-semibold text-[#0f172a]">{mb.health_score}</span>
                             {mb.health_band && (
@@ -350,16 +577,46 @@ export default function MailboxesPage() {
                           {mb.bounced_7d}
                         </span>
                       </td>
+                      <td className="py-3 px-3">
+                        <button
+                          type="button"
+                          onClick={() => toggleExpanded(mb)}
+                          className="cursor-pointer text-left"
+                          title="Show placement results"
+                        >
+                          <PlacementCell test={mb.latest_placement} />
+                        </button>
+                      </td>
                       <td className="py-3 pl-3">
                         <div className="flex items-center justify-end gap-1">
                           <Button
                             variant="outline"
                             size="sm"
                             disabled={busy[mb.id]}
-                            onClick={() => handleTest(mb)}
-                            title="Send a test email from this inbox"
+                            onClick={() => openTest(mb)}
+                            title="Send a test email from this inbox to an address you choose"
+                            aria-expanded={testOpenId === mb.id}
                           >
                             <Send size={14} />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={
+                              busy[mb.id] ||
+                              seedCount === 0 ||
+                              mb.status === "error" ||
+                              (mb.latest_placement != null &&
+                                ["sending", "awaiting"].includes(mb.latest_placement.status))
+                            }
+                            onClick={() => handlePlacement(mb, "neutral")}
+                            title={
+                              seedCount === 0
+                                ? "Add a seed inbox below first"
+                                : "Run a placement test (neutral probe to every seed inbox on another domain)"
+                            }
+                          >
+                            <FlaskConical size={14} />
                           </Button>
                           <Button
                             variant="outline"
@@ -382,26 +639,90 @@ export default function MailboxesPage() {
                         </div>
                       </td>
                     </tr>
-                    {expandedId === mb.id && mb.health_components && (
+                    {testOpenId === mb.id && (
                       <tr className="bg-slate-50/60 border-b last:border-0">
-                        <td colSpan={7} className="px-3 py-3">
-                          <div className="space-y-1.5">
-                            {mb.health_components.map((c) => (
-                              <div key={c.key} className="flex items-start gap-2 text-xs">
-                                <span
-                                  className={`mt-1 h-2 w-2 rounded-full shrink-0 ${dotClass(c.status)}`}
-                                />
-                                <span className="font-medium text-[#0f172a] w-44 shrink-0">
-                                  {c.label}
-                                </span>
-                                <span className="text-muted-foreground">{c.detail}</span>
-                              </div>
-                            ))}
-                            {mb.health_checked_at && (
-                              <p className="text-[11px] text-muted-foreground pt-1">
-                                Last checked {new Date(mb.health_checked_at).toLocaleString()}.
+                        <td colSpan={8} className="px-3 py-3">
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                            <div className="space-y-1 flex-1 max-w-md">
+                              <Label htmlFor={`test-to-${mb.id}`} className="text-xs font-medium">
+                                Send a test email from {mb.email_address} to
+                              </Label>
+                              <Input
+                                id={`test-to-${mb.id}`}
+                                type="email"
+                                value={testTo}
+                                onChange={(e) => setTestTo(e.target.value)}
+                                placeholder="you@gmail.com"
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") void submitTest(mb);
+                                }}
+                              />
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Button
+                                size="sm"
+                                disabled={busy[mb.id] || !testTo.trim()}
+                                onClick={() => submitTest(mb)}
+                              >
+                                <Send size={14} /> {busy[mb.id] ? "Sending…" : "Send test"}
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setTestOpenId(null)}
+                                title="Cancel"
+                              >
+                                <X size={14} />
+                              </Button>
+                            </div>
+                          </div>
+                          <p className="text-[11px] text-muted-foreground mt-2">
+                            Defaults to your login address. The message is the same short, link-free
+                            note the placement test uses, so what you see in that inbox reflects the
+                            mailbox — not a “TEST” subject line. Sending to this mailbox itself is
+                            refused: a self-send never leaves the tenant and always lands in the inbox.
+                          </p>
+                        </td>
+                      </tr>
+                    )}
+                    {expandedId === mb.id && (
+                      <tr className="bg-slate-50/60 border-b last:border-0">
+                        <td colSpan={8} className="px-3 py-3">
+                          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                            <div className="space-y-1.5">
+                              <p className="text-xs font-semibold text-[#0f172a] uppercase tracking-wide">
+                                Health breakdown
                               </p>
-                            )}
+                              {mb.health_components ? (
+                                mb.health_components.map((c) => (
+                                  <div key={c.key} className="flex items-start gap-2 text-xs">
+                                    <span
+                                      className={`mt-1 h-2 w-2 rounded-full shrink-0 ${dotClass(c.status)}`}
+                                    />
+                                    <span className="font-medium text-[#0f172a] w-44 shrink-0">
+                                      {c.label}
+                                    </span>
+                                    <span className="text-muted-foreground">{c.detail}</span>
+                                  </div>
+                                ))
+                              ) : (
+                                <p className="text-xs text-muted-foreground">
+                                  First health check runs within the hour.
+                                </p>
+                              )}
+                              {mb.health_checked_at && (
+                                <p className="text-[11px] text-muted-foreground pt-1">
+                                  Last checked {new Date(mb.health_checked_at).toLocaleString()}.
+                                </p>
+                              )}
+                            </div>
+                            <PlacementPanel
+                              mailbox={mb}
+                              detail={placement[mb.id]}
+                              seedCount={seedCount}
+                              busy={!!busy[mb.id]}
+                              onRun={(probe) => handlePlacement(mb, probe)}
+                            />
                           </div>
                         </td>
                       </tr>
@@ -414,8 +735,330 @@ export default function MailboxesPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Seed inboxes */}
+      <Card className="border-border/50 shadow-sm">
+        <CardHeader className="flex flex-row items-center gap-2 pb-3">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-600">
+            <Target size={16} className="text-white" />
+          </div>
+          <div>
+            <CardTitle className="text-base">
+              Seed inboxes {seeds.length > 0 && <span className="text-muted-foreground font-normal">({seeds.length})</span>}
+            </CardTitle>
+            <p className="text-xs text-muted-foreground">
+              Inboxes you control on other delegation-authorized domains. A placement test sends a
+              probe from a mailbox to every seed on a different domain, then reads each seed to see
+              where it landed — Inbox, Promotions, or Spam — and what the receiver said about
+              SPF, DKIM, and DMARC. Nothing in a seed is ever modified.
+            </p>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {seeds.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-2">
+              No seed inboxes yet. The quickest panel is your own sending mailboxes — any two on
+              different domains can probe each other — or add a dedicated Workspace inbox below.
+            </p>
+          ) : (
+            <div className="divide-y divide-border rounded-lg border">
+              {seeds.map((seed) => (
+                <div key={seed.id} className="flex items-center gap-3 px-3 py-2 text-sm">
+                  <div className="min-w-0 flex-1">
+                    <div className="font-medium text-[#0f172a] truncate">{seed.email_address}</div>
+                    {seed.label && <div className="text-xs text-muted-foreground">{seed.label}</div>}
+                    {seed.status === "error" && seed.last_error && (
+                      <div className="text-xs text-red-600 flex items-center gap-1 mt-0.5">
+                        <AlertTriangle size={12} /> {seed.last_error}
+                      </div>
+                    )}
+                  </div>
+                  <SeedStatusBadge status={seed.status} />
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={seedBusy[seed.id]}
+                      onClick={() => handleToggleSeed(seed)}
+                      title={seed.status === "active" ? "Pause (skip this seed)" : "Resume"}
+                    >
+                      {seed.status === "active" ? <Pause size={14} /> : <Play size={14} />}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={seedBusy[seed.id]}
+                      onClick={() => handleDeleteSeed(seed)}
+                      title="Remove seed inbox"
+                    >
+                      <Trash2 size={14} className="text-red-500" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="space-y-1">
+              <Label htmlFor="seedEmail" className="text-sm font-medium">
+                Seed email address
+              </Label>
+              <Input
+                id="seedEmail"
+                value={seedEmail}
+                onChange={(e) => setSeedEmail(e.target.value)}
+                placeholder="seed@another-authorized-domain.com"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="seedLabel" className="text-sm font-medium">
+                Label (optional)
+              </Label>
+              <Input
+                id="seedLabel"
+                value={seedLabel}
+                onChange={(e) => setSeedLabel(e.target.value)}
+                placeholder="Workspace – davidcabrera"
+              />
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button onClick={handleAddSeed} disabled={addingSeed || !seedEmail.trim()}>
+              {addingSeed ? "Verifying…" : "Add seed inbox"}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleImportSeeds}
+              disabled={importingSeeds || mailboxes.length === 0}
+              title="Register every sending mailbox as a seed — they're already delegation-verified"
+            >
+              {importingSeeds ? "Adding…" : "Use sending mailboxes as seeds"}
+            </Button>
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            A seed must be a Google Workspace inbox on a domain that has authorized the service
+            account (same setup as a sending mailbox). Seeds on a mailbox&apos;s own domain are
+            skipped for that mailbox — same-tenant delivery is never filtered, so it can&apos;t
+            measure anything.
+          </p>
+        </CardContent>
+      </Card>
     </div>
   );
+}
+
+// ── Placement rendering ───────────────────────────────────────────────────
+
+function PlacementCell({ test }: { test: PlacementTest | null }) {
+  if (!test) {
+    return (
+      <span className="text-muted-foreground" title="Run a placement test to measure where this inbox lands.">
+        Not tested
+      </span>
+    );
+  }
+  if (test.status === "sending" || test.status === "awaiting") {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-amber-600 font-medium">
+        <Loader2 size={12} className="animate-spin" /> Checking…
+      </span>
+    );
+  }
+  if (test.status === "failed") {
+    return (
+      <span className="text-red-600 font-medium" title={test.error ?? undefined}>
+        Failed
+      </span>
+    );
+  }
+  const total = test.seeds_total;
+  const delivered = test.inbox_count + test.promotions_count;
+  let text: string;
+  let cls: string;
+  if (test.spam_count > 0) {
+    text = `${test.spam_count}/${total} spam`;
+    cls = "text-red-600";
+  } else if (test.missing_count > 0) {
+    text = `${test.missing_count}/${total} missing`;
+    cls = "text-amber-600";
+  } else if (test.promotions_count > test.inbox_count) {
+    text = `${delivered}/${total} inbox · promo`;
+    cls = "text-amber-600";
+  } else {
+    text = `${delivered}/${total} inbox`;
+    cls = "text-emerald-600";
+  }
+  return (
+    <div>
+      <div
+        className={`font-medium ${cls}`}
+        title={describeCounts({
+          total,
+          inbox: test.inbox_count,
+          promotions: test.promotions_count,
+          spam: test.spam_count,
+          missing: test.missing_count,
+        })}
+      >
+        {text}
+      </div>
+      <div className="text-[11px] text-muted-foreground">
+        {relativeDay(test.completed_at ?? test.started_at)} · {test.probe === "campaign" ? "campaign copy" : "neutral"}
+      </div>
+    </div>
+  );
+}
+
+function PlacementPanel({
+  mailbox,
+  detail,
+  seedCount,
+  busy,
+  onRun,
+}: {
+  mailbox: MailboxRow;
+  detail: PlacementDetail | undefined;
+  seedCount: number;
+  busy: boolean;
+  onRun: (probe: PlacementProbe) => void;
+}) {
+  const test = detail?.test ?? mailbox.latest_placement;
+  const running = !!test && (test.status === "sending" || test.status === "awaiting");
+  const canRun = !busy && !running && seedCount > 0 && mailbox.status !== "error";
+  const results = detail?.results ?? [];
+
+  return (
+    <div className="space-y-2">
+      <p className="text-xs font-semibold text-[#0f172a] uppercase tracking-wide">
+        Seed placement
+      </p>
+      {!test ? (
+        <p className="text-xs text-muted-foreground">
+          Not tested yet. A placement test sends one probe from this mailbox to each seed inbox on
+          another domain and reads back where it landed.
+        </p>
+      ) : (
+        <>
+          <p className="text-xs text-muted-foreground">
+            {running ? (
+              <span className="inline-flex items-center gap-1.5 text-amber-600 font-medium">
+                <Loader2 size={12} className="animate-spin" /> Checking seed inboxes — results update
+                automatically.
+              </span>
+            ) : test.status === "failed" ? (
+              <span className="text-red-600 font-medium">{test.error ?? "The test failed."}</span>
+            ) : (
+              <span className="font-medium text-[#0f172a]">
+                {describeCounts({
+                  total: test.seeds_total,
+                  inbox: test.inbox_count,
+                  promotions: test.promotions_count,
+                  spam: test.spam_count,
+                  missing: test.missing_count,
+                })}
+              </span>
+            )}{" "}
+            <span>
+              · {test.probe === "campaign" ? "campaign copy" : "neutral probe"}
+              {test.subject ? ` “${test.subject}”` : ""} ·{" "}
+              {new Date(test.completed_at ?? test.sent_at ?? test.started_at).toLocaleString()}
+              {test.triggered_by === "scheduled" ? " · automatic" : ""}
+            </span>
+          </p>
+          {!detail ? (
+            <p className="text-xs text-muted-foreground">Loading seed results…</p>
+          ) : results.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No seed results recorded.</p>
+          ) : (
+            <div className="divide-y divide-border rounded-lg border bg-white">
+              {results.map((r) => (
+                <div key={r.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-1.5 text-xs">
+                  <span className="font-medium text-[#0f172a] min-w-0 truncate">{r.seed_email}</span>
+                  <Badge variant="secondary" className={`${resultBadgeClass(r.status)} text-[10px]`}>
+                    {placementStatusLabel(r.status)}
+                  </Badge>
+                  <AuthPills result={r} />
+                  {r.detail && (r.status === "bounced" || r.status === "send_failed" || r.status === "unreadable") && (
+                    <span className="text-muted-foreground truncate" title={r.detail}>
+                      {r.detail}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+      <div className="flex flex-wrap items-center gap-2 pt-1">
+        <Button size="sm" variant="outline" disabled={!canRun} onClick={() => onRun("neutral")}>
+          <FlaskConical size={14} /> Run neutral probe
+        </Button>
+        <Button size="sm" variant="outline" disabled={!canRun} onClick={() => onRun("campaign")}>
+          <FlaskConical size={14} /> Run with campaign copy
+        </Button>
+        {seedCount === 0 && (
+          <span className="text-[11px] text-muted-foreground">Add a seed inbox below to enable tests.</span>
+        )}
+      </div>
+      <p className="text-[11px] text-muted-foreground">
+        Neutral = a short link-free note (reputation + auth only). Campaign copy = step 1 of the
+        campaign this mailbox sends for, with sample values. If neutral lands and campaign copy
+        doesn&apos;t, the copy is the problem; if both go to spam, it&apos;s the domain or mailbox.
+      </p>
+    </div>
+  );
+}
+
+function AuthPills({ result }: { result: PlacementTestResult }) {
+  const a = result.auth_results;
+  if (!a || (a.spf == null && a.dkim == null && a.dmarc == null)) return null;
+  const pill = (name: string, verdict: string | null) => {
+    if (verdict == null) return null;
+    const ok = ["pass", "none", "neutral", "bestguesspass"].includes(verdict);
+    return (
+      <span
+        key={name}
+        className={`font-mono text-[10px] ${ok ? "text-emerald-600" : "text-red-600 font-semibold"}`}
+        title={a.raw ?? undefined}
+      >
+        {name}={verdict}
+      </span>
+    );
+  };
+  return (
+    <span className="inline-flex items-center gap-2">
+      {pill("spf", a.spf)}
+      {pill("dkim", a.dkim)}
+      {pill("dmarc", a.dmarc)}
+    </span>
+  );
+}
+
+function resultBadgeClass(status: PlacementResultStatus): string {
+  switch (status) {
+    case "inbox":
+      return "badge-green";
+    case "promotions":
+      return "badge-amber";
+    case "spam":
+    case "bounced":
+      return "badge-red";
+    case "missing":
+    case "other":
+      return "badge-amber";
+    case "pending":
+    case "send_failed":
+    case "unreadable":
+      return "badge-slate";
+  }
+}
+
+function relativeDay(iso: string): string {
+  const days = Math.floor((Date.now() - Date.parse(iso)) / 86_400_000);
+  if (days <= 0) return "today";
+  if (days === 1) return "yesterday";
+  return `${days}d ago`;
 }
 
 function dotClass(status: HealthComponent["status"]): string {
@@ -432,6 +1075,16 @@ function dotClass(status: HealthComponent["status"]): string {
 }
 
 function StatusBadge({ status }: { status: NativeMailbox["status"] }) {
+  if (status === "active") {
+    return <Badge variant="secondary" className="badge-green text-[10px]">Active</Badge>;
+  }
+  if (status === "paused") {
+    return <Badge variant="secondary" className="bg-slate-100 text-slate-600 border border-slate-200 text-[10px]">Paused</Badge>;
+  }
+  return <Badge variant="secondary" className="badge-red text-[10px]">Error</Badge>;
+}
+
+function SeedStatusBadge({ status }: { status: SeedInbox["status"] }) {
   if (status === "active") {
     return <Badge variant="secondary" className="badge-green text-[10px]">Active</Badge>;
   }

@@ -157,15 +157,35 @@ minutes instead of whenever someone next checks the log.
 
 **Inbox-health monitoring.** The `check-inbox-health` cron scores every native
 (Gmail) sending mailbox 0–100 each hour from free deliverability signals —
-live SPF/DKIM/DMARC/MX DNS, the Spamhaus domain blocklist, and the 7-day
-hard-bounce rate from `native_sends`. It auto-pauses a mailbox that scores
-below the org's offline threshold on two consecutive checks (the guard against
-a one-off DNS blip benching a healthy inbox) and enqueues an owner alert on
-auto-pause or on a fresh transition into the "critical" band. Scores and the
-breakdown surface on the **Admin → Mailboxes** page. Answers "is a mailbox
-about to start landing in spam?" before the bounce rate does the telling.
+live SPF/DKIM/DMARC/MX DNS, the Spamhaus domain blocklist, the 7-day hard and
+soft bounce rates from `native_sends`, the 14-day reply signal, and the latest
+seed placement test. It auto-pauses a mailbox that scores below the org's
+offline threshold on two consecutive checks (the guard against a one-off DNS
+blip benching a healthy inbox) and enqueues an owner alert on auto-pause or on
+a fresh transition into the "critical" band. Scores and the breakdown surface
+on the **Admin → Mailboxes** page. Answers "is a mailbox about to start
+landing in spam?" before the bounce rate does the telling.
 *Implementation:* `src/app/api/cron/check-inbox-health/route.ts`,
 `src/lib/deliverability/inbox-health.ts`.
+
+**Seed placement tests.** The one health signal that *measures* placement
+instead of inferring it. A probe (a neutral link-free note, or step 1 of the
+mailbox's campaign with sample values) is sent from a sending mailbox to each
+seed inbox on a different domain; the seeds are then read back through the
+Gmail API (`rfc822msgid:` lookup, spam included) for the folder the probe
+landed in — Inbox / Promotions / Spam — and the receiver's
+`Authentication-Results` verdicts for SPF/DKIM/DMARC. Results are persisted per
+seed, rolled up per test, shown inline on the Mailboxes page, and graded into
+the `seed_placement` health component. The admin page's polling completes a
+test within a minute or two; the `run-placement-tests` cron (every 10 min)
+finalizes anything left open, enforces the 30-minute "missing" timeout
+(checking the sender for a bounce DSN first), and starts the weekly automatic
+probe per mailbox when the org has an interval set. Probes never touch
+`native_sends`, and seeds are never mutated (read-only scope).
+*Implementation:* `src/lib/deliverability/placement.ts` (pure),
+`src/lib/deliverability/placement-runner.ts` (I/O),
+`src/app/api/cron/run-placement-tests/route.ts`,
+`src/app/api/admin/mailboxes/[id]/placement/route.ts`, migration `00068`.
 
 **Owner alert delivery + heartbeat.** Alerts raised anywhere in the pipeline
 (hard bounces, complaints, auto-paused mailboxes) are enqueued and delivered

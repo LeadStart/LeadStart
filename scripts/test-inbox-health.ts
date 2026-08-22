@@ -5,7 +5,7 @@
  * relative path (type-only cross-imports are erased at runtime).
  *
  * Anchors (see the weights table in inbox-health.ts):
- *   - perfect signals            → 100 / healthy  (8 components)
+ *   - perfect signals            → 100 / healthy  (9 components)
  *   - DBL-listed alone           → 40  / critical
  *   - >10% bounce alone          → 40  / critical
  *   - 3% bounce on 100 sends     → 85  / healthy
@@ -13,6 +13,11 @@
  *   - 30% soft bounce on 100     → 85  / healthy (warn -15, never critical)
  *   - 0 replies on 100 sends/14d → 90  / healthy (warn -10)
  *   - any reply on 100 sends/14d → reply signal ok, no deduction
+ *   - 2 of 3 seeds in spam       → 55  / watch   (bad -45; never critical alone)
+ *   - 1 of 4 seeds in spam       → 75  / watch   (bad -25)
+ *   - 1 of 3 seeds missing       → 90  / healthy (warn -10)
+ *   - Promotions majority        → 95  / healthy (warn -5)
+ *   - all seeds in inbox         → ok, detail names receiver auth
  *   - total DNS resolver outage  → exactly 50 / watch
  *   - empty inputs               → 100 / healthy, every component unchecked
  *
@@ -55,7 +60,7 @@ console.log("\n■ perfect signals → 100 / healthy");
   });
   assert(r.score === 100, `score is 100 (got ${r.score})`);
   assert(r.band === "healthy", `band is healthy (got ${r.band})`);
-  assert(r.components.length === 8, `all 8 components present (got ${r.components.length})`);
+  assert(r.components.length === 9, `all 9 components present (got ${r.components.length})`);
 }
 
 // ---------- 2. DBL-listed alone ----------
@@ -190,6 +195,93 @@ console.log("\n■ 39 sends/14d → reply signal unchecked (below floor)");
   const rep = r.components.find((c) => c.key === "reply_signal");
   assert(rep?.status === "unchecked" && rep.deduction === 0, "reply signal unchecked below 40 sends");
   assert(r.score === 100, `score is 100 (got ${r.score})`);
+}
+
+// ---------- 7c. Seed placement ----------
+const authOk = { checked: 3, spf_fail: 0, dkim_fail: 0, dmarc_fail: 0 };
+const placement = (p: {
+  inbox: number;
+  promotions?: number;
+  spam?: number;
+  missing?: number;
+  authSummary?: typeof authOk | null;
+}) => ({
+  testedAt: "2026-08-22T12:00:00Z",
+  probe: "neutral" as const,
+  seedsTotal: p.inbox + (p.promotions ?? 0) + (p.spam ?? 0) + (p.missing ?? 0),
+  inbox: p.inbox,
+  promotions: p.promotions ?? 0,
+  spam: p.spam ?? 0,
+  missing: p.missing ?? 0,
+  authSummary: p.authSummary === undefined ? authOk : p.authSummary,
+});
+
+console.log("\n■ seed placement: 2 of 3 seeds in spam → bad -45 → 55 / watch");
+{
+  const r = computeInboxHealth({ placement: placement({ inbox: 1, spam: 2 }) });
+  const sp = r.components.find((c) => c.key === "seed_placement");
+  assert(sp?.status === "bad" && sp.deduction === 45, "seed placement is bad, -45");
+  assert(r.score === 55, `score is 55 (got ${r.score})`);
+  assert(r.band === "watch", `band is watch — a bad panel alone never goes critical (got ${r.band})`);
+  assert(!!sp && sp.detail.includes("2 of 3 seeds in spam"), `detail names the spam count (got "${sp?.detail}")`);
+  assert(!!sp && sp.detail.includes("reputation or content"), "detail says auth passed → reputation/content");
+}
+
+console.log("\n■ seed placement: 1 of 4 seeds in spam → bad -25 → 75 / watch");
+{
+  const r = computeInboxHealth({ placement: placement({ inbox: 3, spam: 1 }) });
+  const sp = r.components.find((c) => c.key === "seed_placement");
+  assert(sp?.status === "bad" && sp.deduction === 25, "seed placement is bad, -25");
+  assert(r.score === 75, `score is 75 (got ${r.score})`);
+}
+
+console.log("\n■ seed placement: 1 of 3 missing, none in spam → warn -10 → 90 / healthy");
+{
+  const r = computeInboxHealth({ placement: placement({ inbox: 2, missing: 1 }) });
+  const sp = r.components.find((c) => c.key === "seed_placement");
+  assert(sp?.status === "warn" && sp.deduction === 10, "seed placement is warn, -10");
+  assert(r.score === 90, `score is 90 (got ${r.score})`);
+  assert(!!sp && sp.detail.includes("1 of 3 seeds missing"), "detail names the missing count");
+}
+
+console.log("\n■ seed placement: Promotions majority → warn -5 → 95 / healthy");
+{
+  const r = computeInboxHealth({ placement: placement({ inbox: 1, promotions: 2 }) });
+  const sp = r.components.find((c) => c.key === "seed_placement");
+  assert(sp?.status === "warn" && sp.deduction === 5, "seed placement is warn, -5");
+  assert(r.score === 95, `score is 95 (got ${r.score})`);
+  assert(!!sp && sp.detail.includes("Promotions"), "detail mentions Promotions");
+}
+
+console.log("\n■ seed placement: all inbox → ok, no deduction, detail names receiver auth");
+{
+  const r = computeInboxHealth({ placement: placement({ inbox: 3 }) });
+  const sp = r.components.find((c) => c.key === "seed_placement");
+  assert(sp?.status === "ok" && sp.deduction === 0, "seed placement ok, no deduction");
+  assert(!!sp && sp.detail.startsWith("3 of 3 seeds in the inbox"), `detail leads with the inbox count (got "${sp?.detail}")`);
+  assert(!!sp && sp.detail.includes("SPF/DKIM/DMARC passed"), "detail reports receiver auth passed");
+}
+
+console.log("\n■ seed placement: receiver-side DKIM failure is named in the detail");
+{
+  const r = computeInboxHealth({
+    placement: placement({ inbox: 0, spam: 3, authSummary: { checked: 3, spf_fail: 0, dkim_fail: 3, dmarc_fail: 3 } }),
+  });
+  const sp = r.components.find((c) => c.key === "seed_placement");
+  assert(sp?.status === "bad" && sp.deduction === 45, "all-spam is bad, -45");
+  assert(!!sp && sp.detail.includes("DKIM failed at 3 of 3"), `detail names the DKIM failure (got "${sp?.detail}")`);
+  assert(!!sp && sp.detail.includes("fix authentication"), "detail tells the operator to fix auth first");
+}
+
+console.log("\n■ seed placement omitted / no readable seeds → unchecked, no deduction");
+{
+  const r1 = computeInboxHealth({});
+  const sp1 = r1.components.find((c) => c.key === "seed_placement");
+  assert(sp1?.status === "unchecked" && sp1.deduction === 0, "omitted → unchecked");
+  const r2 = computeInboxHealth({ placement: placement({ inbox: 0 }) });
+  const sp2 = r2.components.find((c) => c.key === "seed_placement");
+  assert(sp2?.status === "unchecked" && sp2.deduction === 0, "zero readable seeds → unchecked");
+  assert(r2.score === 100, `score stays 100 (got ${r2.score})`);
 }
 
 // ---------- 8. Band boundaries ----------

@@ -270,16 +270,24 @@ export class GmailClient {
     return data;
   }
 
-  /** List message ids in `mailbox` matching a Gmail search query (e.g. "in:inbox after:<epoch>"). */
+  /**
+   * List message ids in `mailbox` matching a Gmail search query (e.g.
+   * "in:inbox after:<epoch>"). includeSpamTrash widens the search to SPAM and
+   * TRASH (the placement checker needs it: a probe filtered to spam is exactly
+   * the result we're looking for, and Gmail hides spam from searches by
+   * default unless the query itself says in:spam).
+   */
   async listMessages(
     mailbox: string,
     query: string,
     maxResults = 25,
+    includeSpamTrash = false,
   ): Promise<GmailListEntry[]> {
     const params = new URLSearchParams({
       q: query,
       maxResults: String(maxResults),
     });
+    if (includeSpamTrash) params.set("includeSpamTrash", "true");
     const data = (await this.gmailFetch(
       mailbox,
       `/messages?${params.toString()}`,
