@@ -55,7 +55,34 @@ export type AdminOverviewCard = {
   metrics: KPIMetrics;
   health: "good" | "warning" | "bad" | "none";
   stepAlerts: StepHealthAlert[];
+  // 6-point send-volume sparkline (5-day buckets across the 30-day pull,
+  // oldest→newest). Derived from the snapshots we already fetch — no extra
+  // query. Powers the "Trend" column on the Overview portfolio table.
+  trend: number[];
 };
+
+// Downsample a client's daily send volume into a compact 6-point series for
+// the Overview sparkline. Buckets the last 30 days into six 5-day chunks and
+// sums emails_sent per chunk (summing across the client's campaigns per day).
+function buildSendTrend(snaps: CampaignSnapshot[]): number[] {
+  const byDate = new Map<string, number>();
+  for (const s of snaps) {
+    byDate.set(
+      s.snapshot_date,
+      (byDate.get(s.snapshot_date) ?? 0) + (s.emails_sent ?? 0),
+    );
+  }
+  const daily: number[] = [];
+  for (let i = 29; i >= 0; i--) {
+    const day = new Date(Date.now() - i * 86400000).toISOString().split("T")[0];
+    daily.push(byDate.get(day) ?? 0);
+  }
+  const buckets: number[] = [];
+  for (let i = 0; i < 30; i += 5) {
+    buckets.push(daily.slice(i, i + 5).reduce((a, b) => a + b, 0));
+  }
+  return buckets;
+}
 
 export type AdminOverviewData = {
   cards: AdminOverviewCard[];
@@ -138,6 +165,7 @@ export async function fetchAdminOverview(
       metrics,
       health,
       stepAlerts: clientStepAlerts,
+      trend: buildSendTrend(clientSnapshots),
     };
   });
   const healthOrder = { bad: 0, warning: 1, good: 2, none: 3 };
