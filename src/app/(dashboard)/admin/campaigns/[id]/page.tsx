@@ -18,6 +18,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { PageHeader } from "@/components/layout/page-header";
 import {
   Table,
   TableBody,
@@ -167,48 +168,35 @@ export default async function AdminCampaignDetailPage({
           <ArrowLeft size={14} />
           Back to campaigns
         </Link>
-        <div
-          className="relative overflow-hidden rounded-[20px] p-5 sm:p-7 text-[#0f172a] mt-3"
-          style={{
-            background:
-              "linear-gradient(135deg, #EDEEFF 0%, #D1D3FF 50%, #fff 100%)",
-            border: "1px solid rgba(46,55,254,0.2)",
-            borderTop: "1px solid rgba(46,55,254,0.3)",
-            boxShadow:
-              "inset 0 1px 0 rgba(255,255,255,0.9), 0 4px 14px rgba(46,55,254,0.1)",
-          }}
-        >
-          <div className="relative z-10 flex items-start justify-between gap-4">
-            <div className="min-w-0">
-              <p className="text-xs font-medium text-[#64748b] uppercase tracking-wide">
-                {campaign.source_channel}
-              </p>
-              <h1 className="text-2xl font-bold mt-1">{campaign.name}</h1>
-              {client ? (
-                <p className="text-sm text-[#0f172a]/70 mt-2">
-                  Linked to{" "}
-                  <Link
-                    href={`/admin/clients/${client.id}`}
-                    className="underline"
-                  >
-                    {client.name}
-                  </Link>
-                </p>
-              ) : (
-                <p className="text-sm text-amber-700 mt-2 inline-flex items-center gap-1">
-                  <AlertCircle size={14} /> Orphan campaign — not linked to a
-                  LeadStart client
-                </p>
-              )}
-            </div>
-            <div className="flex flex-col items-end gap-2 shrink-0">
+        <PageHeader
+          className="mt-3"
+          eyebrow={campaign.source_channel}
+          title={campaign.name}
+          subtitle={
+            client ? (
+              <>
+                Linked to{" "}
+                <Link href={`/admin/clients/${client.id}`} className="underline">
+                  {client.name}
+                </Link>
+              </>
+            ) : (
+              <span className="inline-flex items-center gap-1 text-amber-700">
+                <AlertCircle size={14} /> Orphan campaign — not linked to a
+                LeadStart client
+              </span>
+            )
+          }
+          actions={
+            <>
               <Badge
+                variant="secondary"
                 className={
                   campaign.status === "active"
-                    ? "bg-emerald-500/20 text-emerald-900 border-0"
+                    ? "badge-green"
                     : campaign.status === "paused"
-                      ? "bg-amber-500/20 text-amber-900 border-0"
-                      : "bg-white/40 text-[#0f172a]/70 border-0"
+                      ? "badge-amber"
+                      : "badge-slate"
                 }
               >
                 {campaign.status}
@@ -219,10 +207,9 @@ export default async function AdminCampaignDetailPage({
                 status={campaign.status}
                 sourceChannel={campaign.source_channel}
               />
-            </div>
-          </div>
-          <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-[rgba(107,114,255,0.06)]" />
-        </div>
+            </>
+          }
+        />
       </div>
 
       {/* Native email: send/reply stats, enrollment progress, mailbox pool, sequence */}

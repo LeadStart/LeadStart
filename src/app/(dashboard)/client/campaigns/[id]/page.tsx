@@ -1,4 +1,5 @@
 "use client";
+import { PageHeader } from "@/components/layout/page-header";
 
 import { use, useState, useMemo } from "react";
 import useSWR from "swr";
@@ -130,15 +131,24 @@ export default function ClientCampaignPage({
           <ArrowLeft size={14} />
           Back to Dashboard
         </Link>
-        <div className="relative overflow-hidden rounded-[20px] p-5 sm:p-7 text-[#0f172a] mt-3" style={{ background: 'linear-gradient(135deg, #EDEEFF 0%, #D1D3FF 50%, #fff 100%)', border: '1px solid rgba(46,55,254,0.2)', borderTop: '1px solid rgba(46,55,254,0.3)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.9), 0 4px 14px rgba(46,55,254,0.1)' }}>
-          <div className="relative z-10">
-            <Badge className="bg-white/15 text-[#0f172a] border-0 mb-2">
+        <PageHeader
+          className="mt-3"
+          title={typedCampaign.name}
+          actions={
+            <Badge
+              variant="secondary"
+              className={
+                typedCampaign.status === "active"
+                  ? "badge-green"
+                  : typedCampaign.status === "paused"
+                    ? "badge-amber"
+                    : "badge-slate"
+              }
+            >
               {typedCampaign.status}
             </Badge>
-            <h1 className="text-2xl font-bold">{typedCampaign.name}</h1>
-          </div>
-          <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-[rgba(107,114,255,0.06)]" />
-        </div>
+          }
+        />
       </div>
 
       {/* Self-service CSV import — active native email campaigns only */}

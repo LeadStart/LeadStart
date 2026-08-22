@@ -1,4 +1,5 @@
 "use client";
+import { PageHeader } from "@/components/layout/page-header";
 
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -1051,38 +1052,18 @@ export default function BillingPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div
-        className="relative overflow-hidden rounded-[20px] p-5 sm:p-7 text-[#0f172a]"
-        style={{
-          background:
-            "linear-gradient(135deg, #EDEEFF 0%, #D1D3FF 50%, #fff 100%)",
-          border: "1px solid rgba(46,55,254,0.2)",
-          borderTop: "1px solid rgba(46,55,254,0.3)",
-          boxShadow:
-            "inset 0 1px 0 rgba(255,255,255,0.9), 0 4px 14px rgba(46,55,254,0.1)",
-        }}
-      >
-        <div className="relative z-10 flex items-center justify-between">
-          <div>
-            <p className="text-xs font-medium text-[#64748b]">
-              Revenue & Billing
-            </p>
-            <h1
-              className="text-[20px] sm:text-[22px] font-bold mt-1"
-              style={{ color: "#0f172a", letterSpacing: "-0.01em" }}
-            >
-              Billing & Subscriptions
-            </h1>
-          </div>
+      <PageHeader
+        eyebrow="Revenue & Billing"
+        title="Billing & Subscriptions"
+        actions={
           <Badge
             variant="secondary"
             className={
               stripeMode === "live"
-                ? "bg-emerald-100 text-emerald-700 border-0"
+                ? "badge-green"
                 : stripeMode === "test"
-                  ? "bg-amber-100 text-amber-700 border-0"
-                  : "bg-white/15 text-[#0f172a] border-0"
+                  ? "badge-amber"
+                  : "badge-slate"
             }
           >
             {stripeMode === "live"
@@ -1091,9 +1072,8 @@ export default function BillingPage() {
                 ? "Stripe: Test"
                 : "Stripe: Demo"}
           </Badge>
-        </div>
-        <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-[rgba(107,114,255,0.06)]" />
-      </div>
+        }
+      />
 
       {loading && (
         <p className="text-sm text-muted-foreground">Loading billing data…</p>

@@ -74,7 +74,7 @@ export function StageFlowCard({
             {stages.length > 1 && (
               <div
                 className="absolute left-4 top-3 bottom-6 w-0.5 -translate-x-1/2"
-                style={{ background: "linear-gradient(180deg,#A3A8FF,#1C24B8)" }}
+                style={{ background: "#CBD5E1" }}
                 aria-hidden
               />
             )}
@@ -86,7 +86,7 @@ export function StageFlowCard({
                   <li key={s.index} className="relative flex gap-4 pb-4">
                     <span
                       className="relative z-[1] flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white"
-                      style={{ background: "#EA4335", boxShadow: "0 3px 8px rgba(234,67,53,0.35)" }}
+                      style={{ background: "#EA4335" }}
                     >
                       {s.index + 1}
                     </span>
@@ -167,10 +167,7 @@ function CompletionBanner({
   return (
     <div
       className="relative flex flex-wrap items-center gap-4 overflow-hidden rounded-2xl px-5 py-4 text-white"
-      style={{
-        background: "linear-gradient(135deg,#2E37FE 0%,#1C24B8 60%,#0F1880 100%)",
-        boxShadow: "0 8px 22px rgba(28,36,184,0.30)",
-      }}
+      style={{ background: "#2E37FE" }}
     >
       <div
         className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
@@ -230,15 +227,10 @@ function TermBadge({
   value: number;
 }) {
   // A zero doesn't shout — muted slate until there's something to report.
-  const gradients: Record<typeof tone, string> = {
-    green: "linear-gradient(135deg,#10B981,#047857)",
-    blue: "linear-gradient(135deg,#6B72FF,#1C24B8)",
-    red: "linear-gradient(135deg,#ef4444,#b91c1c)",
-  };
-  const shadows: Record<typeof tone, string> = {
-    green: "0 3px 10px rgba(4,120,87,0.32)",
-    blue: "0 3px 10px rgba(46,55,254,0.32)",
-    red: "0 3px 10px rgba(185,28,28,0.32)",
+  const fills: Record<typeof tone, string> = {
+    green: "#059669",
+    blue: "#2E37FE",
+    red: "#dc2626",
   };
   const active = value > 0;
   return (
@@ -246,7 +238,7 @@ function TermBadge({
       className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold"
       style={
         active
-          ? { background: gradients[tone], color: "#fff", boxShadow: shadows[tone] }
+          ? { background: fills[tone], color: "#fff" }
           : { background: "#e2e8f0", color: "#475569" }
       }
     >

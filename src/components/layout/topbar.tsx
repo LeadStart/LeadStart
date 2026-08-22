@@ -33,7 +33,7 @@ function notificationIcon(type: string) {
     case "feedback": return <MessageSquare size={14} className="text-blue-500" />;
     case "webhook": return <Mail size={14} className="text-amber-500" />;
     case "report": return <FileText size={14} className="text-green-500" />;
-    default: return <Bell size={14} className="text-[#2E37FE]" />;
+    default: return <Bell size={14} className="text-primary" />;
   }
 }
 
@@ -91,7 +91,7 @@ export function Topbar({ userEmail, role, actualRole, onRoleSwitch, onMenuClick 
         {/* Mobile menu button */}
         <button
           onClick={onMenuClick}
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[#0f172a] hover:bg-muted/50 lg:hidden"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-foreground hover:bg-muted/50 lg:hidden"
           aria-label="Open menu"
         >
           <Menu size={20} />
@@ -107,7 +107,7 @@ export function Topbar({ userEmail, role, actualRole, onRoleSwitch, onMenuClick 
             <DropdownMenuTrigger className="relative flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors outline-none cursor-pointer">
               <Bell size={18} />
               {unreadCount > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold text-white" style={{ background: '#2E37FE' }}>
+                <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[9px] font-bold text-white">
                   {unreadCount}
                 </span>
               )}
@@ -118,7 +118,7 @@ export function Topbar({ userEmail, role, actualRole, onRoleSwitch, onMenuClick 
                 {unreadCount > 0 && (
                   <button
                     onClick={handleMarkAllRead}
-                    className="text-xs text-[#2E37FE] hover:text-[#0F1880] font-medium cursor-pointer"
+                    className="text-xs text-primary hover:text-primary/80 font-medium cursor-pointer"
                   >
                     Mark all read
                   </button>
@@ -142,7 +142,7 @@ export function Topbar({ userEmail, role, actualRole, onRoleSwitch, onMenuClick 
                       <p className="text-xs text-muted-foreground mt-0.5">{timeAgo(n.created_at)}</p>
                     </div>
                     {!n.read && (
-                      <div className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-[#2E37FE]" />
+                      <div className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-primary" />
                     )}
                   </DropdownMenuItem>
                 ))
@@ -157,7 +157,7 @@ export function Topbar({ userEmail, role, actualRole, onRoleSwitch, onMenuClick 
         {/* User dropdown */}
         <DropdownMenu>
           <DropdownMenuTrigger className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 transition-colors hover:bg-muted/50 outline-none cursor-pointer">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold text-white shrink-0" style={{ background: '#2E37FE' }}>
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-xs font-bold text-white shrink-0">
               {userEmail.charAt(0).toUpperCase()}
             </div>
             <div className="hidden sm:block text-left">

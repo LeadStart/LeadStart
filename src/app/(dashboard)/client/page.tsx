@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import Link from "next/link";
+import { PageHeader } from "@/components/layout/page-header";
 import { ArrowRight, TrendingUp, ChevronDown, ChevronUp } from "lucide-react";
 import type { CampaignSnapshot } from "@/types/app";
 
@@ -118,15 +119,11 @@ export default function ClientDashboardPage() {
   const metrics = { ...rawMetrics, meetings_booked: Math.max(0, rawMetrics.meetings_booked - excludedMeetings) };
   return (
     <div className="space-y-6">
-      <div className="relative overflow-hidden rounded-[20px] p-5 sm:p-7 text-[#0f172a]" style={{ background: 'linear-gradient(135deg, #EDEEFF 0%, #D1D3FF 50%, #fff 100%)', border: '1px solid rgba(46,55,254,0.2)', borderTop: '1px solid rgba(46,55,254,0.3)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.9), 0 4px 14px rgba(46,55,254,0.1)' }}>
-        <div className="relative z-10">
-          <p className="text-xs font-medium text-[#64748b]">Welcome back</p>
-          <h1 className="text-[20px] sm:text-[22px] font-bold mt-1" style={{ color: '#0f172a', letterSpacing: '-0.01em' }}>{client.name}</h1>
-          <p className="text-sm text-[#0f172a]/60 mt-1">{campaigns.length} campaign{campaigns.length !== 1 ? "s" : ""}</p>
-        </div>
-        <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-[rgba(107,114,255,0.06)]" />
-        <div className="absolute -bottom-6 -right-4 h-24 w-24 rounded-full bg-[rgba(107,114,255,0.06)]" />
-      </div>
+      <PageHeader
+        eyebrow="Welcome back"
+        title={client.name}
+        subtitle={`${campaigns.length} campaign${campaigns.length !== 1 ? "s" : ""}`}
+      />
 
       {/* Row 1: Campaign Performance */}
       <div className="flex items-center justify-between mb-3">

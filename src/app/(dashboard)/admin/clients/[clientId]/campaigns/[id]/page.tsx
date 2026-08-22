@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PageHeader } from "@/components/layout/page-header";
 import { createClient } from "@/lib/supabase/server";
 import { KPICard } from "@/components/charts/kpi-card";
 import { DailyChart } from "@/components/charts/daily-chart";
@@ -120,36 +121,27 @@ export default async function CampaignDetailPage({
           <ArrowLeft size={14} />
           Back to Client
         </Link>
-        <div
-          className="relative overflow-hidden rounded-[20px] p-5 sm:p-7 text-[#0f172a] mt-3"
-          style={{
-            background:
-              "linear-gradient(135deg, #EDEEFF 0%, #D1D3FF 50%, #fff 100%)",
-            border: "1px solid rgba(46,55,254,0.2)",
-            borderTop: "1px solid rgba(46,55,254,0.3)",
-            boxShadow:
-              "inset 0 1px 0 rgba(255,255,255,0.9), 0 4px 14px rgba(46,55,254,0.1)",
-          }}
-        >
-          <div className="relative z-10 flex items-start justify-between">
-            <div>
-              <h1 className="text-2xl font-bold">{campaign.name}</h1>
-            </div>
-            <div className="flex items-center gap-2">
+        <PageHeader
+          className="mt-3"
+          title={campaign.name}
+          actions={
+            <>
               <Badge
+                variant="secondary"
                 className={
                   campaign.status === "active"
-                    ? "bg-white/15 text-[#0f172a] border-0"
-                    : "bg-white/10 text-[#0f172a]/60 border-0"
+                    ? "badge-green"
+                    : campaign.status === "paused"
+                      ? "badge-amber"
+                      : "badge-slate"
                 }
               >
                 {campaign.status}
               </Badge>
               <RefreshButton campaignId={campaignId} />
-            </div>
-          </div>
-          <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-[rgba(107,114,255,0.06)]" />
-        </div>
+            </>
+          }
+        />
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">

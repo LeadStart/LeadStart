@@ -21,10 +21,6 @@ import {
   Inbox,
   Settings,
   Sparkles,
-  Layers,
-  TrendingUp,
-  Variable,
-  ShieldOff,
   X,
 } from "lucide-react";
 
@@ -62,6 +58,39 @@ const clientNav: NavItem[] = [
   { href: "/client/settings", label: "Settings", icon: <Settings size={18} /> },
 ];
 
+function NavLink({ item, active }: { item: NavItem; active: boolean }) {
+  return (
+    <Link
+      href={item.href}
+      className={cn(
+        "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+        active
+          ? "bg-sidebar-primary text-sidebar-primary-foreground font-semibold"
+          : "text-sidebar-foreground hover:bg-white/10 hover:text-white"
+      )}
+    >
+      <span className="shrink-0">{item.icon}</span>
+      <span>{item.label}</span>
+    </Link>
+  );
+}
+
+function NavSection({ label, items, pathname }: { label: string; items: NavItem[]; pathname: string }) {
+  if (items.length === 0) return null;
+  return (
+    <>
+      <div className="pt-6 pb-2 px-3">
+        <p className="text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/50">
+          {label}
+        </p>
+      </div>
+      {items.map((item) => (
+        <NavLink key={item.href} item={item} active={pathname === item.href} />
+      ))}
+    </>
+  );
+}
+
 export function Sidebar({ role, open = false, onClose }: { role: AppRole; open?: boolean; onClose?: () => void }) {
   const pathname = usePathname();
   const isAdmin = role === "owner" || role === "va";
@@ -81,131 +110,48 @@ export function Sidebar({ role, open = false, onClose }: { role: AppRole; open?:
       )}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 flex h-full w-64 flex-col overflow-hidden border-r border-[#e2e8f0] transition-transform duration-300 lg:static lg:translate-x-0 lg:transition-none lg:overflow-visible",
+          "fixed inset-y-0 left-0 z-50 flex h-full w-64 flex-col overflow-hidden border-r border-sidebar-border bg-sidebar transition-transform duration-300 lg:static lg:translate-x-0 lg:transition-none",
           open ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         )}
-        style={{ background: 'linear-gradient(180deg, #ffffff 0%, #6B72FF 100%)', boxShadow: '3px 0 12px rgba(15,23,42,0.06), 1px 0 3px rgba(15,23,42,0.03)' }}
       >
-      {/* Sidebar shadow cast into content area (desktop only) */}
-      <div className="absolute top-0 bottom-0 w-8 pointer-events-none z-0 hidden lg:block" style={{ right: '-32px', background: 'linear-gradient(90deg, rgba(15,23,42,0.12) 0%, rgba(28,36,184,0.03) 60%, transparent 100%)' }} />
-
-      {/* Brand header */}
-      <div className="relative flex h-24 items-center justify-center px-6 border-b border-[#e2e8f0]">
-        <Link href={isAdmin ? "/admin" : "/client"} className="flex items-center">
-          <Image src={leadstartLogo} alt="LeadStart" priority className="h-20 w-auto" />
-        </Link>
-        {/* Close button (mobile only) */}
-        <button
-          onClick={onClose}
-          className="absolute right-4 top-1/2 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-lg text-[#0f172a] hover:bg-black/5 lg:hidden"
-          aria-label="Close menu"
-        >
-          <X size={18} />
-        </button>
-      </div>
-
-      {/* Navigation. Scrollable so a tall nav doesn't get clipped on shorter
-          screens. The parent <aside> is overflow-hidden, so we scroll inside
-          <nav>. */}
-      <nav className="flex-1 space-y-1 px-3 py-4 overflow-y-auto" style={{ direction: 'rtl' }}>
-        <div style={{ direction: 'ltr' }}>
-        {nav.map((item) => {
-          const isActive = pathname === item.href;
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                "relative flex items-center gap-3 px-3 py-2.5 text-sm font-medium transition-all duration-200 ml-2",
-                isActive
-                  ? "nav-notch-active text-white font-semibold"
-                  : "nav-notch-hover text-[#0f172a]"
-              )}
-            >
-              <span className={cn("relative z-[1]", isActive ? "text-white" : "text-[#0f172a]")}>
-                {item.icon}
-              </span>
-              <span className="relative z-[1]">{item.label}</span>
-            </Link>
-          );
-        })}
-
-        {sendingNav.length > 0 && (
-          <>
-            <div className="pt-6 pb-2 px-3">
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-[#64748b]">
-                Sending
-              </p>
-            </div>
-            {sendingNav.map((item) => {
-              const isActive = pathname === item.href;
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={cn(
-                    "relative flex items-center gap-3 px-3 py-2.5 text-sm font-medium transition-all duration-200 ml-2",
-                    isActive
-                      ? "nav-notch-active text-white font-semibold"
-                      : "nav-notch-hover text-[#0f172a]"
-                  )}
-                >
-                  <span className={cn("relative z-[1]", isActive ? "text-white" : "text-[#0f172a]")}>
-                    {item.icon}
-                  </span>
-                  <span className="relative z-[1]">{item.label}</span>
-                </Link>
-              );
-            })}
-          </>
-        )}
-
-        {settingsNav.length > 0 && (
-          <>
-            <div className="pt-6 pb-2 px-3">
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-[#64748b]">
-                Settings
-              </p>
-            </div>
-            {settingsNav.map((item) => {
-              const isActive = pathname === item.href;
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={cn(
-                    "relative flex items-center gap-3 px-3 py-2.5 text-sm font-medium transition-all duration-200 ml-2",
-                    isActive
-                      ? "nav-notch-active text-white font-semibold"
-                      : "nav-notch-hover text-[#0f172a]"
-                  )}
-                >
-                  <span className={cn("relative z-[1]", isActive ? "text-white" : "text-[#0f172a]")}>
-                    {item.icon}
-                  </span>
-                  <span className="relative z-[1]">{item.label}</span>
-                </Link>
-              );
-            })}
-          </>
-        )}
+        {/* Brand header */}
+        <div className="relative flex h-24 items-center justify-center px-6 border-b border-sidebar-border">
+          <Link href={isAdmin ? "/admin" : "/client"} className="flex items-center">
+            <Image src={leadstartLogo} alt="LeadStart" priority className="h-20 w-auto" />
+          </Link>
+          {/* Close button (mobile only) */}
+          <button
+            onClick={onClose}
+            className="absolute right-4 top-1/2 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-lg text-sidebar-foreground hover:bg-white/10 lg:hidden"
+            aria-label="Close menu"
+          >
+            <X size={18} />
+          </button>
         </div>
-      </nav>
 
-      {/* Footer */}
-      <div className="border-t border-white/25 p-4">
-        <div className="flex items-center gap-2">
-          <div className="flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold text-white" style={{ background: '#2E37FE' }}>
-            {role === "owner" ? "A" : role === "va" ? "V" : "C"}
-          </div>
-          <div>
-            <p className="text-xs font-medium text-[#0f172a]">
-              {role === "owner" ? "Admin" : role === "va" ? "VA" : "Client"}
-            </p>
-            <p className="text-[10px] text-black">LeadStart Agency</p>
+        {/* Navigation */}
+        <nav className="flex-1 space-y-1 px-3 py-4 overflow-y-auto">
+          {nav.map((item) => (
+            <NavLink key={item.href} item={item} active={pathname === item.href} />
+          ))}
+          <NavSection label="Sending" items={sendingNav} pathname={pathname} />
+          <NavSection label="Settings" items={settingsNav} pathname={pathname} />
+        </nav>
+
+        {/* Footer */}
+        <div className="border-t border-sidebar-border p-4">
+          <div className="flex items-center gap-2">
+            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-sidebar-primary text-xs font-bold text-sidebar-primary-foreground">
+              {role === "owner" ? "A" : role === "va" ? "V" : "C"}
+            </div>
+            <div>
+              <p className="text-xs font-medium text-sidebar-foreground">
+                {role === "owner" ? "Admin" : role === "va" ? "VA" : "Client"}
+              </p>
+              <p className="text-[10px] text-sidebar-foreground/60">LeadStart</p>
+            </div>
           </div>
         </div>
-      </div>
       </aside>
     </>
   );

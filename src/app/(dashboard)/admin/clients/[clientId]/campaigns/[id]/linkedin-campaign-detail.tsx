@@ -1,4 +1,5 @@
 "use client";
+import { PageHeader } from "@/components/layout/page-header";
 
 // LinkedIn flavor of the admin campaign detail page. Used when
 // campaign.source_channel === 'linkedin'. The email path keeps the daily
@@ -160,36 +161,37 @@ export function LinkedinCampaignDetail({
           <ArrowLeft size={14} />
           Back to Client
         </Link>
-        <div className="relative overflow-hidden rounded-[20px] p-5 sm:p-7 text-[#0f172a] mt-3" style={{ background: 'linear-gradient(135deg, #EDEEFF 0%, #D1D3FF 50%, #fff 100%)', border: '1px solid rgba(46,55,254,0.2)', borderTop: '1px solid rgba(46,55,254,0.3)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.9), 0 4px 14px rgba(46,55,254,0.1)' }}>
-          <div className="relative z-10 flex items-start justify-between">
-            <div>
-              <div className="flex items-center gap-2">
-                <Badge
-                  variant="secondary"
-                  className="bg-[#0A66C2]/10 text-[#0A66C2] border-[#0A66C2]/20"
-                >
-                  LinkedIn
-                </Badge>
-                <h1 className="text-2xl font-bold">{campaign.name}</h1>
-              </div>
-              {campaign.unipile_account_id && (
-                <p className="text-xs text-[#0f172a]/50 font-mono mt-1">
-                  account: {campaign.unipile_account_id}
-                </p>
-              )}
-            </div>
-            <Badge
-              className={
-                campaign.status === "active"
-                  ? "bg-white/15 text-[#0f172a] border-0"
-                  : "bg-white/10 text-[#0f172a]/60 border-0"
-              }
-            >
-              {campaign.status}
-            </Badge>
-          </div>
-          <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-[rgba(107,114,255,0.06)]" />
-        </div>
+        <PageHeader
+          className="mt-3"
+          title={campaign.name}
+          subtitle={
+            campaign.unipile_account_id ? (
+              <span className="font-mono">account: {campaign.unipile_account_id}</span>
+            ) : undefined
+          }
+          actions={
+            <>
+              <Badge
+                variant="secondary"
+                className="bg-[#0A66C2]/10 text-[#0A66C2] border-[#0A66C2]/20"
+              >
+                LinkedIn
+              </Badge>
+              <Badge
+                variant="secondary"
+                className={
+                  campaign.status === "active"
+                    ? "badge-green"
+                    : campaign.status === "paused"
+                      ? "badge-amber"
+                      : "badge-slate"
+                }
+              >
+                {campaign.status}
+              </Badge>
+            </>
+          }
+        />
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">

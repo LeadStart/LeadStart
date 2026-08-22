@@ -118,31 +118,13 @@ function AcceptInviteForm() {
   }
 
   return (
-    <div className="flex min-h-screen">
-      {/* Left panel - branding */}
-      <div className="hidden lg:flex lg:w-[58%] items-center justify-center relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #EDEEFF 0%, #D1D3FF 50%, #fff 100%)', WebkitMaskImage: 'linear-gradient(to right, #000 60%, transparent 100%)', maskImage: 'linear-gradient(to right, #000 60%, transparent 100%)' }}>
-        <div className="relative z-10 max-w-md px-8 text-[#0f172a]">
-          <div className="mb-8">
-            <Image src={leadstartLogo} alt="LeadStart" priority className="h-16 w-auto" />
-          </div>
-          <h2 className="text-3xl font-bold leading-tight">
-            Welcome aboard.
-          </h2>
-          <p className="mt-4 text-lg text-[#0f172a]/70 leading-relaxed">
-            Set up your account to access your campaign dashboard and start tracking results.
-          </p>
+    <div className="flex min-h-screen justify-center bg-background px-4 pt-4 pb-8">
+      <div className="w-full max-w-md flex flex-col items-center">
+        <div className="flex justify-center -mb-3">
+          <Image src={leadstartLogo} alt="LeadStart" priority className="h-72 w-auto" />
         </div>
-        <div className="absolute -top-20 -right-20 h-64 w-64 rounded-full bg-[rgba(107,114,255,0.06)]" />
-        <div className="absolute -bottom-16 -left-16 h-48 w-48 rounded-full bg-[rgba(107,114,255,0.06)]" />
-      </div>
-
-      {/* Right panel - form */}
-      <div className="flex w-full lg:w-[42%] items-center justify-center bg-background px-4">
-        <Card className="w-full max-w-md border-border/50 shadow-lg">
+        <Card className="w-full border-border/50 shadow-lg">
           <CardHeader className="text-center pb-2">
-            <div className="flex justify-center lg:hidden mb-4">
-              <Image src={leadstartLogo} alt="LeadStart" priority className="h-12 w-auto" />
-            </div>
             <CardTitle className="text-2xl font-bold">
               Welcome to LeadStart
             </CardTitle>

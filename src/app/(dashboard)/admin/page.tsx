@@ -12,6 +12,7 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { StatCard } from "@/components/charts/stat-card";
+import { PageHeader } from "@/components/layout/page-header";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -378,85 +379,58 @@ export default function AdminOverviewPage() {
   return (
     <div className="space-y-6">
       {/* ---------- Band 1 — Header ---------- */}
-      <div
-        className="relative overflow-hidden rounded-[20px] p-5 sm:p-7"
-        style={{
-          background:
-            "linear-gradient(135deg, #EDEEFF 0%, #D1D3FF 50%, #fff 100%)",
-          border: "1px solid rgba(46,55,254,0.2)",
-          boxShadow:
-            "inset 0 1px 0 rgba(255,255,255,0.9), 0 4px 14px rgba(46,55,254,0.1)",
-        }}
-      >
-        <div className="relative z-10">
-          <p className="text-xs font-medium text-[#64748b]">
-            Welcome back, Daniel
-          </p>
-          <h1
-            className="text-[20px] sm:text-[22px] font-bold mt-1 text-[#0f172a]"
-            style={{ letterSpacing: "-0.01em" }}
-          >
-            Overview
-          </h1>
-          <div className="flex items-center gap-4 sm:gap-7 mt-4 flex-wrap">
-            <div className="text-center">
-              <span className="text-[22px] sm:text-[26px] font-bold text-[#0F1880]">
-                {totalClients}
-              </span>
-              <br />
-              <span className="text-[10px] text-[#64748b]">Clients</span>
-            </div>
-            <div className="text-center">
-              <span className="text-[22px] sm:text-[26px] font-bold text-[#0F1880]">
-                {totalActive}
-              </span>
-              <br />
-              <span className="text-[10px] text-[#64748b]">Active Campaigns</span>
-            </div>
-            <div className="text-center">
-              <span className="text-[22px] sm:text-[26px] font-bold text-[#0F1880]">
-                {healthyCt}
-              </span>
-              <br />
-              <span className="text-[10px] text-[#64748b]">Healthy</span>
-            </div>
-            {warningCt > 0 && (
-              <div className="text-center">
-                <span className="text-[22px] sm:text-[26px] font-bold text-amber-600">
-                  {warningCt}
-                </span>
-                <br />
-                <span className="text-[10px] text-[#64748b]">Warning</span>
-              </div>
-            )}
-            {badCt > 0 && (
-              <div className="text-center">
-                <span className="text-[22px] sm:text-[26px] font-bold text-red-600">
-                  {badCt}
-                </span>
-                <br />
-                <span className="text-[10px] text-[#64748b]">At Risk</span>
-              </div>
-            )}
-            {mrrCents > 0 && (
-              <div className="text-center">
-                <span className="text-[22px] sm:text-[26px] font-bold text-[#0F1880]">
-                  {formatCents(mrrCents)}
-                </span>
-                <br />
-                <span className="text-[10px] text-[#64748b]">MRR</span>
-              </div>
-            )}
+      <div className="space-y-4">
+        <PageHeader eyebrow="Welcome back, Daniel" title="Overview" />
+        <div className="flex items-center gap-4 sm:gap-7 flex-wrap">
+          <div className="text-center">
+            <span className="text-[22px] sm:text-[26px] font-bold text-foreground">
+              {totalClients}
+            </span>
+            <br />
+            <span className="text-[10px] text-muted-foreground">Clients</span>
           </div>
+          <div className="text-center">
+            <span className="text-[22px] sm:text-[26px] font-bold text-foreground">
+              {totalActive}
+            </span>
+            <br />
+            <span className="text-[10px] text-muted-foreground">Active Campaigns</span>
+          </div>
+          <div className="text-center">
+            <span className="text-[22px] sm:text-[26px] font-bold text-foreground">
+              {healthyCt}
+            </span>
+            <br />
+            <span className="text-[10px] text-muted-foreground">Healthy</span>
+          </div>
+          {warningCt > 0 && (
+            <div className="text-center">
+              <span className="text-[22px] sm:text-[26px] font-bold text-amber-600">
+                {warningCt}
+              </span>
+              <br />
+              <span className="text-[10px] text-muted-foreground">Warning</span>
+            </div>
+          )}
+          {badCt > 0 && (
+            <div className="text-center">
+              <span className="text-[22px] sm:text-[26px] font-bold text-red-600">
+                {badCt}
+              </span>
+              <br />
+              <span className="text-[10px] text-muted-foreground">At Risk</span>
+            </div>
+          )}
+          {mrrCents > 0 && (
+            <div className="text-center">
+              <span className="text-[22px] sm:text-[26px] font-bold text-foreground">
+                {formatCents(mrrCents)}
+              </span>
+              <br />
+              <span className="text-[10px] text-muted-foreground">MRR</span>
+            </div>
+          )}
         </div>
-        <div
-          className="absolute -top-10 -right-10 h-40 w-40 rounded-full"
-          style={{
-            background:
-              "radial-gradient(circle, rgba(107,114,255,0.18) 0%, transparent 70%)",
-          }}
-        />
-        <div className="absolute -bottom-6 -right-4 h-24 w-24 rounded-full bg-[rgba(107,114,255,0.06)]" />
       </div>
 
       {/* ---------- Band 2 — Signals ---------- */}

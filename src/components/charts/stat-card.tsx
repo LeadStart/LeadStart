@@ -21,7 +21,7 @@ interface StatCardProps {
 }
 
 const TONE_DEFAULTS: Record<StatCardTone, { iconBg: string; valueColor: string }> = {
-  default: { iconBg: "bg-[#2E37FE]/10", valueColor: "text-[#0f172a]" },
+  default: { iconBg: "bg-primary/10", valueColor: "text-foreground" },
   success: { iconBg: "bg-emerald-50", valueColor: "text-emerald-600" },
   warning: { iconBg: "bg-amber-50", valueColor: "text-amber-600" },
   danger: { iconBg: "bg-red-50", valueColor: "text-red-600" },
@@ -37,12 +37,12 @@ export function StatCard({ label, value, icon, iconBg, valueColor, tone = "defau
   const resolvedValueColor = valueColor ?? defaults.valueColor;
 
   return (
-    <Card className="stat-card stat-card-gold">
+    <Card>
       <CardContent className="pt-[18px] pb-[18px] px-5">
         <div className={cn("flex h-8 w-8 items-center justify-center rounded-lg mb-2", resolvedIconBg)}>
           {icon}
         </div>
-        <p className="text-[12px] font-semibold text-[#64748b] mt-1">
+        <p className="text-[12px] font-semibold text-muted-foreground mt-1">
           {label}
         </p>
         <p className={cn("text-[28px] font-bold leading-tight", resolvedValueColor)} style={{ letterSpacing: '-0.01em' }}>

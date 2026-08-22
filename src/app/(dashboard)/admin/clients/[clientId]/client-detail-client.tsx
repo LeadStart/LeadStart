@@ -1,4 +1,5 @@
 "use client";
+import { PageHeader } from "@/components/layout/page-header";
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -119,51 +120,38 @@ export function ClientDetailClient({
           <ArrowLeft size={14} />
           Back to Overview
         </Link>
-        <div
-          className="relative overflow-hidden rounded-[20px] p-5 sm:p-7 text-[#0f172a] mt-3"
-          style={{
-            background:
-              "linear-gradient(135deg, #EDEEFF 0%, #D1D3FF 50%, #fff 100%)",
-            border: "1px solid rgba(46,55,254,0.2)",
-            borderTop: "1px solid rgba(46,55,254,0.3)",
-            boxShadow:
-              "inset 0 1px 0 rgba(255,255,255,0.9), 0 4px 14px rgba(46,55,254,0.1)",
-          }}
-        >
-          <div className="relative z-10 flex items-start justify-between gap-4 flex-wrap">
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-bold">{client.name}</h1>
-                <Badge
-                  variant="secondary"
-                  className={
-                    (client.status ?? "active") === "active"
-                      ? "badge-green"
-                      : "badge-amber"
-                  }
-                >
-                  {(client.status ?? "active") === "active"
-                    ? "Active"
-                    : "Former"}
-                </Badge>
-              </div>
-              <p className="text-xs text-[#0f172a]/50 mt-0.5">
-                {campaigns.length} campaign
-                {campaigns.length !== 1 ? "s" : ""} &middot;{" "}
-                {linkedUsers.length} portal user
-                {linkedUsers.length !== 1 ? "s" : ""}
-              </p>
-            </div>
+        <PageHeader
+          className="mt-3"
+          title={
+            <span className="inline-flex items-center gap-2">
+              {client.name}
+              <Badge
+                variant="secondary"
+                className={
+                  (client.status ?? "active") === "active"
+                    ? "badge-green"
+                    : "badge-amber"
+                }
+              >
+                {(client.status ?? "active") === "active" ? "Active" : "Former"}
+              </Badge>
+            </span>
+          }
+          subtitle={
+            <>
+              {campaigns.length} campaign{campaigns.length !== 1 ? "s" : ""} ·{" "}
+              {linkedUsers.length} portal user{linkedUsers.length !== 1 ? "s" : ""}
+            </>
+          }
+          actions={
             <Button
               variant="outline"
               size="sm"
               disabled={statusUpdating}
               onClick={() =>
-                toggleClientStatus(
-                  (client.status ?? "active") as ClientStatus,
-                )
+                toggleClientStatus((client.status ?? "active") as ClientStatus)
               }
-              className="bg-white/70 hover:bg-white gap-1.5"
+              className="gap-1.5"
             >
               {(client.status ?? "active") === "active" ? (
                 <>
@@ -175,9 +163,8 @@ export function ClientDetailClient({
                 </>
               )}
             </Button>
-          </div>
-          <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-[rgba(107,114,255,0.06)]" />
-        </div>
+          }
+        />
       </div>
 
       <ClientUsersSection

@@ -67,16 +67,6 @@ export function DailyChart({
       <CardContent>
         <ResponsiveContainer width="100%" height={height}>
           <AreaChart data={data}>
-            <defs>
-              <linearGradient id="gradSent" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#6B72FF" stopOpacity={0.2} />
-                <stop offset="95%" stopColor="#6B72FF" stopOpacity={0} />
-              </linearGradient>
-              <linearGradient id="gradReplies" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#10b981" stopOpacity={0.2} />
-                <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-              </linearGradient>
-            </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
             <XAxis dataKey="date" fontSize={11} tick={{ fill: "#64748b" }} axisLine={{ stroke: "#e2e8f0" }} tickLine={false} />
             <YAxis fontSize={11} tick={{ fill: "#64748b" }} axisLine={false} tickLine={false} />
@@ -85,16 +75,16 @@ export function DailyChart({
                 background: "#ffffff",
                 border: "1px solid #e2e8f0",
                 borderRadius: "8px",
-                boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+                boxShadow: "0 1px 3px rgba(15,23,42,0.08)",
                 fontSize: "12px",
                 color: "#0f172a",
               }}
             />
             {activeSeries.includes("Sent") && (
-              <Area type="monotone" dataKey="Sent" stroke="#6B72FF" strokeWidth={2} fill="url(#gradSent)" dot={false} isAnimationActive={false} />
+              <Area type="monotone" dataKey="Sent" stroke="#6B72FF" strokeWidth={2} fill="#6B72FF" fillOpacity={0.08} dot={false} isAnimationActive={false} />
             )}
             {activeSeries.includes("Replies") && (
-              <Area type="monotone" dataKey="Replies" stroke="#10b981" strokeWidth={2} fill="url(#gradReplies)" dot={false} isAnimationActive={false} />
+              <Area type="monotone" dataKey="Replies" stroke="#10b981" strokeWidth={2} fill="#10b981" fillOpacity={0.08} dot={false} isAnimationActive={false} />
             )}
             {activeSeries.includes("Bounces") && (
               <Area type="monotone" dataKey="Bounces" stroke="#ef4444" strokeWidth={1.5} fill="transparent" dot={false} strokeDasharray="4 2" isAnimationActive={false} />

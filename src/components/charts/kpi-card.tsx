@@ -48,12 +48,12 @@ function getHealthStyles(health: KPIHealth) {
 }
 
 const defaultStyles = {
-  bg: "bg-[#EDEEFF]",
-  border: "border-[#A3A8FF]",
-  text: "text-[#1C24B8]",
-  badge: "bg-[#D1D3FF] text-[#1C24B8]",
+  bg: "bg-muted",
+  border: "border-border",
+  text: "text-foreground",
+  badge: "bg-muted text-muted-foreground",
   icon: <ArrowUpRight size={14} />,
-  indicator: "bg-[#2E37FE]",
+  indicator: "bg-primary",
 };
 
 export function KPICard({ label, value, unit, kpiKey, subtitle, icon }: KPICardProps) {
@@ -71,7 +71,7 @@ export function KPICard({ label, value, unit, kpiKey, subtitle, icon }: KPICardP
 
   return (
     <Card className={cn(
-      "relative overflow-hidden border transition-all duration-200 hover:shadow-md h-full",
+      "relative overflow-hidden border transition-all duration-200 h-full",
       styles.border,
     )}>
       {/* Top colored bar */}

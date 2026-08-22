@@ -1,4 +1,5 @@
 "use client";
+import { PageHeader } from "@/components/layout/page-header";
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
@@ -146,33 +147,11 @@ export function InboxClient({ replies }: { replies: InboxRowReply[] }) {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div
-        className="relative overflow-hidden rounded-[20px] p-5 sm:p-7 text-[#0f172a]"
-        style={{
-          background:
-            "linear-gradient(135deg, #EDEEFF 0%, #D1D3FF 50%, #fff 100%)",
-          border: "1px solid rgba(46,55,254,0.2)",
-          borderTop: "1px solid rgba(46,55,254,0.3)",
-          boxShadow:
-            "inset 0 1px 0 rgba(255,255,255,0.9), 0 4px 14px rgba(46,55,254,0.1)",
-        }}
-      >
-        <div className="relative z-10">
-          <p className="text-xs font-medium text-[#64748b]">Reply Routing</p>
-          <h1
-            className="text-[20px] sm:text-[22px] font-bold mt-1"
-            style={{ letterSpacing: "-0.01em" }}
-          >
-            Inbox Oversight
-          </h1>
-          <p className="text-sm text-[#0f172a]/60 mt-1">
-            Every inbound reply across all clients, grouped by what it needs.
-            Clients act; you observe, coach, and reclassify misses.
-          </p>
-        </div>
-        <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-[rgba(107,114,255,0.06)]" />
-      </div>
+      <PageHeader
+        eyebrow="Reply Routing"
+        title="Inbox Oversight"
+        subtitle="Every inbound reply across all clients, grouped by what it needs. Clients act; you observe, coach, and reclassify misses."
+      />
 
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
