@@ -63,7 +63,7 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
     <Link
       href={item.href}
       className={cn(
-        "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+        "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
         active
           ? "bg-sidebar-primary text-sidebar-primary-foreground font-semibold"
           : "text-sidebar-foreground hover:bg-white/10 hover:text-white"
@@ -79,7 +79,7 @@ function NavSection({ label, items, pathname }: { label: string; items: NavItem[
   if (items.length === 0) return null;
   return (
     <>
-      <div className="pt-6 pb-2 px-3">
+      <div className="pt-4 pb-2 px-3">
         <p className="text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/50">
           {label}
         </p>
@@ -109,28 +109,37 @@ export function Sidebar({ role, open = false, onClose }: { role: AppRole; open?:
         />
       )}
       <aside
+        style={{
+          // White at the top so the (dark-artwork) logo reads clearly, fading
+          // down through brand indigo into the deep-navy nav panel. Custom
+          // gradients go inline — Tailwind v4 @layer utilities don't reliably
+          // emit them (see CLAUDE.md).
+          background:
+            "linear-gradient(180deg, #ffffff 0px, #ffffff 116px, #1e249e 205px, #131b63 52%, #0f172a 100%)",
+          backgroundColor: "#0f172a",
+        }}
         className={cn(
-          "fixed inset-y-0 left-0 z-50 flex h-full w-64 flex-col overflow-hidden border-r border-sidebar-border bg-sidebar transition-transform duration-300 lg:static lg:translate-x-0 lg:transition-none",
+          "fixed inset-y-0 left-0 z-50 flex h-full w-64 flex-col overflow-hidden border-r border-slate-200 transition-transform duration-300 lg:static lg:translate-x-0 lg:transition-none",
           open ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         )}
       >
-        {/* Brand header */}
-        <div className="relative flex h-24 items-center justify-center px-6 border-b border-sidebar-border">
+        {/* Brand header — logo sits on the solid-white top of the gradient */}
+        <div className="relative flex h-[124px] items-center justify-center px-6">
           <Link href={isAdmin ? "/admin" : "/client"} className="flex items-center">
-            <Image src={leadstartLogo} alt="LeadStart" priority className="h-20 w-auto" />
+            <Image src={leadstartLogo} alt="LeadStart" priority className="h-[120px] w-auto" />
           </Link>
           {/* Close button (mobile only) */}
           <button
             onClick={onClose}
-            className="absolute right-4 top-1/2 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-lg text-sidebar-foreground hover:bg-white/10 lg:hidden"
+            className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-black/5 lg:hidden"
             aria-label="Close menu"
           >
             <X size={18} />
           </button>
         </div>
 
-        {/* Navigation */}
-        <nav className="flex-1 space-y-1 px-3 py-4 overflow-y-auto">
+        {/* Navigation — pt clears the white→blue fade so items land on the settled panel */}
+        <nav className="flex-1 space-y-0.5 px-3 pt-5 pb-4 overflow-y-auto">
           {nav.map((item) => (
             <NavLink key={item.href} item={item} active={pathname === item.href} />
           ))}
