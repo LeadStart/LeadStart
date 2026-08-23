@@ -82,12 +82,22 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   // contacts from a different tenant.
   const { data: validContacts } = await admin
     .from("contacts")
-    .select("id")
+    .select("id, email_verification_status")
     .in("id", contactIds)
     .eq("organization_id", c.organization_id);
+  // A cached invalid/disposable verdict would be failed by the pre-send
+  // verification gate anyway — don't enroll those.
+  const UNDELIVERABLE = new Set(["invalid", "disposable"]);
+  const orgContacts =
+    (validContacts as { id: string; email_verification_status: string | null }[] | null) ?? [];
   const validIds = new Set(
-    ((validContacts as { id: string }[] | null) ?? []).map((r) => r.id),
+    orgContacts
+      .filter((r) => !UNDELIVERABLE.has(r.email_verification_status ?? ""))
+      .map((r) => r.id),
   );
+  const skippedUndeliverable = orgContacts.filter((r) =>
+    UNDELIVERABLE.has(r.email_verification_status ?? ""),
+  ).length;
   const filtered = contactIds.filter((id) => validIds.has(id));
 
   if (filtered.length === 0) {
@@ -124,6 +134,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   return NextResponse.json({
     enrolled: insertedCount,
     skipped_existing: filtered.length - insertedCount,
-    skipped_invalid: contactIds.length - filtered.length,
+    skipped_invalid: contactIds.length - filtered.length - skippedUndeliverable,
+    skipped_undeliverable: skippedUndeliverable,
   });
 }

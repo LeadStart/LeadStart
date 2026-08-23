@@ -39,7 +39,9 @@ export type OwnerAlertKind =
   | "hot_lead_persistent_failure"
   | "inbox_health_degraded"
   | "inbox_health_auto_paused"
-  | "client_csv_upload";
+  | "client_csv_upload"
+  | "email_verifier_unavailable"
+  | "email_verifier_credits_low";
 
 export interface OwnerAlertInput {
   admin: ReturnType<typeof createAdminClient>;
@@ -253,6 +255,8 @@ const KIND_LABEL: Record<OwnerAlertKind, string> = {
   inbox_health_degraded: "Mailbox health critical",
   inbox_health_auto_paused: "Mailbox auto-paused (health)",
   client_csv_upload: "Client CSV upload",
+  email_verifier_unavailable: "Email verifier unavailable — new sends on hold",
+  email_verifier_credits_low: "Email verifier credits low",
 };
 
 const KIND_COLOR: Record<OwnerAlertKind, string> = {
@@ -264,6 +268,10 @@ const KIND_COLOR: Record<OwnerAlertKind, string> = {
   inbox_health_auto_paused: "#b91c1c",
   // Informational (not a failure): client self-service activity.
   client_csv_upload: "#2563eb",
+  // Verifier down halts new sends (fail-closed) → hard failure red; a low
+  // credit balance is a warning that still lets fresh-cached contacts send.
+  email_verifier_unavailable: "#b91c1c",
+  email_verifier_credits_low: "#c2410c",
 };
 
 function renderEventCard(input: {

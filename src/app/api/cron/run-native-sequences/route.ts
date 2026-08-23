@@ -13,7 +13,10 @@
 //      step's wait_days has elapsed (channel filtered in SQL — see below).
 //   3. For each, pick a mailbox (sticky per enrollment for thread
 //      continuity; else the least-loaded mailbox in the campaign's pool),
-//      render + send the step, log it to native_sends, advance the
+//      render the step, then verify the recipient just-in-time (Million
+//      Verifier): fresh cached results send with no API call, invalid/
+//      disposable are skipped, and unknown/errors or a verifier outage HOLD
+//      (fail-closed). Then send the step, log it to native_sends, advance the
 //      enrollment.
 //
 // Pacing is at-most-once with no locking, same accepted stance as the
@@ -40,6 +43,8 @@ import {
 } from "@/lib/gmail/ramp";
 import { renderSpintax } from "@/lib/spintax";
 import { buildTokenMap, applyTokens } from "@/lib/native/tokens";
+import { loadVerifierStates, finalizeVerifierStates } from "@/lib/millionverifier/org-state";
+import { gateContactVerification } from "@/lib/millionverifier/verify-contact";
 import type {
   CampaignEnrollment,
   CampaignStep,
@@ -219,6 +224,13 @@ export async function GET(request: NextRequest) {
       s.add(row.client_id ?? "*");
     }
   }
+
+  // Per-org Million Verifier state for this tick: the client (null = gate
+  // disarmed when no key is configured), the 1h suppression window carried over
+  // from a definitive account error, and the per-tick breaker + tallies the
+  // gate mutates as it runs. A missing-column error (migration 00069 not yet
+  // applied) disarms the gate rather than throwing — sends proceed unverified.
+  const verifierByOrg = await loadVerifierStates(admin, orgIds, tickNow);
 
   // Campaign → mailbox pool.
   const { data: poolData } = await admin
@@ -507,6 +519,30 @@ export async function GET(request: NextRequest) {
     const gmail = gmailByOrg.get(campaign.organization_id);
     if (!gmail) continue; // org not configured; leave enrollment active
 
+    // ---- Just-in-time email verification (Million Verifier) ----
+    // Last gate before the send: every check that can stop this enrollment for
+    // free (window, suppression, DNC, caps, mailbox slot, render, Gmail creds)
+    // has already passed, so a credit is only ever spent on an address we would
+    // send to right now. Fresh cached results (<=30d) send with no API call.
+    // A hold leaves the enrollment active (retried next tick) and never consumes
+    // the mailbox slot; a skip fails it terminally. gate.result is snapshotted
+    // on the send row (null = gate disarmed / no key configured).
+    const gate = await gateContactVerification({
+      admin,
+      state: verifierByOrg.get(campaign.organization_id) ?? null,
+      contact,
+      now: tickNow,
+    });
+    if (gate.action === "hold") {
+      results.push({ enrollment_id: enrollment.id, result: `verify_hold_${gate.reason}` });
+      continue;
+    }
+    if (gate.action === "skip") {
+      await markEnrollmentFailed(admin, enrollment.id, `Email verification: ${gate.reason}`);
+      results.push({ enrollment_id: enrollment.id, result: `verify_skip_${gate.status}` });
+      continue;
+    }
+
     const messageId = generateMessageId(mailbox.email_address);
     const raw = buildRawEmail({
       fromEmail: mailbox.email_address,
@@ -577,6 +613,7 @@ export async function GET(request: NextRequest) {
       mailbox_id: mailbox.id,
       step_index: enrollment.current_step_index,
       to_email: contact.email,
+      email_verification_result: gate.result,
       rfc_message_id: rfcMessageId,
       gmail_message_id: sendResult.id,
       gmail_thread_id: sendResult.threadId,
@@ -618,7 +655,13 @@ export async function GET(request: NextRequest) {
     results.push({ enrollment_id: enrollment.id, result: hasNext ? "advanced" : "completed" });
   }
 
-  return NextResponse.json({ status: "ok", sent, results });
+  // Persist per-org credit balance + error streak and enqueue edge-triggered
+  // owner alerts (verifier down / credits low). Never throws. The returned
+  // summary lands in the cron tally so a tick's verification activity
+  // (armed/suppressed/tripped, calls, cached, held, skipped) is greppable.
+  const verification = await finalizeVerifierStates(admin, verifierByOrg);
+
+  return NextResponse.json({ status: "ok", sent, verification, results });
 }
 
 // Render sequence copy against a contact + the sending mailbox. Resolves

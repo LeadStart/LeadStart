@@ -12,6 +12,7 @@ import { SortableHead } from "@/components/ui/sortable-head";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { verificationBadge } from "@/lib/millionverifier/labels";
 import {
   Table,
   TableBody,
@@ -868,7 +869,31 @@ export default function ContactsPage() {
                         />
                       </TableCell>
                       <TableCell className="font-medium">{row.fullName}</TableCell>
-                      <TableCell className="text-muted-foreground">{row.email}</TableCell>
+                      <TableCell className="text-muted-foreground">
+                        <span className="inline-flex items-center gap-1.5">
+                          {row.email}
+                          {(() => {
+                            const b = verificationBadge(row.email_verification_status);
+                            return b ? (
+                              <Badge
+                                variant="secondary"
+                                className={`${b.className} text-[10px]`}
+                                title={[
+                                  row.email_verification_subresult,
+                                  row.email_verified_at &&
+                                    `checked ${new Date(row.email_verified_at).toLocaleDateString()}`,
+                                  row.email_did_you_mean &&
+                                    `did you mean ${row.email_did_you_mean}?`,
+                                ]
+                                  .filter(Boolean)
+                                  .join(" · ")}
+                              >
+                                {b.label}
+                              </Badge>
+                            ) : null;
+                          })()}
+                        </span>
+                      </TableCell>
                       <TableCell className="text-muted-foreground">
                         {row.phone ? (
                           <a

@@ -106,6 +106,66 @@ whenever convenient.
 > Yahoo seeds would need their own readers (Graph OAuth / IMAP app passwords);
 > the `seed_inboxes.provider` column reserves room for them.
 
+## 5. Pre-send email verification (Million Verifier)
+
+Every recipient is verified **just before its first send** (migration `00069`).
+The gate lives inside `run-native-sequences` as the last check before the Gmail
+API call, so a credit is only ever spent on an address that would otherwise be
+sent to right now. Results are cached on the contact for **30 days**, so
+follow-up steps to an already-verified address are free.
+
+**Setup:** paste a Million Verifier key on **Admin → Integrations → Email
+verification** and click **Test connection** (shows the remaining credit
+balance). Leaving the key blank **disarms** the gate — sends proceed unverified,
+exactly as before this feature. Get a key at `app.millionverifier.com/api`
+(pay-as-you-go, ~$37/10k, credits never expire).
+
+**What each result does:**
+
+| Result | Action | Charged? |
+|--------|--------|----------|
+| `ok` | send | yes |
+| `catch_all` | **send, flagged risky** (can't confirm/deny; bounce monitoring + inbox-health auto-pause catch any damage) | no |
+| `unknown` | hold + retry (free) up to 3× at 1h apart, then send flagged risky | no |
+| `invalid` | **skip** — enrollment failed, contact flagged; never sent | yes |
+| `disposable` | **skip** | yes |
+| `error` (per-address) | hold + retry up to 5× at 1h apart, then skip | no |
+
+`role` (info@/sales@) and `free` (gmail.com) are stored as flags only and never
+change the send decision — they're a targeting call, not a deliverability one.
+
+**Fail-closed on outage.** If the verifier is unreachable, out of credits, or the
+key is rejected, new first-touch sends to *unverified* addresses **hold** (they
+retry on later ticks) rather than going out unverified — contacts with a fresh
+cached result still send. A definitive error (bad key / no credits / IP blocked)
+stops all calls for **1 hour** and fires an `email_verifier_unavailable` owner
+alert; a low balance (< 500 credits) fires `email_verifier_credits_low` once as
+it crosses. Fix the key / top up on the Integrations page — the Save/Test button
+clears the error state so the next tick retries immediately.
+
+**One-time rollout burn.** On first deploy, every active/queued contact without a
+cached result verifies at its next step — budget roughly one credit per such
+contact (catch-all/unknown are free). Check the balance before deploying.
+
+**Reading a tick.** The `run-native-sequences` JSON response carries a
+`verification` array (one entry per org): `mode` (`armed`/`suppressed`/`tripped`/
+`disarmed`), `calls`, `cached`, `held`, `skipped`, `credits`, and a per-result
+`counts` map. Result codes in the `results` array: `verify_hold_*` (backoff /
+budget / verifier down), `verify_skip_invalid|disposable|error`.
+
+**Validating the policy.** The send row records what the gate saw
+(`native_sends.email_verification_result`). To check whether "send catch-all,
+flag risky" is holding up, slice bounces by result:
+
+```sql
+select email_verification_result, status, count(*)
+from native_sends
+where sent_at > now() - interval '7 days'
+group by 1, 2 order by 1, 2;
+```
+
+If catch-all rows bounce materially more than `ok` rows, revisit the policy.
+
 ## Notes
 
 - **One service account serves every domain** that authorizes its client ID.

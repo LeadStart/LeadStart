@@ -24,6 +24,7 @@ Live at https://leadstart-ebon.vercel.app (LeadStart Vercel account, auto-deploy
 - **Reply ingest** via the `poll-native-replies` cron, which pulls inbound Gmail messages and hands them to the shared reply pipeline for classification + hot-lead notification.
 - **Contact import** via client self-service CSV upload into native campaigns (per-campaign token mapping through `/api/campaigns/[id]/client-import`).
 - **Inbox health + seed placement** (migrations `00061`, `00067`, `00068`): hourly per-mailbox score from DNS/blacklist/bounce/reply signals plus the one *direct* measurement — a placement test that probes seed inboxes we control and reads back Inbox/Promotions/Spam + receiver-side SPF/DKIM/DMARC. Seed panel + per-mailbox tests live on **Admin → Mailboxes**; the `run-placement-tests` cron finalizes open tests and re-probes every active mailbox weekly. **Activation (2026-08-22 build):** migration `00068` applied 2026-08-22; push to deploy, then click **Use sending mailboxes as seeds** on the Mailboxes page and run a neutral + a campaign-copy probe per mailbox. Setup + interpretation in [`docs/native-email-runbook.md`](docs/native-email-runbook.md) §4.
+- **Pre-send email verification (Million Verifier)** (migration `00069`, code-complete — **not live yet**): closes the #1 evidence-backed deliverability gap. Every recipient is verified *just before its first send* inside `run-native-sequences`; results cache on the contact for 30 days. `ok` sends; `catch_all`/`unknown` send flagged risky; `invalid`/`disposable` are skipped; a verifier outage / no credits **holds** new unverified sends (fail-closed) and alerts the owner. Key + credit balance on **Admin → Integrations → Email verification**; no key = gate disarmed (sends unverified). **Activation:** (1) apply migration `00069` in the Supabase SQL editor; (2) push to deploy; (3) save the Million Verifier key in Settings and click **Test connection**; (4) watch the first `run-native-sequences` ticks (`verification[].mode === "armed"`). Setup + policy + credit/outage handling in [`docs/native-email-runbook.md`](docs/native-email-runbook.md) §5.
 
 ---
 
@@ -105,7 +106,7 @@ The Claude classifier + Resend hot-lead notification flow now runs against nativ
 | `/api/cron/prune-webhook-events` | 4am UTC | Webhook audit log cleanup |
 | `/api/cron/dispatch-owner-alerts` | every 5 min | Owner alert delivery |
 | `/api/cron/owner-heartbeat` | 1pm UTC | Periodic owner ping |
-| `/api/cron/run-native-sequences` | every 5 min | Native Gmail sequence dispatcher (per-mailbox ramp) |
+| `/api/cron/run-native-sequences` | every 5 min | Native Gmail sequence dispatcher (per-mailbox ramp; Million Verifier pre-send gate) |
 | `/api/cron/poll-native-replies` | every minute | Native Gmail reply + bounce ingest |
 | `/api/cron/check-inbox-health` | hourly at :30 | Per-mailbox inbox-health score (DNS, blacklist, bounces, replies, seed placement) |
 | `/api/cron/run-placement-tests` | every 10 min | Finalizes open seed placement tests; starts the weekly automatic probe per mailbox |

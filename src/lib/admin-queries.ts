@@ -43,6 +43,8 @@ const CONTACT_LIST_COLUMNS =
   "email, company_name, title, phone, linkedin_url, intro_line, tags, " +
   "status, source, notes, pipeline_stage, pipeline_sort_order, " +
   "pipeline_notes, pipeline_follow_up_date, pipeline_added_at, " +
+  "email_verification_status, email_verification_subresult, " +
+  "email_verified_at, email_did_you_mean, " +
   "created_at, updated_at";
 
 // ---------- Overview ----------

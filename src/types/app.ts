@@ -51,6 +51,17 @@ export interface Organization {
   // Inbox-placement testing (migration 00068). Days between automatic
   // neutral probes per active mailbox; NULL = manual runs only.
   placement_test_interval_days: number | null;
+  // Email verification — Million Verifier (migration 00069). API key (NULL
+  // disarms the pre-send gate). credits + checked_at are the last-seen balance;
+  // the error trio drives 1h call-suppression after a definitive account error
+  // (bad key / no credits / IP blocked) and the edge-triggered owner alert.
+  millionverifier_api_key: string | null;
+  millionverifier_credits: number | null;
+  millionverifier_credits_checked_at: string | null;
+  millionverifier_last_error: string | null;
+  millionverifier_last_error_kind: "auth" | "credits" | "blocked" | "transient" | null;
+  millionverifier_last_error_at: string | null;
+  millionverifier_error_streak: number;
   created_at: string;
   updated_at: string;
 }
@@ -367,6 +378,18 @@ export interface WebhookEvent {
 // Contacts (campaign leads)
 export type ContactStatus = "new" | "enriched" | "queued" | "uploaded" | "active" | "bounced" | "replied" | "unsubscribed";
 
+// Million Verifier per-address verdict (migration 00069). Orthogonal to
+// ContactStatus. resultcode mapping: 1 ok, 2 catch_all, 3 unknown, 4 error,
+// 5 disposable, 6 invalid.
+export type EmailVerificationStatus =
+  | "ok"
+  | "catch_all"
+  | "unknown"
+  | "invalid"
+  | "disposable"
+  | "error";
+export type EmailVerificationQuality = "good" | "bad" | "risky";
+
 export interface Contact {
   id: string;
   organization_id: string;
@@ -395,6 +418,18 @@ export interface Contact {
   pipeline_notes: string | null;
   pipeline_follow_up_date: string | null;
   pipeline_added_at: string | null;
+  // Email verification (migration 00069). Cached Million Verifier result for
+  // `email`, written just before the first send and reused by follow-ups for
+  // 30 days (email_verified_at drives the TTL). attempts bounds the retry loop
+  // for indeterminate results (unknown / per-address error).
+  email_verification_status: EmailVerificationStatus | null;
+  email_verification_subresult: string | null;
+  email_verification_quality: EmailVerificationQuality | null;
+  email_is_free: boolean | null;
+  email_is_role: boolean | null;
+  email_did_you_mean: string | null;
+  email_verified_at: string | null;
+  email_verification_attempts: number;
   created_at: string;
   updated_at: string;
 }
@@ -902,6 +937,9 @@ export interface NativeSend {
   // status — soft bounces aren't suppressed — but feeds the inbox-health
   // soft-bounce signal. Null = no soft bounce observed for this send.
   soft_bounced_at: string | null;
+  // What the pre-send verification gate saw at send time (migration 00069).
+  // Null = the gate was disarmed (no Million Verifier key) when this row wrote.
+  email_verification_result: "ok" | "catch_all" | "unknown" | null;
 }
 
 // Classes that trigger client notification by default.

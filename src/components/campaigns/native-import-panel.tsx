@@ -52,6 +52,7 @@ interface ImportResult {
   skipped_existing_elsewhere: number;
   skipped_dnc: number;
   skipped_suppressed: number;
+  skipped_undeliverable: number;
   in_file_duplicates: number;
   total_received: number;
 }
@@ -542,6 +543,13 @@ export function NativeImportPanel({ campaignId }: { campaignId: string }) {
                       {" "}
                       · {result.skipped_suppressed} skipped (previously bounced,
                       unsubscribed, or replied)
+                    </>
+                  )}
+                  {result.skipped_undeliverable > 0 && (
+                    <>
+                      {" "}
+                      · {result.skipped_undeliverable} skipped (verified
+                      undeliverable)
                     </>
                   )}
                   {result.skipped_existing_elsewhere > 0 && (

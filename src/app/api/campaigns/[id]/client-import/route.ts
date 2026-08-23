@@ -409,6 +409,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     client_id: string | null;
     status: string;
     custom_fields: Record<string, unknown> | null;
+    email_verification_status: string | null;
   }
   const existingByEmail = new Map<string, ExistingContact>();
   {
@@ -421,7 +422,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     for (const part of chunk(remaining, 200)) {
       const { data: rows, error: exErr } = await admin
         .from("contacts")
-        .select("id, email, client_id, status, custom_fields")
+        .select("id, email, client_id, status, custom_fields, email_verification_status")
         .eq("organization_id", campaign.organization_id)
         .in("email", part);
       if (exErr) {
@@ -441,7 +442,12 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   const toLink: { row: SanitizedRow; existing: ExistingContact }[] = [];
   let skippedExistingElsewhere = 0;
   let skippedSuppressed = 0;
+  let skippedUndeliverable = 0;
   const SUPPRESSED_STATUSES = new Set(["bounced", "unsubscribed", "replied"]);
+  // A cached invalid/disposable verdict from an earlier send would be failed by
+  // the pre-send verification gate anyway — skip it here so counts are truthful.
+  // Advisory only (the cron re-checks at send time), mirroring the DNC filter.
+  const UNDELIVERABLE = new Set(["invalid", "disposable"]);
 
   for (const [email, row] of wanted) {
     const existing = existingByEmail.get(email);
@@ -451,6 +457,8 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       if (SUPPRESSED_STATUSES.has(existing.status)) {
         // Would never send (cron suppression) — keep counts truthful.
         skippedSuppressed++;
+      } else if (UNDELIVERABLE.has(existing.email_verification_status ?? "")) {
+        skippedUndeliverable++;
       } else {
         toLink.push({ row, existing });
       }
@@ -657,6 +665,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
         skipped_existing_elsewhere: skippedExistingElsewhere,
         skipped_dnc: skippedDnc,
         skipped_suppressed: skippedSuppressed,
+        skipped_undeliverable: skippedUndeliverable,
         in_file_duplicates: inFileDuplicates,
       },
     });
@@ -671,6 +680,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     skipped_existing_elsewhere: skippedExistingElsewhere,
     skipped_dnc: skippedDnc,
     skipped_suppressed: skippedSuppressed,
+    skipped_undeliverable: skippedUndeliverable,
     in_file_duplicates: inFileDuplicates,
     total_received: rawRows.length,
   });

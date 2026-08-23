@@ -244,6 +244,37 @@ export default async function AdminCampaignDetailPage({
                   hint={null}
                 />
               </div>
+              {/* Email verification (Million Verifier). Risky = catch-all +
+                  unknown (sent, flagged); Undeliverable = invalid + disposable +
+                  errored (never sent); Unverified = not yet checked. */}
+              <div className="grid grid-cols-4 gap-4">
+                <QueueStat
+                  label="Verified"
+                  value={nativeStats.verification.verified}
+                  color="text-emerald-600"
+                  hint={null}
+                />
+                <QueueStat
+                  label="Risky"
+                  value={nativeStats.verification.risky}
+                  color={nativeStats.verification.risky > 0 ? "text-amber-600" : "text-muted-foreground"}
+                  hint={null}
+                />
+                <QueueStat
+                  label="Undeliverable"
+                  value={nativeStats.verification.undeliverable}
+                  color={
+                    nativeStats.verification.undeliverable > 0 ? "text-red-600" : "text-muted-foreground"
+                  }
+                  hint={null}
+                />
+                <QueueStat
+                  label="Unverified"
+                  value={nativeStats.verification.unverified}
+                  color="text-muted-foreground"
+                  hint={null}
+                />
+              </div>
               <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
                 <span>Active: <strong>{nativeStats.enrollments.active}</strong></span>
                 <span>Completed: <strong>{nativeStats.enrollments.completed}</strong></span>
@@ -465,6 +496,10 @@ interface NativeStats {
   // first-touch rate under reach_first and the honest throughput ceiling.
   dailyInboxCapacity: number;
   activeMailboxCount: number;
+  // Per-campaign email-verification picture (migration 00069), tallied from
+  // each enrollment's contact. risky = catch_all + unknown; undeliverable =
+  // invalid + disposable + error; unverified = not yet checked.
+  verification: { verified: number; risky: number; undeliverable: number; unverified: number };
 }
 
 async function nativeStatsFor(
@@ -477,7 +512,10 @@ async function nativeStatsFor(
     admin.from("lead_replies").select("id", { count: "exact", head: true }).eq("campaign_id", campaignId).eq("source_channel", "native_email"),
     admin.from("campaign_steps").select("step_index, subject_template, body_template, wait_days").eq("campaign_id", campaignId).order("step_index", { ascending: true }),
     admin.from("campaign_mailboxes").select("mailbox_id").eq("campaign_id", campaignId),
-    admin.from("campaign_enrollments").select("status, current_step_index").eq("campaign_id", campaignId),
+    admin
+      .from("campaign_enrollments")
+      .select("status, current_step_index, contacts(email_verification_status)")
+      .eq("campaign_id", campaignId),
   ]);
 
   const stepRows = (stepsRes.data ?? []) as {
@@ -492,8 +530,16 @@ async function nativeStatsFor(
   // current_step_index is the NEXT step a contact will receive, so an active
   // enrollment at index i is "waiting for step i+1".
   const enrollments = { active: 0, completed: 0, replied: 0, failed: 0 };
+  const verification = { verified: 0, risky: 0, undeliverable: 0, unverified: 0 };
   const waitingByStep = new Array(nSteps).fill(0) as number[];
-  for (const row of (enrRes.data ?? []) as { status: string; current_step_index: number | null }[]) {
+  for (const row of (enrRes.data ?? []) as {
+    status: string;
+    current_step_index: number | null;
+    contacts:
+      | { email_verification_status: string | null }
+      | { email_verification_status: string | null }[]
+      | null;
+  }[]) {
     if (row.status in enrollments) {
       enrollments[row.status as keyof typeof enrollments]++;
     }
@@ -501,6 +547,13 @@ async function nativeStatsFor(
       const idx = Math.min(Math.max(row.current_step_index ?? 0, 0), nSteps - 1);
       waitingByStep[idx]++;
     }
+    // The embed is array-vs-object ambiguous for a to-one FK; normalize both.
+    const contact = Array.isArray(row.contacts) ? row.contacts[0] : row.contacts;
+    const vs = contact?.email_verification_status ?? null;
+    if (vs === "ok") verification.verified++;
+    else if (vs === "catch_all" || vs === "unknown") verification.risky++;
+    else if (vs === "invalid" || vs === "disposable" || vs === "error") verification.undeliverable++;
+    else verification.unverified++;
   }
 
   // Sends logged per step so far — one bounded head-count per step (steps are
@@ -575,6 +628,7 @@ async function nativeStatsFor(
     sentByStep,
     dailyInboxCapacity,
     activeMailboxCount,
+    verification,
   };
 }
 

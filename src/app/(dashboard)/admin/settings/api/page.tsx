@@ -36,6 +36,7 @@ import {
   ExternalLink,
   AtSign,
   Activity,
+  MailCheck,
 } from "lucide-react";
 import type { Organization } from "@/types/app";
 import { appUrl } from "@/lib/api-url";
@@ -193,6 +194,23 @@ export default function IntegrationsPage() {
     { kind: "success" } | { kind: "fail"; message: string } | null
   >(null);
 
+  // Email verification — Million Verifier (migration 00069): API key + the
+  // last-seen credit balance / error surfaced on the card.
+  const [millionVerifierKey, setMillionVerifierKey] = useState("");
+  const [millionVerifierMeta, setMillionVerifierMeta] = useState<{
+    credits: number | null;
+    checkedAt: string | null;
+    lastError: string | null;
+    lastErrorAt: string | null;
+  }>({ credits: null, checkedAt: null, lastError: null, lastErrorAt: null });
+  const [savingMillionVerifier, setSavingMillionVerifier] = useState(false);
+  const [millionVerifierSaved, setMillionVerifierSaved] = useState(false);
+  const [millionVerifierError, setMillionVerifierError] = useState<string | null>(null);
+  const [testingMillionVerifier, setTestingMillionVerifier] = useState(false);
+  const [millionVerifierTestResult, setMillionVerifierTestResult] = useState<
+    { kind: "success"; credits: number } | { kind: "fail"; message: string } | null
+  >(null);
+
   useEffect(() => {
     if (!organizationId) return;
     const supabase = createClient();
@@ -268,6 +286,22 @@ export default function IntegrationsPage() {
           };
           if (instOrg.instantly_api_key) setInstantlyKey(instOrg.instantly_api_key);
           setInstantlyWebhookId(instOrg.instantly_webhook_id ?? null);
+          // Email verification — Million Verifier (migration 00069). Same
+          // stale-type cast as above until 00069 is applied everywhere.
+          const mvOrg = data as {
+            millionverifier_api_key?: string | null;
+            millionverifier_credits?: number | null;
+            millionverifier_credits_checked_at?: string | null;
+            millionverifier_last_error?: string | null;
+            millionverifier_last_error_at?: string | null;
+          };
+          if (mvOrg.millionverifier_api_key) setMillionVerifierKey(mvOrg.millionverifier_api_key);
+          setMillionVerifierMeta({
+            credits: mvOrg.millionverifier_credits ?? null,
+            checkedAt: mvOrg.millionverifier_credits_checked_at ?? null,
+            lastError: mvOrg.millionverifier_last_error ?? null,
+            lastErrorAt: mvOrg.millionverifier_last_error_at ?? null,
+          });
         }
       });
   }, [organizationId]);
@@ -671,6 +705,71 @@ export default function IntegrationsPage() {
     }
   }
 
+  async function handleTestMillionVerifier() {
+    setTestingMillionVerifier(true);
+    setMillionVerifierTestResult(null);
+    try {
+      const res = await fetch(appUrl("/api/admin/millionverifier/test"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ api_key: millionVerifierKey }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setMillionVerifierTestResult({ kind: "success", credits: data.credits ?? 0 });
+        setMillionVerifierMeta((m) => ({
+          ...m,
+          credits: typeof data.credits === "number" ? data.credits : m.credits,
+          checkedAt: new Date().toISOString(),
+          lastError: null,
+          lastErrorAt: null,
+        }));
+      } else {
+        setMillionVerifierTestResult({
+          kind: "fail",
+          message: data.error ?? "Key check failed",
+        });
+      }
+    } catch (err) {
+      setMillionVerifierTestResult({
+        kind: "fail",
+        message: err instanceof Error ? err.message : "Key check failed",
+      });
+    } finally {
+      setTestingMillionVerifier(false);
+    }
+  }
+
+  async function handleSaveMillionVerifier() {
+    if (!organizationId) return;
+    setSavingMillionVerifier(true);
+    setMillionVerifierSaved(false);
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("organizations")
+      .update({
+        millionverifier_api_key: millionVerifierKey.trim() || null,
+        // Clear stored error state so the send cron retries with the new key.
+        millionverifier_last_error: null,
+        millionverifier_last_error_kind: null,
+        millionverifier_last_error_at: null,
+        millionverifier_error_streak: 0,
+      })
+      .eq("id", organizationId);
+    setSavingMillionVerifier(false);
+    if (error) {
+      // Surface it rather than claiming "Saved" — e.g. migration 00069 not
+      // applied yet (unknown column) fails the whole update.
+      setMillionVerifierError(error.message);
+      return;
+    }
+    setMillionVerifierError(null);
+    setMillionVerifierSaved(true);
+    setTimeout(() => setMillionVerifierSaved(false), 3000);
+    // Refresh the cached credit balance (also validates the key end-to-end).
+    if (millionVerifierKey.trim()) void handleTestMillionVerifier();
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -863,6 +962,107 @@ export default function IntegrationsPage() {
               </span>
             )}
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Email verification — Million Verifier (migration 00069) */}
+      <Card className="border-border/50 shadow-sm">
+        <CardHeader className="flex flex-row items-center gap-2 pb-3">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-600">
+            <MailCheck size={16} className="text-white" />
+          </div>
+          <div>
+            <CardTitle className="text-base">Email verification</CardTitle>
+            <p className="text-xs text-muted-foreground">
+              Verifies every recipient just before its first send (Million
+              Verifier). Invalid and disposable addresses are never sent;
+              catch-all and unknown are free. Leave blank to send unverified.
+            </p>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-1">
+            <Label htmlFor="millionVerifierKey" className="text-sm font-medium">
+              Million Verifier API key
+            </Label>
+            <Input
+              id="millionVerifierKey"
+              type="password"
+              value={millionVerifierKey}
+              onChange={(e) => setMillionVerifierKey(e.target.value)}
+              placeholder="Enter your Million Verifier API key"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Find your key at{" "}
+              <span className="font-mono">app.millionverifier.com/api</span>. ~1
+              credit per newly-verified address; results are cached for 30 days so
+              follow-ups are free.
+            </p>
+          </div>
+          {(millionVerifierMeta.credits !== null || millionVerifierMeta.checkedAt) && (
+            <p className="text-[11px] text-muted-foreground">
+              {millionVerifierMeta.credits !== null
+                ? `${millionVerifierMeta.credits.toLocaleString()} credits remaining`
+                : "Credits unknown"}
+              {millionVerifierMeta.checkedAt
+                ? ` · checked ${new Date(millionVerifierMeta.checkedAt).toLocaleString()}`
+                : ""}
+            </p>
+          )}
+          {millionVerifierMeta.lastError && (
+            <p className="text-[11px] text-red-600">
+              Last error: {millionVerifierMeta.lastError}
+              {millionVerifierMeta.lastErrorAt
+                ? ` (${new Date(millionVerifierMeta.lastErrorAt).toLocaleString()})`
+                : ""}
+            </p>
+          )}
+          <div className="flex gap-2 items-center">
+            <Button
+              onClick={handleSaveMillionVerifier}
+              disabled={savingMillionVerifier}
+              style={{ background: "#2E37FE" }}
+            >
+              {savingMillionVerifier ? "Saving..." : "Save"}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleTestMillionVerifier}
+              disabled={testingMillionVerifier || !millionVerifierKey}
+            >
+              {testingMillionVerifier ? "Testing..." : "Test connection"}
+            </Button>
+            {millionVerifierSaved && (
+              <span className="text-sm text-emerald-600 flex items-center gap-1">
+                <CheckCircle size={14} /> Saved
+              </span>
+            )}
+          </div>
+          {millionVerifierError && (
+            <div className="flex items-center gap-2 rounded-lg bg-red-50 border border-red-200 p-3">
+              <XCircle size={16} className="text-red-500" />
+              <span className="text-sm font-medium text-red-700">
+                Save failed: {millionVerifierError}
+              </span>
+            </div>
+          )}
+          {millionVerifierTestResult?.kind === "success" && (
+            <div className="flex items-center gap-2 rounded-lg bg-emerald-50 border border-emerald-200 p-3">
+              <CheckCircle size={16} className="text-emerald-500" />
+              <span className="text-sm font-medium text-emerald-700">
+                Connected — {millionVerifierTestResult.credits.toLocaleString()} credits
+                remaining.
+              </span>
+            </div>
+          )}
+          {millionVerifierTestResult?.kind === "fail" && (
+            <div className="flex items-center gap-2 rounded-lg bg-red-50 border border-red-200 p-3">
+              <XCircle size={16} className="text-red-500" />
+              <span className="text-sm font-medium text-red-700">
+                {millionVerifierTestResult.message}
+              </span>
+            </div>
+          )}
         </CardContent>
       </Card>
 
