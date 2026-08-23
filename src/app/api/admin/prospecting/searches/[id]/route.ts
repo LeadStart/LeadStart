@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { getForwardedIdentity } from "@/lib/security/identity";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 // GET /api/admin/prospecting/searches/[id]
@@ -12,23 +12,19 @@ export async function GET(
 ) {
   const { id } = await params;
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
+  // Identity from middleware-forwarded headers — no getUser() round-trip.
+  // This route is polled every ~3s while a search runs, so the saved hop adds up.
+  const identity = await getForwardedIdentity();
+  if (!identity) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const role = user.app_metadata?.role;
-  if (role !== "owner" && role !== "va") {
+  if (identity.role !== "owner" && identity.role !== "va") {
     return NextResponse.json(
       { error: "Owner or VA role required" },
       { status: 403 },
     );
   }
-  const organizationId = user.app_metadata?.organization_id as
-    | string
-    | undefined;
+  const organizationId = identity.organizationId;
   if (!organizationId) {
     return NextResponse.json(
       { error: "No organization on user" },
