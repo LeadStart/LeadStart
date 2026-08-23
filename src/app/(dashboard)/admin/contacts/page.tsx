@@ -42,6 +42,7 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { appUrl } from "@/lib/api-url";
 import { toast } from "sonner";
+import Link from "next/link";
 import {
   Users,
   Plus,
@@ -52,11 +53,36 @@ import {
   ChevronDown,
   Trash2,
   Send,
+  Sparkles,
 } from "lucide-react";
 import type { Contact, ContactStatus, ProspectStage } from "@/types/app";
 import { ImportContactsDialog } from "./import-dialog";
+import {
+  EnrichmentRunBanner,
+  fetchActiveEnrichmentRunId,
+} from "@/components/contacts/enrichment-run-banner";
 
 const CONTACTS_PAGE_SIZE = 25;
+
+// Enrich cost estimate (per contact/step) — mirrors src/lib/apify/pricing.ts.
+const ENRICH_COST_PROFILE = 0.01;
+const ENRICH_COST_DOMAIN = 0.004;
+const ENRICH_COST_WATERFALL = 0.005; // per miss, upper bound
+const ENRICH_COST_ACTIVITY = 0.005; // per profile, upper bound
+
+// Relative "time ago" for the Last posted column.
+function timeAgo(iso: string | null): string {
+  if (!iso) return "—";
+  const then = Date.parse(iso);
+  if (Number.isNaN(then)) return "—";
+  const days = Math.floor((Date.now() - then) / 86_400_000);
+  if (days <= 0) return "today";
+  if (days === 1) return "1d ago";
+  if (days < 30) return `${days}d ago`;
+  const months = Math.floor(days / 30);
+  if (months < 12) return `${months}mo ago`;
+  return `${Math.floor(months / 12)}y ago`;
+}
 
 // Lucide dropped its brand-icon set upstream, so inline the LinkedIn glyph
 // (same SVG used in the client-page LinkedIn section).
@@ -167,6 +193,34 @@ function statusLabel(s: ContactStatus) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+// ---- Email verification status: list filter (Million Verifier vocab) ----
+// The per-row badge is rendered inline with verificationBadge() from
+// @/lib/millionverifier/labels — the single source of truth for status
+// presentation. This filter narrows the list by that same MV status.
+type EmailStatusFilter = "all" | "verified" | "needs_enrichment" | "risky" | "invalid";
+const EMAIL_STATUS_FILTER_OPTIONS: { value: EmailStatusFilter; label: string }[] = [
+  { value: "all", label: "All Email Statuses" },
+  { value: "verified", label: "Verified" },
+  { value: "needs_enrichment", label: "Needs enrichment" },
+  { value: "risky", label: "Risky / catch-all" },
+  { value: "invalid", label: "Invalid / disposable" },
+];
+function matchesEmailStatusFilter(c: Contact, f: EmailStatusFilter): boolean {
+  const s = c.email_verification_status;
+  switch (f) {
+    case "verified":
+      return s === "ok";
+    case "needs_enrichment":
+      return !c.email;
+    case "risky":
+      return s === "catch_all" || s === "unknown";
+    case "invalid":
+      return s === "invalid" || s === "disposable";
+    default:
+      return true;
+  }
+}
+
 type OwnerView = "leadstart" | "client";
 
 type FormState = {
@@ -229,6 +283,7 @@ export default function ContactsPage() {
     if (q !== null) setSearch(q);
   }, [searchParams]);
   const [statusFilter, setStatusFilter] = useState<ContactStatus | "all">("all");
+  const [emailStatusFilter, setEmailStatusFilter] = useState<EmailStatusFilter>("all");
   const [clientFilter, setClientFilter] = useState<string>("all");
 
   // Unified dialog state — null = closed, "add" = new, Contact = edit
@@ -267,11 +322,13 @@ export default function ContactsPage() {
       (c.first_name || "").toLowerCase().includes(search.toLowerCase()) ||
       (c.last_name || "").toLowerCase().includes(search.toLowerCase()) ||
       (c.email || "").toLowerCase().includes(search.toLowerCase()) ||
-      (c.company_name || "").toLowerCase().includes(search.toLowerCase());
+      (c.company_name || "").toLowerCase().includes(search.toLowerCase()) ||
+      (c.company_domain || "").toLowerCase().includes(search.toLowerCase());
     const matchesStatus = statusFilter === "all" || c.status === statusFilter;
+    const matchesEmailStatus = matchesEmailStatusFilter(c, emailStatusFilter);
     const matchesClient =
       ownerView === "leadstart" || clientFilter === "all" || c.client_id === clientFilter;
-    return matchesSearch && matchesStatus && matchesClient;
+    return matchesSearch && matchesStatus && matchesEmailStatus && matchesClient;
   });
 
   const rows = filtered.map((contact) => ({
@@ -284,7 +341,7 @@ export default function ContactsPage() {
   const [page, setPage] = useState(1);
   useEffect(() => {
     setPage(1);
-  }, [search, statusFilter, clientFilter, ownerView, sortConfig?.key, sortConfig?.direction]);
+  }, [search, statusFilter, emailStatusFilter, clientFilter, ownerView, sortConfig?.key, sortConfig?.direction]);
   const totalPages = Math.max(1, Math.ceil(sorted.length / CONTACTS_PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
   const pageStart = (safePage - 1) * CONTACTS_PAGE_SIZE;
@@ -295,10 +352,28 @@ export default function ContactsPage() {
   const [campaignDialogOpen, setCampaignDialogOpen] = useState(false);
   const [selectedCampaignId, setSelectedCampaignId] = useState("");
   const [assigning, setAssigning] = useState(false);
+  const [enrichDialogOpen, setEnrichDialogOpen] = useState(false);
+  const [enrichRunProfiles, setEnrichRunProfiles] = useState(true);
+  const [enrichRunDomains, setEnrichRunDomains] = useState(true);
+  const [enrichRunWaterfall, setEnrichRunWaterfall] = useState(true);
+  const [enrichRunActivity, setEnrichRunActivity] = useState(true);
+  const [enrichStarting, setEnrichStarting] = useState(false);
+  const [enrichError, setEnrichError] = useState<string | null>(null);
+  const [activeRunId, setActiveRunId] = useState<string | null>(null);
   useEffect(() => {
     setSelectedIds(new Set());
     setCampaignDialogOpen(false);
   }, [ownerView]);
+  // Resume the run banner after a refresh if a run is still active.
+  useEffect(() => {
+    let cancelled = false;
+    fetchActiveEnrichmentRunId().then((id) => {
+      if (!cancelled && id) setActiveRunId(id);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const pageRowIds = pageRows.map((r) => r.id);
   const filteredIds = sorted.map((r) => r.id);
@@ -380,6 +455,69 @@ export default function ContactsPage() {
   const eligibleCampaigns = campaigns.filter(
     (c) => c.client_id === commonClientId,
   );
+
+  // Enrich eligibility, computed from the current selection.
+  const enrichNeedsDomain = selectedContacts.filter(
+    (c) => c.company_linkedin_url && !c.company_domain,
+  ).length;
+  const enrichNeedsEmail = selectedContacts.filter(
+    (c) => !c.email && (c.linkedin_url || c.company_domain || c.company_linkedin_url),
+  ).length;
+  const enrichActivityCount = selectedContacts.filter((c) => c.linkedin_url).length;
+  const enrichEstimate =
+    (enrichRunProfiles ? enrichNeedsEmail * ENRICH_COST_PROFILE : 0) +
+    (enrichRunDomains ? enrichNeedsDomain * ENRICH_COST_DOMAIN : 0) +
+    (enrichRunWaterfall ? enrichNeedsEmail * ENRICH_COST_WATERFALL : 0) +
+    (enrichRunActivity ? enrichActivityCount * ENRICH_COST_ACTIVITY : 0);
+  const unverifiedSelected = selectedContacts.filter(
+    (c) =>
+      !c.email ||
+      c.email_verification_status === "invalid" ||
+      c.email_verification_status === "disposable",
+  ).length;
+
+  async function handleStartEnrichment() {
+    if (selectedIds.size === 0) return;
+    setEnrichStarting(true);
+    setEnrichError(null);
+    try {
+      const res = await fetch(appUrl("/api/admin/contacts/enrich/start"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contact_ids: Array.from(selectedIds),
+          run_profiles: enrichRunProfiles,
+          run_domains: enrichRunDomains,
+          run_waterfall: enrichRunWaterfall,
+          run_activity: enrichRunActivity,
+        }),
+      });
+      const data = (await res.json()) as {
+        run_id?: string;
+        total?: number;
+        error?: string;
+        skipped?: Record<string, number>;
+      };
+      if (!res.ok || !data.run_id) {
+        setEnrichError(data.error ?? `Failed to start enrichment (${res.status})`);
+        return;
+      }
+      setActiveRunId(data.run_id);
+      setEnrichDialogOpen(false);
+      setSelectedIds(new Set());
+      const skippedTotal = data.skipped
+        ? Object.values(data.skipped).reduce((a, b) => a + b, 0)
+        : 0;
+      toast.success(
+        `Enrichment started for ${data.total ?? 0} contact${data.total === 1 ? "" : "s"}` +
+          (skippedTotal ? ` — ${skippedTotal} skipped (already enriched or missing data)` : ""),
+      );
+    } catch (err) {
+      setEnrichError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setEnrichStarting(false);
+    }
+  }
 
   async function handleBulkAssignCampaign() {
     if (!selectedCampaignId || selectedIds.size === 0) return;
@@ -484,7 +622,7 @@ export default function ContactsPage() {
   const isDialogOpen = dialogMode !== null;
 
   async function handleSubmit() {
-    if (!form.email.trim()) return;
+    if (!form.email.trim() && !form.linkedin.trim()) return;
     if (form.owner === "client" && !form.clientId) {
       alert("Client contacts must be assigned to a client.");
       return;
@@ -532,7 +670,7 @@ export default function ContactsPage() {
       const basePayload = {
         first_name: form.firstName.trim() || null,
         last_name: form.lastName.trim() || null,
-        email: form.email.trim(),
+        email: form.email.trim() || null,
         company_name: form.company.trim() || null,
         title: form.title.trim() || null,
         phone: form.phone.trim() || null,
@@ -584,7 +722,8 @@ export default function ContactsPage() {
     if (!editing) return;
     const label =
       [editing.first_name, editing.last_name].filter(Boolean).join(" ") ||
-      editing.email;
+      editing.email ||
+      "this contact";
     if (
       !confirm(
         `Delete ${label}? This permanently removes the contact and cannot be undone.`,
@@ -703,6 +842,21 @@ export default function ContactsPage() {
             ))}
           </SelectContent>
         </Select>
+        <Select
+          value={emailStatusFilter}
+          onValueChange={(v) => setEmailStatusFilter((v ?? "all") as EmailStatusFilter)}
+        >
+          <SelectTrigger className="w-[180px]" style={{ height: "36px" }}>
+            <SelectValue placeholder="Email status" />
+          </SelectTrigger>
+          <SelectContent>
+            {EMAIL_STATUS_FILTER_OPTIONS.map((o) => (
+              <SelectItem key={o.value} value={o.value}>
+                {o.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         {ownerView === "client" ? (
           <Select
             value={clientFilter}
@@ -758,6 +912,18 @@ export default function ContactsPage() {
             )}
             <Button
               size="sm"
+              variant="outline"
+              onClick={() => {
+                setEnrichError(null);
+                setEnrichDialogOpen(true);
+              }}
+              className="gap-1.5"
+            >
+              <Sparkles size={14} />
+              Enrich
+            </Button>
+            <Button
+              size="sm"
               variant="destructive"
               onClick={handleBulkDelete}
               disabled={bulkDeleting}
@@ -771,6 +937,16 @@ export default function ContactsPage() {
           </div>
         </div>
       )}
+
+      {/* Enrichment run progress */}
+      <EnrichmentRunBanner
+        runId={activeRunId}
+        onDone={async () => {
+          await refetch();
+          await swrMutate("admin-contacts-with-pipeline");
+        }}
+        onDismiss={() => setActiveRunId(null)}
+      />
 
       {/* Contacts table — row click opens edit dialog */}
       <Card className="border-border/50 shadow-sm">
@@ -833,6 +1009,10 @@ export default function ContactsPage() {
                   <SortableHead sortKey="company_name" sortConfig={sortConfig} onSort={requestSort}>
                     Company
                   </SortableHead>
+                  <TableHead className="hidden lg:table-cell">Domain</TableHead>
+                  <SortableHead sortKey="last_posted_at" sortConfig={sortConfig} onSort={requestSort}>
+                    Last posted
+                  </SortableHead>
                   <TableHead>Tags</TableHead>
                   {ownerView === "client" && <TableHead>Campaign</TableHead>}
                   <SortableHead sortKey="created_at" sortConfig={sortConfig} onSort={requestSort}>
@@ -871,7 +1051,7 @@ export default function ContactsPage() {
                       <TableCell className="font-medium">{row.fullName}</TableCell>
                       <TableCell className="text-muted-foreground">
                         <span className="inline-flex items-center gap-1.5">
-                          {row.email}
+                          {row.email ?? <span className="text-xs">—</span>}
                           {(() => {
                             const b = verificationBadge(row.email_verification_status);
                             return b ? (
@@ -929,6 +1109,12 @@ export default function ContactsPage() {
                       </TableCell>
                       <TableCell className="text-muted-foreground">
                         {row.company_name || "—"}
+                      </TableCell>
+                      <TableCell className="hidden lg:table-cell text-muted-foreground">
+                        {row.company_domain ?? <span className="text-xs">—</span>}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-xs whitespace-nowrap">
+                        {timeAgo(row.last_posted_at)}
                       </TableCell>
                       <TableCell>
                         <TagsCell tags={row.tags ?? []} />
@@ -1008,7 +1194,7 @@ export default function ContactsPage() {
               </div>
             </div>
             <div className="space-y-1">
-              <Label className="text-sm font-medium">Email *</Label>
+              <Label className="text-sm font-medium">Email</Label>
               <Input
                 type="email"
                 value={form.email}
@@ -1016,6 +1202,7 @@ export default function ContactsPage() {
                 placeholder="email@company.com"
                 style={{ height: "36px" }}
               />
+              <p className="text-[11px] text-muted-foreground">Email or LinkedIn URL required.</p>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
@@ -1173,7 +1360,7 @@ export default function ContactsPage() {
                   className="flex-1"
                   style={{ background: "#2E37FE" }}
                   disabled={
-                    !form.email.trim() ||
+                    (!form.email.trim() && !form.linkedin.trim()) ||
                     saving ||
                     deleting ||
                     (form.owner === "client" && !form.clientId)
@@ -1202,6 +1389,10 @@ export default function ContactsPage() {
           // Bulk imports with pipeline_stage need to reach the Prospects
           // kanban too — invalidate its specific cache key.
           await swrMutate("admin-contacts-with-pipeline");
+        }}
+        onEnrichStarted={(runId) => {
+          setActiveRunId(runId);
+          setImportOpen(false);
         }}
       />
 
@@ -1264,6 +1455,12 @@ export default function ContactsPage() {
                 </span>
                 . Contacts will be assigned to the campaign and enrolled into its sending sequence.
               </p>
+              {unverifiedSelected > 0 && (
+                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2.5 py-1.5">
+                  {unverifiedSelected} selected contact{unverifiedSelected === 1 ? " has" : "s have"} no
+                  verified email — use a LinkedIn campaign for those.
+                </p>
+              )}
               <Select
                 value={selectedCampaignId}
                 onValueChange={(v) => setSelectedCampaignId(v ?? "")}
@@ -1307,6 +1504,117 @@ export default function ContactsPage() {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Enrich dialog */}
+      <Dialog
+        open={enrichDialogOpen}
+        onOpenChange={(v) => {
+          setEnrichDialogOpen(v);
+          if (!v) setEnrichError(null);
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Enrich contacts</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              {selectedIds.size} contact{selectedIds.size === 1 ? "" : "s"} selected ·{" "}
+              {enrichNeedsDomain} need a company domain · {enrichNeedsEmail} need an email.
+            </p>
+            <div className="space-y-2.5">
+              <label className="flex items-start gap-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={enrichRunProfiles}
+                  onChange={(e) => setEnrichRunProfiles(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-border accent-[#2E37FE] cursor-pointer"
+                />
+                <span>
+                  Find emails from LinkedIn profiles (HarvestAPI)
+                  <span className="block text-[11px] text-muted-foreground">
+                    $0.01 each · only charged when a profile is searchable
+                  </span>
+                </span>
+              </label>
+              <label className="flex items-start gap-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={enrichRunDomains}
+                  onChange={(e) => setEnrichRunDomains(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-border accent-[#2E37FE] cursor-pointer"
+                />
+                <span>
+                  Resolve company domains
+                  <span className="block text-[11px] text-muted-foreground">$0.004 each</span>
+                </span>
+              </label>
+              <label className="flex items-start gap-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={enrichRunWaterfall}
+                  onChange={(e) => setEnrichRunWaterfall(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-border accent-[#2E37FE] cursor-pointer"
+                />
+                <span>
+                  Second pass on misses
+                  <span className="block text-[11px] text-muted-foreground">
+                    ≈ $0.005 per miss re-tried
+                  </span>
+                </span>
+              </label>
+              <label className="flex items-start gap-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={enrichRunActivity}
+                  onChange={(e) => setEnrichRunActivity(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-border accent-[#2E37FE] cursor-pointer"
+                />
+                <span>
+                  Score LinkedIn activity (last posted)
+                  <span className="block text-[11px] text-muted-foreground">
+                    ≈ $0.005 per profile · stamps a recency rank to prioritize outreach
+                  </span>
+                </span>
+              </label>
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Found emails are verified automatically by Million Verifier just
+              before the first send — no separate step here.
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Estimated cost: up to ~${enrichEstimate.toFixed(3)}
+            </p>
+            {enrichError && (
+              <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-md px-2.5 py-1.5">
+                {enrichError}{" "}
+                <Link href="/admin/settings/api" className="underline">
+                  Open Integrations settings
+                </Link>
+              </p>
+            )}
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => setEnrichDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                style={{ background: "#2E37FE" }}
+                disabled={
+                  enrichStarting ||
+                  (!enrichRunProfiles &&
+                    !enrichRunDomains &&
+                    !enrichRunWaterfall &&
+                    !enrichRunActivity) ||
+                  (enrichNeedsDomain === 0 && enrichNeedsEmail === 0 && enrichActivityCount === 0)
+                }
+                onClick={handleStartEnrichment}
+              >
+                {enrichStarting ? "Starting…" : "Start enrichment"}
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

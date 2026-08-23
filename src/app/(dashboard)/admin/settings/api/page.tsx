@@ -37,6 +37,7 @@ import {
   AtSign,
   Activity,
   MailCheck,
+  Bot,
 } from "lucide-react";
 import type { Organization } from "@/types/app";
 import { appUrl } from "@/lib/api-url";
@@ -211,6 +212,15 @@ export default function IntegrationsPage() {
     { kind: "success"; credits: number } | { kind: "fail"; message: string } | null
   >(null);
 
+  // Apify (Contacts → Enrich: profile→email, company→domain, waterfall — migration 00070)
+  const [apifyKey, setApifyKey] = useState("");
+  const [savingApify, setSavingApify] = useState(false);
+  const [apifySaved, setApifySaved] = useState(false);
+  const [testingApify, setTestingApify] = useState(false);
+  const [apifyTestResult, setApifyTestResult] = useState<
+    { kind: "success"; username: string; plan: string | null } | { kind: "fail"; message: string } | null
+  >(null);
+
   useEffect(() => {
     if (!organizationId) return;
     const supabase = createClient();
@@ -235,6 +245,8 @@ export default function IntegrationsPage() {
           if (typedOrg.resend_api_key) setResendKey(typedOrg.resend_api_key);
           if (typedOrg.email_from) setEmailFrom(typedOrg.email_from);
           if (typedOrg.scrapio_api_key) setScrapioKey(typedOrg.scrapio_api_key);
+          const apifyOrg = data as { apify_api_key?: string | null };
+          if (apifyOrg.apify_api_key) setApifyKey(apifyOrg.apify_api_key);
           // Decision-maker enrichment keys (migration 00044). Cast through
           // unknown because typedOrg's compile-time shape (Organization) is
           // stale w.r.t. the new columns until we update the type.
@@ -378,6 +390,45 @@ export default function IntegrationsPage() {
       });
     } finally {
       setTestingScrapio(false);
+    }
+  }
+
+  async function handleSaveApifyKey() {
+    if (!organizationId) return;
+    setSavingApify(true);
+    setApifySaved(false);
+    const supabase = createClient();
+    await supabase
+      .from("organizations")
+      .update({ apify_api_key: apifyKey || null })
+      .eq("id", organizationId);
+    setApifySaved(true);
+    setSavingApify(false);
+    setTimeout(() => setApifySaved(false), 3000);
+  }
+
+  async function handleTestApify() {
+    setTestingApify(true);
+    setApifyTestResult(null);
+    try {
+      const res = await fetch(appUrl("/api/admin/apify/validate-key"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ api_key: apifyKey }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setApifyTestResult({ kind: "success", username: data.username ?? "", plan: data.plan ?? null });
+      } else {
+        setApifyTestResult({ kind: "fail", message: data.error ?? "Connection failed" });
+      }
+    } catch (err) {
+      setApifyTestResult({
+        kind: "fail",
+        message: err instanceof Error ? err.message : "Connection failed",
+      });
+    } finally {
+      setTestingApify(false);
     }
   }
 
@@ -1155,6 +1206,70 @@ export default function IntegrationsPage() {
               )}
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Apify — Contacts enrichment (migration 00070) */}
+      <Card className="border-border/50 shadow-sm">
+        <CardHeader className="flex flex-row items-center gap-2 pb-3">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-600">
+            <Bot size={16} className="text-white" />
+          </div>
+          <div>
+            <CardTitle className="text-base">Apify</CardTitle>
+            <p className="text-xs text-muted-foreground">
+              Powers Contacts &rarr; Enrich (LinkedIn profile &rarr; email, company &rarr; domain, second-pass waterfall)
+            </p>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-1">
+            <Label htmlFor="apifyKey" className="text-sm font-medium">API Token</Label>
+            <Input
+              id="apifyKey"
+              type="password"
+              value={apifyKey}
+              onChange={(e) => setApifyKey(e.target.value)}
+              placeholder="apify_api_..."
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Find your token at <span className="font-mono">console.apify.com</span> &rarr; Settings &rarr;
+              Integrations. One token powers every Contacts &rarr; Enrich step; you&apos;re billed per Apify actor run.
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Button onClick={handleSaveApifyKey} disabled={savingApify} style={{ background: "#2E37FE" }}>
+              {savingApify ? "Saving..." : "Save Token"}
+            </Button>
+            <Button variant="outline" onClick={handleTestApify} disabled={testingApify || !apifyKey}>
+              {testingApify ? "Testing..." : "Test Connection"}
+            </Button>
+            {apifySaved && (
+              <span className="text-sm text-emerald-600 flex items-center gap-1">
+                <CheckCircle size={14} /> Saved
+              </span>
+            )}
+          </div>
+          {apifyTestResult?.kind === "success" && (
+            <div className="flex items-center gap-2 rounded-lg bg-emerald-50 border border-emerald-200 p-3">
+              <CheckCircle size={16} className="text-emerald-500" />
+              <span className="text-sm font-medium text-emerald-700">
+                Connection successful
+                {apifyTestResult.username && (
+                  <span className="text-emerald-700/70 font-normal"> — {apifyTestResult.username}</span>
+                )}
+                {apifyTestResult.plan && (
+                  <span className="text-emerald-700/70 font-normal"> · {apifyTestResult.plan}</span>
+                )}
+              </span>
+            </div>
+          )}
+          {apifyTestResult?.kind === "fail" && (
+            <div className="flex items-center gap-2 rounded-lg bg-red-50 border border-red-200 p-3">
+              <XCircle size={16} className="text-red-500" />
+              <span className="text-sm font-medium text-red-700">{apifyTestResult.message}</span>
+            </div>
+          )}
         </CardContent>
       </Card>
 

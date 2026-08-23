@@ -40,8 +40,9 @@ const SNAPSHOT_COLUMNS =
 // website) so its fetcher keeps select("*").
 const CONTACT_LIST_COLUMNS =
   "id, organization_id, client_id, campaign_id, first_name, last_name, " +
-  "email, company_name, title, phone, linkedin_url, intro_line, tags, " +
-  "status, source, notes, pipeline_stage, pipeline_sort_order, " +
+  "email, company_name, title, phone, linkedin_url, company_linkedin_url, " +
+  "company_domain, last_posted_at, recent_post_count, activity_checked_at, " +
+  "intro_line, tags, status, source, notes, pipeline_stage, pipeline_sort_order, " +
   "pipeline_notes, pipeline_follow_up_date, pipeline_added_at, " +
   "email_verification_status, email_verification_subresult, " +
   "email_verified_at, email_did_you_mean, " +

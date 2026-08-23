@@ -38,6 +38,10 @@
       "schedule": "* * * * *"
     },
     {
+      "path": "/app/api/cron/run-apify-enrichment",
+      "schedule": "* * * * *"
+    },
+    {
       "path": "/app/api/cron/run-linkedin-sequences",
       "schedule": "*/15 * * * *"
     },
