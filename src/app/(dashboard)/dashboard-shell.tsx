@@ -42,7 +42,8 @@ export function DashboardShell({
     <div className="flex h-screen overflow-hidden bg-background">
       {isAdmin && <AdminPrefetcher />}
       <Sidebar role={role} open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-      <div className="flex flex-1 flex-col overflow-hidden min-w-0">
+      {/* Offset (desktop) clears the floating rail — see globals.css `.app-shell-content` */}
+      <div className="app-shell-content flex flex-1 flex-col overflow-hidden min-w-0">
         <Topbar
           userEmail={userEmail}
           role={role}

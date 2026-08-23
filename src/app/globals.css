@@ -151,6 +151,32 @@
   ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 }
 
+/* ============================================================
+   Floating navigation rail — desktop ≥1024px.
+   The rail detaches from the edges into an inset, rounded,
+   elevated card; content clears it on the left. The elevation
+   shadow + the logo bloom are DELIBERATE exceptions to the flat
+   contract (no cast-shadow / no glow), approved by Daniel
+   2026-08-23. See UI_RULES.md → Sidebar. Below 1024px the rail
+   stays a full-height slide-in drawer (Tailwind classes on the
+   <aside>), so these overrides are desktop-only.
+   ============================================================ */
+@media (min-width: 1024px) {
+  .app-rail {
+    position: fixed;
+    top: 24px;
+    left: 24px;
+    bottom: 24px;
+    width: 200px;
+    border: 0;
+    border-radius: 20px;
+    box-shadow: 0 22px 44px rgba(15, 23, 42, 0.32), 0 2px 8px rgba(15, 23, 42, 0.14);
+  }
+  .app-shell-content {
+    margin-left: 248px; /* gap 24 + rail 200 + gap 24 */
+  }
+}
+
 /* Triple-bounce envelope loader (Loader 07) — keyframes at top level so Tailwind v4 preserves them */
 @keyframes ls7-bounce {
   0%, 80%, 100% { transform: translateY(0) rotate(0deg); }

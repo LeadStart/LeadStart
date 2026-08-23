@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import leadstartLogo from "../../../public/leadstart-logo.png";
+import leadstartMark from "../../../public/leadstart-mark-transparent.png";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import type { AppRole } from "@/types/app";
@@ -110,36 +110,64 @@ export function Sidebar({ role, open = false, onClose }: { role: AppRole; open?:
       )}
       <aside
         style={{
-          // White at the top so the (dark-artwork) logo reads clearly, fading
-          // down through brand indigo into the deep-navy nav panel. Custom
-          // gradients go inline — Tailwind v4 @layer utilities don't reliably
-          // emit them (see CLAUDE.md).
+          // Solid brand-blue → navy. The floating rail carries a real
+          // elevation shadow (globals.css `.app-rail`) and the logo a soft
+          // bloom — deliberate exceptions to the flat contract, approved
+          // 2026-08-23 (see UI_RULES.md). Gradient stays inline (Tailwind v4
+          // @layer utilities don't reliably emit it).
           background:
-            "linear-gradient(180deg, #ffffff 0px, #ffffff 116px, #1e249e 205px, #131b63 52%, #0f172a 100%)",
+            "linear-gradient(180deg, #1b2273 0%, #151d67 34%, #0f172a 100%)",
           backgroundColor: "#0f172a",
         }}
         className={cn(
-          "fixed inset-y-0 left-0 z-50 flex h-full w-64 flex-col overflow-hidden border-r border-slate-200 transition-transform duration-300 lg:static lg:translate-x-0 lg:transition-none",
+          // Mobile: full-height slide-in drawer. Desktop (lg): `.app-rail`
+          // (globals.css) makes it a floating, inset, rounded, elevated card.
+          "app-rail fixed inset-y-0 left-0 z-50 flex w-64 flex-col overflow-hidden transition-transform duration-300 lg:translate-x-0 lg:transition-none",
           open ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         )}
       >
-        {/* Brand header — logo sits on the solid-white top of the gradient */}
-        <div className="relative flex h-[124px] items-center justify-center px-6">
-          <Link href={isAdmin ? "/admin" : "/client"} className="flex items-center">
-            <Image src={leadstartLogo} alt="LeadStart" priority className="h-[120px] w-auto" />
+        {/* Brand header — transparent mark backlit by a soft bloom + live wordmark */}
+        <div className="relative flex flex-col items-center gap-2.5 px-4 pt-4 pb-3">
+          <Link href={isAdmin ? "/admin" : "/client"} className="flex flex-col items-center gap-2.5">
+            <span className="relative flex items-center justify-center">
+              {/* Soft bloom (halo 0.83) — fades to 0, stays clear of the wordmark */}
+              <span
+                aria-hidden
+                className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
+                style={{
+                  width: 142,
+                  height: 72,
+                  background:
+                    "radial-gradient(ellipse at center, rgba(255,255,255,0.88) 0%, rgba(255,255,255,0.54) 24%, rgba(255,255,255,0.30) 42%, rgba(255,255,255,0.13) 60%, rgba(255,255,255,0.04) 78%, rgba(255,255,255,0) 100%)",
+                  filter: "blur(7px)",
+                }}
+              />
+              <Image src={leadstartMark} alt="LeadStart" priority className="relative h-[62px] w-auto" />
+            </span>
+            <span
+              className="relative text-[17px] font-extrabold uppercase tracking-[0.2em] leading-none"
+              style={{
+                backgroundImage: "linear-gradient(180deg, #ffffff 0%, #c3ccff 100%)",
+                WebkitBackgroundClip: "text",
+                backgroundClip: "text",
+                color: "transparent",
+              }}
+            >
+              LeadStart
+            </span>
           </Link>
           {/* Close button (mobile only) */}
           <button
             onClick={onClose}
-            className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-black/5 lg:hidden"
+            className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-lg text-white/70 hover:bg-white/10 lg:hidden"
             aria-label="Close menu"
           >
             <X size={18} />
           </button>
         </div>
 
-        {/* Navigation — pt clears the white→blue fade so items land on the settled panel */}
-        <nav className="flex-1 space-y-0.5 px-3 pt-5 pb-4 overflow-y-auto">
+        {/* Navigation */}
+        <nav className="flex-1 space-y-0.5 px-3 pt-3 pb-4 overflow-y-auto">
           {nav.map((item) => (
             <NavLink key={item.href} item={item} active={pathname === item.href} />
           ))}
