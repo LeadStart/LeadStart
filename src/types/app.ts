@@ -62,6 +62,11 @@ export interface Organization {
   millionverifier_last_error_kind: "auth" | "credits" | "blocked" | "transient" | null;
   millionverifier_last_error_at: string | null;
   millionverifier_error_streak: number;
+  // Apify token (migration 00070). One key powers the Contacts → Enrich
+  // phases: LinkedIn profile → email, company → domain, and the second-pass
+  // email waterfall. Falls back to process.env.APIFY_API_TOKEN at runtime.
+  // (Email verification is Million Verifier's, above — not Apify's.)
+  apify_api_key: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -390,6 +395,10 @@ export type EmailVerificationStatus =
   | "error";
 export type EmailVerificationQuality = "good" | "bad" | "risky";
 
+// Which Apify actor supplied the email during enrichment (migration 00070).
+// Provenance only — verification itself is Million Verifier's, not Apify's.
+export type EmailProviderId = "harvestapi" | "vdrmota" | "bovi";
+
 export interface Contact {
   id: string;
   organization_id: string;
@@ -402,6 +411,15 @@ export interface Contact {
   title: string | null;
   phone: string | null;
   linkedin_url: string | null;
+  // LinkedIn import + Apify enrichment (migration 00070). Email verification
+  // itself lives in the Million Verifier fields below (single source of truth);
+  // enrichment only fills `email` + provenance in enrichment_data/tags.
+  company_linkedin_url: string | null;
+  company_domain: string | null;
+  // LinkedIn activity recency (Apify enrichment activity phase).
+  last_posted_at: string | null;
+  recent_post_count: number | null;
+  activity_checked_at: string | null;
   intro_line: string | null;
   enrichment_data: Record<string, unknown>;
   // Arbitrary per-contact merge variables for sequence copy (e.g.
@@ -1053,6 +1071,93 @@ export interface DecisionMakerResult {
   enrichment_source: "website" | "web_search" | null;
   enrichment_notes: string | null;
   status: DmResultStatus;
+  cost_usd: number | string;
+  created_at: string;
+  updated_at: string;
+}
+
+// ---------- Contact enrichment runs (Apify: profiles → domains → waterfall → activity) ----------
+// Contact-keyed cousin of DecisionMakerRun/Result. Processed by
+// /api/cron/run-apify-enrichment. See migration 00070. Email verification is
+// NOT a phase here — Million Verifier owns verification (its own send-gate).
+// The pipeline only fills contacts.email (fill-only) + provenance.
+
+export type EnrichmentRunStatus = "pending" | "running" | "complete" | "failed";
+export type EnrichmentPhase = "profiles" | "domains" | "waterfall" | "activity" | "complete";
+export type EnrichmentStepStatus =
+  | "pending" | "in_flight" | "found" | "not_found" | "skipped" | "error";
+
+export interface EnrichmentRun {
+  id: string;
+  organization_id: string;
+  created_by: string;
+  // provider snapshots
+  profile_actor: string;
+  domain_actor: string;
+  waterfall_actor: string | null;
+  activity_actor: string | null;
+  run_profiles: boolean;
+  run_domains: boolean;
+  run_waterfall: boolean;
+  run_activity: boolean;
+  phase: EnrichmentPhase;
+  status: EnrichmentRunStatus;
+  total_count: number;
+  phase_total_count: number;
+  processed_count: number;
+  found_emails_profiles_count: number;
+  found_domains_count: number;
+  found_emails_waterfall_count: number;
+  found_emails_count: number;
+  found_activity_count: number;
+  cost_usd: number | string;
+  active_apify_run_id: string | null;
+  active_apify_dataset_id: string | null;
+  active_batch_started_at: string | null;
+  active_batch_attempt: number;
+  consecutive_failures: number;
+  locked_at: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  progress_message: string | null;
+  error_message: string | null;
+  created_at: string;
+}
+
+export interface EnrichmentRunItem {
+  id: string;
+  run_id: string;
+  organization_id: string;
+  contact_id: string;
+  linkedin_url: string | null;
+  profile_id: string | null;
+  company_linkedin_url: string | null;
+  company_id: string | null;
+  company_slug: string | null;
+  company_name: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  company_domain: string | null;
+  profile_status: EnrichmentStepStatus;
+  profile_apify_run_id: string | null;
+  profile_notes: string | null;
+  domain_status: EnrichmentStepStatus;
+  domain_apify_run_id: string | null;
+  domain_notes: string | null;
+  waterfall_status: EnrichmentStepStatus | null;
+  waterfall_apify_run_id: string | null;
+  waterfall_notes: string | null;
+  activity_status: EnrichmentStepStatus | null;
+  activity_apify_run_id: string | null;
+  activity_notes: string | null;
+  last_posted_at: string | null;
+  recent_post_count: number | null;
+  email: string | null;
+  // Which Apify actor supplied `email` (provenance). Verification is Million
+  // Verifier's job on the contact, not tracked per enrichment item.
+  email_provider: EmailProviderId | null;
+  confidence: number | null;
+  attempts: number;
   cost_usd: number | string;
   created_at: string;
   updated_at: string;

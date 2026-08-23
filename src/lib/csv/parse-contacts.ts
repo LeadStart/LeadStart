@@ -82,6 +82,17 @@ export const HEADER_ALIASES: Record<string, string> = {
   linkedin: "linkedin_url",
   "linkedin url": "linkedin_url",
   "linkedin profile": "linkedin_url",
+  // LinkedIn / Apify export aliases (unambiguous only — see import-dialog.tsx
+  // for the LinkedIn-mode overlay that adds the riskier ones like "website").
+  "profile url": "linkedin_url",
+  "linkedin profile url": "linkedin_url",
+  linkedinurl: "linkedin_url",
+  "company linkedin url": "company_linkedin_url",
+  companylinkedinurl: "company_linkedin_url",
+  "currentpositions/0/companylinkedinurl": "company_linkedin_url",
+  "company domain": "company_domain",
+  "currentpositions/0/companyname": "company_name",
+  "currentpositions/0/title": "title",
   tags: "tags",
   notes: "notes",
   "intro line": "intro_line",
