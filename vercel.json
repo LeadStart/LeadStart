@@ -34,6 +34,14 @@
       "schedule": "* * * * *"
     },
     {
+      "path": "/app/api/cron/run-linkedin-searches",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/app/api/cron/drain-enrichment-queue",
+      "schedule": "* * * * *"
+    },
+    {
       "path": "/app/api/cron/run-decision-maker-enrichment",
       "schedule": "* * * * *"
     },

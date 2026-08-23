@@ -35,6 +35,7 @@ import {
 import { appUrl } from "@/lib/api-url";
 import type { ScrapioBusiness, ProspectSearchStatus } from "@/types/app";
 import { Typeahead, type TypeaheadResult } from "./typeahead";
+import { LinkedInSearchPanel } from "./linkedin-search-panel";
 
 type Filters = {
   has_website: boolean;
@@ -183,6 +184,7 @@ export default function ProspectingPage() {
   const [selectedLocation, setSelectedLocation] =
     useState<TypeaheadResult | null>(null);
 
+  const [sourceMode, setSourceMode] = useState<"linkedin" | "business">("linkedin");
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
   const [maxResults, setMaxResults] = useState<number>(500);
 
@@ -572,9 +574,34 @@ export default function ProspectingPage() {
             <Sparkles size={20} /> Prospecting
           </span>
         }
-        subtitle="Search Scrap.io by category and location, then save selected leads into your CRM pipeline. Searches run in the background — close the tab and come back any time."
+        subtitle="Source new people — search LinkedIn by ICP, or Scrap.io by category and location — then save selected leads into your CRM. Searches run in the background."
       />
 
+      <div className="inline-flex rounded-lg border border-border/60 bg-muted/30 p-0.5">
+        <button
+          type="button"
+          onClick={() => setSourceMode("linkedin")}
+          className={`cursor-pointer rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+            sourceMode === "linkedin" ? "bg-background shadow-sm" : "text-muted-foreground"
+          }`}
+        >
+          LinkedIn people
+        </button>
+        <button
+          type="button"
+          onClick={() => setSourceMode("business")}
+          className={`cursor-pointer rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+            sourceMode === "business" ? "bg-background shadow-sm" : "text-muted-foreground"
+          }`}
+        >
+          Business (Scrap.io)
+        </button>
+      </div>
+
+      {sourceMode === "linkedin" && <LinkedInSearchPanel />}
+
+      {sourceMode === "business" && (
+        <>
       {/* Recent searches */}
       {recentSearches.length > 0 && (
         <Card className="border-border/50 shadow-sm">
@@ -1270,6 +1297,8 @@ export default function ProspectingPage() {
             />
           </CardContent>
         </Card>
+      )}
+        </>
       )}
     </div>
   );

@@ -1026,6 +1026,54 @@ export interface ProspectSearch {
   created_at: string;
 }
 
+// ---------- LinkedIn people-search sourcing (migration 00072) ----------
+
+export type LinkedInSearchStatus = "pending" | "running" | "complete" | "failed";
+
+// One sourced person, flattened from the linkedin-profile-search actor.
+// linkedin_url is the identity/dedupe key (like ScrapioBusiness.google_id).
+export interface LinkedInProspect {
+  profile_id: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  full_name: string | null;
+  headline: string | null;
+  linkedin_url: string | null;
+  location: string | null;
+  company_name: string | null;
+  company_linkedin_url: string | null;
+  company_domain: string | null;
+  email: string | null;
+}
+
+// Cached people-search audit row + async Apify run tracking. The background
+// worker (/api/cron/run-linkedin-searches) starts the actor and polls it across
+// ticks; the page polls this row for progress. Mirrors ProspectSearch but the
+// engine is an async Apify actor rather than a synchronous cursor API.
+export interface LinkedInSearch {
+  id: string;
+  organization_id: string;
+  created_by: string;
+  query: Record<string, unknown>;
+  results: LinkedInProspect[];
+  result_count: number;
+  target_max_results: number;
+  truncated: boolean;
+  saved_count: number;
+  status: LinkedInSearchStatus;
+  progress_message: string | null;
+  error_message: string | null;
+  actor: string;
+  active_apify_run_id: string | null;
+  active_apify_dataset_id: string | null;
+  consecutive_failures: number;
+  cost_usd: number | string;
+  started_at: string | null;
+  completed_at: string | null;
+  expires_at: string;
+  created_at: string;
+}
+
 // ---------- Decision-maker enrichment (migration 00044) ----------
 
 export type DmRunStatus = "pending" | "running" | "complete" | "failed";

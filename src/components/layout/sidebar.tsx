@@ -21,6 +21,7 @@ import {
   Inbox,
   Settings,
   Sparkles,
+  Workflow,
   X,
 } from "lucide-react";
 
@@ -50,6 +51,10 @@ const adminSettingsNav: NavItem[] = [
   { href: "/admin/billing", label: "Billing", icon: <CreditCard size={18} /> },
   { href: "/admin/settings/team", label: "Team", icon: <Building2 size={18} /> },
   { href: "/admin/settings/api", label: "Integrations", icon: <Key size={18} /> },
+];
+
+const adminWorkflowsNav: NavItem[] = [
+  { href: "/admin/workflows", label: "Outbound pipeline", icon: <Workflow size={18} /> },
 ];
 
 const clientNav: NavItem[] = [
@@ -97,6 +102,7 @@ export function Sidebar({ role, open = false, onClose }: { role: AppRole; open?:
   const nav = isAdmin ? adminNav : clientNav;
   const sendingNav = isAdmin ? adminSendingNav : [];
   const settingsNav = isAdmin ? adminSettingsNav : [];
+  const workflowsNav = isAdmin ? adminWorkflowsNav : [];
 
   return (
     <>
@@ -173,6 +179,7 @@ export function Sidebar({ role, open = false, onClose }: { role: AppRole; open?:
           ))}
           <NavSection label="Sending" items={sendingNav} pathname={pathname} />
           <NavSection label="Settings" items={settingsNav} pathname={pathname} />
+          <NavSection label="Workflows" items={workflowsNav} pathname={pathname} />
         </nav>
 
         {/* Footer */}

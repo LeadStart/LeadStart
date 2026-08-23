@@ -108,6 +108,8 @@ export function EnrichmentRunBanner({
         : "border-blue-200 bg-blue-50 text-blue-800";
 
   const cost = Number(run.cost_usd || 0);
+  const foundEmails = run.found_emails_profiles_count + run.found_emails_waterfall_count;
+  const noEmail = Math.max(0, run.total_count - foundEmails);
 
   return (
     <div className={`flex items-start justify-between gap-3 rounded-lg border px-3 py-2.5 ${tone}`}>
@@ -129,6 +131,11 @@ export function EnrichmentRunBanner({
             {cost.toFixed(3)}
             {run.progress_message ? ` · ${run.progress_message}` : ""}
           </p>
+          {run.status === "complete" && noEmail > 0 && (
+            <p className="text-[11px] font-medium">
+              {foundEmails} got an email · {noEmail} have none — filter &ldquo;Needs enrichment&rdquo; below to route them to a LinkedIn campaign or park them.
+            </p>
+          )}
         </div>
       </div>
       {terminal && onDismiss && (
