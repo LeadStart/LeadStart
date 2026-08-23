@@ -506,9 +506,13 @@ async function nativeStatsFor(
   admin: ReturnType<typeof createAdminClient>,
   campaignId: string,
 ): Promise<NativeStats> {
-  const [sentRes, bouncedRes, repliedRes, stepsRes, poolRes, enrRes] = await Promise.all([
-    admin.from("native_sends").select("id", { count: "exact", head: true }).eq("campaign_id", campaignId),
-    admin.from("native_sends").select("id", { count: "exact", head: true }).eq("campaign_id", campaignId).eq("status", "bounced"),
+  // One row-fetch of this campaign's sends (step_index + status) replaces the
+  // separate sent/bounced count queries AND the per-step count N+1 further
+  // down — sent, bounced, and sent-per-step are all tallied from these rows.
+  // native_sends is a narrow log; pulling two columns for one campaign is far
+  // cheaper on this instance than a fan-out of count-only queries.
+  const [campaignSendsRes, repliedRes, stepsRes, poolRes, enrRes] = await Promise.all([
+    admin.from("native_sends").select("step_index, status").eq("campaign_id", campaignId),
     admin.from("lead_replies").select("id", { count: "exact", head: true }).eq("campaign_id", campaignId).eq("source_channel", "native_email"),
     admin.from("campaign_steps").select("step_index, subject_template, body_template, wait_days").eq("campaign_id", campaignId).order("step_index", { ascending: true }),
     admin.from("campaign_mailboxes").select("mailbox_id").eq("campaign_id", campaignId),
@@ -517,6 +521,13 @@ async function nativeStatsFor(
       .select("status, current_step_index, contacts(email_verification_status)")
       .eq("campaign_id", campaignId),
   ]);
+
+  const campaignSends = (campaignSendsRes.data ?? []) as {
+    step_index: number | null;
+    status: string | null;
+  }[];
+  const sentCount = campaignSends.length;
+  const bouncedCount = campaignSends.filter((s) => s.status === "bounced").length;
 
   const stepRows = (stepsRes.data ?? []) as {
     step_index: number;
@@ -556,21 +567,13 @@ async function nativeStatsFor(
     else verification.unverified++;
   }
 
-  // Sends logged per step so far — one bounded head-count per step (steps are
-  // few, so this is a handful of count-only queries, no rows transferred).
-  const sentByStep =
-    nSteps > 0
-      ? await Promise.all(
-          stepRows.map((_, i) =>
-            admin
-              .from("native_sends")
-              .select("id", { count: "exact", head: true })
-              .eq("campaign_id", campaignId)
-              .eq("step_index", i)
-              .then((r) => r.count ?? 0),
-          ),
-        )
-      : [];
+  // Sends logged per step so far — tallied from the campaign sends already
+  // fetched above (was one count query per step).
+  const sentByStep = new Array(nSteps).fill(0) as number[];
+  for (const s of campaignSends) {
+    const i = s.step_index ?? -1;
+    if (i >= 0 && i < nSteps) sentByStep[i]++;
+  }
 
   // Resolve the mailbox pool with a second query rather than a PostgREST
   // embed (embed typing is array-vs-object ambiguous for a to-one FK). Also
@@ -596,19 +599,36 @@ async function nativeStatsFor(
     mailboxes = mbs.map((m) => ({ email: m.email_address, status: m.status }));
     const activeMbs = mbs.filter((m) => m.status === "active");
     activeMailboxCount = activeMbs.length;
-    const caps = await Promise.all(
-      activeMbs.map(async (m) => {
-        const { count } = await admin
-          .from("native_sends")
-          .select("id", { count: "exact", head: true })
-          .eq("mailbox_id", m.id);
-        return effectiveDailyCap(
-          { max_daily_cap: m.max_daily_cap, daily_cap_override: m.daily_cap_override },
-          count ?? 0,
+    // Each active inbox's warmup cap keys off its all-time send count. One fetch
+    // of mailbox_id for the active pool, tallied in JS, replaces the per-mailbox
+    // count query (was one round-trip per active inbox).
+    const sendCountByMailbox = new Map<string, number>();
+    if (activeMbs.length > 0) {
+      const { data: mbSendRows } = await admin
+        .from("native_sends")
+        .select("mailbox_id")
+        .in(
+          "mailbox_id",
+          activeMbs.map((m) => m.id),
         );
-      }),
+      for (const row of (mbSendRows ?? []) as { mailbox_id: string | null }[]) {
+        if (row.mailbox_id) {
+          sendCountByMailbox.set(
+            row.mailbox_id,
+            (sendCountByMailbox.get(row.mailbox_id) ?? 0) + 1,
+          );
+        }
+      }
+    }
+    dailyInboxCapacity = activeMbs.reduce(
+      (sum, m) =>
+        sum +
+        effectiveDailyCap(
+          { max_daily_cap: m.max_daily_cap, daily_cap_override: m.daily_cap_override },
+          sendCountByMailbox.get(m.id) ?? 0,
+        ),
+      0,
     );
-    dailyInboxCapacity = caps.reduce((a, b) => a + b, 0);
   }
 
   const steps = stepRows.map((s) => ({
@@ -618,8 +638,8 @@ async function nativeStatsFor(
   }));
 
   return {
-    sent: sentRes.count ?? 0,
-    bounced: bouncedRes.count ?? 0,
+    sent: sentCount,
+    bounced: bouncedCount,
     replied: repliedRes.count ?? 0,
     enrollments,
     mailboxes,
