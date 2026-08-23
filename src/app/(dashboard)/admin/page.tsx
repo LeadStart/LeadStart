@@ -165,7 +165,7 @@ function SegmentChip({
 
 // ---------- Page ----------
 export default function AdminOverviewPage() {
-  const { data: overview, loading: ovLoading } = useSupabaseQuery(
+  const { data: overview, loading: ovLoading, refetch: refetchOverview } = useSupabaseQuery(
     ADMIN_OVERVIEW_KEY,
     fetchAdminOverview,
   );
@@ -306,7 +306,9 @@ export default function AdminOverviewPage() {
       alert(`Could not delete client: ${error.message}`);
       return;
     }
-    window.location.reload();
+    // Revalidate the overview cache so the deleted client drops out — a full
+    // page reload would re-run the entire dashboard query set unnecessarily.
+    await refetchOverview();
   }
 
   if (ovLoading || !overview) {

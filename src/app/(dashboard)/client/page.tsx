@@ -71,7 +71,11 @@ export default function ClientDashboardPage() {
       supabase
         .from("campaign_snapshots").select("*")
         .in("campaign_id", campaignIds)
-        .order("snapshot_date", { ascending: true }),
+        .order("snapshot_date", { ascending: true })
+        // Bound the all-time pull (powers the by-month chart). A client won't
+        // exceed this many daily snapshots across campaigns for years; caps the
+        // worst case without affecting normal accounts.
+        .limit(2000),
     ]);
     setSnapshots((filtered.data || []) as CampaignSnapshot[]);
     setAllTimeSnapshots((allTime.data || []) as CampaignSnapshot[]);

@@ -30,11 +30,14 @@ export function MonthlyPositiveChart({ snapshots, height = 220 }: MonthlyPositiv
   }
 
   const allMonths = Array.from(monthMap.keys()).sort();
-  if (allMonths.length === 0) return null;
 
   const WINDOW = 12;
   const maxOffset = Math.max(0, allMonths.length - WINDOW);
+  // Hook must run unconditionally (rules of React / React Compiler): compute
+  // maxOffset first, call useState, then bail out for the empty case.
   const [offset, setOffset] = useState(maxOffset); // start showing most recent
+
+  if (allMonths.length === 0) return null;
 
   const visibleMonths = allMonths.slice(offset, offset + WINDOW);
 

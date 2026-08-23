@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useSupabaseQuery } from "@/hooks/use-supabase-query";
-import { useApiQuery } from "@/hooks/use-api-query";
+import { useSWRConfig } from "swr";
+import { createClient } from "@/lib/supabase/client";
 import {
   ADMIN_OVERVIEW_KEY,
   ADMIN_CLIENTS_KEY,
@@ -10,35 +10,51 @@ import {
   ADMIN_CONTACTS_KEY,
   ADMIN_FEEDBACK_KEY,
   ADMIN_TASKS_KEY,
-  ADMIN_CONTACTS_PIPELINE_KEY,
-  API_BILLING_DATA_PATH,
   fetchAdminOverview,
   fetchAdminClients,
   fetchAdminCampaigns,
   fetchAdminContacts,
   fetchAdminFeedback,
   fetchAdminTasks,
-  fetchAdminContactsPipeline,
 } from "@/lib/admin-queries";
 
 /**
- * Warms the SWR cache for every admin tab so later sidebar clicks render
+ * Warms the SWR cache for the common admin tabs so later sidebar clicks render
  * from cache instead of paying a fresh round-trip. Renders nothing.
  *
- * Deferred until the browser is idle: firing 8 background queries on
- * mount competes with the current page's own queries for the browser's
- * ~6-connection-per-origin limit, which made first paint feel slow. We
- * wait for `requestIdleCallback` (or a 1500ms fallback) so the page
- * being viewed gets the connection pool to itself, then warm the cache
- * once it's settled.
+ * Two deliberate constraints, both learned from this being a first-paint drag:
  *
- * Only mount this for admin users — client users never navigate to these
- * keys so warming them would waste bandwidth.
+ * 1. Deferred until the browser is idle (requestIdleCallback, 1.5s fallback) so
+ *    the page you're actually looking at gets the connection pool to itself
+ *    first.
+ * 2. Warmed SEQUENTIALLY, one key at a time. Firing all fetchers at once put a
+ *    burst of heavy queries on a small Supabase instance in parallel with the
+ *    current page's own queries — they queued behind each other and made the
+ *    click you just made feel slow. One-at-a-time keeps the DB unsaturated.
+ *
+ * Only the light-to-medium list keys are warmed. The prospects pipeline
+ * (select * incl. the enrichment_data JSONB) and billing (5-table join) are
+ * heavy and rarely the next click, so they fetch on demand instead.
+ *
+ * Keys already in the SWR cache (e.g. the current page already fetched one) are
+ * skipped, so warming never re-fetches data the app already has.
  */
 const PREFETCH_FALLBACK_DELAY_MS = 1500;
 
+const WARM_TASKS: ReadonlyArray<
+  readonly [string, (supabase: ReturnType<typeof createClient>) => Promise<unknown>]
+> = [
+  [ADMIN_OVERVIEW_KEY, fetchAdminOverview],
+  [ADMIN_CLIENTS_KEY, fetchAdminClients],
+  [ADMIN_CAMPAIGNS_KEY, fetchAdminCampaigns],
+  [ADMIN_CONTACTS_KEY, fetchAdminContacts],
+  [ADMIN_FEEDBACK_KEY, fetchAdminFeedback],
+  [ADMIN_TASKS_KEY, fetchAdminTasks],
+];
+
 export function AdminPrefetcher() {
   const [ready, setReady] = useState(false);
+  const { cache, mutate } = useSWRConfig();
 
   useEffect(() => {
     const win = window as Window & {
@@ -73,21 +89,30 @@ export function AdminPrefetcher() {
     };
   }, []);
 
-  if (!ready) return null;
-  return <DeferredPrefetchQueries />;
-}
+  useEffect(() => {
+    if (!ready) return;
+    let cancelled = false;
 
-function DeferredPrefetchQueries() {
-  useSupabaseQuery(ADMIN_OVERVIEW_KEY, fetchAdminOverview);
-  useSupabaseQuery(ADMIN_CLIENTS_KEY, fetchAdminClients);
-  useSupabaseQuery(ADMIN_CAMPAIGNS_KEY, fetchAdminCampaigns);
-  useSupabaseQuery(ADMIN_CONTACTS_KEY, fetchAdminContacts);
-  useSupabaseQuery(ADMIN_FEEDBACK_KEY, fetchAdminFeedback);
-  useSupabaseQuery(ADMIN_TASKS_KEY, fetchAdminTasks);
-  useSupabaseQuery(ADMIN_CONTACTS_PIPELINE_KEY, fetchAdminContactsPipeline);
+    (async () => {
+      const supabase = createClient();
+      for (const [key, fetcher] of WARM_TASKS) {
+        if (cancelled) return;
+        // Skip anything already cached (the current page may own this key).
+        if (cache.get(key)?.data !== undefined) continue;
+        try {
+          // Populate the cache slot without triggering a follow-up revalidation.
+          await mutate(key, () => fetcher(supabase), { revalidate: false });
+        } catch {
+          // Best-effort cache warming — a failure just means this tab fetches
+          // on click, same as if the prefetcher weren't mounted.
+        }
+      }
+    })();
 
-  // Billing pulls plans+quotes+subs+invoices+clients in one round-trip.
-  useApiQuery(API_BILLING_DATA_PATH);
+    return () => {
+      cancelled = true;
+    };
+  }, [ready, cache, mutate]);
 
   return null;
 }

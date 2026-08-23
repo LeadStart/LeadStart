@@ -1,0 +1,30 @@
+-- =============================================
+-- Migration 00070: statement_timeout for the service_role
+--
+-- Context (2026-08-23): investigating the app's sluggishness + a multi-hour
+-- outage, a read-only inspection of the live instance showed:
+--   - authenticated already has statement_timeout = 8s  (Supabase default)
+--   - anon          already has statement_timeout = 3s  (Supabase default)
+--   - authenticator already has statement_timeout = 8s, lock_timeout = 8s
+--   - service_role  has NO statement_timeout            (<-- the gap)
+--
+-- So user-facing (browser) queries already fail fast. The only role that can run
+-- unbounded is service_role — the crons + admin routes (createAdminClient). In
+-- the outage, every 90-340s hung request in the gateway logs was ua=node
+-- (service_role). This adds a ceiling so a stuck/slow service_role statement
+-- releases its backend instead of holding it until the 90s gateway kill and
+-- letting the next cron minute pile on.
+--
+-- This is defensive hygiene, not a proven cure for that specific outage (the DB
+-- was unreachable at the connection level, which a statement_timeout can't help
+-- with). The durable reliability fix is dedicated compute (see PROJECT_STATUS).
+--
+-- NOTE: an earlier draft of this migration also set authenticated=20s / anon=15s.
+-- That was removed — it would have LOOSENED Supabase's existing 8s/3s limits.
+--
+-- Apply by hand in the Supabase SQL editor (project exedxjrifprqgftyuroc).
+-- Takes effect for new connections; pooled connections pick it up as they cycle.
+-- Verify: SELECT rolname, rolconfig FROM pg_roles WHERE rolname = 'service_role';
+-- =============================================
+
+ALTER ROLE service_role SET statement_timeout = '30s';

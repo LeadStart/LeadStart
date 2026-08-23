@@ -35,6 +35,9 @@ export default function ClientInboxPage() {
       .select("*")
       .eq("client_id", client.id)
       .order("received_at", { ascending: false })
+      // Bound the fetch — the list paginates at 25/page and only ever shows the
+      // most recent replies. Mirrors the admin inbox's .limit(200).
+      .limit(200)
       .then(({ data }) => {
         setReplies((data || []) as LeadReply[]);
         setLoading(false);

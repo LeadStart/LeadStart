@@ -56,22 +56,24 @@ export function ClientDataProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      const { data: clientData } = await supabase
-        .from("clients")
-        .select("*")
-        .eq("id", (clientUserData[0] as { client_id: string }).client_id)
-        .single();
+      // clients (by id) and campaigns (by client_id) both key off the same
+      // client_id we just resolved, so fetch them in parallel instead of
+      // waiting for the client row before starting campaigns. Cuts the portal
+      // boot from 3 sequential round-trips to 2.
+      const clientId = (clientUserData[0] as { client_id: string }).client_id;
+      const [clientRes, campaignsRes] = await Promise.all([
+        supabase.from("clients").select("*").eq("id", clientId).single(),
+        supabase.from("campaigns").select("*").eq("client_id", clientId),
+      ]);
 
+      const clientData = clientRes.data;
       if (!clientData) {
         setData({ userId: user.id, client: null, campaigns: [], loading: false, noClient: true });
         return;
       }
 
       const client = clientData as Client;
-      const { data: campaignsData } = await supabase
-        .from("campaigns")
-        .select("*")
-        .eq("client_id", client.id);
+      const campaignsData = campaignsRes.data;
 
       setData({
         userId: user.id,

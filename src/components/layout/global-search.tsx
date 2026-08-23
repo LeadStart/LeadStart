@@ -23,10 +23,15 @@ export function GlobalSearch() {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(0);
+  // Don't load the search index (all clients + campaigns + contacts) until the
+  // user actually interacts with the search box. This ran on mount of every
+  // admin page, three unbounded queries per navigation, for a typeahead most
+  // page views never touch. Null key = SWR paused; flips on first focus.
+  const [activated, setActivated] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const { data } = useSupabaseQuery("topbar-global-search", async (supabase) => {
+  const { data } = useSupabaseQuery(activated ? "topbar-global-search" : null, async (supabase) => {
     const [clientsRes, campaignsRes, contactsRes] = await Promise.all([
       supabase.from("clients").select("id, name, contact_email"),
       supabase.from("campaigns").select("id, name, client_id, status"),
@@ -173,6 +178,7 @@ export function GlobalSearch() {
             setOpen(true);
           }}
           onFocus={() => {
+            setActivated(true);
             if (query.trim().length > 0) setOpen(true);
           }}
           onKeyDown={handleKeyDown}

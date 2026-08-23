@@ -21,10 +21,17 @@ export function useUser() {
   useEffect(() => {
     const supabase = createClient();
 
-    supabase.auth.getUser().then(({ data }: { data: { user: AppUser | null } }) => {
-      setUser(data.user);
-      setLoading(false);
-    });
+    // getSession() reads the user from the locally-stored JWT (no network hop);
+    // the middleware already validated the token on the way in. getUser() would
+    // add a round-trip to Supabase Auth on every mount of every page that uses
+    // this hook (contacts, prospects, tasks, mailboxes, settings). Same user
+    // shape either way. onAuthStateChange below keeps it fresh.
+    supabase.auth
+      .getSession()
+      .then(({ data }: { data: { session: { user?: AppUser } | null } }) => {
+        setUser(data.session?.user ?? null);
+        setLoading(false);
+      });
 
     const {
       data: { subscription },

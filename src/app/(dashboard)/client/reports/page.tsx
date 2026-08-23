@@ -35,7 +35,7 @@ export default function ClientReportsPage() {
   useEffect(() => {
     if (contextLoading || !client) return;
     const supabase = createClient();
-    supabase.from("kpi_reports").select("*").eq("client_id", client.id).order("created_at", { ascending: false })
+    supabase.from("kpi_reports").select("*").eq("client_id", client.id).order("created_at", { ascending: false }).limit(100)
       .then(({ data: reportsData }) => {
         setReports((reportsData || []) as KPIReport[]);
         setLoading(false);

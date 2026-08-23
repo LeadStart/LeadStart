@@ -21,7 +21,7 @@ export default function ClientFeedbackPage() {
 
   useEffect(() => {
     const supabase = createClient();
-    supabase.from("lead_feedback").select("*").order("created_at", { ascending: false })
+    supabase.from("lead_feedback").select("*").order("created_at", { ascending: false }).limit(100)
       .then(({ data }) => {
         setFeedback((data || []) as LeadFeedback[]);
         setLoading(false);

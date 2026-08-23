@@ -367,16 +367,22 @@ export default function ProspectsPage() {
 
     for (const stage of stagesToUpdate) {
       const items = list.filter((c) => c.pipeline_stage === stage);
-      for (let i = 0; i < items.length; i++) {
-        const { error } = await supabase
-          .from("contacts")
-          .update({ pipeline_stage: stage, pipeline_sort_order: i })
-          .eq("id", items[i].id);
-        if (error) {
-          alert(`Failed to save pipeline change: ${error.message}`);
-          void refetch();
-          return;
-        }
+      // Fire the per-card position updates in parallel — they're independent
+      // rows, each setting an absolute sort_order by index. Reordering a large
+      // column was previously N serial round-trips before the board settled.
+      const results = await Promise.all(
+        items.map((item, i) =>
+          supabase
+            .from("contacts")
+            .update({ pipeline_stage: stage, pipeline_sort_order: i })
+            .eq("id", item.id),
+        ),
+      );
+      const failed = results.find((r) => r.error);
+      if (failed?.error) {
+        alert(`Failed to save pipeline change: ${failed.error.message}`);
+        void refetch();
+        return;
       }
     }
   }

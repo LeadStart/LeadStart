@@ -34,7 +34,7 @@ export function DailyChart({
   series = ["Sent", "Replies", "Bounces", "Positive"],
   height = 300,
 }: DailyChartProps) {
-  const data = snapshots
+  const data = [...snapshots]
     .sort((a, b) => a.snapshot_date.localeCompare(b.snapshot_date))
     .map((s) => ({
       date: new Date(s.snapshot_date).toLocaleDateString("en-US", {
