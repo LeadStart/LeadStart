@@ -67,13 +67,18 @@ export const FUNCTIONS: Facet[] = [
   { value: "26", label: "Customer Success and Support" },
 ];
 
-// Industries (industryIds) — a verified common-B2B subset of LinkedIn's Industry
-// Codes V2 (434 total). Every id below is confirmed from LinkedIn's V2 table or
-// the actor docs; more verticals can be appended as their ids are confirmed.
+// Industries (industryIds) — a broad B2B set drawn from LinkedIn's Industry
+// Codes V2 (434 total). Every id below is validated against the actor's own
+// industry CSV (HarvestAPI/linkedin-industry-codes-v2) — none guessed. The UI
+// renders these as a searchable multi-select.
 export const INDUSTRIES: Facet[] = [
   { value: "4", label: "Software Development" },
+  { value: "96", label: "IT Services & IT Consulting" },
+  { value: "118", label: "Computer & Network Security" },
   { value: "24", label: "Computers & Electronics Manufacturing" },
   { value: "7", label: "Semiconductor Manufacturing" },
+  { value: "3132", label: "Internet Publishing" },
+  { value: "8", label: "Telecommunications" },
   { value: "43", label: "Financial Services" },
   { value: "41", label: "Banking" },
   { value: "45", label: "Investment Banking" },
@@ -82,13 +87,19 @@ export const INDUSTRIES: Facet[] = [
   { value: "106", label: "Venture Capital & Private Equity" },
   { value: "42", label: "Insurance" },
   { value: "47", label: "Accounting" },
+  { value: "1862", label: "Marketing Services" },
   { value: "80", label: "Advertising Services" },
+  { value: "11", label: "Business Consulting & Services" },
   { value: "104", label: "Staffing & Recruiting" },
   { value: "1923", label: "Executive Search Services" },
   { value: "1925", label: "Temporary Help Services" },
+  { value: "137", label: "Human Resources Services" },
   { value: "14", label: "Hospitals & Health Care" },
   { value: "15", label: "Pharmaceutical Manufacturing" },
   { value: "17", label: "Medical Equipment Manufacturing" },
+  { value: "12", label: "Biotechnology Research" },
+  { value: "44", label: "Real Estate" },
+  { value: "1770", label: "Real Estate Agents & Brokers" },
   { value: "48", label: "Construction" },
   { value: "122", label: "Facilities Services" },
   { value: "25", label: "Manufacturing" },
@@ -97,9 +108,24 @@ export const INDUSTRIES: Facet[] = [
   { value: "54", label: "Chemical Manufacturing" },
   { value: "53", label: "Motor Vehicle Manufacturing" },
   { value: "57", label: "Oil & Gas" },
+  { value: "59", label: "Utilities" },
+  { value: "144", label: "Renewable Energy & Semiconductors" },
+  { value: "27", label: "Retail" },
+  { value: "1445", label: "Online & Mail Order Retail" },
+  { value: "133", label: "Wholesale" },
+  { value: "116", label: "Transportation" },
+  { value: "87", label: "Freight & Package Transportation" },
+  { value: "92", label: "Truck Transportation" },
+  { value: "93", label: "Warehousing & Storage" },
+  { value: "10", label: "Legal Services" },
+  { value: "9", label: "Law Practice" },
   { value: "31", label: "Hospitality" },
   { value: "34", label: "Food & Beverage Services" },
   { value: "32", label: "Restaurants" },
+  { value: "91", label: "Consumer Services" },
+  { value: "124", label: "Wellness & Fitness Services" },
+  { value: "30", label: "Travel Arrangements" },
+  { value: "28", label: "Entertainment Providers" },
   { value: "1999", label: "Education" },
   { value: "132", label: "E-Learning Providers" },
   { value: "105", label: "Professional Training & Coaching" },
@@ -108,11 +134,8 @@ export const INDUSTRIES: Facet[] = [
   { value: "121", label: "Security & Investigations" },
   { value: "108", label: "Translation & Localization" },
   { value: "103", label: "Writing & Editing" },
-  { value: "91", label: "Consumer Services" },
-  { value: "124", label: "Wellness & Fitness Services" },
-  { value: "201", label: "Farming, Ranching, Forestry" },
+  { value: "201", label: "Farming" },
   { value: "1912", label: "Administrative & Support Services" },
   { value: "1931", label: "Telephone Call Centers" },
-  { value: "30", label: "Travel Arrangements" },
-  { value: "28", label: "Entertainment Providers" },
 ];
+
