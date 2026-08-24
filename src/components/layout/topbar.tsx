@@ -86,7 +86,9 @@ export function Topbar({ userEmail, role, actualRole, onRoleSwitch, onMenuClick 
   }
 
   return (
-    <header className="flex h-16 shrink-0 items-center justify-between border-b border-border/50 bg-white px-4 sm:px-6 gap-3">
+    // Mobile: flush full-width strip with a border-b. Desktop (lg): `.app-topbar`
+    // (globals.css) floats it as an inset, rounded, hairline card matching the rail.
+    <header className="app-topbar flex h-16 shrink-0 items-center justify-between border-b border-border/50 bg-white px-4 sm:px-6 gap-3">
       <div className="flex items-center gap-3 min-w-0 flex-1">
         {/* Mobile menu button */}
         <button

@@ -51,7 +51,9 @@ export function DashboardShell({
           onRoleSwitch={handleRoleSwitch}
           onMenuClick={() => setSidebarOpen(true)}
         />
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6">
+        {/* `.app-main` (globals.css, desktop) zeroes the left padding so pages
+            share the floating topbar's left gridline */}
+        <main className="app-main flex-1 overflow-y-auto p-4 sm:p-6">
           {children}
         </main>
       </div>

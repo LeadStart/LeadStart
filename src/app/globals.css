@@ -152,14 +152,19 @@
 }
 
 /* ============================================================
-   Floating navigation rail — desktop ≥1024px.
+   Floating shell — desktop ≥1024px.
    The rail detaches from the edges into an inset, rounded,
    elevated card; content clears it on the left. The elevation
    shadow + the logo bloom are DELIBERATE exceptions to the flat
    contract (no cast-shadow / no glow), approved by Daniel
-   2026-08-23. See UI_RULES.md → Sidebar. Below 1024px the rail
-   stays a full-height slide-in drawer (Tailwind classes on the
-   <aside>), so these overrides are desktop-only.
+   2026-08-23. See UI_RULES.md → Sidebar. The topbar joins it as
+   a sibling floating card ("Twin Float", approved 2026-08-24):
+   same 24px top/right inset, rounded, white with a full hairline
+   instead of the flush border-b; page content drops its left
+   padding so it shares the bar's left gridline. Below 1024px the
+   rail stays a full-height slide-in drawer and the topbar stays
+   a flush full-width strip (Tailwind classes on the elements),
+   so these overrides are desktop-only.
    ============================================================ */
 @media (min-width: 1024px) {
   .app-rail {
@@ -174,6 +179,14 @@
   }
   .app-shell-content {
     margin-left: 248px; /* gap 24 + rail 200 + gap 24 */
+  }
+  .app-topbar {
+    margin: 24px 24px 0 0;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+  }
+  .app-main {
+    padding-left: 0; /* content left edge = topbar left edge, 24px off the rail */
   }
 }
 
