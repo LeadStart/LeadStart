@@ -594,10 +594,11 @@ export function LinkedInSearchPanel() {
   const [headcount, setHeadcount] = useState<Set<string>>(new Set());
   const [recentlyChanged, setRecentlyChanged] = useState(false);
   const [activePosters, setActivePosters] = useState(false);
-  // Deep search: fan the query into per-state/seniority sub-queries so we pull
-  // past LinkedIn's ~25-per-query cookieless cap. On by default — a single query
-  // rarely returns more than one page.
-  const [autoSegment, setAutoSegment] = useState(true);
+  // Deep search (auto query-segmentation): a PAID-Apify feature that splits a
+  // search into sub-queries to pull past LinkedIn's 2,500-per-query ceiling.
+  // OFF by default — it's only for bulk pulls, and on the free Apify tier the
+  // actor refuses to segment and returns zero.
+  const [autoSegment, setAutoSegment] = useState(false);
   const [depth, setDepth] = useState<Depth>("short");
   const [maxResults, setMaxResults] = useState<number>(250);
   // Advanced
@@ -1132,7 +1133,8 @@ export function LinkedInSearchPanel() {
                     <span className="text-sm font-medium">Deep search</span>
                   </button>
                   <span className="text-[12px] text-muted-foreground">
-                    Sweeps by state &amp; seniority past LinkedIn&apos;s ~25-per-query cap — on by default. Turn off only for a cheaper single-query peek.
+                    Only for bulk pulls beyond ~2,500 matches per query (sweeps sub-queries).{" "}
+                    <span className="font-medium text-amber-600">Paid Apify only</span> — the free tier returns 0 with this on.
                   </span>
                   <InfoButton label="About Deep search" onClick={() => setInfoOpen("segment")} />
                 </div>
@@ -1504,49 +1506,41 @@ export function LinkedInSearchPanel() {
         wide
       >
         <div className="space-y-3 text-[12px] text-muted-foreground">
+          <div className="rounded-md border border-amber-200 bg-amber-50 px-2.5 py-2 text-[11.5px] text-amber-800">
+            <span className="font-semibold">Requires a paid Apify plan.</span> On the free Apify tier
+            the actor refuses to segment and the search comes back with{" "}
+            <span className="font-medium">0 results</span>. (The free tier also caps every run at 25
+            items — a plan limit, not this feature.)
+          </div>
           <p>
-            LinkedIn&apos;s cookieless (logged-out) search only returns about{" "}
-            <span className="font-medium text-foreground">one page — ~25 people — per query</span>,
-            no matter how many you ask for. Deep search gets around that by{" "}
+            LinkedIn won&apos;t return more than{" "}
+            <span className="font-medium text-foreground">~2,500 results for a single search query</span>.
+            Deep search gets past that ceiling by{" "}
             <span className="font-medium text-foreground">
               splitting your search into many narrower sub-queries
             </span>{" "}
-            — by US state, then seniority band — and sweeping across them until it reaches your{" "}
-            <span className="font-medium text-foreground">Max people</span> target. Same filters,
-            just run as dozens of slices instead of one capped query.
+            — by country, state, then seniority — and sweeping across them, deduping, until it reaches
+            your Max people. It&apos;s a tool for <span className="font-medium text-foreground">bulk pulls</span>.
           </p>
           <div>
-            <p className="font-medium text-foreground">What it changes</p>
+            <p className="font-medium text-foreground">You probably don&apos;t need it</p>
             <ul className="mt-1 list-disc space-y-0.5 pl-4">
               <li>
-                <span className="font-medium">More results</span> — a query that returns 25 flat can
-                return hundreds once it&apos;s swept state-by-state.
+                On a paid plan, a{" "}
+                <span className="font-medium">normal search already returns up to your Max people</span>{" "}
+                (anything up to 2,500 per query) — no segmentation required.
               </li>
               <li>
-                <span className="font-medium">Costs more</span> — you&apos;re billed per search page,
-                and this scrapes a page (or more) per slice. Cost scales with how many people you
-                actually pull, so it roughly tracks your Max people.
+                Only turn it on when you genuinely want{" "}
+                <span className="font-medium">more than ~2,500 matches</span> in one run. It also costs
+                more (a search page per slice).
               </li>
-              <li>
-                <span className="font-medium">Duplicates are removed</span> across slices, so you
-                won&apos;t import the same person twice.
-              </li>
-            </ul>
-          </div>
-          <div>
-            <p className="font-medium text-foreground">When to turn it off</p>
-            <ul className="mt-1 list-disc space-y-0.5 pl-4">
-              <li>
-                A genuinely tiny niche where ~25 is plenty — a single query is cheaper, and sweeping
-                empty state slices just adds cost.
-              </li>
-              <li>A quick sanity check before committing to a full pull.</li>
             </ul>
           </div>
           <p className="rounded-md bg-[#EDEEFF]/70 px-2.5 py-2 text-[11px]">
-            Rule of thumb: leave it <span className="font-medium text-foreground">on</span> when you
-            want real volume, off for a cheap peek. Raising <span className="font-medium">Max people</span>{" "}
-            is what tells it how far to sweep.
+            Seeing only 25 results? That&apos;s the{" "}
+            <span className="font-medium text-foreground">free Apify tier&apos;s per-run cap</span> —
+            upgrade the plan and a normal search returns up to your Max people, no Deep search needed.
           </p>
         </div>
       </InfoDialog>
