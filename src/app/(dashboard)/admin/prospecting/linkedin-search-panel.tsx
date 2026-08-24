@@ -41,6 +41,8 @@ import {
   Mail,
   Clock,
   XCircle,
+  Pencil,
+  Check,
 } from "lucide-react";
 import { appUrl } from "@/lib/api-url";
 import { createClient } from "@/lib/supabase/client";
@@ -203,6 +205,8 @@ const LOCATION_TRAPS: Record<string, { fix?: string; hint: string }> = {
 
 type SearchDetail = {
   id: string;
+  // `query.name` is the user's custom label (falls back to the ICP summary).
+  query: { name?: string; levers?: Record<string, unknown>; depth?: string } | null;
   results: LinkedInProspect[];
   result_count: number;
   target_max_results: number;
@@ -217,7 +221,7 @@ type SearchDetail = {
 // stripped by the list endpoint — clicking a run loads it via the poll).
 type PriorRun = {
   id: string;
-  query: { levers?: Record<string, unknown>; depth?: string } | null;
+  query: { name?: string; levers?: Record<string, unknown>; depth?: string } | null;
   result_count: number;
   target_max_results: number;
   saved_count: number | null;
@@ -260,6 +264,15 @@ function describeLevers(query: PriorRun["query"]): string {
   if (!parts.length && sen?.length) parts.push(`${sen.length} seniority`);
   if (!parts.length && ind?.length) parts.push(`${ind.length} industry`);
   return parts.join(" ") || "All people";
+}
+
+// The label to show for a search: the user's custom name, else the auto ICP
+// summary derived from its levers.
+function searchName(
+  query: { name?: string; levers?: Record<string, unknown>; depth?: string } | null | undefined,
+): string {
+  const n = query?.name?.trim();
+  return n || describeLevers(query ?? null);
 }
 
 function timeAgoShort(iso: string | null): string {
@@ -786,6 +799,47 @@ export function LinkedInSearchPanel() {
     loadPriorRuns();
   }, [loadPriorRuns]);
 
+  // Collapse the active results card, and name / rename any search. The name
+  // lives on the search's `query.name` (PATCH /linkedin-searches/[id]); an
+  // empty name clears it back to the auto ICP summary.
+  const [resultsCollapsed, setResultsCollapsed] = useState(false);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameDraft, setRenameDraft] = useState("");
+  const startRename = (id: string, current: string) => {
+    setRenamingId(id);
+    setRenameDraft(current);
+  };
+  const cancelRename = () => {
+    setRenamingId(null);
+    setRenameDraft("");
+  };
+  const saveRename = useCallback(
+    async (id: string) => {
+      const name = renameDraft.trim().slice(0, 80);
+      // Optimistic: patch local state first so the label updates instantly.
+      setPriorRuns((prev) =>
+        prev.map((r) =>
+          r.id === id ? { ...r, query: { ...(r.query ?? {}), name: name || undefined } } : r,
+        ),
+      );
+      setDetail((d) =>
+        d && d.id === id ? { ...d, query: { ...(d.query ?? {}), name: name || undefined } } : d,
+      );
+      setRenamingId(null);
+      setRenameDraft("");
+      try {
+        await fetch(appUrl(`/api/admin/prospecting/linkedin-searches/${id}`), {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name }),
+        });
+      } catch {
+        loadPriorRuns(); // reconcile on failure
+      }
+    },
+    [renameDraft, loadPriorRuns],
+  );
+
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Load the org's campaigns for the "Add to campaign" picker.
@@ -846,6 +900,7 @@ export function LinkedInSearchPanel() {
       setPage(1);
       setSaveMsg(null);
       setError(null);
+      setResultsCollapsed(false);
       setSearchId(id);
     },
     [searchId, stopPoll],
@@ -962,6 +1017,7 @@ export function LinkedInSearchPanel() {
     setDetail(null);
     setSelected(new Set());
     setPage(1);
+    setResultsCollapsed(false);
     try {
       const res = await fetch(appUrl("/api/admin/prospecting/linkedin-search"), {
         method: "POST",
@@ -1452,39 +1508,91 @@ export function LinkedInSearchPanel() {
               <div className="space-y-1">
                 {priorRuns.map((r) => {
                   const active = r.id === searchId;
+                  const editing = renamingId === r.id;
                   return (
-                    <button
+                    <div
                       key={r.id}
-                      type="button"
-                      onClick={() => loadPriorRun(r.id)}
-                      className={`flex w-full cursor-pointer items-center gap-3 rounded-md border px-3 py-2 text-left transition-colors ${
+                      className={`group flex items-center gap-1.5 rounded-md border px-2 transition-colors ${
                         active ? "border-[#2E37FE] bg-[#EDEEFF]" : "border-transparent hover:bg-muted/50"
                       }`}
                     >
-                      <PriorStatusIcon status={r.status} />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-[13px] font-medium">{describeLevers(r.query)}</p>
-                        <p className="text-[11px] text-muted-foreground">
-                          {r.status === "complete" ? (
-                            <>
-                              {r.result_count.toLocaleString()} found
-                              {r.saved_count ? ` · ${r.saved_count} imported` : ""}
-                              {" · "}
-                              {timeAgoShort(r.completed_at ?? r.created_at)}
-                            </>
-                          ) : r.status === "running" ? (
-                            <span className="text-blue-600">Running…</span>
-                          ) : r.status === "pending" ? (
-                            <span className="text-amber-600">Queued</span>
-                          ) : (
-                            <span className="text-red-600">Failed</span>
-                          )}
-                        </p>
-                      </div>
-                      <span className="shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground">
-                        ${(Number(r.cost_usd) || 0).toFixed(2)}
-                      </span>
-                    </button>
+                      {editing ? (
+                        <div className="flex flex-1 items-center gap-1.5 py-1.5">
+                          <input
+                            autoFocus
+                            value={renameDraft}
+                            onChange={(e) => setRenameDraft(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                saveRename(r.id);
+                              } else if (e.key === "Escape") {
+                                cancelRename();
+                              }
+                            }}
+                            placeholder="Name this search"
+                            className="min-w-0 flex-1 rounded-md border border-input bg-background px-2 py-1 text-[12.5px] outline-none focus:border-[#2E37FE]"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => saveRename(r.id)}
+                            aria-label="Save name"
+                            className="shrink-0 rounded p-1 text-emerald-600 hover:bg-emerald-50"
+                          >
+                            <Check size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={cancelRename}
+                            aria-label="Cancel rename"
+                            className="shrink-0 rounded p-1 text-muted-foreground hover:bg-muted"
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => loadPriorRun(r.id)}
+                            className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 py-2 text-left"
+                          >
+                            <PriorStatusIcon status={r.status} />
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-[13px] font-medium">{searchName(r.query)}</p>
+                              <p className="text-[11px] text-muted-foreground">
+                                {r.status === "complete" ? (
+                                  <>
+                                    {r.result_count.toLocaleString()} found
+                                    {r.saved_count ? ` · ${r.saved_count} imported` : ""}
+                                    {" · "}
+                                    {timeAgoShort(r.completed_at ?? r.created_at)}
+                                  </>
+                                ) : r.status === "running" ? (
+                                  <span className="text-blue-600">Running…</span>
+                                ) : r.status === "pending" ? (
+                                  <span className="text-amber-600">Queued</span>
+                                ) : (
+                                  <span className="text-red-600">Failed</span>
+                                )}
+                              </p>
+                            </div>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => startRename(r.id, r.query?.name ?? "")}
+                            aria-label={`Rename ${searchName(r.query)}`}
+                            title="Rename search"
+                            className="shrink-0 rounded p-1 text-muted-foreground transition-colors hover:bg-[#EDEEFF] hover:text-[#2E37FE]"
+                          >
+                            <Pencil size={13} />
+                          </button>
+                          <span className="shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground">
+                            ${(Number(r.cost_usd) || 0).toFixed(2)}
+                          </span>
+                        </>
+                      )}
+                    </div>
                   );
                 })}
               </div>
@@ -1913,7 +2021,57 @@ export function LinkedInSearchPanel() {
                     <CheckCircle2 size={16} className="text-white" />
                   )}
                 </div>
-                <div>
+                <div className="min-w-0">
+                  {/* Editable search name — custom label, else the ICP summary. */}
+                  {searchId && renamingId === searchId ? (
+                    <div className="mb-1 flex items-center gap-1.5">
+                      <input
+                        autoFocus
+                        value={renameDraft}
+                        onChange={(e) => setRenameDraft(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            saveRename(searchId);
+                          } else if (e.key === "Escape") {
+                            cancelRename();
+                          }
+                        }}
+                        placeholder="Name this search"
+                        className="w-[220px] max-w-full rounded-md border border-input bg-background px-2 py-0.5 text-[12px] outline-none focus:border-[#2E37FE]"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => saveRename(searchId)}
+                        aria-label="Save name"
+                        className="rounded p-0.5 text-emerald-600 hover:bg-emerald-50"
+                      >
+                        <Check size={14} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={cancelRename}
+                        aria-label="Cancel rename"
+                        className="rounded p-0.5 text-muted-foreground hover:bg-muted"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ) : (
+                    searchId && (
+                      <button
+                        type="button"
+                        onClick={() => startRename(searchId, detail?.query?.name ?? "")}
+                        title={detail?.query?.name ? "Rename this search" : "Name this search"}
+                        className="mb-1 inline-flex max-w-full items-center gap-1 rounded-md border border-dashed border-border px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground transition-colors hover:border-[#2E37FE]/60 hover:bg-[#EDEEFF]/50 hover:text-[#2E37FE]"
+                      >
+                        <Pencil size={11} className="shrink-0" />
+                        <span className="truncate">
+                          {detail?.query?.name ? detail.query.name : `Name this search (${searchName(detail?.query)})`}
+                        </span>
+                      </button>
+                    )
+                  )}
                   <CardTitle className="text-base">
                     {isRunning
                       ? `Sourcing… ${(detail?.result_count ?? results.length).toLocaleString()} found`
@@ -1940,8 +2098,8 @@ export function LinkedInSearchPanel() {
                   </p>
                 </div>
               </div>
-              {selected.size > 0 && (
-                <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2">
+                {selected.size > 0 && (
                   <Button
                     size="sm"
                     onClick={() => {
@@ -1954,10 +2112,24 @@ export function LinkedInSearchPanel() {
                     <Send size={15} className="mr-1.5" />
                     Add to campaign ({selected.size})
                   </Button>
-                </div>
-              )}
+                )}
+                <button
+                  type="button"
+                  onClick={() => setResultsCollapsed((v) => !v)}
+                  aria-label={resultsCollapsed ? "Expand results" : "Collapse results"}
+                  aria-expanded={!resultsCollapsed}
+                  title={resultsCollapsed ? "Expand" : "Collapse"}
+                  className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                >
+                  <ChevronDown
+                    size={18}
+                    className={`transition-transform ${resultsCollapsed ? "-rotate-90" : ""}`}
+                  />
+                </button>
+              </div>
             </div>
           </CardHeader>
+          {!resultsCollapsed && (
           <CardContent className="space-y-3">
             {/* Add-to-campaign inline panel */}
             {addOpen && selected.size > 0 && (
@@ -2166,6 +2338,7 @@ export function LinkedInSearchPanel() {
               </div>
             )}
           </CardContent>
+          )}
         </Card>
       )}
 
