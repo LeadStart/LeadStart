@@ -22,9 +22,12 @@ import { SlidersHorizontal, CheckCircle, XCircle, Loader2, AlertTriangle } from 
 import { appUrl } from "@/lib/api-url";
 import type { EnrichmentSettings, EnrichmentWaterfallMethod } from "@/types/app";
 
-// Phase-1 method menu. The full union has more members (pattern_mv,
-// site_scrape, scrape_plus_pattern) — they join this list as their phases ship.
+// Available methods. site_scrape + scrape_plus_pattern need the private Apify
+// actor deployed (apify-actors/site-contact-scraper) — see the hint below.
 const METHOD_OPTIONS: { value: EnrichmentWaterfallMethod; label: string }[] = [
+  { value: "pattern_mv", label: "Pattern + verify (Million Verifier)" },
+  { value: "scrape_plus_pattern", label: "Site scrape, then pattern + verify" },
+  { value: "site_scrape", label: "Site scrape (phone + generic email + personal)" },
   { value: "vdrmota", label: "Directory scrape (vdrmota)" },
   { value: "bovi", label: "Pattern finder (bovi)" },
   { value: "off", label: "Off — skip this band" },
@@ -203,10 +206,11 @@ export function WaterfallSettingsCard() {
                 </div>
               ))}
               <p className="text-[11px] text-muted-foreground">
-                Pattern+verify (Million Verifier) and our own site scraper join this
-                list as they ship. Until per-size routing lands, one method runs for
-                the whole run: the first directory/pattern method among Unknown
-                &rarr; Small &rarr; Large. Off everywhere disables the second pass.
+                Each contact is routed to its band&apos;s method by employee count
+                (contacts with no count use the Unknown method). The two site-scrape
+                methods need the private scraper actor deployed first
+                (apify-actors/site-contact-scraper). Off in every band disables the
+                second pass.
               </p>
             </div>
 
@@ -233,20 +237,23 @@ export function WaterfallSettingsCard() {
               </p>
             </div>
 
-            {/* catch-all toggle — Phase 2 */}
-            <label className="flex items-start gap-2 text-sm cursor-not-allowed opacity-60">
+            {/* catch-all toggle — live in Phase 2 (pattern_mv) */}
+            <label className="flex items-start gap-2 text-sm cursor-pointer">
               <input
                 type="checkbox"
                 checked={settings.accept_catch_all_guesses}
-                disabled
-                className="mt-0.5 h-4 w-4 rounded border-border"
+                onChange={(e) =>
+                  setSettings({ ...settings, accept_catch_all_guesses: e.target.checked })
+                }
+                className="mt-0.5 h-4 w-4 rounded border-border accent-[#2E37FE] cursor-pointer"
               />
               <span>
                 Accept catch-all pattern guesses
                 <span className="block text-[11px] text-muted-foreground">
-                  Arrives with the pattern+verify method. When on, a pattern guess
-                  that verifies as catch-all is still written (flagged risky); the
-                  pre-send gate re-checks it either way.
+                  For the pattern method: when on, a guess that verifies as
+                  catch-all is still written (flagged risky, low confidence); the
+                  pre-send gate re-checks it either way. Off = only clean-verified
+                  addresses are kept.
                 </span>
               </span>
             </label>

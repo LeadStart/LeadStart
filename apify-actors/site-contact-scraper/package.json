@@ -1,0 +1,24 @@
+{
+  "name": "site-contact-scraper",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "description": "LeadStart private Apify actor — 5-tier anti-bot fetch waterfall + contact extraction for the site_scrape enrichment method.",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "tsx src/main.ts",
+    "test": "tsx test/extract.test.ts && tsx test/discover.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "apify": "^3.2.6",
+    "playwright": "^1.48.0",
+    "playwright-extra": "^4.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
+    "tsx": "^4.19.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.16.11",
+    "typescript": "^5.6.3"
+  }
+}

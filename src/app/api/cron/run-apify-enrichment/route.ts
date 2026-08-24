@@ -6,7 +6,12 @@ import { ApifyClient } from "@/lib/apify/client";
 import { isInProgress, isTerminalBad, isTerminalOk } from "@/lib/apify/types";
 import { loadApifyToken } from "@/lib/apify/auth";
 import { extractCompanyId, extractCompanySlug } from "@/lib/apify/domain";
-import { getProvider } from "@/lib/apify/providers";
+import {
+  getProvider,
+  WATERFALL_VDRMOTA_ACTOR_ID,
+  WATERFALL_BOVI_ACTOR_ID,
+  WATERFALL_SCRAPE_ACTOR_ID,
+} from "@/lib/apify/providers";
 import type { PhaseResult, ProviderItem } from "@/lib/apify/providers/types";
 import { sanitizeFoundEmail } from "@/lib/apify/email-sanity";
 import { ENRICH_RUN_COLUMNS, ENRICH_ITEM_WORK_COLUMNS } from "@/lib/apify/columns";
@@ -15,9 +20,20 @@ import {
   DOMAIN_COST_USD,
   WATERFALL_LEAD_COST_USD,
   ACTIVITY_COST_USD,
+  MV_CREDIT_COST_USD,
 } from "@/lib/apify/pricing";
-import type { EmailProviderId, EnrichmentPhase, EnrichmentSettings } from "@/types/app";
+import {
+  DEFAULT_ENRICHMENT_SETTINGS,
+  type EmailProviderId,
+  type EnrichmentPhase,
+  type EnrichmentSettings,
+  type EnrichmentWaterfallMethod,
+} from "@/types/app";
 import { alertActorFailure } from "@/lib/notifications/actor-failure-alert";
+import { MillionVerifierClient, MillionVerifierError } from "@/lib/millionverifier/client";
+import { ORG_ERROR_SUPPRESS_MS, shouldAlertAccountError } from "@/lib/millionverifier/policy";
+import { enqueueOwnerAlert } from "@/lib/notifications/owner-alerts";
+import { runPatternMv, type PatternMvItem } from "@/lib/enrichment/pattern-mv";
 
 // GET /api/cron/run-apify-enrichment — one worker tick (60s budget).
 //
@@ -38,6 +54,39 @@ const APIFY_TIMEOUT_SEC = 1200;
 const MAX_ITEM_ATTEMPTS = 2;
 const MAX_CONSECUTIVE_FAILURES = 3;
 const START_BUDGET_SEC = 45;
+
+// pattern_mv (direct method) tuning. A small MV pool + wall-clock deadline keeps
+// a batch inside the 60s tick; leftover items stay pending for the next tick.
+const PATTERN_MV_BATCH = 25;
+const PATTERN_MV_CONCURRENCY = 5;
+const PATTERN_MV_VERIFY_TIMEOUT_SEC = 6;
+const PATTERN_MV_DEADLINE_SEC = 40;
+
+// Waterfall methods by execution style:
+//   DIRECT   — run inline in the tick via Million Verifier, no Apify run.
+//   SCRAPE   — our site-contact-scraper actor (site_scrape + the scrape stage of
+//              scrape_plus_pattern, which then hands misses to pattern_mv).
+//   APIFY_SOLO — the single-actor community scrapers (vdrmota, bovi).
+// All Apify styles use the existing start-run → poll → ingest path.
+const DIRECT_METHODS: EnrichmentWaterfallMethod[] = ["pattern_mv"];
+const SCRAPE_METHODS: EnrichmentWaterfallMethod[] = ["site_scrape", "scrape_plus_pattern"];
+const APIFY_SOLO_METHODS: EnrichmentWaterfallMethod[] = ["vdrmota", "bovi"];
+
+function actorForMethod(method: EnrichmentWaterfallMethod): string | null {
+  if (method === "vdrmota") return WATERFALL_VDRMOTA_ACTOR_ID;
+  if (method === "bovi") return WATERFALL_BOVI_ACTOR_ID;
+  if (method === "site_scrape" || method === "scrape_plus_pattern") return WATERFALL_SCRAPE_ACTOR_ID;
+  return null;
+}
+
+// Route an item to its size-band method from the run's config snapshot.
+function methodForItem(
+  config: EnrichmentSettings,
+  employeeCount: number | null,
+): EnrichmentWaterfallMethod {
+  if (employeeCount == null) return config.unknown_method;
+  return employeeCount >= config.size_threshold ? config.large_method : config.small_method;
+}
 
 type Admin = SupabaseClient;
 
@@ -69,6 +118,7 @@ interface RunRow {
 type ItemRow = ProviderItem & {
   contact_id: string;
   attempts: number;
+  waterfall_method: EnrichmentWaterfallMethod | null;
   profile_status: string;
   profile_apify_run_id: string | null;
   domain_status: string;
@@ -306,21 +356,34 @@ async function startNextBatch(
   cols: { status: string; runId: string; notes: string },
   provider: ReturnType<typeof getProvider>,
   tickStart: number,
+  // When set (an internal apify-waterfall sub-batch), scope the pending select
+  // to one method group and do NOT advance the phase on an empty batch — the
+  // waterfall router owns advancing. Absent = a normal phase batch.
+  methodFilter?: EnrichmentWaterfallMethod[],
 ): Promise<Record<string, unknown>> {
+  // The waterfall phase has per-item methods (incl. the direct pattern_mv
+  // pathway), so it's routed specially — unless we're already inside a
+  // method-scoped apify sub-batch call.
+  if (phase === "waterfall" && !methodFilter) {
+    return startNextWaterfall(admin, client, run, cols, tickStart);
+  }
   if (!provider) return { status: "advanced" };
 
   const batchSize = BATCH_SIZE;
-  const { data: pendingData } = await admin
+  let pendingQuery = admin
     .from("enrichment_run_items")
     .select(ENRICH_ITEM_WORK_COLUMNS)
     .eq("run_id", run.id)
-    .eq(cols.status, "pending")
+    .eq(cols.status, "pending");
+  if (methodFilter) pendingQuery = pendingQuery.in("waterfall_method", methodFilter);
+  const { data: pendingData } = await pendingQuery
     .order("created_at", { ascending: true })
     .order("id", { ascending: true })
     .limit(batchSize);
 
   let batch = (pendingData as ItemRow[] | null) ?? [];
   if (batch.length === 0) {
+    if (methodFilter) return { status: "skipped_batch" };
     await advancePhase(admin, run);
     return { status: "advanced", phase: run.phase };
   }
@@ -412,9 +475,322 @@ async function startNextBatch(
 function isEmptyInput(input: unknown): boolean {
   if (!input || typeof input !== "object") return true;
   const obj = input as Record<string, unknown>;
-  const arrays = [obj.urls, obj.companies, obj.people, obj.emails, obj.startUrls];
+  const arrays = [obj.urls, obj.companies, obj.people, obj.emails, obj.startUrls, obj.targets];
   const anyNonEmpty = arrays.some((a) => Array.isArray(a) && a.length > 0);
   return !anyNonEmpty;
+}
+
+// -------------------------------------------------------- waterfall routing
+
+// Count pending waterfall items whose method is in `methods`.
+async function countWaterfallMethodPending(
+  admin: Admin,
+  runId: string,
+  methods: EnrichmentWaterfallMethod[],
+): Promise<number> {
+  const { count } = await admin
+    .from("enrichment_run_items")
+    .select("id", { count: "exact", head: true })
+    .eq("run_id", runId)
+    .eq("waterfall_status", "pending")
+    .in("waterfall_method", methods);
+  return count ?? 0;
+}
+
+// The waterfall phase, method-routed: process the direct (pattern_mv) group
+// inline first, then each configured Apify method in a fixed order (one active
+// Apify run at a time). When nothing is pending across all methods, advance.
+async function startNextWaterfall(
+  admin: Admin,
+  client: ApifyClient,
+  run: RunRow,
+  cols: { status: string; runId: string; notes: string },
+  tickStart: number,
+): Promise<Record<string, unknown>> {
+  // 1. Direct pattern_mv group (cheap, no external run) — also picks up
+  //    scrape_plus_pattern items downgraded to pattern_mv after a scrape miss.
+  if ((await countWaterfallMethodPending(admin, run.id, DIRECT_METHODS)) > 0) {
+    return runPatternMvBatch(admin, run, cols, tickStart);
+  }
+  // 2. Our site-scraper group (site_scrape + scrape_plus_pattern's scrape stage).
+  if ((await countWaterfallMethodPending(admin, run.id, SCRAPE_METHODS)) > 0) {
+    const actorId = actorForMethod("site_scrape");
+    run.waterfall_actor = actorId;
+    await admin.from("enrichment_runs").update({ waterfall_actor: actorId }).eq("id", run.id);
+    const provider = getProvider("waterfall", actorId);
+    return startNextBatch(admin, client, run, "waterfall", cols, provider, tickStart, SCRAPE_METHODS);
+  }
+  // 3. Single-actor community scrapers (vdrmota, bovi), in a fixed order.
+  for (const method of APIFY_SOLO_METHODS) {
+    if ((await countWaterfallMethodPending(admin, run.id, [method])) > 0) {
+      const actorId = actorForMethod(method);
+      run.waterfall_actor = actorId;
+      await admin.from("enrichment_runs").update({ waterfall_actor: actorId }).eq("id", run.id);
+      const provider = getProvider("waterfall", actorId);
+      return startNextBatch(admin, client, run, "waterfall", cols, provider, tickStart, [method]);
+    }
+  }
+  await advancePhase(admin, run);
+  return { status: "advanced", phase: run.phase };
+}
+
+// Definitive Million Verifier failure during pattern_mv: record it on the org so
+// BOTH the enrichment worker and the send-gate back off for the suppression
+// window, and fire the same edge-triggered owner alert the send-gate would.
+async function recordMvDefinitiveError(
+  admin: Admin,
+  organizationId: string,
+  prevStreak: number,
+  err: MillionVerifierError,
+): Promise<void> {
+  const streak = (prevStreak ?? 0) + 1;
+  await admin
+    .from("organizations")
+    .update({
+      millionverifier_last_error: err.message,
+      millionverifier_last_error_kind: err.kind,
+      millionverifier_last_error_at: new Date().toISOString(),
+      millionverifier_error_streak: streak,
+    })
+    .eq("id", organizationId);
+  if (shouldAlertAccountError(err.kind, streak)) {
+    await enqueueOwnerAlert({
+      admin,
+      kind: "email_verifier_unavailable",
+      subject: "Email verifier unavailable — enrichment waterfall on hold",
+      summary:
+        err.kind === "credits"
+          ? "Million Verifier is out of credits. Pattern-based email enrichment is held until it's topped up."
+          : err.kind === "auth"
+            ? "Million Verifier rejected the API key. Pattern-based email enrichment is held until the key is fixed."
+            : "This server's IP is blocked by Million Verifier. Pattern-based email enrichment is held.",
+      context: { organization_id: organizationId, error_kind: err.kind, error: err.message, streak },
+    });
+  }
+}
+
+// Process one pattern_mv batch inline (no Apify run). Fail-closed on a definitive
+// MV error (records suppression, holds the batch); leaves indeterminate items
+// pending to retry; writes clean hits fill-only via writeEmail.
+async function runPatternMvBatch(
+  admin: Admin,
+  run: RunRow,
+  cols: { status: string; runId: string; notes: string },
+  tickStart: number,
+): Promise<Record<string, unknown>> {
+  // Org MV key + error/suppression state.
+  const { data: orgRow } = await admin
+    .from("organizations")
+    .select(
+      "millionverifier_api_key, millionverifier_last_error_kind, millionverifier_last_error_at, millionverifier_error_streak",
+    )
+    .eq("id", run.organization_id)
+    .maybeSingle();
+  const org = orgRow as {
+    millionverifier_api_key: string | null;
+    millionverifier_last_error_kind: string | null;
+    millionverifier_last_error_at: string | null;
+    millionverifier_error_streak: number | null;
+  } | null;
+  const key = org?.millionverifier_api_key?.trim() || process.env.MILLIONVERIFIER_API_KEY?.trim() || null;
+
+  // Claim a batch of pending direct-method items.
+  const { data: pendingData } = await admin
+    .from("enrichment_run_items")
+    .select(ENRICH_ITEM_WORK_COLUMNS)
+    .eq("run_id", run.id)
+    .eq("waterfall_status", "pending")
+    .in("waterfall_method", DIRECT_METHODS)
+    .order("created_at", { ascending: true })
+    .order("id", { ascending: true })
+    .limit(PATTERN_MV_BATCH);
+  let batch = (pendingData as ItemRow[] | null) ?? [];
+  if (batch.length === 0) return { status: "skipped_batch" };
+  batch = await dropAlreadyDone(admin, run, "waterfall", cols, batch);
+  if (batch.length === 0) return { status: "skipped_batch" };
+
+  // No MV key → pattern matching can't run. Mark this batch not_found with a
+  // clear note (a config gap, not a silent miss) and let the run continue.
+  if (!key) {
+    await admin
+      .from("enrichment_run_items")
+      .update({
+        waterfall_status: "not_found",
+        waterfall_notes: "Million Verifier key required for pattern email finding (Settings → Integrations)",
+      })
+      .eq("run_id", run.id)
+      .in("id", batch.map((b) => b.id));
+    return { status: "no_mv_key", items: batch.length };
+  }
+
+  // Suppression window after a recent definitive error — hold, don't call MV.
+  const kind = org?.millionverifier_last_error_kind;
+  const definitive = !!kind && kind !== "transient";
+  if (definitive && org?.millionverifier_last_error_at) {
+    const at = Date.parse(org.millionverifier_last_error_at);
+    if (!Number.isNaN(at) && Date.now() < at + ORG_ERROR_SUPPRESS_MS) {
+      await admin
+        .from("enrichment_runs")
+        .update({ progress_message: "Waterfall held — email verifier unavailable (retrying shortly)", locked_at: null })
+        .eq("id", run.id);
+      return { status: "mv_suppressed" };
+    }
+  }
+
+  const config = run.waterfall_config ?? DEFAULT_ENRICHMENT_SETTINGS;
+  const client = new MillionVerifierClient(key);
+  const deadlineMs = tickStart + PATTERN_MV_DEADLINE_SEC * 1000;
+  const mvItems: PatternMvItem[] = batch.map((b) => ({
+    id: b.id,
+    first_name: b.first_name,
+    last_name: b.last_name,
+    company_domain: b.company_domain,
+  }));
+
+  let outcomes;
+  try {
+    outcomes = await runPatternMv(client, mvItems, {
+      acceptCatchAll: config.accept_catch_all_guesses,
+      timeoutSec: PATTERN_MV_VERIFY_TIMEOUT_SEC,
+      deadlineMs,
+      concurrency: PATTERN_MV_CONCURRENCY,
+    });
+  } catch (err) {
+    if (err instanceof MillionVerifierError && err.definitive) {
+      await recordMvDefinitiveError(admin, run.organization_id, org?.millionverifier_error_streak ?? 0, err);
+      await admin
+        .from("enrichment_runs")
+        .update({ progress_message: `Waterfall held — ${err.message.slice(0, 150)}`, locked_at: null })
+        .eq("id", run.id);
+      return { status: "mv_error", kind: err.kind };
+    }
+    throw err; // unexpected — the tick's outer try/catch handles it
+  }
+
+  // Fetch the batch's contacts for fill-only writes.
+  const contactIds = Array.from(new Set(batch.map((b) => b.contact_id)));
+  const contactMap = new Map<string, Contact>();
+  for (let i = 0; i < contactIds.length; i += 300) {
+    const part = contactIds.slice(i, i + 300);
+    const { data } = await admin
+      .from("contacts")
+      .select("id, email, enrichment_data, tags, status")
+      .eq("organization_id", run.organization_id)
+      .in("id", part);
+    for (const c of (data as Contact[] | null) ?? []) contactMap.set(c.id, c);
+  }
+
+  let found = 0;
+  let notFound = 0;
+  let skipped = 0;
+  let inconclusive = 0;
+  let totalCredits = 0;
+
+  for (const item of batch) {
+    const outcome = outcomes.get(item.id);
+    if (!outcome) continue; // hit the deadline — stays pending for the next tick
+    totalCredits += outcome.credits;
+    const share = outcome.credits * MV_CREDIT_COST_USD;
+
+    if (outcome.kind === "found") {
+      const contact = contactMap.get(item.contact_id);
+      const res: PhaseResult = {
+        status: "found",
+        email: outcome.email,
+        confidence: outcome.confidence,
+        extra: { waterfall_status: outcome.mvResult },
+      };
+      const r = await writeEmail(admin, cols, item, res, contact, "pattern_mv", share, "pattern_mv");
+      if (r === "found") found++;
+      else if (r === "skipped") skipped++;
+      else notFound++;
+    } else if (outcome.kind === "not_found") {
+      await admin
+        .from("enrichment_run_items")
+        .update({ waterfall_status: "not_found", waterfall_notes: outcome.note, cost_usd: share })
+        .eq("id", item.id);
+      notFound++;
+    } else {
+      // inconclusive — retry unless we've hit the attempt cap.
+      const attempts = (item.attempts ?? 0) + 1;
+      if (attempts >= MAX_ITEM_ATTEMPTS) {
+        await admin
+          .from("enrichment_run_items")
+          .update({
+            waterfall_status: "not_found",
+            waterfall_notes: `inconclusive after ${attempts} attempts: ${outcome.note}`,
+            cost_usd: share,
+          })
+          .eq("id", item.id);
+        notFound++;
+      } else {
+        await admin
+          .from("enrichment_run_items")
+          .update({ attempts, cost_usd: share })
+          .eq("id", item.id);
+        inconclusive++;
+      }
+    }
+  }
+
+  if (totalCredits > 0) {
+    const add = totalCredits * MV_CREDIT_COST_USD;
+    await admin
+      .from("enrichment_runs")
+      .update({ cost_usd: (Number(run.cost_usd) || 0) + add })
+      .eq("id", run.id);
+    run.cost_usd = (Number(run.cost_usd) || 0) + add;
+  }
+
+  await admin
+    .from("enrichment_runs")
+    .update({
+      progress_message: `Pattern+verify: ${found} found · ${notFound} miss · ${inconclusive} retrying (${totalCredits} MV credits)`,
+      locked_at: null,
+    })
+    .eq("id", run.id);
+
+  return { status: "pattern_mv", found, not_found: notFound, skipped, inconclusive, credits: totalCredits };
+}
+
+// Seed the waterfall phase: stamp each eligible item (no email, has a domain)
+// with its size-band method from the run's config snapshot, and mark the 'off'
+// band skipped. Returns the count of actionable (pending) items.
+async function seedWaterfallItems(admin: Admin, run: RunRow): Promise<number> {
+  const config = (run.waterfall_config ?? DEFAULT_ENRICHMENT_SETTINGS) as EnrichmentSettings;
+  const { data } = await admin
+    .from("enrichment_run_items")
+    .select("id, employee_count")
+    .eq("run_id", run.id)
+    .is("waterfall_status", null)
+    .is("email", null)
+    .not("company_domain", "is", null);
+  const rows = (data as { id: string; employee_count: number | null }[] | null) ?? [];
+  if (rows.length === 0) return 0;
+
+  const groups = new Map<EnrichmentWaterfallMethod, string[]>();
+  for (const r of rows) {
+    const method = methodForItem(config, r.employee_count);
+    const arr = groups.get(method) ?? [];
+    arr.push(r.id);
+    groups.set(method, arr);
+  }
+
+  let pending = 0;
+  for (const [method, ids] of groups) {
+    const patch =
+      method === "off"
+        ? { waterfall_status: "skipped", waterfall_method: "off", waterfall_notes: "waterfall off for this size band" }
+        : { waterfall_status: "pending", waterfall_method: method, attempts: 0 };
+    for (let i = 0; i < ids.length; i += 200) {
+      await admin
+        .from("enrichment_run_items")
+        .update(patch)
+        .in("id", ids.slice(i, i + 200));
+    }
+    if (method !== "off") pending += ids.length;
+  }
+  return pending;
 }
 
 // ---------------------------------------------------------------- ingest
@@ -591,7 +967,47 @@ async function writePhaseResult(
 }
 
 function waterfallProviderId(run: RunRow): EmailProviderId {
-  return run.waterfall_actor?.includes("bovi") ? "bovi" : "vdrmota";
+  const a = run.waterfall_actor ?? "";
+  if (a.includes("site-contact-scraper")) return "site_scrape";
+  if (a.includes("bovi")) return "bovi";
+  return "vdrmota";
+}
+
+// Finish a waterfall item that produced no usable personal email. Company-level
+// scrape extras (generic emails) still get persisted, and a scrape_plus_pattern
+// item is handed to its stage-2 pattern_mv pass instead of ending here. Returns
+// "skipped" for that handoff (deferred), "not_found" otherwise.
+async function finishWaterfallMiss(
+  admin: Admin,
+  cols: { status: string; runId: string; notes: string },
+  item: ItemRow,
+  contact: Contact | undefined,
+  extraPatch: Record<string, unknown>,
+  note: string,
+  share: number,
+): Promise<"not_found" | "skipped"> {
+  if (contact && extraPatch.company_emails) {
+    const ed = mergeEnrichment(contact.enrichment_data, { company_emails: extraPatch.company_emails });
+    await admin.from("contacts").update({ enrichment_data: ed }).eq("id", contact.id);
+  }
+  if (item.waterfall_method === "scrape_plus_pattern") {
+    await admin
+      .from("enrichment_run_items")
+      .update({
+        waterfall_status: "pending",
+        waterfall_method: "pattern_mv",
+        attempts: 0,
+        waterfall_notes: "scrape found no personal email; trying pattern+verify",
+        cost_usd: share,
+      })
+      .eq("id", item.id);
+    return "skipped";
+  }
+  await admin
+    .from("enrichment_run_items")
+    .update({ [cols.status]: "not_found", [cols.notes]: note, cost_usd: share })
+    .eq("id", item.id);
+  return "not_found";
 }
 
 async function writeEmail(
@@ -602,17 +1018,24 @@ async function writeEmail(
   contact: Contact | undefined,
   providerId: EmailProviderId,
   share: number,
+  // Contact tag recording the source; Apify providers stay "apify", the direct
+  // methods get their own tag so provenance isn't mislabeled.
+  sourceTag = "apify",
 ): Promise<"found" | "not_found" | "skipped"> {
   const now = new Date().toISOString();
   const extraPatch = (res.extra ?? {}) as Record<string, unknown>;
   const companyEmailsPatch = extraPatch.company_emails ? { company_emails: extraPatch.company_emails } : {};
 
+  // Company phone (from a site scrape) fills contacts.phone fill-only regardless
+  // of the email outcome. A no-op for methods that don't return a phone.
+  if (contact) {
+    const phone =
+      typeof extraPatch.phone === "string" && extraPatch.phone.trim() ? (extraPatch.phone as string).trim() : null;
+    if (phone) await admin.from("contacts").update({ phone }).eq("id", contact.id).is("phone", null);
+  }
+
   if (res.status !== "found" || !res.email) {
-    await admin
-      .from("enrichment_run_items")
-      .update({ [cols.status]: "not_found", [cols.notes]: "no email found", cost_usd: share })
-      .eq("id", item.id);
-    return "not_found";
+    return finishWaterfallMiss(admin, cols, item, contact, extraPatch, "no email found", share);
   }
 
   const san = sanitizeFoundEmail(res.email, {
@@ -621,11 +1044,7 @@ async function writeEmail(
     domain: item.company_domain,
   });
   if (!san.email) {
-    await admin
-      .from("enrichment_run_items")
-      .update({ [cols.status]: "not_found", [cols.notes]: `provider junk email: ${san.rejectReason}`, cost_usd: share })
-      .eq("id", item.id);
-    return "not_found";
+    return finishWaterfallMiss(admin, cols, item, contact, extraPatch, `provider junk email: ${san.rejectReason}`, share);
   }
 
   const noteFlags = san.flags.length ? san.flags.join("; ") : null;
@@ -642,7 +1061,7 @@ async function writeEmail(
       email: { provider: providerId, email: san.email, confidence: res.confidence ?? null, provider_status: providerStatus, found_at: now },
       ...companyEmailsPatch,
     });
-    const tags = Array.from(new Set([...(contact.tags ?? []), "enriched", "apify"]));
+    const tags = Array.from(new Set([...(contact.tags ?? []), "enriched", sourceTag]));
     const { data: updated, error } = await admin
       .from("contacts")
       .update({
@@ -863,13 +1282,9 @@ async function advancePhase(admin: Admin, run: RunRow): Promise<void> {
     if (phase === "domains") {
       phase = "waterfall";
       if (run.run_waterfall) {
-        await admin
-          .from("enrichment_run_items")
-          .update({ waterfall_status: "pending", attempts: 0 })
-          .eq("run_id", run.id)
-          .is("email", null)
-          .not("company_domain", "is", null);
-        const n = await countPending(admin, run.id, "waterfall_status");
+        // Stamp each eligible item with its size-band method (pattern_mv /
+        // vdrmota / bovi / off) from the run's config snapshot.
+        const n = await seedWaterfallItems(admin, run);
         if (n > 0) break;
       }
       continue;

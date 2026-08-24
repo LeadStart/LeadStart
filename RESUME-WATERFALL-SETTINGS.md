@@ -230,7 +230,24 @@ type in [src/types/app.ts](src/types/app.ts)).
    writes `contacts.phone` fill-only (`.is('phone', null)`) + stamps
    `enrichment_run_items.employee_count`.
 
-### Phase 2 — pattern_mv direct method
+### Phase 2 — pattern_mv direct method — ✅ BUILT (2026-08-24), live MV run pending a key
+
+> **Status (2026-08-24):** built + type-checked + unit-tested (candidate generator,
+> `scripts/test-pattern-mv.ts`, 9/9). New `src/lib/enrichment/pattern-mv.ts`
+> (generator + `runPatternMv` worker pool); cron `run-apify-enrichment` gained the
+> direct-method pathway (`runPatternMvBatch`), method-grouped routing
+> (`startNextWaterfall`), per-item size-band seeding (`seedWaterfallItems`), and
+> fail-closed MV suppression/alert parity. Defaults flipped to `pattern_mv`;
+> settings card offers it + the catch-all toggle is live; the enrich-dialog
+> estimate is method-aware (pattern ≈$0.004/contact vs vdrmota per-domain) —
+> both verified in the preview, route round-trip verified against the DB.
+> **Blocked for the live run:** the org has NO Million Verifier key saved (and
+> none in env), so a real pattern_mv run can't execute yet — same class of block
+> as Phase 1's Apify budget. Code handles no-key gracefully (marks items
+> "MV key required", never crashes). To run live: save an MV key in Settings →
+> Integrations, set the org's bands to pattern_mv, then enrich 3 email-less
+> contacts that have a domain (~≤18 credits). The org's stored settings were left
+> unchanged (still vdrmota) — the pattern_mv default applies to new orgs.
 1. `src/lib/enrichment/pattern-mv.ts`: candidate generator (order above; skip
    candidates colliding with known-bad; lowercase; dedupe) + `runPatternMv(items)`
    using the MV client; returns `PhaseResult`-shaped output.
@@ -247,6 +264,49 @@ type in [src/types/app.ts](src/types/app.ts)).
 
 ### Phase 3 — site_scrape actor + provider
 
+> **PROGRESS (2026-08-24): the ACTOR is built + its pure logic unit-tested.** Not
+> yet deployed (blocked on Apify budget) and not yet wired into the pipeline.
+> Built in `apify-actors/site-contact-scraper/`:
+>   - `fetchPage.ts` — the 5-tier waterfall (undici → curl_cffi fingerprint →
+>     curl_cffi+proxy → Playwright+stealth → managed unblocker), SSRF guard +
+>     per-domain politeness + phrase-list block detection, all ported/adapted
+>     from the saasassins engine; `fetchOutcome` per domain.
+>   - `fingerprint_fetch.py` + `fingerprintFetch.ts` — the curl_cffi tier (+proxy).
+>   - `unblocker.ts` — tier-5 client + 429 circuit breaker.
+>   - `extract.ts` (emails/phones/socials/personMatch) + `discover.ts` (nav-link
+>     discovery + multilingual keyword priority) — PURE, unit-tested green
+>     (`test/`: 17 + 6). Block-detection does NOT reject on smallness; `accept()`
+>     predicate threaded (email-or-name).
+>   - `main.ts` (Apify entry) + `scrape.ts` (per-domain orchestration) + Dockerfile
+>     (Node+Chromium base + python3/curl_cffi) + `.actor/` manifest + input schema.
+>   - App `tsconfig.json` excludes `apify-actors` so the actor's own toolchain
+>     doesn't pollute the app build (verified: no leakage).
+> **PIPELINE WIRING DONE (2026-08-24) — Phase 3 is CODE-COMPLETE except deploy.**
+> (i) ✅ `src/lib/apify/providers/waterfall-scrape.ts` PhaseProvider — buildInput
+> dedupes by domain (one target/domain, representative name); parseItems joins by
+> domain, re-derives per-contact name matches from the record's personEmails[],
+> surfaces phone + company_emails in `extra`. Actor id is env-overridable
+> (`SITE_SCRAPE_ACTOR_ID`, default `leadstart~site-contact-scraper`) so no code
+> change is needed after `apify push`.
+> (ii) ✅ Registered in providers/index.ts (`WATERFALL_BY_ACTOR`,
+> `resolveWaterfallActor`) + cron `actorForMethod`.
+> (iii) ✅ Cron two-stage: method groups are now DIRECT (`pattern_mv`), SCRAPE
+> (`site_scrape` + `scrape_plus_pattern`), APIFY_SOLO (`vdrmota`,`bovi`);
+> `startNextBatch` methodFilter is an array (`.in`); `startNextWaterfall` routes
+> the scrape group to the scrape actor; `writeEmail` writes `contacts.phone`
+> fill-only + `company_emails` on both hit AND miss, and `finishWaterfallMiss`
+> hands a `scrape_plus_pattern` miss to stage-2 pattern_mv (flips
+> waterfall_method → pattern_mv, status → pending). `waterfall_method` added to
+> `ENRICH_ITEM_WORK_COLUMNS` + ItemRow; `isEmptyInput` recognizes `targets`.
+> (iv) ✅ Settings card lists site_scrape + scrape_plus_pattern; enrich-dialog
+> estimate has a `scrape` kind (≈$0.006/company compute) — verified live in the
+> preview. pricing.ts: `estimateScrapeCost` + `SITE_SCRAPE_COST_USD`.
+> All app tsc-clean; actor pure logic 23/23 green.
+> **REMAINING: only deploy** — `apify push` (owner CLI login, needs Apify budget
+> headroom → Aug 28), set `SITE_SCRAPE_ACTOR_ID` (+ optional
+> `SITE_SCRAPE_UNBLOCKER_KEY`) in Vercel env, smoke-test 3 sites, then set an org
+> band to site_scrape/scrape_plus_pattern to exercise end-to-end.
+
 > **Design locked with the owner (2026-08-24, follow-up session).** Build for ANY
 > ICP, not just small/local businesses — the scraper is intended to eventually be
 > resold as a decision-maker-finding service for other companies' TAM/ICPs.
@@ -256,29 +316,76 @@ type in [src/types/app.ts](src/types/app.ts)).
 > pages are the personMatch fuel), priority contact → team/leadership → about,
 > capped by `scrape_max_pages` (org default now **6**, was 4). Hardcoded paths
 > only as the no-nav fallback.
-> (b) **Three-tier escalation ladder; tier 3 WIRED at launch, key-optional** —
-> tier 1 undici → tier 2 Playwright+stealth (Apify residential proxy is the
-> intermediate lever) → tier 3 managed unblocker (Scrapfly-class, plain HTTP call
-> from inside the actor). Tier 3 fires ONLY on tier-2 failures AND only when
-> `unblockerKey` is present in the input; no key → ladder stops at tier 2. Every
-> domain stamps `fetchOutcome: ok_http | ok_browser | ok_unblocker | blocked |
-> empty | error` so each run measures its own block rate. Per-request gating
-> keeps the cost story intact — the unblocker premium applies only to the
-> residual. Vendor + pricing pinned at key-signup time (Scrapfly vs
-> ScrapingBee/Zyte comparison then).
+> (b) **FIVE-tier escalation ladder — upgraded 2026-08-24 from the proven
+> saasassins-scraper-engine (curl_cffi tier recovered 144/144 = 100% of a hard
+> anti-bot set at ~250ms, $0).** The original 3-tier plan jumped undici →
+> Playwright → unblocker and MISSED the highest-leverage cheap tier: a TLS/JA3 +
+> HTTP-2 **fingerprint impersonation** fetch (no browser). Most small/mid sites
+> gate on the client's TLS handshake fingerprint (Akamai, many WAFs), NOT on a JS
+> challenge — Node's undici has a non-browser JA3 and gets blocked; `curl_cffi`
+> reproduces a real Chrome fingerprint so the same plain GET sails through and the
+> content is already in the static HTML. New ladder:
+>   1. **undici direct** — plain HTTPS + Chrome UA, datacenter IP (~100ms, $0; unprotected sites)
+>   2. **curl_cffi fingerprint** — Chrome TLS/JA3 + HTTP-2 impersonation, no browser (~250ms, $0; beats TLS/WAF gating — THE new tier, the reason for the high hit rate)
+>   3. **curl_cffi + Apify residential proxy** — fingerprint + clean IP reputation (small proxy cost; beats IP-reputation blocks a datacenter IP fails)
+>   4. **Playwright + stealth** (playwright-extra + puppeteer-extra-plugin-stealth, optionally via residential proxy) — only when the page is JS-RENDERED (seconds, compute)
+>   5. **managed unblocker** (Scrapfly-class ASP+render_js, plain HTTP from inside the actor) — hard Cloudflare/DataDome only; key-optional (`unblockerKey` in input; absent → ladder stops at tier 4), fires ONLY on a tier-4 miss, with a consecutive-429 circuit breaker (disable for the run after ~6 sustained 429s = quota exhausted) mirroring the reference's ScrapFly breaker.
+> Fingerprint (tiers 2–3) is network-layer; stealth (tier 4) is browser-layer —
+> we now have BOTH (the original plan had only the browser layer). Each domain
+> stamps `fetchOutcome: ok_http | ok_fingerprint | ok_fingerprint_proxy |
+> ok_browser | ok_unblocker | blocked | empty | error` so each run measures its
+> own tier distribution + block rate. Per-tier gating keeps the cost story intact
+> — curl_cffi collapses the escalation rate to the expensive browser/paid tiers,
+> so most "blocked" sites resolve at ~$0. Docker image note below (Python).
 > (c) **Pre-run estimate band** — the Contacts enrich dialog gains a site_scrape
 > estimate line (≈$0.002–0.01 × domains, "billed as compute"; unblocker requests
 > cost extra), not just post-run `usageTotalUsd`.
 > (d) Resale productization (whose Apify account, billing pass-through,
 > multi-tenancy) is explicitly OUT of Phase 3 — running the private actor under
 > the owner's account on clients' behalf covers v1.
+> (e) **Block-detection + accept-predicate (adopt from the reference verbatim —
+> both are battle-tested and one contradicts the original plan).**
+>   - A 200 whose BODY is a challenge page is NOT success: match a
+>     high-precision interstitial phrase list ("pardon our interruption", "just a
+>     moment...", "verifying you are human", "attention required!", "enable
+>     javascript and cookies to continue", "access to this page has been denied",
+>     …) over the first ~4KB. Deliberately specific — a bare "cloudflare"/"captcha"
+>     mention appears on legit pages.
+>   - **DROP the original plan's "<500 chars text → escalate" rule.** The
+>     reference explicitly warns it drops real leads: legit minimal company sites
+>     / SoS pages are often tiny. Only treat truly-empty (<~120 chars) as a miss.
+>   - **`accept(html, status)` predicate** threaded per fetch: for our use case,
+>     accept = "page yields a mailto/email regex OR the target's name". A page
+>     that loads clean but has no contact info then FALLS THROUGH to a browser
+>     render (which may reveal JS-injected `mailto:`s) instead of being scored a
+>     miss — a direct hit-rate win for email specifically. Keep the last usable
+>     HTML and return it if every tier fails accept.
+> (f) **SSRF guard + politeness (legal guardrail — the actor fetches arbitrary
+> discovered nav-link URLs).** Block private/loopback IPs via DNS resolution
+> before fetch; per-domain min 1.5s gap between request starts; per-domain
+> cooldown once a domain refuses (403/429) at EVERY tier — escalate tiers on a
+> block, never hammer. NEVER add login, CAPTCHA-solving, or evasion beyond
+> fingerprint-correct polite fetching of public pages.
 
-1. New repo folder `apify-actors/site-contact-scraper/` (Dockerfile-less Apify
-   Node/Playwright template; `playwright-extra` + stealth plugin; HTTPS-first via
-   undici with realistic headers; escalation rules: empty `<body>`, <500 chars text,
-   403/503, Cloudflare markers). Deployed to the owner's Apify account as a PRIVATE
-   actor (`apify push` — needs the owner's Apify CLI login once; document in
-   activation). Pin actor build memory ≤1024MB to keep `actor-start-gb` tiny.
+1. New repo folder `apify-actors/site-contact-scraper/`. **Custom Dockerfile
+   (NOT the Dockerfile-less template) — the image needs BOTH Node and Python:**
+   base `apify/actor-node-playwright-chrome`, then `apt-get python3` +
+   `pip install curl_cffi==0.13.0` (small). Fetch waterfall = a generalized
+   `fetchPage(url, {accept, staticOnly})` ported from the reference's
+   [fetchPage.ts](../saasassins-scraper-engine/src/fetchPage.ts): tiers 1/4/5 pure
+   Node, tiers 2/3 shell out to a bundled `fingerprint_fetch.py` via `execFile`
+   (the reference's Node→Python shim drops in unchanged). `staticOnly:true` (skip
+   the browser tiers) for the bulk/large-company sweeps. Deployed to the owner's
+   Apify account as a PRIVATE actor (`apify push` — needs the owner's Apify CLI
+   login once; document in activation). Pin build memory ≤1024MB to keep
+   `actor-start-gb` tiny (curl_cffi tier needs no extra memory; only Playwright/
+   unblocker tiers do). **Why the Apify actor is the right home:** curl_cffi needs
+   a Python subprocess and Playwright needs headful Chromium — neither runs on
+   Vercel/serverless, but both run in the actor's Docker container. This
+   VALIDATES the private-actor choice (the reference explicitly notes it must run
+   on a real box/VPS, not serverless). Reference engine saved at
+   `C:\Users\dtucc\Downloads\saasassins-scraper-engine.zip`; see
+   [[apify-fingerprint-fetch-engine]] memory.
 2. `src/lib/apify/providers/waterfall-scrape.ts`: `PhaseProvider` for it (join by
    domain like vdrmota's parser); writes phone fill-only, `company_emails` to
    enrichment_data, name-matched personal email via `writeEmail(...,'site_scrape')`.

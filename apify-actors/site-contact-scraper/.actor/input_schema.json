@@ -1,0 +1,42 @@
+{
+  "title": "Site Contact Scraper input",
+  "type": "object",
+  "schemaVersion": 1,
+  "properties": {
+    "targets": {
+      "title": "Targets",
+      "type": "array",
+      "description": "Companies to scrape. Each item: { domain, firstName?, lastName? }. firstName/lastName let the scraper flag a name-matched personal email.",
+      "editor": "json",
+      "prefill": [{ "domain": "example.com", "firstName": "Jane", "lastName": "Doe" }]
+    },
+    "maxPagesPerDomain": {
+      "title": "Max pages per domain",
+      "type": "integer",
+      "description": "Homepage + discovered contact pages, capped at this many total.",
+      "default": 6,
+      "minimum": 1,
+      "maximum": 12
+    },
+    "pageKeywords": {
+      "title": "Page keywords (optional override)",
+      "type": "array",
+      "description": "Override the default contact-page keyword list. Each item: { kw, priority } (lower priority = fetched sooner).",
+      "editor": "json"
+    },
+    "useProxy": {
+      "title": "Use residential proxy",
+      "type": "boolean",
+      "description": "Route the fingerprint + browser tiers through Apify residential proxies (small extra cost; beats IP-reputation blocks).",
+      "default": false
+    },
+    "unblockerKey": {
+      "title": "Unblocker API key",
+      "type": "string",
+      "description": "Managed unblocker (ScrapFly-class) key for tier 5. Leave blank to stop the ladder at tier 4.",
+      "editor": "textfield",
+      "isSecret": true
+    }
+  },
+  "required": ["targets"]
+}

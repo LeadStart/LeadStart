@@ -1190,16 +1190,17 @@ export interface EnrichmentSettings {
   scrape_max_pages: number;
 }
 
-// Phase-1 defaults preserve today's behavior (vdrmota for every band) so no run
-// silently loses its waterfall before pattern_mv/site_scrape ship. The one
-// deliberate change is the leads cap dropping 10 → 3 (see RESUME-WATERFALL-SETTINGS).
-// Phase 2 flips the method defaults to pattern_mv / scrape_plus_pattern.
+// Phase-2 defaults route every band to pattern_mv (pattern-permutation +
+// Million Verifier) — ~$0.004/contact, surgical, no Apify. vdrmota stays
+// available as an explicit per-band choice. The leads cap (10 → 3) still applies
+// when a band is set to vdrmota. Phase 3 will flip `small_method` to
+// scrape_plus_pattern once the site scraper ships (see RESUME-WATERFALL-SETTINGS).
 export const DEFAULT_ENRICHMENT_SETTINGS: EnrichmentSettings = {
   waterfall_enabled: true,
   size_threshold: 50,
-  small_method: "vdrmota",
-  large_method: "vdrmota",
-  unknown_method: "vdrmota",
+  small_method: "pattern_mv",
+  large_method: "pattern_mv",
+  unknown_method: "pattern_mv",
   vdrmota_max_leads: 3,
   accept_catch_all_guesses: false,
   // 6 (not 4): owner wants team/leadership/staff pages in the crawl — they're

@@ -1,0 +1,8 @@
+node_modules
+.venv
+apify_storage
+storage
+dist
+.git
+*.log
+test

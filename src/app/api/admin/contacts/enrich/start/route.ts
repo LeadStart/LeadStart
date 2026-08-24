@@ -87,13 +87,18 @@ export async function POST(request: NextRequest) {
   }
 
   // Org waterfall config (migration 00075). The run_waterfall request is honored
-  // only when the org's waterfall is enabled AND a size band names an Apify
-  // method (direct methods like pattern_mv arrive in Phase 2). The settings are
-  // snapshotted onto the run so an in-flight run never re-reads live config.
+  // when the org's waterfall is enabled AND at least one size band names a real
+  // method (not 'off'). The Apify actor snapshot may be null when every band is
+  // a direct method (pattern_mv) — that's fine, the worker routes per item. The
+  // settings are snapshotted onto the run so it never re-reads live config.
   const settings = await loadEnrichmentSettings(admin, organizationId);
   const waterfallActor = resolveWaterfallActor(settings);
+  const waterfallHasWork =
+    settings.small_method !== "off" ||
+    settings.large_method !== "off" ||
+    settings.unknown_method !== "off";
   const runWaterfallEffective =
-    runWaterfall && settings.waterfall_enabled && waterfallActor !== null;
+    runWaterfall && settings.waterfall_enabled && waterfallHasWork;
   if (!runProfiles && !runDomains && !runWaterfallEffective && !runActivity) {
     // Only the waterfall was requested and config disables it.
     return NextResponse.json(

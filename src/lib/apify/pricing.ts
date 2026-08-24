@@ -18,6 +18,28 @@ export const APIFY_FREE_TIER_MULTIPLIER = 20;
 // when the caller doesn't know the org's configured cap.
 export const DEFAULT_WATERFALL_MAX_LEADS = 3;
 
+// Approx cost of ONE Million Verifier credit (used to tally pattern_mv per-item
+// cost). MV is a prepaid pool, not per-call metered like Apify, so this is a
+// rough unit price — ~$0.004 per contact worst case (≤6 candidates, catch-all +
+// unknown are free). Pattern_mv typically resolves in 1–3 charged credits.
+export const MV_CREDIT_COST_USD = 0.0007;
+
+// Estimate for the pattern_mv method: contacts × ~6 candidate checks × unit
+// price, an honest upper bound (most resolve in far fewer).
+export const PATTERN_MV_MAX_CREDITS_PER_CONTACT = 6;
+export function estimatePatternMvCost(contacts: number): number {
+  return contacts * PATTERN_MV_MAX_CREDITS_PER_CONTACT * MV_CREDIT_COST_USD;
+}
+
+// site_scrape (our own actor) bills raw Apify COMPUTE per site, not per-lead
+// events: ~$0.002–0.01/site depending on whether the browser tier fires. This
+// midpoint is a per-domain estimate band; the actual cost is read from the run's
+// usageTotalUsd. A managed-unblocker request (tier 5) would add its own charge.
+export const SITE_SCRAPE_COST_USD = 0.006;
+export function estimateScrapeCost(domains: number): number {
+  return domains * SITE_SCRAPE_COST_USD;
+}
+
 export function estimateProfileCost(profiles: number): number {
   return profiles * PROFILE_EMAIL_COST_USD;
 }

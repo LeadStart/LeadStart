@@ -1,0 +1,3 @@
+# Python dependency for the TLS/HTTP-2 fingerprint tier (src/fingerprint_fetch.py).
+# Pinned to match the proven saasassins engine. Pulls in cffi + certifi.
+curl_cffi==0.13.0

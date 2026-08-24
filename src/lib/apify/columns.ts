@@ -21,7 +21,7 @@ export const ENRICH_ITEM_COLUMNS =
 // The join keys + per-step run ids the worker needs to build input and ingest.
 export const ENRICH_ITEM_WORK_COLUMNS =
   "id, contact_id, linkedin_url, profile_id, company_linkedin_url, company_id, company_slug, " +
-  "company_name, first_name, last_name, company_domain, email, attempts, " +
+  "company_name, first_name, last_name, company_domain, email, attempts, waterfall_method, " +
   "profile_status, profile_apify_run_id, domain_status, domain_apify_run_id, " +
   "waterfall_status, waterfall_apify_run_id, " +
   "activity_status, activity_apify_run_id";

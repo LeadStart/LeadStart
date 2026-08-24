@@ -50,6 +50,8 @@ import {
   DEFAULT_WATERFALL_MAX_LEADS,
   APIFY_FREE_TIER_MULTIPLIER,
   estimateWaterfallCost,
+  estimatePatternMvCost,
+  estimateScrapeCost,
 } from "@/lib/apify/pricing";
 import { toast } from "sonner";
 import Link from "next/link";
@@ -377,6 +379,10 @@ export default function ContactsPage() {
   const [enrichWaterfallCfg, setEnrichWaterfallCfg] = useState<{
     enabled: boolean;
     leadCap: number;
+    // Cost shape of the configured method(s): "pattern" (pattern_mv, ~$0.004/contact
+    // via Million Verifier), "scrape" (our site scraper, per-domain compute),
+    // "apify" (vdrmota/bovi directory scrape, per-domain), or "off".
+    kind: "off" | "pattern" | "scrape" | "apify";
   } | null>(null);
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
   useEffect(() => {
@@ -399,18 +405,40 @@ export default function ContactsPage() {
     let cancelled = false;
     fetch(appUrl("/api/admin/enrichment/settings"), { cache: "no-store" })
       .then((r) => r.json())
-      .then((d: { settings?: { waterfall_enabled?: boolean; vdrmota_max_leads?: number } }) => {
-        if (cancelled || !d?.settings) return;
-        const enabled = d.settings.waterfall_enabled !== false;
-        setEnrichWaterfallCfg({
-          enabled,
-          leadCap:
-            typeof d.settings.vdrmota_max_leads === "number"
-              ? d.settings.vdrmota_max_leads
-              : DEFAULT_WATERFALL_MAX_LEADS,
-        });
-        if (!enabled) setEnrichRunWaterfall(false);
-      })
+      .then(
+        (d: {
+          settings?: {
+            waterfall_enabled?: boolean;
+            vdrmota_max_leads?: number;
+            small_method?: string;
+            large_method?: string;
+            unknown_method?: string;
+          };
+        }) => {
+          if (cancelled || !d?.settings) return;
+          const s = d.settings;
+          const enabled = s.waterfall_enabled !== false;
+          const methods = [s.small_method, s.large_method, s.unknown_method];
+          const applicable = methods.filter((m) => m && m !== "off");
+          // Pick the estimate shape from the priciest method in play: a directory
+          // scraper (vdrmota/bovi) > our site scraper > pattern+verify.
+          const kind: "off" | "pattern" | "scrape" | "apify" =
+            applicable.length === 0
+              ? "off"
+              : applicable.some((m) => m === "vdrmota" || m === "bovi")
+                ? "apify"
+                : applicable.some((m) => m === "site_scrape" || m === "scrape_plus_pattern")
+                  ? "scrape"
+                  : "pattern";
+          setEnrichWaterfallCfg({
+            enabled,
+            leadCap:
+              typeof s.vdrmota_max_leads === "number" ? s.vdrmota_max_leads : DEFAULT_WATERFALL_MAX_LEADS,
+            kind,
+          });
+          if (!enabled || kind === "off") setEnrichRunWaterfall(false);
+        },
+      )
       .catch(() => {
         /* estimate falls back to defaults */
       });
@@ -525,10 +553,23 @@ export default function ContactsPage() {
     return domains.size + unknown;
   })();
   const waterfallLeadCap = enrichWaterfallCfg?.leadCap ?? DEFAULT_WATERFALL_MAX_LEADS;
+  // Default to the pattern method (Phase-2 default) until the config loads.
+  const waterfallKind = enrichWaterfallCfg?.kind ?? "pattern";
+  const waterfallDisabled = enrichWaterfallCfg
+    ? !enrichWaterfallCfg.enabled || enrichWaterfallCfg.kind === "off"
+    : false;
+  const waterfallEstimate =
+    waterfallKind === "apify"
+      ? estimateWaterfallCost(enrichWaterfallDomains, waterfallLeadCap)
+      : waterfallKind === "scrape"
+        ? estimateScrapeCost(enrichWaterfallDomains)
+        : waterfallKind === "pattern"
+          ? estimatePatternMvCost(enrichNeedsEmail)
+          : 0;
   const enrichEstimate =
     (enrichRunProfiles ? enrichNeedsEmail * ENRICH_COST_PROFILE : 0) +
     (enrichRunDomains ? enrichNeedsDomain * ENRICH_COST_DOMAIN : 0) +
-    (enrichRunWaterfall ? estimateWaterfallCost(enrichWaterfallDomains, waterfallLeadCap) : 0) +
+    (enrichRunWaterfall ? waterfallEstimate : 0) +
     (enrichRunActivity ? enrichActivityCount * ENRICH_COST_ACTIVITY : 0);
   const unverifiedSelected = selectedContacts.filter(
     (c) =>
@@ -1615,26 +1656,28 @@ export default function ContactsPage() {
               </label>
               <label
                 className={`flex items-start gap-2 text-sm ${
-                  enrichWaterfallCfg?.enabled === false
-                    ? "cursor-not-allowed opacity-60"
-                    : "cursor-pointer"
+                  waterfallDisabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"
                 }`}
               >
                 <input
                   type="checkbox"
                   checked={enrichRunWaterfall}
-                  disabled={enrichWaterfallCfg?.enabled === false}
+                  disabled={waterfallDisabled}
                   onChange={(e) => setEnrichRunWaterfall(e.target.checked)}
                   className="mt-0.5 h-4 w-4 rounded border-border accent-[#2E37FE] cursor-pointer"
                 />
                 <span>
                   Second pass on misses
                   <span className="block text-[11px] text-muted-foreground">
-                    {enrichWaterfallCfg?.enabled === false
+                    {waterfallDisabled
                       ? "turned off in Settings → Integrations"
-                      : `crawls each company's site + pulls up to ${waterfallLeadCap} directory ${
-                          waterfallLeadCap === 1 ? "lead" : "leads"
-                        } ≈ $${(waterfallLeadCap * WATERFALL_PER_LEAD_USD).toFixed(3)} per company (paid plan) · ~${APIFY_FREE_TIER_MULTIPLIER}× higher on the Apify free tier`}
+                      : waterfallKind === "pattern"
+                        ? `guesses the common email patterns + verifies each with Million Verifier ≈ $${estimatePatternMvCost(1).toFixed(3)} per contact`
+                        : waterfallKind === "scrape"
+                          ? `scrapes each company site for phone + emails ≈ $${estimateScrapeCost(1).toFixed(3)} per company (compute; +MV credits if it falls through to pattern)`
+                          : `crawls each company's site + pulls up to ${waterfallLeadCap} directory ${
+                              waterfallLeadCap === 1 ? "lead" : "leads"
+                            } ≈ $${(waterfallLeadCap * WATERFALL_PER_LEAD_USD).toFixed(3)} per company (paid plan) · ~${APIFY_FREE_TIER_MULTIPLIER}× higher on the Apify free tier`}
                   </span>
                 </span>
               </label>
