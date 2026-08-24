@@ -94,6 +94,24 @@ function estimatePerItem(phase: EnrichmentPhase): number {
   }
 }
 
+// Add a failed/aborted run's real Apify charge to the enrichment run total.
+// Pay-per-event billing charges as events happen, so a run that never SUCCEEDED
+// still cost money; only the success path recorded it before, which silently
+// hid the spend (e.g. an aborted vdrmota waterfall). No estimate fallback here —
+// a run that didn't finish has no item count to estimate from; record only what
+// Apify actually reports.
+async function recordBadRunCost(
+  admin: Admin,
+  run: RunRow,
+  apRun: { usageTotalUsd?: number | null },
+): Promise<void> {
+  const usd = typeof apRun.usageTotalUsd === "number" ? apRun.usageTotalUsd : 0;
+  if (usd <= 0) return;
+  const next = (Number(run.cost_usd) || 0) + usd;
+  await admin.from("enrichment_runs").update({ cost_usd: next }).eq("id", run.id);
+  run.cost_usd = next;
+}
+
 function mergeEnrichment(ed: unknown, patch: Record<string, unknown>): Record<string, unknown> {
   const base = ed && typeof ed === "object" ? { ...(ed as Record<string, unknown>) } : {};
   const enr =
@@ -213,6 +231,9 @@ async function runPhase(
         } catch {
           /* best-effort */
         }
+        // Apify bills per event as it runs, so a stuck+aborted run still cost
+        // money — record whatever it accrued (partial) so spend isn't hidden.
+        await recordBadRunCost(admin, run, apRun);
         await requeueOrFail(admin, run, cols, "stuck >20min; aborted");
         await clearActive(admin, run.id);
         return { status: "batch_failed", apify_status: apRun.status, note: "stuck" };
@@ -251,6 +272,10 @@ async function runPhase(
     }
 
     if (isTerminalBad(apRun.status)) {
+      // A FAILED/TIMED-OUT/ABORTED run still incurred its per-event charges —
+      // record the real cost (usageTotalUsd is final here) before requeueing,
+      // or the spend disappears from the run total.
+      await recordBadRunCost(admin, run, apRun);
       await requeueOrFail(admin, run, cols, `Apify run ${apRun.status}: ${apRun.statusMessage ?? ""}`);
       await clearActive(admin, run.id);
       const failures = (run.consecutive_failures ?? 0) + 1;

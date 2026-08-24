@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useUser } from "@/hooks/use-user";
+import { ApifySpendCard } from "./apify-spend-card";
 import {
   Key,
   RefreshCw,
@@ -1272,6 +1273,9 @@ export default function IntegrationsPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Apify spend — authoritative cost breakdown read live from Apify */}
+      <ApifySpendCard />
 
       {/* Anthropic — decision-maker enrichment Layer 1 */}
       <Card className="border-border/50 shadow-sm">

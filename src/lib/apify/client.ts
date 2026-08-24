@@ -160,6 +160,73 @@ export class ApifyClient {
     return typeof n === "number" && Number.isFinite(n) ? n : null;
   }
 
+  // ---- Account spend (authoritative, matches the Apify invoice) ----
+
+  // The account's current monthly usage cycle: window, dollars used, and cap.
+  // `usageUsd` is Apify's own authoritative cycle total (includes every run,
+  // succeeded or not, plus storage) — the number to trust over our per-run tallies.
+  async getMonthlyUsage(): Promise<{
+    cycleStart: string | null;
+    cycleEnd: string | null;
+    usageUsd: number | null;
+    limitUsd: number | null;
+  }> {
+    const { body } = await this.request<{
+      data: {
+        monthlyUsageCycle?: { startAt?: string; endAt?: string };
+        limits?: { maxMonthlyUsageUsd?: number };
+        current?: { monthlyUsageUsd?: number };
+      };
+    }>("/users/me/limits");
+    const d = body.data ?? {};
+    return {
+      cycleStart: d.monthlyUsageCycle?.startAt ?? null,
+      cycleEnd: d.monthlyUsageCycle?.endAt ?? null,
+      usageUsd: typeof d.current?.monthlyUsageUsd === "number" ? d.current.monthlyUsageUsd : null,
+      limitUsd: typeof d.limits?.maxMonthlyUsageUsd === "number" ? d.limits.maxMonthlyUsageUsd : null,
+    };
+  }
+
+  // Recent actor runs across the account (newest first), each with its real
+  // charge — the raw material for the per-actor spend breakdown.
+  async listRuns(
+    opts: { limit?: number } = {},
+  ): Promise<
+    Array<{ id: string; actId: string; status: string; startedAt: string; usageTotalUsd: number | null }>
+  > {
+    const { body } = await this.request<{
+      data: {
+        items?: Array<{
+          id: string;
+          actId: string;
+          status: string;
+          startedAt: string;
+          usageTotalUsd?: number | null;
+        }>;
+      };
+    }>("/actor-runs", { searchParams: { desc: true, limit: opts.limit ?? 1000 } });
+    return (body.data?.items ?? []).map((r) => ({
+      id: r.id,
+      actId: r.actId,
+      status: r.status,
+      startedAt: r.startedAt,
+      usageTotalUsd: typeof r.usageTotalUsd === "number" ? r.usageTotalUsd : null,
+    }));
+  }
+
+  // "username/actor-name" for an actor id (best-effort; falls back to the id).
+  async getActorName(actId: string): Promise<string> {
+    try {
+      const { body } = await this.request<{ data: { username?: string; name?: string } }>(
+        `/acts/${encodeURIComponent(actId)}`,
+      );
+      const d = body.data;
+      return d?.username && d?.name ? `${d.username}/${d.name}` : actId;
+    } catch {
+      return actId;
+    }
+  }
+
   // One page of dataset items (bare JSON array). `total` comes from the
   // X-Apify-Pagination-Total header when present.
   async getDatasetItems<T = Record<string, unknown>>(

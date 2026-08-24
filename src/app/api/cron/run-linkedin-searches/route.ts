@@ -111,6 +111,10 @@ export async function GET(request: NextRequest) {
           await client.abortRun(row.active_apify_run_id).catch(() => {});
           const failures = row.consecutive_failures + 1;
           await release({
+            // A stuck+aborted actor still incurred charges — record what it
+            // accrued (partial) so spend isn't hidden.
+            cost_usd:
+              Number(row.cost_usd) + (typeof run.usageTotalUsd === "number" ? run.usageTotalUsd : 0),
             active_apify_run_id: null,
             active_apify_dataset_id: null,
             active_batch_started_at: null,
@@ -176,6 +180,10 @@ export async function GET(request: NextRequest) {
       // Terminal-bad (FAILED / TIMED-OUT / ABORTED).
       const failures = row.consecutive_failures + 1;
       await release({
+        // A failed/aborted actor still cost money (per-event billing) — record
+        // the real charge so it isn't dropped from the search's cost.
+        cost_usd:
+          Number(row.cost_usd) + (typeof run.usageTotalUsd === "number" ? run.usageTotalUsd : 0),
         active_apify_run_id: null,
         active_apify_dataset_id: null,
         active_batch_started_at: null,
