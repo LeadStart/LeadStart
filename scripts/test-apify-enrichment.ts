@@ -24,7 +24,6 @@ import {
 import { sanitizeFoundEmail } from "../src/lib/apify/email-sanity.ts";
 import { profileProvider } from "../src/lib/apify/providers/profile-harvestapi.ts";
 import { companyProvider } from "../src/lib/apify/providers/company-harvestapi.ts";
-import { waterfallVdrmotaProvider } from "../src/lib/apify/providers/waterfall-vdrmota.ts";
 import { waterfallBoviProvider } from "../src/lib/apify/providers/waterfall-bovi.ts";
 import { activityProvider } from "../src/lib/apify/providers/activity-harvestapi.ts";
 import { ApifyClient } from "../src/lib/apify/client.ts";
@@ -168,34 +167,6 @@ console.log("companyProvider.parseItems");
   const r = companyProvider.parseItems(ds, items);
   eq(r.get("c3")?.companyDomain, "marsden.com", "company matched by slug");
   eq(r.get("c4")?.status, "not_found", "unique-name match but social-only website → not_found");
-}
-
-// ---------------- waterfall vdrmota ----------------
-console.log("waterfallVdrmotaProvider.parseItems");
-{
-  const items = [
-    item({ id: "w1", first_name: "Mark", last_name: "Salek", company_domain: "cleannetusa.com" }),
-    item({ id: "w2", first_name: "Ghost", last_name: "Person", company_domain: "cleannetusa.com" }),
-    item({ id: "w3", first_name: "X", last_name: "Y", company_domain: "uncrawled.com" }),
-  ];
-  const ds = [
-    {
-      domain: "cleannetusa.com",
-      emails: ["info@cleannetusa.com", "sales@cleannetusa.com"],
-      leadsEnrichment: [{ firstName: "Mark", lastName: "Salek", email: "msalek@cleannetusa.com", emailVerificationStatus: "valid" }],
-    },
-  ];
-  const r = waterfallVdrmotaProvider.parseItems(ds, items);
-  eq(r.get("w1")?.status, "found", "vdrmota person matched in leadsEnrichment");
-  eq(r.get("w1")?.email, "msalek@cleannetusa.com", "vdrmota email");
-  eq(
-    (r.get("w1")?.extra as { waterfall_status?: string })?.waterfall_status,
-    "valid",
-    "vdrmota raw verification kept as provenance (not a verdict)",
-  );
-  assert(Array.isArray((r.get("w1")?.extra as { company_emails?: unknown[] })?.company_emails), "vdrmota company_emails captured");
-  eq(r.get("w2")?.status, "not_found", "vdrmota person not in leads → not_found");
-  eq(r.get("w3")?.status, "not_found", "vdrmota domain not crawled → not_found");
 }
 
 // ---------------- waterfall bovi ----------------

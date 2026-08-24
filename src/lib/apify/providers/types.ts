@@ -30,11 +30,11 @@ export interface PhaseResult {
 // ProviderItem.id; items with no entry are treated as not_found by the worker.
 // Email verification is NOT a provider concern — Million Verifier owns it.
 export interface PhaseProvider {
-  id: string; // 'harvestapi' | 'harvestapi-company' | 'vdrmota' | 'bovi'
+  id: string; // 'harvestapi' | 'harvestapi-company' | 'site_scrape' | 'bovi'
   actorId: string; // Apify "username~actor" id
   // `config` is the run's enrichment-settings snapshot (migration 00075). Only
-  // the vdrmota waterfall reads it today (its per-company lead cap); the other
-  // providers ignore it.
+  // the site-scrape provider reads it today (its scrape_max_pages); the others
+  // ignore it.
   buildInput(items: ProviderItem[], config?: EnrichmentSettings | null): unknown;
   parseItems(datasetItems: unknown[], items: ProviderItem[]): Map<string, PhaseResult>;
 }

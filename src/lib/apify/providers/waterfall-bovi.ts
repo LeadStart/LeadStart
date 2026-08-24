@@ -1,6 +1,6 @@
 import { personKey, trimRaw, type PhaseProvider, type PhaseResult, type ProviderItem } from "./types";
 
-// Free-tier alternative to vdrmota for the waterfall (pay only per found email).
+// Opt-in Apify pattern-finder fallback for the waterfall (pay only per found email).
 // Registered but not the default — see providers/index.ts. Batch name+domain.
 export const WATERFALL_BOVI_ACTOR_ID = "bovi~email-finder-bulk";
 

@@ -401,10 +401,11 @@ export type EmailVerificationQuality = "good" | "bad" | "risky";
 // Which method supplied the email during enrichment (migration 00070; waterfall
 // methods extended in 00075). Provenance only — verification itself is Million
 // Verifier's, not Apify's. `pattern_mv` (pattern-permutation + Million Verifier)
-// and `site_scrape` (our own contact scraper) ship in later waterfall phases.
+// and `site_scrape` (our own contact scraper) are the waterfall methods; `bovi`
+// is the pay-per-found Apify fallback. (Historical rows may carry the retired
+// `vdrmota` value in the plain-TEXT column — that's fine, it's provenance data.)
 export type EmailProviderId =
   | "harvestapi"
-  | "vdrmota"
   | "bovi"
   | "pattern_mv"
   | "site_scrape";
@@ -1145,19 +1146,16 @@ export type EnrichmentPhase = "profiles" | "domains" | "waterfall" | "activity" 
 export type EnrichmentStepStatus =
   | "pending" | "in_flight" | "found" | "not_found" | "skipped" | "error";
 
-// The pluggable second-pass email waterfall methods (migration 00075). Only the
-// Apify methods (`vdrmota`, `bovi`) plus `off` are wired in Phase 1; the direct
-// methods arrive in later phases:
+// The pluggable second-pass email waterfall methods (migration 00075):
+//   pattern_mv          — first/last/domain permutations verified by Million Verifier (default)
 //   scrape_plus_pattern — our site scraper, then pattern_mv on the still-missing
-//   pattern_mv          — first/last/domain permutations verified by Million Verifier
-//   site_scrape         — our own HTTPS-first → Playwright company-site scraper
-//   vdrmota / bovi      — existing Apify community actors
+//   site_scrape         — our own 5-tier anti-bot company-site scraper
+//   bovi                — pay-per-found Apify pattern finder (fallback)
 //   off                 — skip the waterfall for this size band
 export type EnrichmentWaterfallMethod =
   | "scrape_plus_pattern"
   | "pattern_mv"
   | "site_scrape"
-  | "vdrmota"
   | "bovi"
   | "off";
 
@@ -1165,7 +1163,6 @@ export const ENRICHMENT_WATERFALL_METHODS: readonly EnrichmentWaterfallMethod[] 
   "scrape_plus_pattern",
   "pattern_mv",
   "site_scrape",
-  "vdrmota",
   "bovi",
   "off",
 ];
@@ -1182,26 +1179,21 @@ export interface EnrichmentSettings {
   small_method: EnrichmentWaterfallMethod;
   large_method: EnrichmentWaterfallMethod;
   unknown_method: EnrichmentWaterfallMethod;
-  // vdrmota directory leads pulled per company (each billed). 1–10.
-  vdrmota_max_leads: number;
   // Whether pattern_mv may auto-write a catch-all guess (Phase 2 gate).
   accept_catch_all_guesses: boolean;
   // Max pages the site scraper crawls per domain (Phase 3).
   scrape_max_pages: number;
 }
 
-// Phase-2 defaults route every band to pattern_mv (pattern-permutation +
-// Million Verifier) — ~$0.004/contact, surgical, no Apify. vdrmota stays
-// available as an explicit per-band choice. The leads cap (10 → 3) still applies
-// when a band is set to vdrmota. Phase 3 will flip `small_method` to
-// scrape_plus_pattern once the site scraper ships (see RESUME-WATERFALL-SETTINGS).
+// Defaults route every band to pattern_mv (pattern-permutation + Million
+// Verifier) — ~$0.004/contact, surgical, no Apify. site_scrape / scrape_plus_pattern
+// and the bovi fallback are opt-in per band.
 export const DEFAULT_ENRICHMENT_SETTINGS: EnrichmentSettings = {
   waterfall_enabled: true,
   size_threshold: 50,
   small_method: "pattern_mv",
   large_method: "pattern_mv",
   unknown_method: "pattern_mv",
-  vdrmota_max_leads: 3,
   accept_catch_all_guesses: false,
   // 6 (not 4): owner wants team/leadership/staff pages in the crawl — they're
   // where personMatch hits live. Discovery-driven selection keeps this cheap.

@@ -57,6 +57,13 @@ phone/employeeCount/HQ capture in the domains phase.
 - **Phase 4 — polish:** per-method run-banner counters, spend-card compute note,
   `enqueue-enrichment` now snapshots org settings too, retire-vdrmota-as-default
   comment, this status update.
+- **vdrmota FULLY removed (2026-08-24, owner call):** superseding the earlier
+  "keep as an option" decision. Deleted the provider + actor id + registry entry
+  + routing + the `vdrmota` method/`EmailProviderId` union members + the
+  `vdrmota_max_leads` setting + the settings-card option/lead-cap field + the
+  prospecting-panel labels (now "pattern + verify"). Stored org settings migrated
+  off vdrmota (coerced to pattern_mv). bovi stays as the opt-in Apify fallback.
+  Historical vdrmota spend still shows in the Apify spend card (real billing data).
 
 **Remaining (all external-dependency gated, no code left):** (1) deploy the actor —
 `apify push` (owner Apify CLI login + Apify budget headroom, resets Aug 28), then set

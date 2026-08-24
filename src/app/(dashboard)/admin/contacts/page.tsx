@@ -45,11 +45,7 @@ import {
   PROFILE_EMAIL_COST_USD,
   DOMAIN_COST_USD,
   ACTIVITY_COST_USD,
-  WATERFALL_LEAD_COST_USD,
-  WATERFALL_VERIFY_COST_USD,
-  DEFAULT_WATERFALL_MAX_LEADS,
-  APIFY_FREE_TIER_MULTIPLIER,
-  estimateWaterfallCost,
+  estimateBoviCost,
   estimatePatternMvCost,
   estimateScrapeCost,
 } from "@/lib/apify/pricing";
@@ -76,13 +72,11 @@ import {
 
 const CONTACTS_PAGE_SIZE = 25;
 
-// Enrich cost estimate (per contact/step). The waterfall is the odd one out:
-// it bills per DOMAIN × directory-leads-cap, not per contact — see
-// estimateWaterfallCost in src/lib/apify/pricing.ts.
+// Enrich cost estimate (per contact/step). The waterfall estimate depends on the
+// configured method (pattern / scrape / bovi) — see the pricing helpers.
 const ENRICH_COST_PROFILE = PROFILE_EMAIL_COST_USD;
 const ENRICH_COST_DOMAIN = DOMAIN_COST_USD;
 const ENRICH_COST_ACTIVITY = ACTIVITY_COST_USD;
-const WATERFALL_PER_LEAD_USD = WATERFALL_LEAD_COST_USD + WATERFALL_VERIFY_COST_USD;
 
 // Relative "time ago" for the Last posted column.
 function timeAgo(iso: string | null): string {
@@ -378,10 +372,9 @@ export default function ContactsPage() {
   // waterfall shows as such instead of silently not running.
   const [enrichWaterfallCfg, setEnrichWaterfallCfg] = useState<{
     enabled: boolean;
-    leadCap: number;
     // Cost shape of the configured method(s): "pattern" (pattern_mv, ~$0.004/contact
     // via Million Verifier), "scrape" (our site scraper, per-domain compute),
-    // "apify" (vdrmota/bovi directory scrape, per-domain), or "off".
+    // "apify" (the bovi pattern finder, per-domain), or "off".
     kind: "off" | "pattern" | "scrape" | "apify";
   } | null>(null);
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
@@ -409,7 +402,6 @@ export default function ContactsPage() {
         (d: {
           settings?: {
             waterfall_enabled?: boolean;
-            vdrmota_max_leads?: number;
             small_method?: string;
             large_method?: string;
             unknown_method?: string;
@@ -420,22 +412,17 @@ export default function ContactsPage() {
           const enabled = s.waterfall_enabled !== false;
           const methods = [s.small_method, s.large_method, s.unknown_method];
           const applicable = methods.filter((m) => m && m !== "off");
-          // Pick the estimate shape from the priciest method in play: a directory
-          // scraper (vdrmota/bovi) > our site scraper > pattern+verify.
+          // Pick the estimate shape from the priciest method in play: the bovi
+          // pattern finder > our site scraper > pattern+verify.
           const kind: "off" | "pattern" | "scrape" | "apify" =
             applicable.length === 0
               ? "off"
-              : applicable.some((m) => m === "vdrmota" || m === "bovi")
+              : applicable.some((m) => m === "bovi")
                 ? "apify"
                 : applicable.some((m) => m === "site_scrape" || m === "scrape_plus_pattern")
                   ? "scrape"
                   : "pattern";
-          setEnrichWaterfallCfg({
-            enabled,
-            leadCap:
-              typeof s.vdrmota_max_leads === "number" ? s.vdrmota_max_leads : DEFAULT_WATERFALL_MAX_LEADS,
-            kind,
-          });
+          setEnrichWaterfallCfg({ enabled, kind });
           if (!enabled || kind === "off") setEnrichRunWaterfall(false);
         },
       )
@@ -552,15 +539,14 @@ export default function ContactsPage() {
     }
     return domains.size + unknown;
   })();
-  const waterfallLeadCap = enrichWaterfallCfg?.leadCap ?? DEFAULT_WATERFALL_MAX_LEADS;
-  // Default to the pattern method (Phase-2 default) until the config loads.
+  // Default to the pattern method (the default) until the config loads.
   const waterfallKind = enrichWaterfallCfg?.kind ?? "pattern";
   const waterfallDisabled = enrichWaterfallCfg
     ? !enrichWaterfallCfg.enabled || enrichWaterfallCfg.kind === "off"
     : false;
   const waterfallEstimate =
     waterfallKind === "apify"
-      ? estimateWaterfallCost(enrichWaterfallDomains, waterfallLeadCap)
+      ? estimateBoviCost(enrichWaterfallDomains)
       : waterfallKind === "scrape"
         ? estimateScrapeCost(enrichWaterfallDomains)
         : waterfallKind === "pattern"
@@ -1675,9 +1661,7 @@ export default function ContactsPage() {
                         ? `guesses the common email patterns + verifies each with Million Verifier ≈ $${estimatePatternMvCost(1).toFixed(3)} per contact`
                         : waterfallKind === "scrape"
                           ? `scrapes each company site for phone + emails ≈ $${estimateScrapeCost(1).toFixed(3)} per company (compute; +MV credits if it falls through to pattern)`
-                          : `crawls each company's site + pulls up to ${waterfallLeadCap} directory ${
-                              waterfallLeadCap === 1 ? "lead" : "leads"
-                            } ≈ $${(waterfallLeadCap * WATERFALL_PER_LEAD_USD).toFixed(3)} per company (paid plan) · ~${APIFY_FREE_TIER_MULTIPLIER}× higher on the Apify free tier`}
+                          : `runs the bovi pattern finder ≈ $${estimateBoviCost(1).toFixed(3)} per company (billed per found email)`}
                   </span>
                 </span>
               </label>

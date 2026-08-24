@@ -9,6 +9,17 @@
 
 ---
 
+> **UPDATE 2026-08-24 — vdrmota FULLY REMOVED (owner call).** This doc's earlier
+> "retire as default, keep as an option" decision is SUPERSEDED: vdrmota is gone
+> entirely (provider, actor, registry, routing, `EnrichmentWaterfallMethod` +
+> `EmailProviderId` union members, `vdrmota_max_leads` setting, settings-card
+> option + lead-cap field, prospecting-panel labels). Default method is
+> pattern_mv; bovi remains as the opt-in Apify fallback; site_scrape is ours.
+> Stored org settings were migrated off vdrmota (coerced to pattern_mv on read).
+> Historical vdrmota charges still appear in the Apify spend card — that's real
+> billing data, intentionally not scrubbed. Ignore vdrmota mentions below; they
+> are decision history.
+
 ## Why this exists — the evidence (all measured live on 2026-08-24, don't re-litigate)
 
 The second-pass email waterfall (`vdrmota~contact-info-scraper`) is **wrong for our

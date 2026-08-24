@@ -66,7 +66,7 @@ const PHASE_ORDER: Record<string, number> = {
 const ENRICH_DEFS = [
   { key: "profiles", name: "Profile → email", actor: "profile-scraper", icon: Mail, color: "#3b46ff", unit: "emails", found: (r: EnrichmentRun) => r.found_emails_profiles_count },
   { key: "domains", name: "Company → domain", actor: "linkedin-company", icon: Globe, color: "#6366f1", unit: "domains", found: (r: EnrichmentRun) => r.found_domains_count },
-  { key: "waterfall", name: "2nd-pass email", actor: "vdrmota", icon: Layers, color: "#8b5cf6", unit: "recovered", found: (r: EnrichmentRun) => r.found_emails_waterfall_count },
+  { key: "waterfall", name: "2nd-pass email", actor: "pattern + verify", icon: Layers, color: "#8b5cf6", unit: "recovered", found: (r: EnrichmentRun) => r.found_emails_waterfall_count },
   { key: "activity", name: "Activity", actor: "profile-posts", icon: Activity, color: "#6366f1", unit: "active", found: (r: EnrichmentRun) => r.found_activity_count },
 ] as const;
 

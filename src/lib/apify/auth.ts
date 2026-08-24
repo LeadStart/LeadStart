@@ -51,7 +51,6 @@ export function normalizeEnrichmentSettings(
     small_method: method(o.small_method, base.small_method),
     large_method: method(o.large_method, base.large_method),
     unknown_method: method(o.unknown_method, base.unknown_method),
-    vdrmota_max_leads: intClamp(o.vdrmota_max_leads, base.vdrmota_max_leads, 1, 10),
     accept_catch_all_guesses: bool(o.accept_catch_all_guesses, base.accept_catch_all_guesses),
     scrape_max_pages: intClamp(o.scrape_max_pages, base.scrape_max_pages, 1, 20),
   };

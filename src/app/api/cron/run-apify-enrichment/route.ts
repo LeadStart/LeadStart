@@ -8,7 +8,6 @@ import { loadApifyToken } from "@/lib/apify/auth";
 import { extractCompanyId, extractCompanySlug } from "@/lib/apify/domain";
 import {
   getProvider,
-  WATERFALL_VDRMOTA_ACTOR_ID,
   WATERFALL_BOVI_ACTOR_ID,
   WATERFALL_SCRAPE_ACTOR_ID,
 } from "@/lib/apify/providers";
@@ -66,14 +65,13 @@ const PATTERN_MV_DEADLINE_SEC = 40;
 //   DIRECT   — run inline in the tick via Million Verifier, no Apify run.
 //   SCRAPE   — our site-contact-scraper actor (site_scrape + the scrape stage of
 //              scrape_plus_pattern, which then hands misses to pattern_mv).
-//   APIFY_SOLO — the single-actor community scrapers (vdrmota, bovi).
+//   APIFY_SOLO — the single-actor community scraper (bovi).
 // All Apify styles use the existing start-run → poll → ingest path.
 const DIRECT_METHODS: EnrichmentWaterfallMethod[] = ["pattern_mv"];
 const SCRAPE_METHODS: EnrichmentWaterfallMethod[] = ["site_scrape", "scrape_plus_pattern"];
-const APIFY_SOLO_METHODS: EnrichmentWaterfallMethod[] = ["vdrmota", "bovi"];
+const APIFY_SOLO_METHODS: EnrichmentWaterfallMethod[] = ["bovi"];
 
 function actorForMethod(method: EnrichmentWaterfallMethod): string | null {
-  if (method === "vdrmota") return WATERFALL_VDRMOTA_ACTOR_ID;
   if (method === "bovi") return WATERFALL_BOVI_ACTOR_ID;
   if (method === "site_scrape" || method === "scrape_plus_pattern") return WATERFALL_SCRAPE_ACTOR_ID;
   return null;
@@ -531,7 +529,7 @@ async function startNextWaterfall(
     const provider = getProvider("waterfall", actorId);
     return startNextBatch(admin, client, run, "waterfall", cols, provider, tickStart, SCRAPE_METHODS);
   }
-  // 3. Single-actor community scrapers (vdrmota, bovi), in a fixed order.
+  // 3. Single-actor community scraper (bovi).
   for (const method of APIFY_SOLO_METHODS) {
     if ((await countWaterfallMethodPending(admin, run.id, [method])) > 0) {
       const actorId = actorForMethod(method);
@@ -980,8 +978,7 @@ async function writePhaseResult(
 function waterfallProviderId(run: RunRow): EmailProviderId {
   const a = run.waterfall_actor ?? "";
   if (a.includes("site-contact-scraper")) return "site_scrape";
-  if (a.includes("bovi")) return "bovi";
-  return "vdrmota";
+  return "bovi";
 }
 
 // Friendly method name for the run-banner progress line.
@@ -989,7 +986,6 @@ function waterfallMethodLabel(actor: string | null): string {
   const a = actor ?? "";
   if (a.includes("site-contact-scraper")) return "Site scrape";
   if (a.includes("bovi")) return "Pattern finder";
-  if (a.includes("contact-info-scraper")) return "Directory scrape";
   return "Second pass";
 }
 
@@ -1068,7 +1064,7 @@ async function writeEmail(
   }
 
   const noteFlags = san.flags.length ? san.flags.join("; ") : null;
-  // The provider's own status string (e.g. vdrmota/bovi verdict), kept as
+  // The provider's own status string (e.g. bovi/scrape verdict), kept as
   // provenance only — never a verification verdict. Million Verifier is the
   // authority, applied later at its pre-send gate.
   const providerStatus = (extraPatch.waterfall_status as string | null | undefined) ?? null;
@@ -1303,7 +1299,7 @@ async function advancePhase(admin: Admin, run: RunRow): Promise<void> {
       phase = "waterfall";
       if (run.run_waterfall) {
         // Stamp each eligible item with its size-band method (pattern_mv /
-        // vdrmota / bovi / off) from the run's config snapshot.
+        // pattern_mv / site_scrape / bovi / off) from the run's config snapshot.
         const n = await seedWaterfallItems(admin, run);
         if (n > 0) break;
       }

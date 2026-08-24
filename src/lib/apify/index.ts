@@ -20,7 +20,6 @@ export {
   getProvider,
   PROFILE_ACTOR,
   DOMAIN_ACTOR,
-  WATERFALL_ACTOR,
   ACTIVITY_ACTOR,
   WATERFALL_BOVI_ACTOR_ID,
 } from "./providers";

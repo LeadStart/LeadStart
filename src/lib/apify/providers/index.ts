@@ -2,7 +2,6 @@ import type { EnrichmentPhase, EnrichmentSettings } from "@/types/app";
 import type { PhaseProvider } from "./types";
 import { profileProvider, PROFILE_ACTOR_ID } from "./profile-harvestapi";
 import { companyProvider, DOMAIN_ACTOR_ID } from "./company-harvestapi";
-import { waterfallVdrmotaProvider, WATERFALL_VDRMOTA_ACTOR_ID } from "./waterfall-vdrmota";
 import { waterfallBoviProvider, WATERFALL_BOVI_ACTOR_ID } from "./waterfall-bovi";
 import { waterfallScrapeProvider, WATERFALL_SCRAPE_ACTOR_ID } from "./waterfall-scrape";
 import { activityProvider, ACTIVITY_ACTOR_ID } from "./activity-harvestapi";
@@ -11,26 +10,22 @@ import { activityProvider, ACTIVITY_ACTOR_ID } from "./activity-harvestapi";
 // is NOT an Apify phase — Million Verifier owns it.
 //
 // Since migration 00075 the waterfall METHOD is org-configurable and defaults to
-// pattern_mv (not an Apify actor) — see DEFAULT_ENRICHMENT_SETTINGS. The run's
-// waterfall actor is resolved per method by resolveWaterfallActor + the worker's
-// per-method routing, so WATERFALL_ACTOR below is a legacy default kept only for
-// back-compat; new code should NOT hardcode it.
+// pattern_mv (a direct method, no Apify actor) — see DEFAULT_ENRICHMENT_SETTINGS.
+// The run's waterfall actor is resolved per method by resolveWaterfallActor + the
+// worker's per-method routing.
 export const PROFILE_ACTOR = PROFILE_ACTOR_ID;
 export const DOMAIN_ACTOR = DOMAIN_ACTOR_ID;
-export const WATERFALL_ACTOR = WATERFALL_VDRMOTA_ACTOR_ID;
 export const ACTIVITY_ACTOR = ACTIVITY_ACTOR_ID;
 
 export {
   PROFILE_ACTOR_ID,
   DOMAIN_ACTOR_ID,
-  WATERFALL_VDRMOTA_ACTOR_ID,
   WATERFALL_BOVI_ACTOR_ID,
   WATERFALL_SCRAPE_ACTOR_ID,
   ACTIVITY_ACTOR_ID,
 };
 
 const WATERFALL_BY_ACTOR: Record<string, PhaseProvider> = {
-  [WATERFALL_VDRMOTA_ACTOR_ID]: waterfallVdrmotaProvider,
   [WATERFALL_BOVI_ACTOR_ID]: waterfallBoviProvider,
   [WATERFALL_SCRAPE_ACTOR_ID]: waterfallScrapeProvider,
 };
@@ -43,7 +38,6 @@ const WATERFALL_BY_ACTOR: Record<string, PhaseProvider> = {
 // still routes those (direct pattern_mv, or the scrape actor per method).
 export function resolveWaterfallActor(settings: EnrichmentSettings): string | null {
   for (const m of [settings.unknown_method, settings.small_method, settings.large_method]) {
-    if (m === "vdrmota") return WATERFALL_VDRMOTA_ACTOR_ID;
     if (m === "bovi") return WATERFALL_BOVI_ACTOR_ID;
     if (m === "site_scrape" || m === "scrape_plus_pattern") return WATERFALL_SCRAPE_ACTOR_ID;
   }
@@ -51,7 +45,9 @@ export function resolveWaterfallActor(settings: EnrichmentSettings): string | nu
 }
 
 // Resolve the provider for a phase. `actorId` is the run's snapshot (only the
-// waterfall has a choice); the others are fixed per phase.
+// waterfall has a choice). The waterfall fallback is a non-null placeholder so
+// the worker proceeds to its per-method router (the default pattern_mv path uses
+// no provider); it's never actually invoked for parsing in that case.
 export function getProvider(phase: EnrichmentPhase, actorId: string | null): PhaseProvider | null {
   switch (phase) {
     case "profiles":
@@ -59,7 +55,7 @@ export function getProvider(phase: EnrichmentPhase, actorId: string | null): Pha
     case "domains":
       return companyProvider;
     case "waterfall":
-      return (actorId && WATERFALL_BY_ACTOR[actorId]) || waterfallVdrmotaProvider;
+      return (actorId && WATERFALL_BY_ACTOR[actorId]) || waterfallScrapeProvider;
     case "activity":
       return activityProvider;
     default:
@@ -70,7 +66,6 @@ export function getProvider(phase: EnrichmentPhase, actorId: string | null): Pha
 export {
   profileProvider,
   companyProvider,
-  waterfallVdrmotaProvider,
   waterfallBoviProvider,
   waterfallScrapeProvider,
   activityProvider,

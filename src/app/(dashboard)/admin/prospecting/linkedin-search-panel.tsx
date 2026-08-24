@@ -91,12 +91,13 @@ const DEPTHS: { value: Depth; label: string; hint: string; rate: number }[] = [
 ];
 
 // Per-person enrichment rates (the Contacts waterfall), for the cost breakdown.
-// Actors: profile-scraper (email), linkedin-company (domain), vdrmota (2nd pass),
-// profile-posts (activity); verify is Million Verifier (not Apify).
+// Actors: profile-scraper (email), linkedin-company (domain), pattern + verify
+// (2nd pass — the default method), profile-posts (activity); verify is Million
+// Verifier (not Apify).
 const ENRICH_RATES = {
   email: 0.01,
   domain: 0.004,
-  waterfall: 0.005,
+  waterfall: 0.004,
   activity: 0.005,
   verify: 0.0006,
 };
@@ -1988,7 +1989,7 @@ export function LinkedInSearchPanel() {
                 <span className="font-mono tabular-nums">${ENRICH_RATES.domain.toFixed(4)}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span>2nd-pass email · <span className="font-mono">vdrmota</span> (misses)</span>
+                <span>2nd-pass email · <span className="font-mono">pattern + verify</span> (misses)</span>
                 <span className="font-mono tabular-nums">${ENRICH_RATES.waterfall.toFixed(4)}</span>
               </div>
               <div className="flex items-center justify-between">

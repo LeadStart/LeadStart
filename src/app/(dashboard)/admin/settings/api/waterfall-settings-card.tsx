@@ -2,9 +2,9 @@
 
 // Enrichment waterfall — org-level config for the second-pass email waterfall
 // (migration 00075): master toggle, company-size routing (small/large/unknown
-// bands split at an employee-count threshold), the vdrmota per-company lead cap,
-// and the (Phase-2) catch-all toggle. Phase 1 offers only the methods that exist
-// today (vdrmota / bovi / off); pattern_mv + site_scrape appear as they ship.
+// bands split at an employee-count threshold), and the catch-all toggle. Default
+// method is pattern_mv; site_scrape/scrape_plus_pattern need the private actor,
+// bovi is the opt-in pay-per-found fallback.
 
 import { useCallback, useEffect, useState } from "react";
 import { Card, CardHeader, CardContent, CardTitle } from "@/components/ui/card";
@@ -28,7 +28,6 @@ const METHOD_OPTIONS: { value: EnrichmentWaterfallMethod; label: string }[] = [
   { value: "pattern_mv", label: "Pattern + verify (Million Verifier)" },
   { value: "scrape_plus_pattern", label: "Site scrape, then pattern + verify" },
   { value: "site_scrape", label: "Site scrape (phone + generic email + personal)" },
-  { value: "vdrmota", label: "Directory scrape (vdrmota)" },
   { value: "bovi", label: "Pattern finder (bovi)" },
   { value: "off", label: "Off — skip this band" },
 ];
@@ -45,10 +44,9 @@ export function WaterfallSettingsCard() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  // Local text state for the numeric fields so partial typing doesn't fight the
+  // Local text state for the numeric field so partial typing doesn't fight the
   // clamp; committed on save.
   const [thresholdText, setThresholdText] = useState("");
-  const [leadCapText, setLeadCapText] = useState("");
 
   const load = useCallback(async () => {
     setLoadError(null);
@@ -62,7 +60,6 @@ export function WaterfallSettingsCard() {
       const s = d.settings as EnrichmentSettings;
       setSettings(s);
       setThresholdText(String(s.size_threshold));
-      setLeadCapText(String(s.vdrmota_max_leads));
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : "Failed to load settings");
     }
@@ -85,7 +82,6 @@ export function WaterfallSettingsCard() {
           settings: {
             ...settings,
             size_threshold: thresholdText.trim() === "" ? settings.size_threshold : Number(thresholdText),
-            vdrmota_max_leads: leadCapText.trim() === "" ? settings.vdrmota_max_leads : Number(leadCapText),
           },
         }),
       });
@@ -98,7 +94,6 @@ export function WaterfallSettingsCard() {
       const s = d.settings as EnrichmentSettings;
       setSettings(s);
       setThresholdText(String(s.size_threshold));
-      setLeadCapText(String(s.vdrmota_max_leads));
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (e) {
@@ -211,29 +206,6 @@ export function WaterfallSettingsCard() {
                 methods need the private scraper actor deployed first
                 (apify-actors/site-contact-scraper). Off in every band disables the
                 second pass.
-              </p>
-            </div>
-
-            {/* vdrmota lead cap */}
-            <div className="space-y-1">
-              <Label htmlFor="wfLeadCap" className="text-sm font-medium">
-                Directory leads per company (vdrmota)
-              </Label>
-              <Input
-                id="wfLeadCap"
-                type="number"
-                min={1}
-                max={10}
-                value={leadCapText}
-                onChange={(e) => setLeadCapText(e.target.value)}
-                disabled={!enabled}
-                className="max-w-[220px]"
-              />
-              <p className="text-[11px] text-muted-foreground">
-                Each lead pulled is billed (&asymp;$0.005 on a paid Apify plan,
-                &asymp;$0.10 on the free tier) whether or not it matches your
-                contact. 1&ndash;10; lower = cheaper, higher = better odds the
-                directory dump contains your person.
               </p>
             </div>
 
