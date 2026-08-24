@@ -32,6 +32,8 @@ import {
   ExternalLink,
   Info,
   HelpCircle,
+  Bookmark,
+  Trash2,
 } from "lucide-react";
 import { appUrl } from "@/lib/api-url";
 import { createClient } from "@/lib/supabase/client";
@@ -46,6 +48,24 @@ import { PipelineStatusPanel } from "./pipeline-status-panel";
 import { fetchActiveEnrichmentRunId } from "@/components/contacts/enrichment-run-banner";
 
 type Depth = "short" | "full" | "full_email";
+
+// The full form state a saved preset captures + restores.
+type SearchConfig = {
+  query: string;
+  jobTitles: string[];
+  locations: string[];
+  headcount: string[];
+  seniority: string[];
+  functions: string[];
+  industries: string[];
+  excludeTitles: string[];
+  currentCompanies: string[];
+  recentlyChanged: boolean;
+  activePosters: boolean;
+  autoSegment: boolean;
+  depth: Depth;
+  maxResults: number;
+};
 
 // Per-profile sourcing rates. The actor bills $0.10 per search page (25
 // profiles = $0.004/profile) for Short, + $0.004/profile to open each profile
@@ -407,6 +427,165 @@ function PresetRow({ label, value, onClick }: { label: string; value: string; on
   );
 }
 
+// Saved-search dropdown: name + store the whole form as a preset (org-shared,
+// so it follows you across machines and teammates), then reload or delete it.
+function SavedSearches({
+  getConfig,
+  onLoad,
+}: {
+  getConfig: () => SearchConfig;
+  onLoad: (config: SearchConfig) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [presets, setPresets] = useState<{ id: string; name: string; config: SearchConfig }[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [name, setName] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const ref = useRef<HTMLDivElement>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(appUrl("/api/admin/prospecting/search-presets"), { cache: "no-store" });
+      const data = await res.json();
+      if (res.ok) setPresets((data.presets ?? []) as { id: string; name: string; config: SearchConfig }[]);
+    } catch {
+      // ignore — leave list as-is
+    }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
+
+  const save = async () => {
+    const n = name.trim();
+    if (!n) return;
+    setSaving(true);
+    setErr(null);
+    try {
+      const res = await fetch(appUrl("/api/admin/prospecting/search-presets"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: n, config: getConfig() }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setErr(data.error ?? "Save failed");
+        setSaving(false);
+        return;
+      }
+      setName("");
+      await load();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Save failed");
+    }
+    setSaving(false);
+  };
+
+  const remove = async (id: string) => {
+    setPresets((p) => p.filter((x) => x.id !== id)); // optimistic
+    try {
+      await fetch(appUrl(`/api/admin/prospecting/search-presets/${id}`), { method: "DELETE" });
+    } catch {
+      load();
+    }
+  };
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex shrink-0 cursor-pointer items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-[12px] font-medium text-[#2E37FE] hover:bg-[#EDEEFF]/50"
+      >
+        <Bookmark size={14} />
+        Saved{presets.length ? ` (${presets.length})` : ""}
+        <ChevronDown size={13} className={`transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+        <div className="absolute right-0 top-[40px] z-40 w-72 rounded-lg border border-border bg-background p-2 shadow-lg">
+          <div className="mb-2">
+            <p className="mb-1 px-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+              Save current search
+            </p>
+            <div className="flex gap-1.5">
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    save();
+                  }
+                }}
+                placeholder="Name this search"
+                className="min-w-0 flex-1 rounded-md border border-input bg-transparent px-2 py-1 text-[12px] outline-none focus:border-[#2E37FE]"
+              />
+              <Button
+                size="sm"
+                onClick={save}
+                disabled={saving || !name.trim()}
+                style={{ background: "#2E37FE" }}
+                className="text-white"
+              >
+                {saving ? <Loader2 size={13} className="animate-spin" /> : "Save"}
+              </Button>
+            </div>
+            {err && <p className="mt-1 text-[11px] text-red-600">{err}</p>}
+          </div>
+          <div className="border-t border-border pt-1.5">
+            {loading ? (
+              <p className="px-1 py-2 text-[12px] text-muted-foreground">Loading…</p>
+            ) : presets.length === 0 ? (
+              <p className="px-1 py-2 text-[12px] text-muted-foreground">
+                No saved searches yet — name one above.
+              </p>
+            ) : (
+              <div className="max-h-56 overflow-auto">
+                {presets.map((p) => (
+                  <div key={p.id} className="group flex items-center gap-1 rounded-md px-1 hover:bg-muted">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onLoad(p.config);
+                        setOpen(false);
+                      }}
+                      className="min-w-0 flex-1 truncate py-1.5 text-left text-[12.5px]"
+                      title={p.name}
+                    >
+                      {p.name}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => remove(p.id)}
+                      aria-label={`Delete ${p.name}`}
+                      className="shrink-0 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:text-red-600 group-hover:opacity-100"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function LinkedInSearchPanel() {
   // Levers
   const [query, setQuery] = useState("");
@@ -530,6 +709,49 @@ export function LinkedInSearchPanel() {
     if (activePosters) levers.recentlyPostedOnLinkedIn = true;
     if (autoSegment) levers.autoSegment = true;
     return levers;
+  };
+
+  // Capture / restore the whole form for saved-search presets.
+  const buildConfig = (): SearchConfig => ({
+    query,
+    jobTitles,
+    locations,
+    headcount: Array.from(headcount),
+    seniority: Array.from(seniority),
+    functions: Array.from(functions),
+    industries: Array.from(industries),
+    excludeTitles,
+    currentCompanies,
+    recentlyChanged,
+    activePosters,
+    autoSegment,
+    depth,
+    maxResults,
+  });
+
+  const applyConfig = (c: SearchConfig) => {
+    setQuery(c.query ?? "");
+    setJobTitles(c.jobTitles ?? []);
+    setLocations(c.locations ?? []);
+    setHeadcount(new Set(c.headcount ?? []));
+    setSeniority(new Set(c.seniority ?? []));
+    setFunctions(new Set(c.functions ?? []));
+    setIndustries(new Set(c.industries ?? []));
+    setExcludeTitles(c.excludeTitles ?? []);
+    setCurrentCompanies(c.currentCompanies ?? []);
+    setRecentlyChanged(Boolean(c.recentlyChanged));
+    setActivePosters(Boolean(c.activePosters));
+    setAutoSegment(c.autoSegment ?? true);
+    if (c.depth) setDepth(c.depth);
+    if (typeof c.maxResults === "number") setMaxResults(c.maxResults);
+    // Reveal Advanced if the preset set anything that lives there.
+    if (
+      (c.excludeTitles?.length ?? 0) > 0 ||
+      (c.currentCompanies?.length ?? 0) > 0 ||
+      c.autoSegment === false
+    ) {
+      setAdvancedOpen(true);
+    }
   };
 
   const applyPreset = (p: Preset) => {
@@ -703,15 +925,18 @@ export function LinkedInSearchPanel() {
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => setInfoOpen("tips")}
-            aria-haspopup="dialog"
-            className="flex shrink-0 cursor-pointer items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-[12px] font-medium text-[#2E37FE] hover:bg-[#EDEEFF]/50"
-          >
-            <HelpCircle size={14} />
-            How to search
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            <SavedSearches getConfig={buildConfig} onLoad={applyConfig} />
+            <button
+              type="button"
+              onClick={() => setInfoOpen("tips")}
+              aria-haspopup="dialog"
+              className="flex shrink-0 cursor-pointer items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-[12px] font-medium text-[#2E37FE] hover:bg-[#EDEEFF]/50"
+            >
+              <HelpCircle size={14} />
+              How to search
+            </button>
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
