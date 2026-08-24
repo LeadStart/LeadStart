@@ -11,6 +11,7 @@ import {
   type ProfileSearchLevers,
 } from "@/lib/apify/sourcing/profile-search";
 import type { LinkedInProspect } from "@/types/app";
+import { alertActorFailure } from "@/lib/notifications/actor-failure-alert";
 
 // GET /api/cron/run-linkedin-searches — every minute.
 //
@@ -123,6 +124,14 @@ export async function GET(request: NextRequest) {
                 }
               : {}),
           });
+          if (failures >= MAX_CONSECUTIVE_FAILURES) {
+            await alertActorFailure(admin, {
+              kind: "linkedin_search",
+              actor: row.actor,
+              error: "Search timed out repeatedly",
+              context: { search_id: row.id },
+            });
+          }
           return NextResponse.json({ status: "aborted_stuck", id: row.id });
         }
         await release({ progress_message: "Searching LinkedIn…" });
@@ -167,6 +176,14 @@ export async function GET(request: NextRequest) {
             }
           : {}),
       });
+      if (failures >= MAX_CONSECUTIVE_FAILURES) {
+        await alertActorFailure(admin, {
+          kind: "linkedin_search",
+          actor: row.actor,
+          error: run.statusMessage ?? `Actor run ${run.status}`,
+          context: { search_id: row.id },
+        });
+      }
       return NextResponse.json({ status: "run_failed", id: row.id, apify_status: run.status });
     }
 
@@ -194,6 +211,14 @@ export async function GET(request: NextRequest) {
         ? { status: "failed", error_message: message.slice(0, 500), completed_at: new Date().toISOString() }
         : {}),
     });
+    if (failures >= MAX_CONSECUTIVE_FAILURES) {
+      await alertActorFailure(admin, {
+        kind: "linkedin_search",
+        actor: row.actor,
+        error: message.slice(0, 500),
+        context: { search_id: row.id },
+      });
+    }
     return NextResponse.json({ status: "error", id: row.id, message: message.slice(0, 200) });
   }
 }

@@ -26,6 +26,7 @@ import {
   Send,
   ExternalLink,
   Info,
+  HelpCircle,
 } from "lucide-react";
 import { appUrl } from "@/lib/api-url";
 import { createClient } from "@/lib/supabase/client";
@@ -45,9 +46,52 @@ const DEPTHS: { value: Depth; label: string; hint: string; rate: number }[] = [
   { value: "full_email", label: "Full + email", hint: "adds an email search", rate: 0.012 },
 ];
 
+// Per-person enrichment rates (the Contacts waterfall), for the cost breakdown.
+// Actors: profile-scraper (email), linkedin-company (domain), vdrmota (2nd pass),
+// profile-posts (activity); verify is Million Verifier (not Apify).
+const ENRICH_RATES = {
+  email: 0.01,
+  domain: 0.004,
+  waterfall: 0.005,
+  activity: 0.005,
+  verify: 0.0006,
+};
+
 const MAX_OPTIONS = [100, 250, 500, 1000] as const;
 const POLL_MS = 3000;
 const PAGE_SIZE = 25;
+
+type Preset = {
+  name: string;
+  titles?: string[];
+  seniority?: string[];
+  functions?: string[];
+  industries?: string[];
+};
+
+// Quick-start ICP templates. Codes reference the verified facet taxonomy:
+// seniority 220=Director 300=VP 310=CXO 320=Owner, function 18=Operations
+// 25=Sales, industry 4=Software Development.
+const PRESETS: Preset[] = [
+  {
+    name: "Facilities decision-makers",
+    titles: ["Facilities Manager", "Director of Facilities", "VP Operations"],
+    seniority: ["220", "300"],
+    functions: ["18"],
+  },
+  {
+    name: "SaaS founders & C-suite",
+    titles: ["Founder", "CEO", "Co-Founder"],
+    seniority: ["310", "320"],
+    industries: ["4"],
+  },
+  {
+    name: "Sales / RevOps leaders",
+    titles: ["VP Sales", "Head of Sales", "Revenue Operations"],
+    seniority: ["220", "300"],
+    functions: ["25"],
+  },
+];
 
 type SearchDetail = {
   id: string;
@@ -226,6 +270,7 @@ export function LinkedInSearchPanel() {
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [estimateInfoOpen, setEstimateInfoOpen] = useState(false);
   const [depthInfoOpen, setDepthInfoOpen] = useState(false);
+  const [tipsOpen, setTipsOpen] = useState(false);
   const [excludeTitles, setExcludeTitles] = useState<string[]>([]);
   const [currentCompanies, setCurrentCompanies] = useState<string[]>([]);
   const [seniority, setSeniority] = useState<Set<string>>(new Set());
@@ -319,6 +364,14 @@ export function LinkedInSearchPanel() {
     return levers;
   };
 
+  const applyPreset = (p: Preset) => {
+    setJobTitles(p.titles ?? []);
+    setSeniority(new Set(p.seniority ?? []));
+    setFunctions(new Set(p.functions ?? []));
+    setIndustries(new Set(p.industries ?? []));
+    setTipsOpen(false);
+  };
+
   const hasConstraint =
     query.trim().length > 0 ||
     jobTitles.length > 0 ||
@@ -389,6 +442,10 @@ export function LinkedInSearchPanel() {
   const depthMeta = DEPTHS.find((d) => d.value === depth);
   const rate = depthMeta?.rate ?? 0.002;
   const estimate = rate * maxResults;
+  const activityRate = activePosters ? 0 : ENRICH_RATES.activity;
+  const perPersonEnrich =
+    ENRICH_RATES.email + ENRICH_RATES.domain + ENRICH_RATES.waterfall + activityRate + ENRICH_RATES.verify;
+  const projectedTotal = estimate + perPersonEnrich * maxResults;
 
   const handleSave = async () => {
     if (!searchId || selected.size === 0) return;
@@ -428,18 +485,62 @@ export function LinkedInSearchPanel() {
     <div className="space-y-4">
       {/* Search form */}
       <Card className="border-border/50 shadow-sm">
-        <CardHeader className="flex flex-row items-center gap-2 pb-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]">
-            <UserSearch size={16} className="text-white" />
+        <CardHeader className="flex flex-row items-start justify-between gap-2 pb-3">
+          <div className="flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]">
+              <UserSearch size={16} className="text-white" />
+            </div>
+            <div>
+              <CardTitle className="text-base">Find people on LinkedIn</CardTitle>
+              <p className="text-xs text-muted-foreground">
+                Source new people by ICP. Selected people import into Contacts, where the waterfall finds + verifies their email.
+              </p>
+            </div>
           </div>
-          <div>
-            <CardTitle className="text-base">Find people on LinkedIn</CardTitle>
-            <p className="text-xs text-muted-foreground">
-              Source new people by ICP. Selected people import into Contacts, where the waterfall finds + verifies their email.
-            </p>
-          </div>
+          <button
+            type="button"
+            onClick={() => setTipsOpen((v) => !v)}
+            className="flex shrink-0 cursor-pointer items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-[12px] font-medium text-[#2E37FE] hover:bg-[#EDEEFF]/50"
+          >
+            <HelpCircle size={14} />
+            How to search
+          </button>
         </CardHeader>
         <CardContent className="space-y-4">
+          {tipsOpen && (
+            <div className="space-y-2 rounded-lg border border-[#2E37FE]/20 bg-[#EDEEFF]/40 p-3 text-[12px] text-slate-600">
+              <p className="text-[13px] font-medium text-slate-900">How to search</p>
+              <ul className="list-disc space-y-1 pl-4">
+                <li>
+                  <span className="font-medium text-slate-800">Multiple values:</span> in Job titles and Locations, type a value and press Enter (or comma) to add several — results match <span className="font-medium">any</span> of them. e.g. VP Sales, Head of Sales, CRO.
+                </li>
+                <li>
+                  <span className="font-medium text-slate-800">Seniority · Function · Industry</span> are multi-select (Industry is searchable) — pick as many as apply.
+                </li>
+                <li>
+                  <span className="font-medium text-slate-800">Keywords</span> is a fuzzy free-text search across the whole profile — the broadest lever. It supports LinkedIn operators: an &ldquo;exact phrase&rdquo; in quotes, plus AND / OR / NOT — e.g. facilities AND (director OR manager).
+                </li>
+                <li>
+                  <span className="font-medium text-slate-800">For precise, non-wildcard targeting,</span> lean on the facets (they map to LinkedIn&apos;s own codes) over Keywords. Company size and the timing toggles narrow further.
+                </li>
+              </ul>
+              <div className="pt-0.5">
+                <p className="mb-1 text-[13px] font-medium text-slate-900">Quick-start presets</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {PRESETS.map((p) => (
+                    <button
+                      key={p.name}
+                      type="button"
+                      onClick={() => applyPreset(p)}
+                      className="cursor-pointer rounded-md border border-[#2E37FE]/40 bg-white px-2.5 py-1 text-[12px] font-medium text-[#1C24B8] hover:bg-[#EDEEFF]"
+                    >
+                      {p.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label>Keywords</Label>
@@ -688,24 +789,65 @@ export function LinkedInSearchPanel() {
           )}
 
           {estimateInfoOpen && (
-            <div className="rounded-lg border border-border bg-muted/30 p-3 text-[12px] text-muted-foreground">
-              <p className="font-medium text-foreground">How this estimate is figured</p>
-              <div className="mt-1.5 space-y-1">
-                <div className="flex items-center justify-between">
-                  <span>Depth — {depthMeta?.label} ({depthMeta?.hint})</span>
-                  <span className="font-mono tabular-nums">~${rate.toFixed(4)} / profile</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span>Max people</span>
-                  <span className="font-mono tabular-nums">× {maxResults.toLocaleString()}</span>
-                </div>
-                <div className="flex items-center justify-between border-t border-border/60 pt-1 font-medium text-foreground">
-                  <span>Upper-bound estimate</span>
-                  <span className="font-mono tabular-nums">~${estimate.toFixed(2)}</span>
+            <div className="space-y-2.5 rounded-lg border border-border bg-muted/30 p-3 text-[12px] text-muted-foreground">
+              <p className="font-medium text-foreground">Cost by stage &amp; actor</p>
+
+              <div>
+                <p className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-500">
+                  Sourcing · this search (up to {maxResults.toLocaleString()})
+                </p>
+                <div className="mt-1 flex items-center justify-between">
+                  <span>
+                    Search · <span className="font-mono">profile-search</span> ({depthMeta?.label})
+                  </span>
+                  <span className="font-mono tabular-nums">
+                    ${rate.toFixed(4)} × {maxResults.toLocaleString()} = ${estimate.toFixed(2)}
+                  </span>
                 </div>
               </div>
-              <p className="mt-2">
-                Depth sets the per-profile rate; multiplied by max people. The actor only charges for profiles it can actually return, so real cost is usually lower — and Short-mode pricing is confirmed on the first live run, so treat this as a ceiling. Enrichment (finding emails) is billed separately, later, only on the people you import.
+
+              <div>
+                <p className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-500">
+                  Enrichment · per person you import (runs in Contacts)
+                </p>
+                <div className="mt-1 space-y-0.5">
+                  <div className="flex items-center justify-between">
+                    <span>Profile → email · <span className="font-mono">profile-scraper</span></span>
+                    <span className="font-mono tabular-nums">${ENRICH_RATES.email.toFixed(4)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span>Company → domain · <span className="font-mono">linkedin-company</span></span>
+                    <span className="font-mono tabular-nums">${ENRICH_RATES.domain.toFixed(4)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span>2nd-pass email · <span className="font-mono">vdrmota</span> (misses)</span>
+                    <span className="font-mono tabular-nums">${ENRICH_RATES.waterfall.toFixed(4)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span>
+                      Activity · <span className="font-mono">profile-posts</span>
+                      {activePosters ? " (skipped)" : ""}
+                    </span>
+                    <span className="font-mono tabular-nums">${activityRate.toFixed(4)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span>Verify · Million Verifier</span>
+                    <span className="font-mono tabular-nums">${ENRICH_RATES.verify.toFixed(4)}</span>
+                  </div>
+                  <div className="flex items-center justify-between border-t border-border/60 pt-0.5 font-medium text-foreground">
+                    <span>per imported person (max)</span>
+                    <span className="font-mono tabular-nums">${perPersonEnrich.toFixed(4)}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between rounded-md bg-[#EDEEFF]/70 px-2 py-1.5 font-medium text-foreground">
+                <span>Projected total if you import + enrich all {maxResults.toLocaleString()}</span>
+                <span className="font-mono tabular-nums">~${projectedTotal.toFixed(2)}</span>
+              </div>
+
+              <p className="text-[11px]">
+                A ceiling, not a bill: sourcing charges only for profiles the actor can return; enrichment bills only on people you actually import (usually a subset), and each waterfall pass only touches people the previous one left without an email. Verification runs once, at first send. Short-mode search pricing is confirmed on the first live run.
               </p>
             </div>
           )}

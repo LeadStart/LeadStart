@@ -17,6 +17,7 @@ import {
   ACTIVITY_COST_USD,
 } from "@/lib/apify/pricing";
 import type { EmailProviderId, EnrichmentPhase } from "@/types/app";
+import { alertActorFailure } from "@/lib/notifications/actor-failure-alert";
 
 // GET /api/cron/run-apify-enrichment — one worker tick (60s budget).
 //
@@ -787,6 +788,7 @@ async function failRun(admin: Admin, runId: string, message: string): Promise<vo
       active_apify_run_id: null,
     })
     .eq("id", runId);
+  await alertActorFailure(admin, { kind: "enrichment", error: message, context: { run_id: runId } });
 }
 
 // Move to the next enabled phase that has work; finalize when none remain.
