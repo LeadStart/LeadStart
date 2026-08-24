@@ -604,7 +604,7 @@ function SavedSearches({
         onClick={() => setOpen((v) => !v)}
         className="flex shrink-0 cursor-pointer items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-[12px] font-medium text-[#2E37FE] hover:bg-[#EDEEFF]/50"
       >
-        <Bookmark size={14} />
+        <Bookmark size={14} fill={presets.length > 0 ? "currentColor" : "none"} />
         Saved{presets.length ? ` (${presets.length})` : ""}
         <ChevronDown size={13} className={`transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
@@ -681,6 +681,9 @@ function SavedSearches({
 }
 
 export function LinkedInSearchPanel() {
+  // Optional name for this run — labels it in Prior runs + above the results
+  // (renamable later). Stored on the search's query.name at creation.
+  const [searchNameInput, setSearchNameInput] = useState("");
   // Levers
   const [query, setQuery] = useState("");
   const [jobTitles, setJobTitles] = useState<string[]>([]);
@@ -1022,7 +1025,12 @@ export function LinkedInSearchPanel() {
       const res = await fetch(appUrl("/api/admin/prospecting/linkedin-search"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ levers: buildLevers(), depth, max_results: maxResults }),
+        body: JSON.stringify({
+          levers: buildLevers(),
+          depth,
+          max_results: maxResults,
+          name: searchNameInput.trim(),
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -1178,6 +1186,26 @@ export function LinkedInSearchPanel() {
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* Optional name for this run — the label it carries in Prior runs
+              and above the results (renamable there too). */}
+          <div className="space-y-1.5">
+            <Label>
+              Search name{" "}
+              <span className="font-normal text-muted-foreground">(optional)</span>
+            </Label>
+            <Input
+              value={searchNameInput}
+              onChange={(e) => setSearchNameInput(e.target.value)}
+              maxLength={80}
+              placeholder="e.g. Commercial cleaning — US founders"
+              style={{ height: 38 }}
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Labels this run in Prior runs and above the results. Leave blank to
+              auto-name it from your filters — you can rename it any time.
+            </p>
+          </div>
+
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <div className="flex items-center gap-1.5">

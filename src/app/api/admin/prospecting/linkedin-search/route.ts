@@ -22,7 +22,14 @@ const DEFAULT_MAX = 100;
 const HARD_CAP = 2500;
 const VALID_DEPTHS: ProfileSearchDepth[] = ["short", "full", "full_email"];
 
-type Body = { levers?: ProfileSearchLevers; depth?: unknown; max_results?: unknown };
+type Body = {
+  levers?: ProfileSearchLevers;
+  depth?: unknown;
+  max_results?: unknown;
+  name?: unknown;
+};
+
+const MAX_NAME = 80;
 
 function clampInt(v: unknown, min: number, max: number, dflt: number): number {
   const n = typeof v === "number" ? v : Number(v);
@@ -48,6 +55,7 @@ export async function POST(request: NextRequest) {
     ? (body.depth as ProfileSearchDepth)
     : "short";
   const maxResults = clampInt(body.max_results, 1, HARD_CAP, DEFAULT_MAX);
+  const name = (typeof body.name === "string" ? body.name : "").trim().slice(0, MAX_NAME);
 
   // Guard an unbounded search: the built input must carry at least one real
   // filter beyond the three always-present control keys.
@@ -89,7 +97,7 @@ export async function POST(request: NextRequest) {
     .insert({
       organization_id: organizationId,
       created_by: user.id,
-      query: { levers, depth },
+      query: name ? { levers, depth, name } : { levers, depth },
       results: [],
       result_count: 0,
       target_max_results: maxResults,
