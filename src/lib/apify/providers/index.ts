@@ -1,4 +1,4 @@
-import type { EnrichmentPhase } from "@/types/app";
+import type { EnrichmentPhase, EnrichmentSettings } from "@/types/app";
 import type { PhaseProvider } from "./types";
 import { profileProvider, PROFILE_ACTOR_ID } from "./profile-harvestapi";
 import { companyProvider, DOMAIN_ACTOR_ID } from "./company-harvestapi";
@@ -28,6 +28,21 @@ const WATERFALL_BY_ACTOR: Record<string, PhaseProvider> = {
   [WATERFALL_VDRMOTA_ACTOR_ID]: waterfallVdrmotaProvider,
   [WATERFALL_BOVI_ACTOR_ID]: waterfallBoviProvider,
 };
+
+// Resolve the Apify waterfall actor from an org's enrichment settings (migration
+// 00075). Phase 1 runs a SINGLE actor for the whole waterfall — true per-item,
+// per-size-band routing lands in Phase 2 (advancePhase stamps waterfall_method).
+// Until then we pick the first Apify method across the bands (unknown first,
+// since Phase 1 computes no size), so the all-vdrmota defaults resolve to
+// vdrmota and current behavior is preserved. Returns null when no band names an
+// Apify method (all off / direct-only) → the waterfall is skipped for the run.
+export function resolveWaterfallActor(settings: EnrichmentSettings): string | null {
+  for (const m of [settings.unknown_method, settings.small_method, settings.large_method]) {
+    if (m === "vdrmota") return WATERFALL_VDRMOTA_ACTOR_ID;
+    if (m === "bovi") return WATERFALL_BOVI_ACTOR_ID;
+  }
+  return null;
+}
 
 // Resolve the provider for a phase. `actorId` is the run's snapshot (only the
 // waterfall has a choice); the others are fixed per phase.

@@ -1,3 +1,5 @@
+import type { EnrichmentSettings } from "@/types/app";
+
 // The subset of an enrichment_run_items row a provider needs to build input and
 // join results back. The worker passes the real DB rows (which satisfy this).
 export interface ProviderItem {
@@ -30,7 +32,10 @@ export interface PhaseResult {
 export interface PhaseProvider {
   id: string; // 'harvestapi' | 'harvestapi-company' | 'vdrmota' | 'bovi'
   actorId: string; // Apify "username~actor" id
-  buildInput(items: ProviderItem[]): unknown;
+  // `config` is the run's enrichment-settings snapshot (migration 00075). Only
+  // the vdrmota waterfall reads it today (its per-company lead cap); the other
+  // providers ignore it.
+  buildInput(items: ProviderItem[], config?: EnrichmentSettings | null): unknown;
   parseItems(datasetItems: unknown[], items: ProviderItem[]): Map<string, PhaseResult>;
 }
 

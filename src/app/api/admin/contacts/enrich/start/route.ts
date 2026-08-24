@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireEnrichmentContext } from "@/lib/apify/auth";
+import { loadEnrichmentSettings, requireEnrichmentContext } from "@/lib/apify/auth";
 import { extractProfileId, extractCompanyId, extractCompanySlug } from "@/lib/apify/domain";
 import {
   PROFILE_ACTOR,
   DOMAIN_ACTOR,
-  WATERFALL_ACTOR,
   ACTIVITY_ACTOR,
+  resolveWaterfallActor,
 } from "@/lib/apify/providers";
 
 // POST /api/admin/contacts/enrich/start
@@ -82,6 +82,25 @@ export async function POST(request: NextRequest) {
   if (!apifyToken) {
     return NextResponse.json(
       { error: "Apify API token not set. Save it in /admin/settings/api first." },
+      { status: 400 },
+    );
+  }
+
+  // Org waterfall config (migration 00075). The run_waterfall request is honored
+  // only when the org's waterfall is enabled AND a size band names an Apify
+  // method (direct methods like pattern_mv arrive in Phase 2). The settings are
+  // snapshotted onto the run so an in-flight run never re-reads live config.
+  const settings = await loadEnrichmentSettings(admin, organizationId);
+  const waterfallActor = resolveWaterfallActor(settings);
+  const runWaterfallEffective =
+    runWaterfall && settings.waterfall_enabled && waterfallActor !== null;
+  if (!runProfiles && !runDomains && !runWaterfallEffective && !runActivity) {
+    // Only the waterfall was requested and config disables it.
+    return NextResponse.json(
+      {
+        error:
+          "The second-pass waterfall is turned off in Settings → Integrations (Enrichment waterfall card)",
+      },
       { status: 400 },
     );
   }
@@ -197,7 +216,7 @@ export async function POST(request: NextRequest) {
     ? "profiles"
     : runDomains
       ? "domains"
-      : runWaterfall
+      : runWaterfallEffective
         ? "waterfall"
         : "activity";
 
@@ -208,11 +227,12 @@ export async function POST(request: NextRequest) {
       created_by: user.id,
       profile_actor: PROFILE_ACTOR,
       domain_actor: DOMAIN_ACTOR,
-      waterfall_actor: runWaterfall ? WATERFALL_ACTOR : null,
+      waterfall_actor: runWaterfallEffective ? waterfallActor : null,
       activity_actor: runActivity ? ACTIVITY_ACTOR : null,
+      waterfall_config: settings,
       run_profiles: runProfiles,
       run_domains: runDomains,
-      run_waterfall: runWaterfall,
+      run_waterfall: runWaterfallEffective,
       run_activity: runActivity,
       phase: initialPhase,
       status: "pending",

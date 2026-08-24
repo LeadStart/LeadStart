@@ -1,3 +1,4 @@
+import { DEFAULT_ENRICHMENT_SETTINGS, type EnrichmentSettings } from "@/types/app";
 import { normalizeDomain } from "../domain";
 import { lc, trimRaw, type PhaseProvider, type PhaseResult, type ProviderItem } from "./types";
 
@@ -29,16 +30,21 @@ export const waterfallVdrmotaProvider: PhaseProvider = {
   id: "vdrmota",
   actorId: WATERFALL_VDRMOTA_ACTOR_ID,
 
-  buildInput(items: ProviderItem[]): unknown {
+  buildInput(items: ProviderItem[], config?: EnrichmentSettings | null): unknown {
     const domains = Array.from(
       new Set(items.map((it) => it.company_domain).filter((d): d is string => Boolean(d))),
     );
+    // Directory leads pulled per company — each one is billed (the actor's most
+    // expensive event, ~$0.10/lead on the free tier). Configurable per org;
+    // defaults to 3 (was a hardcoded 10). Clamp defensively.
+    const rawCap = config?.vdrmota_max_leads ?? DEFAULT_ENRICHMENT_SETTINGS.vdrmota_max_leads;
+    const leadCap = Math.min(10, Math.max(1, Math.round(rawCap)));
     return {
       startUrls: domains.map((d) => ({ url: `https://${d}` })),
       maxDepth: 1,
       maxRequestsPerStartUrl: 10,
       sameDomain: true,
-      maximumLeadsEnrichmentRecords: 10,
+      maximumLeadsEnrichmentRecords: leadCap,
       verifyLeadsEnrichmentEmails: true,
     };
   },

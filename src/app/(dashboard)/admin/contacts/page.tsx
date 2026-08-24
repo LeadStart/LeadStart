@@ -41,6 +41,16 @@ import {
 } from "@/components/ui/dialog";
 import { createClient } from "@/lib/supabase/client";
 import { appUrl } from "@/lib/api-url";
+import {
+  PROFILE_EMAIL_COST_USD,
+  DOMAIN_COST_USD,
+  ACTIVITY_COST_USD,
+  WATERFALL_LEAD_COST_USD,
+  WATERFALL_VERIFY_COST_USD,
+  DEFAULT_WATERFALL_MAX_LEADS,
+  APIFY_FREE_TIER_MULTIPLIER,
+  estimateWaterfallCost,
+} from "@/lib/apify/pricing";
 import { toast } from "sonner";
 import Link from "next/link";
 import {
@@ -64,11 +74,13 @@ import {
 
 const CONTACTS_PAGE_SIZE = 25;
 
-// Enrich cost estimate (per contact/step) — mirrors src/lib/apify/pricing.ts.
-const ENRICH_COST_PROFILE = 0.01;
-const ENRICH_COST_DOMAIN = 0.004;
-const ENRICH_COST_WATERFALL = 0.005; // per miss, upper bound
-const ENRICH_COST_ACTIVITY = 0.005; // per profile, upper bound
+// Enrich cost estimate (per contact/step). The waterfall is the odd one out:
+// it bills per DOMAIN × directory-leads-cap, not per contact — see
+// estimateWaterfallCost in src/lib/apify/pricing.ts.
+const ENRICH_COST_PROFILE = PROFILE_EMAIL_COST_USD;
+const ENRICH_COST_DOMAIN = DOMAIN_COST_USD;
+const ENRICH_COST_ACTIVITY = ACTIVITY_COST_USD;
+const WATERFALL_PER_LEAD_USD = WATERFALL_LEAD_COST_USD + WATERFALL_VERIFY_COST_USD;
 
 // Relative "time ago" for the Last posted column.
 function timeAgo(iso: string | null): string {
@@ -359,6 +371,13 @@ export default function ContactsPage() {
   const [enrichRunActivity, setEnrichRunActivity] = useState(true);
   const [enrichStarting, setEnrichStarting] = useState(false);
   const [enrichError, setEnrichError] = useState<string | null>(null);
+  // Org waterfall config (migration 00075) — fetched when the dialog opens so
+  // the estimate uses the real per-company lead cap and a config-disabled
+  // waterfall shows as such instead of silently not running.
+  const [enrichWaterfallCfg, setEnrichWaterfallCfg] = useState<{
+    enabled: boolean;
+    leadCap: number;
+  } | null>(null);
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
   useEffect(() => {
     setSelectedIds(new Set());
@@ -374,6 +393,31 @@ export default function ContactsPage() {
       cancelled = true;
     };
   }, []);
+  // Load the org's waterfall config when the enrich dialog opens (once per open).
+  useEffect(() => {
+    if (!enrichDialogOpen) return;
+    let cancelled = false;
+    fetch(appUrl("/api/admin/enrichment/settings"), { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d: { settings?: { waterfall_enabled?: boolean; vdrmota_max_leads?: number } }) => {
+        if (cancelled || !d?.settings) return;
+        const enabled = d.settings.waterfall_enabled !== false;
+        setEnrichWaterfallCfg({
+          enabled,
+          leadCap:
+            typeof d.settings.vdrmota_max_leads === "number"
+              ? d.settings.vdrmota_max_leads
+              : DEFAULT_WATERFALL_MAX_LEADS,
+        });
+        if (!enabled) setEnrichRunWaterfall(false);
+      })
+      .catch(() => {
+        /* estimate falls back to defaults */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [enrichDialogOpen]);
 
   const pageRowIds = pageRows.map((r) => r.id);
   const filteredIds = sorted.map((r) => r.id);
@@ -464,10 +508,27 @@ export default function ContactsPage() {
     (c) => !c.email && (c.linkedin_url || c.company_domain || c.company_linkedin_url),
   ).length;
   const enrichActivityCount = selectedContacts.filter((c) => c.linkedin_url).length;
+  // The waterfall crawls per company DOMAIN (unique known domains + contacts that
+  // may still gain one), pulling up to the configured lead cap per domain — each
+  // lead billed. This is the honest per-domain math; the old per-contact estimate
+  // under-counted ~100× on the free tier.
+  const enrichWaterfallDomains = (() => {
+    const missing = selectedContacts.filter(
+      (c) => !c.email && (c.linkedin_url || c.company_domain || c.company_linkedin_url),
+    );
+    const domains = new Set<string>();
+    let unknown = 0;
+    for (const c of missing) {
+      if (c.company_domain) domains.add(c.company_domain.toLowerCase());
+      else unknown++;
+    }
+    return domains.size + unknown;
+  })();
+  const waterfallLeadCap = enrichWaterfallCfg?.leadCap ?? DEFAULT_WATERFALL_MAX_LEADS;
   const enrichEstimate =
     (enrichRunProfiles ? enrichNeedsEmail * ENRICH_COST_PROFILE : 0) +
     (enrichRunDomains ? enrichNeedsDomain * ENRICH_COST_DOMAIN : 0) +
-    (enrichRunWaterfall ? enrichNeedsEmail * ENRICH_COST_WATERFALL : 0) +
+    (enrichRunWaterfall ? estimateWaterfallCost(enrichWaterfallDomains, waterfallLeadCap) : 0) +
     (enrichRunActivity ? enrichActivityCount * ENRICH_COST_ACTIVITY : 0);
   const unverifiedSelected = selectedContacts.filter(
     (c) =>
@@ -1552,17 +1613,28 @@ export default function ContactsPage() {
                   <span className="block text-[11px] text-muted-foreground">$0.004 each</span>
                 </span>
               </label>
-              <label className="flex items-start gap-2 text-sm cursor-pointer">
+              <label
+                className={`flex items-start gap-2 text-sm ${
+                  enrichWaterfallCfg?.enabled === false
+                    ? "cursor-not-allowed opacity-60"
+                    : "cursor-pointer"
+                }`}
+              >
                 <input
                   type="checkbox"
                   checked={enrichRunWaterfall}
+                  disabled={enrichWaterfallCfg?.enabled === false}
                   onChange={(e) => setEnrichRunWaterfall(e.target.checked)}
                   className="mt-0.5 h-4 w-4 rounded border-border accent-[#2E37FE] cursor-pointer"
                 />
                 <span>
                   Second pass on misses
                   <span className="block text-[11px] text-muted-foreground">
-                    ≈ $0.005 per miss re-tried
+                    {enrichWaterfallCfg?.enabled === false
+                      ? "turned off in Settings → Integrations"
+                      : `crawls each company's site + pulls up to ${waterfallLeadCap} directory ${
+                          waterfallLeadCap === 1 ? "lead" : "leads"
+                        } ≈ $${(waterfallLeadCap * WATERFALL_PER_LEAD_USD).toFixed(3)} per company (paid plan) · ~${APIFY_FREE_TIER_MULTIPLIER}× higher on the Apify free tier`}
                   </span>
                 </span>
               </label>

@@ -3,6 +3,7 @@
 
 export const ENRICH_RUN_COLUMNS =
   "id, organization_id, created_by, profile_actor, domain_actor, waterfall_actor, activity_actor, " +
+  "waterfall_config, " +
   "run_profiles, run_domains, run_waterfall, run_activity, phase, status, total_count, " +
   "phase_total_count, processed_count, found_emails_profiles_count, found_domains_count, " +
   "found_emails_waterfall_count, found_emails_count, found_activity_count, cost_usd, " +

@@ -15,6 +15,75 @@ function str(v: unknown): string | null {
   return typeof v === "string" && v.trim() ? v.trim() : null;
 }
 
+// Company phone from the harvestapi record. Shape is usually
+// `phone: { number, extension }`; tolerate a bare string too.
+function companyPhone(rec: Rec): string | null {
+  const p = rec.phone;
+  if (p && typeof p === "object") {
+    const num = str((p as Rec).number);
+    if (!num) return null;
+    const ext = str((p as Rec).extension);
+    return ext ? `${num} x${ext}` : num;
+  }
+  return str(p);
+}
+
+// Employee count is the size-routing input (migration 00075). Coerce number|string.
+function companyEmployeeCount(rec: Rec): number | null {
+  const n = rec.employeeCount;
+  if (typeof n === "number" && Number.isFinite(n)) return Math.round(n);
+  if (typeof n === "string" && n.trim() && Number.isFinite(Number(n))) return Math.round(Number(n));
+  return null;
+}
+
+// Compact HQ location line (provenance only) — field names vary, so probe a few.
+function companyHq(rec: Rec): string | null {
+  const fromLoc = (loc: unknown): string | null => {
+    if (typeof loc === "string") return str(loc);
+    if (!loc || typeof loc !== "object") return null;
+    const l = loc as Rec;
+    const explicit = str(l.address) ?? str(l.description) ?? str(l.formatted);
+    if (explicit) return explicit;
+    const parts = [
+      str(l.city),
+      str(l.geographicArea) ?? str(l.state) ?? str(l.region),
+      str(l.country),
+    ].filter((s): s is string => Boolean(s));
+    return parts.length ? parts.join(", ") : null;
+  };
+  const direct = rec.headquarter ?? rec.headquarters ?? rec.hq;
+  if (direct) {
+    const s = fromLoc(direct);
+    if (s) return s;
+  }
+  const locs = rec.locations;
+  if (Array.isArray(locs) && locs.length) {
+    const flagged = (locs as Rec[]).find(
+      (l) => l && typeof l === "object" && (l.isHeadquarter || l.headquarter || l.isPrimary),
+    );
+    const s = fromLoc(flagged ?? locs[0]);
+    if (s) return s;
+  }
+  return null;
+}
+
+// Denormalized company block persisted into enrichment_data.enrichment.company.
+// The domain-phase ingest also lifts `phone` → contacts.phone (fill-only) and
+// `employeeCount` → enrichment_run_items.employee_count for size routing.
+function companyBlock(rec: Rec, fallbackId: string | null): Record<string, unknown> {
+  return {
+    id: str(rec.id) ?? fallbackId,
+    name: str(rec.name),
+    linkedinUrl: str(rec.linkedinUrl),
+    website: str(rec.website),
+    employeeCount: companyEmployeeCount(rec),
+    phone: companyPhone(rec),
+    hq: companyHq(rec),
+    industries: rec.industries ?? null,
+    resolved_at: new Date().toISOString(),
+  };
+}
+
 export const companyProvider: PhaseProvider = {
   id: "harvestapi-company",
   actorId: DOMAIN_ACTOR_ID,
@@ -84,8 +153,10 @@ export const companyProvider: PhaseProvider = {
       if (!domain) {
         out.set(it.id, {
           status: "not_found",
+          // Company record resolved but no website → no domain. We still keep
+          // the company block so the ingest can lift phone + employeeCount.
           extra: {
-            company: { name: str(rec.name), linkedinUrl: str(rec.linkedinUrl), website },
+            company: companyBlock(rec, it.company_id),
             domain_note: `company found (by ${matchedBy}), no usable website: ${website ?? "∅"}`,
           },
           raw: trimRaw(rec),
@@ -98,15 +169,7 @@ export const companyProvider: PhaseProvider = {
         companyDomain: domain,
         extra: {
           matched_by: matchedBy,
-          company: {
-            id: str(rec.id) ?? it.company_id,
-            name: str(rec.name),
-            linkedinUrl: str(rec.linkedinUrl),
-            website,
-            employeeCount: rec.employeeCount ?? null,
-            industries: rec.industries ?? null,
-            resolved_at: new Date().toISOString(),
-          },
+          company: companyBlock(rec, it.company_id),
         },
         raw: trimRaw(rec),
       });

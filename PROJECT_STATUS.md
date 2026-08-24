@@ -28,7 +28,7 @@ Live at https://leadstart-ebon.vercel.app (LeadStart Vercel account, auto-deploy
 
 ---
 
-## Current initiative: Configurable enrichment waterfall (planned 2026-08-24, NOT started)
+## Current initiative: Configurable enrichment waterfall (Phases 0–1 SHIPPED 2026-08-24; Phases 2–4 remain)
 
 Replace the vdrmota-by-default second-pass email waterfall with an org-configurable,
 per-company-size routed system: a Waterfall settings card (Settings → Integrations),
@@ -36,7 +36,18 @@ a pattern-permutation + Million Verifier email finder (~$0.004/contact vs vdrmot
 ~$1.00/company on free tier — its one real run charged $3.96 and filled 0 fields),
 an own HTTPS-first → Playwright+stealth site scraper for company-level phone/generic
 email, and company-phone/employeeCount capture from the harvestapi company actor.
-Full plan, evidence, schema (migration 00075), phased work plan + open decisions:
+
+**Shipped (Phases 0–1, 2026-08-24):** migration `00075` (applied to the live DB),
+`EnrichmentSettings` types + loader, the Enrichment-waterfall settings card +
+`GET/POST /api/admin/enrichment/settings`, enrich-start config snapshot +
+waterfall-enabled gating, configurable vdrmota lead cap (default 10 → 3), honest
+per-domain waterfall cost estimates in the enrich dialog (free-tier ×20 warning),
+and company phone/employeeCount/HQ capture in the domains phase (phone fill-only
+onto contacts; employee_count stamped per item as the future size-routing input).
+Pending live check after the Aug-28 Apify reset: one ~$0.01 domains-only run to
+see contacts.phone + employee_count fill. Phases 2–4 (pattern_mv, site_scrape
+actor, per-size routing, polish) not started.
+Full plan, evidence, schema, phased work plan + decision history:
 [`RESUME-WATERFALL-SETTINGS.md`](RESUME-WATERFALL-SETTINGS.md).
 
 ## Other initiative: LinkedIn Channel via Unipile

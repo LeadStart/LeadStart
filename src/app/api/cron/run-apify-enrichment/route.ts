@@ -16,7 +16,7 @@ import {
   WATERFALL_LEAD_COST_USD,
   ACTIVITY_COST_USD,
 } from "@/lib/apify/pricing";
-import type { EmailProviderId, EnrichmentPhase } from "@/types/app";
+import type { EmailProviderId, EnrichmentPhase, EnrichmentSettings } from "@/types/app";
 import { alertActorFailure } from "@/lib/notifications/actor-failure-alert";
 
 // GET /api/cron/run-apify-enrichment — one worker tick (60s budget).
@@ -53,6 +53,9 @@ interface RunRow {
   profile_actor: string;
   domain_actor: string;
   waterfall_actor: string | null;
+  // Enrichment-settings snapshot at run start (migration 00075); null on runs
+  // created before the waterfall-settings feature.
+  waterfall_config: EnrichmentSettings | null;
   active_apify_run_id: string | null;
   active_apify_dataset_id: string | null;
   active_batch_started_at: string | null;
@@ -329,7 +332,7 @@ async function startNextBatch(
     return { status: "skipped_batch" };
   }
 
-  const input = provider.buildInput(batch);
+  const input = provider.buildInput(batch, run.waterfall_config ?? null);
   if (isEmptyInput(input)) {
     // Nothing actionable in this batch (e.g. all lacked a domain) — mark
     // not_found so the run can progress.
@@ -474,6 +477,24 @@ async function writePhaseResult(
   const now = new Date().toISOString();
 
   if (phase === "domains") {
+    // Company-level extras the harvestapi actor already returns (migration
+    // 00075): phone fills contacts.phone (fill-only, zero extra spend) and
+    // employeeCount lands on the item — the waterfall's size-routing input.
+    // Both exist even when the record had no usable website (not_found path).
+    const company = (res.extra?.company ?? null) as Record<string, unknown> | null;
+    const phone =
+      company && typeof company.phone === "string" && company.phone.trim()
+        ? (company.phone as string).trim()
+        : null;
+    const employeeCount =
+      company && typeof company.employeeCount === "number" && Number.isFinite(company.employeeCount)
+        ? Math.round(company.employeeCount as number)
+        : null;
+    if (contact && phone) {
+      await admin.from("contacts").update({ phone }).eq("id", contact.id).is("phone", null);
+    }
+    const employeeCountPatch = employeeCount != null ? { employee_count: employeeCount } : {};
+
     if (res.status === "found" && res.companyDomain) {
       if (contact) {
         const ed = mergeEnrichment(contact.enrichment_data, {
@@ -492,6 +513,7 @@ async function writePhaseResult(
           company_domain: res.companyDomain,
           domain_notes: res.extra?.matched_by ? `matched by ${res.extra.matched_by}` : null,
           cost_usd: share,
+          ...employeeCountPatch,
         })
         .eq("id", item.id);
       return "found";
@@ -502,6 +524,7 @@ async function writePhaseResult(
         domain_status: "not_found",
         domain_notes: (res.extra?.domain_note as string) ?? "no company domain found",
         cost_usd: share,
+        ...employeeCountPatch,
       })
       .eq("id", item.id);
     return "not_found";

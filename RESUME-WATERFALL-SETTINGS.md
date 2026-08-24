@@ -92,9 +92,15 @@ waterfall phase (cron tick)
   send-gate's fail-closed posture ([policy.ts](src/lib/millionverifier/policy.ts)).
   Cost ≈ ≤6 MV credits/contact (~$0.004 worst case), 30-day MV cache applies.
 - **site_scrape (apify, new, ours):** private actor `leadstart/site-contact-scraper`.
-  Input `{targets:[{domain, firstName?, lastName?}], maxPagesPerDomain: 4}`. Per
-  domain: try `https://{domain}` + likely contact paths (`/contact`, `/about`,
-  `/contact-us`, `/team`) with plain HTTP (undici) + stealth-ish headers; escalate to
+  Input `{targets:[{domain, firstName?, lastName?}], maxPagesPerDomain: 6,
+  pageKeywords?: string[], unblockerKey?: string}`. Per domain: fetch
+  `https://{domain}` first, then DISCOVER candidate pages from its nav/footer
+  links matched against `pageKeywords` (defaults: contact, contact-us, about,
+  about-us, team, our-team, meet-the-team, staff, people, leadership, management,
+  company + common non-English equivalents — kontakt, équipe, equipo, über-uns,
+  chi-siamo), fetched in priority order contact → team/leadership → about (the
+  hardcoded path list survives only as the fallback when the homepage yields no
+  parseable links). All with plain HTTP (undici) + stealth-ish headers; escalate to
   Playwright+stealth (playwright-extra + puppeteer-extra-plugin-stealth) only when
   HTML is empty/JS-shelled/blocked. Extract mailtos + email regex + phone regex
   (tel: links, contact-page proximity), socials; flag `personMatch` when a target
@@ -166,7 +172,26 @@ type in [src/types/app.ts](src/types/app.ts)).
 
 ## Work plan (each phase compiles + verifies standalone; LOCAL ONLY until owner says push)
 
-### Phase 0 — config plumbing (no behavior change)
+> **STATUS (2026-08-24, follow-up session): Phases 0 + 1 are BUILT and verified
+> locally (uncommitted).** Migration 00075 is APPLIED to the live DB (all 4
+> columns confirmed). Owner decisions taken: size_threshold=50, catch-all OFF,
+> Phase-3 hosting = private Apify actor, pattern_mv writes contacts.email = yes.
+> Settings card round-trip verified against organizations.enrichment_settings;
+> enrich-dialog estimate shows per-domain math with the configured lead cap.
+> NOT yet verified live: a real domains-phase run filling contacts.phone +
+> employee_count. Owner confirmed 2026-08-24: NO Starter upgrade — waiting on
+> the Aug 28 free-tier reset. Run the ~$0.01 domains-only verification (2–3
+> contacts) after Aug 28, or immediately if the upgrade happens first.
+> The "settings page hangs on direct load" observation from this verification was
+> investigated (2026-08-24 follow-up) and is NOT an app bug: it is an artifact of
+> the embedded preview pane, which never composites frames when not displayed, so
+> requestAnimationFrame never fires and Turbopack-dev hydration of deep
+> Suspense-boundary routes parks forever on the loading skeleton. The same
+> direct-URL load renders fine in real Chrome (verified). No app fix needed;
+> when testing deep admin routes in the hidden preview pane, use client-side
+> navigation (sidebar links) instead of full-document loads.
+
+### Phase 0 — config plumbing (no behavior change) — ✅ DONE (2026-08-24)
 1. Migration `00075` above (write file; apply only on explicit "go").
 2. [src/types/app.ts](src/types/app.ts): `EnrichmentSettings` type + defaults const;
    `Organization.enrichment_settings`; extend `EmailProviderId`;
@@ -174,7 +199,7 @@ type in [src/types/app.ts](src/types/app.ts)).
 3. [src/lib/apify/auth.ts](src/lib/apify/auth.ts): `loadEnrichmentSettings(admin, orgId)`
    → merge stored JSONB over defaults (missing keys = defaults; never throw).
 
-### Phase 1 — Waterfall settings card + honest costs (ships value immediately)
+### Phase 1 — Waterfall settings card + honest costs — ✅ DONE (2026-08-24, except live company-phone run)
 1. New `src/app/(dashboard)/admin/settings/api/waterfall-settings-card.tsx`, rendered
    right after the Apify spend card in
    [settings/api/page.tsx](src/app/(dashboard)/admin/settings/api/page.tsx)
@@ -221,6 +246,33 @@ type in [src/types/app.ts](src/types/app.ts)).
    settings card; flip DEFAULTS to `pattern_mv` everywhere; catch-all toggle goes live.
 
 ### Phase 3 — site_scrape actor + provider
+
+> **Design locked with the owner (2026-08-24, follow-up session).** Build for ANY
+> ICP, not just small/local businesses — the scraper is intended to eventually be
+> resold as a decision-maker-finding service for other companies' TAM/ICPs.
+> (a) **Discovery-driven, broader page selection** — homepage first, then internal
+> nav/footer links matched against the configurable `pageKeywords` input (broad
+> multilingual defaults above; leadership/our-team/staff/people included — team
+> pages are the personMatch fuel), priority contact → team/leadership → about,
+> capped by `scrape_max_pages` (org default now **6**, was 4). Hardcoded paths
+> only as the no-nav fallback.
+> (b) **Three-tier escalation ladder; tier 3 WIRED at launch, key-optional** —
+> tier 1 undici → tier 2 Playwright+stealth (Apify residential proxy is the
+> intermediate lever) → tier 3 managed unblocker (Scrapfly-class, plain HTTP call
+> from inside the actor). Tier 3 fires ONLY on tier-2 failures AND only when
+> `unblockerKey` is present in the input; no key → ladder stops at tier 2. Every
+> domain stamps `fetchOutcome: ok_http | ok_browser | ok_unblocker | blocked |
+> empty | error` so each run measures its own block rate. Per-request gating
+> keeps the cost story intact — the unblocker premium applies only to the
+> residual. Vendor + pricing pinned at key-signup time (Scrapfly vs
+> ScrapingBee/Zyte comparison then).
+> (c) **Pre-run estimate band** — the Contacts enrich dialog gains a site_scrape
+> estimate line (≈$0.002–0.01 × domains, "billed as compute"; unblocker requests
+> cost extra), not just post-run `usageTotalUsd`.
+> (d) Resale productization (whose Apify account, billing pass-through,
+> multi-tenancy) is explicitly OUT of Phase 3 — running the private actor under
+> the owner's account on clients' behalf covers v1.
+
 1. New repo folder `apify-actors/site-contact-scraper/` (Dockerfile-less Apify
    Node/Playwright template; `playwright-extra` + stealth plugin; HTTPS-first via
    undici with realistic headers; escalation rules: empty `<body>`, <500 chars text,
@@ -258,8 +310,8 @@ type in [src/types/app.ts](src/types/app.ts)).
   one JS-heavy, one with published phone) before wiring; then end-to-end on 5
   contacts; confirm `usedBrowser` only on the JS-heavy one.
 - **Apify budget note:** the account was AT the $5 free-tier cap on 2026-08-24
-  (cycle resets **Aug 28**; upgrade to Starter $29/mo was under consideration —
-  ask the owner which happened). Live Apify verification needs headroom; pattern_mv
+  (cycle resets **Aug 28**). Owner confirmed 2026-08-24: NO Starter upgrade —
+  waiting on the reset. Live Apify verification needs headroom; pattern_mv
   (Phase 2) needs NO Apify at all and can be verified even while capped.
 
 ## Cost model after (per contact needing an email, paid Apify tier)

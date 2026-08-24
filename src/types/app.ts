@@ -67,6 +67,9 @@ export interface Organization {
   // email waterfall. Falls back to process.env.APIFY_API_TOKEN at runtime.
   // (Email verification is Million Verifier's, above — not Apify's.)
   apify_api_key: string | null;
+  // Configurable enrichment waterfall (migration 00075). NULL → code defaults
+  // (DEFAULT_ENRICHMENT_SETTINGS). Read/merged via loadEnrichmentSettings.
+  enrichment_settings: EnrichmentSettings | null;
   created_at: string;
   updated_at: string;
 }
@@ -395,9 +398,16 @@ export type EmailVerificationStatus =
   | "error";
 export type EmailVerificationQuality = "good" | "bad" | "risky";
 
-// Which Apify actor supplied the email during enrichment (migration 00070).
-// Provenance only — verification itself is Million Verifier's, not Apify's.
-export type EmailProviderId = "harvestapi" | "vdrmota" | "bovi";
+// Which method supplied the email during enrichment (migration 00070; waterfall
+// methods extended in 00075). Provenance only — verification itself is Million
+// Verifier's, not Apify's. `pattern_mv` (pattern-permutation + Million Verifier)
+// and `site_scrape` (our own contact scraper) ship in later waterfall phases.
+export type EmailProviderId =
+  | "harvestapi"
+  | "vdrmota"
+  | "bovi"
+  | "pattern_mv"
+  | "site_scrape";
 
 export interface Contact {
   id: string;
@@ -1135,6 +1145,68 @@ export type EnrichmentPhase = "profiles" | "domains" | "waterfall" | "activity" 
 export type EnrichmentStepStatus =
   | "pending" | "in_flight" | "found" | "not_found" | "skipped" | "error";
 
+// The pluggable second-pass email waterfall methods (migration 00075). Only the
+// Apify methods (`vdrmota`, `bovi`) plus `off` are wired in Phase 1; the direct
+// methods arrive in later phases:
+//   scrape_plus_pattern — our site scraper, then pattern_mv on the still-missing
+//   pattern_mv          — first/last/domain permutations verified by Million Verifier
+//   site_scrape         — our own HTTPS-first → Playwright company-site scraper
+//   vdrmota / bovi      — existing Apify community actors
+//   off                 — skip the waterfall for this size band
+export type EnrichmentWaterfallMethod =
+  | "scrape_plus_pattern"
+  | "pattern_mv"
+  | "site_scrape"
+  | "vdrmota"
+  | "bovi"
+  | "off";
+
+export const ENRICHMENT_WATERFALL_METHODS: readonly EnrichmentWaterfallMethod[] = [
+  "scrape_plus_pattern",
+  "pattern_mv",
+  "site_scrape",
+  "vdrmota",
+  "bovi",
+  "off",
+];
+
+// Org-level enrichment/waterfall config (organizations.enrichment_settings, JSONB).
+// NULL in the DB → these code defaults. Snapshotted onto each run's
+// waterfall_config so an in-flight run never re-reads live settings.
+export interface EnrichmentSettings {
+  // Master switch for the whole second-pass waterfall.
+  waterfall_enabled: boolean;
+  // Employee-count boundary between the small and large size bands.
+  size_threshold: number;
+  // Method per size band. `unknown_method` covers items with no known count.
+  small_method: EnrichmentWaterfallMethod;
+  large_method: EnrichmentWaterfallMethod;
+  unknown_method: EnrichmentWaterfallMethod;
+  // vdrmota directory leads pulled per company (each billed). 1–10.
+  vdrmota_max_leads: number;
+  // Whether pattern_mv may auto-write a catch-all guess (Phase 2 gate).
+  accept_catch_all_guesses: boolean;
+  // Max pages the site scraper crawls per domain (Phase 3).
+  scrape_max_pages: number;
+}
+
+// Phase-1 defaults preserve today's behavior (vdrmota for every band) so no run
+// silently loses its waterfall before pattern_mv/site_scrape ship. The one
+// deliberate change is the leads cap dropping 10 → 3 (see RESUME-WATERFALL-SETTINGS).
+// Phase 2 flips the method defaults to pattern_mv / scrape_plus_pattern.
+export const DEFAULT_ENRICHMENT_SETTINGS: EnrichmentSettings = {
+  waterfall_enabled: true,
+  size_threshold: 50,
+  small_method: "vdrmota",
+  large_method: "vdrmota",
+  unknown_method: "vdrmota",
+  vdrmota_max_leads: 3,
+  accept_catch_all_guesses: false,
+  // 6 (not 4): owner wants team/leadership/staff pages in the crawl — they're
+  // where personMatch hits live. Discovery-driven selection keeps this cheap.
+  scrape_max_pages: 6,
+};
+
 export interface EnrichmentRun {
   id: string;
   organization_id: string;
@@ -1144,6 +1216,9 @@ export interface EnrichmentRun {
   domain_actor: string;
   waterfall_actor: string | null;
   activity_actor: string | null;
+  // Enrichment settings snapshot at run-start (migration 00075). NULL for runs
+  // created before the waterfall-settings feature.
+  waterfall_config: EnrichmentSettings | null;
   run_profiles: boolean;
   run_domains: boolean;
   run_waterfall: boolean;
@@ -1186,6 +1261,11 @@ export interface EnrichmentRunItem {
   first_name: string | null;
   last_name: string | null;
   company_domain: string | null;
+  // Which waterfall method advancePhase routed this item to (migration 00075).
+  // NULL until the waterfall phase stamps it (Phase 2 routing).
+  waterfall_method: EnrichmentWaterfallMethod | null;
+  // Employee count captured in the domains phase — the size-routing input.
+  employee_count: number | null;
   profile_status: EnrichmentStepStatus;
   profile_apify_run_id: string | null;
   profile_notes: string | null;

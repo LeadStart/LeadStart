@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/select";
 import { useUser } from "@/hooks/use-user";
 import { ApifySpendCard } from "./apify-spend-card";
+import { WaterfallSettingsCard } from "./waterfall-settings-card";
 import {
   Key,
   RefreshCw,
@@ -1276,6 +1277,9 @@ export default function IntegrationsPage() {
 
       {/* Apify spend — authoritative cost breakdown read live from Apify */}
       <ApifySpendCard />
+
+      {/* Enrichment waterfall — second-pass method routing + caps (migration 00075) */}
+      <WaterfallSettingsCard />
 
       {/* Anthropic — decision-maker enrichment Layer 1 */}
       <Card className="border-border/50 shadow-sm">
