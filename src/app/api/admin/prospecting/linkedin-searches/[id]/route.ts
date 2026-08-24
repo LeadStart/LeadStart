@@ -1,17 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireEnrichmentContext } from "@/lib/apify/auth";
 import { ApifyClient } from "@/lib/apify/client";
+import { parseProfileSearchResults } from "@/lib/apify/sourcing/profile-search";
+import type { LinkedInProspect } from "@/types/app";
 
 // GET /api/admin/prospecting/linkedin-searches/[id]
 // Returns the search row for the polling UI. Mirrors enrich/run/[id].
 //
-// While a sourcing run is in flight, the response overlays a LIVE dataset
-// item count read straight from Apify — the UI polls this route every 3s,
-// but the cron (the state machine + DB writer) only refreshes the row once
-// a minute. The overlay is read-only and best-effort: persistence stays with
-// the cron, and any Apify hiccup just falls back to the stored row.
+// While a sourcing run is in flight, the response overlays LIVE data read
+// straight from Apify — both the dataset item count AND a capped page of the
+// parsed rows themselves, so the results table streams profiles in as the
+// actor scrapes them (Phase 1 live review). The UI polls this route every 3s,
+// but the cron (the state machine + DB writer) only refreshes the row once a
+// minute and only stores `results` on completion. The overlay is read-only
+// and best-effort: persistence stays with the cron, and any Apify hiccup just
+// falls back to the stored row.
 
 export const maxDuration = 10;
+
+// Cap the rows streamed mid-run so the 3s poll payload stays bounded. The full
+// set (up to target) lands from the cron on completion; this is a live preview.
+const STREAM_ROW_CAP = 300;
 
 const COLUMNS =
   "id, organization_id, query, results, result_count, target_max_results, truncated, saved_count, status, progress_message, error_message, actor, cost_usd, started_at, completed_at, expires_at, created_at, active_apify_dataset_id";
@@ -40,6 +49,7 @@ export async function GET(
 
   const search = row as unknown as {
     status: string;
+    results: LinkedInProspect[] | null;
     result_count: number | null;
     target_max_results: number | null;
     progress_message: string | null;
@@ -47,18 +57,26 @@ export async function GET(
   };
 
   if (search.status === "running" && search.active_apify_dataset_id && ctx.apifyToken) {
-    try {
-      const live = await new ApifyClient(ctx.apifyToken).getDatasetItemCount(
-        search.active_apify_dataset_id,
-      );
-      if (typeof live === "number") {
-        const target = search.target_max_results ?? live;
-        const soFar = Math.max(search.result_count ?? 0, Math.min(live, target));
-        search.result_count = soFar;
-        if (soFar > 0) search.progress_message = `Sourcing profiles… ${soFar} found`;
-      }
-    } catch {
-      // best-effort — the persisted row is still a valid answer
+    const client = new ApifyClient(ctx.apifyToken);
+    const dsId = search.active_apify_dataset_id;
+    // Two cheap, unbilled dataset reads: the true count (may exceed the row
+    // cap) drives the progress number; the capped item page streams live rows.
+    const [live, items] = await Promise.all([
+      client.getDatasetItemCount(dsId).catch(() => null),
+      client
+        .getAllDatasetItems(dsId, { maxItems: STREAM_ROW_CAP })
+        .catch(() => [] as Record<string, unknown>[]),
+    ]);
+    if (typeof live === "number") {
+      const target = search.target_max_results ?? live;
+      const soFar = Math.max(search.result_count ?? 0, Math.min(live, target));
+      search.result_count = soFar;
+      if (soFar > 0) search.progress_message = `Sourcing profiles… ${soFar} found`;
+    }
+    if (items.length > 0) {
+      // Parse/dedup identically to the final ingest so streamed rows match the
+      // completed set (same identity keys, same shape).
+      search.results = parseProfileSearchResults(items);
     }
   }
 

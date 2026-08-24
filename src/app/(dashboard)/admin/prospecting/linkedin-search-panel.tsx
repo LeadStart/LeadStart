@@ -28,16 +28,27 @@ import {
   CheckCircle2,
   AlertTriangle,
   ChevronDown,
+  ChevronRight,
   Send,
   ExternalLink,
   Info,
   HelpCircle,
   Bookmark,
   Trash2,
+  History,
+  Globe,
+  Activity,
+  Mail,
+  Clock,
+  XCircle,
 } from "lucide-react";
 import { appUrl } from "@/lib/api-url";
 import { createClient } from "@/lib/supabase/client";
-import type { LinkedInProspect, LinkedInSearchStatus } from "@/types/app";
+import type {
+  LinkedInProspect,
+  LinkedInSearchStatus,
+  EnrichmentRunItem,
+} from "@/types/app";
 import {
   HEADCOUNTS,
   SENIORITY_LEVELS,
@@ -90,7 +101,7 @@ const ENRICH_RATES = {
 
 const MAX_OPTIONS = [100, 250, 500, 1000] as const;
 const POLL_MS = 3000;
-const PAGE_SIZE = 25;
+const PAGE_SIZE = 50;
 
 type Preset = {
   name: string;
@@ -202,7 +213,77 @@ type SearchDetail = {
   cost_usd: number | string;
 };
 
+// One row of the collapsible "Prior runs" list (the [id] `results` JSONB is
+// stripped by the list endpoint — clicking a run loads it via the poll).
+type PriorRun = {
+  id: string;
+  query: { levers?: Record<string, unknown>; depth?: string } | null;
+  result_count: number;
+  target_max_results: number;
+  saved_count: number | null;
+  status: LinkedInSearchStatus;
+  cost_usd: number | string;
+  completed_at: string | null;
+  created_at: string;
+};
+
+// The slice of an enrichment run item the results table layers onto a sourced
+// row (Phase 2). Keyed by lower(linkedin_url) to match a LinkedInProspect.
+type EnrichLite = Pick<
+  EnrichmentRunItem,
+  | "linkedin_url"
+  | "email"
+  | "company_domain"
+  | "last_posted_at"
+  | "profile_status"
+  | "domain_status"
+  | "waterfall_status"
+  | "activity_status"
+>;
+
 type Campaign = { id: string; name: string };
+
+const LC = (s: string | null | undefined) => (s ?? "").trim().toLowerCase();
+
+// A one-line ICP summary for a prior run, built from its stored levers.
+function describeLevers(query: PriorRun["query"]): string {
+  const lv = query?.levers ?? {};
+  const parts: string[] = [];
+  const titles = lv.currentJobTitles as string[] | undefined;
+  const q = lv.query as string | undefined;
+  const locs = lv.locations as string[] | undefined;
+  if (titles?.length) parts.push(titles.slice(0, 2).join(", ") + (titles.length > 2 ? ` +${titles.length - 2}` : ""));
+  else if (q) parts.push(`"${q.length > 40 ? q.slice(0, 40) + "…" : q}"`);
+  if (locs?.length) parts.push("in " + locs.slice(0, 2).join(", ") + (locs.length > 2 ? ` +${locs.length - 2}` : ""));
+  const sen = lv.seniorityLevelIds as string[] | undefined;
+  const ind = lv.industryIds as string[] | undefined;
+  if (!parts.length && sen?.length) parts.push(`${sen.length} seniority`);
+  if (!parts.length && ind?.length) parts.push(`${ind.length} industry`);
+  return parts.join(" ") || "All people";
+}
+
+function timeAgoShort(iso: string | null): string {
+  if (!iso) return "";
+  const ms = Date.now() - new Date(iso).getTime();
+  const m = Math.round(ms / 60000);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m}m ago`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.round(h / 24)}d ago`;
+}
+
+// Loosened step-status type: the EnrichLite fields are EnrichmentStepStatus,
+// but waterfall/activity can be null, and helpers accept undefined for absence.
+type EnrichmentStepish =
+  | "pending"
+  | "in_flight"
+  | "found"
+  | "not_found"
+  | "skipped"
+  | "error"
+  | null
+  | undefined;
 
 function ChipInput({
   placeholder,
@@ -641,6 +722,70 @@ export function LinkedInSearchPanel() {
     };
   }, []);
 
+  // Phase 2 per-row overlay: enrichment run items keyed by lower(linkedin_url).
+  // Polls the same run the status panel radial reads, but pulls the item rows
+  // so each sourced row's email/domain/activity fills in live as it's found.
+  const [enrichByUrl, setEnrichByUrl] = useState<Map<string, EnrichLite>>(new Map());
+  // URLs the user imported this session — lets a row show "Queued" the instant
+  // it's sent, before the run's item rows exist to poll.
+  const [importedUrls, setImportedUrls] = useState<Set<string>>(new Set());
+  const enrichTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!enrichmentRunId) return;
+    let cancelled = false;
+    const stop = () => {
+      if (enrichTimer.current) {
+        clearTimeout(enrichTimer.current);
+        enrichTimer.current = null;
+      }
+    };
+    const poll = async () => {
+      try {
+        const res = await fetch(appUrl(`/api/admin/contacts/enrich/run/${enrichmentRunId}`), {
+          cache: "no-store",
+        });
+        if (res.ok) {
+          const data = (await res.json()) as { run: { status: string }; items: EnrichLite[] };
+          if (cancelled) return;
+          const map = new Map<string, EnrichLite>();
+          for (const it of data.items ?? []) {
+            const k = LC(it.linkedin_url);
+            if (k) map.set(k, it);
+          }
+          setEnrichByUrl(map);
+          if (data.run.status === "complete" || data.run.status === "failed") return; // terminal — stop
+        }
+      } catch {
+        // transient — reschedule
+      }
+      if (!cancelled) enrichTimer.current = setTimeout(poll, POLL_MS);
+    };
+    poll();
+    return () => {
+      cancelled = true;
+      stop();
+    };
+  }, [enrichmentRunId]);
+
+  // Collapsible "Prior runs" list.
+  const [priorRuns, setPriorRuns] = useState<PriorRun[]>([]);
+  const [priorOpen, setPriorOpen] = useState(false);
+  const loadPriorRuns = useCallback(async () => {
+    try {
+      const res = await fetch(appUrl("/api/admin/prospecting/linkedin-searches"), {
+        cache: "no-store",
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      setPriorRuns(Array.isArray(data.searches) ? (data.searches as PriorRun[]) : []);
+    } catch {
+      // ignore — leave list as-is
+    }
+  }, []);
+  useEffect(() => {
+    loadPriorRuns();
+  }, [loadPriorRuns]);
+
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Load the org's campaigns for the "Add to campaign" picker.
@@ -678,6 +823,7 @@ export function LinkedInSearchPanel() {
           setDetail(d);
           if (d.status === "complete" || d.status === "failed") {
             stopPoll();
+            loadPriorRuns(); // reflect the finished run in the Prior runs list
             return;
           }
         }
@@ -686,7 +832,23 @@ export function LinkedInSearchPanel() {
       }
       timer.current = setTimeout(() => poll(id), POLL_MS);
     },
-    [stopPoll],
+    [stopPoll, loadPriorRuns],
+  );
+
+  // Load a prior run into the results view: point the poller at it (a complete
+  // run resolves on the first tick and stops). Clears the current selection.
+  const loadPriorRun = useCallback(
+    (id: string) => {
+      if (id === searchId) return;
+      stopPoll();
+      setDetail(null);
+      setSelected(new Set());
+      setPage(1);
+      setSaveMsg(null);
+      setError(null);
+      setSearchId(id);
+    },
+    [searchId, stopPoll],
   );
 
   useEffect(() => {
@@ -832,6 +994,18 @@ export function LinkedInSearchPanel() {
   // the Email column when the run actually carries some (avoids a dead column).
   const emailCount = useMemo(() => results.filter((r) => Boolean(r.email)).length, [results]);
   const hasEmails = emailCount > 0;
+  // Once an import kicks off enrichment, reveal the Email/Domain/Activity
+  // columns so the Phase-2 overlay has somewhere to land — even for a Short
+  // search that sourced no emails of its own.
+  const showEnrichCols = enrichByUrl.size > 0 || importedUrls.size > 0;
+  // How many imported rows have landed an email so far (live progress line).
+  const enrichedEmailCount = useMemo(() => {
+    let n = 0;
+    for (const e of enrichByUrl.values()) if (e.email) n++;
+    return n;
+  }, [enrichByUrl]);
+  // The table shows once sourcing completes, or mid-run as streamed rows arrive.
+  const showResults = isComplete || (isRunning && results.length > 0);
   // Actual $ the actor run cost (usageTotalUsd), written by the worker on finish.
   const actualCost = detail ? Number(detail.cost_usd) || 0 : 0;
   const pageKeys = pageResults.map((r) => r.linkedin_url).filter(Boolean) as string[];
@@ -900,8 +1074,16 @@ export function LinkedInSearchPanel() {
         const id = await fetchActiveEnrichmentRunId();
         if (id) setEnrichmentRunId(id);
       }
+      // Remember what we just imported so those rows immediately read "Queued"
+      // (the enrichment run's item rows take a tick or two to appear).
+      setImportedUrls((prev) => {
+        const next = new Set(prev);
+        for (const u of selected) next.add(LC(u));
+        return next;
+      });
       setSelected(new Set());
       setAddOpen(false);
+      loadPriorRuns(); // saved_count changed
     } catch (e) {
       setSaveMsg(e instanceof Error ? e.message : "Save failed");
     } finally {
@@ -1241,6 +1423,75 @@ export function LinkedInSearchPanel() {
         enrichmentRunId={enrichmentRunId}
       />
       </div>
+
+      {/* Prior runs — collapsible. Click a run to reload its results (no new
+          Apify charge; a completed run resolves on the first poll tick). */}
+      {priorRuns.length > 0 && (
+        <Card className="border-border/50 shadow-sm">
+          <button
+            type="button"
+            onClick={() => setPriorOpen((v) => !v)}
+            className="flex w-full cursor-pointer items-center gap-2.5 px-4 py-3 text-left"
+          >
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-500">
+              <History size={15} className="text-white" />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-semibold">Prior runs</p>
+              <p className="text-[11px] text-muted-foreground">
+                {priorRuns.length} recent search{priorRuns.length === 1 ? "" : "es"} · reload results free
+              </p>
+            </div>
+            <ChevronRight
+              size={16}
+              className={`shrink-0 text-muted-foreground transition-transform ${priorOpen ? "rotate-90" : ""}`}
+            />
+          </button>
+          {priorOpen && (
+            <div className="border-t border-border/60 p-2">
+              <div className="space-y-1">
+                {priorRuns.map((r) => {
+                  const active = r.id === searchId;
+                  return (
+                    <button
+                      key={r.id}
+                      type="button"
+                      onClick={() => loadPriorRun(r.id)}
+                      className={`flex w-full cursor-pointer items-center gap-3 rounded-md border px-3 py-2 text-left transition-colors ${
+                        active ? "border-[#2E37FE] bg-[#EDEEFF]" : "border-transparent hover:bg-muted/50"
+                      }`}
+                    >
+                      <PriorStatusIcon status={r.status} />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[13px] font-medium">{describeLevers(r.query)}</p>
+                        <p className="text-[11px] text-muted-foreground">
+                          {r.status === "complete" ? (
+                            <>
+                              {r.result_count.toLocaleString()} found
+                              {r.saved_count ? ` · ${r.saved_count} imported` : ""}
+                              {" · "}
+                              {timeAgoShort(r.completed_at ?? r.created_at)}
+                            </>
+                          ) : r.status === "running" ? (
+                            <span className="text-blue-600">Running…</span>
+                          ) : r.status === "pending" ? (
+                            <span className="text-amber-600">Queued</span>
+                          ) : (
+                            <span className="text-red-600">Failed</span>
+                          )}
+                        </p>
+                      </div>
+                      <span className="shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground">
+                        ${(Number(r.cost_usd) || 0).toFixed(2)}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </Card>
+      )}
 
       {/* Info modals — the single popup pattern for every (i) on this page */}
       <InfoDialog open={infoOpen === "tips"} onClose={() => setInfoOpen(null)} title="How to search" wide>
@@ -1644,23 +1895,44 @@ export function LinkedInSearchPanel() {
         </div>
       </InfoDialog>
 
-      {/* Results */}
-      {isComplete && (
+      {/* Results — appears the moment sourced rows stream in (Phase 1) and
+          gains live Email/Domain/Activity columns as enrichment lands (Phase 2). */}
+      {showResults && (
         <Card className="border-border/50 shadow-sm">
           <CardHeader className="pb-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500">
-                  <CheckCircle2 size={16} className="text-white" />
+                <div
+                  className={`flex h-8 w-8 items-center justify-center rounded-lg ${
+                    isRunning ? "bg-[#2E37FE]" : "bg-emerald-500"
+                  }`}
+                >
+                  {isRunning ? (
+                    <Loader2 size={16} className="animate-spin text-white" />
+                  ) : (
+                    <CheckCircle2 size={16} className="text-white" />
+                  )}
                 </div>
                 <div>
                   <CardTitle className="text-base">
-                    {results.length.toLocaleString()} {results.length === 1 ? "person" : "people"} found
+                    {isRunning
+                      ? `Sourcing… ${(detail?.result_count ?? results.length).toLocaleString()} found`
+                      : `${results.length.toLocaleString()} ${results.length === 1 ? "person" : "people"} found`}
                   </CardTitle>
                   <p className="text-xs text-muted-foreground">
-                    {selected.size > 0 ? `${selected.size} selected` : "Select people to import"}
+                    {isRunning
+                      ? "Rows stream in as they're scraped — select any to import"
+                      : selected.size > 0
+                        ? `${selected.size} selected`
+                        : "Select people to import"}
                     {hasEmails && (
                       <span className="ml-1 text-emerald-600">· {emailCount} with email</span>
+                    )}
+                    {showEnrichCols && (
+                      <span className="ml-1 text-[#2E37FE]">
+                        · enrichment found {enrichedEmailCount} email
+                        {enrichedEmailCount === 1 ? "" : "s"}
+                      </span>
                     )}
                     {detail?.truncated && (
                       <span className="ml-1 text-amber-600">· more available — raise the cap</span>
@@ -1694,7 +1966,8 @@ export function LinkedInSearchPanel() {
                   Import {selected.size} to Contacts
                 </p>
                 <p className="mt-0.5 text-[12px] text-muted-foreground">
-                  Pick a campaign to assign them to, or import without one. Enrichment runs in Contacts.
+                  Pick a campaign to assign them to, or import without one. Enrichment runs here and
+                  the columns below fill in live.
                 </p>
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   <select
@@ -1732,11 +2005,15 @@ export function LinkedInSearchPanel() {
               </div>
             )}
 
-            <div className="overflow-x-auto">
-              <Table>
+            {/* table-fixed + per-cell truncation keeps every column inside the
+                card — no horizontal scroll — while whitespace-nowrap (from the
+                Table primitives) keeps every row a single, uniform line. When
+                the enrichment columns are live, Headline + Location step aside
+                so Email/Domain/Activity/Status fit without crowding. */}
+            <Table className="table-fixed">
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-10">
+                    <TableHead className="w-8">
                       <input
                         type="checkbox"
                         checked={allPageSelected}
@@ -1746,11 +2023,36 @@ export function LinkedInSearchPanel() {
                       />
                     </TableHead>
                     <TableHead>Name</TableHead>
-                    <TableHead className="hidden md:table-cell">Headline</TableHead>
+                    {!showEnrichCols && (
+                      <TableHead className="hidden md:table-cell">Headline</TableHead>
+                    )}
                     <TableHead>Company</TableHead>
-                    {hasEmails && <TableHead>Email</TableHead>}
-                    <TableHead className="hidden lg:table-cell">Location</TableHead>
-                    <TableHead className="w-10"></TableHead>
+                    {(hasEmails || showEnrichCols) && (
+                      <TableHead>
+                        <span className="inline-flex items-center gap-1">
+                          <Mail size={12} /> Email
+                        </span>
+                      </TableHead>
+                    )}
+                    {showEnrichCols && (
+                      <TableHead className="hidden w-[128px] sm:table-cell">
+                        <span className="inline-flex items-center gap-1">
+                          <Globe size={12} /> Domain
+                        </span>
+                      </TableHead>
+                    )}
+                    {showEnrichCols && (
+                      <TableHead className="hidden w-[92px] xl:table-cell">
+                        <span className="inline-flex items-center gap-1">
+                          <Activity size={12} /> Activity
+                        </span>
+                      </TableHead>
+                    )}
+                    {showEnrichCols && <TableHead className="w-[112px]">Status</TableHead>}
+                    {!showEnrichCols && (
+                      <TableHead className="hidden lg:table-cell">Location</TableHead>
+                    )}
+                    <TableHead className="w-9"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1761,9 +2063,19 @@ export function LinkedInSearchPanel() {
                       r.full_name ||
                       [r.first_name, r.last_name].filter(Boolean).join(" ") ||
                       "—";
+                    const en = url ? enrichByUrl.get(LC(url)) : undefined;
+                    const imported = Boolean(en) || Boolean(url && importedUrls.has(LC(url)));
+                    const emailVal = en?.email ?? r.email ?? null;
+                    const emailLoading =
+                      !emailVal && !!en &&
+                      (isStepActive(en.profile_status) || isStepActive(en.waterfall_status));
+                    const domainVal = en?.company_domain ?? r.company_domain ?? null;
+                    const domainLoading = !domainVal && !!en && isStepActive(en.domain_status);
+                    const activityVal = en?.last_posted_at ? timeAgoShort(en.last_posted_at) : null;
+                    const activityLoading = !activityVal && !!en && isStepActive(en.activity_status);
                     return (
                       <TableRow key={url || i} data-state={on ? "selected" : undefined}>
-                        <TableCell>
+                        <TableCell className="w-8">
                           <input
                             type="checkbox"
                             checked={Boolean(on)}
@@ -1773,24 +2085,55 @@ export function LinkedInSearchPanel() {
                             aria-label={`Select ${name}`}
                           />
                         </TableCell>
-                        <TableCell className="font-medium">{name}</TableCell>
-                        <TableCell className="hidden max-w-[280px] truncate text-muted-foreground md:table-cell">
-                          {r.headline ?? "—"}
+                        <TableCell className="truncate font-medium" title={name}>
+                          {name}
                         </TableCell>
-                        <TableCell>{r.company_name ?? "—"}</TableCell>
-                        {hasEmails && (
-                          <TableCell className="font-mono text-[12px]">
-                            {r.email ? (
-                              <span className="text-foreground">{r.email}</span>
-                            ) : (
-                              <span className="text-muted-foreground">—</span>
-                            )}
+                        {!showEnrichCols && (
+                          <TableCell
+                            className="hidden truncate text-muted-foreground md:table-cell"
+                            title={r.headline ?? undefined}
+                          >
+                            {r.headline ?? "—"}
                           </TableCell>
                         )}
-                        <TableCell className="hidden text-muted-foreground lg:table-cell">
-                          {r.location ?? "—"}
+                        <TableCell className="truncate" title={r.company_name ?? undefined}>
+                          {r.company_name ?? "—"}
                         </TableCell>
-                        <TableCell>
+                        {(hasEmails || showEnrichCols) && (
+                          <TableCell
+                            className="truncate font-mono text-[12px]"
+                            title={emailVal ?? undefined}
+                          >
+                            <EnrichCell value={emailVal} loading={emailLoading} />
+                          </TableCell>
+                        )}
+                        {showEnrichCols && (
+                          <TableCell
+                            className="hidden truncate font-mono text-[12px] text-muted-foreground sm:table-cell"
+                            title={domainVal ?? undefined}
+                          >
+                            <EnrichCell value={domainVal} loading={domainLoading} />
+                          </TableCell>
+                        )}
+                        {showEnrichCols && (
+                          <TableCell className="hidden text-[12px] text-muted-foreground xl:table-cell">
+                            <EnrichCell value={activityVal} loading={activityLoading} plain />
+                          </TableCell>
+                        )}
+                        {showEnrichCols && (
+                          <TableCell>
+                            <RowStatusBadge en={en} imported={imported} />
+                          </TableCell>
+                        )}
+                        {!showEnrichCols && (
+                          <TableCell
+                            className="hidden truncate text-muted-foreground lg:table-cell"
+                            title={r.location ?? undefined}
+                          >
+                            {r.location ?? "—"}
+                          </TableCell>
+                        )}
+                        <TableCell className="w-9">
                           {url ? (
                             <a
                               href={url}
@@ -1808,19 +2151,20 @@ export function LinkedInSearchPanel() {
                   })}
                 </TableBody>
               </Table>
-            </div>
             <PaginationControls
               currentPage={page}
               totalItems={results.length}
               pageSize={PAGE_SIZE}
               onPageChange={setPage}
             />
-            <div className="flex items-center justify-between border-t border-border/60 pt-2.5 text-[11px] text-muted-foreground">
-              <span>Actual Apify cost for this search — billed per profile returned, not per target</span>
-              <span className="font-mono tabular-nums font-medium text-foreground">
-                ${actualCost.toFixed(2)}
-              </span>
-            </div>
+            {isComplete && (
+              <div className="flex items-center justify-between border-t border-border/60 pt-2.5 text-[11px] text-muted-foreground">
+                <span>Actual Apify cost for this search — billed per profile returned, not per target</span>
+                <span className="font-mono tabular-nums font-medium text-foreground">
+                  ${actualCost.toFixed(2)}
+                </span>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
@@ -1833,4 +2177,78 @@ export function LinkedInSearchPanel() {
       )}
     </div>
   );
+}
+
+// ---- Live-review helpers (Phase 2 per-row overlay) ----
+
+function isStepActive(s: EnrichmentStepish): boolean {
+  return s === "pending" || s === "in_flight";
+}
+
+// One enrichment value cell: the value once found, a spinner while its step is
+// still running, an em dash when the step finished without one.
+function EnrichCell({
+  value,
+  loading,
+  plain = false,
+}: {
+  value: string | null;
+  loading: boolean;
+  plain?: boolean;
+}) {
+  if (value)
+    return <span className={plain ? "text-foreground" : "text-foreground"}>{value}</span>;
+  if (loading) return <Loader2 size={13} className="animate-spin text-[#2E37FE]" />;
+  return <span className="text-muted-foreground">—</span>;
+}
+
+// Per-row import/enrichment state pill. Blank until the row is imported, then
+// Queued → Enriching → Enriched as the run works through its steps.
+function RowStatusBadge({
+  en,
+  imported,
+}: {
+  en: EnrichLite | undefined;
+  imported: boolean;
+}) {
+  if (!imported) return <span className="text-xs text-muted-foreground">—</span>;
+  if (!en) {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
+        <Clock size={10} /> Queued
+      </span>
+    );
+  }
+  const active =
+    isStepActive(en.profile_status) ||
+    isStepActive(en.domain_status) ||
+    isStepActive(en.waterfall_status) ||
+    isStepActive(en.activity_status);
+  if (active) {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-[#EDEEFF] px-1.5 py-0.5 text-[10px] font-medium text-[#1C24B8]">
+        <Loader2 size={10} className="animate-spin" /> Enriching
+      </span>
+    );
+  }
+  if (en.email) {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
+        <CheckCircle2 size={10} /> Enriched
+      </span>
+    );
+  }
+  // Terminal, but no email landed — still done, just nothing to send to.
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">
+      <XCircle size={10} /> No email
+    </span>
+  );
+}
+
+function PriorStatusIcon({ status }: { status: LinkedInSearchStatus }) {
+  if (status === "complete") return <CheckCircle2 size={15} className="shrink-0 text-emerald-600" />;
+  if (status === "running") return <Loader2 size={15} className="shrink-0 animate-spin text-blue-600" />;
+  if (status === "pending") return <Clock size={15} className="shrink-0 text-amber-600" />;
+  return <XCircle size={15} className="shrink-0 text-red-600" />;
 }
