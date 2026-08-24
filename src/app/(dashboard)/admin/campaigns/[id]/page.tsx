@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/table";
 import { ArrowLeft, Inbox, Upload, AlertCircle, CheckCircle2 } from "lucide-react";
 import { NativeImportPanel } from "@/components/campaigns/native-import-panel";
+import { CampaignContactsCard, type CampaignContactRow } from "./campaign-contacts-card";
 import { NativeSequenceSection } from "./native-sequence-section";
 import { StageFlowCard, type StageRow } from "./stage-flow-card";
 import { CampaignLifecycleButton } from "./campaign-lifecycle-button";
@@ -114,6 +115,42 @@ export default async function AdminCampaignDetailPage({
     campaign.source_channel === "native_email"
       ? await nativeStatsFor(admin, campaignId)
       : null;
+
+  // Contacts assigned to this campaign (contacts.campaign_id) joined with
+  // their sequence-enrollment state. Assignment alone does not send — the
+  // dispatcher works exclusively off campaign_enrollments — so the card shows
+  // both facts per contact. Capped at the newest 1000 rows.
+  const CONTACTS_CAP = 1000;
+  const [assignedRes, campEnrollRes] = await Promise.all([
+    admin
+      .from("contacts")
+      .select(
+        "id, first_name, last_name, email, email_verification_status, company_name, title, created_at",
+      )
+      .eq("campaign_id", campaignId)
+      .order("created_at", { ascending: false })
+      .limit(CONTACTS_CAP),
+    admin
+      .from("campaign_enrollments")
+      .select("contact_id, status, current_step_index")
+      .eq("campaign_id", campaignId),
+  ]);
+  const enrollmentByContact = new Map(
+    (
+      (campEnrollRes.data ?? []) as {
+        contact_id: string;
+        status: string;
+        current_step_index: number | null;
+      }[]
+    ).map((e) => [
+      e.contact_id,
+      { status: e.status, current_step_index: e.current_step_index },
+    ]),
+  );
+  const campaignContacts: CampaignContactRow[] = (
+    (assignedRes.data ?? []) as Omit<CampaignContactRow, "enrollment">[]
+  ).map((c) => ({ ...c, enrollment: enrollmentByContact.get(c.id) ?? null }));
+  const contactsTruncated = campaignContacts.length === CONTACTS_CAP;
 
   // Stage-flow view model + completion projection for the "Contacts by sending
   // stage" panel. Resolve each step's display subject (later steps thread as
@@ -365,6 +402,19 @@ export default async function AdminCampaignDetailPage({
           />
         </>
       )}
+
+      {/* Everyone assigned to this campaign + whether they're actually in the
+          sending sequence. Channel-agnostic — renders for native email and
+          LinkedIn alike. */}
+      <CampaignContactsCard
+        campaignId={campaign.id}
+        contacts={campaignContacts}
+        truncated={contactsTruncated}
+        canEnroll={
+          campaign.source_channel === "native_email" ||
+          campaign.source_channel === "linkedin"
+        }
+      />
 
       {/* Orphan: surface a client-linker so the owner can attach in one click */}
       {!campaign.client_id && clientsForLink.length > 0 && (

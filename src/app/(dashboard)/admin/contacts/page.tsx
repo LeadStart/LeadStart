@@ -1453,7 +1453,8 @@ export default function ContactsPage() {
                     ? clientMap.get(commonClientId)
                     : "this client"}
                 </span>
-                . Contacts will be assigned to the campaign and enrolled into its sending sequence.
+                . Contacts are assigned to the campaign here — then review and
+                enroll them into its sending sequence from the campaign page.
               </p>
               {unverifiedSelected > 0 && (
                 <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2.5 py-1.5">

@@ -22,8 +22,10 @@ export interface ApifyRun {
   defaultKeyValueStoreId?: string;
   // Only present when the token owns the run (our token does).
   usageTotalUsd?: number | null;
-  // Live run stats — datasetItems ticks up while the run is in progress.
-  stats?: { datasetItems?: number } | null;
+  // NOTE: the run's `stats` object carries NO dataset item count (verified
+  // against the live API — it holds runtime/memory/CPU/network numbers only).
+  // For live progress while a run is in flight, read the run's dataset:
+  // ApifyClient.getDatasetItemCount(run.defaultDatasetId).
 }
 
 export interface ApifyUser {

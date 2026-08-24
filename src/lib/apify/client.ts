@@ -149,6 +149,17 @@ export class ApifyClient {
     return body.data;
   }
 
+  // Dataset metadata. `itemCount` is the number of items pushed so far and is
+  // readable while the owning run is still in progress — Apify's documented
+  // live-progress signal (the run object's own stats carry no item count).
+  async getDatasetItemCount(datasetId: string): Promise<number | null> {
+    const { body } = await this.request<{ data: { itemCount?: number } }>(
+      `/datasets/${encodeURIComponent(datasetId)}`,
+    );
+    const n = body.data?.itemCount;
+    return typeof n === "number" && Number.isFinite(n) ? n : null;
+  }
+
   // One page of dataset items (bare JSON array). `total` comes from the
   // X-Apify-Pagination-Total header when present.
   async getDatasetItems<T = Record<string, unknown>>(

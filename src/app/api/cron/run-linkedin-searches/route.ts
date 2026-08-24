@@ -134,10 +134,15 @@ export async function GET(request: NextRequest) {
           }
           return NextResponse.json({ status: "aborted_stuck", id: row.id });
         }
-        // Surface live sourcing progress: the actor's dataset fills as it
-        // scrapes (segment by segment under Deep search), so the panel ticks up
-        // instead of showing a silent spinner until the whole run finishes.
-        const scraped = typeof run.stats?.datasetItems === "number" ? run.stats.datasetItems : 0;
+        // Surface live sourcing progress. The run object exposes no item count
+        // (its stats are runtime/memory/CPU only), so read the run's dataset —
+        // itemCount updates as the actor pushes profiles (per profile in Full
+        // modes, per 25-result search page in Short mode). Progress-only read:
+        // a transient failure must not fail the poll tick.
+        const scraped = await client
+          .getDatasetItemCount(run.defaultDatasetId)
+          .then((n) => n ?? 0)
+          .catch(() => 0);
         const soFar = Math.min(scraped, row.target_max_results);
         await release({
           result_count: soFar,

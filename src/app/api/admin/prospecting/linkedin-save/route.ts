@@ -65,15 +65,19 @@ export async function POST(request: NextRequest) {
     (searchRow as { query?: { levers?: { recentlyPostedOnLinkedIn?: boolean } } }).query?.levers ?? {};
   const skipActivity = searchLevers.recentlyPostedOnLinkedIn === true;
 
-  // If a campaign is targeted, confirm it belongs to the org.
+  // If a campaign is targeted, confirm it belongs to the org and resolve its
+  // client — a campaign-attributed import is that client's recipient list row,
+  // so it must carry the client's id to show under Contacts → Client.
+  let campaignClientId: string | null = null;
   if (campaignId) {
     const { data: camp } = await admin
       .from("campaigns")
-      .select("id")
+      .select("id, client_id")
       .eq("id", campaignId)
       .eq("organization_id", organizationId)
       .maybeSingle();
     if (!camp) return NextResponse.json({ error: "Campaign not found" }, { status: 404 });
+    campaignClientId = (camp as { client_id: string | null }).client_id;
   }
 
   const cached = ((searchRow as { results: LinkedInProspect[] | null }).results ?? []).filter(
@@ -142,7 +146,7 @@ export async function POST(request: NextRequest) {
     })
     .map((p) => ({
       organization_id: organizationId,
-      client_id: null,
+      client_id: campaignClientId,
       campaign_id: campaignId,
       first_name: p.first_name,
       last_name: p.last_name,
@@ -156,9 +160,12 @@ export async function POST(request: NextRequest) {
       tags: ["linkedin", "prospecting"],
       status: "new",
       source: "linkedin-prospecting",
-      pipeline_stage: "lead",
+      // Client-bound imports (campaign has a client) are recipient rows, not
+      // agency prospects — they stay off the Prospects kanban, which is
+      // client_id-IS-NULL-only.
+      pipeline_stage: campaignClientId ? null : "lead",
       pipeline_sort_order: 0,
-      pipeline_added_at: now,
+      pipeline_added_at: campaignClientId ? null : now,
       created_at: now,
       updated_at: now,
     }));
