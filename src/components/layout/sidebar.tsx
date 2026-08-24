@@ -136,16 +136,32 @@ export function Sidebar({ role, open = false, onClose }: { role: AppRole; open?:
         <div className="relative flex flex-col items-center gap-2.5 px-4 pt-4 pb-3">
           <Link href={isAdmin ? "/admin" : "/client"} className="flex flex-col items-center gap-2.5">
             <span className="relative flex items-center justify-center">
-              {/* Soft bloom (halo 0.83) — fades to 0, stays clear of the wordmark */}
+              {/* Spotlight bloom (mockup direction D @ 0.91): a wide soft aura +
+                  a crisp bright core behind the transparent mark, so the full
+                  funnel reads on white. Two stacked radials, each scaled 0.91;
+                  both fade to 0 above the wordmark so it stays on navy. */}
               <span
                 aria-hidden
-                className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
+                className="pointer-events-none absolute left-1/2 top-1/2"
                 style={{
-                  width: 142,
-                  height: 72,
+                  width: 216,
+                  height: 128,
+                  transform: "translate(-50%, -52%) scale(0.91)",
                   background:
-                    "radial-gradient(ellipse at center, rgba(255,255,255,0.88) 0%, rgba(255,255,255,0.54) 24%, rgba(255,255,255,0.30) 42%, rgba(255,255,255,0.13) 60%, rgba(255,255,255,0.04) 78%, rgba(255,255,255,0) 100%)",
-                  filter: "blur(7px)",
+                    "radial-gradient(ellipse at 50% 46%, rgba(255,255,255,0.44) 0%, rgba(255,255,255,0.15) 44%, rgba(255,255,255,0) 78%)",
+                  filter: "blur(14px)",
+                }}
+              />
+              <span
+                aria-hidden
+                className="pointer-events-none absolute left-1/2 top-1/2"
+                style={{
+                  width: 128,
+                  height: 92,
+                  transform: "translate(-50%, -52%) scale(0.91)",
+                  background:
+                    "radial-gradient(ellipse at 50% 46%, #ffffff 0%, rgba(255,255,255,0.90) 40%, rgba(255,255,255,0.28) 70%, rgba(255,255,255,0) 84%)",
+                  filter: "blur(4px)",
                 }}
               />
               <Image src={leadstartMark} alt="LeadStart" priority className="relative h-[62px] w-auto" />
