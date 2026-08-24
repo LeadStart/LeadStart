@@ -562,10 +562,13 @@ export function LinkedInSearchPanel() {
             <div className="space-y-1.5">
               <Label>Locations</Label>
               <ChipInput
-                placeholder="Country, state, or city"
+                placeholder="e.g. United States, California, Chicago"
                 values={locations}
                 onChange={setLocations}
               />
+              <p className="text-[11px] text-muted-foreground">
+                Country, state/region, or city — LinkedIn has no zip or county. Use full names (&ldquo;United Kingdom&rdquo;, not &ldquo;UK&rdquo;).
+              </p>
             </div>
             <div className="space-y-1.5">
               <Label>Company size</Label>
