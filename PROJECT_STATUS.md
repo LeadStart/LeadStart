@@ -28,6 +28,17 @@ Live at https://leadstart-ebon.vercel.app (LeadStart Vercel account, auto-deploy
 
 ---
 
+## Current initiative: Configurable enrichment waterfall (planned 2026-08-24, NOT started)
+
+Replace the vdrmota-by-default second-pass email waterfall with an org-configurable,
+per-company-size routed system: a Waterfall settings card (Settings → Integrations),
+a pattern-permutation + Million Verifier email finder (~$0.004/contact vs vdrmota's
+~$1.00/company on free tier — its one real run charged $3.96 and filled 0 fields),
+an own HTTPS-first → Playwright+stealth site scraper for company-level phone/generic
+email, and company-phone/employeeCount capture from the harvestapi company actor.
+Full plan, evidence, schema (migration 00075), phased work plan + open decisions:
+[`RESUME-WATERFALL-SETTINGS.md`](RESUME-WATERFALL-SETTINGS.md).
+
 ## Other initiative: LinkedIn Channel via Unipile
 
 **Status:** All 9 code commits shipped (latest `64b45fd`). **NOT live yet** — gated on three migrations + Unipile config + webhook registration. No more code commits required for first activation.
