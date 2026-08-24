@@ -279,15 +279,11 @@ type in [src/types/app.ts](src/types/app.ts)).
    pre-send gate re-verifies anyway), or hold candidates in enrichment_data only?
 
 ## Repo state at handoff (2026-08-24, end of session)
-- Pushed to master already: prospecting live-review + prior runs + fit-to-width table
-  (`e953eae`), search rename/collapse (`20d91f2`), earlier fixes (`0f1fe77`, `e9181a2`).
-- **UNCOMMITTED in the working tree** (owner hasn't said push; do NOT lose these):
-  cron cost-accounting fix for failed/aborted runs
-  ([run-apify-enrichment](src/app/api/cron/run-apify-enrichment/route.ts),
-  [run-linkedin-searches](src/app/api/cron/run-linkedin-searches/route.ts)); Apify
-  spend card (`settings/api/apify-spend-card.tsx` + `api/admin/apify/spend/route.ts`
-  + client methods in [client.ts](src/lib/apify/client.ts)); search-name field
-  ([linkedin-search route](src/app/api/admin/prospecting/linkedin-search/route.ts) +
-  panel); Saved-bookmark fill + Search-name field ([linkedin-search-panel.tsx](src/app/(dashboard)/admin/prospecting/linkedin-search-panel.tsx));
-  non-sticky topbar ([dashboard-shell.tsx](src/app/(dashboard)/dashboard-shell.tsx));
-  this doc + a PROJECT_STATUS pointer. All verified in the dev preview this session.
+Everything from the planning session is **committed and pushed** — the tree was clean
+at handoff. Relevant commits on master: `0f1fe77`/`e9181a2` (progress-polling fix,
+campaign contacts card, client backfill, RLS migration), `e953eae` (prospecting
+live-review, prior runs, fit-to-width table), `20d91f2` (search rename/collapse),
+`936686c` (failed-run cost accounting + Apify spend card in Settings), `29fbab1`
+(search-name field, bookmark fill, non-sticky topbar), `46e54b4` (this plan).
+All verified in the dev preview before pushing. Nothing from Phases 0–4 below has
+been started.
