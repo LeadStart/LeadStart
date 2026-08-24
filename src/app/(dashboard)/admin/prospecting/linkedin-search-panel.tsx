@@ -851,34 +851,6 @@ export function LinkedInSearchPanel() {
             </button>
           </div>
 
-          {/* Deep search (query segmentation) */}
-          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 rounded-lg border border-[#2E37FE]/20 bg-[#EDEEFF]/30 px-3 py-2">
-            <button
-              type="button"
-              role="switch"
-              aria-checked={autoSegment}
-              onClick={() => setAutoSegment((v) => !v)}
-              className="inline-flex cursor-pointer items-center gap-2"
-            >
-              <span
-                className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${
-                  autoSegment ? "bg-[#2E37FE]" : "bg-slate-300"
-                }`}
-              >
-                <span
-                  className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-all ${
-                    autoSegment ? "left-[18px]" : "left-0.5"
-                  }`}
-                />
-              </span>
-              <span className="text-sm font-medium">Deep search</span>
-            </button>
-            <span className="text-[12px] text-muted-foreground">
-              Sweeps by state &amp; seniority to pull past LinkedIn&apos;s ~25-per-query cap.
-            </span>
-            <InfoButton label="About Deep search" onClick={() => setInfoOpen("segment")} />
-          </div>
-
           {/* Advanced */}
           <div>
             <button
@@ -893,22 +865,51 @@ export function LinkedInSearchPanel() {
               Advanced filters
             </button>
             {advancedOpen && (
-              <div className="mt-3 grid gap-4 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <Label>Exclude job titles</Label>
-                  <ChipInput
-                    placeholder="Titles to skip"
-                    values={excludeTitles}
-                    onChange={setExcludeTitles}
-                  />
+              <div className="mt-3 space-y-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label>Exclude job titles</Label>
+                    <ChipInput
+                      placeholder="Titles to skip"
+                      values={excludeTitles}
+                      onChange={setExcludeTitles}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Current company (LinkedIn URL)</Label>
+                    <ChipInput
+                      placeholder="linkedin.com/company/…"
+                      values={currentCompanies}
+                      onChange={setCurrentCompanies}
+                    />
+                  </div>
                 </div>
-                <div className="space-y-1.5">
-                  <Label>Current company (LinkedIn URL)</Label>
-                  <ChipInput
-                    placeholder="linkedin.com/company/…"
-                    values={currentCompanies}
-                    onChange={setCurrentCompanies}
-                  />
+                {/* Deep search — the default; opt out here only for a cheap single-query search. */}
+                <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 border-t border-border/60 pt-3">
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={autoSegment}
+                    onClick={() => setAutoSegment((v) => !v)}
+                    className="inline-flex cursor-pointer items-center gap-2"
+                  >
+                    <span
+                      className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${
+                        autoSegment ? "bg-[#2E37FE]" : "bg-slate-300"
+                      }`}
+                    >
+                      <span
+                        className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-all ${
+                          autoSegment ? "left-[18px]" : "left-0.5"
+                        }`}
+                      />
+                    </span>
+                    <span className="text-sm font-medium">Deep search</span>
+                  </button>
+                  <span className="text-[12px] text-muted-foreground">
+                    Sweeps by state &amp; seniority past LinkedIn&apos;s ~25-per-query cap — on by default. Turn off only for a cheaper single-query peek.
+                  </span>
+                  <InfoButton label="About Deep search" onClick={() => setInfoOpen("segment")} />
                 </div>
               </div>
             )}
