@@ -22,6 +22,8 @@ export interface ApifyRun {
   defaultKeyValueStoreId?: string;
   // Only present when the token owns the run (our token does).
   usageTotalUsd?: number | null;
+  // Live run stats — datasetItems ticks up while the run is in progress.
+  stats?: { datasetItems?: number } | null;
 }
 
 export interface ApifyUser {

@@ -120,8 +120,18 @@ export function PipelineStatusPanel({
       return { ...base, state: "failed", frac: 0, note: search.error_message ?? "Search failed" };
     if (searchDone)
       return { ...base, state: "done", frac: 1, processed: search!.result_count, total: search!.result_count, result: search!.result_count, unit: "sourced" };
-    if (searchActive)
-      return { ...base, state: "active", frac: 0.2, note: search?.progress_message ?? "Searching LinkedIn…" };
+    if (searchActive) {
+      const proc = search?.result_count ?? 0;
+      const total = search?.target_max_results ?? 0;
+      return {
+        ...base,
+        state: "active",
+        frac: proc > 0 && total > 0 ? Math.min(0.95, Math.max(0.05, proc / total)) : 0.12,
+        processed: proc > 0 ? proc : undefined,
+        total: proc > 0 && total > 0 ? total : undefined,
+        note: search?.progress_message ?? "Searching LinkedIn…",
+      };
+    }
     return { ...base, state: "idle", frac: 0 };
   })();
 

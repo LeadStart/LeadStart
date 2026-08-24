@@ -134,8 +134,16 @@ export async function GET(request: NextRequest) {
           }
           return NextResponse.json({ status: "aborted_stuck", id: row.id });
         }
-        await release({ progress_message: "Searching LinkedIn…" });
-        return NextResponse.json({ status: "running", id: row.id, apify_run_id: run.id });
+        // Surface live sourcing progress: the actor's dataset fills as it
+        // scrapes (segment by segment under Deep search), so the panel ticks up
+        // instead of showing a silent spinner until the whole run finishes.
+        const scraped = typeof run.stats?.datasetItems === "number" ? run.stats.datasetItems : 0;
+        const soFar = Math.min(scraped, row.target_max_results);
+        await release({
+          result_count: soFar,
+          progress_message: soFar > 0 ? `Sourcing profiles… ${soFar} found` : "Searching LinkedIn…",
+        });
+        return NextResponse.json({ status: "running", id: row.id, apify_run_id: run.id, scraped: soFar });
       }
 
       if (isTerminalOk(run.status)) {
