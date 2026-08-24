@@ -356,12 +356,14 @@ function InfoDialog({
       }}
     >
       <DialogContent
-        className={`${wide ? "max-w-2xl" : "max-w-lg"} w-[95vw] max-h-[85vh] overflow-y-auto`}
+        className={`${wide ? "max-w-2xl" : "max-w-lg"} w-[95vw] max-h-[85vh] overflow-y-auto overflow-x-hidden`}
       >
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
+        <DialogHeader className="min-w-0">
+          <DialogTitle className="break-words">{title}</DialogTitle>
         </DialogHeader>
-        {children}
+        {/* min-w-0 lets this grid item shrink so its content wraps instead of
+            forcing the modal to scroll horizontally. */}
+        <div className="min-w-0">{children}</div>
       </DialogContent>
     </Dialog>
   );
@@ -383,26 +385,24 @@ function InfoButton({ label, onClick }: { label: string; onClick: () => void }) 
 
 function Code({ children }: { children: ReactNode }) {
   return (
-    <code className="rounded bg-muted px-1 py-px font-mono text-[11px] text-foreground">
+    <code className="rounded bg-muted px-1 py-px font-mono text-[11px] break-words text-foreground">
       {children}
     </code>
   );
 }
 
-// A clickable preset row inside an info modal: name on the left, the value it
-// fills on the right.
+// A clickable preset row inside an info modal: name on top, the value it fills
+// below — stacked (not side-by-side) so long values wrap in place instead of
+// truncating or forcing the modal to scroll sideways.
 function PresetRow({ label, value, onClick }: { label: string; value: string; onClick: () => void }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      title={value}
-      className="flex w-full cursor-pointer items-baseline gap-2 rounded-md border border-border px-2.5 py-1.5 text-left transition-colors hover:border-[#2E37FE]/50 hover:bg-[#EDEEFF]/40"
+      className="flex w-full cursor-pointer flex-col gap-0.5 rounded-md border border-border px-2.5 py-1.5 text-left transition-colors hover:border-[#2E37FE]/50 hover:bg-[#EDEEFF]/40"
     >
-      <span className="shrink-0 text-[11px] font-semibold text-foreground">{label}</span>
-      <span className="min-w-0 flex-1 truncate text-right font-mono text-[11px] text-[#1C24B8]">
-        {value}
-      </span>
+      <span className="text-[11px] font-semibold text-foreground">{label}</span>
+      <span className="break-words font-mono text-[11px] text-[#1C24B8]">{value}</span>
     </button>
   );
 }
