@@ -41,6 +41,9 @@ export interface ProfileSearchLevers {
   schools?: string[];
   recentlyChangedJobs?: boolean;
   recentlyPostedOnLinkedIn?: boolean;
+  // Auto query-segmentation: split one query into per-country/state/seniority
+  // sub-queries so we pull past LinkedIn's ~1-page (~25) cookieless-search cap.
+  autoSegment?: boolean;
 }
 
 const RESULTS_PER_PAGE = 25;
@@ -89,6 +92,14 @@ export function buildProfileSearchInput(
   }
   if (levers.recentlyChangedJobs) input.recentlyChangedJobs = true;
   if (levers.recentlyPostedOnLinkedIn) input.recentlyPostedOnLinkedIn = true;
+  // Segmentation: takePages applies PER segment, maxItems caps the whole run —
+  // so the actor sweeps country→state→seniority sub-queries until it has
+  // maxItems unique profiles, bypassing the per-query wall. "default" levels =
+  // country + state + seniority (industry stays off).
+  if (levers.autoSegment) {
+    input.autoQuerySegmentation = true;
+    input.autoQuerySegmentationLevels = ["default"];
+  }
   return input;
 }
 

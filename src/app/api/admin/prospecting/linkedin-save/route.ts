@@ -104,9 +104,42 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  // Also dedupe by email (idx_contacts_org_email_unique, on lower(email)). The
+  // linkedin_url check alone let a single pre-existing email violate the unique
+  // constraint and fail the WHOLE batch insert — saving nothing.
+  const existingEmails = new Set<string>();
+  const emailVariants = Array.from(
+    new Set(
+      chosen
+        .map((p) => p.email)
+        .filter((e): e is string => Boolean(e && e.trim()))
+        .flatMap((e) => [e, e.toLowerCase()]),
+    ),
+  );
+  for (const part of chunk(emailVariants, 300)) {
+    const { data } = await admin
+      .from("contacts")
+      .select("email")
+      .eq("organization_id", organizationId)
+      .in("email", part);
+    for (const r of (data as { email: string | null }[] | null) ?? []) {
+      if (r.email) existingEmails.add(lc(r.email));
+    }
+  }
+
   const now = new Date().toISOString();
+  const seenEmail = new Set<string>();
   const toInsert = chosen
-    .filter((p) => !existing.has(lc(p.linkedin_url)))
+    .filter((p) => {
+      if (existing.has(lc(p.linkedin_url))) return false;
+      const e = lc(p.email);
+      if (e) {
+        // Skip an email that's already in the org, or repeated within this batch.
+        if (existingEmails.has(e) || seenEmail.has(e)) return false;
+        seenEmail.add(e);
+      }
+      return true;
+    })
     .map((p) => ({
       organization_id: organizationId,
       client_id: null,
@@ -134,13 +167,33 @@ export async function POST(request: NextRequest) {
   const insertedIds: string[] = [];
   for (const part of chunk(toInsert, CHUNK)) {
     const { data, error } = await admin.from("contacts").insert(part).select("id");
-    if (error) {
-      console.error("[linkedin-save] insert failed:", error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+    if (!error) {
+      const ids = (data as { id: string }[] | null) ?? [];
+      inserted += ids.length;
+      for (const r of ids) insertedIds.push(r.id);
+      continue;
     }
-    const ids = (data as { id: string }[] | null) ?? [];
-    inserted += ids.length;
-    for (const r of ids) insertedIds.push(r.id);
+    // A residual unique-constraint collision (23505) must not sink the whole
+    // batch — retry this chunk row-by-row and skip only the rows that conflict.
+    if (error.code === "23505") {
+      for (const oneRow of part) {
+        const { data: one, error: oneErr } = await admin
+          .from("contacts")
+          .insert(oneRow)
+          .select("id");
+        if (oneErr) {
+          if (oneErr.code === "23505") continue; // already exists — skip
+          console.error("[linkedin-save] row insert failed:", oneErr);
+          return NextResponse.json({ error: oneErr.message }, { status: 500 });
+        }
+        const ids = (one as { id: string }[] | null) ?? [];
+        inserted += ids.length;
+        for (const r of ids) insertedIds.push(r.id);
+      }
+      continue;
+    }
+    console.error("[linkedin-save] insert failed:", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
   const prevSaved = (searchRow as { saved_count: number | null }).saved_count ?? 0;

@@ -52,9 +52,14 @@ export async function POST(request: NextRequest) {
   // Guard an unbounded search: the built input must carry at least one real
   // filter beyond the three always-present control keys.
   const input = buildProfileSearchInput(levers, { depth, maxItems: maxResults });
-  const constraintKeys = Object.keys(input).filter(
-    (k) => k !== "profileScraperMode" && k !== "maxItems" && k !== "takePages",
-  );
+  const CONTROL_KEYS = new Set([
+    "profileScraperMode",
+    "maxItems",
+    "takePages",
+    "autoQuerySegmentation",
+    "autoQuerySegmentationLevels",
+  ]);
+  const constraintKeys = Object.keys(input).filter((k) => !CONTROL_KEYS.has(k));
   if (constraintKeys.length === 0) {
     return NextResponse.json(
       { error: "Add at least one filter (keywords, job title, location, …) before searching" },
