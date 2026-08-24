@@ -183,7 +183,9 @@ export function ApifySpendCard() {
                   </>
                 )}
               {data.truncated && "Showing the most recent 1,000 runs. "}
-              Figures come straight from Apify, so an aborted or failed run still appears here.
+              Figures come straight from Apify, so an aborted or failed run still appears here. The
+              site-contact-scraper is billed as raw compute (per site), not per-lead like the
+              directory scrapers.
             </p>
           </>
         ) : null}

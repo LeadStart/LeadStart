@@ -7,11 +7,14 @@ import { waterfallBoviProvider, WATERFALL_BOVI_ACTOR_ID } from "./waterfall-bovi
 import { waterfallScrapeProvider, WATERFALL_SCRAPE_ACTOR_ID } from "./waterfall-scrape";
 import { activityProvider, ACTIVITY_ACTOR_ID } from "./activity-harvestapi";
 
-// Actor snapshots written onto enrichment_runs at start time. The owner's Apify
-// account is on a paid tier (2026-08-22), so the waterfall defaults to the
-// official vdrmota contact scraper; bovi stays registered as the Free-tier
-// fallback (swap this one constant to WATERFALL_BOVI_ACTOR_ID).
-// Email verification is NOT an Apify phase — Million Verifier owns it.
+// Actor snapshots written onto enrichment_runs at start time. Email verification
+// is NOT an Apify phase — Million Verifier owns it.
+//
+// Since migration 00075 the waterfall METHOD is org-configurable and defaults to
+// pattern_mv (not an Apify actor) — see DEFAULT_ENRICHMENT_SETTINGS. The run's
+// waterfall actor is resolved per method by resolveWaterfallActor + the worker's
+// per-method routing, so WATERFALL_ACTOR below is a legacy default kept only for
+// back-compat; new code should NOT hardcode it.
 export const PROFILE_ACTOR = PROFILE_ACTOR_ID;
 export const DOMAIN_ACTOR = DOMAIN_ACTOR_ID;
 export const WATERFALL_ACTOR = WATERFALL_VDRMOTA_ACTOR_ID;

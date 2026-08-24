@@ -28,26 +28,41 @@ Live at https://leadstart-ebon.vercel.app (LeadStart Vercel account, auto-deploy
 
 ---
 
-## Current initiative: Configurable enrichment waterfall (Phases 0–1 SHIPPED 2026-08-24; Phases 2–4 remain)
+## Current initiative: Configurable enrichment waterfall (Phases 0–4 CODE-COMPLETE 2026-08-24; live activation gated on Apify budget + MV key)
 
 Replace the vdrmota-by-default second-pass email waterfall with an org-configurable,
 per-company-size routed system: a Waterfall settings card (Settings → Integrations),
 a pattern-permutation + Million Verifier email finder (~$0.004/contact vs vdrmota's
 ~$1.00/company on free tier — its one real run charged $3.96 and filled 0 fields),
-an own HTTPS-first → Playwright+stealth site scraper for company-level phone/generic
-email, and company-phone/employeeCount capture from the harvestapi company actor.
+our own 5-tier anti-bot site scraper for company-level phone/generic/personal email,
+and company-phone/employeeCount capture from the harvestapi company actor.
 
-**Shipped (Phases 0–1, 2026-08-24):** migration `00075` (applied to the live DB),
-`EnrichmentSettings` types + loader, the Enrichment-waterfall settings card +
-`GET/POST /api/admin/enrichment/settings`, enrich-start config snapshot +
-waterfall-enabled gating, configurable vdrmota lead cap (default 10 → 3), honest
-per-domain waterfall cost estimates in the enrich dialog (free-tier ×20 warning),
-and company phone/employeeCount/HQ capture in the domains phase (phone fill-only
-onto contacts; employee_count stamped per item as the future size-routing input).
-Pending live check after the Aug-28 Apify reset: one ~$0.01 domains-only run to
-see contacts.phone + employee_count fill. Phases 2–4 (pattern_mv, site_scrape
-actor, per-size routing, polish) not started.
-Full plan, evidence, schema, phased work plan + decision history:
+**Shipped to prod (Phases 0–1, commits `98f5b83`/`5c4830e`):** migration `00075`
+(applied to the live DB), `EnrichmentSettings` types + loader, the settings card +
+`GET/POST /api/admin/enrichment/settings`, config snapshot + gating, configurable
+vdrmota lead cap (10 → 3), honest per-domain cost estimates, and company
+phone/employeeCount/HQ capture in the domains phase.
+
+**Built locally, committed, NOT pushed (Phases 2–4, commit `10a53e7`):**
+- **Phase 2 — pattern_mv:** `src/lib/enrichment/pattern-mv.ts` (permutation generator
+  + Million Verifier verify loop, unit-tested), the cron direct-method pathway +
+  per-item size-band routing + fail-closed MV parity, defaults flipped to
+  pattern_mv, catch-all toggle live, method-aware dialog estimate.
+- **Phase 3 — site_scrape:** the private Apify actor in
+  `apify-actors/site-contact-scraper/` (5-tier waterfall undici → curl_cffi TLS
+  fingerprint → +residential proxy → Playwright+stealth → managed unblocker, ported
+  from the proven saasassins engine; discovery-driven crawl + extraction,
+  unit-tested 23/23), the `waterfall-scrape.ts` provider + registry, the cron
+  two-stage `scrape_plus_pattern`, and the scrape cost estimate.
+- **Phase 4 — polish:** per-method run-banner counters, spend-card compute note,
+  `enqueue-enrichment` now snapshots org settings too, retire-vdrmota-as-default
+  comment, this status update.
+
+**Remaining (all external-dependency gated, no code left):** (1) deploy the actor —
+`apify push` (owner Apify CLI login + Apify budget headroom, resets Aug 28), then set
+`SITE_SCRAPE_ACTOR_ID` in Vercel env; (2) three live verifications — Phase 1
+company-phone (Apify budget), Phase 2 pattern_mv (save an MV key in Settings), Phase 3
+scrape (post-deploy). Full plan, evidence, schema, phased work plan + decision history:
 [`RESUME-WATERFALL-SETTINGS.md`](RESUME-WATERFALL-SETTINGS.md).
 
 ## Other initiative: LinkedIn Channel via Unipile

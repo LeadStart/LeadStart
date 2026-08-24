@@ -313,6 +313,17 @@ async function runPhase(
         .update({ cost_usd: (Number(run.cost_usd) || 0) + batchCost })
         .eq("id", run.id);
       run.cost_usd = (Number(run.cost_usd) || 0) + batchCost;
+      // Per-method result line for the run banner (pattern_mv sets its own).
+      if (phase === "waterfall") {
+        const h = harvested as { found: number; not_found: number; skipped: number };
+        const label = waterfallMethodLabel(run.waterfall_actor);
+        await admin
+          .from("enrichment_runs")
+          .update({
+            progress_message: `${label}: ${h.found} found · ${h.not_found} miss${h.skipped ? ` · ${h.skipped} deferred` : ""}`,
+          })
+          .eq("id", run.id);
+      }
       await clearActive(admin, run.id);
       run.active_apify_run_id = null;
 
@@ -971,6 +982,15 @@ function waterfallProviderId(run: RunRow): EmailProviderId {
   if (a.includes("site-contact-scraper")) return "site_scrape";
   if (a.includes("bovi")) return "bovi";
   return "vdrmota";
+}
+
+// Friendly method name for the run-banner progress line.
+function waterfallMethodLabel(actor: string | null): string {
+  const a = actor ?? "";
+  if (a.includes("site-contact-scraper")) return "Site scrape";
+  if (a.includes("bovi")) return "Pattern finder";
+  if (a.includes("contact-info-scraper")) return "Directory scrape";
+  return "Second pass";
 }
 
 // Finish a waterfall item that produced no usable personal email. Company-level

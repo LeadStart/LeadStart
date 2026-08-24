@@ -393,11 +393,19 @@ type in [src/types/app.ts](src/types/app.ts)).
    (stamp both stages in `waterfall_notes`).
 4. Settings card lists it; per-run cost read from `usageTotalUsd` as usual.
 
-### Phase 4 — polish
-- Per-method result counters on the run banner + pipeline panel ("pattern found 4 ·
-  scrape found 2 phones"); spend-card note that site_scrape is compute-priced;
-  PROJECT_STATUS + this doc updated; retire-vdrmota-as-default note in
-  [providers/index.ts](src/lib/apify/providers/index.ts).
+### Phase 4 — polish — ✅ DONE (2026-08-24)
+- ✅ Per-method run-banner counters: pattern_mv emits its own progress line; the
+  apify waterfall harvest now sets `"<Method>: N found · M miss · K deferred"`
+  (waterfallMethodLabel), surfaced by enrichment-run-banner.tsx.
+- ✅ Spend-card note that the site-contact-scraper is compute-priced (per site),
+  not per-lead (apify-spend-card.tsx).
+- ✅ Retire-vdrmota-as-default: providers/index.ts comment updated (default method
+  is pattern_mv; WATERFALL_ACTOR is legacy back-compat only).
+- ✅ Bonus consistency fix: `enqueue-enrichment.ts` (the Prospecting→Contacts
+  auto-enqueue path) now loads + snapshots the org's enrichment_settings + gates
+  run_waterfall, same as contacts/enrich/start — previously it hardcoded the
+  vdrmota actor and ignored org config.
+- ✅ PROJECT_STATUS + this doc updated.
 
 ---
 

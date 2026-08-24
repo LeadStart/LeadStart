@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { extractProfileId, extractCompanyId, extractCompanySlug } from "./domain";
-import { PROFILE_ACTOR, DOMAIN_ACTOR, WATERFALL_ACTOR, ACTIVITY_ACTOR } from "./providers";
+import { PROFILE_ACTOR, DOMAIN_ACTOR, ACTIVITY_ACTOR, resolveWaterfallActor } from "./providers";
+import { loadEnrichmentSettings } from "./auth";
 
 // Auto-enrichment enqueue — the "queue-behind" heart of the Prospecting →
 // Contacts handoff. Given a set of contact ids, it either starts an enrichment
@@ -124,6 +125,15 @@ export async function enqueueEnrichment(
     return { status: "queued", count: eligibleContactIds.length };
   }
 
+  // Snapshot the org's waterfall config (migration 00075) onto the run, same as
+  // contacts/enrich/start — so an auto-enqueued run honors the configured method
+  // + size routing (not a hardcoded vdrmota default).
+  const settings = await loadEnrichmentSettings(admin, organizationId);
+  const waterfallActor = resolveWaterfallActor(settings);
+  const runWaterfall =
+    settings.waterfall_enabled &&
+    (settings.small_method !== "off" || settings.large_method !== "off" || settings.unknown_method !== "off");
+
   // Free → create the run (all four phases) + its items.
   const { data: runRow, error: runError } = await admin
     .from("enrichment_runs")
@@ -132,11 +142,12 @@ export async function enqueueEnrichment(
       created_by: userId,
       profile_actor: PROFILE_ACTOR,
       domain_actor: DOMAIN_ACTOR,
-      waterfall_actor: WATERFALL_ACTOR,
+      waterfall_actor: runWaterfall ? waterfallActor : null,
       activity_actor: runActivity ? ACTIVITY_ACTOR : null,
+      waterfall_config: settings,
       run_profiles: true,
       run_domains: true,
-      run_waterfall: true,
+      run_waterfall: runWaterfall,
       run_activity: runActivity,
       phase: "profiles",
       status: "pending",
