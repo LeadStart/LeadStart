@@ -25,15 +25,18 @@ function strArray(v: unknown): string[] {
 }
 
 // Pick the most trustworthy phone to write to contacts.phone. The actor extracts
-// liberally (any phone-shaped text), so choose conservatively here: prefer an
-// explicit country code (+…), then a full-length national/intl number (≥10 digits).
-// Short bare fragments (<10 digits, no +) are almost always IDs/prices/page noise,
-// not diallable numbers — skip rather than write a wrong phone.
+// liberally (any phone-shaped text), so choose conservatively here. A well-formed
+// phone is 10–13 digits (national number + optional country code); prefer that
+// band so a real number with trailing junk (e.g. "+1 844-325-0707" glued to "150"
+// → 14 digits) loses to the clean one, and short fragments (<10 digits) are
+// dropped as IDs/prices/page noise. Within the pool, prefer an explicit +CC form.
 function pickBestPhone(phones: string[]): string | null {
-  const withPlus = phones.find((p) => p.trim().startsWith("+") && p.replace(/\D/g, "").length >= 8);
-  if (withPlus) return withPlus.trim();
-  const full = phones.find((p) => p.replace(/\D/g, "").length >= 10);
-  return full ? full.trim() : null;
+  const digits = (p: string) => p.replace(/\D/g, "").length;
+  const sane = phones.filter((p) => digits(p) >= 10 && digits(p) <= 13);
+  const pool = sane.length ? sane : phones.filter((p) => digits(p) >= 10);
+  if (!pool.length) return null;
+  const withPlus = pool.find((p) => p.trim().startsWith("+"));
+  return (withPlus ?? pool[0]).trim();
 }
 
 function normName(s: string | null | undefined): string {
