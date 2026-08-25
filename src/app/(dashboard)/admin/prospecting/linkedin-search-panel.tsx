@@ -1141,6 +1141,15 @@ export function LinkedInSearchPanel() {
     emailRate + domainRate + ENRICH_RATES.waterfall + activityRate + ENRICH_RATES.verify;
   const projectedTotal = estimate + perPersonEnrich * maxResults;
   const pricesLive = livePricing?.source === "live" || livePricing?.source === "partial";
+  // Est. cost per email type for the results radial, from the same live rates as
+  // the estimate above: a person email via the email finders, a company inbox
+  // from one site scrape, and "none" = the full per-contact spend that still
+  // turned up nothing (the priciest outcome — it exhausts every method).
+  const outcomeCosts = {
+    person: emailRate,
+    company: livePricing?.enrich.site_scrape ?? 0.003,
+    none: perPersonEnrich,
+  };
 
   const handleSave = async () => {
     if (!searchId || selected.size === 0) return;
@@ -2214,7 +2223,7 @@ export function LinkedInSearchPanel() {
                 there's email data (Full+email sourcing or enrichment underway). */}
             {(hasEmails || showEnrichCols) && (
               <div className="rounded-xl border border-border/50 bg-muted/20 px-4 py-3">
-                <EmailOutcomeRadial {...emailOutcome} />
+                <EmailOutcomeRadial {...emailOutcome} costs={outcomeCosts} />
               </div>
             )}
             {/* Add-to-campaign inline panel */}
@@ -2519,18 +2528,21 @@ function EmailOutcomeRadial({
   company,
   none,
   total,
+  costs,
 }: {
   person: number;
   company: number;
   none: number;
   total: number;
+  costs?: { person: number; company: number; none: number };
 }) {
   const R = 34;
   const C = 2 * Math.PI * R;
+  const money = (n: number) => `$${n.toFixed(n < 1 ? 3 : 2)}`;
   const segs = [
-    { key: "person", v: person, color: "#10b981", label: "Person email" },
-    { key: "company", v: company, color: "#2E37FE", label: "Company only" },
-    { key: "none", v: none, color: "#e2e8f0", label: "No email" },
+    { key: "person" as const, v: person, color: "#10b981", label: "Person email" },
+    { key: "company" as const, v: company, color: "#2E37FE", label: "Company only" },
+    { key: "none" as const, v: none, color: "#94a3b8", label: "No email" },
   ];
   const withEmail = person + company;
   let acc = 0;
@@ -2568,19 +2580,31 @@ function EmailOutcomeRadial({
         </div>
       </div>
       <div className="min-w-0 flex-1">
-        <p className="mb-1.5 text-[12px] font-semibold">Email outcomes</p>
-        <div className="space-y-1">
-          {segs.map((s) => {
-            const pct = total > 0 ? Math.round((s.v / total) * 100) : 0;
-            return (
-              <div key={s.key} className="flex items-center gap-2 text-[11.5px]">
-                <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: s.color }} />
-                <span className="text-muted-foreground">{s.label}</span>
-                <span className="ml-auto font-mono font-semibold tabular-nums">{s.v}</span>
-                <span className="w-9 text-right font-mono tabular-nums text-muted-foreground/70">{pct}%</span>
-              </div>
-            );
-          })}
+        <p className="mb-1.5 flex items-baseline justify-between gap-2 text-[12px] font-semibold">
+          Email outcomes
+          {costs && (
+            <span className="text-[9px] font-normal uppercase tracking-wide text-muted-foreground/60">
+              est. $/email
+            </span>
+          )}
+        </p>
+        <div className="space-y-0.5">
+          {segs.map((s) => (
+            <div
+              key={s.key}
+              className="flex items-center gap-2 border-b border-dashed border-border/60 py-[3px] text-[11.5px] last:border-b-0"
+            >
+              <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: s.color }} />
+              <span className="text-muted-foreground">{s.label}</span>
+              <span className="ml-auto font-mono font-semibold tabular-nums">{s.v}</span>
+              {costs && (
+                <span className="w-[58px] text-right font-mono tabular-nums text-muted-foreground/80">
+                  {money(costs[s.key])}
+                  <span className="text-muted-foreground/50">/ea</span>
+                </span>
+              )}
+            </div>
+          ))}
         </div>
       </div>
     </div>
