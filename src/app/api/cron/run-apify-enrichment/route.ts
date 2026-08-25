@@ -1026,6 +1026,20 @@ async function finishWaterfallMiss(
   return "not_found";
 }
 
+// Guard scraped phones before they touch contacts.phone. The site-contact-scraper
+// already hardens these, but an older actor build (or a manual run) could still
+// hand back a copyright year-range or date stamp — never write one to a CRM field.
+function isPlausibleContactPhone(raw: string): boolean {
+  const s = raw.trim();
+  if (/(^|\D)(19|20)\d{2}\s*[-–—]\s*(19|20)\d{2}(\D|$)/.test(s)) return false; // 1996-2026
+  if (/(^|\D)(19|20)\d{2}[-/.](0?[1-9]|1[0-2])[-/.](0?[1-9]|[12]\d|3[01])(\D|$)/.test(s)) return false; // 2004-02-07
+  const d = s.replace(/\D/g, "");
+  if (d.length < 7 || d.length > 15) return false;
+  if (/^(19|20)\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])$/.test(d)) return false; // YYYYMMDD
+  if (/^(19|20)\d{2}(19|20)\d{2}$/.test(d)) return false; // YYYYYYYY concatenated years
+  return true;
+}
+
 async function writeEmail(
   admin: Admin,
   cols: { status: string; runId: string; notes: string },
@@ -1045,8 +1059,9 @@ async function writeEmail(
   // Company phone (from a site scrape) fills contacts.phone fill-only regardless
   // of the email outcome. A no-op for methods that don't return a phone.
   if (contact) {
-    const phone =
+    const raw =
       typeof extraPatch.phone === "string" && extraPatch.phone.trim() ? (extraPatch.phone as string).trim() : null;
+    const phone = raw && isPlausibleContactPhone(raw) ? raw : null;
     if (phone) await admin.from("contacts").update({ phone }).eq("id", contact.id).is("phone", null);
   }
 

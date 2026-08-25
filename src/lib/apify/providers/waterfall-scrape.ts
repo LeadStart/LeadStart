@@ -8,11 +8,11 @@ import { trimRaw, type PhaseProvider, type PhaseResult, type ProviderItem } from
 // phones, socials, and name-matched personal emails. Company-level compute
 // pricing (no per-lead events), unlike vdrmota.
 //
-// The actor id must match the pushed actor. It's env-overridable so the owner
-// can set it after `apify push` without a code change (the account username
-// isn't known until then); the fallback is the expected `leadstart` account id.
+// The actor id must match the pushed actor. Deployed 2026-08-25 under the owner's
+// Apify account (username `indispensable_nonagon`). Still env-overridable via
+// SITE_SCRAPE_ACTOR_ID as an escape hatch if the actor later moves accounts.
 export const WATERFALL_SCRAPE_ACTOR_ID =
-  process.env.SITE_SCRAPE_ACTOR_ID?.trim() || "leadstart~site-contact-scraper";
+  process.env.SITE_SCRAPE_ACTOR_ID?.trim() || "indispensable_nonagon~site-contact-scraper";
 
 type Rec = Record<string, unknown>;
 
@@ -22,6 +22,18 @@ function str(v: unknown): string | null {
 
 function strArray(v: unknown): string[] {
   return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && !!x.trim()) : [];
+}
+
+// Pick the most trustworthy phone to write to contacts.phone. The actor extracts
+// liberally (any phone-shaped text), so choose conservatively here: prefer an
+// explicit country code (+…), then a full-length national/intl number (≥10 digits).
+// Short bare fragments (<10 digits, no +) are almost always IDs/prices/page noise,
+// not diallable numbers — skip rather than write a wrong phone.
+function pickBestPhone(phones: string[]): string | null {
+  const withPlus = phones.find((p) => p.trim().startsWith("+") && p.replace(/\D/g, "").length >= 8);
+  if (withPlus) return withPlus.trim();
+  const full = phones.find((p) => p.replace(/\D/g, "").length >= 10);
+  return full ? full.trim() : null;
 }
 
 function normName(s: string | null | undefined): string {
@@ -116,9 +128,10 @@ export const waterfallScrapeProvider: PhaseProvider = {
       // (fill-only onto the contact) + generic company emails (enrichment_data).
       const companyEmails = strArray(rec.companyEmails).slice(0, 10);
       const phones = strArray(rec.phones);
+      const bestPhone = pickBestPhone(phones);
       const extra: Record<string, unknown> = { scrape_outcome: str(rec.fetchOutcome) };
       if (companyEmails.length) extra.company_emails = companyEmails;
-      if (phones.length) extra.phone = phones[0];
+      if (bestPhone) extra.phone = bestPhone;
 
       const match = pickPersonEmail(personEmailsOf(rec), it.first_name, it.last_name);
       if (match) {

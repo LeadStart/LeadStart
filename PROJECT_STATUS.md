@@ -65,11 +65,21 @@ phone/employeeCount/HQ capture in the domains phase.
   off vdrmota (coerced to pattern_mv). bovi stays as the opt-in Apify fallback.
   Historical vdrmota spend still shows in the Apify spend card (real billing data).
 
-**Remaining (all external-dependency gated, no code left):** (1) deploy the actor —
-`apify push` (owner Apify CLI login + Apify budget headroom, resets Aug 28), then set
-`SITE_SCRAPE_ACTOR_ID` in Vercel env; (2) three live verifications — Phase 1
-company-phone (Apify budget), Phase 2 pattern_mv (save an MV key in Settings), Phase 3
-scrape (post-deploy). Full plan, evidence, schema, phased work plan + decision history:
+**site_scrape actor DEPLOYED + VERIFIED (2026-08-25).** Pushed as
+`indispensable_nonagon/site-contact-scraper` **build 0.1.3**. The initial smoke test
+exposed extraction bugs (date/year-range strings written as phones, role inboxes
+mislabeled personal, off-domain page-noise leaks) — all fixed in the actor and
+re-verified live: gnu.org's 7 fake phones → 0, role inboxes → companyEmails,
+leaks gone. Actor-id wired in code (env-overridable), plus an app-side `pickBestPhone`
+(write the +CC/≥10-digit number, not `phones[0]` noise) and an `isPlausibleContactPhone`
+write-guard. Provider e2e on real data (James Hill @ apify.com → writes
+`james.hill@apify.com` + `+17183565168`, 7/7). Deploy trap that cost 2 builds: `apify
+push` from a `.claude/worktrees/*` checkout ships STALE source — push from the primary
+repo (`apify-actors/site-contact-scraper`) or commit first.
+
+**Remaining live checks (external-dependency gated):** Phase 1 company-phone fill via a
+real domains-phase run, and a Phase 2 pattern_mv live run (MV key is present). Full
+plan, evidence, schema, phased work plan + decision history:
 [`RESUME-WATERFALL-SETTINGS.md`](RESUME-WATERFALL-SETTINGS.md).
 
 ## Other initiative: LinkedIn Channel via Unipile

@@ -112,7 +112,7 @@ export async function scrapeDomain(target: ScrapeTarget, opts: ScrapeOptions): P
   let usedBrowser = home.via === "playwright";
   let pagesFetched = 1;
   const homeOutcome: FetchOutcome = home.via ? VIA_TO_OUTCOME[home.via] : "ok_http";
-  mergeInto(merged, extractContacts(home.html, extractTarget));
+  mergeInto(merged, extractContacts(home.html, extractTarget, domain));
 
   // 2. Discover + fetch contact-bearing pages. Accept a page that yields an
   //    email OR the target's name — a clean-but-empty page escalates to a browser
@@ -127,7 +127,7 @@ export async function scrapeDomain(target: ScrapeTarget, opts: ScrapeOptions): P
     if (page.via === "playwright") usedBrowser = true;
     if (page.html) {
       pagesFetched++;
-      mergeInto(merged, extractContacts(page.html, extractTarget));
+      mergeInto(merged, extractContacts(page.html, extractTarget, domain));
     }
   }
 

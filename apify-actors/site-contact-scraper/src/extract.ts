@@ -29,6 +29,13 @@ const ROLE_LOCALPARTS = new Set([
   "accounting", "general", "reception", "webmaster", "noreply", "no-reply",
   "donotreply", "newsletter", "subscribe", "orders", "booking", "bookings",
   "reservations", "quote", "quotes", "estimate", "estimates", "dispatch",
+  // System / governance / department inboxes (seen leaking into personEmails):
+  "webmasters", "sysadmin", "sysadmins", "postmaster", "hostmaster", "root",
+  "abuse", "security", "privacy", "legal", "compliance", "gdpr", "dpo",
+  "maintainer", "maintainers", "license", "licensing", "license-violation",
+  "assign", "translators", "translations", "web-translators", "feedback",
+  "community", "partners", "partnerships", "vendor", "vendors", "procurement",
+  "finance", "invoices", "invoice", "unsubscribe", "notifications", "notify",
 ]);
 
 // Obvious non-addresses / placeholders / asset filenames to drop.
@@ -72,19 +79,59 @@ function isRoleLocalPart(local: string): boolean {
   return ROLE_LOCALPARTS.has(head);
 }
 
-function normalizePhone(raw: string): string | null {
+// Reject date / year-range shapes that masquerade as phones. Copyright spans
+// ("© 1996-2026" → 19962026), ISO dates ("2004-02-07" → 20040207), and bare
+// YYYYMMDD stamps are the #1 phone false-positives on real contact pages.
+function isDateOrYearRange(raw: string): boolean {
+  const s = raw.trim();
+  if (/(^|\D)(19|20)\d{2}\s*[-–—]\s*(19|20)\d{2}(\D|$)/.test(s)) return true; // 1996-2026
+  if (/(^|\D)(19|20)\d{2}[-/.](0?[1-9]|1[0-2])[-/.](0?[1-9]|[12]\d|3[01])(\D|$)/.test(s)) return true; // 2004-02-07
+  const d = s.replace(/\D/g, "");
+  if (/^(19|20)\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])$/.test(d)) return true; // YYYYMMDD
+  if (/^(19|20)\d{2}(19|20)\d{2}$/.test(d)) return true; // YYYYYYYY concatenated year range
+  return false;
+}
+
+// `fromTel` = the number came from a tel: href, i.e. the site itself declared it a
+// phone → trusted. Free text needs a genuine phone signal (leading +, parenthesized
+// area code, or grouped separators) so we don't ingest IDs, prices, or date stamps.
+function normalizePhone(raw: string, fromTel: boolean): string | null {
+  if (isDateOrYearRange(raw)) return null;
   const trimmed = raw.replace(/[^\d+]/g, "");
   const digits = trimmed.replace(/\D/g, "");
   if (digits.length < 7 || digits.length > 15) return null; // implausible
+  if (!fromTel) {
+    const t = raw.trim();
+    const hasPlus = t.startsWith("+");
+    const hasParens = /\(\s*\d{2,4}\s*\)/.test(t);
+    const grouped = /\d[\s.\-]\d/.test(t) && /^\+?\d[\d\s().\-]+\d$/.test(t);
+    if (!(hasPlus || hasParens || grouped)) return null; // bare digit run → not a phone
+  }
   // Keep a readable form: leading + if present, else the digit string.
   return trimmed.startsWith("+") ? `+${digits}` : digits;
 }
 
-export function extractContacts(html: string, target?: ExtractTarget): ExtractedContacts {
+// Bare registrable domain of an email (host lowercased). Used for same-site trust.
+function emailDomain(email: string): string {
+  return (email.split("@")[1] || "").toLowerCase();
+}
+
+// Is `ed` the same registrable site as `sd` (exact or sub/parent domain)?
+function sameSite(ed: string, sd: string): boolean {
+  if (!ed || !sd) return false;
+  return ed === sd || ed.endsWith(`.${sd}`) || sd.endsWith(`.${ed}`);
+}
+
+export function extractContacts(
+  html: string,
+  target?: ExtractTarget,
+  siteDomain?: string | null,
+): ExtractedContacts {
   const text = toText(html);
   const first = normName(target?.firstName);
   const last = normName(target?.lastName);
   const hasTarget = first.length >= 2 || last.length >= 2;
+  const sd = (siteDomain ?? "").trim().toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "");
 
   // ---- emails ----
   const emailSet = new Set<string>();
@@ -103,9 +150,12 @@ export function extractContacts(html: string, target?: ExtractTarget): Extracted
   const personEmails: PersonEmail[] = [];
 
   for (const email of emails) {
+    const onSite = !sd || sameSite(emailDomain(email), sd);
     const local = email.split("@")[0];
     if (isRoleLocalPart(local)) {
-      companyEmails.push(email);
+      // A role inbox only counts as THIS company's when it's on-site. An off-domain
+      // role address (a partner/vendor linked from the page) is neither ours nor a person.
+      if (onSite) companyEmails.push(email);
       continue;
     }
     const nl = normName(local);
@@ -124,23 +174,27 @@ export function extractContacts(html: string, target?: ExtractTarget): Extracted
       }
       nameMatched = localHit || proximityHit;
     }
-    personEmails.push({ email, nameMatched });
+    // On-site personal addresses are kept as-is. Off-domain ones are page noise
+    // (third-party embeds, quoted addresses) unless they actually match the target.
+    if (onSite || nameMatched) personEmails.push({ email, nameMatched });
   }
 
   // ---- phones ----
   const phoneSet = new Set<string>();
   const phones: string[] = [];
-  const addPhone = (raw: string) => {
-    const p = normalizePhone(raw);
+  const addPhone = (raw: string, fromTel: boolean) => {
+    const p = normalizePhone(raw, fromTel);
     if (!p) return;
     const key = p.replace(/\D/g, "");
     if (phoneSet.has(key)) return;
     phoneSet.add(key);
     phones.push(p);
   };
-  for (const m of html.matchAll(TEL_RE)) addPhone(decodeURIComponent(m[1]));
-  // Text phones: sequences that look like real numbers (7–15 digits, phone-ish punctuation).
-  for (const m of text.matchAll(/(\+?\d[\d\s().\-]{6,}\d)/g)) addPhone(m[0]);
+  // tel: hrefs are trusted (the site declared them) and pushed first, so phones[0]
+  // — the value the provider writes fill-only to contacts.phone — is the best one.
+  for (const m of html.matchAll(TEL_RE)) addPhone(decodeURIComponent(m[1]), true);
+  // Text phones: sequences that look like real numbers; gated hard in normalizePhone.
+  for (const m of text.matchAll(/(\+?\d[\d\s().\-]{6,}\d)/g)) addPhone(m[0], false);
 
   // ---- socials ----
   const socials: ExtractedContacts["socials"] = {};

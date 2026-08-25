@@ -14,7 +14,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { appUrl } from "@/lib/api-url";
-import type { EnrichmentRun } from "@/types/app";
+import type { EnrichmentRun, EnrichmentWaterfallMethod } from "@/types/app";
 import {
   ENRICH_POLL_INTERVAL_MS,
   type EnrichmentRunDetail,
@@ -40,6 +40,22 @@ export type SearchStatusLite = {
 
 type StageState = "idle" | "queued" | "active" | "done" | "skipped" | "failed";
 
+// The 2nd-pass waterfall fans out by company size — each band routes to its own
+// method. We only have the config snapshot (no per-band counts), so the rail shows
+// the routing PLAN, not fake per-method progress.
+type RouterBand = { label: string; method: EnrichmentWaterfallMethod };
+type RouterView = { bands: RouterBand[] };
+
+// Short method labels for the compact rail. Canonical long labels live in the
+// waterfall settings card (waterfall-settings-card.tsx METHOD_OPTIONS).
+const METHOD_SHORT: Record<EnrichmentWaterfallMethod, string> = {
+  pattern_mv: "pattern + verify",
+  scrape_plus_pattern: "scrape → pattern",
+  site_scrape: "site scrape",
+  bovi: "bovi",
+  off: "off",
+};
+
 type StageView = {
   key: string;
   name: string;
@@ -53,6 +69,8 @@ type StageView = {
   result?: number;
   unit?: string;
   note?: string;
+  subNote?: string; // secondary line (e.g. domains phase also grabs phone + size)
+  router?: RouterView; // size-routing map, waterfall stage only
   counted: boolean; // whether it feeds the overall radial
 };
 
@@ -165,6 +183,33 @@ export function PipelineStatusPanel({
       };
     return { ...base, state: "queued", frac: 0 };
   });
+
+  // Surface the two things the new flow added: the domains phase also captures a
+  // company phone + employee count, and the 2nd-pass waterfall routes by that size.
+  const wf = run?.waterfall_config ?? null;
+  for (const s of enrichStages) {
+    if (s.key === "domains" && (s.state === "active" || s.state === "done")) {
+      s.subNote = "+ company phone & size captured";
+    }
+    if (s.key === "waterfall" && s.state !== "skipped") {
+      if (run && run.run_waterfall === false) {
+        s.state = "skipped";
+        s.frac = 1;
+        s.note = "waterfall disabled in settings";
+      } else if (wf) {
+        const bands: RouterBand[] = [
+          { label: `≤ ${wf.size_threshold} emp`, method: wf.small_method },
+          { label: `> ${wf.size_threshold} emp`, method: wf.large_method },
+          { label: "unknown size", method: wf.unknown_method },
+        ];
+        const uniqueMethods = Array.from(new Set(bands.map((b) => b.method)));
+        // Collapse to the single method when every band agrees; else it's routed.
+        s.actor = uniqueMethods.length === 1 ? METHOD_SHORT[uniqueMethods[0]] : "size-routed";
+        // Only worth drawing the branch when the bands actually differ.
+        if (uniqueMethods.length > 1) s.router = { bands };
+      }
+    }
+  }
 
   const verify: StageView = {
     key: "verify",
@@ -347,6 +392,33 @@ function StageRow({ stage, last }: { stage: StageView; last: boolean }) {
         )}
         {stage.note && (
           <p className={`mt-1 text-[10.5px] ${failed ? "text-red-600" : "text-muted-foreground"}`}>{stage.note}</p>
+        )}
+        {stage.subNote && !dim && (
+          <p className="mt-1 text-[10px] text-muted-foreground">{stage.subNote}</p>
+        )}
+        {stage.router && (
+          <div className="mt-1.5 rounded-md border border-[#2E37FE]/15 bg-[#2E37FE]/[0.035] px-2 py-1.5">
+            <p className="mb-1 text-[9px] font-semibold uppercase tracking-wide text-[#1C24B8]/70">
+              Routed by company size
+            </p>
+            <div className="space-y-0.5">
+              {stage.router.bands.map((b) => (
+                <div key={b.label} className="flex items-center justify-between gap-2 text-[10.5px]">
+                  <span className="text-muted-foreground">{b.label}</span>
+                  <span className="flex items-center gap-1">
+                    <span className="text-[#2E37FE]/50">→</span>
+                    <span
+                      className={`font-mono text-[10px] ${
+                        b.method === "off" ? "text-muted-foreground/60" : "font-medium text-[#1C24B8]"
+                      }`}
+                    >
+                      {METHOD_SHORT[b.method]}
+                    </span>
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
         )}
       </div>
     </div>
