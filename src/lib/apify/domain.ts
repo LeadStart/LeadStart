@@ -117,6 +117,17 @@ export function extractCompanyId(url: string | null | undefined): string | null 
   return m ? m[1] : null;
 }
 
+// Keep a company LinkedIn URL only if it's a real /company/ page. HarvestAPI
+// hands back a SEARCH link (linkedin.com/search/results/all/?keywords=Name) when
+// a person's employer has no LinkedIn company page — that's not a company URL, so
+// storing it just pollutes company_linkedin_url and makes the domains phase log a
+// misleading "no parseable company LinkedIn URL". Drop it to null instead.
+export function sanitizeCompanyUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  const u = url.trim();
+  return /linkedin\.com\/company\//i.test(u) ? u : null;
+}
+
 // Company slug (non-numeric), e.g. /company/pritchard-industries → "pritchard-industries".
 export function extractCompanySlug(url: string | null | undefined): string | null {
   if (!url) return null;

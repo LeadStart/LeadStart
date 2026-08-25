@@ -1,5 +1,5 @@
 import type { LinkedInProspect } from "@/types/app";
-import { extractProfileId, normalizeDomain } from "../domain";
+import { extractProfileId, normalizeDomain, sanitizeCompanyUrl } from "../domain";
 
 // LinkedIn people-search sourcing — the top-of-funnel actor that finds NEW
 // people by ICP filters (as opposed to the enrichment providers, which take
@@ -164,7 +164,10 @@ export function parseProfileSearchResults(datasetItems: unknown[]): LinkedInPros
       linkedin_url,
       location: pickLocation(raw),
       company_name: pos ? str(pos.companyName) : str(raw.companyName),
-      company_linkedin_url: pos ? (str(pos.companyLinkedinUrl) ?? str(pos.companyUrl)) : null,
+      // Only a real /company/ page — a search-link placeholder becomes null.
+      company_linkedin_url: sanitizeCompanyUrl(
+        pos ? (str(pos.companyLinkedinUrl) ?? str(pos.companyUrl)) : null,
+      ),
       company_domain: website ? normalizeDomain(website) : null,
       email: pickEmail(raw),
     });

@@ -106,6 +106,14 @@ const ENRICH_RATES = {
   verify: 0.0006,
 };
 
+// Deep search (auto query-segmentation) sweeps many sub-queries and opens far
+// more profiles than it returns after de-duplication, so it bills well above
+// rate × target — a single-query search does not. Observed ≈3.5× on a Full+email
+// run (target 25 → $1.25 actual vs a $0.35 base estimate). Applied as a
+// multiplier so the estimate is a realistic ceiling instead of a 3–4× undercount.
+// Approximate (overlap varies with how broad the ICP is) — refine as more runs land.
+const DEEP_SEARCH_MULTIPLIER = 3.5;
+
 const MAX_OPTIONS = [100, 250, 500, 1000] as const;
 const POLL_MS = 3000;
 const PAGE_SIZE = 50;
@@ -144,7 +152,7 @@ const PRESETS: Preset[] = [
 
 // Every info affordance on this page opens one of these overlay modals —
 // never an inline box that shifts the form.
-type InfoKey = "tips" | "keywords" | "titles" | "locations" | "depth" | "estimate" | "segment";
+type InfoKey = "tips" | "keywords" | "titles" | "locations" | "depth" | "estimate" | "segment" | "actual";
 
 // Click-to-fill Keywords patterns. searchQuery is one fuzzy query over the
 // whole profile; these double as operator teaching examples (quotes, AND/OR/
@@ -549,6 +557,9 @@ function SavedSearches({
   const [name, setName] = useState("");
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // Inline rename of an existing preset.
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState("");
   const ref = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
@@ -610,6 +621,47 @@ function SavedSearches({
     }
   };
 
+  const startEdit = (p: { id: string; name: string }) => {
+    setErr(null);
+    setEditingId(p.id);
+    setEditDraft(p.name);
+  };
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditDraft("");
+  };
+  const saveEdit = async (id: string) => {
+    const n = editDraft.trim();
+    if (!n) return;
+    const prev = presets;
+    // Optimistic rename; revert on failure.
+    setPresets((list) => list.map((x) => (x.id === id ? { ...x, name: n } : x)));
+    cancelEdit();
+    try {
+      const res = await fetch(appUrl(`/api/admin/prospecting/search-presets/${id}`), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: n }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setPresets(prev);
+        setErr(data.error ?? "Rename failed");
+      }
+    } catch {
+      setPresets(prev);
+      load();
+    }
+  };
+
+  // Drop any in-progress rename when the dropdown closes.
+  useEffect(() => {
+    if (!open) {
+      setEditingId(null);
+      setEditDraft("");
+    }
+  }, [open]);
+
   return (
     <div className="relative" ref={ref}>
       <button
@@ -661,29 +713,76 @@ function SavedSearches({
               </p>
             ) : (
               <div className="max-h-56 overflow-auto">
-                {presets.map((p) => (
-                  <div key={p.id} className="group flex items-center gap-1 rounded-md px-1 hover:bg-muted">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onLoad(p.config);
-                        setOpen(false);
-                      }}
-                      className="min-w-0 flex-1 truncate py-1.5 text-left text-[12.5px]"
-                      title={p.name}
-                    >
-                      {p.name}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => remove(p.id)}
-                      aria-label={`Delete ${p.name}`}
-                      className="shrink-0 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:text-red-600 group-hover:opacity-100"
-                    >
-                      <Trash2 size={13} />
-                    </button>
-                  </div>
-                ))}
+                {presets.map((p) =>
+                  editingId === p.id ? (
+                    <div key={p.id} className="flex items-center gap-1 rounded-md px-1">
+                      <input
+                        autoFocus
+                        value={editDraft}
+                        onChange={(e) => setEditDraft(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            saveEdit(p.id);
+                          }
+                          if (e.key === "Escape") {
+                            e.preventDefault();
+                            cancelEdit();
+                          }
+                        }}
+                        maxLength={80}
+                        className="min-w-0 flex-1 rounded-md border border-input bg-transparent px-2 py-1 text-[12px] outline-none focus:border-[#2E37FE]"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => saveEdit(p.id)}
+                        disabled={!editDraft.trim()}
+                        aria-label={`Save name for ${p.name}`}
+                        className="shrink-0 rounded p-1 text-muted-foreground hover:text-emerald-600 disabled:opacity-40"
+                      >
+                        <Check size={13} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={cancelEdit}
+                        aria-label="Cancel rename"
+                        className="shrink-0 rounded p-1 text-muted-foreground hover:text-foreground"
+                      >
+                        <X size={13} />
+                      </button>
+                    </div>
+                  ) : (
+                    <div key={p.id} className="group flex items-center gap-1 rounded-md px-1 hover:bg-muted">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onLoad(p.config);
+                          setOpen(false);
+                        }}
+                        className="min-w-0 flex-1 truncate py-1.5 text-left text-[12.5px]"
+                        title={p.name}
+                      >
+                        {p.name}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => startEdit(p)}
+                        aria-label={`Rename ${p.name}`}
+                        className="shrink-0 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:text-[#2E37FE] group-hover:opacity-100"
+                      >
+                        <Pencil size={13} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => remove(p.id)}
+                        aria-label={`Delete ${p.name}`}
+                        className="shrink-0 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:text-red-600 group-hover:opacity-100"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  ),
+                )}
               </div>
             )}
           </div>
@@ -765,6 +864,9 @@ export function LinkedInSearchPanel() {
   // URLs the user imported this session — lets a row show "Queued" the instant
   // it's sent, before the run's item rows exist to poll.
   const [importedUrls, setImportedUrls] = useState<Set<string>>(new Set());
+  // Actual enrichment-run spend (Apify usageTotalUsd accumulated by the worker),
+  // for the cost-breakdown popover on the results footer.
+  const [enrichRunCost, setEnrichRunCost] = useState(0);
   const enrichTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Live Apify pricing (pulled fresh, cached ~1h server-side) so the estimate
@@ -832,7 +934,10 @@ export function LinkedInSearchPanel() {
           cache: "no-store",
         });
         if (res.ok) {
-          const data = (await res.json()) as { run: { status: string }; items: EnrichLite[] };
+          const data = (await res.json()) as {
+            run: { status: string; cost_usd?: number | string };
+            items: EnrichLite[];
+          };
           if (cancelled) return;
           const map = new Map<string, EnrichLite>();
           for (const it of data.items ?? []) {
@@ -840,6 +945,7 @@ export function LinkedInSearchPanel() {
             if (k) map.set(k, it);
           }
           setEnrichByUrl(map);
+          setEnrichRunCost(Number(data.run.cost_usd) || 0);
           if (data.run.status === "complete" || data.run.status === "failed") return; // terminal — stop
         }
       } catch {
@@ -1186,7 +1292,8 @@ export function LinkedInSearchPanel() {
   const depthMeta = DEPTHS.find((d) => d.value === depth);
   // Live Apify prices when loaded, else the static DEPTHS / ENRICH_RATES fallback.
   const rate = livePricing?.sourcing?.[depth] ?? depthMeta?.rate ?? 0.002;
-  const estimate = rate * maxResults;
+  // Deep search multiplies the sourcing bill (see DEEP_SEARCH_MULTIPLIER).
+  const estimate = rate * maxResults * (autoSegment ? DEEP_SEARCH_MULTIPLIER : 1);
   const emailRate = livePricing?.enrich.profile ?? ENRICH_RATES.email;
   const domainRate = livePricing?.enrich.domain ?? ENRICH_RATES.domain;
   // Activity is an add-on: costs only when toggled on AND not already covered by
@@ -1272,6 +1379,16 @@ export function LinkedInSearchPanel() {
         verify: detail.query.addons.verify === true,
       }
     : { activity: addActivity, verify: addVerify };
+
+  // Actual-spend breakdown (the "What did this cost?" popover). Sourcing +
+  // enrichment are both real Apify usageTotalUsd figures; together they reconcile
+  // the "Spend so far" number on the pipeline panel.
+  const totalApify = actualCost + enrichRunCost;
+  const ranDepth = (detail?.query?.depth as Depth | undefined) ?? depth;
+  const ranDepthLabel = DEPTHS.find((d) => d.value === ranDepth)?.label ?? "Short";
+  const ranDeepSearch = Boolean(
+    (detail?.query as { levers?: { autoSegment?: boolean } } | null)?.levers?.autoSegment,
+  );
 
   return (
     <div className="space-y-4">
@@ -2143,7 +2260,8 @@ export function LinkedInSearchPanel() {
                 Search · <span className="font-mono">profile-search</span> ({depthMeta?.label})
               </span>
               <span className="font-mono tabular-nums">
-                ${rate.toFixed(4)} × {maxResults.toLocaleString()} = ${estimate.toFixed(2)}
+                ${rate.toFixed(4)} × {maxResults.toLocaleString()}
+                {autoSegment ? ` × ${DEEP_SEARCH_MULTIPLIER} deep` : ""} = ${estimate.toFixed(2)}
               </span>
             </div>
           </div>
@@ -2209,6 +2327,73 @@ export function LinkedInSearchPanel() {
               per-result prices above — no separate proxy or compute-unit line.
             </p>
           </div>
+        </div>
+      </InfoDialog>
+
+      <InfoDialog
+        open={infoOpen === "actual"}
+        onClose={() => setInfoOpen(null)}
+        title="What did this cost?"
+      >
+        <div className="space-y-3 text-[12px] text-muted-foreground">
+          <p>
+            Every figure below is the <span className="font-medium text-foreground">actual</span> amount
+            Apify billed for each run (its <span className="font-mono">usageTotalUsd</span>), not an
+            estimate.
+          </p>
+
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <span>
+                Sourcing · <span className="font-mono">profile-search</span>
+              </span>
+              <span className="font-mono tabular-nums font-medium text-foreground">
+                ${actualCost.toFixed(2)}
+              </span>
+            </div>
+            <p className="text-[11px] text-muted-foreground/80">
+              {detail?.result_count ?? 0} profiles returned · {ranDepthLabel}
+              {ranDeepSearch ? " · Deep search on" : ""}
+            </p>
+          </div>
+
+          <div className="space-y-1 border-t border-border/60 pt-2">
+            <div className="flex items-center justify-between">
+              <span>Enrichment · this run</span>
+              <span className="font-mono tabular-nums font-medium text-foreground">
+                ${enrichRunCost.toFixed(2)}
+              </span>
+            </div>
+            <p className="text-[11px] text-muted-foreground/80">
+              across <span className="font-mono">profile-scraper</span>,{" "}
+              <span className="font-mono">linkedin-company</span>, the 2nd-pass finder
+              {panelAddons.activity ? (
+                <>
+                  , and <span className="font-mono">profile-posts</span>
+                </>
+              ) : (
+                ""
+              )}
+              {panelAddons.verify ? " + Million Verifier" : ""} — billed only on the people you
+              imported.
+            </p>
+          </div>
+
+          <div className="flex items-center justify-between rounded-md bg-[#EDEEFF]/70 px-2 py-1.5 font-medium text-foreground">
+            <span>Total Apify spend</span>
+            <span className="font-mono tabular-nums">${totalApify.toFixed(2)}</span>
+          </div>
+
+          <p className="text-[11px]">
+            Sourcing is billed for <span className="font-medium text-foreground">total work</span>, not
+            the profiles you keep: <span className="font-mono">Full + email</span> opens each profile
+            for an email lookup (~$10/1k), and <span className="font-medium text-foreground">Deep
+            search</span> sweeps sub-queries — opening far more profiles than the
+            {" "}{detail?.result_count ?? 0} it returns after de-duplication. That&apos;s why the
+            per-returned-profile figure looks high. To cut it, drop to{" "}
+            <span className="font-medium text-foreground">Short</span> depth and let the enrichment
+            waterfall find emails only on the people you import.
+          </p>
         </div>
       </InfoDialog>
 
@@ -2454,8 +2639,9 @@ export function LinkedInSearchPanel() {
                     const en = url ? enrichByUrl.get(LC(url)) : undefined;
                     const imported = Boolean(en) || Boolean(url && importedUrls.has(LC(url)));
                     const emailVal = en?.email ?? r.email ?? null;
+                    const companyEmailVal = en?.company_email ?? null;
                     const emailLoading =
-                      !emailVal && !!en &&
+                      !emailVal && !companyEmailVal && !!en &&
                       (isStepActive(en.profile_status) || isStepActive(en.waterfall_status));
                     const domainVal = en?.company_domain ?? r.company_domain ?? null;
                     const domainLoading = !domainVal && !!en && isStepActive(en.domain_status);
@@ -2490,9 +2676,9 @@ export function LinkedInSearchPanel() {
                         {(hasEmails || showEnrichCols) && (
                           <TableCell
                             className="truncate font-mono text-[12px]"
-                            title={emailVal ?? undefined}
+                            title={emailVal ?? companyEmailVal ?? undefined}
                           >
-                            <EnrichCell value={emailVal} loading={emailLoading} />
+                            <EmailCell person={emailVal} company={companyEmailVal} loading={emailLoading} />
                           </TableCell>
                         )}
                         {showEnrichCols && (
@@ -2548,8 +2734,11 @@ export function LinkedInSearchPanel() {
             {isComplete && (
               <div className="flex items-center justify-between border-t border-border/60 pt-2.5 text-[11px] text-muted-foreground">
                 <span>Actual Apify cost for this search — billed per profile returned, not per target</span>
-                <span className="font-mono tabular-nums font-medium text-foreground">
-                  ${actualCost.toFixed(2)}
+                <span className="flex items-center gap-1.5">
+                  <span className="font-mono tabular-nums font-medium text-foreground">
+                    ${actualCost.toFixed(2)}
+                  </span>
+                  <InfoButton label="What did this cost?" onClick={() => setInfoOpen("actual")} />
                 </span>
               </div>
             )}
@@ -2587,6 +2776,32 @@ function EnrichCell({
 }) {
   if (value)
     return <span className={plain ? "text-foreground" : "text-foreground"}>{value}</span>;
+  if (loading) return <Loader2 size={13} className="animate-spin text-[#2E37FE]" />;
+  return <span className="text-muted-foreground">—</span>;
+}
+
+// The Email cell, color-coded to match the Email-outcomes radial: a person's
+// direct address in blue, or — when that's all we found — the company's generic
+// inbox in green with a "company" tag so it's never mistaken for a personal one.
+function EmailCell({
+  person,
+  company,
+  loading,
+}: {
+  person: string | null;
+  company: string | null;
+  loading: boolean;
+}) {
+  if (person) return <span style={{ color: "#2E37FE" }}>{person}</span>;
+  if (company)
+    return (
+      <span className="inline-flex items-center gap-1" style={{ color: "#10b981" }}>
+        <span className="truncate">{company}</span>
+        <span className="shrink-0 rounded bg-emerald-50 px-1 py-px text-[9px] font-semibold uppercase tracking-wide text-emerald-600">
+          company
+        </span>
+      </span>
+    );
   if (loading) return <Loader2 size={13} className="animate-spin text-[#2E37FE]" />;
   return <span className="text-muted-foreground">—</span>;
 }
@@ -2660,9 +2875,11 @@ function EmailOutcomeRadial({
   const R = 34;
   const C = 2 * Math.PI * R;
   const money = (n: number) => `$${n.toFixed(n < 1 ? 3 : 2)}`;
+  // Colors: person = blue, company = green (flipped from the usual "best = green"
+  // so the same palette carries into the results Email column).
   const segs = [
-    { key: "person" as const, v: person, color: "#10b981", label: "Person email" },
-    { key: "company" as const, v: company, color: "#2E37FE", label: "Company only" },
+    { key: "person" as const, v: person, color: "#2E37FE", label: "Person email" },
+    { key: "company" as const, v: company, color: "#10b981", label: "Company only" },
     { key: "none" as const, v: none, color: "#94a3b8", label: "No email" },
   ];
   const withEmail = person + company;

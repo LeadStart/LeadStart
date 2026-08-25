@@ -1,4 +1,4 @@
-import { extractProfileId } from "../domain";
+import { extractProfileId, sanitizeCompanyUrl } from "../domain";
 import { lc, trimRaw, type PhaseProvider, type PhaseResult, type ProviderItem } from "./types";
 
 export const PROFILE_ACTOR_ID = "harvestapi~linkedin-profile-scraper";
@@ -44,7 +44,8 @@ function pickCompanyLinkedinUrl(rec: Rec): string | null {
     (Array.isArray(rec.experience) && rec.experience) ||
     [];
   for (const p of positions as Rec[]) {
-    const url = str(p?.companyLinkedinUrl) ?? str(p?.companyUrl);
+    // Real /company/ page only — a search-link placeholder is not a company URL.
+    const url = sanitizeCompanyUrl(str(p?.companyLinkedinUrl) ?? str(p?.companyUrl));
     if (url) return url;
   }
   return null;

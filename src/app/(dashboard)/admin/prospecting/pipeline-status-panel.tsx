@@ -243,8 +243,14 @@ export function PipelineStatusPanel({
 
   // ---- overall (radial) ----
   const counted = stages.filter((s) => s.counted);
-  const overall = counted.reduce((a, s) => a + (s.state === "skipped" ? 1 : s.frac), 0) / counted.length;
-  const pct = Math.round(overall * 100);
+  const rawOverall = counted.reduce((a, s) => a + (s.state === "skipped" ? 1 : s.frac), 0) / counted.length;
+  // Only read a full 100% once the run has actually completed. A fully-processed
+  // but not-yet-advanced active phase (e.g. activity 20/20 while the worker
+  // finalizes the tick) has frac=1 and would otherwise show 100% with a stage
+  // still spinning — cap it at 99% until the run is complete.
+  const runComplete = run?.status === "complete";
+  const overall = runComplete ? rawOverall : Math.min(rawOverall, 0.99);
+  const pct = runComplete ? 100 : Math.min(99, Math.round(rawOverall * 100));
 
   const centerNote = (() => {
     if (search?.status === "failed" || run?.status === "failed") return "attention needed";
