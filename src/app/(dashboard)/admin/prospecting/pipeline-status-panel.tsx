@@ -14,7 +14,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { appUrl } from "@/lib/api-url";
-import type { EnrichmentRun, EnrichmentWaterfallMethod } from "@/types/app";
+import type { EnrichmentAddons, EnrichmentRun, EnrichmentWaterfallMethod } from "@/types/app";
 import {
   ENRICH_POLL_INTERVAL_MS,
   type EnrichmentRunDetail,
@@ -79,23 +79,36 @@ const PHASE_ORDER: Record<string, number> = {
   domains: 1,
   waterfall: 2,
   activity: 3,
+  verify: 4,
 };
 
+// Core stages (always shown) + the two opt-in add-ons (activity, verify). The
+// add-ons are filtered out of the rail unless enabled — see the assembly below.
 const ENRICH_DEFS = [
-  { key: "profiles", name: "Profile → email", actor: "profile-scraper", icon: Mail, color: "#3b46ff", unit: "emails", found: (r: EnrichmentRun) => r.found_emails_profiles_count },
-  { key: "domains", name: "Company → domain", actor: "linkedin-company", icon: Globe, color: "#6366f1", unit: "domains", found: (r: EnrichmentRun) => r.found_domains_count },
-  { key: "waterfall", name: "2nd-pass email", actor: "pattern + verify", icon: Layers, color: "#8b5cf6", unit: "recovered", found: (r: EnrichmentRun) => r.found_emails_waterfall_count },
-  { key: "activity", name: "Activity", actor: "profile-posts", icon: Activity, color: "#6366f1", unit: "active", found: (r: EnrichmentRun) => r.found_activity_count },
+  { key: "profiles", name: "Profile → email", actor: "profile-scraper", icon: Mail, color: "#3b46ff", unit: "emails", addon: false, found: (r: EnrichmentRun) => r.found_emails_profiles_count },
+  { key: "domains", name: "Company → domain", actor: "linkedin-company", icon: Globe, color: "#6366f1", unit: "domains", addon: false, found: (r: EnrichmentRun) => r.found_domains_count },
+  { key: "waterfall", name: "2nd-pass email", actor: "pattern + verify", icon: Layers, color: "#8b5cf6", unit: "recovered", addon: false, found: (r: EnrichmentRun) => r.found_emails_waterfall_count },
+  { key: "activity", name: "Activity", actor: "profile-posts", icon: Activity, color: "#6366f1", unit: "active", addon: true, found: (r: EnrichmentRun) => r.found_activity_count },
+  { key: "verify", name: "Verify", actor: "Million Verifier", icon: ShieldCheck, color: "#10b981", unit: "verified", addon: true, found: (r: EnrichmentRun) => r.found_verified_count },
 ] as const;
 
 export function PipelineStatusPanel({
   search,
   starting,
   enrichmentRunId,
+  addons,
+  autoRun,
 }: {
   search: SearchStatusLite;
   starting: boolean;
   enrichmentRunId: string | null;
+  // The opt-in add-ons chosen for this search (activity / verify). Drives which
+  // add-on stages show in the rail BEFORE a run exists; once a run exists the
+  // run's own flags take over. Null = neither (not yet chosen / legacy).
+  addons: EnrichmentAddons | null;
+  // Whether the org auto-runs enrichment after a search (kill-switch). Only
+  // changes the "sourced" caption copy.
+  autoRun: boolean;
 }) {
   const [run, setRun] = useState<EnrichmentRun | null>(null);
 
@@ -157,11 +170,23 @@ export function PipelineStatusPanel({
   })();
 
   // ---- enrichment stages ----
+  // Activity + verify are opt-in add-ons: shown only when the run enabled them or
+  // this search intends them (so a queued add-on appears before the run exists).
+  const showActivity = (run?.run_activity ?? false) || (addons?.activity ?? false);
+  const showVerify = (run?.run_verify ?? false) || (addons?.verify ?? false);
+  const defs = ENRICH_DEFS.filter((d) => {
+    if (d.key === "activity") return showActivity;
+    if (d.key === "verify") return showVerify;
+    return true;
+  });
+
   const cur = run ? PHASE_ORDER[run.phase] ?? 0 : -1;
-  const enrichStages: StageView[] = ENRICH_DEFS.map((d) => {
+  const enrichStages: StageView[] = defs.map((d) => {
     const base = { key: d.key, name: d.name, actor: d.actor, icon: d.icon, color: d.color, unit: d.unit, counted: true };
     if (d.key === "activity" && run && run.run_activity === false)
       return { ...base, state: "skipped", frac: 1, note: "skipped — already gated on activity" };
+    if (d.key === "verify" && run && run.run_verify === false)
+      return { ...base, state: "skipped", frac: 1, note: "verification off for this run" };
     if (!run)
       return { ...base, state: searchDone ? "queued" : "idle", frac: 0 };
     if (run.status === "complete")
@@ -214,19 +239,7 @@ export function PipelineStatusPanel({
     }
   }
 
-  const verify: StageView = {
-    key: "verify",
-    name: "Verify",
-    actor: "Million Verifier",
-    icon: ShieldCheck,
-    color: "#10b981",
-    state: run?.status === "complete" ? "queued" : "idle",
-    frac: 0,
-    note: "runs at first send",
-    counted: false,
-  };
-
-  const stages = [sourcing, ...enrichStages, verify];
+  const stages = [sourcing, ...enrichStages];
 
   // ---- overall (radial) ----
   const counted = stages.filter((s) => s.counted);
@@ -238,7 +251,7 @@ export function PipelineStatusPanel({
     if (run?.status === "complete") return "enrichment complete";
     const active = stages.find((s) => s.state === "active");
     if (active) return active.name.toLowerCase();
-    if (searchDone && !run) return "sourced · import to enrich";
+    if (searchDone && !run) return autoRun ? "sourced · starting enrichment…" : "sourced · import to enrich";
     if (searchActive) return "sourcing";
     return "ready";
   })();

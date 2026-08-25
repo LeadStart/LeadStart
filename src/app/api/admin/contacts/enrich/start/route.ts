@@ -29,6 +29,7 @@ type Body = {
   run_domains?: unknown;
   run_waterfall?: unknown;
   run_activity?: unknown;
+  run_verify?: unknown;
 };
 
 type ContactRow = {
@@ -64,7 +65,10 @@ export async function POST(request: NextRequest) {
   const runProfiles = body.run_profiles === undefined ? true : Boolean(body.run_profiles);
   const runDomains = body.run_domains === undefined ? true : Boolean(body.run_domains);
   const runWaterfall = body.run_waterfall === undefined ? true : Boolean(body.run_waterfall);
-  const runActivity = body.run_activity === undefined ? true : Boolean(body.run_activity);
+  // Activity + verify are opt-in add-ons here (default OFF), matching the
+  // Prospecting per-search toggles.
+  const runActivity = body.run_activity === undefined ? false : Boolean(body.run_activity);
+  const runVerify = body.run_verify === undefined ? false : Boolean(body.run_verify);
 
   if (contactIds.length === 0) {
     return NextResponse.json({ error: "contact_ids is required" }, { status: 400 });
@@ -75,11 +79,14 @@ export async function POST(request: NextRequest) {
       { status: 400 },
     );
   }
-  if (!runProfiles && !runDomains && !runWaterfall && !runActivity) {
+  if (!runProfiles && !runDomains && !runWaterfall && !runActivity && !runVerify) {
     return NextResponse.json({ error: "Select at least one enrichment step" }, { status: 400 });
   }
-  // Every phase runs on Apify, so any requested step needs the token.
-  if (!apifyToken) {
+  // The core phases run on Apify; verify is Million Verifier only. Require the
+  // Apify token only when an Apify phase is requested (a verify-only run doesn't
+  // need it).
+  const needsApify = runProfiles || runDomains || runWaterfall || runActivity;
+  if (needsApify && !apifyToken) {
     return NextResponse.json(
       { error: "Apify API token not set. Save it in /admin/settings/api first." },
       { status: 400 },
@@ -99,7 +106,7 @@ export async function POST(request: NextRequest) {
     settings.unknown_method !== "off";
   const runWaterfallEffective =
     runWaterfall && settings.waterfall_enabled && waterfallHasWork;
-  if (!runProfiles && !runDomains && !runWaterfallEffective && !runActivity) {
+  if (!runProfiles && !runDomains && !runWaterfallEffective && !runActivity && !runVerify) {
     // Only the waterfall was requested and config disables it.
     return NextResponse.json(
       {
@@ -109,6 +116,19 @@ export async function POST(request: NextRequest) {
       { status: 400 },
     );
   }
+
+  // First enabled phase. When verify is the ONLY phase, its items are seeded at
+  // creation (there's no earlier phase for advancePhase to seed them from).
+  const initialPhase = runProfiles
+    ? "profiles"
+    : runDomains
+      ? "domains"
+      : runWaterfallEffective
+        ? "waterfall"
+        : runActivity
+          ? "activity"
+          : "verify";
+  const seedVerifyNow = initialPhase === "verify";
 
   // One active run per org.
   const { data: activeRows } = await admin
@@ -160,8 +180,12 @@ export async function POST(request: NextRequest) {
     // Activity scoring only needs a profile URL — works even for contacts that
     // already have an email/domain (assigned to its phase by the worker).
     const wantActivity = runActivity && Boolean(profileId);
+    // Verify only applies to a contact that already has (or will have) an email.
+    // Profiles/waterfall may add one later, so a contact with a profile URL is
+    // also verifiable downstream even without an email today.
+    const wantVerify = runVerify && (Boolean(c.email) || wantProfile || wantDomain);
 
-    if (!wantProfile && !wantDomain && !wantActivity) {
+    if (!wantProfile && !wantDomain && !wantActivity && !wantVerify) {
       // Attribute one skip reason (priority order).
       if (c.email) skipped.already_has_email++;
       else if (runProfiles && !profileId) skipped.no_linkedin_url++;
@@ -201,8 +225,11 @@ export async function POST(request: NextRequest) {
       profile_notes: profileNote,
       domain_status: wantDomain ? "pending" : "skipped",
       domain_notes: domainNote,
-      // waterfall/activity are assigned by the worker's advancePhase.
+      // waterfall/activity are assigned by the worker's advancePhase. verify is
+      // too, UNLESS it's the only phase (nothing earlier to trigger the seed) —
+      // then seed it here for contacts that already have an email.
       waterfall_status: null,
+      verify_status: seedVerifyNow && c.email ? "pending" : null,
       email: c.email,
       created_at: now,
       updated_at: now,
@@ -215,15 +242,6 @@ export async function POST(request: NextRequest) {
       { status: 400 },
     );
   }
-
-  // Create the run. phase = first enabled step (the UI always enables profiles).
-  const initialPhase = runProfiles
-    ? "profiles"
-    : runDomains
-      ? "domains"
-      : runWaterfallEffective
-        ? "waterfall"
-        : "activity";
 
   const { data: runRow, error: runError } = await admin
     .from("enrichment_runs")
@@ -239,6 +257,7 @@ export async function POST(request: NextRequest) {
       run_domains: runDomains,
       run_waterfall: runWaterfallEffective,
       run_activity: runActivity,
+      run_verify: runVerify,
       phase: initialPhase,
       status: "pending",
       total_count: itemRows.length,

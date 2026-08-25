@@ -131,6 +131,26 @@ export function WaterfallSettingsCard() {
           </div>
         ) : (
           <>
+            {/* auto-run kill-switch — the Prospecting → Contacts → Enrich flow */}
+            <label className="flex items-start gap-2 text-sm cursor-pointer">
+              <input
+                type="checkbox"
+                checked={settings.auto_run_after_search}
+                onChange={(e) =>
+                  setSettings({ ...settings, auto_run_after_search: e.target.checked })
+                }
+                className="mt-0.5 h-4 w-4 rounded border-border accent-[#2E37FE] cursor-pointer"
+              />
+              <span>
+                Auto-run pipeline after a LinkedIn search
+                <span className="block text-[11px] text-muted-foreground">
+                  When on, a finished Prospecting search imports every sourced person into
+                  Contacts and starts enrichment automatically. Off = curate the list first
+                  and click Import to Contacts yourself.
+                </span>
+              </span>
+            </label>
+
             {/* master toggle */}
             <label className="flex items-start gap-2 text-sm cursor-pointer">
               <input

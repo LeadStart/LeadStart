@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import {
   DEFAULT_ENRICHMENT_SETTINGS,
   ENRICHMENT_WATERFALL_METHODS,
+  type EnrichmentAddons,
   type EnrichmentSettings,
   type EnrichmentWaterfallMethod,
 } from "@/types/app";
@@ -53,6 +54,18 @@ export function normalizeEnrichmentSettings(
     unknown_method: method(o.unknown_method, base.unknown_method),
     accept_catch_all_guesses: bool(o.accept_catch_all_guesses, base.accept_catch_all_guesses),
     scrape_max_pages: intClamp(o.scrape_max_pages, base.scrape_max_pages, 1, 20),
+    auto_run_after_search: bool(o.auto_run_after_search, base.auto_run_after_search),
+  };
+}
+
+// Coerce a stored/posted blob into a complete EnrichmentAddons. Both flags
+// default OFF — a missing stamp (older contact) or a non-boolean value reads as
+// false, matching the "add-ons are opt-in" contract.
+export function normalizeAddons(input: unknown): EnrichmentAddons {
+  const o = input && typeof input === "object" ? (input as Record<string, unknown>) : {};
+  return {
+    activity: o.activity === true,
+    verify: o.verify === true,
   };
 }
 

@@ -45,6 +45,7 @@ import {
   PROFILE_EMAIL_COST_USD,
   DOMAIN_COST_USD,
   ACTIVITY_COST_USD,
+  MV_CREDIT_COST_USD,
   estimateBoviCost,
   estimatePatternMvCost,
   estimateScrapeCost,
@@ -77,6 +78,7 @@ const CONTACTS_PAGE_SIZE = 25;
 const ENRICH_COST_PROFILE = PROFILE_EMAIL_COST_USD;
 const ENRICH_COST_DOMAIN = DOMAIN_COST_USD;
 const ENRICH_COST_ACTIVITY = ACTIVITY_COST_USD;
+const ENRICH_COST_VERIFY = MV_CREDIT_COST_USD;
 
 // Relative "time ago" for the Last posted column.
 function timeAgo(iso: string | null): string {
@@ -364,7 +366,9 @@ export default function ContactsPage() {
   const [enrichRunProfiles, setEnrichRunProfiles] = useState(true);
   const [enrichRunDomains, setEnrichRunDomains] = useState(true);
   const [enrichRunWaterfall, setEnrichRunWaterfall] = useState(true);
-  const [enrichRunActivity, setEnrichRunActivity] = useState(true);
+  // Activity + verify are opt-in add-ons (default OFF), matching Prospecting.
+  const [enrichRunActivity, setEnrichRunActivity] = useState(false);
+  const [enrichRunVerify, setEnrichRunVerify] = useState(false);
   const [enrichStarting, setEnrichStarting] = useState(false);
   const [enrichError, setEnrichError] = useState<string | null>(null);
   // Org waterfall config (migration 00075) — fetched when the dialog opens so
@@ -523,6 +527,9 @@ export default function ContactsPage() {
     (c) => !c.email && (c.linkedin_url || c.company_domain || c.company_linkedin_url),
   ).length;
   const enrichActivityCount = selectedContacts.filter((c) => c.linkedin_url).length;
+  // Verifiable emails: those already on a contact + those we expect to find.
+  const enrichVerifyCount =
+    selectedContacts.filter((c) => c.email).length + enrichNeedsEmail;
   // The waterfall crawls per company DOMAIN (unique known domains + contacts that
   // may still gain one), pulling up to the configured lead cap per domain — each
   // lead billed. This is the honest per-domain math; the old per-contact estimate
@@ -556,7 +563,8 @@ export default function ContactsPage() {
     (enrichRunProfiles ? enrichNeedsEmail * ENRICH_COST_PROFILE : 0) +
     (enrichRunDomains ? enrichNeedsDomain * ENRICH_COST_DOMAIN : 0) +
     (enrichRunWaterfall ? waterfallEstimate : 0) +
-    (enrichRunActivity ? enrichActivityCount * ENRICH_COST_ACTIVITY : 0);
+    (enrichRunActivity ? enrichActivityCount * ENRICH_COST_ACTIVITY : 0) +
+    (enrichRunVerify ? enrichVerifyCount * ENRICH_COST_VERIFY : 0);
   const unverifiedSelected = selectedContacts.filter(
     (c) =>
       !c.email ||
@@ -578,6 +586,7 @@ export default function ContactsPage() {
           run_domains: enrichRunDomains,
           run_waterfall: enrichRunWaterfall,
           run_activity: enrichRunActivity,
+          run_verify: enrichRunVerify,
         }),
       });
       const data = (await res.json()) as {
@@ -1703,16 +1712,33 @@ export default function ContactsPage() {
                   className="mt-0.5 h-4 w-4 rounded border-border accent-[#2E37FE] cursor-pointer"
                 />
                 <span>
-                  Score LinkedIn activity (last posted)
+                  Score LinkedIn activity (last posted){" "}
+                  <span className="text-[9px] uppercase tracking-wide text-[#2E37FE]/70">add-on</span>
                   <span className="block text-[11px] text-muted-foreground">
                     ≈ $0.005 per profile · stamps a recency rank to prioritize outreach
                   </span>
                 </span>
               </label>
+              <label className="flex items-start gap-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={enrichRunVerify}
+                  onChange={(e) => setEnrichRunVerify(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-border accent-[#2E37FE] cursor-pointer"
+                />
+                <span>
+                  Verify emails (Million Verifier){" "}
+                  <span className="text-[9px] uppercase tracking-wide text-[#2E37FE]/70">add-on</span>
+                  <span className="block text-[11px] text-muted-foreground">
+                    ≈ ${ENRICH_COST_VERIFY.toFixed(4)} per email · marks each found address
+                    valid / risky / invalid in the report
+                  </span>
+                </span>
+              </label>
             </div>
             <p className="text-[11px] text-muted-foreground">
-              Found emails are verified automatically by Million Verifier just
-              before the first send — no separate step here.
+              Even without the verify add-on, found emails are re-checked by Million
+              Verifier just before the first send.
             </p>
             <p className="text-xs text-muted-foreground">
               Estimated cost: up to ~${enrichEstimate.toFixed(3)}
@@ -1736,8 +1762,12 @@ export default function ContactsPage() {
                   (!enrichRunProfiles &&
                     !enrichRunDomains &&
                     !enrichRunWaterfall &&
-                    !enrichRunActivity) ||
-                  (enrichNeedsDomain === 0 && enrichNeedsEmail === 0 && enrichActivityCount === 0)
+                    !enrichRunActivity &&
+                    !enrichRunVerify) ||
+                  (enrichNeedsDomain === 0 &&
+                    enrichNeedsEmail === 0 &&
+                    enrichActivityCount === 0 &&
+                    enrichVerifyCount === 0)
                 }
                 onClick={handleStartEnrichment}
               >

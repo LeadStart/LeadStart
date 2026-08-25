@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireEnrichmentContext } from "@/lib/apify/auth";
+import { requireEnrichmentContext, normalizeAddons } from "@/lib/apify/auth";
 import {
   buildProfileSearchInput,
   PROFILE_SEARCH_ACTOR_ID,
@@ -27,6 +27,7 @@ type Body = {
   depth?: unknown;
   max_results?: unknown;
   name?: unknown;
+  addons?: unknown;
 };
 
 const MAX_NAME = 80;
@@ -56,6 +57,10 @@ export async function POST(request: NextRequest) {
     : "short";
   const maxResults = clampInt(body.max_results, 1, HARD_CAP, DEFAULT_MAX);
   const name = (typeof body.name === "string" ? body.name : "").trim().slice(0, MAX_NAME);
+  // The opt-in enrichment add-ons chosen for this search (activity/verify, both
+  // default OFF). Stored on the search's query so whichever import path fires
+  // later (manual save or auto-import) stamps the same choice onto contacts.
+  const addons = normalizeAddons(body.addons);
 
   // Guard an unbounded search: the built input must carry at least one real
   // filter beyond the three always-present control keys.
@@ -97,7 +102,7 @@ export async function POST(request: NextRequest) {
     .insert({
       organization_id: organizationId,
       created_by: user.id,
-      query: name ? { levers, depth, name } : { levers, depth },
+      query: { levers, depth, addons, ...(name ? { name } : {}) },
       results: [],
       result_count: 0,
       target_max_results: maxResults,

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { checkCronAuth } from "@/lib/security/cron-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { loadApifyToken } from "@/lib/apify/auth";
+import { loadApifyToken, loadEnrichmentSettings } from "@/lib/apify/auth";
 import { ApifyClient } from "@/lib/apify/client";
 import { isInProgress, isTerminalOk } from "@/lib/apify/types";
 import {
@@ -11,6 +11,8 @@ import {
   type ProfileSearchLevers,
 } from "@/lib/apify/sourcing/profile-search";
 import type { LinkedInProspect } from "@/types/app";
+import { importLinkedInProspects } from "@/lib/apify/import-prospects";
+import { enqueueEnrichment } from "@/lib/apify/enqueue-enrichment";
 import { alertActorFailure } from "@/lib/notifications/actor-failure-alert";
 
 // GET /api/cron/run-linkedin-searches — every minute.
@@ -34,7 +36,13 @@ const MAX_INGEST = 2500;
 type SearchRow = {
   id: string;
   organization_id: string;
-  query: { levers?: ProfileSearchLevers; depth?: ProfileSearchDepth } | null;
+  created_by: string | null;
+  saved_count: number | null;
+  query: {
+    levers?: ProfileSearchLevers;
+    depth?: ProfileSearchDepth;
+    addons?: unknown;
+  } | null;
   target_max_results: number;
   actor: string;
   active_apify_run_id: string | null;
@@ -42,6 +50,68 @@ type SearchRow = {
   consecutive_failures: number;
   cost_usd: number | string;
 };
+
+// Resolve a user to attribute the auto-run to: the search's creator, else the
+// org owner (same fallback as drain-enrichment-queue). Null when neither exists.
+async function resolveAutoRunUserId(
+  admin: ReturnType<typeof createAdminClient>,
+  row: SearchRow,
+): Promise<string | null> {
+  if (row.created_by) return row.created_by;
+  const { data: owner } = await admin
+    .from("profiles")
+    .select("id")
+    .eq("organization_id", row.organization_id)
+    .eq("role", "owner")
+    .limit(1)
+    .maybeSingle();
+  return (owner as { id: string } | null)?.id ?? null;
+}
+
+// Best-effort auto-import of a completed search's sourced people into Contacts,
+// then start enrichment. Gated on the org's auto_run_after_search kill-switch.
+// Never throws — sourcing is already saved; a failure here degrades to the
+// manual "Import to Contacts" path. Returns a short progress note.
+async function autoImportAndEnrich(
+  admin: ReturnType<typeof createAdminClient>,
+  row: SearchRow,
+  prospects: LinkedInProspect[],
+): Promise<string | null> {
+  try {
+    const settings = await loadEnrichmentSettings(admin, row.organization_id);
+    if (!settings.auto_run_after_search) return null;
+    const userId = await resolveAutoRunUserId(admin, row);
+    if (!userId) return "auto-import skipped — no owner to attribute the run to";
+
+    const imported = await importLinkedInProspects(admin, {
+      organizationId: row.organization_id,
+      // saved_count is bumped inside the helper; pass what we have (0 for a fresh
+      // search), the manual path may add more later.
+      search: { id: row.id, saved_count: row.saved_count, query: row.query },
+      prospects,
+    });
+    if (imported.insertedIds.length === 0) {
+      return imported.skippedDuplicates > 0
+        ? `Imported 0 · ${imported.skippedDuplicates} already in Contacts`
+        : "Imported 0 people";
+    }
+    const enq = await enqueueEnrichment(admin, {
+      organizationId: row.organization_id,
+      userId,
+      contactIds: imported.insertedIds,
+    });
+    const tail =
+      enq.status === "started"
+        ? "enrichment started"
+        : enq.status === "queued"
+          ? "enrichment queued"
+          : `enrichment skipped (${enq.reason})`;
+    return `Imported ${imported.inserted} to Contacts · ${tail}`;
+  } catch (err) {
+    console.error("[run-linkedin-searches] auto-import failed:", err);
+    return "auto-import failed — import manually from the results table";
+  }
+}
 
 export async function GET(request: NextRequest) {
   const authError = checkCronAuth(request);
@@ -76,7 +146,7 @@ export async function GET(request: NextRequest) {
     .in("status", ["pending", "running"])
     .or(`locked_at.is.null,locked_at.lt.${leaseCutoff}`)
     .select(
-      "id, organization_id, query, target_max_results, actor, active_apify_run_id, active_batch_started_at, consecutive_failures, cost_usd",
+      "id, organization_id, created_by, saved_count, query, target_max_results, actor, active_apify_run_id, active_batch_started_at, consecutive_failures, cost_usd",
     )
     .maybeSingle();
   if (!claimed) return NextResponse.json({ status: "claim_failed", id: searchId });
@@ -161,6 +231,10 @@ export async function GET(request: NextRequest) {
         const prospects = all.slice(0, row.target_max_results);
         const cost =
           Number(row.cost_usd) + (typeof run.usageTotalUsd === "number" ? run.usageTotalUsd : 0);
+        // Persist the sourced results + mark complete FIRST (never lose sourcing),
+        // then best-effort auto-import + enrich. autoImportAndEnrich also bumps
+        // saved_count, so clear active_apify_run_id here and let it own the
+        // progress_message tail.
         await release({
           status: "complete",
           results: prospects,
@@ -174,7 +248,14 @@ export async function GET(request: NextRequest) {
           progress_message: `Found ${prospects.length} ${prospects.length === 1 ? "person" : "people"}`,
           completed_at: new Date().toISOString(),
         });
-        return NextResponse.json({ status: "complete", id: row.id, count: prospects.length });
+        const note = await autoImportAndEnrich(admin, row, prospects);
+        if (note) {
+          await admin
+            .from("linkedin_searches")
+            .update({ progress_message: `Found ${prospects.length} · ${note}` })
+            .eq("id", row.id);
+        }
+        return NextResponse.json({ status: "complete", id: row.id, count: prospects.length, auto: note });
       }
 
       // Terminal-bad (FAILED / TIMED-OUT / ABORTED).

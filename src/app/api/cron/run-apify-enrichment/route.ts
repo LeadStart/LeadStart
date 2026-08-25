@@ -24,13 +24,20 @@ import {
 import {
   DEFAULT_ENRICHMENT_SETTINGS,
   type EmailProviderId,
+  type EmailVerificationStatus,
   type EnrichmentPhase,
   type EnrichmentSettings,
   type EnrichmentWaterfallMethod,
 } from "@/types/app";
 import { alertActorFailure } from "@/lib/notifications/actor-failure-alert";
 import { MillionVerifierClient, MillionVerifierError } from "@/lib/millionverifier/client";
-import { ORG_ERROR_SUPPRESS_MS, shouldAlertAccountError } from "@/lib/millionverifier/policy";
+import type { MillionVerifierResponse } from "@/lib/millionverifier/client";
+import {
+  decideFromCached,
+  decideFromResult,
+  ORG_ERROR_SUPPRESS_MS,
+  shouldAlertAccountError,
+} from "@/lib/millionverifier/policy";
 import { enqueueOwnerAlert } from "@/lib/notifications/owner-alerts";
 import { runPatternMv, type PatternMvItem } from "@/lib/enrichment/pattern-mv";
 
@@ -97,6 +104,8 @@ interface RunRow {
   run_domains: boolean;
   run_waterfall: boolean;
   run_activity: boolean;
+  // Opt-in Million Verifier phase (migration 00077).
+  run_verify: boolean;
   profile_actor: string;
   domain_actor: string;
   waterfall_actor: string | null;
@@ -133,7 +142,17 @@ const PHASE_COLS: Record<
   domains: { status: "domain_status", runId: "domain_apify_run_id", notes: "domain_notes" },
   waterfall: { status: "waterfall_status", runId: "waterfall_apify_run_id", notes: "waterfall_notes" },
   activity: { status: "activity_status", runId: "activity_apify_run_id", notes: "activity_notes" },
+  // Verify is inline (Million Verifier, no Apify run) — runId is never queried
+  // for it; runPhase short-circuits before the Apify start/poll path.
+  verify: { status: "verify_status", runId: "verify_apify_run_id", notes: "verify_notes" },
 };
+
+// pattern_mv + verify are inline Million Verifier phases: batch, small pool, and
+// a wall-clock deadline that keeps a tick under the 60s budget.
+const VERIFY_BATCH = 25;
+const VERIFY_CONCURRENCY = 5;
+const VERIFY_TIMEOUT = 6; // MV server-side timeout param (sec)
+const VERIFY_DEADLINE_SEC = 40;
 
 function estimatePerItem(phase: EnrichmentPhase): number {
   switch (phase) {
@@ -141,6 +160,7 @@ function estimatePerItem(phase: EnrichmentPhase): number {
     case "domains": return DOMAIN_COST_USD;
     case "waterfall": return WATERFALL_LEAD_COST_USD;
     case "activity": return ACTIVITY_COST_USD;
+    case "verify": return MV_CREDIT_COST_USD;
     default: return 0;
   }
 }
@@ -264,6 +284,14 @@ async function runPhase(
 ): Promise<Record<string, unknown>> {
   const phase = run.phase as Exclude<EnrichmentPhase, "complete">;
   const cols = PHASE_COLS[phase];
+
+  // Verify is an inline Million Verifier phase (no Apify run) — handle it before
+  // the provider lookup / Apify start-poll path, same as pattern_mv inside the
+  // waterfall.
+  if (phase === "verify") {
+    return runVerifyPhase(admin, run, tickStart);
+  }
+
   const provider = getProvider(phase, run.waterfall_actor);
   if (!provider) {
     await advancePhase(admin, run);
@@ -760,6 +788,233 @@ async function runPatternMvBatch(
     .eq("id", run.id);
 
   return { status: "pattern_mv", found, not_found: notFound, skipped, inconclusive, credits: totalCredits };
+}
+
+// ---------------------------------------------------------------- verify phase
+
+// A found email's verify columns. `found` == verified clean (MV "ok");
+// everything else is `not_found` with the MV verdict in verification_result so
+// the report can show the nuance (catch_all/unknown/invalid/disposable/error).
+async function writeVerifyItem(
+  admin: Admin,
+  itemId: string,
+  mvResult: string,
+  note: string | null,
+): Promise<void> {
+  await admin
+    .from("enrichment_run_items")
+    .update({
+      verify_status: mvResult === "ok" ? "found" : "not_found",
+      verification_result: mvResult,
+      verify_notes: note,
+    })
+    .eq("id", itemId);
+}
+
+// The opt-in verification phase (run_verify): Million Verifier each found email
+// so the enrichment report carries a verdict. Inline, no Apify. Fill-only on the
+// contact's verification columns (00069) — MV is the single source of truth, so
+// the send-gate later reads this from its 30-day cache (no double spend). Cache
+// hits (<30d) cost nothing. Fail-closed on a definitive MV error; no key marks
+// the phase's items skipped with a config note and completes the phase.
+async function runVerifyPhase(
+  admin: Admin,
+  run: RunRow,
+  tickStart: number,
+): Promise<Record<string, unknown>> {
+  // Org MV key + error/suppression state (same source as pattern_mv).
+  const { data: orgRow } = await admin
+    .from("organizations")
+    .select(
+      "millionverifier_api_key, millionverifier_last_error_kind, millionverifier_last_error_at, millionverifier_error_streak",
+    )
+    .eq("id", run.organization_id)
+    .maybeSingle();
+  const org = orgRow as {
+    millionverifier_api_key: string | null;
+    millionverifier_last_error_kind: string | null;
+    millionverifier_last_error_at: string | null;
+    millionverifier_error_streak: number | null;
+  } | null;
+  const key = org?.millionverifier_api_key?.trim() || process.env.MILLIONVERIFIER_API_KEY?.trim() || null;
+
+  // No key → verification can't run. Mark all pending verify items skipped with a
+  // clear note (a config gap, not a silent miss) and complete the phase.
+  if (!key) {
+    await admin
+      .from("enrichment_run_items")
+      .update({
+        verify_status: "skipped",
+        verify_notes: "Million Verifier key required to verify emails (Settings → Integrations)",
+      })
+      .eq("run_id", run.id)
+      .eq("verify_status", "pending");
+    await advancePhase(admin, run);
+    return { status: "no_mv_key", phase: run.phase };
+  }
+
+  // Suppression window after a recent definitive error — hold, don't call MV.
+  const kind = org?.millionverifier_last_error_kind;
+  const definitive = !!kind && kind !== "transient";
+  if (definitive && org?.millionverifier_last_error_at) {
+    const at = Date.parse(org.millionverifier_last_error_at);
+    if (!Number.isNaN(at) && Date.now() < at + ORG_ERROR_SUPPRESS_MS) {
+      await admin
+        .from("enrichment_runs")
+        .update({ progress_message: "Verification held — email verifier unavailable (retrying shortly)", locked_at: null })
+        .eq("id", run.id);
+      return { status: "mv_suppressed" };
+    }
+  }
+
+  // Claim a batch of pending verify items.
+  const { data: pendingData } = await admin
+    .from("enrichment_run_items")
+    .select("id, contact_id, email")
+    .eq("run_id", run.id)
+    .eq("verify_status", "pending")
+    .order("created_at", { ascending: true })
+    .order("id", { ascending: true })
+    .limit(VERIFY_BATCH);
+  const batch = (pendingData as { id: string; contact_id: string; email: string | null }[] | null) ?? [];
+  if (batch.length === 0) {
+    await advancePhase(admin, run);
+    return { status: "advanced", phase: run.phase };
+  }
+
+  // Fetch contacts (current email + verification cache columns from 00069).
+  type VRow = {
+    id: string;
+    email: string | null;
+    email_verification_status: EmailVerificationStatus | null;
+    email_verified_at: string | null;
+    // Matches CacheView (decideFromCached tolerates a runtime null via `?? 0`).
+    email_verification_attempts: number;
+  };
+  const contactIds = Array.from(new Set(batch.map((b) => b.contact_id)));
+  const contactMap = new Map<string, VRow>();
+  for (let i = 0; i < contactIds.length; i += 300) {
+    const part = contactIds.slice(i, i + 300);
+    const { data } = await admin
+      .from("contacts")
+      .select("id, email, email_verification_status, email_verified_at, email_verification_attempts")
+      .eq("organization_id", run.organization_id)
+      .in("id", part);
+    for (const c of (data as VRow[] | null) ?? []) contactMap.set(c.id, c);
+  }
+
+  const client = new MillionVerifierClient(key);
+  const now = new Date();
+  const deadlineMs = tickStart + VERIFY_DEADLINE_SEC * 1000;
+  // MV charges for ok/invalid/disposable; catch_all + unknown are free.
+  const CHARGED = new Set(["ok", "invalid", "disposable"]);
+
+  let verified = 0; // clean 'ok'
+  let risky = 0; // catch_all / unknown
+  let bad = 0; // invalid / disposable / error
+  let credits = 0;
+  let processed = 0;
+  // Boxed so the worker-closure assignment survives TS control-flow narrowing.
+  const errBox: { e: MillionVerifierError | null } = { e: null };
+
+  const tally = (status: string) => {
+    if (status === "ok") verified++;
+    else if (status === "catch_all" || status === "unknown") risky++;
+    else bad++;
+  };
+
+  let cursor = 0;
+  const worker = async (): Promise<void> => {
+    for (;;) {
+      if (errBox.e) return;
+      if (Date.now() >= deadlineMs) return; // leftover items stay pending for next tick
+      const idx = cursor++;
+      if (idx >= batch.length) return;
+      const item = batch[idx];
+      const contact = contactMap.get(item.contact_id);
+      const email = contact?.email ?? item.email ?? null;
+      if (!email) {
+        await admin
+          .from("enrichment_run_items")
+          .update({ verify_status: "skipped", verify_notes: "no email to verify" })
+          .eq("id", item.id);
+        processed++;
+        continue;
+      }
+
+      // 30-day cache: reuse a fresh verdict with no API call (shared with the
+      // send-gate). Only send/skip verdicts are terminal from cache; an
+      // indeterminate cache entry falls through to a fresh call.
+      if (contact) {
+        const cached = decideFromCached(contact, now);
+        if (cached.action === "send" || cached.action === "skip") {
+          const status = contact.email_verification_status ?? (cached.action === "send" ? "ok" : "invalid");
+          await writeVerifyItem(admin, item.id, status, "cached verdict (<30d)");
+          tally(status);
+          processed++;
+          continue;
+        }
+      }
+
+      // Live call.
+      let res: MillionVerifierResponse;
+      try {
+        res = await client.verify(email, { timeoutSec: VERIFY_TIMEOUT });
+      } catch (err) {
+        if (err instanceof MillionVerifierError && err.definitive) {
+          errBox.e = err;
+          return;
+        }
+        // transient / per-address failure — leave pending, retry next tick.
+        continue;
+      }
+      const { patch } = decideFromResult(res, contact?.email_verification_attempts ?? 0, now);
+      // Persist onto the contact so the send-gate reuses it (MV single source).
+      if (contact) {
+        await admin.from("contacts").update(patch).eq("id", contact.id);
+        Object.assign(contact, patch);
+      }
+      const status = patch.email_verification_status;
+      if (CHARGED.has(status)) credits++;
+      await writeVerifyItem(admin, item.id, status, null);
+      tally(status);
+      processed++;
+    }
+  };
+
+  await Promise.all(
+    Array.from({ length: Math.min(VERIFY_CONCURRENCY, batch.length) }, () => worker()),
+  );
+
+  // Definitive MV failure mid-batch → record suppression + hold (leaves the rest
+  // pending; the send-gate backs off too via the shared org state).
+  if (errBox.e) {
+    await recordMvDefinitiveError(admin, run.organization_id, org?.millionverifier_error_streak ?? 0, errBox.e);
+    await admin
+      .from("enrichment_runs")
+      .update({ progress_message: `Verification held — ${errBox.e.message.slice(0, 150)}`, locked_at: null })
+      .eq("id", run.id);
+    return { status: "mv_error", kind: errBox.e.kind, processed };
+  }
+
+  if (credits > 0) {
+    const add = credits * MV_CREDIT_COST_USD;
+    await admin
+      .from("enrichment_runs")
+      .update({ cost_usd: (Number(run.cost_usd) || 0) + add })
+      .eq("id", run.id);
+    run.cost_usd = (Number(run.cost_usd) || 0) + add;
+  }
+
+  await admin
+    .from("enrichment_runs")
+    .update({
+      progress_message: `Verify: ${verified} clean · ${risky} risky · ${bad} bad (${credits} MV credits)`,
+      locked_at: null,
+    })
+    .eq("id", run.id);
+
+  return { status: "verify", verified, risky, bad, credits, processed };
 }
 
 // Seed the waterfall phase: stamp each eligible item (no email, has a domain)
@@ -1299,6 +1554,19 @@ async function failRun(admin: Admin, runId: string, message: string): Promise<vo
   await alertActorFailure(admin, { kind: "enrichment", error: message, context: { run_id: runId } });
 }
 
+// Stamp verify_status='pending' on every item that has an email (found this run
+// or imported with one). Returns the count seeded (0 → nothing to verify).
+async function seedVerifyItems(admin: Admin, run: RunRow): Promise<number> {
+  const { data } = await admin
+    .from("enrichment_run_items")
+    .update({ verify_status: "pending", attempts: 0 })
+    .eq("run_id", run.id)
+    .is("verify_status", null)
+    .not("email", "is", null)
+    .select("id");
+  return (data as { id: string }[] | null)?.length ?? 0;
+}
+
 // Move to the next enabled phase that has work; finalize when none remain.
 async function advancePhase(admin: Admin, run: RunRow): Promise<void> {
   let phase: EnrichmentPhase = run.phase;
@@ -1344,7 +1612,18 @@ async function advancePhase(admin: Admin, run: RunRow): Promise<void> {
       }
       continue;
     }
-    // activity → done
+    if (phase === "activity") {
+      phase = "verify";
+      if (run.run_verify) {
+        // Verify every item that actually has an email (found this run or
+        // imported with one) — the report's verifiable set. Last phase so it
+        // covers waterfall-recovered addresses too.
+        const n = await seedVerifyItems(admin, run);
+        if (n > 0) break;
+      }
+      continue;
+    }
+    // verify → done
     phase = "complete";
     break;
   }
@@ -1358,7 +1637,10 @@ async function advancePhase(admin: Admin, run: RunRow): Promise<void> {
         phase: "complete",
         completed_at: new Date().toISOString(),
         locked_at: null,
-        progress_message: `Emails ${counts.found_emails_count} · domains ${counts.found_domains_count} · activity ${counts.found_activity_count}`,
+        progress_message:
+          `Emails ${counts.found_emails_count} · domains ${counts.found_domains_count}` +
+          (run.run_activity ? ` · activity ${counts.found_activity_count}` : "") +
+          (run.run_verify ? ` · verified ${counts.found_verified_count}` : ""),
       })
       .eq("id", run.id);
     run.phase = "complete";
@@ -1398,6 +1680,7 @@ interface Counters {
   found_emails_waterfall_count: number;
   found_emails_count: number;
   found_activity_count: number;
+  found_verified_count: number;
 }
 
 async function recomputeCounters(admin: Admin, run: RunRow): Promise<Counters> {
@@ -1414,6 +1697,7 @@ async function recomputeCounters(admin: Admin, run: RunRow): Promise<Counters> {
   const foundDomains = await countIn(admin, run.id, "domain_status", ["found"]);
   const foundWaterfall = await countIn(admin, run.id, "waterfall_status", ["found"]);
   const foundActivity = await countIn(admin, run.id, "activity_status", ["found"]);
+  const foundVerified = await countIn(admin, run.id, "verify_status", ["found"]);
 
   const { count: emailCount } = await admin
     .from("enrichment_run_items")
@@ -1429,6 +1713,7 @@ async function recomputeCounters(admin: Admin, run: RunRow): Promise<Counters> {
     found_emails_waterfall_count: foundWaterfall,
     found_emails_count: emailCount ?? 0,
     found_activity_count: foundActivity,
+    found_verified_count: foundVerified,
   };
 
   // Don't clobber a completed run's terminal message; just persist counts +

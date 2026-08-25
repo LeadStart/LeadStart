@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { extractProfileId, extractCompanyId, extractCompanySlug } from "./domain";
 import { PROFILE_ACTOR, DOMAIN_ACTOR, ACTIVITY_ACTOR, resolveWaterfallActor } from "./providers";
-import { loadEnrichmentSettings } from "./auth";
+import { loadEnrichmentSettings, normalizeAddons } from "./auth";
 
 // Auto-enrichment enqueue — the "queue-behind" heart of the Prospecting →
 // Contacts handoff. Given a set of contact ids, it either starts an enrichment
@@ -102,14 +102,21 @@ export async function enqueueEnrichment(
     return { status: "skipped", reason: "nothing_eligible" };
   }
 
-  // Skip the activity pass when EVERY imported person was already sourced with an
-  // "active on LinkedIn" filter (skip_activity stamped on their import). We'd just
-  // be re-measuring what the search already gated on. Mixed batches keep it on.
+  // Add-on gating (migration 00077). Activity + verify default OFF; a contact
+  // opts in via the `addons` stamped on its enrichment_data at import time
+  // (import-prospects). `.some` is generous to a drain-merged mixed batch: if any
+  // person wanted an add-on, the run does that phase. Activity additionally
+  // respects the "already active on LinkedIn" skip so we don't re-measure what
+  // the search already filtered on.
   const eligibleSet = new Set(eligibleContactIds);
   const eligible = contacts.filter((c) => eligibleSet.has(c.id));
-  const runActivity = !eligible.every(
+  const addonsFor = (c: ContactRow) =>
+    normalizeAddons((c.enrichment_data as { addons?: unknown } | null)?.addons);
+  const allSkipActivity = eligible.every(
     (c) => (c.enrichment_data as { skip_activity?: boolean } | null)?.skip_activity === true,
   );
+  const runActivity = eligible.some((c) => addonsFor(c).activity) && !allSkipActivity;
+  const runVerify = eligible.some((c) => addonsFor(c).verify);
 
   // One active run per org → if busy, stamp the eligible contacts and bail.
   const { data: activeRows } = await admin
@@ -149,6 +156,7 @@ export async function enqueueEnrichment(
       run_domains: true,
       run_waterfall: runWaterfall,
       run_activity: runActivity,
+      run_verify: runVerify,
       phase: "profiles",
       status: "pending",
       total_count: rows.length,

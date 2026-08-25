@@ -51,6 +51,7 @@ import type {
   LinkedInProspect,
   LinkedInSearchStatus,
   EnrichmentRunItem,
+  EnrichmentAddons,
 } from "@/types/app";
 import {
   HEADCOUNTS,
@@ -77,6 +78,8 @@ type SearchConfig = {
   recentlyChanged: boolean;
   activePosters: boolean;
   autoSegment: boolean;
+  addActivity: boolean;
+  addVerify: boolean;
   depth: Depth;
   maxResults: number;
 };
@@ -208,7 +211,12 @@ const LOCATION_TRAPS: Record<string, { fix?: string; hint: string }> = {
 type SearchDetail = {
   id: string;
   // `query.name` is the user's custom label (falls back to the ICP summary).
-  query: { name?: string; levers?: Record<string, unknown>; depth?: string } | null;
+  query: {
+    name?: string;
+    levers?: Record<string, unknown>;
+    depth?: string;
+    addons?: { activity?: boolean; verify?: boolean };
+  } | null;
   results: LinkedInProspect[];
   result_count: number;
   target_max_results: number;
@@ -696,6 +704,13 @@ export function LinkedInSearchPanel() {
   const [headcount, setHeadcount] = useState<Set<string>>(new Set());
   const [recentlyChanged, setRecentlyChanged] = useState(false);
   const [activePosters, setActivePosters] = useState(false);
+  // Opt-in enrichment add-ons (default OFF) chosen for this search. Activity =
+  // score posting recency; verify = Million Verifier every found email.
+  const [addActivity, setAddActivity] = useState(false);
+  const [addVerify, setAddVerify] = useState(false);
+  // Org kill-switch: does a finished search auto-import + enrich? Only changes
+  // the panel's "sourced" caption. Fetched once from enrichment settings.
+  const [autoRun, setAutoRun] = useState(true);
   // Deep search (auto query-segmentation): a PAID-Apify feature that splits a
   // search into sub-queries to pull past LinkedIn's 2,500-per-query ceiling.
   // OFF by default — it's only for bulk pulls, and on the free Apify tier the
@@ -767,6 +782,41 @@ export function LinkedInSearchPanel() {
       cancelled = true;
     };
   }, []);
+  // The org's auto-run-after-search kill-switch (from enrichment settings).
+  useEffect(() => {
+    let cancelled = false;
+    fetch(appUrl("/api/admin/enrichment/settings"), { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!cancelled && d?.settings) setAutoRun(d.settings.auto_run_after_search !== false);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  // When a search has completed but we don't yet have its enrichment run id (the
+  // cron auto-imports server-side, or a manual import queued behind another run),
+  // poll for the org's active run so the panel lights up without a page refresh.
+  useEffect(() => {
+    if (!(detail?.status === "complete") || enrichmentRunId) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const poll = async () => {
+      const id = await fetchActiveEnrichmentRunId();
+      if (cancelled) return;
+      if (id) {
+        setEnrichmentRunId(id);
+        return;
+      }
+      timer = setTimeout(poll, POLL_MS);
+    };
+    poll();
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [detail?.status, enrichmentRunId]);
   useEffect(() => {
     if (!enrichmentRunId) return;
     let cancelled = false;
@@ -967,6 +1017,8 @@ export function LinkedInSearchPanel() {
     recentlyChanged,
     activePosters,
     autoSegment,
+    addActivity,
+    addVerify,
     depth,
     maxResults,
   });
@@ -984,6 +1036,8 @@ export function LinkedInSearchPanel() {
     setRecentlyChanged(Boolean(c.recentlyChanged));
     setActivePosters(Boolean(c.activePosters));
     setAutoSegment(c.autoSegment ?? true);
+    setAddActivity(Boolean(c.addActivity));
+    setAddVerify(Boolean(c.addVerify));
     if (c.depth) setDepth(c.depth);
     if (typeof c.maxResults === "number") setMaxResults(c.maxResults);
     // Reveal Advanced if the preset set anything that lives there.
@@ -1051,6 +1105,7 @@ export function LinkedInSearchPanel() {
           depth,
           max_results: maxResults,
           name: searchNameInput.trim(),
+          addons: { activity: addActivity, verify: addVerify },
         }),
       });
       const data = await res.json();
@@ -1134,11 +1189,14 @@ export function LinkedInSearchPanel() {
   const estimate = rate * maxResults;
   const emailRate = livePricing?.enrich.profile ?? ENRICH_RATES.email;
   const domainRate = livePricing?.enrich.domain ?? ENRICH_RATES.domain;
-  const activityRate = activePosters ? 0 : livePricing?.enrich.activity ?? ENRICH_RATES.activity;
-  // waterfall (pattern_mv default) + verify are Million Verifier credits, not an
-  // Apify list price, so they stay on the static estimate.
+  // Activity is an add-on: costs only when toggled on AND not already covered by
+  // the "active on LinkedIn" search filter (which makes the pass redundant).
+  const activityRate =
+    addActivity && !activePosters ? (livePricing?.enrich.activity ?? ENRICH_RATES.activity) : 0;
+  // Verify is an add-on (Million Verifier credits, not an Apify list price).
+  const verifyRate = addVerify ? ENRICH_RATES.verify : 0;
   const perPersonEnrich =
-    emailRate + domainRate + ENRICH_RATES.waterfall + activityRate + ENRICH_RATES.verify;
+    emailRate + domainRate + ENRICH_RATES.waterfall + activityRate + verifyRate;
   const projectedTotal = estimate + perPersonEnrich * maxResults;
   const pricesLive = livePricing?.source === "live" || livePricing?.source === "partial";
   // Est. cost per email type for the results radial, from the same live rates as
@@ -1205,6 +1263,15 @@ export function LinkedInSearchPanel() {
       setSaving(false);
     }
   };
+
+  // Add-ons for the live panel: a created/running search reflects its stored
+  // choice; a fresh form reflects the current toggles.
+  const panelAddons: EnrichmentAddons = detail?.query?.addons
+    ? {
+        activity: detail.query.addons.activity === true,
+        verify: detail.query.addons.verify === true,
+      }
+    : { activity: addActivity, verify: addVerify };
 
   return (
     <div className="space-y-4">
@@ -1394,6 +1461,51 @@ export function LinkedInSearchPanel() {
             </button>
           </div>
 
+          {/* Enrichment add-ons — opt-in stages that extend the pipeline. */}
+          <div className="rounded-lg border border-border/60 bg-muted/30 p-3">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Enrichment add-ons
+            </p>
+            <p className="mt-0.5 text-[11px] text-muted-foreground">
+              The base pipeline finds each person&apos;s email, company domain, and a
+              verified 2nd-pass email. Add more depth:
+            </p>
+            <div className="mt-2 space-y-2">
+              <label className="flex cursor-pointer items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={addActivity}
+                  onChange={(e) => setAddActivity(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 cursor-pointer rounded border-border accent-[#2E37FE]"
+                />
+                <span>
+                  Activity check
+                  <span className="block text-[11px] text-muted-foreground">
+                    Scores each person&apos;s LinkedIn posting recency (last 30 days).
+                    {activePosters
+                      ? " Already covered by your “Active on LinkedIn” filter — will be skipped."
+                      : ""}
+                  </span>
+                </span>
+              </label>
+              <label className="flex cursor-pointer items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={addVerify}
+                  onChange={(e) => setAddVerify(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 cursor-pointer rounded border-border accent-[#2E37FE]"
+                />
+                <span>
+                  Email verification
+                  <span className="block text-[11px] text-muted-foreground">
+                    Verifies every found email with Million Verifier so your report shows
+                    valid / risky / invalid.
+                  </span>
+                </span>
+              </label>
+            </div>
+          </div>
+
           {/* Advanced */}
           <div>
             <button
@@ -1565,6 +1677,8 @@ export function LinkedInSearchPanel() {
         search={detail}
         starting={starting}
         enrichmentRunId={enrichmentRunId}
+        addons={panelAddons}
+        autoRun={autoRun}
       />
       </div>
 
@@ -2051,17 +2165,24 @@ export function LinkedInSearchPanel() {
                 <span>2nd-pass email · <span className="font-mono">pattern + verify</span> (misses)</span>
                 <span className="font-mono tabular-nums">${ENRICH_RATES.waterfall.toFixed(4)}</span>
               </div>
-              <div className="flex items-center justify-between">
-                <span>
-                  Activity · <span className="font-mono">profile-posts</span>
-                  {activePosters ? " (skipped)" : ""}
-                </span>
-                <span className="font-mono tabular-nums">${activityRate.toFixed(4)}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span>Verify · Million Verifier</span>
-                <span className="font-mono tabular-nums">${ENRICH_RATES.verify.toFixed(4)}</span>
-              </div>
+              {addActivity && (
+                <div className="flex items-center justify-between">
+                  <span>
+                    Activity · <span className="font-mono">profile-posts</span>
+                    {activePosters ? " (skipped)" : ""} <span className="text-[9px] uppercase tracking-wide text-[#2E37FE]/70">add-on</span>
+                  </span>
+                  <span className="font-mono tabular-nums">${activityRate.toFixed(4)}</span>
+                </div>
+              )}
+              {addVerify && (
+                <div className="flex items-center justify-between">
+                  <span>
+                    Verify · Million Verifier{" "}
+                    <span className="text-[9px] uppercase tracking-wide text-[#2E37FE]/70">add-on</span>
+                  </span>
+                  <span className="font-mono tabular-nums">${verifyRate.toFixed(4)}</span>
+                </div>
+              )}
               <div className="flex items-center justify-between border-t border-border/60 pt-0.5 font-medium text-foreground">
                 <span>per imported person (max)</span>
                 <span className="font-mono tabular-nums">${perPersonEnrich.toFixed(4)}</span>
@@ -2075,7 +2196,7 @@ export function LinkedInSearchPanel() {
           </div>
 
           <p className="text-[11px]">
-            A ceiling, not a bill: sourcing charges only for profiles the actor can return; enrichment bills only on people you actually import (usually a subset), and each waterfall pass only touches people the previous one left without an email. Verification runs once, at first send. With Deep search on, sourcing sweeps sub-queries to actually reach your Max people, so the sourcing figure is realistic rather than a rarely-hit ceiling.
+            A ceiling, not a bill: sourcing charges only for profiles the actor can return; enrichment bills only on people you actually import (usually a subset), and each waterfall pass only touches people the previous one left without an email. Activity and verification bill only when you toggle them on above. With Deep search on, sourcing sweeps sub-queries to actually reach your Max people, so the sourcing figure is realistic rather than a rarely-hit ceiling.
           </p>
 
           <div className="rounded-md border border-border bg-muted/40 px-2.5 py-2 text-[11px]">

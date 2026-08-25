@@ -1140,14 +1140,19 @@ export interface DecisionMakerResult {
   updated_at: string;
 }
 
-// ---------- Contact enrichment runs (Apify: profiles → domains → waterfall → activity) ----------
+// ---------- Contact enrichment runs (Apify: profiles → domains → waterfall → activity → verify) ----------
 // Contact-keyed cousin of DecisionMakerRun/Result. Processed by
-// /api/cron/run-apify-enrichment. See migration 00070. Email verification is
-// NOT a phase here — Million Verifier owns verification (its own send-gate).
-// The pipeline only fills contacts.email (fill-only) + provenance.
+// /api/cron/run-apify-enrichment. See migration 00070.
+//
+// The core waterfall (profiles → domains → waterfall) always runs; `activity`
+// and `verify` are OPT-IN add-ons (migration 00077, run_activity / run_verify).
+// The `verify` phase is Million Verifier run inline on every found email so the
+// enrichment report carries a verification verdict — MV stays the single source
+// of truth; its pre-send gate is the backstop (and hits the 30-day cache, so no
+// double spend). A run with verify off writes no verification columns here.
 
 export type EnrichmentRunStatus = "pending" | "running" | "complete" | "failed";
-export type EnrichmentPhase = "profiles" | "domains" | "waterfall" | "activity" | "complete";
+export type EnrichmentPhase = "profiles" | "domains" | "waterfall" | "activity" | "verify" | "complete";
 export type EnrichmentStepStatus =
   | "pending" | "in_flight" | "found" | "not_found" | "skipped" | "error";
 
@@ -1172,6 +1177,22 @@ export const ENRICHMENT_WATERFALL_METHODS: readonly EnrichmentWaterfallMethod[] 
   "off",
 ];
 
+// The two opt-in add-on stages a prospecting search can bolt onto the core
+// pipeline (chosen per-search, stamped on each imported contact's
+// enrichment_data, then read back by enqueueEnrichment). Both default OFF — a
+// missing/partial stamp coerces to false. See normalizeAddons in lib/apify/auth.
+export interface EnrichmentAddons {
+  // Score LinkedIn posting recency (harvestapi profile-posts).
+  activity: boolean;
+  // Verify every found email with Million Verifier as a run phase.
+  verify: boolean;
+}
+
+export const DEFAULT_ENRICHMENT_ADDONS: EnrichmentAddons = {
+  activity: false,
+  verify: false,
+};
+
 // Org-level enrichment/waterfall config (organizations.enrichment_settings, JSONB).
 // NULL in the DB → these code defaults. Snapshotted onto each run's
 // waterfall_config so an in-flight run never re-reads live settings.
@@ -1188,6 +1209,10 @@ export interface EnrichmentSettings {
   accept_catch_all_guesses: boolean;
   // Max pages the site scraper crawls per domain (Phase 3).
   scrape_max_pages: number;
+  // Kill-switch: when true, a completed LinkedIn search auto-imports every
+  // sourced profile into Contacts and starts enrichment (migration 00077). When
+  // false, import stays the manual "Import to Contacts" click.
+  auto_run_after_search: boolean;
 }
 
 // Defaults route every band to pattern_mv (pattern-permutation + Million
@@ -1203,6 +1228,10 @@ export const DEFAULT_ENRICHMENT_SETTINGS: EnrichmentSettings = {
   // 6 (not 4): owner wants team/leadership/staff pages in the crawl — they're
   // where personMatch hits live. Discovery-driven selection keeps this cheap.
   scrape_max_pages: 6,
+  // On by default: a finished search flows straight into enrichment so the
+  // pipeline doesn't stall at "sourced". Owners can flip it off to curate which
+  // rows enter the CRM (manual Import to Contacts).
+  auto_run_after_search: true,
 };
 
 export interface EnrichmentRun {
@@ -1221,6 +1250,9 @@ export interface EnrichmentRun {
   run_domains: boolean;
   run_waterfall: boolean;
   run_activity: boolean;
+  // Opt-in email-verification phase (migration 00077). Off on runs created
+  // before the add-on existed.
+  run_verify: boolean;
   phase: EnrichmentPhase;
   status: EnrichmentRunStatus;
   total_count: number;
@@ -1231,6 +1263,8 @@ export interface EnrichmentRun {
   found_emails_waterfall_count: number;
   found_emails_count: number;
   found_activity_count: number;
+  // Emails that verified clean (MV "ok") in the verify phase (migration 00077).
+  found_verified_count: number;
   cost_usd: number | string;
   active_apify_run_id: string | null;
   active_apify_dataset_id: string | null;
@@ -1278,6 +1312,12 @@ export interface EnrichmentRunItem {
   activity_notes: string | null;
   last_posted_at: string | null;
   recent_post_count: number | null;
+  // step 5 (opt-in): verify (Million Verifier). NULL = not part of verification.
+  verify_status: EnrichmentStepStatus | null;
+  verify_notes: string | null;
+  // MV verdict for the found email: 'ok' | 'catch_all' | 'unknown' | 'invalid'
+  // | 'disposable' (null until verified).
+  verification_result: string | null;
   email: string | null;
   // Which Apify actor supplied `email` (provenance). Verification is Million
   // Verifier's job on the contact, not tracked per enrichment item.
