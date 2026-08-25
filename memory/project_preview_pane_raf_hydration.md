@@ -32,4 +32,15 @@ client-side navigation (click sidebar links from /app/admin) instead of direct
 URL loads — or test in real Chrome via claude-in-chrome. Do NOT file or chase
 "page hangs on refresh" bugs reproduced only in the hidden pane; check rAF
 liveness first (`requestAnimationFrame(() => ...)` never firing = this
-artifact). Related: [[dev-server-next-cache-onedrive]].
+artifact).
+
+When the pane is fully undisplayed for the WHOLE session (2026-08-24 waterfall
+work: rAF dead even on shallow /admin, `computer` screenshots/clicks fail with
+"pane not displayed", viewport 0x0), you get no hydrated base to client-nav
+from, so React interactivity can't be exercised at all here. Fallbacks that
+STILL work without React: (1) verify API routes with same-origin `fetch()` in
+`javascript_tool` — the /app/api/dev/login auth cookie rides along, so e.g. GET/
+POST `/app/api/admin/enrichment/settings` round-trips are fully testable; (2)
+`read_page` sees the SSR DOM, so the server-rendered DEFAULT state (initial
+props) is verifiable even though toggles/state changes are not. Push the rest to
+real Chrome or code-confidence. Related: [[dev-server-next-cache-onedrive]].
