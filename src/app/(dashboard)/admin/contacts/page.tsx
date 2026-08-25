@@ -46,6 +46,7 @@ import {
   DOMAIN_COST_USD,
   ACTIVITY_COST_USD,
   MV_CREDIT_COST_USD,
+  DOMAIN_DISCOVERY_COST_USD,
   estimateBoviCost,
   estimatePatternMvCost,
   estimateScrapeCost,
@@ -79,6 +80,7 @@ const ENRICH_COST_PROFILE = PROFILE_EMAIL_COST_USD;
 const ENRICH_COST_DOMAIN = DOMAIN_COST_USD;
 const ENRICH_COST_ACTIVITY = ACTIVITY_COST_USD;
 const ENRICH_COST_VERIFY = MV_CREDIT_COST_USD;
+const ENRICH_COST_DISCOVERY = DOMAIN_DISCOVERY_COST_USD;
 
 // Relative "time ago" for the Last posted column.
 function timeAgo(iso: string | null): string {
@@ -380,6 +382,9 @@ export default function ContactsPage() {
     // via Million Verifier), "scrape" (our site scraper, per-domain compute),
     // "apify" (the bovi pattern finder, per-domain), or "off".
     kind: "off" | "pattern" | "scrape" | "apify";
+    // Whether web-lookup domain discovery is on (name-only companies can gain a
+    // domain, so they count toward the domain + downstream estimate).
+    domainDiscovery: boolean;
   } | null>(null);
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
   useEffect(() => {
@@ -409,6 +414,7 @@ export default function ContactsPage() {
             small_method?: string;
             large_method?: string;
             unknown_method?: string;
+            domain_discovery_enabled?: boolean;
           };
         }) => {
           if (cancelled || !d?.settings) return;
@@ -426,7 +432,7 @@ export default function ContactsPage() {
                 : applicable.some((m) => m === "site_scrape" || m === "scrape_plus_pattern")
                   ? "scrape"
                   : "pattern";
-          setEnrichWaterfallCfg({ enabled, kind });
+          setEnrichWaterfallCfg({ enabled, kind, domainDiscovery: s.domain_discovery_enabled !== false });
           if (!enabled || kind === "off") setEnrichRunWaterfall(false);
         },
       )
@@ -520,11 +526,20 @@ export default function ContactsPage() {
   );
 
   // Enrich eligibility, computed from the current selection.
-  const enrichNeedsDomain = selectedContacts.filter(
+  const discoveryOn = enrichWaterfallCfg?.domainDiscovery ?? true;
+  // Domain resolution splits two ways: a LinkedIn company page (linkedin-company
+  // actor) vs a name-only company with no page (web-lookup discovery, when on).
+  const enrichNeedsDomainLinkedin = selectedContacts.filter(
     (c) => c.company_linkedin_url && !c.company_domain,
   ).length;
+  const enrichNeedsDomainDiscovery = discoveryOn
+    ? selectedContacts.filter((c) => !c.company_linkedin_url && !c.company_domain && c.company_name).length
+    : 0;
+  const enrichNeedsDomain = enrichNeedsDomainLinkedin + enrichNeedsDomainDiscovery;
   const enrichNeedsEmail = selectedContacts.filter(
-    (c) => !c.email && (c.linkedin_url || c.company_domain || c.company_linkedin_url),
+    (c) =>
+      !c.email &&
+      (c.linkedin_url || c.company_domain || c.company_linkedin_url || (discoveryOn && c.company_name)),
   ).length;
   const enrichActivityCount = selectedContacts.filter((c) => c.linkedin_url).length;
   // Verifiable emails: those already on a contact + those we expect to find.
@@ -536,7 +551,9 @@ export default function ContactsPage() {
   // under-counted ~100× on the free tier.
   const enrichWaterfallDomains = (() => {
     const missing = selectedContacts.filter(
-      (c) => !c.email && (c.linkedin_url || c.company_domain || c.company_linkedin_url),
+      (c) =>
+        !c.email &&
+        (c.linkedin_url || c.company_domain || c.company_linkedin_url || (discoveryOn && c.company_name)),
     );
     const domains = new Set<string>();
     let unknown = 0;
@@ -561,7 +578,10 @@ export default function ContactsPage() {
           : 0;
   const enrichEstimate =
     (enrichRunProfiles ? enrichNeedsEmail * ENRICH_COST_PROFILE : 0) +
-    (enrichRunDomains ? enrichNeedsDomain * ENRICH_COST_DOMAIN : 0) +
+    (enrichRunDomains
+      ? enrichNeedsDomainLinkedin * ENRICH_COST_DOMAIN +
+        enrichNeedsDomainDiscovery * ENRICH_COST_DISCOVERY
+      : 0) +
     (enrichRunWaterfall ? waterfallEstimate : 0) +
     (enrichRunActivity ? enrichActivityCount * ENRICH_COST_ACTIVITY : 0) +
     (enrichRunVerify ? enrichVerifyCount * ENRICH_COST_VERIFY : 0);
@@ -1676,7 +1696,10 @@ export default function ContactsPage() {
                 />
                 <span>
                   Resolve company domains
-                  <span className="block text-[11px] text-muted-foreground">$0.004 each</span>
+                  <span className="block text-[11px] text-muted-foreground">
+                    $0.004 each via LinkedIn
+                    {discoveryOn ? " · +$0.005 web lookup when the company has no LinkedIn page" : ""}
+                  </span>
                 </span>
               </label>
               <label

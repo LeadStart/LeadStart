@@ -151,6 +151,26 @@ export function WaterfallSettingsCard() {
               </span>
             </label>
 
+            {/* domain discovery — independent of the waterfall master toggle */}
+            <label className="flex items-start gap-2 text-sm cursor-pointer">
+              <input
+                type="checkbox"
+                checked={settings.domain_discovery_enabled}
+                onChange={(e) =>
+                  setSettings({ ...settings, domain_discovery_enabled: e.target.checked })
+                }
+                className="mt-0.5 h-4 w-4 rounded border-border accent-[#2E37FE] cursor-pointer"
+              />
+              <span>
+                Discover websites for companies without a LinkedIn page
+                <span className="block text-[11px] text-muted-foreground">
+                  During the domain step, a web lookup (Perplexity or Claude) finds the
+                  company&apos;s website when it has no LinkedIn page — validated against the
+                  live site before saving, so the email waterfall can still run. ≈ $0.005/company.
+                </span>
+              </span>
+            </label>
+
             {/* master toggle */}
             <label className="flex items-start gap-2 text-sm cursor-pointer">
               <input

@@ -37,6 +37,18 @@ export function estimateBoviCost(domains: number): number {
   return domains * BOVI_COST_USD;
 }
 
+// Name→domain discovery (web lookup for companies with no LinkedIn page). Honest
+// ceiling: a Perplexity Sonar call is ~$0.0005 in tokens but Perplexity also
+// bills a per-request search fee, and the Claude web_search fallback runs
+// ~$0.01–0.015/lookup ($10/1k searches + tokens); the homepage-confirmation fetch
+// is free. NOTE: the cost accrued onto the run is token-only (calculateCost),
+// so it undercounts the per-request search fee — same known simplification as
+// the decision-maker layer, surfaced here as the estimate ceiling.
+export const DOMAIN_DISCOVERY_COST_USD = 0.005;
+export function estimateDomainDiscoveryCost(companies: number): number {
+  return companies * DOMAIN_DISCOVERY_COST_USD;
+}
+
 export function estimateProfileCost(profiles: number): number {
   return profiles * PROFILE_EMAIL_COST_USD;
 }

@@ -177,15 +177,25 @@ export async function POST(request: NextRequest) {
 
     const wantProfile = runProfiles && !c.email && Boolean(profileId);
     const wantDomain = runDomains && !c.company_domain && hasCompanyRef;
+    // Name-only companies (no LinkedIn page) → web-lookup discovery in the
+    // domains phase, when enabled. Lets a sourced-email + name-only contact
+    // (which would otherwise be dropped) enter with a domain-discovery item.
+    const wantDomainDiscovery =
+      runDomains &&
+      settings.domain_discovery_enabled &&
+      !c.company_domain &&
+      !hasCompanyRef &&
+      Boolean(c.company_name?.trim());
     // Activity scoring only needs a profile URL — works even for contacts that
     // already have an email/domain (assigned to its phase by the worker).
     const wantActivity = runActivity && Boolean(profileId);
     // Verify only applies to a contact that already has (or will have) an email.
-    // Profiles/waterfall may add one later, so a contact with a profile URL is
-    // also verifiable downstream even without an email today.
-    const wantVerify = runVerify && (Boolean(c.email) || wantProfile || wantDomain);
+    // Profiles/waterfall may add one later, so a contact with a profile URL or a
+    // discoverable domain is also verifiable downstream even without an email today.
+    const wantVerify =
+      runVerify && (Boolean(c.email) || wantProfile || wantDomain || wantDomainDiscovery);
 
-    if (!wantProfile && !wantDomain && !wantActivity && !wantVerify) {
+    if (!wantProfile && !wantDomain && !wantDomainDiscovery && !wantActivity && !wantVerify) {
       // Attribute one skip reason (priority order).
       if (c.email) skipped.already_has_email++;
       else if (runProfiles && !profileId) skipped.no_linkedin_url++;
@@ -201,13 +211,16 @@ export async function POST(request: NextRequest) {
         : c.email
           ? "already has email"
           : "no parseable LinkedIn profile URL";
-    const domainNote = wantDomain
-      ? null
-      : !runDomains
-        ? "domains step disabled"
-        : c.company_domain
-          ? "already has company domain"
-          : "no parseable company LinkedIn URL";
+    const domainNote =
+      wantDomain || wantDomainDiscovery
+        ? null
+        : !runDomains
+          ? "domains step disabled"
+          : c.company_domain
+            ? "already has company domain"
+            : c.company_name
+              ? "company not on LinkedIn (website discovery off)"
+              : "no parseable company LinkedIn URL";
 
     itemRows.push({
       organization_id: organizationId,
@@ -223,7 +236,7 @@ export async function POST(request: NextRequest) {
       company_domain: c.company_domain,
       profile_status: wantProfile ? "pending" : "skipped",
       profile_notes: profileNote,
-      domain_status: wantDomain ? "pending" : "skipped",
+      domain_status: wantDomain || wantDomainDiscovery ? "pending" : "skipped",
       domain_notes: domainNote,
       // waterfall/activity are assigned by the worker's advancePhase. verify is
       // too, UNLESS it's the only phase (nothing earlier to trigger the seed) —

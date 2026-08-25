@@ -22,63 +22,8 @@ import {
   DEFAULT_LAYER2_MODEL,
   isPerplexityModel,
 } from "./pricing";
+import { callPerplexity } from "../perplexity/client";
 import type { EnrichmentInput, EnrichmentOptions, EnrichmentResult } from "./types";
-
-interface PerplexityCallResult {
-  text: string;
-  cost: number;
-}
-
-interface PerplexityResponse {
-  choices?: Array<{ message?: { content?: string } }>;
-  usage?: { prompt_tokens?: number; completion_tokens?: number };
-}
-
-async function callPerplexity(
-  apiKey: string,
-  prompt: string,
-  model: string,
-): Promise<PerplexityCallResult> {
-  const response = await fetch("https://api.perplexity.ai/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model,
-      messages: [
-        {
-          role: "system",
-          content:
-            "You are a business research assistant. Return ONLY valid JSON, no markdown, no explanation, no preamble.",
-        },
-        { role: "user", content: prompt },
-      ],
-      max_tokens: 200,
-      temperature: 0.1,
-      return_citations: true,
-      search_recency_filter: "year",
-    }),
-  });
-
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`Perplexity API error ${response.status}: ${errText}`);
-  }
-
-  const data = (await response.json()) as PerplexityResponse;
-  const text = data.choices?.[0]?.message?.content || "";
-  const usage = data.usage || {};
-  const cost = calculateCost(
-    {
-      input_tokens: usage.prompt_tokens || 0,
-      output_tokens: usage.completion_tokens || 0,
-    },
-    model,
-  );
-  return { text, cost };
-}
 
 export async function enrichWithWebSearch(
   input: EnrichmentInput,

@@ -4,7 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { checkCronAuth } from "@/lib/security/cron-auth";
 import { ApifyClient } from "@/lib/apify/client";
 import { isInProgress, isTerminalBad, isTerminalOk } from "@/lib/apify/types";
-import { loadApifyToken } from "@/lib/apify/auth";
+import { loadApifyToken, normalizeEnrichmentSettings } from "@/lib/apify/auth";
 import { extractCompanyId, extractCompanySlug } from "@/lib/apify/domain";
 import {
   getProvider,
@@ -40,6 +40,17 @@ import {
 } from "@/lib/millionverifier/policy";
 import { enqueueOwnerAlert } from "@/lib/notifications/owner-alerts";
 import { runPatternMv, type PatternMvItem } from "@/lib/enrichment/pattern-mv";
+import Anthropic from "@anthropic-ai/sdk";
+import { callPerplexity } from "@/lib/perplexity/client";
+import { calculateCost, HAIKU_MODEL_ID } from "@/lib/decision-maker/pricing";
+import { fetchPage } from "@/lib/decision-maker/fetcher";
+import { isSafeUrl } from "@/lib/decision-maker/validation";
+import {
+  runDomainDiscovery,
+  extractContactLocation,
+  type DiscoveryItem,
+  type LlmSearchFn,
+} from "@/lib/enrichment/domain-discovery";
 
 // GET /api/cron/run-apify-enrichment — one worker tick (60s budget).
 //
@@ -67,6 +78,13 @@ const PATTERN_MV_BATCH = 25;
 const PATTERN_MV_CONCURRENCY = 5;
 const PATTERN_MV_VERIFY_TIMEOUT_SEC = 6;
 const PATTERN_MV_DEADLINE_SEC = 40;
+
+// Domain-discovery (inline web lookup for companies with no LinkedIn page).
+// Smaller batch + pool than pattern_mv — each item is an LLM web search (slower)
+// plus an optional homepage fetch.
+const DISCOVERY_BATCH = 10;
+const DISCOVERY_CONCURRENCY = 3;
+const DISCOVERY_DEADLINE_SEC = 40;
 
 // Waterfall methods by execution style:
 //   DIRECT   — run inline in the tick via Million Verifier, no Apify run.
@@ -397,12 +415,21 @@ async function startNextBatch(
   // to one method group and do NOT advance the phase on an empty batch — the
   // waterfall router owns advancing. Absent = a normal phase batch.
   methodFilter?: EnrichmentWaterfallMethod[],
+  // When set (the domains linkedin-company sub-batch), scope the pending select
+  // to items WITH a company ref and do NOT advance on empty — the domains router
+  // owns advancing (it also runs the inline web-lookup discovery sub-stage).
+  domainsRefsOnly?: boolean,
 ): Promise<Record<string, unknown>> {
   // The waterfall phase has per-item methods (incl. the direct pattern_mv
   // pathway), so it's routed specially — unless we're already inside a
   // method-scoped apify sub-batch call.
   if (phase === "waterfall" && !methodFilter) {
     return startNextWaterfall(admin, client, run, cols, tickStart);
+  }
+  // The domains phase is two-stage (linkedin-company Apify batch for items with a
+  // company ref, then inline web-lookup discovery for name-only items).
+  if (phase === "domains" && !domainsRefsOnly) {
+    return startNextDomains(admin, client, run, cols, provider, tickStart);
   }
   if (!provider) return { status: "advanced" };
 
@@ -413,6 +440,10 @@ async function startNextBatch(
     .eq("run_id", run.id)
     .eq(cols.status, "pending");
   if (methodFilter) pendingQuery = pendingQuery.in("waterfall_method", methodFilter);
+  // Scope to items that actually carry a LinkedIn company ref — a mixed batch
+  // would feed ref-less items into the company actor, which returns nothing for
+  // them and marks them not_found before discovery ever gets a chance.
+  if (domainsRefsOnly) pendingQuery = pendingQuery.or("company_id.not.is.null,company_slug.not.is.null");
   const { data: pendingData } = await pendingQuery
     .order("created_at", { ascending: true })
     .order("id", { ascending: true })
@@ -420,7 +451,7 @@ async function startNextBatch(
 
   let batch = (pendingData as ItemRow[] | null) ?? [];
   if (batch.length === 0) {
-    if (methodFilter) return { status: "skipped_batch" };
+    if (methodFilter || domainsRefsOnly) return { status: "skipped_batch" };
     await advancePhase(admin, run);
     return { status: "advanced", phase: run.phase };
   }
@@ -567,6 +598,51 @@ async function startNextWaterfall(
       return startNextBatch(admin, client, run, "waterfall", cols, provider, tickStart, [method]);
     }
   }
+  await advancePhase(admin, run);
+  return { status: "advanced", phase: run.phase };
+}
+
+// Count pending domain items with (or without) a parseable LinkedIn company ref.
+async function countDomainsPending(admin: Admin, runId: string, withRefs: boolean): Promise<number> {
+  let q = admin
+    .from("enrichment_run_items")
+    .select("id", { count: "exact", head: true })
+    .eq("run_id", runId)
+    .eq("domain_status", "pending");
+  q = withRefs
+    ? q.or("company_id.not.is.null,company_slug.not.is.null")
+    : q.is("company_id", null).is("company_slug", null).not("company_name", "is", null);
+  const { count } = await q;
+  return count ?? 0;
+}
+
+// The domains phase, two-stage (mirrors startNextWaterfall): resolve domains for
+// items WITH a LinkedIn company ref via the harvestapi company actor first, then
+// discover domains for name-only (no-ref) items via an inline web lookup, then
+// advance. One active Apify run at a time.
+async function startNextDomains(
+  admin: Admin,
+  client: ApifyClient,
+  run: RunRow,
+  cols: { status: string; runId: string; notes: string },
+  provider: ReturnType<typeof getProvider>,
+  tickStart: number,
+): Promise<Record<string, unknown>> {
+  // 1. Items with a company ref → the harvestapi linkedin-company Apify batch.
+  if ((await countDomainsPending(admin, run.id, true)) > 0) {
+    return startNextBatch(admin, client, run, "domains", cols, provider, tickStart, undefined, true);
+  }
+  // 2. Name-only items (no LinkedIn company page) → inline web-lookup discovery.
+  if ((await countDomainsPending(admin, run.id, false)) > 0) {
+    return runDomainDiscoveryBatch(admin, run, cols, tickStart);
+  }
+  // 3. Any remaining pending (ref-less AND nameless — shouldn't happen) can't be
+  //    resolved either way; mark them so they don't strand the phase, then advance.
+  await admin
+    .from("enrichment_run_items")
+    .update({ domain_status: "not_found", domain_notes: "no company reference or name to resolve a domain" })
+    .eq("run_id", run.id)
+    .eq("domain_status", "pending");
   await advancePhase(admin, run);
   return { status: "advanced", phase: run.phase };
 }
@@ -788,6 +864,217 @@ async function runPatternMvBatch(
     .eq("id", run.id);
 
   return { status: "pattern_mv", found, not_found: notFound, skipped, inconclusive, credits: totalCredits };
+}
+
+// Process one domain-discovery batch inline (no Apify run) — the domains-phase
+// fallback for contacts whose employer has no LinkedIn page. Web-looks-up each
+// company's website (Perplexity Sonar, else Claude web_search), strictly
+// validates it (name↔domain + citation + homepage), and writes company_domain
+// fill-only so the email waterfall can run. Per-item failures are inconclusive
+// (retried to the attempt cap); no key → not_found with a config note (run
+// continues). Never uses in_flight — recoverOrphans would reset it.
+async function runDomainDiscoveryBatch(
+  admin: Admin,
+  run: RunRow,
+  cols: { status: string; runId: string; notes: string },
+  tickStart: number,
+): Promise<Record<string, unknown>> {
+  const settings = normalizeEnrichmentSettings(run.waterfall_config ?? undefined);
+  // Defensive: discovery turned off after this run was seeded → finish the
+  // name-only pending items rather than loop.
+  if (!settings.domain_discovery_enabled) {
+    await admin
+      .from("enrichment_run_items")
+      .update({ domain_status: "not_found", domain_notes: "website discovery disabled in settings" })
+      .eq("run_id", run.id)
+      .eq("domain_status", "pending")
+      .is("company_id", null)
+      .is("company_slug", null)
+      .not("company_name", "is", null);
+    return { status: "discovery_disabled" };
+  }
+
+  // Org keys — Perplexity preferred, Claude web_search fallback.
+  const { data: orgRow } = await admin
+    .from("organizations")
+    .select("anthropic_api_key, perplexity_api_key")
+    .eq("id", run.organization_id)
+    .maybeSingle();
+  const org = orgRow as { anthropic_api_key: string | null; perplexity_api_key: string | null } | null;
+  const perplexityKey = org?.perplexity_api_key?.trim() || process.env.PERPLEXITY_API_KEY?.trim() || null;
+  const anthropicKey = org?.anthropic_api_key?.trim() || process.env.ANTHROPIC_API_KEY?.trim() || null;
+
+  // Claim a batch of name-only pending domain items.
+  const { data: pendingData } = await admin
+    .from("enrichment_run_items")
+    .select(ENRICH_ITEM_WORK_COLUMNS)
+    .eq("run_id", run.id)
+    .eq("domain_status", "pending")
+    .is("company_id", null)
+    .is("company_slug", null)
+    .not("company_name", "is", null)
+    .order("created_at", { ascending: true })
+    .order("id", { ascending: true })
+    .limit(DISCOVERY_BATCH);
+  let batch = (pendingData as ItemRow[] | null) ?? [];
+  if (batch.length === 0) return { status: "skipped_batch" };
+  batch = await dropAlreadyDone(admin, run, "domains", cols, batch);
+  if (batch.length === 0) return { status: "skipped_batch" };
+
+  // Neither key → discovery can't run. Mark not_found with a config-gap note.
+  if (!perplexityKey && !anthropicKey) {
+    await admin
+      .from("enrichment_run_items")
+      .update({
+        domain_status: "not_found",
+        domain_notes: "Anthropic or Perplexity API key required for website discovery (Settings → Integrations)",
+      })
+      .eq("run_id", run.id)
+      .in("id", batch.map((b) => b.id));
+    return { status: "no_discovery_key", items: batch.length };
+  }
+
+  // Fetch contacts for location (enrichment_data) + fill-only writes.
+  const contactIds = Array.from(new Set(batch.map((b) => b.contact_id)));
+  const contactMap = new Map<string, Contact>();
+  for (let i = 0; i < contactIds.length; i += 300) {
+    const part = contactIds.slice(i, i + 300);
+    const { data } = await admin
+      .from("contacts")
+      .select("id, email, enrichment_data, tags, status")
+      .eq("organization_id", run.organization_id)
+      .in("id", part);
+    for (const c of (data as Contact[] | null) ?? []) contactMap.set(c.id, c);
+  }
+
+  const providerLabel = perplexityKey ? "sonar" : "claude-web-search";
+  const llm: LlmSearchFn = perplexityKey
+    ? async (prompt) => {
+        const r = await callPerplexity(perplexityKey, prompt, "sonar", {
+          maxTokens: 300,
+          searchRecencyFilter: null,
+        });
+        return { text: r.text, citations: r.citations, cost: r.cost };
+      }
+    : async (prompt) => {
+        const anthropic = new Anthropic({ apiKey: anthropicKey as string });
+        const message = await anthropic.messages.create({
+          model: HAIKU_MODEL_ID,
+          max_tokens: 1024,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          tools: [{ type: "web_search_20250305" } as any],
+          messages: [{ role: "user", content: prompt }],
+        });
+        const cost = calculateCost(
+          { input_tokens: message.usage.input_tokens, output_tokens: message.usage.output_tokens },
+          HAIKU_MODEL_ID,
+        );
+        const textBlocks = message.content.filter(
+          (b): b is Extract<typeof b, { type: "text" }> => b.type === "text",
+        );
+        const lastText = textBlocks[textBlocks.length - 1];
+        // Grounding URLs from web_search_tool_result blocks → citations.
+        const citations: string[] = [];
+        for (const b of message.content) {
+          const bb = b as { type?: string; content?: unknown };
+          if (bb.type === "web_search_tool_result" && Array.isArray(bb.content)) {
+            for (const rr of bb.content as Array<{ url?: unknown }>) {
+              if (typeof rr.url === "string") citations.push(rr.url);
+            }
+          }
+        }
+        return { text: lastText ? lastText.text : "", citations, cost };
+      };
+
+  const guardedFetch = (url: string): Promise<string> =>
+    isSafeUrl(url) ? fetchPage(url) : Promise.resolve("");
+
+  const items: DiscoveryItem[] = batch.map((b) => ({
+    id: b.id,
+    companyName: b.company_name ?? "",
+    location: extractContactLocation(contactMap.get(b.contact_id)?.enrichment_data),
+  }));
+
+  const outcomes = await runDomainDiscovery(items, llm, guardedFetch, {
+    deadlineMs: tickStart + DISCOVERY_DEADLINE_SEC * 1000,
+    concurrency: DISCOVERY_CONCURRENCY,
+    providerLabel,
+  });
+
+  let found = 0;
+  let notFound = 0;
+  let inconclusive = 0;
+  let totalCost = 0;
+
+  for (const item of batch) {
+    const outcome = outcomes.get(item.id);
+    if (!outcome) continue; // deadline — stays pending for the next tick
+    totalCost += outcome.cost;
+
+    if (outcome.kind === "found") {
+      const contact = contactMap.get(item.contact_id);
+      const res: PhaseResult = {
+        status: "found",
+        companyDomain: outcome.domain,
+        extra: {
+          found_note: outcome.note,
+          company: {
+            domain: outcome.domain,
+            name: item.company_name,
+            discovered_via: providerLabel,
+            resolved_at: new Date().toISOString(),
+          },
+        },
+      };
+      const r = await writePhaseResult(admin, run, "domains", cols, item, res, contact, outcome.cost);
+      if (r === "found") found++;
+      else notFound++;
+    } else if (outcome.kind === "not_found") {
+      await admin
+        .from("enrichment_run_items")
+        .update({ domain_status: "not_found", domain_notes: outcome.note, cost_usd: outcome.cost })
+        .eq("id", item.id);
+      notFound++;
+    } else {
+      // inconclusive — retry unless we've hit the attempt cap.
+      const attempts = (item.attempts ?? 0) + 1;
+      if (attempts >= MAX_ITEM_ATTEMPTS) {
+        await admin
+          .from("enrichment_run_items")
+          .update({
+            domain_status: "not_found",
+            domain_notes: `inconclusive after ${attempts} attempts: ${outcome.note}`,
+            cost_usd: outcome.cost,
+          })
+          .eq("id", item.id);
+        notFound++;
+      } else {
+        await admin
+          .from("enrichment_run_items")
+          .update({ attempts, cost_usd: outcome.cost })
+          .eq("id", item.id);
+        inconclusive++;
+      }
+    }
+  }
+
+  if (totalCost > 0) {
+    await admin
+      .from("enrichment_runs")
+      .update({ cost_usd: (Number(run.cost_usd) || 0) + totalCost })
+      .eq("id", run.id);
+    run.cost_usd = (Number(run.cost_usd) || 0) + totalCost;
+  }
+
+  await admin
+    .from("enrichment_runs")
+    .update({
+      progress_message: `Website lookup: ${found} found · ${notFound} miss${inconclusive ? ` · ${inconclusive} retrying` : ""}`,
+      locked_at: null,
+    })
+    .eq("id", run.id);
+
+  return { status: "domain_discovery", found, not_found: notFound, inconclusive };
 }
 
 // ---------------------------------------------------------------- verify phase
@@ -1153,7 +1440,11 @@ async function writePhaseResult(
         .update({
           domain_status: "found",
           company_domain: res.companyDomain,
-          domain_notes: res.extra?.matched_by ? `matched by ${res.extra.matched_by}` : null,
+          // Discovery supplies its own provenance ("discovered via sonar —
+          // homepage-confirmed"); the linkedin-company actor supplies matched_by.
+          domain_notes:
+            (res.extra?.found_note as string) ??
+            (res.extra?.matched_by ? `matched by ${res.extra.matched_by}` : null),
           cost_usd: share,
           ...employeeCountPatch,
         })
@@ -1575,14 +1866,31 @@ async function advancePhase(admin: Admin, run: RunRow): Promise<void> {
     if (phase === "profiles") {
       phase = "domains";
       if (run.run_domains) {
-        // Re-activate domain items that the profile phase gave a company URL to.
+        // Re-activate domain items the profile phase backfilled a company ref to.
+        // id OR slug — a profile-supplied /company/<slug> URL yields a slug only
+        // (the company actor matches by slug too), and used to be stranded here.
         await admin
           .from("enrichment_run_items")
           .update({ domain_status: "pending", attempts: 0 })
           .eq("run_id", run.id)
           .eq("domain_status", "skipped")
           .is("company_domain", null)
-          .not("company_id", "is", null);
+          .or("company_id.not.is.null,company_slug.not.is.null");
+        // Defensive web-lookup discovery seeding for runs created by pre-deploy
+        // code: name-only, ref-less skipped items, when discovery is enabled.
+        // (Primary seeding is at import time in the seeders.) Kept at the
+        // transition so 'skipped'→'pending' never grows phase_total_count mid-phase.
+        if (normalizeEnrichmentSettings(run.waterfall_config ?? undefined).domain_discovery_enabled) {
+          await admin
+            .from("enrichment_run_items")
+            .update({ domain_status: "pending", attempts: 0 })
+            .eq("run_id", run.id)
+            .eq("domain_status", "skipped")
+            .is("company_domain", null)
+            .is("company_id", null)
+            .is("company_slug", null)
+            .not("company_name", "is", null);
+        }
         const n = await countPending(admin, run.id, "domain_status");
         if (n > 0) break;
       }

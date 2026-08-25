@@ -7,6 +7,7 @@ import {
   ACTIVITY_COST_USD,
   BOVI_COST_USD,
   SITE_SCRAPE_COST_USD,
+  DOMAIN_DISCOVERY_COST_USD,
 } from "@/lib/apify/pricing";
 
 // GET /api/admin/enrichment/pricing
@@ -29,6 +30,7 @@ function staticFallback(): LivePricing {
       activity: ACTIVITY_COST_USD,
       bovi: BOVI_COST_USD,
       site_scrape: SITE_SCRAPE_COST_USD,
+      domain_discovery: DOMAIN_DISCOVERY_COST_USD,
     },
     notes: ["No Apify token set — showing stored fallback prices"],
   };

@@ -1213,6 +1213,11 @@ export interface EnrichmentSettings {
   // sourced profile into Contacts and starts enrichment (migration 00077). When
   // false, import stays the manual "Import to Contacts" click.
   auto_run_after_search: boolean;
+  // When true, the domains phase discovers a website domain via web lookup
+  // (Perplexity/Claude) for contacts whose employer has no LinkedIn company page,
+  // so the email waterfall can still run for them. Validated against the live
+  // site before saving. No LinkedIn-company charge; ~$0.005/company web lookup.
+  domain_discovery_enabled: boolean;
 }
 
 // Defaults route every band to pattern_mv (pattern-permutation + Million
@@ -1232,6 +1237,9 @@ export const DEFAULT_ENRICHMENT_SETTINGS: EnrichmentSettings = {
   // pipeline doesn't stall at "sourced". Owners can flip it off to curate which
   // rows enter the CRM (manual Import to Contacts).
   auto_run_after_search: true,
+  // On by default: recovers the ~50% of small-business contacts whose employer
+  // has no LinkedIn page (they'd otherwise dead-end with no domain, no email).
+  domain_discovery_enabled: true,
 };
 
 export interface EnrichmentRun {

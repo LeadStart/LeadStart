@@ -55,6 +55,7 @@ export function normalizeEnrichmentSettings(
     accept_catch_all_guesses: bool(o.accept_catch_all_guesses, base.accept_catch_all_guesses),
     scrape_max_pages: intClamp(o.scrape_max_pages, base.scrape_max_pages, 1, 20),
     auto_run_after_search: bool(o.auto_run_after_search, base.auto_run_after_search),
+    domain_discovery_enabled: bool(o.domain_discovery_enabled, base.domain_discovery_enabled),
   };
 }
 

@@ -19,6 +19,7 @@ import {
   ACTIVITY_COST_USD,
   BOVI_COST_USD,
   SITE_SCRAPE_COST_USD,
+  DOMAIN_DISCOVERY_COST_USD,
 } from "./pricing";
 
 const SOURCING_ACTOR = "harvestapi~linkedin-profile-search";
@@ -39,7 +40,15 @@ export interface LivePricing {
   fetchedAt: string;
   tier: string;
   sourcing: { short: number; full: number; full_email: number };
-  enrich: { profile: number; domain: number; activity: number; bovi: number; site_scrape: number };
+  enrich: {
+    profile: number;
+    domain: number;
+    activity: number;
+    bovi: number;
+    site_scrape: number;
+    // Web-lookup domain discovery (not an Apify actor — token-based, static).
+    domain_discovery: number;
+  };
   notes: string[];
 }
 
@@ -129,6 +138,7 @@ export async function fetchLivePricing(token: string, tier = "FREE"): Promise<Li
       activity,
       bovi: round4(boviPrice),
       site_scrape: SITE_SCRAPE_MEASURED_USD || SITE_SCRAPE_COST_USD,
+      domain_discovery: DOMAIN_DISCOVERY_COST_USD,
     },
     notes,
   };

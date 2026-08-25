@@ -37,7 +37,12 @@ function chunk<T>(arr: T[], size: number): T[][] {
 // Contacts with real enrichment work: no email + a parseable profile URL, or a
 // missing domain + a parseable company URL. (Activity also only needs a profile
 // URL; the worker assigns it its own phase.)
-function buildItemRows(contacts: ContactRow[], organizationId: string, now: string) {
+function buildItemRows(
+  contacts: ContactRow[],
+  organizationId: string,
+  now: string,
+  discoveryEnabled: boolean,
+) {
   const rows: Record<string, unknown>[] = [];
   const eligibleContactIds: string[] = [];
   for (const c of contacts) {
@@ -46,8 +51,17 @@ function buildItemRows(contacts: ContactRow[], organizationId: string, now: stri
     const companySlug = extractCompanySlug(c.company_linkedin_url);
     const wantProfile = !c.email && Boolean(profileId);
     const wantDomain = !c.company_domain && Boolean(companyId || companySlug);
+    // Name-only companies (no LinkedIn company page) → web-lookup discovery in
+    // the domains phase, when enabled. Born 'pending' so they enter the run —
+    // otherwise a sourced-email + name-only contact would be dropped entirely.
+    const wantDomainDiscovery =
+      discoveryEnabled &&
+      !c.company_domain &&
+      !companyId &&
+      !companySlug &&
+      Boolean(c.company_name?.trim());
     const wantActivity = Boolean(profileId);
-    if (!wantProfile && !wantDomain && !wantActivity) continue;
+    if (!wantProfile && !wantDomain && !wantDomainDiscovery && !wantActivity) continue;
     eligibleContactIds.push(c.id);
     rows.push({
       organization_id: organizationId,
@@ -63,8 +77,15 @@ function buildItemRows(contacts: ContactRow[], organizationId: string, now: stri
       company_domain: c.company_domain,
       profile_status: wantProfile ? "pending" : "skipped",
       profile_notes: wantProfile ? null : c.email ? "already has email" : "no parseable LinkedIn profile URL",
-      domain_status: wantDomain ? "pending" : "skipped",
-      domain_notes: wantDomain ? null : c.company_domain ? "already has company domain" : "no parseable company LinkedIn URL",
+      domain_status: wantDomain || wantDomainDiscovery ? "pending" : "skipped",
+      domain_notes:
+        wantDomain || wantDomainDiscovery
+          ? null
+          : c.company_domain
+            ? "already has company domain"
+            : c.company_name
+              ? "company not on LinkedIn (website discovery off)"
+              : "no parseable company LinkedIn URL",
       waterfall_status: null,
       email: c.email,
       created_at: now,
@@ -94,8 +115,19 @@ export async function enqueueEnrichment(
     contacts.push(...((data as ContactRow[] | null) ?? []));
   }
 
+  // Load the org's enrichment config up front — its domain_discovery_enabled flag
+  // decides whether name-only companies become eligible (they gain a domain-
+  // discovery item), so it must be known before we build the item rows. The same
+  // snapshot is written onto the run below.
+  const settings = await loadEnrichmentSettings(admin, organizationId);
+
   const now = new Date().toISOString();
-  const { rows, eligibleContactIds } = buildItemRows(contacts, organizationId, now);
+  const { rows, eligibleContactIds } = buildItemRows(
+    contacts,
+    organizationId,
+    now,
+    settings.domain_discovery_enabled,
+  );
   if (rows.length === 0) {
     // Nothing to enrich — clear any stale queue stamp so the drain lets go.
     await admin.from("contacts").update({ enrich_queued_at: null }).in("id", contactIds);
@@ -134,8 +166,7 @@ export async function enqueueEnrichment(
 
   // Snapshot the org's waterfall config (migration 00075) onto the run, same as
   // contacts/enrich/start — so an auto-enqueued run honors the configured method
-  // + size routing (not a hardcoded vdrmota default).
-  const settings = await loadEnrichmentSettings(admin, organizationId);
+  // + size routing. (settings was loaded above for the discovery gate.)
   const waterfallActor = resolveWaterfallActor(settings);
   const runWaterfall =
     settings.waterfall_enabled &&

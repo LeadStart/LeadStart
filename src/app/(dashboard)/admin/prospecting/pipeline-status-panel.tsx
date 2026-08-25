@@ -216,8 +216,13 @@ export function PipelineStatusPanel({
   // company phone + employee count, and the 2nd-pass waterfall routes by that size.
   const wf = run?.waterfall_config ?? null;
   for (const s of enrichStages) {
-    if (s.key === "domains" && (s.state === "active" || s.state === "done")) {
-      s.subNote = "+ company phone & size captured";
+    if (s.key === "domains") {
+      // When discovery is on, the domains step is two-stage: the LinkedIn company
+      // lookup plus a web lookup for companies with no LinkedIn page.
+      if (wf?.domain_discovery_enabled) s.actor = "linkedin-company + web lookup";
+      if (s.state === "active" || s.state === "done") {
+        s.subNote = "+ company phone & size captured";
+      }
     }
     if (s.key === "waterfall" && s.state !== "skipped") {
       if (run && run.run_waterfall === false) {

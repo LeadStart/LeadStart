@@ -104,6 +104,9 @@ const ENRICH_RATES = {
   waterfall: 0.004,
   activity: 0.005,
   verify: 0.0006,
+  // Web lookup for companies with no LinkedIn page. Only that subset incurs it,
+  // but it's counted per-person in the ceiling estimate (see the breakdown note).
+  domain_discovery: 0.005,
 };
 
 // Deep search (auto query-segmentation) sweeps many sub-queries and opens far
@@ -323,10 +326,14 @@ function ChipInput({
   placeholder,
   values,
   onChange,
+  // Multi-value fields all add on Enter/comma — say so. Override for a field-
+  // specific note; pass null to hide entirely.
+  hint = "Press Enter or comma to add several — each is searched as its own term.",
 }: {
   placeholder: string;
   values: string[];
   onChange: (v: string[]) => void;
+  hint?: string | null;
 }) {
   const [draft, setDraft] = useState("");
   const add = () => {
@@ -335,6 +342,7 @@ function ChipInput({
     setDraft("");
   };
   return (
+    <div className="space-y-1">
     <div
       className="flex flex-wrap items-center gap-1.5 rounded-lg border border-input bg-transparent px-2 py-1.5"
       style={{ minHeight: 38 }}
@@ -370,6 +378,8 @@ function ChipInput({
         placeholder={values.length ? "" : placeholder}
         className="min-w-[120px] flex-1 border-0 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
       />
+    </div>
+      {hint && <p className="text-[11px] text-muted-foreground">{hint}</p>}
     </div>
   );
 }
@@ -810,6 +820,9 @@ export function LinkedInSearchPanel() {
   // Org kill-switch: does a finished search auto-import + enrich? Only changes
   // the panel's "sourced" caption. Fetched once from enrichment settings.
   const [autoRun, setAutoRun] = useState(true);
+  // Org setting: discover websites for companies with no LinkedIn page (feeds the
+  // per-person estimate + the breakdown row).
+  const [domainDiscoveryOn, setDomainDiscoveryOn] = useState(true);
   // Deep search (auto query-segmentation): a PAID-Apify feature that splits a
   // search into sub-queries to pull past LinkedIn's 2,500-per-query ceiling.
   // OFF by default — it's only for bulk pulls, and on the free Apify tier the
@@ -890,7 +903,10 @@ export function LinkedInSearchPanel() {
     fetch(appUrl("/api/admin/enrichment/settings"), { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
-        if (!cancelled && d?.settings) setAutoRun(d.settings.auto_run_after_search !== false);
+        if (!cancelled && d?.settings) {
+          setAutoRun(d.settings.auto_run_after_search !== false);
+          setDomainDiscoveryOn(d.settings.domain_discovery_enabled !== false);
+        }
       })
       .catch(() => {});
     return () => {
@@ -1302,8 +1318,14 @@ export function LinkedInSearchPanel() {
     addActivity && !activePosters ? (livePricing?.enrich.activity ?? ENRICH_RATES.activity) : 0;
   // Verify is an add-on (Million Verifier credits, not an Apify list price).
   const verifyRate = addVerify ? ENRICH_RATES.verify : 0;
+  // Website discovery — a web lookup for the subset of people whose company has
+  // no LinkedIn page. Counted per-person as a small ceiling addition (only that
+  // subset actually incurs it), unless discovery is turned off in settings.
+  const discoveryRate = domainDiscoveryOn
+    ? (livePricing?.enrich.domain_discovery ?? ENRICH_RATES.domain_discovery)
+    : 0;
   const perPersonEnrich =
-    emailRate + domainRate + ENRICH_RATES.waterfall + activityRate + verifyRate;
+    emailRate + domainRate + ENRICH_RATES.waterfall + activityRate + verifyRate + discoveryRate;
   const projectedTotal = estimate + perPersonEnrich * maxResults;
   const pricesLive = livePricing?.source === "live" || livePricing?.source === "partial";
   // Est. cost per email type for the results radial, from the same live rates as
@@ -2279,6 +2301,15 @@ export function LinkedInSearchPanel() {
                 <span>Company → domain · <span className="font-mono">linkedin-company</span></span>
                 <span className="font-mono tabular-nums">${domainRate.toFixed(4)}</span>
               </div>
+              {domainDiscoveryOn && (
+                <div className="flex items-center justify-between">
+                  <span>
+                    Website discovery · <span className="font-mono">web lookup</span>{" "}
+                    <span className="text-[9px] text-muted-foreground">(companies with no LinkedIn page)</span>
+                  </span>
+                  <span className="font-mono tabular-nums">${discoveryRate.toFixed(4)}</span>
+                </div>
+              )}
               <div className="flex items-center justify-between">
                 <span>2nd-pass email · <span className="font-mono">pattern + verify</span> (misses)</span>
                 <span className="font-mono tabular-nums">${ENRICH_RATES.waterfall.toFixed(4)}</span>
