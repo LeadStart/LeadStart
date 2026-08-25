@@ -1157,7 +1157,10 @@ export function LinkedInSearchPanel() {
     setCurrentCompanies(c.currentCompanies ?? []);
     setRecentlyChanged(Boolean(c.recentlyChanged));
     setActivePosters(Boolean(c.activePosters));
-    setAutoSegment(c.autoSegment ?? true);
+    // Deep search is opt-in ($0.10/page swept across segments, regardless of
+    // yield). Presets saved before the toggle existed have no autoSegment key —
+    // they must NOT silently enable it (that's how a 2-result search cost $1.10).
+    setAutoSegment(c.autoSegment === true);
     setAddActivity(Boolean(c.addActivity));
     setAddVerify(Boolean(c.addVerify));
     if (c.depth) setDepth(c.depth);

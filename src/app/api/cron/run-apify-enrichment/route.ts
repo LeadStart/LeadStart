@@ -307,12 +307,12 @@ async function runPhase(
   // the provider lookup / Apify start-poll path, same as pattern_mv inside the
   // waterfall.
   if (phase === "verify") {
-    return runVerifyPhase(admin, run, tickStart);
+    return runVerifyPhase(admin, client, run, tickStart);
   }
 
   const provider = getProvider(phase, run.waterfall_actor);
   if (!provider) {
-    await advancePhase(admin, run);
+    await advancePhase(admin, client, run);
     return { status: "advanced", note: "no provider for phase" };
   }
 
@@ -452,7 +452,7 @@ async function startNextBatch(
   let batch = (pendingData as ItemRow[] | null) ?? [];
   if (batch.length === 0) {
     if (methodFilter || domainsRefsOnly) return { status: "skipped_batch" };
-    await advancePhase(admin, run);
+    await advancePhase(admin, client, run);
     return { status: "advanced", phase: run.phase };
   }
 
@@ -598,7 +598,7 @@ async function startNextWaterfall(
       return startNextBatch(admin, client, run, "waterfall", cols, provider, tickStart, [method]);
     }
   }
-  await advancePhase(admin, run);
+  await advancePhase(admin, client, run);
   return { status: "advanced", phase: run.phase };
 }
 
@@ -643,7 +643,7 @@ async function startNextDomains(
     .update({ domain_status: "not_found", domain_notes: "no company reference or name to resolve a domain" })
     .eq("run_id", run.id)
     .eq("domain_status", "pending");
-  await advancePhase(admin, run);
+  await advancePhase(admin, client, run);
   return { status: "advanced", phase: run.phase };
 }
 
@@ -1106,6 +1106,7 @@ async function writeVerifyItem(
 // the phase's items skipped with a config note and completes the phase.
 async function runVerifyPhase(
   admin: Admin,
+  apify: ApifyClient, // only for advancePhase's completion-time cost reconcile
   run: RunRow,
   tickStart: number,
 ): Promise<Record<string, unknown>> {
@@ -1136,7 +1137,7 @@ async function runVerifyPhase(
       })
       .eq("run_id", run.id)
       .eq("verify_status", "pending");
-    await advancePhase(admin, run);
+    await advancePhase(admin, apify, run);
     return { status: "no_mv_key", phase: run.phase };
   }
 
@@ -1165,7 +1166,7 @@ async function runVerifyPhase(
     .limit(VERIFY_BATCH);
   const batch = (pendingData as { id: string; contact_id: string; email: string | null }[] | null) ?? [];
   if (batch.length === 0) {
-    await advancePhase(admin, run);
+    await advancePhase(admin, apify, run);
     return { status: "advanced", phase: run.phase };
   }
 
@@ -1858,8 +1859,66 @@ async function seedVerifyItems(admin: Admin, run: RunRow): Promise<number> {
   return (data as { id: string }[] | null)?.length ?? 0;
 }
 
+// Final cost reconciliation at run completion. Per-batch accruals read a run's
+// usageTotalUsd the moment it finished, but Apify posts pay-per-event charges
+// asynchronously — a fast same-tick batch records ~$0 (compute only), so
+// cost_usd can badly undercount (observed: $0.00005 recorded vs $0.028 billed).
+// By completion every batch's charges have long settled, so re-read each
+// distinct Apify run's FINAL usage and floor cost_usd with the sum. max() keeps
+// the accrued figure when it's already higher (it also contains the non-Apify
+// MV-credit + discovery-LLM shares); when the Apify sum alone exceeds it, the
+// accrual provably under-captured and the reconciled figure is far closer to
+// truth (short only by those small non-Apify shares). Best-effort — never fails
+// the run.
+async function reconcileRunCost(admin: Admin, client: ApifyClient, run: RunRow): Promise<void> {
+  try {
+    const RUN_ID_COLS = [
+      "profile_apify_run_id",
+      "domain_apify_run_id",
+      "waterfall_apify_run_id",
+      "activity_apify_run_id",
+    ] as const;
+    const ids = new Set<string>();
+    for (let offset = 0; offset < 5000; offset += 1000) {
+      const { data } = await admin
+        .from("enrichment_run_items")
+        .select(RUN_ID_COLS.join(", "))
+        .eq("run_id", run.id)
+        .range(offset, offset + 999);
+      const rows = (data as unknown as Record<string, string | null>[] | null) ?? [];
+      for (const r of rows) {
+        for (const col of RUN_ID_COLS) {
+          const v = r[col];
+          if (v) ids.add(v);
+        }
+      }
+      if (rows.length < 1000) break;
+    }
+    // No Apify runs (pure pattern_mv/discovery run) or an implausible pile-up —
+    // leave the accrued figure alone.
+    if (ids.size === 0 || ids.size > 40) return;
+
+    let apifyFinal = 0;
+    for (const id of ids) {
+      try {
+        const apRun = await client.getRun(id);
+        if (typeof apRun.usageTotalUsd === "number") apifyFinal += apRun.usageTotalUsd;
+      } catch {
+        // best-effort per run
+      }
+    }
+    const accrued = Number(run.cost_usd) || 0;
+    if (apifyFinal > accrued) {
+      await admin.from("enrichment_runs").update({ cost_usd: apifyFinal }).eq("id", run.id);
+      run.cost_usd = apifyFinal;
+    }
+  } catch {
+    // reconciliation must never break completion
+  }
+}
+
 // Move to the next enabled phase that has work; finalize when none remain.
-async function advancePhase(admin: Admin, run: RunRow): Promise<void> {
+async function advancePhase(admin: Admin, client: ApifyClient, run: RunRow): Promise<void> {
   let phase: EnrichmentPhase = run.phase;
 
   for (;;) {
@@ -1937,6 +1996,7 @@ async function advancePhase(admin: Admin, run: RunRow): Promise<void> {
   }
 
   if (phase === "complete") {
+    await reconcileRunCost(admin, client, run);
     const counts = await recomputeCounters(admin, run);
     await admin
       .from("enrichment_runs")
