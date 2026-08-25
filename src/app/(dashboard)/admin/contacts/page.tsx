@@ -1138,39 +1138,69 @@ export default function ContactsPage() {
                       </TableCell>
                       <TableCell className="font-medium">{row.fullName}</TableCell>
                       <TableCell className="text-muted-foreground">
-                        <span className="inline-flex items-center gap-1.5">
-                          {row.email ?? <span className="text-xs">—</span>}
-                          {(() => {
-                            const b = verificationBadge(row.email_verification_status);
-                            return b ? (
-                              <Badge
-                                variant="secondary"
-                                className={`${b.className} text-[10px]`}
-                                title={[
-                                  row.email_verification_subresult,
-                                  row.email_verified_at &&
-                                    `checked ${new Date(row.email_verified_at).toLocaleDateString()}`,
-                                  row.email_did_you_mean &&
-                                    `did you mean ${row.email_did_you_mean}?`,
-                                ]
-                                  .filter(Boolean)
-                                  .join(" · ")}
-                              >
-                                {b.label}
-                              </Badge>
-                            ) : null;
-                          })()}
-                        </span>
+                        <div className="flex flex-col gap-0.5">
+                          <span className="inline-flex items-center gap-1.5">
+                            {row.email ?? <span className="text-xs">—</span>}
+                            {(() => {
+                              const b = verificationBadge(row.email_verification_status);
+                              return b ? (
+                                <Badge
+                                  variant="secondary"
+                                  className={`${b.className} text-[10px]`}
+                                  title={[
+                                    row.email_verification_subresult,
+                                    row.email_verified_at &&
+                                      `checked ${new Date(row.email_verified_at).toLocaleDateString()}`,
+                                    row.email_did_you_mean &&
+                                      `did you mean ${row.email_did_you_mean}?`,
+                                  ]
+                                    .filter(Boolean)
+                                    .join(" · ")}
+                                >
+                                  {b.label}
+                                </Badge>
+                              ) : null;
+                            })()}
+                          </span>
+                          {row.company_email && (
+                            <span
+                              title="Generic company inbox"
+                              className="inline-flex items-center gap-1 text-[11px] text-muted-foreground/80"
+                            >
+                              <span className="rounded bg-muted px-1 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground/70">
+                                co
+                              </span>
+                              {row.company_email}
+                            </span>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="text-muted-foreground">
-                        {row.phone ? (
-                          <a
-                            href={`tel:${row.phone}`}
-                            onClick={(e) => e.stopPropagation()}
-                            className="hover:text-[#2E37FE] hover:underline"
-                          >
-                            {row.phone}
-                          </a>
+                        {row.phone || row.company_phone ? (
+                          <div className="flex flex-col gap-0.5">
+                            {row.phone && (
+                              <a
+                                href={`tel:${row.phone}`}
+                                onClick={(e) => e.stopPropagation()}
+                                className="hover:text-[#2E37FE] hover:underline"
+                              >
+                                {row.phone}
+                              </a>
+                            )}
+                            {row.company_phone && (
+                              <a
+                                href={`tel:${row.company_phone}`}
+                                onClick={(e) => e.stopPropagation()}
+                                title="Company main line"
+                                className="inline-flex items-center gap-1 text-[11px] text-muted-foreground/80 hover:text-[#2E37FE] hover:underline"
+                              >
+                                <span className="rounded bg-muted px-1 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground/70">
+                                  co
+                                </span>
+                                {row.company_phone}
+                              </a>
+                            )}
+                          </div>
                         ) : (
                           "—"
                         )}

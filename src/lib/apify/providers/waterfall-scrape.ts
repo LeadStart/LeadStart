@@ -127,14 +127,19 @@ export const waterfallScrapeProvider: PhaseProvider = {
         continue;
       }
 
-      // Company-level extras written regardless of a personal-email hit: phone
-      // (fill-only onto the contact) + generic company emails (enrichment_data).
+      // Company-level extras written regardless of a personal-email hit — these
+      // land in the dedicated company_* columns, NOT contacts.email/phone: the
+      // company main line + a generic info@/contact@ inbox (full list also kept
+      // in enrichment_data).
       const companyEmails = strArray(rec.companyEmails).slice(0, 10);
       const phones = strArray(rec.phones);
       const bestPhone = pickBestPhone(phones);
       const extra: Record<string, unknown> = { scrape_outcome: str(rec.fetchOutcome) };
-      if (companyEmails.length) extra.company_emails = companyEmails;
-      if (bestPhone) extra.phone = bestPhone;
+      if (companyEmails.length) {
+        extra.company_emails = companyEmails; // full list → enrichment_data JSONB
+        extra.company_email = companyEmails[0]; // primary → contacts.company_email
+      }
+      if (bestPhone) extra.company_phone = bestPhone; // → contacts.company_phone
 
       const match = pickPersonEmail(personEmailsOf(rec), it.first_name, it.last_name);
       if (match) {

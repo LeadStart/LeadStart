@@ -421,6 +421,11 @@ export interface Contact {
   company_name: string | null;
   title: string | null;
   phone: string | null;
+  // Company-level contact info (migration 00076) — kept SEPARATE from the
+  // decision-maker's own email/phone above. Filled by site scrape + the
+  // harvestapi company actor (the company's main line / generic info@ inbox).
+  company_phone: string | null;
+  company_email: string | null;
   linkedin_url: string | null;
   // LinkedIn import + Apify enrichment (migration 00070). Email verification
   // itself lives in the Million Verifier fields below (single source of truth);

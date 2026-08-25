@@ -863,9 +863,11 @@ async function writePhaseResult(
 
   if (phase === "domains") {
     // Company-level extras the harvestapi actor already returns (migration
-    // 00075): phone fills contacts.phone (fill-only, zero extra spend) and
-    // employeeCount lands on the item — the waterfall's size-routing input.
-    // Both exist even when the record had no usable website (not_found path).
+    // 00075): the company phone fills contacts.company_phone (migration 00076 —
+    // NOT contacts.phone, which is reserved for the decision-maker's own line)
+    // fill-only, zero extra spend; employeeCount lands on the item — the
+    // waterfall's size-routing input. Both exist even when the record had no
+    // usable website (not_found path).
     const company = (res.extra?.company ?? null) as Record<string, unknown> | null;
     const phone =
       company && typeof company.phone === "string" && company.phone.trim()
@@ -876,7 +878,7 @@ async function writePhaseResult(
         ? Math.round(company.employeeCount as number)
         : null;
     if (contact && phone) {
-      await admin.from("contacts").update({ phone }).eq("id", contact.id).is("phone", null);
+      await admin.from("contacts").update({ company_phone: phone }).eq("id", contact.id).is("company_phone", null);
     }
     const employeeCountPatch = employeeCount != null ? { employee_count: employeeCount } : {};
 
@@ -1056,13 +1058,21 @@ async function writeEmail(
   const extraPatch = (res.extra ?? {}) as Record<string, unknown>;
   const companyEmailsPatch = extraPatch.company_emails ? { company_emails: extraPatch.company_emails } : {};
 
-  // Company phone (from a site scrape) fills contacts.phone fill-only regardless
-  // of the email outcome. A no-op for methods that don't return a phone.
+  // Company-level data (from a site scrape) fills the dedicated company_* columns
+  // fill-only, regardless of the personal-email outcome. contacts.email/phone stay
+  // reserved for the decision-maker's own details (migration 00076).
   if (contact) {
-    const raw =
-      typeof extraPatch.phone === "string" && extraPatch.phone.trim() ? (extraPatch.phone as string).trim() : null;
-    const phone = raw && isPlausibleContactPhone(raw) ? raw : null;
-    if (phone) await admin.from("contacts").update({ phone }).eq("id", contact.id).is("phone", null);
+    const rawPhone =
+      typeof extraPatch.company_phone === "string" ? (extraPatch.company_phone as string).trim() : "";
+    const companyPhone = rawPhone && isPlausibleContactPhone(rawPhone) ? rawPhone : null;
+    if (companyPhone) {
+      await admin.from("contacts").update({ company_phone: companyPhone }).eq("id", contact.id).is("company_phone", null);
+    }
+    const companyEmail =
+      typeof extraPatch.company_email === "string" ? (extraPatch.company_email as string).trim().toLowerCase() : "";
+    if (companyEmail) {
+      await admin.from("contacts").update({ company_email: companyEmail }).eq("id", contact.id).is("company_email", null);
+    }
   }
 
   if (res.status !== "found" || !res.email) {
