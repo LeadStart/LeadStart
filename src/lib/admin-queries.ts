@@ -40,7 +40,7 @@ const SNAPSHOT_COLUMNS =
 // website) so its fetcher keeps select("*").
 const CONTACT_LIST_COLUMNS =
   "id, organization_id, client_id, campaign_id, first_name, last_name, " +
-  "email, company_name, title, phone, company_phone, company_email, linkedin_url, company_linkedin_url, " +
+  "email, company_name, title, phone, company_phone, company_email, location, linkedin_url, company_linkedin_url, " +
   "company_domain, last_posted_at, recent_post_count, activity_checked_at, " +
   "intro_line, tags, status, source, notes, pipeline_stage, pipeline_sort_order, " +
   "pipeline_notes, pipeline_follow_up_date, pipeline_added_at, " +
@@ -119,7 +119,7 @@ export async function fetchAdminOverview(
     ]);
   const clients = (clientsRes.data || []) as Client[];
   const campaigns = (campaignsRes.data || []) as Campaign[];
-  const snapshots = (snapshotsRes.data || []) as CampaignSnapshot[];
+  const snapshots = (snapshotsRes.data || []) as unknown as CampaignSnapshot[];
   const stepMetrics = (stepMetricsRes.data || []) as CampaignStepMetric[];
 
   const campaignInfoMap = new Map<
@@ -234,7 +234,7 @@ export async function fetchAdminCampaigns(supabase: SupabaseClient) {
   return {
     campaigns: (campaignsRes.data || []) as Campaign[],
     clients: (clientsRes.data || []) as Client[],
-    snapshots: (snapshotsRes.data || []) as CampaignSnapshot[],
+    snapshots: (snapshotsRes.data || []) as unknown as CampaignSnapshot[],
   };
 }
 
@@ -251,7 +251,9 @@ export async function fetchAdminContacts(supabase: SupabaseClient) {
     supabase.from("campaigns").select("id, name, client_id"),
   ]);
   return {
-    contacts: (contactsRes.data || []) as Contact[],
+    // Cast via unknown: the long select string defeats supabase-js's type
+    // inference (GenericStringError), so direct-cast overlap checking fails.
+    contacts: (contactsRes.data || []) as unknown as Contact[],
     clients: (clientsRes.data || []) as { id: string; name: string }[],
     campaigns: (campaignsRes.data || []) as {
       id: string;

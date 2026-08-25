@@ -131,6 +131,9 @@ export async function importLinkedInProspects(
       email: p.email,
       company_name: p.company_name,
       title: p.headline,
+      // The PERSON's LinkedIn profile location (migration 00078) — where they
+      // live/work, not the company's address.
+      location: p.location,
       linkedin_url: p.linkedin_url,
       company_linkedin_url: p.company_linkedin_url,
       company_domain: p.company_domain,

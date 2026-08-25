@@ -934,17 +934,19 @@ async function runDomainDiscoveryBatch(
     return { status: "no_discovery_key", items: batch.length };
   }
 
-  // Fetch contacts for location (enrichment_data) + fill-only writes.
+  // Fetch contacts for location + fill-only writes. `location` (00078) is the
+  // first-class column; the enrichment_data dig is the pre-00078 fallback.
+  type DiscoveryContact = Contact & { location?: string | null };
   const contactIds = Array.from(new Set(batch.map((b) => b.contact_id)));
-  const contactMap = new Map<string, Contact>();
+  const contactMap = new Map<string, DiscoveryContact>();
   for (let i = 0; i < contactIds.length; i += 300) {
     const part = contactIds.slice(i, i + 300);
     const { data } = await admin
       .from("contacts")
-      .select("id, email, enrichment_data, tags, status")
+      .select("id, email, location, enrichment_data, tags, status")
       .eq("organization_id", run.organization_id)
       .in("id", part);
-    for (const c of (data as Contact[] | null) ?? []) contactMap.set(c.id, c);
+    for (const c of (data as DiscoveryContact[] | null) ?? []) contactMap.set(c.id, c);
   }
 
   const providerLabel = perplexityKey ? "sonar" : "claude-web-search";
@@ -989,11 +991,14 @@ async function runDomainDiscoveryBatch(
   const guardedFetch = (url: string): Promise<string> =>
     isSafeUrl(url) ? fetchPage(url) : Promise.resolve("");
 
-  const items: DiscoveryItem[] = batch.map((b) => ({
-    id: b.id,
-    companyName: b.company_name ?? "",
-    location: extractContactLocation(contactMap.get(b.contact_id)?.enrichment_data),
-  }));
+  const items: DiscoveryItem[] = batch.map((b) => {
+    const contact = contactMap.get(b.contact_id);
+    return {
+      id: b.id,
+      companyName: b.company_name ?? "",
+      location: contact?.location?.trim() || extractContactLocation(contact?.enrichment_data),
+    };
+  });
 
   const outcomes = await runDomainDiscovery(items, llm, guardedFetch, {
     deadlineMs: tickStart + DISCOVERY_DEADLINE_SEC * 1000,

@@ -1501,7 +1501,10 @@ export function LinkedInSearchPanel() {
                 onChange={setLocations}
               />
               <p className="text-[11px] text-muted-foreground">
-                Country, state/region, or city — LinkedIn has no zip or county. Use full names (&ldquo;United Kingdom&rdquo;, not &ldquo;UK&rdquo;).
+                Filters on the <span className="font-medium text-foreground">person&apos;s</span> profile
+                location (where they live/work), not the company&apos;s address. Country, state/region, or
+                city — LinkedIn has no zip or county. Use full names (&ldquo;United Kingdom&rdquo;, not
+                &ldquo;UK&rdquo;).
               </p>
               {locationFlags.length > 0 && (
                 <div className="space-y-1 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-2">
@@ -2152,6 +2155,17 @@ export function LinkedInSearchPanel() {
             <span className="font-medium text-foreground">top hit — silently</span>. People in{" "}
             <span className="font-medium text-foreground">any</span> listed location match.
           </p>
+          <div>
+            <p className="font-medium text-foreground">Whose location is it?</p>
+            <p className="mt-1">
+              The <span className="font-medium text-foreground">person&apos;s</span> — their LinkedIn
+              profile location (usually where they live/work), not the company&apos;s address. For
+              small local businesses the two almost always coincide; for larger companies you may
+              match a remote exec whose company is headquartered elsewhere. The person&apos;s location
+              is saved onto the contact on import; the company&apos;s own HQ (when its LinkedIn page
+              lists one) is captured separately during enrichment.
+            </p>
+          </div>
           <div>
             <p className="font-medium text-foreground">Granularity</p>
             <ul className="mt-1 list-disc space-y-0.5 pl-4">

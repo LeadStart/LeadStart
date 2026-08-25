@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireProspectingContext } from "@/lib/scrapio/auth";
+import { normalizeDomain } from "@/lib/apify/domain";
 import type { ScrapioBusiness } from "@/types/app";
 
 // POST /api/admin/prospecting/save
@@ -187,6 +188,12 @@ export async function POST(request: NextRequest) {
         company_name: row.name || null,
         title: enrich?.title ?? null,
         phone: row.phone || null,
+        // Business city/state (migration 00078). For Scrap.io rows the business
+        // location doubles as the contact's location.
+        location: [row.city, row.state].filter(Boolean).join(", ") || null,
+        // The scraped website was only buried in enrichment_data before — also
+        // resolve it to a usable company domain so the email waterfall can run.
+        company_domain: normalizeDomain(row.website) ?? null,
         linkedin_url: pickFirst(row.linkedin),
         intro_line: null,
         enrichment_data: enrich

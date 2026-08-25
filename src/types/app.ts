@@ -426,6 +426,10 @@ export interface Contact {
   // harvestapi company actor (the company's main line / generic info@ inbox).
   company_phone: string | null;
   company_email: string | null;
+  // The PERSON's location (migration 00078): LinkedIn profile location for
+  // LinkedIn-sourced contacts, city/state for Scrap.io. NOT the company address
+  // (that lives in enrichment_data.enrichment.company.hq when known).
+  location: string | null;
   linkedin_url: string | null;
   // LinkedIn import + Apify enrichment (migration 00070). Email verification
   // itself lives in the Million Verifier fields below (single source of truth);
