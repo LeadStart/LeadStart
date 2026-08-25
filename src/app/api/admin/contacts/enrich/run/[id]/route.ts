@@ -58,5 +58,28 @@ export async function GET(
     if (page.length < PAGE) break;
   }
 
+  // Join contacts.company_email (migration 00076) onto each item so the search
+  // results can chart person-email vs company-only vs none — the generic inbox
+  // lives on the contact, not the run item.
+  const contactIds = Array.from(
+    new Set(items.map((it) => (it as { contact_id?: string }).contact_id).filter(Boolean) as string[]),
+  );
+  if (contactIds.length) {
+    const byId = new Map<string, string | null>();
+    for (let i = 0; i < contactIds.length; i += PAGE) {
+      const { data } = await admin
+        .from("contacts")
+        .select("id, company_email")
+        .in("id", contactIds.slice(i, i + PAGE));
+      for (const c of (data ?? []) as { id: string; company_email: string | null }[]) {
+        byId.set(c.id, c.company_email);
+      }
+    }
+    for (const it of items) {
+      (it as { company_email?: string | null }).company_email =
+        byId.get((it as { contact_id?: string }).contact_id ?? "") ?? null;
+    }
+  }
+
   return NextResponse.json({ run: runRow, items });
 }

@@ -45,6 +45,7 @@ import {
   Check,
 } from "lucide-react";
 import { appUrl } from "@/lib/api-url";
+import type { LivePricing } from "@/lib/apify/live-pricing";
 import { createClient } from "@/lib/supabase/client";
 import type {
   LinkedInProspect,
@@ -244,7 +245,10 @@ type EnrichLite = Pick<
   | "domain_status"
   | "waterfall_status"
   | "activity_status"
->;
+> & {
+  // Joined from contacts.company_email by the run-detail route (migration 00076).
+  company_email?: string | null;
+};
 
 type Campaign = { id: string; name: string };
 
@@ -747,6 +751,22 @@ export function LinkedInSearchPanel() {
   // it's sent, before the run's item rows exist to poll.
   const [importedUrls, setImportedUrls] = useState<Set<string>>(new Set());
   const enrichTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Live Apify pricing (pulled fresh, cached ~1h server-side) so the estimate
+  // never goes stale. Falls back to the static pricing constants below on error.
+  const [livePricing, setLivePricing] = useState<LivePricing | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    fetch(appUrl("/api/admin/enrichment/pricing"), { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!cancelled && d) setLivePricing(d as LivePricing);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   useEffect(() => {
     if (!enrichmentRunId) return;
     let cancelled = false;
@@ -1069,6 +1089,21 @@ export function LinkedInSearchPanel() {
     for (const e of enrichByUrl.values()) if (e.email) n++;
     return n;
   }, [enrichByUrl]);
+  // Email-outcome split for the results radial: a decision-maker (person) email —
+  // from Full+email sourcing or the enrichment overlay — vs a company-only generic
+  // inbox vs none yet. Fills in live as enrichment lands on each row.
+  const emailOutcome = useMemo(() => {
+    let person = 0;
+    let company = 0;
+    let none = 0;
+    for (const r of results) {
+      const en = r.linkedin_url ? enrichByUrl.get(LC(r.linkedin_url)) : undefined;
+      if (r.email || en?.email) person++;
+      else if (en?.company_email) company++;
+      else none++;
+    }
+    return { person, company, none, total: results.length };
+  }, [results, enrichByUrl]);
   // The table shows once sourcing completes, or mid-run as streamed rows arrive.
   const showResults = isComplete || (isRunning && results.length > 0);
   // Actual $ the actor run cost (usageTotalUsd), written by the worker on finish.
@@ -1094,12 +1129,18 @@ export function LinkedInSearchPanel() {
   };
 
   const depthMeta = DEPTHS.find((d) => d.value === depth);
-  const rate = depthMeta?.rate ?? 0.002;
+  // Live Apify prices when loaded, else the static DEPTHS / ENRICH_RATES fallback.
+  const rate = livePricing?.sourcing?.[depth] ?? depthMeta?.rate ?? 0.002;
   const estimate = rate * maxResults;
-  const activityRate = activePosters ? 0 : ENRICH_RATES.activity;
+  const emailRate = livePricing?.enrich.profile ?? ENRICH_RATES.email;
+  const domainRate = livePricing?.enrich.domain ?? ENRICH_RATES.domain;
+  const activityRate = activePosters ? 0 : livePricing?.enrich.activity ?? ENRICH_RATES.activity;
+  // waterfall (pattern_mv default) + verify are Million Verifier credits, not an
+  // Apify list price, so they stay on the static estimate.
   const perPersonEnrich =
-    ENRICH_RATES.email + ENRICH_RATES.domain + ENRICH_RATES.waterfall + activityRate + ENRICH_RATES.verify;
+    emailRate + domainRate + ENRICH_RATES.waterfall + activityRate + ENRICH_RATES.verify;
   const projectedTotal = estimate + perPersonEnrich * maxResults;
+  const pricesLive = livePricing?.source === "live" || livePricing?.source === "partial";
 
   const handleSave = async () => {
     if (!searchId || selected.size === 0) return;
@@ -1484,6 +1525,15 @@ export function LinkedInSearchPanel() {
               </Button>
               <div className="flex items-center gap-1.5">
                 <span className="text-[11px] text-muted-foreground">est. ~${estimate.toFixed(2)}</span>
+                {pricesLive && (
+                  <span
+                    title="Prices pulled live from Apify"
+                    className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-emerald-600"
+                  >
+                    <span className="h-1 w-1 rounded-full bg-emerald-500" />
+                    live
+                  </span>
+                )}
                 <InfoButton label="How is this estimated?" onClick={() => setInfoOpen("estimate")} />
               </div>
             </div>
@@ -1982,11 +2032,11 @@ export function LinkedInSearchPanel() {
             <div className="mt-1 space-y-0.5">
               <div className="flex items-center justify-between">
                 <span>Profile → email · <span className="font-mono">profile-scraper</span></span>
-                <span className="font-mono tabular-nums">${ENRICH_RATES.email.toFixed(4)}</span>
+                <span className="font-mono tabular-nums">${emailRate.toFixed(4)}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span>Company → domain · <span className="font-mono">linkedin-company</span></span>
-                <span className="font-mono tabular-nums">${ENRICH_RATES.domain.toFixed(4)}</span>
+                <span className="font-mono tabular-nums">${domainRate.toFixed(4)}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span>2nd-pass email · <span className="font-mono">pattern + verify</span> (misses)</span>
@@ -2160,6 +2210,13 @@ export function LinkedInSearchPanel() {
           </CardHeader>
           {!resultsCollapsed && (
           <CardContent className="space-y-3">
+            {/* Email-outcome radial — person vs company-only vs none. Shows once
+                there's email data (Full+email sourcing or enrichment underway). */}
+            {(hasEmails || showEnrichCols) && (
+              <div className="rounded-xl border border-border/50 bg-muted/20 px-4 py-3">
+                <EmailOutcomeRadial {...emailOutcome} />
+              </div>
+            )}
             {/* Add-to-campaign inline panel */}
             {addOpen && selected.size > 0 && (
               <div className="rounded-lg border border-[#2E37FE]/30 bg-[#EDEEFF]/40 p-4">
@@ -2453,4 +2510,79 @@ function PriorStatusIcon({ status }: { status: LinkedInSearchStatus }) {
   if (status === "running") return <Loader2 size={15} className="shrink-0 animate-spin text-blue-600" />;
   if (status === "pending") return <Clock size={15} className="shrink-0 text-amber-600" />;
   return <XCircle size={15} className="shrink-0 text-red-600" />;
+}
+
+// Email-outcome radial for a search's results: a decision-maker (person) email vs
+// a company-only generic inbox vs none yet. Fills in live as enrichment lands.
+function EmailOutcomeRadial({
+  person,
+  company,
+  none,
+  total,
+}: {
+  person: number;
+  company: number;
+  none: number;
+  total: number;
+}) {
+  const R = 34;
+  const C = 2 * Math.PI * R;
+  const segs = [
+    { key: "person", v: person, color: "#10b981", label: "Person email" },
+    { key: "company", v: company, color: "#2E37FE", label: "Company only" },
+    { key: "none", v: none, color: "#e2e8f0", label: "No email" },
+  ];
+  const withEmail = person + company;
+  let acc = 0;
+  return (
+    <div className="flex items-center gap-5">
+      <div className="relative h-[96px] w-[96px] shrink-0">
+        <svg width="96" height="96" viewBox="0 0 88 88" className="-rotate-90">
+          <circle cx="44" cy="44" r={R} fill="none" stroke="#f1f5f9" strokeWidth="10" />
+          {total > 0 &&
+            segs.map((s) => {
+              const frac = s.v / total;
+              if (frac <= 0) return null;
+              const len = frac * C;
+              const off = acc;
+              acc += len;
+              return (
+                <circle
+                  key={s.key}
+                  cx="44"
+                  cy="44"
+                  r={R}
+                  fill="none"
+                  stroke={s.color}
+                  strokeWidth="10"
+                  strokeDasharray={`${len} ${C - len}`}
+                  strokeDashoffset={-off}
+                  style={{ transition: "stroke-dasharray .4s ease" }}
+                />
+              );
+            })}
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <span className="text-[20px] font-bold leading-none tabular-nums">{withEmail}</span>
+          <span className="text-[9px] leading-tight text-muted-foreground">of {total}</span>
+        </div>
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="mb-1.5 text-[12px] font-semibold">Email outcomes</p>
+        <div className="space-y-1">
+          {segs.map((s) => {
+            const pct = total > 0 ? Math.round((s.v / total) * 100) : 0;
+            return (
+              <div key={s.key} className="flex items-center gap-2 text-[11.5px]">
+                <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: s.color }} />
+                <span className="text-muted-foreground">{s.label}</span>
+                <span className="ml-auto font-mono font-semibold tabular-nums">{s.v}</span>
+                <span className="w-9 text-right font-mono tabular-nums text-muted-foreground/70">{pct}%</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
 }

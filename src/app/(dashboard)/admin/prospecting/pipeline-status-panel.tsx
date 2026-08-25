@@ -144,7 +144,10 @@ export function PipelineStatusPanel({
       return {
         ...base,
         state: "active",
-        frac: proc > 0 && total > 0 ? Math.min(0.95, Math.max(0.05, proc / total)) : 0.12,
+        // Starting placeholder == the early-progress floor (0.05), so the bar is
+        // monotonic: it never drops from a high "starting" guess down to the real
+        // first-result value (which used to read as 2% → 1%).
+        frac: proc > 0 && total > 0 ? Math.min(0.95, Math.max(0.05, proc / total)) : 0.05,
         processed: proc > 0 ? proc : undefined,
         total: proc > 0 && total > 0 ? total : undefined,
         note: search?.progress_message ?? "Searching LinkedIn…",
