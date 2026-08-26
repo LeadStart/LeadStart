@@ -976,7 +976,7 @@ async function runDomainDiscoveryBatch(
           model: HAIKU_MODEL_ID,
           max_tokens: 1024,
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          tools: [{ type: "web_search_20250305" } as any],
+          tools: [{ type: "web_search_20250305", name: "web_search" } as any],
           messages: [{ role: "user", content: prompt }],
         });
         const cost = calculateCost(
