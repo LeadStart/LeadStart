@@ -12,6 +12,7 @@ import {
   Check,
   Loader2,
   XCircle,
+  UserSearch,
 } from "lucide-react";
 import { appUrl } from "@/lib/api-url";
 import type { EnrichmentAddons, EnrichmentRun, EnrichmentWaterfallMethod } from "@/types/app";
@@ -77,9 +78,10 @@ type StageView = {
 const PHASE_ORDER: Record<string, number> = {
   profiles: 0,
   domains: 1,
-  waterfall: 2,
-  activity: 3,
-  verify: 4,
+  naming: 2,
+  waterfall: 3,
+  activity: 4,
+  verify: 5,
 };
 
 // Core stages (always shown) + the two opt-in add-ons (activity, verify). The
@@ -87,6 +89,7 @@ const PHASE_ORDER: Record<string, number> = {
 const ENRICH_DEFS = [
   { key: "profiles", name: "Profile → email", actor: "profile-scraper", icon: Mail, color: "#3b46ff", unit: "emails", addon: false, found: (r: EnrichmentRun) => r.found_emails_profiles_count },
   { key: "domains", name: "Company → domain", actor: "linkedin-company", icon: Globe, color: "#6366f1", unit: "domains", addon: false, found: (r: EnrichmentRun) => r.found_domains_count },
+  { key: "naming", name: "Owner name", actor: "decision-maker", icon: UserSearch, color: "#f59e0b", unit: "names", addon: true, found: (r: EnrichmentRun) => r.found_names_count },
   { key: "waterfall", name: "2nd-pass email", actor: "pattern + verify", icon: Layers, color: "#8b5cf6", unit: "recovered", addon: false, found: (r: EnrichmentRun) => r.found_emails_waterfall_count },
   { key: "activity", name: "Activity", actor: "profile-posts", icon: Activity, color: "#6366f1", unit: "active", addon: true, found: (r: EnrichmentRun) => r.found_activity_count },
   { key: "verify", name: "Verify", actor: "Million Verifier", icon: ShieldCheck, color: "#10b981", unit: "verified", addon: true, found: (r: EnrichmentRun) => r.found_verified_count },
@@ -174,9 +177,11 @@ export function PipelineStatusPanel({
   // this search intends them (so a queued add-on appears before the run exists).
   const showActivity = (run?.run_activity ?? false) || (addons?.activity ?? false);
   const showVerify = (run?.run_verify ?? false) || (addons?.verify ?? false);
+  const showNaming = (run?.run_naming ?? false) || (addons?.naming ?? false);
   const defs = ENRICH_DEFS.filter((d) => {
     if (d.key === "activity") return showActivity;
     if (d.key === "verify") return showVerify;
+    if (d.key === "naming") return showNaming;
     return true;
   });
 
@@ -187,6 +192,8 @@ export function PipelineStatusPanel({
       return { ...base, state: "skipped", frac: 1, note: "skipped — already gated on activity" };
     if (d.key === "verify" && run && run.run_verify === false)
       return { ...base, state: "skipped", frac: 1, note: "verification off for this run" };
+    if (d.key === "naming" && run && run.run_naming === false)
+      return { ...base, state: "skipped", frac: 1, note: "owner-name lookup off for this run" };
     if (!run)
       return { ...base, state: searchDone ? "queued" : "idle", frac: 0 };
     if (run.status === "complete")

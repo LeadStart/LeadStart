@@ -8,6 +8,8 @@ import {
   BOVI_COST_USD,
   SITE_SCRAPE_COST_USD,
   DOMAIN_DISCOVERY_COST_USD,
+  NAMING_COST_USD,
+  MAPS_PLACE_COST_USD,
 } from "@/lib/apify/pricing";
 
 // GET /api/admin/enrichment/pricing
@@ -24,6 +26,7 @@ function staticFallback(): LivePricing {
     fetchedAt: new Date().toISOString(),
     tier: "FREE",
     sourcing: { short: 0.004, full: 0.008, full_email: 0.014 },
+    maps: { place: MAPS_PLACE_COST_USD },
     enrich: {
       profile: PROFILE_EMAIL_COST_USD,
       domain: DOMAIN_COST_USD,
@@ -31,6 +34,7 @@ function staticFallback(): LivePricing {
       bovi: BOVI_COST_USD,
       site_scrape: SITE_SCRAPE_COST_USD,
       domain_discovery: DOMAIN_DISCOVERY_COST_USD,
+      naming: NAMING_COST_USD,
     },
     notes: ["No Apify token set — showing stored fallback prices"],
   };

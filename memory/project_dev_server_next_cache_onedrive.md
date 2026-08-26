@@ -17,4 +17,6 @@ The repo lives under OneDrive (`C:\Users\dtucc\OneDrive\Documents\Claude\LeadSta
 
 **Also watch:** every failed compile leaks `.next/dev/build/postcss.js` worker node processes that never get reaped — thousands can pile up (2386 seen 2026-08-22). If the server misbehaves or port 3000 stays bound after a stop, kill stray `node.exe` whose command line contains `LeadStart-App` + `postcss.js`.
 
+**Third symptom (2026-08-25) — NOT the cache:** dev routes 500 with `Module not found: Can't resolve 'prettier/plugins/html'` (via `@react-email/render` → `resend` → any route importing the notification helpers). Survives a `.next` wipe because it's a **stale `node_modules`** — `prettier` was missing entirely while `package-lock.json` was already correct. Fix: `npm install` (no lockfile change), then restart. Rule: on module-not-found for a package that IS in the dependency tree, run `npm install` FIRST, then suspect `.next`.
+
 Benign side note: a stray `C:\Users\dtucc\package-lock.json` (no package.json/node_modules beside it) triggers Next's "multiple lockfiles" warning. Harmless once `.next` is clean; leave it or delete it — it does not cause the tailwindcss error.

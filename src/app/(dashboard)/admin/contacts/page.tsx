@@ -371,6 +371,7 @@ export default function ContactsPage() {
   // Activity + verify are opt-in add-ons (default OFF), matching Prospecting.
   const [enrichRunActivity, setEnrichRunActivity] = useState(false);
   const [enrichRunVerify, setEnrichRunVerify] = useState(false);
+  const [enrichRunNaming, setEnrichRunNaming] = useState(false);
   const [enrichStarting, setEnrichStarting] = useState(false);
   const [enrichError, setEnrichError] = useState<string | null>(null);
   // Org waterfall config (migration 00075) — fetched when the dialog opens so
@@ -607,6 +608,7 @@ export default function ContactsPage() {
           run_waterfall: enrichRunWaterfall,
           run_activity: enrichRunActivity,
           run_verify: enrichRunVerify,
+          run_naming: enrichRunNaming,
         }),
       });
       const data = (await res.json()) as {
@@ -1758,6 +1760,22 @@ export default function ContactsPage() {
                   </span>
                 </span>
               </label>
+              <label className="flex items-start gap-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={enrichRunNaming}
+                  onChange={(e) => setEnrichRunNaming(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-border accent-[#2E37FE] cursor-pointer"
+                />
+                <span>
+                  Find owner names (decision-maker){" "}
+                  <span className="text-[9px] uppercase tracking-wide text-[#2E37FE]/70">add-on</span>
+                  <span className="block text-[11px] text-muted-foreground">
+                    ≈ $0.015 per business · for name-less company leads (e.g. Google Maps) —
+                    finds the owner&apos;s name &amp; title, then builds their personal email
+                  </span>
+                </span>
+              </label>
             </div>
             <p className="text-[11px] text-muted-foreground">
               Even without the verify add-on, found emails are re-checked by Million
@@ -1786,7 +1804,8 @@ export default function ContactsPage() {
                     !enrichRunDomains &&
                     !enrichRunWaterfall &&
                     !enrichRunActivity &&
-                    !enrichRunVerify) ||
+                    !enrichRunVerify &&
+                    !enrichRunNaming) ||
                   (enrichNeedsDomain === 0 &&
                     enrichNeedsEmail === 0 &&
                     enrichActivityCount === 0 &&

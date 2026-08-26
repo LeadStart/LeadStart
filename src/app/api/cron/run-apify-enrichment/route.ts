@@ -40,11 +40,14 @@ import {
 } from "@/lib/millionverifier/policy";
 import { enqueueOwnerAlert } from "@/lib/notifications/owner-alerts";
 import { runPatternMv, type PatternMvItem } from "@/lib/enrichment/pattern-mv";
+import { hasUsableName, methodForItem } from "@/lib/enrichment/waterfall-routing";
+import { classifyContactOutcome, addOutcome, ALL_COUNT_KEYS } from "@/lib/enrichment/outcomes";
 import Anthropic from "@anthropic-ai/sdk";
 import { callPerplexity } from "@/lib/perplexity/client";
 import { calculateCost, HAIKU_MODEL_ID } from "@/lib/decision-maker/pricing";
 import { fetchPage } from "@/lib/decision-maker/fetcher";
 import { isSafeUrl } from "@/lib/decision-maker/validation";
+import { enrichBusiness, type EnrichmentInput, type EnrichmentResult } from "@/lib/decision-maker";
 import {
   runDomainDiscovery,
   extractContactLocation,
@@ -86,6 +89,14 @@ const DISCOVERY_BATCH = 10;
 const DISCOVERY_CONCURRENCY = 3;
 const DISCOVERY_DEADLINE_SEC = 40;
 
+// Naming (inline decision-maker Layer 1/2). The heaviest inline step — each item
+// scrapes a site (Layer 1) and may web-search (Layer 2) — so small batch + pool
+// + a per-business timeout well under the tick budget.
+const NAMING_BATCH = 4;
+const NAMING_CONCURRENCY = 2;
+const NAMING_DEADLINE_SEC = 45;
+const NAMING_PER_BUSINESS_TIMEOUT_MS = 30_000;
+
 // Waterfall methods by execution style:
 //   DIRECT   — run inline in the tick via Million Verifier, no Apify run.
 //   SCRAPE   — our site-contact-scraper actor (site_scrape + the scrape stage of
@@ -102,15 +113,6 @@ function actorForMethod(method: EnrichmentWaterfallMethod): string | null {
   return null;
 }
 
-// Route an item to its size-band method from the run's config snapshot.
-function methodForItem(
-  config: EnrichmentSettings,
-  employeeCount: number | null,
-): EnrichmentWaterfallMethod {
-  if (employeeCount == null) return config.unknown_method;
-  return employeeCount >= config.size_threshold ? config.large_method : config.small_method;
-}
-
 type Admin = SupabaseClient;
 
 interface RunRow {
@@ -124,6 +126,8 @@ interface RunRow {
   run_activity: boolean;
   // Opt-in Million Verifier phase (migration 00077).
   run_verify: boolean;
+  // Opt-in decision-maker naming phase (migration 00079).
+  run_naming: boolean;
   profile_actor: string;
   domain_actor: string;
   waterfall_actor: string | null;
@@ -148,6 +152,7 @@ type ItemRow = ProviderItem & {
   profile_apify_run_id: string | null;
   domain_status: string;
   domain_apify_run_id: string | null;
+  naming_status: string | null;
   waterfall_status: string | null;
   waterfall_apify_run_id: string | null;
 };
@@ -158,6 +163,9 @@ const PHASE_COLS: Record<
 > = {
   profiles: { status: "profile_status", runId: "profile_apify_run_id", notes: "profile_notes" },
   domains: { status: "domain_status", runId: "domain_apify_run_id", notes: "domain_notes" },
+  // Naming is inline (decision-maker Layer 1/2, no Apify run) — runId is never
+  // queried; runPhase short-circuits before the Apify path, like verify.
+  naming: { status: "naming_status", runId: "naming_apify_run_id", notes: "naming_notes" },
   waterfall: { status: "waterfall_status", runId: "waterfall_apify_run_id", notes: "waterfall_notes" },
   activity: { status: "activity_status", runId: "activity_apify_run_id", notes: "activity_notes" },
   // Verify is inline (Million Verifier, no Apify run) — runId is never queried
@@ -308,6 +316,10 @@ async function runPhase(
   // waterfall.
   if (phase === "verify") {
     return runVerifyPhase(admin, client, run, tickStart);
+  }
+  // Naming is an inline decision-maker phase (no Apify run) — same pattern.
+  if (phase === "naming") {
+    return runNamingBatch(admin, client, run, tickStart);
   }
 
   const provider = getProvider(phase, run.waterfall_actor);
@@ -1082,6 +1094,291 @@ async function runDomainDiscoveryBatch(
   return { status: "domain_discovery", found, not_found: notFound, inconclusive };
 }
 
+// ---------------------------------------------------------------- naming phase
+
+// Dig the Maps category + business city/state stamped on a contact's
+// enrichment_data at import (import-maps-places), for the naming input.
+function namingContext(ed: unknown): { category: string | null; city: string | null; state: string | null } {
+  if (!ed || typeof ed !== "object") return { category: null, city: null, state: null };
+  const o = ed as Record<string, unknown>;
+  const sr = (o.source_row && typeof o.source_row === "object" ? (o.source_row as Record<string, unknown>) : {});
+  const catRaw = sr.category ?? sr.category_label;
+  const category = typeof catRaw === "string" && catRaw.trim() ? catRaw.trim() : null;
+  const city = typeof o.city === "string" && o.city.trim() ? o.city.trim() : null;
+  const state = typeof o.state === "string" && o.state.trim() ? o.state.trim() : null;
+  return { category, city, state };
+}
+
+// Process one naming batch inline (no Apify run) — the opt-in owner-name add-on.
+// Runs the decision-maker orchestrator (Layer 1 site scrape → Layer 2 web search)
+// per name-less item, writing first/last/title onto the item AND the contact so
+// the waterfall's pattern_mv can then build a personal email from name + domain
+// (and a returned personal email is written straight through as provider
+// 'decision_maker'). No Anthropic key → not_found with a config note (run
+// continues). Per-item errors retry to the attempt cap. Never uses in_flight —
+// recoverOrphans would reset it.
+async function runNamingBatch(
+  admin: Admin,
+  client: ApifyClient, // only for advancePhase's completion-time cost reconcile
+  run: RunRow,
+  tickStart: number,
+): Promise<Record<string, unknown>> {
+  const cols = PHASE_COLS.naming;
+
+  // Org keys — Anthropic is mandatory (Layer 1 is Haiku); Perplexity optional
+  // (Layer 2 falls back to Claude web_search when it's absent).
+  const { data: orgRow } = await admin
+    .from("organizations")
+    .select("anthropic_api_key, perplexity_api_key")
+    .eq("id", run.organization_id)
+    .maybeSingle();
+  const org = orgRow as { anthropic_api_key: string | null; perplexity_api_key: string | null } | null;
+  const anthropicKey = org?.anthropic_api_key?.trim() || process.env.ANTHROPIC_API_KEY?.trim() || null;
+  const perplexityKey = org?.perplexity_api_key?.trim() || process.env.PERPLEXITY_API_KEY?.trim() || null;
+
+  // No Anthropic key → naming can't run. Mark ALL pending naming items not_found
+  // with a config note and complete the phase (mirrors verify's no-key path).
+  if (!anthropicKey) {
+    await admin
+      .from("enrichment_run_items")
+      .update({
+        naming_status: "not_found",
+        naming_notes: "Anthropic API key required for owner-name discovery (Settings → Integrations)",
+      })
+      .eq("run_id", run.id)
+      .eq("naming_status", "pending");
+    await advancePhase(admin, client, run);
+    return { status: "no_naming_key", phase: run.phase };
+  }
+
+  // Claim a batch of pending naming items.
+  const { data: pendingData } = await admin
+    .from("enrichment_run_items")
+    .select(ENRICH_ITEM_WORK_COLUMNS)
+    .eq("run_id", run.id)
+    .eq("naming_status", "pending")
+    .order("created_at", { ascending: true })
+    .order("id", { ascending: true })
+    .limit(NAMING_BATCH);
+  let batch = (pendingData as ItemRow[] | null) ?? [];
+  // Nothing pending → the phase is done; advance (mirrors runVerifyPhase).
+  if (batch.length === 0) {
+    await advancePhase(admin, client, run);
+    return { status: "advanced", phase: run.phase };
+  }
+  batch = await dropAlreadyDone(admin, run, "naming", cols, batch);
+  if (batch.length === 0) return { status: "skipped_batch" };
+
+  // Fetch contacts for input construction + fill-only writes.
+  type NamingContact = Contact & {
+    first_name?: string | null;
+    last_name?: string | null;
+    title?: string | null;
+    company_email?: string | null;
+    location?: string | null;
+  };
+  const contactIds = Array.from(new Set(batch.map((b) => b.contact_id)));
+  const contactMap = new Map<string, NamingContact>();
+  for (let i = 0; i < contactIds.length; i += 300) {
+    const part = contactIds.slice(i, i + 300);
+    const { data } = await admin
+      .from("contacts")
+      .select("id, email, first_name, last_name, title, company_email, location, enrichment_data, tags, status")
+      .eq("organization_id", run.organization_id)
+      .in("id", part);
+    for (const c of (data as NamingContact[] | null) ?? []) contactMap.set(c.id, c);
+  }
+
+  // Concurrency pool over enrichBusiness; items past the deadline stay pending.
+  const deadlineMs = tickStart + NAMING_DEADLINE_SEC * 1000;
+  let cursor = 0;
+  const outcomes = new Map<string, EnrichmentResult>();
+  const worker = async (): Promise<void> => {
+    for (;;) {
+      if (Date.now() >= deadlineMs) return;
+      const i = cursor++;
+      if (i >= batch.length) return;
+      const item = batch[i];
+      const contact = contactMap.get(item.contact_id);
+      const { category, city, state } = namingContext(contact?.enrichment_data);
+      const input: EnrichmentInput = {
+        business_name: item.company_name ?? "",
+        website: item.company_domain ? `https://${item.company_domain}` : null,
+        category,
+        city: city ?? contact?.location ?? null,
+        state,
+        generic_email: contact?.company_email ?? null,
+      };
+      try {
+        const res = await enrichBusiness(input, {
+          serviceType: "operations",
+          useLayer2: true, // uses Perplexity if present, else Claude web_search
+          anthropicKey: anthropicKey as string,
+          perplexityKey: perplexityKey ?? undefined,
+          perBusinessTimeoutMs: NAMING_PER_BUSINESS_TIMEOUT_MS,
+        });
+        outcomes.set(item.id, res);
+      } catch (err) {
+        outcomes.set(item.id, {
+          first_name: null,
+          last_name: null,
+          title: null,
+          personal_email: null,
+          other_emails: [],
+          enrichment_source: null,
+          enrichment_notes: err instanceof Error ? err.message : String(err),
+          status: "error",
+          cost_usd: 0,
+        });
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(NAMING_CONCURRENCY, batch.length) }, () => worker()));
+
+  let found = 0;
+  let notFound = 0;
+  let inconclusive = 0;
+  let totalCost = 0;
+  const now = new Date().toISOString();
+
+  for (const item of batch) {
+    const outcome = outcomes.get(item.id);
+    if (!outcome) continue; // deadline — stays pending for the next tick
+    totalCost += outcome.cost_usd;
+    const contact = contactMap.get(item.contact_id);
+
+    // A name was found → write it to the item (so seedWaterfallItems routes to
+    // pattern_mv) and fill-only to the contact, plus any personal email.
+    if (outcome.first_name && contact) {
+      // 1) Provenance + fill-only name/title on the contact.
+      let curEd = mergeEnrichment(contact.enrichment_data, {
+        decision_maker: {
+          provider: "decision_maker",
+          first_name: outcome.first_name,
+          last_name: outcome.last_name,
+          title: outcome.title,
+          source: outcome.enrichment_source,
+          found_at: now,
+        },
+      });
+      const { data: nameUpd } = await admin
+        .from("contacts")
+        .update({
+          first_name: outcome.first_name,
+          last_name: outcome.last_name,
+          title: outcome.title,
+          enrichment_data: curEd,
+        })
+        .eq("id", contact.id)
+        .is("first_name", null)
+        .select("id");
+      if (!nameUpd || nameUpd.length === 0) {
+        // Name already set since we read it — still record provenance.
+        await admin.from("contacts").update({ enrichment_data: curEd }).eq("id", contact.id);
+      }
+
+      // 2) Personal email, if the layers returned one — sanitize, then fill-only.
+      let itemEmail: string | null = null;
+      if (outcome.personal_email) {
+        const san = sanitizeFoundEmail(outcome.personal_email, {
+          firstName: outcome.first_name,
+          lastName: outcome.last_name,
+          domain: item.company_domain,
+        });
+        if (san.email) {
+          curEd = mergeEnrichment(curEd, {
+            email: { provider: "decision_maker", email: san.email, confidence: 70, provider_status: null, found_at: now },
+          });
+          const tags = Array.from(new Set([...(contact.tags ?? []), "enriched", "decision_maker"]));
+          const { data: eUpd, error: eErr } = await admin
+            .from("contacts")
+            .update({ email: san.email, tags, enrichment_data: curEd })
+            .eq("id", contact.id)
+            .is("email", null)
+            .select("id");
+          if (!eErr && eUpd && eUpd.length > 0) {
+            itemEmail = san.email;
+          } else {
+            // 23505 (email on another contact) or a race → keep the name, record
+            // the conflict, leave the item email null (waterfall may still try).
+            const ed2 = mergeEnrichment(curEd, {
+              email_conflict: { provider: "decision_maker", email: san.email },
+            });
+            await admin.from("contacts").update({ enrichment_data: ed2 }).eq("id", contact.id);
+          }
+        }
+      }
+
+      const notes = [outcome.enrichment_source, outcome.enrichment_notes]
+        .filter(Boolean)
+        .join(": ")
+        .slice(0, 300);
+      await admin
+        .from("enrichment_run_items")
+        .update({
+          naming_status: "found",
+          first_name: outcome.first_name,
+          last_name: outcome.last_name,
+          title: outcome.title,
+          ...(itemEmail ? { email: itemEmail, email_provider: "decision_maker" } : {}),
+          naming_notes: notes || null,
+          cost_usd: outcome.cost_usd,
+        })
+        .eq("id", item.id);
+      found++;
+    } else if (outcome.status === "error") {
+      // Retry unless we've hit the attempt cap.
+      const attempts = (item.attempts ?? 0) + 1;
+      if (attempts >= MAX_ITEM_ATTEMPTS) {
+        await admin
+          .from("enrichment_run_items")
+          .update({
+            naming_status: "not_found",
+            naming_notes: `error after ${attempts} attempts: ${outcome.enrichment_notes}`.slice(0, 300),
+            cost_usd: outcome.cost_usd,
+          })
+          .eq("id", item.id);
+        notFound++;
+      } else {
+        await admin
+          .from("enrichment_run_items")
+          .update({ attempts, cost_usd: outcome.cost_usd })
+          .eq("id", item.id);
+        inconclusive++;
+      }
+    } else {
+      // Completed but no name found.
+      await admin
+        .from("enrichment_run_items")
+        .update({
+          naming_status: "not_found",
+          naming_notes: (outcome.enrichment_notes || "no decision-maker found").slice(0, 300),
+          cost_usd: outcome.cost_usd,
+        })
+        .eq("id", item.id);
+      notFound++;
+    }
+  }
+
+  if (totalCost > 0) {
+    await admin
+      .from("enrichment_runs")
+      .update({ cost_usd: (Number(run.cost_usd) || 0) + totalCost })
+      .eq("id", run.id);
+    run.cost_usd = (Number(run.cost_usd) || 0) + totalCost;
+  }
+
+  await admin
+    .from("enrichment_runs")
+    .update({
+      progress_message: `Owner names: ${found} found · ${notFound} miss${inconclusive ? ` · ${inconclusive} retrying` : ""}`,
+      locked_at: null,
+    })
+    .eq("id", run.id);
+
+  return { status: "naming", found, not_found: notFound, inconclusive };
+}
+
 // ---------------------------------------------------------------- verify phase
 
 // A found email's verify columns. `found` == verified clean (MV "ok");
@@ -1317,17 +1614,25 @@ async function seedWaterfallItems(admin: Admin, run: RunRow): Promise<number> {
   const config = (run.waterfall_config ?? DEFAULT_ENRICHMENT_SETTINGS) as EnrichmentSettings;
   const { data } = await admin
     .from("enrichment_run_items")
-    .select("id, employee_count")
+    .select("id, employee_count, first_name, last_name")
     .eq("run_id", run.id)
     .is("waterfall_status", null)
     .is("email", null)
     .not("company_domain", "is", null);
-  const rows = (data as { id: string; employee_count: number | null }[] | null) ?? [];
+  const rows =
+    (data as { id: string; employee_count: number | null; first_name: string | null; last_name: string | null }[] | null) ??
+    [];
   if (rows.length === 0) return 0;
 
+  // Group by resolved method. Track name-less items (methodForItem routes them to
+  // site_scrape) so we can stamp a provenance note — these are the Google-Maps
+  // business leads with no decision-maker resolved yet.
   const groups = new Map<EnrichmentWaterfallMethod, string[]>();
+  const namelessRouted: string[] = [];
   for (const r of rows) {
-    const method = methodForItem(config, r.employee_count);
+    const named = hasUsableName(r.first_name, r.last_name);
+    const method = methodForItem(config, r.employee_count, named);
+    if (!named && method !== "off") namelessRouted.push(r.id);
     const arr = groups.get(method) ?? [];
     arr.push(r.id);
     groups.set(method, arr);
@@ -1346,6 +1651,13 @@ async function seedWaterfallItems(admin: Admin, run: RunRow): Promise<number> {
         .in("id", ids.slice(i, i + 200));
     }
     if (method !== "off") pending += ids.length;
+  }
+  // Provenance note for the name-less → site_scrape routing (doesn't change state).
+  for (let i = 0; i < namelessRouted.length; i += 200) {
+    await admin
+      .from("enrichment_run_items")
+      .update({ waterfall_notes: "no person name — routed to site scrape" })
+      .in("id", namelessRouted.slice(i, i + 200));
   }
   return pending;
 }
@@ -1555,12 +1867,16 @@ async function finishWaterfallMiss(
   extraPatch: Record<string, unknown>,
   note: string,
   share: number,
-): Promise<"not_found" | "skipped"> {
+): Promise<"found" | "not_found" | "skipped"> {
   if (contact && extraPatch.company_emails) {
     const ed = mergeEnrichment(contact.enrichment_data, { company_emails: extraPatch.company_emails });
     await admin.from("contacts").update({ enrichment_data: ed }).eq("id", contact.id);
   }
-  if (item.waterfall_method === "scrape_plus_pattern") {
+  const named = hasUsableName(item.first_name, item.last_name);
+  // scrape_plus_pattern hands a scrape miss to pattern_mv — but only with a name
+  // to build guesses from. A name-less miss can't be helped by pattern_mv, so it
+  // falls through to the generic-inbox backfill / terminal path below.
+  if (item.waterfall_method === "scrape_plus_pattern" && named) {
     await admin
       .from("enrichment_run_items")
       .update({
@@ -1573,6 +1889,46 @@ async function finishWaterfallMiss(
       .eq("id", item.id);
     return "skipped";
   }
+
+  // Generic-inbox backfill: for a name-less business lead with no personal email,
+  // a scraped company inbox (info@/contact@) IS the actionable address — the
+  // native sender mails contacts.email and skips email-less rows, so a generic
+  // living only in company_email would be unsendable. Fill contacts.email
+  // (fill-only) with the generic at low confidence + provenance so the lead is
+  // usable. Deliberate, documented exception to the 00076 person-email reservation,
+  // gated on !named so decision-maker rows keep the strict person-only contract.
+  const genericEmail =
+    typeof extraPatch.company_email === "string" ? extraPatch.company_email.trim().toLowerCase() : "";
+  if (!named && genericEmail && contact && !contact.email) {
+    const now = new Date().toISOString();
+    const ed = mergeEnrichment(contact.enrichment_data, {
+      email: { provider: "site_scrape", kind: "company_generic", email: genericEmail, confidence: 30, found_at: now },
+    });
+    const tags = Array.from(new Set([...(contact.tags ?? []), "enriched", "site_scrape"]));
+    const { data: updated, error } = await admin
+      .from("contacts")
+      .update({ email: genericEmail, tags, enrichment_data: ed })
+      .eq("id", contact.id)
+      .is("email", null)
+      .select("id");
+    if (!error && updated && updated.length > 0) {
+      await admin
+        .from("enrichment_run_items")
+        .update({
+          [cols.status]: "found",
+          email: genericEmail,
+          email_provider: "site_scrape",
+          confidence: 30,
+          [cols.notes]: "generic company inbox (no decision-maker name)",
+          cost_usd: share,
+        })
+        .eq("id", item.id);
+      return "found";
+    }
+    // 23505 (email already on another contact) or a race → fall through to the
+    // terminal miss below rather than throwing.
+  }
+
   await admin
     .from("enrichment_run_items")
     .update({ [cols.status]: "not_found", [cols.notes]: note, cost_usd: share })
@@ -1733,13 +2089,17 @@ async function dropAlreadyDone(
   const contactIds = batch.map((b) => b.contact_id);
   const { data } = await admin
     .from("contacts")
-    .select("id, email, company_domain")
+    .select("id, email, company_domain, first_name, last_name")
     .eq("organization_id", run.organization_id)
     .in("id", contactIds);
   const map = new Map(
-    ((data as { id: string; email: string | null; company_domain: string | null }[] | null) ?? []).map(
-      (c) => [c.id, c],
-    ),
+    ((data as {
+      id: string;
+      email: string | null;
+      company_domain: string | null;
+      first_name: string | null;
+      last_name: string | null;
+    }[] | null) ?? []).map((c) => [c.id, c]),
   );
 
   const keep: ItemRow[] = [];
@@ -1751,7 +2111,10 @@ async function dropAlreadyDone(
         ? Boolean(c?.company_domain)
         : phase === "profiles" || phase === "waterfall"
           ? Boolean(c?.email)
-          : false;
+          : // naming: the contact already has an email or a name → nothing to find.
+            phase === "naming"
+            ? Boolean(c?.email) || Boolean(c?.first_name) || Boolean(c?.last_name)
+            : false;
     if (done) skipIds.push(it.id);
     else keep.push(it);
   }
@@ -1922,6 +2285,94 @@ async function reconcileRunCost(admin: Admin, client: ApifyClient, run: RunRow):
   }
 }
 
+// Delivered-outcome ledger (Phase 5). At completion, classify each of the run's
+// contacts by delivered tier (record / phone / company_email / owner_name /
+// personal_email / verified_email) and roll the counts onto the run
+// (outcome_counts) and — for search-sourced contacts — merge-increment the
+// source search's delivered_counts. The margin substrate for future billing.
+// Best-effort; never breaks completion. (A search enriched across multiple
+// drain-merged runs accumulates; a rare manual re-enrichment can double-count —
+// acceptable for a rough ledger.)
+type ContactOutcomeRow = {
+  id: string;
+  email: string | null;
+  email_verification_status: string | null;
+  company_email: string | null;
+  company_phone: string | null;
+  phone: string | null;
+  first_name: string | null;
+  enrichment_data: unknown;
+};
+async function finalizeOutcomes(admin: Admin, run: RunRow): Promise<void> {
+  try {
+    const contactIds: string[] = [];
+    for (let offset = 0; offset < 20000; offset += 1000) {
+      const { data } = await admin
+        .from("enrichment_run_items")
+        .select("contact_id")
+        .eq("run_id", run.id)
+        .range(offset, offset + 999);
+      const rows = (data as { contact_id: string }[] | null) ?? [];
+      for (const r of rows) if (r.contact_id) contactIds.push(r.contact_id);
+      if (rows.length < 1000) break;
+    }
+    const uniqIds = Array.from(new Set(contactIds));
+    if (uniqIds.length === 0) return;
+
+    const runCounts: Record<string, number> = {};
+    const perSearch = new Map<string, { table: "maps_searches" | "linkedin_searches"; counts: Record<string, number> }>();
+
+    for (let i = 0; i < uniqIds.length; i += 300) {
+      const part = uniqIds.slice(i, i + 300);
+      const { data } = await admin
+        .from("contacts")
+        .select("id, email, email_verification_status, company_email, company_phone, phone, first_name, enrichment_data")
+        .eq("organization_id", run.organization_id)
+        .in("id", part);
+      for (const c of (data as ContactOutcomeRow[] | null) ?? []) {
+        const ed = (c.enrichment_data && typeof c.enrichment_data === "object" ? c.enrichment_data : {}) as Record<string, unknown>;
+        const enr = (ed.enrichment && typeof ed.enrichment === "object" ? ed.enrichment : {}) as Record<string, unknown>;
+        const emailBlock = (enr.email && typeof enr.email === "object" ? enr.email : {}) as Record<string, unknown>;
+        const flags = classifyContactOutcome({
+          email: c.email,
+          emailVerificationStatus: c.email_verification_status,
+          emailKind: typeof emailBlock.kind === "string" ? emailBlock.kind : null,
+          companyEmail: c.company_email,
+          companyPhone: c.company_phone,
+          phone: c.phone,
+          firstName: c.first_name,
+        });
+        addOutcome(runCounts, flags);
+        const mapsId = typeof ed.maps_search_id === "string" ? ed.maps_search_id : null;
+        const liId = typeof ed.linkedin_search_id === "string" ? ed.linkedin_search_id : null;
+        if (mapsId) {
+          const g = perSearch.get(`maps_searches:${mapsId}`) ?? { table: "maps_searches" as const, counts: {} };
+          addOutcome(g.counts, flags);
+          perSearch.set(`maps_searches:${mapsId}`, g);
+        } else if (liId) {
+          const g = perSearch.get(`linkedin_searches:${liId}`) ?? { table: "linkedin_searches" as const, counts: {} };
+          addOutcome(g.counts, flags);
+          perSearch.set(`linkedin_searches:${liId}`, g);
+        }
+      }
+    }
+
+    await admin.from("enrichment_runs").update({ outcome_counts: runCounts }).eq("id", run.id);
+
+    for (const [key, g] of perSearch) {
+      const id = key.slice(key.indexOf(":") + 1);
+      const { data: cur } = await admin.from(g.table).select("delivered_counts").eq("id", id).maybeSingle();
+      const base = (cur as { delivered_counts?: Record<string, number> } | null)?.delivered_counts ?? {};
+      const merged: Record<string, number> = { ...base };
+      for (const k of ALL_COUNT_KEYS) if (g.counts[k]) merged[k] = (merged[k] ?? 0) + g.counts[k];
+      await admin.from(g.table).update({ delivered_counts: merged }).eq("id", id);
+    }
+  } catch (e) {
+    console.error("[finalizeOutcomes] failed:", e);
+    // never break completion
+  }
+}
+
 // Move to the next enabled phase that has work; finalize when none remain.
 async function advancePhase(admin: Admin, client: ApifyClient, run: RunRow): Promise<void> {
   let phase: EnrichmentPhase = run.phase;
@@ -1961,10 +2412,31 @@ async function advancePhase(admin: Admin, client: ApifyClient, run: RunRow): Pro
       continue;
     }
     if (phase === "domains") {
+      phase = "naming";
+      if (run.run_naming) {
+        // Seed name-less, company-named items for owner-name discovery. Runs
+        // BEFORE the waterfall so a found name routes that item to pattern_mv
+        // (the decision-maker → personal-email chain).
+        await admin
+          .from("enrichment_run_items")
+          .update({ naming_status: "pending", attempts: 0 })
+          .eq("run_id", run.id)
+          .is("naming_status", null)
+          .is("email", null)
+          .is("first_name", null)
+          .is("last_name", null)
+          .not("company_name", "is", null);
+        const n = await countPending(admin, run.id, "naming_status");
+        if (n > 0) break;
+      }
+      continue;
+    }
+    if (phase === "naming") {
       phase = "waterfall";
       if (run.run_waterfall) {
         // Stamp each eligible item with its size-band method (pattern_mv /
-        // pattern_mv / site_scrape / bovi / off) from the run's config snapshot.
+        // site_scrape / bovi / off) from the run's config snapshot. Name-aware:
+        // items the naming phase just named now route to pattern_mv.
         const n = await seedWaterfallItems(admin, run);
         if (n > 0) break;
       }
@@ -2002,6 +2474,7 @@ async function advancePhase(admin: Admin, client: ApifyClient, run: RunRow): Pro
 
   if (phase === "complete") {
     await reconcileRunCost(admin, client, run);
+    await finalizeOutcomes(admin, run);
     const counts = await recomputeCounters(admin, run);
     await admin
       .from("enrichment_runs")
@@ -2012,6 +2485,7 @@ async function advancePhase(admin: Admin, client: ApifyClient, run: RunRow): Pro
         locked_at: null,
         progress_message:
           `Emails ${counts.found_emails_count} · domains ${counts.found_domains_count}` +
+          (run.run_naming ? ` · names ${counts.found_names_count}` : "") +
           (run.run_activity ? ` · activity ${counts.found_activity_count}` : "") +
           (run.run_verify ? ` · verified ${counts.found_verified_count}` : ""),
       })
@@ -2054,6 +2528,7 @@ interface Counters {
   found_emails_count: number;
   found_activity_count: number;
   found_verified_count: number;
+  found_names_count: number;
 }
 
 async function recomputeCounters(admin: Admin, run: RunRow): Promise<Counters> {
@@ -2071,6 +2546,7 @@ async function recomputeCounters(admin: Admin, run: RunRow): Promise<Counters> {
   const foundWaterfall = await countIn(admin, run.id, "waterfall_status", ["found"]);
   const foundActivity = await countIn(admin, run.id, "activity_status", ["found"]);
   const foundVerified = await countIn(admin, run.id, "verify_status", ["found"]);
+  const foundNames = await countIn(admin, run.id, "naming_status", ["found"]);
 
   const { count: emailCount } = await admin
     .from("enrichment_run_items")
@@ -2087,6 +2563,7 @@ async function recomputeCounters(admin: Admin, run: RunRow): Promise<Counters> {
     found_emails_count: emailCount ?? 0,
     found_activity_count: foundActivity,
     found_verified_count: foundVerified,
+    found_names_count: foundNames,
   };
 
   // Don't clobber a completed run's terminal message; just persist counts +

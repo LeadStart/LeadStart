@@ -60,8 +60,27 @@ function buildItemRows(
       !companyId &&
       !companySlug &&
       Boolean(c.company_name?.trim());
+    // A contact that already has a domain but no email (e.g. a Google-Maps
+    // business lead: company + website, no person) still has real work — the
+    // waterfall can scrape its site for a company/owner email. Without this it
+    // matched no want-flag and was silently dropped from the run entirely.
+    // Its item is born with waterfall_status null; seedWaterfallItems stamps the
+    // method + pending at the domains→waterfall transition (advancePhase owns
+    // waterfall seeding), so we do NOT pre-seed 'pending' here.
+    const wantWaterfallOnly = !c.email && Boolean(c.company_domain?.trim());
+    // Name-less business lead that opted into the owner-name (naming) add-on —
+    // eligible even with no domain (naming's Layer 2 web-searches by name + city).
+    // Gated on the per-contact addon stamp so a run without naming doesn't pull in
+    // contacts it can't work.
+    const wantNaming =
+      normalizeAddons((c.enrichment_data as { addons?: unknown } | null)?.addons).naming &&
+      !c.email &&
+      !c.first_name &&
+      !c.last_name &&
+      Boolean(c.company_name?.trim());
     const wantActivity = Boolean(profileId);
-    if (!wantProfile && !wantDomain && !wantDomainDiscovery && !wantActivity) continue;
+    if (!wantProfile && !wantDomain && !wantDomainDiscovery && !wantWaterfallOnly && !wantNaming && !wantActivity)
+      continue;
     eligibleContactIds.push(c.id);
     rows.push({
       organization_id: organizationId,
@@ -149,6 +168,7 @@ export async function enqueueEnrichment(
   );
   const runActivity = eligible.some((c) => addonsFor(c).activity) && !allSkipActivity;
   const runVerify = eligible.some((c) => addonsFor(c).verify);
+  const runNaming = eligible.some((c) => addonsFor(c).naming);
 
   // One active run per org → if busy, stamp the eligible contacts and bail.
   const { data: activeRows } = await admin
@@ -188,6 +208,7 @@ export async function enqueueEnrichment(
       run_waterfall: runWaterfall,
       run_activity: runActivity,
       run_verify: runVerify,
+      run_naming: runNaming,
       phase: "profiles",
       status: "pending",
       total_count: rows.length,

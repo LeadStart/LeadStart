@@ -67,6 +67,7 @@ export function normalizeAddons(input: unknown): EnrichmentAddons {
   return {
     activity: o.activity === true,
     verify: o.verify === true,
+    naming: o.naming === true,
   };
 }
 

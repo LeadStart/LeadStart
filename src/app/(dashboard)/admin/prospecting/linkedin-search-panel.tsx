@@ -1401,12 +1401,15 @@ export function LinkedInSearchPanel() {
 
   // Add-ons for the live panel: a created/running search reflects its stored
   // choice; a fresh form reflects the current toggles.
+  // naming (owner-name discovery) is a Maps-vein add-on — LinkedIn contacts
+  // already carry names — so it's always false here.
   const panelAddons: EnrichmentAddons = detail?.query?.addons
     ? {
         activity: detail.query.addons.activity === true,
         verify: detail.query.addons.verify === true,
+        naming: false,
       }
-    : { activity: addActivity, verify: addVerify };
+    : { activity: addActivity, verify: addVerify, naming: false };
 
   // Actual-spend breakdown (the "What did this cost?" popover). Sourcing +
   // enrichment are both real Apify usageTotalUsd figures; together they reconcile

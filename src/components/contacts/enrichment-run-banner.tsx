@@ -36,6 +36,8 @@ function phaseLine(run: EnrichmentRun): string {
       return `Finding emails from LinkedIn profiles (HarvestAPI) · ${n}/${N}`;
     case "domains":
       return `Resolving company domains · ${n}/${N}`;
+    case "naming":
+      return `Finding owner names (decision-maker) · ${n}/${N}`;
     case "waterfall":
       return `Second pass on misses · ${n}/${N}`;
     case "activity":
@@ -129,6 +131,7 @@ export function EnrichmentRunBanner({
             Emails found {run.found_emails_profiles_count}
             {run.run_waterfall ? ` (+${run.found_emails_waterfall_count} second pass)` : ""} · Domains{" "}
             {run.found_domains_count}/{run.total_count}
+            {run.run_naming ? ` · Names ${run.found_names_count}` : ""}
             {run.run_activity ? ` · Active ${run.found_activity_count}` : ""}
             {run.run_verify ? ` · Verified ${run.found_verified_count}` : ""} · est. cost $
             {cost.toFixed(3)}

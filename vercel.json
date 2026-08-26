@@ -30,19 +30,15 @@
       "schedule": "0 13 * * *"
     },
     {
-      "path": "/app/api/cron/run-prospect-searches",
-      "schedule": "* * * * *"
-    },
-    {
       "path": "/app/api/cron/run-linkedin-searches",
       "schedule": "* * * * *"
     },
     {
-      "path": "/app/api/cron/drain-enrichment-queue",
+      "path": "/app/api/cron/run-maps-searches",
       "schedule": "* * * * *"
     },
     {
-      "path": "/app/api/cron/run-decision-maker-enrichment",
+      "path": "/app/api/cron/drain-enrichment-queue",
       "schedule": "* * * * *"
     },
     {

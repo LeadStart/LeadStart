@@ -20,6 +20,8 @@ import {
   BOVI_COST_USD,
   SITE_SCRAPE_COST_USD,
   DOMAIN_DISCOVERY_COST_USD,
+  NAMING_COST_USD,
+  MAPS_PLACE_COST_USD,
 } from "./pricing";
 
 const SOURCING_ACTOR = "harvestapi~linkedin-profile-search";
@@ -27,6 +29,7 @@ const PROFILE_ACTOR = "harvestapi~linkedin-profile-scraper";
 const DOMAIN_ACTOR = "harvestapi~linkedin-company";
 const ACTIVITY_ACTOR = "harvestapi~linkedin-profile-posts";
 const BOVI_ACTOR = "bovi~email-finder-bulk";
+const MAPS_ACTOR = "compass~google-maps-extractor";
 
 // LinkedIn search pages return 25 results; the actor bills one search-page event
 // per page, so per-profile = page price / 25.
@@ -40,6 +43,8 @@ export interface LivePricing {
   fetchedAt: string;
   tier: string;
   sourcing: { short: number; full: number; full_email: number };
+  // Google Maps business sourcing (compass~google-maps-extractor, per place).
+  maps: { place: number };
   enrich: {
     profile: number;
     domain: number;
@@ -48,6 +53,9 @@ export interface LivePricing {
     site_scrape: number;
     // Web-lookup domain discovery (not an Apify actor — token-based, static).
     domain_discovery: number;
+    // Owner-name (decision-maker) discovery — token-based (Anthropic/Perplexity),
+    // static ceiling; not an Apify actor.
+    naming: number;
   };
   notes: string[];
 }
@@ -91,12 +99,13 @@ export async function fetchLivePricing(token: string, tier = "FREE"): Promise<Li
   const hit = cache.get(token);
   if (hit && Date.now() - hit.at < TTL_MS) return hit.value;
 
-  const [src, prof, dom, act, bovi] = await Promise.all([
+  const [src, prof, dom, act, bovi, maps] = await Promise.all([
     currentEvents(token, SOURCING_ACTOR),
     currentEvents(token, PROFILE_ACTOR),
     currentEvents(token, DOMAIN_ACTOR),
     currentEvents(token, ACTIVITY_ACTOR),
     currentEvents(token, BOVI_ACTOR),
+    currentEvents(token, MAPS_ACTOR),
   ]);
   const notes: string[] = [];
   const missing: string[] = [];
@@ -121,9 +130,11 @@ export async function fetchLivePricing(token: string, tier = "FREE"): Promise<Li
   if (act == null) missing.push("activity");
   const boviPrice = priceOf(bovi, "email-found", tier) ?? BOVI_COST_USD;
   if (bovi == null) missing.push("bovi");
+  const mapsPlace = priceOf(maps, "place-scraped", tier) ?? MAPS_PLACE_COST_USD;
+  if (maps == null) missing.push("maps");
 
-  const gotAll = [src, prof, dom, act, bovi].every(Boolean);
-  const source: LivePricing["source"] = gotAll ? "live" : missing.length === 5 ? "fallback" : "partial";
+  const gotAll = [src, prof, dom, act, bovi, maps].every(Boolean);
+  const source: LivePricing["source"] = gotAll ? "live" : missing.length === 6 ? "fallback" : "partial";
   if (missing.length) notes.push(`Using stored fallback for: ${missing.join(", ")}`);
   notes.push("site_scrape is compute-billed (measured avg, not an Apify list price); pattern_mv uses Million Verifier credits");
 
@@ -132,6 +143,7 @@ export async function fetchLivePricing(token: string, tier = "FREE"): Promise<Li
     fetchedAt: new Date().toISOString(),
     tier,
     sourcing: { short: round4(short), full, full_email },
+    maps: { place: round4(mapsPlace) },
     enrich: {
       profile: round4(profile),
       domain: round4(domain),
@@ -139,6 +151,7 @@ export async function fetchLivePricing(token: string, tier = "FREE"): Promise<Li
       bovi: round4(boviPrice),
       site_scrape: SITE_SCRAPE_MEASURED_USD || SITE_SCRAPE_COST_USD,
       domain_discovery: DOMAIN_DISCOVERY_COST_USD,
+      naming: NAMING_COST_USD,
     },
     notes,
   };

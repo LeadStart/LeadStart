@@ -7,6 +7,7 @@ import {
   ACTIVITY_ACTOR,
   resolveWaterfallActor,
 } from "@/lib/apify/providers";
+import { hasUsableName, methodForItem } from "@/lib/enrichment/waterfall-routing";
 
 // POST /api/admin/contacts/enrich/start
 //
@@ -30,6 +31,7 @@ type Body = {
   run_waterfall?: unknown;
   run_activity?: unknown;
   run_verify?: unknown;
+  run_naming?: unknown;
 };
 
 type ContactRow = {
@@ -69,6 +71,8 @@ export async function POST(request: NextRequest) {
   // Prospecting per-search toggles.
   const runActivity = body.run_activity === undefined ? false : Boolean(body.run_activity);
   const runVerify = body.run_verify === undefined ? false : Boolean(body.run_verify);
+  // Owner-name discovery add-on (default OFF). No Apify — decision-maker Layer 1/2.
+  const runNaming = body.run_naming === undefined ? false : Boolean(body.run_naming);
 
   if (contactIds.length === 0) {
     return NextResponse.json({ error: "contact_ids is required" }, { status: 400 });
@@ -79,7 +83,7 @@ export async function POST(request: NextRequest) {
       { status: 400 },
     );
   }
-  if (!runProfiles && !runDomains && !runWaterfall && !runActivity && !runVerify) {
+  if (!runProfiles && !runDomains && !runWaterfall && !runActivity && !runVerify && !runNaming) {
     return NextResponse.json({ error: "Select at least one enrichment step" }, { status: 400 });
   }
   // The core phases run on Apify; verify is Million Verifier only. Require the
@@ -106,7 +110,7 @@ export async function POST(request: NextRequest) {
     settings.unknown_method !== "off";
   const runWaterfallEffective =
     runWaterfall && settings.waterfall_enabled && waterfallHasWork;
-  if (!runProfiles && !runDomains && !runWaterfallEffective && !runActivity && !runVerify) {
+  if (!runProfiles && !runDomains && !runWaterfallEffective && !runActivity && !runVerify && !runNaming) {
     // Only the waterfall was requested and config disables it.
     return NextResponse.json(
       {
@@ -117,18 +121,27 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // First enabled phase. When verify is the ONLY phase, its items are seeded at
-  // creation (there's no earlier phase for advancePhase to seed them from).
+  // First enabled phase. When a phase is the ONLY/first phase, its items are
+  // seeded at creation (there's no earlier phase for advancePhase to seed from).
+  // naming sits between domains and waterfall.
   const initialPhase = runProfiles
     ? "profiles"
     : runDomains
       ? "domains"
-      : runWaterfallEffective
-        ? "waterfall"
-        : runActivity
-          ? "activity"
-          : "verify";
+      : runNaming
+        ? "naming"
+        : runWaterfallEffective
+          ? "waterfall"
+          : runActivity
+            ? "activity"
+            : "verify";
   const seedVerifyNow = initialPhase === "verify";
+  const seedNamingNow = initialPhase === "naming";
+  // When waterfall is the ONLY phase (no profiles/domains ahead of it), there's
+  // no domains→waterfall transition for the worker to seed from — so stamp the
+  // method + pending at insert here (mirrors seedVerifyNow). Normal runs seed in
+  // advancePhase.seedWaterfallItems.
+  const seedWaterfallNow = initialPhase === "waterfall";
 
   // One active run per org.
   const { data: activeRows } = await admin
@@ -186,16 +199,35 @@ export async function POST(request: NextRequest) {
       !c.company_domain &&
       !hasCompanyRef &&
       Boolean(c.company_name?.trim());
+    // A contact that already has a domain but no email (a Google-Maps business
+    // lead, or any imported company+website row) still has waterfall work — the
+    // site scraper can find a company/owner email. Without this it matched no
+    // want-flag and was dropped from the run entirely.
+    const wantWaterfallOnly = runWaterfallEffective && !c.email && Boolean(c.company_domain);
+    // Owner-name discovery: a name-less, company-named contact (no email yet).
+    // Works even without a domain (Layer 2 web-searches by name + city).
+    const wantNaming =
+      runNaming && !c.email && !c.first_name && !c.last_name && Boolean(c.company_name?.trim());
     // Activity scoring only needs a profile URL — works even for contacts that
     // already have an email/domain (assigned to its phase by the worker).
     const wantActivity = runActivity && Boolean(profileId);
     // Verify only applies to a contact that already has (or will have) an email.
-    // Profiles/waterfall may add one later, so a contact with a profile URL or a
-    // discoverable domain is also verifiable downstream even without an email today.
+    // Profiles/waterfall/naming may add one later, so a contact with a profile
+    // URL, a discoverable domain, a waterfall-only domain, or a naming target is
+    // verifiable downstream.
     const wantVerify =
-      runVerify && (Boolean(c.email) || wantProfile || wantDomain || wantDomainDiscovery);
+      runVerify &&
+      (Boolean(c.email) || wantProfile || wantDomain || wantDomainDiscovery || wantWaterfallOnly || wantNaming);
 
-    if (!wantProfile && !wantDomain && !wantDomainDiscovery && !wantActivity && !wantVerify) {
+    if (
+      !wantProfile &&
+      !wantDomain &&
+      !wantDomainDiscovery &&
+      !wantWaterfallOnly &&
+      !wantNaming &&
+      !wantActivity &&
+      !wantVerify
+    ) {
       // Attribute one skip reason (priority order).
       if (c.email) skipped.already_has_email++;
       else if (runProfiles && !profileId) skipped.no_linkedin_url++;
@@ -222,6 +254,26 @@ export async function POST(request: NextRequest) {
               ? "company not on LinkedIn (website discovery off)"
               : "no parseable company LinkedIn URL";
 
+    // Waterfall seed for the "waterfall is the only phase" edge (seedWaterfallNow):
+    // stamp method + pending now, since there's no domains→waterfall transition
+    // ahead. employee_count is unknown at insert (null) → unknown-size band.
+    const wfMethod =
+      seedWaterfallNow && wantWaterfallOnly
+        ? methodForItem(settings, null, hasUsableName(c.first_name, c.last_name))
+        : null;
+    const wfSeed =
+      wfMethod == null
+        ? { waterfall_status: null }
+        : wfMethod === "off"
+          ? { waterfall_status: "skipped", waterfall_method: "off", waterfall_notes: "waterfall off for this size band" }
+          : {
+              waterfall_status: "pending",
+              waterfall_method: wfMethod,
+              ...(hasUsableName(c.first_name, c.last_name)
+                ? {}
+                : { waterfall_notes: "no person name — routed to site scrape" }),
+            };
+
     itemRows.push({
       organization_id: organizationId,
       contact_id: c.id,
@@ -238,10 +290,11 @@ export async function POST(request: NextRequest) {
       profile_notes: profileNote,
       domain_status: wantDomain || wantDomainDiscovery ? "pending" : "skipped",
       domain_notes: domainNote,
-      // waterfall/activity are assigned by the worker's advancePhase. verify is
-      // too, UNLESS it's the only phase (nothing earlier to trigger the seed) —
-      // then seed it here for contacts that already have an email.
-      waterfall_status: null,
+      // naming/waterfall/activity are assigned by the worker's advancePhase.
+      // verify + naming + waterfall are seeded here when one of them is the only
+      // phase (nothing earlier to trigger the seed).
+      naming_status: seedNamingNow && wantNaming ? "pending" : null,
+      ...wfSeed,
       verify_status: seedVerifyNow && c.email ? "pending" : null,
       email: c.email,
       created_at: now,
@@ -271,6 +324,7 @@ export async function POST(request: NextRequest) {
       run_waterfall: runWaterfallEffective,
       run_activity: runActivity,
       run_verify: runVerify,
+      run_naming: runNaming,
       phase: initialPhase,
       status: "pending",
       total_count: itemRows.length,

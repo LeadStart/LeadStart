@@ -82,6 +82,76 @@ real domains-phase run, and a Phase 2 pattern_mv live run (MV key is present). F
 plan, evidence, schema, phased work plan + decision history:
 [`RESUME-WATERFALL-SETTINGS.md`](RESUME-WATERFALL-SETTINGS.md).
 
+## Current initiative: Google Maps prospecting vein (SHIPPED 2026-08-25 — code-complete, browser-verified, full-pipeline e2e-verified, pushed to master)
+
+The second prospecting vein alongside LinkedIn — "no stone unturned." Google Maps
+surfaces SMBs with no LinkedIn presence; their leads are company inboxes/phones
+(at that size the owner reads info@), upgraded to an owner's personal email via the
+new naming add-on. Source = Apify `compass~google-maps-extractor` (~$4/1k places;
+Scrap.io subscription canceled, its Business-tab UI retired). Monetization model
+(owner call): **outcome-tiered per lead** (record $0.05 → +generic email $0.10 →
++owner name $0.20 → +verified personal email $0.30), mid-market; this build lays the
+**delivered-outcome ledger** the future self-serve billing prices against.
+
+**Built locally, NOT pushed. Migrations `00078`/`00079`/`00080` APPLIED to the live DB
+2026-08-25.**
+- **Phase 0 — probe:** pinned the compass actor's charge events (`place-scraped`
+  tiered, `filter-applied`, …), the `website` enum, and output fields (live run).
+- **Phase 1 — domain-only leads become first-class:** name-aware waterfall routing
+  extracted to `src/lib/enrichment/waterfall-routing.ts` (name-less items → site_scrape,
+  never pattern_mv/bovi); `wantWaterfallOnly` eligibility in `enqueue-enrichment.ts` +
+  `contacts/enrich/start`; `pickPersonEmail` accepts a name-less on-site person email
+  (conf 50); **generic-inbox backfill** — a scraped company inbox fills `contacts.email`
+  for name-less leads so the native sender can mail them (documented 00076 exception).
+  Unit-tested (`scripts/test-waterfall-routing.ts`, 19/19).
+- **Phase 2 — Maps vein core (migration 00078):** `maps_searches` table (linkedin_searches
+  twin), `run-maps-searches` cron (start→poll→ingest, lease, auto-import+enrich),
+  `src/lib/apify/sourcing/maps-search.ts` + `import-maps-places.ts` (dedup by
+  `contacts.google_place_id`), API routes `maps-search`/`maps-searches`/`[id]`/`maps-save`,
+  cron registered in vercel.json. Cost-minimal input (no filter events; closed places
+  dropped client-side). **Live-verified:** sourced 8 med spas → imported with
+  domain/phone/place-id → re-import deduped to 0.
+- **Phase 3 — owner-name "naming" phase (migration 00079):** new opt-in enrichment phase
+  domains → **naming** → waterfall; `runNamingBatch` runs the existing decision-maker
+  orchestrator (`enrichBusiness` Layer 1/2) per name-less item, writes first/last/title →
+  item routes to pattern_mv → MV-verified personal email. Fail-closed with no Anthropic
+  key. `EnrichmentAddons.naming`, `run_naming`, `EmailProviderId 'decision_maker'`.
+- **Phase 4 — panel + presets (migration 00080):** self-contained `MapsSearchPanel`
+  (niche packs, location, filters, add-ons, presets, live estimate, streaming results,
+  import), swapped into the Prospecting "Business (Google Maps)" tab (dead Scrap.io UI
+  removed); `maps_search_presets` sibling table with a **global/system tier + slug** the
+  future landing pages resolve; `maps-search-presets` routes.
+- **Phase 5 — delivered-outcome ledger:** `src/lib/enrichment/outcomes.ts` classifies each
+  contact by tier at run completion → `enrichment_runs.outcome_counts` +
+  `maps_searches`/`linkedin_searches.delivered_counts`. The margin substrate.
+- **Post-review additions (same day, adversarial pass):** delivered-outcome **radial** in
+  the Maps panel (exclusive `tier_*` buckets added to the ledger; `scripts/test-outcomes.ts`
+  22/22); per-row **"already in CRM" badge** + count (the spend-visibility guard — compass
+  has no blacklist, re-pulls re-pay); dead Scrap.io + decision-maker cron **schedules
+  removed from vercel.json**; `preset_slug` provenance stamped; fixed an invalid route-file
+  export.
+- **Browser pass + FULL E2E — DONE (2026-08-25, pre-push):** panel verified in the dev
+  preview (form, packs, estimate, presets, prior runs); then a real 12-place Dallas
+  commercial-cleaning search ran through the actual crons end-to-end — auto-import 12 →
+  enrichment auto-start → name-aware routing to site_scrape → 3 generic inboxes
+  **backfilled into contacts.email** (`kind: company_generic`) + 12 phones → ledger
+  stamped `{record:12, phone:12, company_email:4, tier_company:4, tier_phone:8}` → the
+  radial + "In CRM" badges rendered the real numbers. Env fix en route: dev 500s from
+  `prettier/plugins/html` were a stale node_modules (missing `prettier`) — `npm install`
+  fixed it, lockfile unchanged. Only the **naming phase** hasn't run live (no Anthropic
+  key in the org — its no-key fail-soft path is what executed).
+
+**Verified:** tsc clean (0 new app-code errors); unit tests routing 19/19, outcomes 22/22,
+pattern-mv 9/9, domain-discovery 30/30; live — compass I/O + pricing, Maps
+sourcing→import→dedup, site_scrape on name-less trades domains, and the **full cron
+pipeline end-to-end in the real app** (see the bullet above).
+
+**Remaining to activate the owner-name add-on:** save an **Anthropic** (and optionally
+Perplexity) key in Settings → Integrations (MV key already present), then run a Maps
+search with "Find owner names" on and confirm names + a pattern_mv personal email land.
+Everything else is live on deploy. Full decisions, schema, e2e evidence, machine-move
+checklist, and next steps: [`RESUME-MAPS-VEIN.md`](RESUME-MAPS-VEIN.md).
+
 ## Other initiative: LinkedIn Channel via Unipile
 
 **Status:** All 9 code commits shipped (latest `64b45fd`). **NOT live yet** — gated on three migrations + Unipile config + webhook registration. No more code commits required for first activation.

@@ -16,7 +16,13 @@ const RECIPIENT =
   "daniel.tuccillo92@gmail.com";
 const FROM = process.env.EMAIL_FROM || "LeadStart <info@no-reply.leadstart.io>";
 
-export type ActorFailureKind = "enrichment" | "linkedin_search";
+export type ActorFailureKind = "enrichment" | "linkedin_search" | "maps_search";
+
+const KIND_LABEL: Record<ActorFailureKind, string> = {
+  enrichment: "Contacts enrichment",
+  linkedin_search: "LinkedIn people search",
+  maps_search: "Google Maps business search",
+};
 
 function esc(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -45,7 +51,7 @@ export async function alertActorFailure(
     const last = lastRaw ? Date.parse(lastRaw) : 0;
     if (Number.isFinite(last) && Date.now() - last < COOLDOWN_MS) return;
 
-    const label = input.kind === "enrichment" ? "Contacts enrichment" : "LinkedIn people search";
+    const label = KIND_LABEL[input.kind];
     const subject = `⚠️ LeadStart: ${label} is failing (Apify)`;
     const ctxRows = Object.entries(input.context ?? {})
       .map(

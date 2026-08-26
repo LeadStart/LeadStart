@@ -51,6 +51,25 @@ export function estimateDomainDiscoveryCost(companies: number): number {
   return companies * DOMAIN_DISCOVERY_COST_USD;
 }
 
+// Owner-name (naming) discovery — the decision-maker Layer 1 (Haiku site scrape)
+// + optional Layer 2 (Perplexity/Claude web search) per business. Honest ceiling:
+// Layer 1 is ~$0.003–0.01 in tokens, Layer 2 adds ~$0.005–0.015 when it fires;
+// the site fetch is free. Token-only accrual undercounts per-request search fees
+// (same simplification as domain discovery), so this is the estimate ceiling.
+export const NAMING_COST_USD = 0.015;
+export function estimateNamingCost(businesses: number): number {
+  return businesses * NAMING_COST_USD;
+}
+
+// Google Maps place record (compass~google-maps-extractor `place-scraped` event).
+// Tiered FREE $0.005 → DIAMOND $0.0008; this BRONZE/Starter midpoint is the
+// estimate — actual cost is read from the run's usageTotalUsd. Filter events
+// (min-rating / website filter) add ~$0.001/place each when used.
+export const MAPS_PLACE_COST_USD = 0.004;
+export function estimateMapsPlaceCost(places: number): number {
+  return places * MAPS_PLACE_COST_USD;
+}
+
 export function estimateProfileCost(profiles: number): number {
   return profiles * PROFILE_EMAIL_COST_USD;
 }

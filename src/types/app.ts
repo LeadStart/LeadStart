@@ -408,7 +408,9 @@ export type EmailProviderId =
   | "harvestapi"
   | "bovi"
   | "pattern_mv"
-  | "site_scrape";
+  | "site_scrape"
+  // A personal email found by the decision-maker (naming) phase's Layer 1/2.
+  | "decision_maker";
 
 export interface Contact {
   id: string;
@@ -1094,6 +1096,67 @@ export interface LinkedInSearch {
   created_at: string;
 }
 
+// ---------- Google Maps business-search sourcing (migration 00078) ----------
+
+export type MapsSearchStatus = "pending" | "running" | "complete" | "failed";
+
+// One place, flattened from the compass~google-maps-extractor actor.
+// google_place_id is the identity/dedupe key (like LinkedInProspect.linkedin_url
+// and ScrapioBusiness.google_id). company_domain is derived from `website` via
+// normalizeDomain (null when the place has no site or only a social page).
+export interface MapsPlace {
+  google_place_id: string;
+  name: string | null;
+  category: string | null; // primary categoryName, kebab-slugged for DM seniority maps
+  category_label: string | null; // human-readable categoryName as returned
+  categories: string[];
+  website: string | null;
+  company_domain: string | null;
+  phone: string | null; // E.164 preferred (phoneUnformatted)
+  full_address: string | null;
+  street: string | null;
+  city: string | null;
+  state: string | null;
+  postal_code: string | null;
+  country_code: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  rating: number | null; // totalScore
+  reviews_count: number | null;
+  maps_url: string | null;
+  temporarily_closed: boolean;
+  claimed: boolean | null;
+}
+
+// Cached Maps-search audit row + async Apify run tracking — the Google-Maps twin
+// of LinkedInSearch. The background worker (/api/cron/run-maps-searches) starts
+// the compass actor and polls it across ticks; the page polls this row for
+// progress. delivered_counts is the outcome ledger (Phase 5).
+export interface MapsSearch {
+  id: string;
+  organization_id: string;
+  created_by: string;
+  query: Record<string, unknown>;
+  results: MapsPlace[];
+  result_count: number;
+  target_max_results: number;
+  truncated: boolean;
+  saved_count: number;
+  status: MapsSearchStatus;
+  progress_message: string | null;
+  error_message: string | null;
+  actor: string;
+  active_apify_run_id: string | null;
+  active_apify_dataset_id: string | null;
+  consecutive_failures: number;
+  cost_usd: number | string;
+  delivered_counts: Record<string, number>;
+  started_at: string | null;
+  completed_at: string | null;
+  expires_at: string;
+  created_at: string;
+}
+
 // ---------- Decision-maker enrichment (migration 00044) ----------
 
 export type DmRunStatus = "pending" | "running" | "complete" | "failed";
@@ -1156,7 +1219,14 @@ export interface DecisionMakerResult {
 // double spend). A run with verify off writes no verification columns here.
 
 export type EnrichmentRunStatus = "pending" | "running" | "complete" | "failed";
-export type EnrichmentPhase = "profiles" | "domains" | "waterfall" | "activity" | "verify" | "complete";
+export type EnrichmentPhase =
+  | "profiles"
+  | "domains"
+  | "naming"
+  | "waterfall"
+  | "activity"
+  | "verify"
+  | "complete";
 export type EnrichmentStepStatus =
   | "pending" | "in_flight" | "found" | "not_found" | "skipped" | "error";
 
@@ -1190,11 +1260,16 @@ export interface EnrichmentAddons {
   activity: boolean;
   // Verify every found email with Million Verifier as a run phase.
   verify: boolean;
+  // Discover the decision-maker's name + title (decision-maker Layer 1/2) so
+  // pattern_mv can build their personal email. The owner-name add-on, primarily
+  // for name-less Google-Maps business leads (migration 00079).
+  naming: boolean;
 }
 
 export const DEFAULT_ENRICHMENT_ADDONS: EnrichmentAddons = {
   activity: false,
   verify: false,
+  naming: false,
 };
 
 // Org-level enrichment/waterfall config (organizations.enrichment_settings, JSONB).
@@ -1265,6 +1340,8 @@ export interface EnrichmentRun {
   // Opt-in email-verification phase (migration 00077). Off on runs created
   // before the add-on existed.
   run_verify: boolean;
+  // Opt-in decision-maker naming phase (migration 00079). Off on older runs.
+  run_naming: boolean;
   phase: EnrichmentPhase;
   status: EnrichmentRunStatus;
   total_count: number;
@@ -1277,6 +1354,10 @@ export interface EnrichmentRun {
   found_activity_count: number;
   // Emails that verified clean (MV "ok") in the verify phase (migration 00077).
   found_verified_count: number;
+  // Decision-maker names found in the naming phase (migration 00079).
+  found_names_count: number;
+  // Delivered-outcome ledger, classified at completion (migration 00079 / Phase 5).
+  outcome_counts: Record<string, number>;
   cost_usd: number | string;
   active_apify_run_id: string | null;
   active_apify_dataset_id: string | null;
@@ -1316,6 +1397,11 @@ export interface EnrichmentRunItem {
   domain_status: EnrichmentStepStatus;
   domain_apify_run_id: string | null;
   domain_notes: string | null;
+  // Opt-in naming (decision-maker) phase (migration 00079). NULL = not part of
+  // naming. `title` holds the discovered role.
+  naming_status: EnrichmentStepStatus | null;
+  naming_notes: string | null;
+  title: string | null;
   waterfall_status: EnrichmentStepStatus | null;
   waterfall_apify_run_id: string | null;
   waterfall_notes: string | null;

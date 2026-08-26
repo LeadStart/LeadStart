@@ -19,4 +19,16 @@ To get real numbers, query the Apify account API with the key in Settings → In
 
 **Run-progress gotcha (fixed 2026-08-24):** the Apify run object's `stats` has NO `datasetItems` field (verified live — runtime/memory/CPU only; an earlier session invented it, so sourcing progress sat at 0 all run). Live progress = `GET /v2/datasets/{defaultDatasetId}` → `itemCount`, readable mid-run; `ApifyClient.getDatasetItemCount()` wraps it. Actors push per-profile in Full modes, per 25-result page in Short mode.
 
+**Google Maps vein cost model — `compass~google-maps-extractor` (probed live 2026-08-25).**
+Charge events (tiered by the org's Apify plan; org is on ~BRONZE → place ≈ $0.004):
+`place-scraped` (primary) FREE $0.005 / BRONZE $0.004 / SILVER $0.003 / GOLD $0.0021 /
+PLATINUM $0.0013 / DIAMOND $0.0008; `filter-applied` ≈ $0.001/place; `place-details-scraped`
+$0.002; `contact-details-scraped` (company enrich). **Gotcha: `filter-applied` bills
+`places × price × #filters` for EACH of `skipClosedPlaces` / `website≠allPlaces` /
+`placeMinimumStars` / `categoryFilterWords`.** So the cost-minimal input (what
+`buildMapsSearchInput` does) sends NONE of those by default — closed places are dropped
+client-side in `parseMapsSearchResults` for free, and detail-page + contacts enrichment stay
+OFF (we enrich domains ourselves far cheaper: `site_scrape` ≈ $0.0005–0.003/domain measured,
++ pattern_mv MV credits). Full Maps vein: [[RESUME-MAPS-VEIN]].
+
 **vdrmota waterfall is being retired as default (2026-08-24).** Measured: its lead-scraped event is per-LEAD (~$0.10 free tier / ~$0.005 paid) and our input pulls 10 leads/company ⇒ ~$1.00/company free tier; the pricing.ts estimate treated it as $0.005/contact (~100× off). Its one real run ($3.96, aborted at our 60s budget) filled ZERO contact fields, and its `leadsEnrichment` is a people-DATABASE join (Mongo ObjectIds, licdn photo URLs) — not reproducible by scraping, but replaceable for our need by pattern-permutation + Million Verifier (~$0.004/contact). Replacement plan (settings panel, pattern+MV, own HTTPS→Playwright scraper, size routing): [[RESUME-WATERFALL-SETTINGS]] at repo root.
