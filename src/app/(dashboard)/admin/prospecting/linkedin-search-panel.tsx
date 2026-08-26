@@ -98,12 +98,15 @@ const DEPTHS: { value: Depth; label: string; hint: string; rate: number }[] = [
 // Actors: profile-scraper (email), linkedin-company (domain), pattern + verify
 // (2nd pass — the default method), profile-posts (activity); verify is Million
 // Verifier (not Apify).
+// waterfall/verify are Million Verifier credits at the 10K-bundle rate
+// ($0.0037/credit, owner call 2026-08-25): waterfall = 6-candidate upper bound,
+// verify = 1 credit. Keep in sync with MV_CREDIT_COST_USD in lib/apify/pricing.
 const ENRICH_RATES = {
   email: 0.01,
   domain: 0.004,
-  waterfall: 0.004,
+  waterfall: 0.022,
   activity: 0.005,
-  verify: 0.0006,
+  verify: 0.0037,
   // Web lookup for companies with no LinkedIn page. Only that subset incurs it,
   // but it's counted per-person in the ceiling estimate (see the breakdown note).
   domain_discovery: 0.005,

@@ -7,11 +7,13 @@ export const DOMAIN_COST_USD = 0.004;         // harvestapi company (paid-tier)
 export const WATERFALL_LEAD_COST_USD = 0.005; // generic apify-waterfall per-item fallback (paid tier)
 export const ACTIVITY_COST_USD = 0.005;       // harvestapi profile-posts (~0-5 posts/person; 0-result ≈ $0.001)
 
-// Approx cost of ONE Million Verifier credit (used to tally pattern_mv per-item
-// cost). MV is a prepaid pool, not per-call metered like Apify, so this is a
-// rough unit price — ~$0.004 per contact worst case (≤6 candidates, catch-all +
-// unknown are free). Pattern_mv typically resolves in 1–3 charged credits.
-export const MV_CREDIT_COST_USD = 0.0007;
+// Cost of ONE Million Verifier credit at the org's purchase tier. MV is a
+// prepaid tiered pool ($37/10K ≈ $0.0037 … $549/1M ≈ $0.00055 — verified
+// against MV pricing 2026-08-25); owner call 2026-08-25: assume the 10K
+// pay-as-you-go bundle until purchasing changes. Pattern_mv typically resolves
+// in 1–3 charged credits (~$0.004–0.011/contact; ≤6 worst case ≈ $0.022;
+// catch-all + unknown verdicts are free).
+export const MV_CREDIT_COST_USD = 0.0037;
 
 // Estimate for the pattern_mv method (the default): contacts × ~6 candidate
 // checks × unit price, an honest upper bound (most resolve in far fewer).
