@@ -169,6 +169,10 @@ export async function enqueueEnrichment(
   const runActivity = eligible.some((c) => addonsFor(c).activity) && !allSkipActivity;
   const runVerify = eligible.some((c) => addonsFor(c).verify);
   const runNaming = eligible.some((c) => addonsFor(c).naming);
+  // Per-search catch-all opt-in ORs over the org-level setting: the run's config
+  // snapshot flips accept_catch_all_guesses on so pattern_mv keeps the best
+  // catch-all guess (confidence 40, flagged) instead of discarding it.
+  const includeCatchAll = eligible.some((c) => addonsFor(c).include_catch_all);
 
   // One active run per org → if busy, stamp the eligible contacts and bail.
   const { data: activeRows } = await admin
@@ -202,7 +206,7 @@ export async function enqueueEnrichment(
       domain_actor: DOMAIN_ACTOR,
       waterfall_actor: runWaterfall ? waterfallActor : null,
       activity_actor: runActivity ? ACTIVITY_ACTOR : null,
-      waterfall_config: settings,
+      waterfall_config: includeCatchAll ? { ...settings, accept_catch_all_guesses: true } : settings,
       run_profiles: true,
       run_domains: true,
       run_waterfall: runWaterfall,

@@ -32,6 +32,7 @@ type Body = {
   run_activity?: unknown;
   run_verify?: unknown;
   run_naming?: unknown;
+  include_catch_all?: unknown;
 };
 
 type ContactRow = {
@@ -73,6 +74,11 @@ export async function POST(request: NextRequest) {
   const runVerify = body.run_verify === undefined ? false : Boolean(body.run_verify);
   // Owner-name discovery add-on (default OFF). No Apify — decision-maker Layer 1/2.
   const runNaming = body.run_naming === undefined ? false : Boolean(body.run_naming);
+  // Per-run catch-all opt-in (default OFF): ORs over the org setting by flipping
+  // accept_catch_all_guesses on this run's config snapshot — pattern_mv then
+  // keeps the best catch-all guess (confidence 40, flagged) instead of dropping it.
+  const includeCatchAll =
+    body.include_catch_all === undefined ? false : Boolean(body.include_catch_all);
 
   if (contactIds.length === 0) {
     return NextResponse.json({ error: "contact_ids is required" }, { status: 400 });
@@ -318,7 +324,7 @@ export async function POST(request: NextRequest) {
       domain_actor: DOMAIN_ACTOR,
       waterfall_actor: runWaterfallEffective ? waterfallActor : null,
       activity_actor: runActivity ? ACTIVITY_ACTOR : null,
-      waterfall_config: settings,
+      waterfall_config: includeCatchAll ? { ...settings, accept_catch_all_guesses: true } : settings,
       run_profiles: runProfiles,
       run_domains: runDomains,
       run_waterfall: runWaterfallEffective,

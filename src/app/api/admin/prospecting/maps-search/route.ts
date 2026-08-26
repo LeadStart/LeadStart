@@ -84,7 +84,13 @@ export async function POST(request: NextRequest) {
   // until then). `verify` runs the Million Verifier phase.
   const addonsInput =
     body.addons && typeof body.addons === "object" ? (body.addons as Record<string, unknown>) : {};
-  const addons = { verify: addonsInput.verify === true, naming: addonsInput.naming === true };
+  const addons = {
+    verify: addonsInput.verify === true,
+    naming: addonsInput.naming === true,
+    // Keep catch-all pattern guesses (flagged, confidence 40) for this search's
+    // auto-enrichment instead of discarding them.
+    include_catch_all: addonsInput.include_catch_all === true,
+  };
 
   // One active search per org (pre-check; the unique index is the real race guard).
   const { data: activeRows } = await admin

@@ -2337,6 +2337,8 @@ async function finalizeOutcomes(admin: Admin, run: RunRow): Promise<void> {
           email: c.email,
           emailVerificationStatus: c.email_verification_status,
           emailKind: typeof emailBlock.kind === "string" ? emailBlock.kind : null,
+          emailProviderStatus:
+            typeof emailBlock.provider_status === "string" ? emailBlock.provider_status : null,
           companyEmail: c.company_email,
           companyPhone: c.company_phone,
           phone: c.phone,

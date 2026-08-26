@@ -68,6 +68,7 @@ export function normalizeAddons(input: unknown): EnrichmentAddons {
     activity: o.activity === true,
     verify: o.verify === true,
     naming: o.naming === true,
+    include_catch_all: o.include_catch_all === true,
   };
 }
 

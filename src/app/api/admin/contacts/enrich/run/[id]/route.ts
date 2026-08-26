@@ -65,19 +65,36 @@ export async function GET(
     new Set(items.map((it) => (it as { contact_id?: string }).contact_id).filter(Boolean) as string[]),
   );
   if (contactIds.length) {
-    const byId = new Map<string, string | null>();
+    type ContactJoin = {
+      company_email: string | null;
+      email_kind: string | null;
+      email_provider_status: string | null;
+    };
+    const byId = new Map<string, ContactJoin>();
     for (let i = 0; i < contactIds.length; i += PAGE) {
       const { data } = await admin
         .from("contacts")
-        .select("id, company_email")
+        .select(
+          // email_kind/email_provider_status are scalar projections out of
+          // enrichment_data (generic-inbox kind + catch-all provenance) so the
+          // results table can tier/badge each row without the JSONB blob.
+          "id, company_email, email_kind:enrichment_data->enrichment->email->>kind, email_provider_status:enrichment_data->enrichment->email->>provider_status",
+        )
         .in("id", contactIds.slice(i, i + PAGE));
-      for (const c of (data ?? []) as { id: string; company_email: string | null }[]) {
-        byId.set(c.id, c.company_email);
+      for (const c of (data ?? []) as unknown as ({ id: string } & ContactJoin)[]) {
+        byId.set(c.id, {
+          company_email: c.company_email,
+          email_kind: c.email_kind,
+          email_provider_status: c.email_provider_status,
+        });
       }
     }
     for (const it of items) {
-      (it as { company_email?: string | null }).company_email =
-        byId.get((it as { contact_id?: string }).contact_id ?? "") ?? null;
+      const join = byId.get((it as { contact_id?: string }).contact_id ?? "");
+      (it as { company_email?: string | null }).company_email = join?.company_email ?? null;
+      (it as { email_kind?: string | null }).email_kind = join?.email_kind ?? null;
+      (it as { email_provider_status?: string | null }).email_provider_status =
+        join?.email_provider_status ?? null;
     }
   }
 

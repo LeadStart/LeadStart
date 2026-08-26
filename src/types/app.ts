@@ -470,6 +470,12 @@ export interface Contact {
   email_did_you_mean: string | null;
   email_verified_at: string | null;
   email_verification_attempts: number;
+  // NOT real columns — scalars projected out of enrichment_data by the list
+  // fetchers (admin-queries CONTACT_LIST_COLUMNS, enrich/run/[id] join) so list
+  // UIs can tier/badge emails without hauling the whole JSONB blob. Absent on
+  // fetches that don't project them.
+  email_kind?: string | null; // enrichment.email.kind — 'company_generic' for a backfilled inbox
+  email_provider_status?: string | null; // enrichment.email.provider_status — 'catch_all' for an unprovable guess
   created_at: string;
   updated_at: string;
 }
@@ -1264,12 +1270,18 @@ export interface EnrichmentAddons {
   // pattern_mv can build their personal email. The owner-name add-on, primarily
   // for name-less Google-Maps business leads (migration 00079).
   naming: boolean;
+  // Keep the best pattern guess on a catch-all domain (confidence 40, flagged
+  // catch_all) instead of discarding it. Per-run OR over the org-level
+  // accept_catch_all_guesses setting — the run's waterfall_config snapshot is
+  // overridden to true when any enrolled contact carries this stamp.
+  include_catch_all: boolean;
 }
 
 export const DEFAULT_ENRICHMENT_ADDONS: EnrichmentAddons = {
   activity: false,
   verify: false,
   naming: false,
+  include_catch_all: false,
 };
 
 // Org-level enrichment/waterfall config (organizations.enrichment_settings, JSONB).
