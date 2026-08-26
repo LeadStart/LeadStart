@@ -19,6 +19,7 @@ import {
 import { useUser } from "@/hooks/use-user";
 import { ApifySpendCard } from "./apify-spend-card";
 import { WaterfallSettingsCard } from "./waterfall-settings-card";
+import { RegistrarSettingsCard } from "./registrar-settings-card";
 import {
   Key,
   RefreshCw,
@@ -1280,6 +1281,9 @@ export default function IntegrationsPage() {
 
       {/* Enrichment waterfall — second-pass method routing + caps (migration 00075) */}
       <WaterfallSettingsCard />
+
+      {/* Domain registrars — Porkbun/Spaceship keys + spend cap (Phase 2, migration 00084) */}
+      <RegistrarSettingsCard />
 
       {/* Anthropic — decision-maker enrichment Layer 1 */}
       <Card className="border-border/50 shadow-sm">

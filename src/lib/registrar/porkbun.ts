@@ -1,0 +1,121 @@
+// Porkbun registrar client (Phase 2). Base https://api.porkbun.com/api/json/v3.
+// Every call is POST with {apikey, secretapikey} in the JSON body (Porkbun's
+// convention — including "retrieve"). DNS + availability are well-established;
+// registerDomain is implemented to the documented shape but is PENDING LIVE
+// VERIFICATION with a real key (Porkbun registration-via-API params/contacts
+// need confirming) — it throws clearly if the endpoint rejects it.
+
+import type {
+  DnsRecordInput,
+  DomainAvailability,
+  RegisterResult,
+  RegistrarProvider,
+} from "./types";
+
+const BASE = "https://api.porkbun.com/api/json/v3";
+
+export class PorkbunError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "PorkbunError";
+  }
+}
+
+interface PorkbunEnvelope {
+  status?: string;
+  message?: string;
+  [k: string]: unknown;
+}
+
+// ── Record mapping (pure; exported for tests) ───────────────────────────────
+// Porkbun uses a single "content" value field for every record type and a
+// subdomain-only "name" (blank for the apex), which matches DnsRecordInput.
+
+export function toPorkbunRecord(rec: DnsRecordInput): Record<string, string> {
+  const out: Record<string, string> = {
+    name: rec.name, // "" = apex
+    type: rec.type,
+    content: rec.content,
+    ttl: String(rec.ttl ?? 3600),
+  };
+  if (rec.priority != null) out.prio = String(rec.priority);
+  return out;
+}
+
+export function fromPorkbunRecord(
+  r: { name?: string; type?: string; content?: string; ttl?: string | number; prio?: string | number },
+  domain: string,
+): DnsRecordInput {
+  // Retrieve returns the full host in "name"; reduce to the subdomain.
+  const host = (r.name ?? "").toLowerCase();
+  const name = host === domain.toLowerCase() ? "" : host.replace(new RegExp(`\\.?${escapeRegExp(domain)}$`, "i"), "");
+  return {
+    type: (r.type ?? "TXT") as DnsRecordInput["type"],
+    name,
+    content: r.content ?? "",
+    ttl: r.ttl != null ? Number(r.ttl) : undefined,
+    priority: r.prio != null && r.prio !== "" ? Number(r.prio) : undefined,
+  };
+}
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// ── Provider ────────────────────────────────────────────────────────────────
+
+export function createPorkbunProvider(creds: { apiKey: string; secretApiKey: string }): RegistrarProvider {
+  const auth = { apikey: creds.apiKey, secretapikey: creds.secretApiKey };
+
+  async function post(path: string, body: Record<string, unknown> = {}): Promise<PorkbunEnvelope> {
+    let res: Response;
+    try {
+      res = await fetch(`${BASE}${path}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...auth, ...body }),
+      });
+    } catch (err) {
+      throw new PorkbunError(`Network error calling Porkbun ${path}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+    const json = (await res.json().catch(() => ({}))) as PorkbunEnvelope;
+    if (!res.ok || json.status !== "SUCCESS") {
+      throw new PorkbunError(json.message || `Porkbun ${path} failed (HTTP ${res.status}).`);
+    }
+    return json;
+  }
+
+  return {
+    id: "porkbun",
+
+    async checkAvailability(domain: string): Promise<DomainAvailability> {
+      const json = await post(`/domain/checkDomain/${encodeURIComponent(domain)}`);
+      const r = (json.response ?? {}) as { avail?: string; price?: string | number };
+      const price = r.price != null ? Number(r.price) : NaN;
+      return { domain, available: r.avail === "yes", priceUsd: Number.isFinite(price) ? price : null };
+    },
+
+    async registerDomain(domain: string): Promise<RegisterResult> {
+      // PENDING LIVE VERIFICATION (see file header). Porkbun uses the account's
+      // default contacts; we send domain + 1 year.
+      const json = await post(`/domain/register`, { domain, years: "1" });
+      const price = (json.response as { price?: string | number } | undefined)?.price;
+      const n = price != null ? Number(price) : NaN;
+      return { domain, registrar: "porkbun", priceUsd: Number.isFinite(n) ? n : 0 };
+    },
+
+    async upsertDnsRecords(domain: string, records: DnsRecordInput[]): Promise<void> {
+      // Porkbun has no bulk upsert; create each. (The provisioning route writes a
+      // fresh domain's records, so there's nothing to dedupe against yet.)
+      for (const rec of records) {
+        await post(`/dns/create/${encodeURIComponent(domain)}`, toPorkbunRecord(rec));
+      }
+    },
+
+    async getDnsRecords(domain: string): Promise<DnsRecordInput[]> {
+      const json = await post(`/dns/retrieve/${encodeURIComponent(domain)}`);
+      const records = (json.records ?? []) as Parameters<typeof fromPorkbunRecord>[0][];
+      return records.map((r) => fromPorkbunRecord(r, domain));
+    },
+  };
+}
