@@ -118,6 +118,12 @@ provisioning → warming → active → tired → resting → (re-)warming → a
 
 ## 3. Phase 0 — Owner decisions & prerequisites (Daniel)
 
+> **DECIDED 2026-08-26:** Registrar = **BOTH Porkbun + Spaceship** (buy where cheaper).
+> Monthly domain spend cap = **$25/mo** (fail-closed; hard ceiling before any real-money run).
+> VPS = **Hetzner**. Pilot = **5 domains / 15 inboxes / 2 IPs**. Operational defaults confirmed:
+> arm inbox-health auto-pause at **50**; SMTP steady cap **15/day/inbox**; rest **45d**; drain
+> **14d**; reserve pool **~20% of active, min 3**. These are locked inputs for Phases 2–5.
+
 Decisions the phases below assume (recommendation in bold):
 
 | # | Decision | Recommendation |
@@ -214,6 +220,23 @@ their domains are `active` (the only behavioral change on day one is protection)
 ---
 
 ## 5. Phase 2 — Registrar automation (Porkbun + Spaceship)
+
+> **BUILT 2026-08-26 (local, unpushed; migration 00084 applied to prod).** `src/lib/registrar/`:
+> pure core (`types`/`spend` fail-closed cap/`names` lookalike generator/`dns` tier builders) +
+> `porkbun`/`spaceship` clients implementing `RegistrarProvider` + `auth` loader/factory;
+> `scripts/test-registrar.ts` 50/50 (spend cap, name gen, per-type DNS record mapping). API:
+> `/api/admin/registrar/settings` (GET returns has_porkbun/has_spaceship + cap, NEVER secrets;
+> POST partial-saves keys + cap), `/test` (validates a key via a real availability call), and
+> `/provision` (availability sweep → cheapest → fail-closed $25/mo cap → register → Gmail-tier
+> DNS → `sending_domains` 'provisioning' row). Settings → Integrations **Domain registrars card**
+> (keys + cap + per-provider Test) — NEEDS Daniel visual sign-off. tsc-clean.
+>
+> **Register endpoints are PENDING LIVE VERIFICATION** (Porkbun/Spaceship registration params +
+> Spaceship contact IDs) — confirm on the first real purchase once keys are added. **Not built
+> (best done interactively with Daniel — spends real money + visual sign-off):** a provisioning
+> UI form + the optional brand→candidates `/suggest` endpoint + the first live $10-ish buy.
+> **Daniel to-do:** create Porkbun + Spaceship accounts + API keys, enter them + the $25 cap in
+> Settings, Test each.
 
 ~0.5–1 session. Both registrars verified (2026-08-26) to support availability checks,
 **registration/purchase**, and full DNS record CRUD via API.
