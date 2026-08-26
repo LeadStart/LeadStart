@@ -45,6 +45,7 @@ import {
   Check,
 } from "lucide-react";
 import { appUrl } from "@/lib/api-url";
+import { classifyEmailTier, EMAIL_TIER_RANK, type EmailTier } from "@/lib/enrichment/email-tier";
 import type { LivePricing } from "@/lib/apify/live-pricing";
 import { createClient } from "@/lib/supabase/client";
 import type {
@@ -80,6 +81,7 @@ type SearchConfig = {
   autoSegment: boolean;
   addActivity: boolean;
   addVerify: boolean;
+  addCatchAll?: boolean;
   depth: Depth;
   maxResults: number;
 };
@@ -270,6 +272,10 @@ type EnrichLite = Pick<
 > & {
   // Joined from contacts.company_email by the run-detail route (migration 00076).
   company_email?: string | null;
+  // Scalar projections out of contacts.enrichment_data (run-detail route join):
+  // generic-inbox kind + catch-all provenance, for tier badges/ordering.
+  email_kind?: string | null;
+  email_provider_status?: string | null;
 };
 
 type Campaign = { id: string; name: string };
@@ -819,6 +825,7 @@ export function LinkedInSearchPanel() {
   // Opt-in enrichment add-ons (default OFF) chosen for this search. Activity =
   // score posting recency; verify = Million Verifier every found email.
   const [addActivity, setAddActivity] = useState(false);
+  const [addCatchAll, setAddCatchAll] = useState(false);
   const [addVerify, setAddVerify] = useState(false);
   // Org kill-switch: does a finished search auto-import + enrich? Only changes
   // the panel's "sourced" caption. Fetched once from enrichment settings.
@@ -1144,6 +1151,7 @@ export function LinkedInSearchPanel() {
     autoSegment,
     addActivity,
     addVerify,
+    addCatchAll,
     depth,
     maxResults,
   });
@@ -1166,6 +1174,7 @@ export function LinkedInSearchPanel() {
     setAutoSegment(c.autoSegment === true);
     setAddActivity(Boolean(c.addActivity));
     setAddVerify(Boolean(c.addVerify));
+    setAddCatchAll(Boolean(c.addCatchAll));
     if (c.depth) setDepth(c.depth);
     if (typeof c.maxResults === "number") setMaxResults(c.maxResults);
     // Reveal Advanced if the preset set anything that lives there.
@@ -1233,7 +1242,7 @@ export function LinkedInSearchPanel() {
           depth,
           max_results: maxResults,
           name: searchNameInput.trim(),
-          addons: { activity: addActivity, verify: addVerify },
+          addons: { activity: addActivity, verify: addVerify, include_catch_all: addCatchAll },
         }),
       });
       const data = await res.json();
@@ -1250,7 +1259,31 @@ export function LinkedInSearchPanel() {
     }
   };
 
-  const results = detail?.results ?? [];
+  const rawResults = detail?.results ?? [];
+  // Found-first ordering on finished lists (owner ruling 2026-08-26): once
+  // sourcing is complete, rows float to the top by delivered email tier —
+  // personal -> company inbox -> catch-all -> none — re-sorting live as the
+  // enrichment overlay lands emails. Mid-sourcing keeps pure arrival order.
+  const results = useMemo(() => {
+    if (!detail || (detail.status !== "complete" && detail.status !== "failed")) return rawResults;
+    if (enrichByUrl.size === 0 && !rawResults.some((r) => r.email)) return rawResults;
+    return rawResults
+      .map((r, i) => {
+        const en = r.linkedin_url ? enrichByUrl.get(LC(r.linkedin_url)) : undefined;
+        const rank = EMAIL_TIER_RANK[
+          classifyEmailTier({
+            email: en?.email ?? r.email ?? null,
+            company_email: en?.company_email ?? null,
+            email_kind: en?.email_kind ?? null,
+            email_provider_status: en?.email_provider_status ?? null,
+          })
+        ];
+        return { r, i, rank };
+      })
+      .sort((a, b) => a.rank - b.rank || a.i - b.i)
+      .map((x) => x.r);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rawResults, enrichByUrl, detail?.status]);
   const isComplete = detail?.status === "complete";
   const isRunning = detail?.status === "running" || detail?.status === "pending";
 
@@ -1278,14 +1311,22 @@ export function LinkedInSearchPanel() {
   const emailOutcome = useMemo(() => {
     let person = 0;
     let company = 0;
+    let catchAll = 0;
     let none = 0;
     for (const r of results) {
       const en = r.linkedin_url ? enrichByUrl.get(LC(r.linkedin_url)) : undefined;
-      if (r.email || en?.email) person++;
-      else if (en?.company_email) company++;
+      const tier = classifyEmailTier({
+        email: en?.email ?? r.email ?? null,
+        company_email: en?.company_email ?? null,
+        email_kind: en?.email_kind ?? null,
+        email_provider_status: en?.email_provider_status ?? null,
+      });
+      if (tier === "person") person++;
+      else if (tier === "company") company++;
+      else if (tier === "catch_all") catchAll++;
       else none++;
     }
-    return { person, company, none, total: results.length };
+    return { person, company, catchAll, none, total: results.length };
   }, [results, enrichByUrl]);
   // The table shows once sourcing completes, or mid-run as streamed rows arrive.
   const showResults = isComplete || (isRunning && results.length > 0);
@@ -1408,8 +1449,10 @@ export function LinkedInSearchPanel() {
         activity: detail.query.addons.activity === true,
         verify: detail.query.addons.verify === true,
         naming: false,
+        include_catch_all:
+          (detail.query.addons as { include_catch_all?: unknown }).include_catch_all === true,
       }
-    : { activity: addActivity, verify: addVerify, naming: false };
+    : { activity: addActivity, verify: addVerify, naming: false, include_catch_all: addCatchAll };
 
   // Actual-spend breakdown (the "What did this cost?" popover). Sourcing +
   // enrichment are both real Apify usageTotalUsd figures; together they reconcile
@@ -1651,6 +1694,21 @@ export function LinkedInSearchPanel() {
                   <span className="block text-[11px] text-muted-foreground">
                     Verifies every found email with Million Verifier so your report shows
                     valid / risky / invalid.
+                  </span>
+                </span>
+              </label>
+              <label className="flex cursor-pointer items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={addCatchAll}
+                  onChange={(e) => setAddCatchAll(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 cursor-pointer rounded border-border accent-[#2E37FE]"
+                />
+                <span>
+                  Include catch-all guesses
+                  <span className="block text-[11px] text-muted-foreground">
+                    On domains that accept every address, keep the best pattern guess
+                    (flagged Catch-all, confidence 40) instead of discarding it. No extra cost.
                   </span>
                 </span>
               </label>
@@ -2694,6 +2752,12 @@ export function LinkedInSearchPanel() {
                     const imported = Boolean(en) || Boolean(url && importedUrls.has(LC(url)));
                     const emailVal = en?.email ?? r.email ?? null;
                     const companyEmailVal = en?.company_email ?? null;
+                    const emailTier = classifyEmailTier({
+                      email: emailVal,
+                      company_email: companyEmailVal,
+                      email_kind: en?.email_kind ?? null,
+                      email_provider_status: en?.email_provider_status ?? null,
+                    });
                     const emailLoading =
                       !emailVal && !companyEmailVal && !!en &&
                       (isStepActive(en.profile_status) || isStepActive(en.waterfall_status));
@@ -2732,7 +2796,7 @@ export function LinkedInSearchPanel() {
                             className="truncate font-mono text-[12px]"
                             title={emailVal ?? companyEmailVal ?? undefined}
                           >
-                            <EmailCell person={emailVal} company={companyEmailVal} loading={emailLoading} />
+                            <EmailCell person={emailVal} company={companyEmailVal} tier={emailTier} loading={emailLoading} />
                           </TableCell>
                         )}
                         {showEnrichCols && (
@@ -2840,12 +2904,34 @@ function EnrichCell({
 function EmailCell({
   person,
   company,
+  tier,
   loading,
 }: {
   person: string | null;
   company: string | null;
+  // Delivered tier for the person value: a catch-all guess or a backfilled
+  // generic inbox renders flagged, not as a clean person email.
+  tier?: EmailTier;
   loading: boolean;
 }) {
+  if (person && tier === "catch_all")
+    return (
+      <span className="inline-flex items-center gap-1" style={{ color: "#ea580c" }}>
+        <span className="truncate">{person}</span>
+        <span className="shrink-0 rounded bg-orange-50 px-1 py-px text-[9px] font-semibold uppercase tracking-wide text-orange-600">
+          catch-all
+        </span>
+      </span>
+    );
+  if (person && tier === "company")
+    return (
+      <span className="inline-flex items-center gap-1" style={{ color: "#10b981" }}>
+        <span className="truncate">{person}</span>
+        <span className="shrink-0 rounded bg-emerald-50 px-1 py-px text-[9px] font-semibold uppercase tracking-wide text-emerald-600">
+          company
+        </span>
+      </span>
+    );
   if (person) return <span style={{ color: "#2E37FE" }}>{person}</span>;
   if (company)
     return (
@@ -2916,12 +3002,14 @@ function PriorStatusIcon({ status }: { status: LinkedInSearchStatus }) {
 function EmailOutcomeRadial({
   person,
   company,
+  catchAll = 0,
   none,
   total,
   costs,
 }: {
   person: number;
   company: number;
+  catchAll?: number;
   none: number;
   total: number;
   costs?: { person: number; company: number; none: number };
@@ -2934,8 +3022,11 @@ function EmailOutcomeRadial({
   const segs = [
     { key: "person" as const, v: person, color: "#2E37FE", label: "Person email" },
     { key: "company" as const, v: company, color: "#10b981", label: "Company only" },
+    { key: "catchAll" as const, v: catchAll, color: "#f97316", label: "Catch-all guess" },
     { key: "none" as const, v: none, color: "#94a3b8", label: "No email" },
   ];
+  // Catch-all guesses stay out of the headline count — unprovable addresses
+  // chart as their own segment.
   const withEmail = person + company;
   let acc = 0;
   return (
@@ -2989,7 +3080,7 @@ function EmailOutcomeRadial({
               <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: s.color }} />
               <span className="text-muted-foreground">{s.label}</span>
               <span className="ml-auto font-mono font-semibold tabular-nums">{s.v}</span>
-              {costs && (
+              {costs && s.key !== "catchAll" && (
                 <span className="w-[58px] text-right font-mono tabular-nums text-muted-foreground/80">
                   {money(costs[s.key])}
                   <span className="text-muted-foreground/50">/ea</span>

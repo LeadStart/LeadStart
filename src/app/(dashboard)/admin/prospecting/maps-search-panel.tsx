@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import { appUrl } from "@/lib/api-url";
 import { createClient } from "@/lib/supabase/client";
+import { classifyEmailTier, EMAIL_TIER_RANK, type EmailTier } from "@/lib/enrichment/email-tier";
 import type { MapsPlace, MapsSearchStatus } from "@/types/app";
 
 // The Google Maps prospecting vein — self-contained sibling of LinkedInSearchPanel.
@@ -106,6 +107,7 @@ type MapsConfig = {
   minStars?: string;
   addNaming?: boolean;
   addVerify?: boolean;
+  addCatchAll?: boolean;
   maxResults?: number;
 };
 
@@ -131,6 +133,7 @@ export function MapsSearchPanel() {
   const [maxResults, setMaxResults] = useState(250);
   const [addNaming, setAddNaming] = useState(false);
   const [addVerify, setAddVerify] = useState(false);
+  const [addCatchAll, setAddCatchAll] = useState(false);
   const [searchName, setSearchName] = useState("");
 
   // Search run state.
@@ -158,6 +161,9 @@ export function MapsSearchPanel() {
   // server-side blacklist, so re-pulling a niche re-pays for places you already
   // own; this flag makes the overlap visible before you import (or re-search).
   const [inCrm, setInCrm] = useState<Set<string>>(new Set());
+  // Best email tier already delivered per in-CRM place (person / company /
+  // catch_all) — orders finished lists found-first and badges each row.
+  const [crmTier, setCrmTier] = useState<Map<string, EmailTier>>(new Map());
 
   // ---- loaders ----
   const loadPresets = useCallback(async () => {
@@ -204,25 +210,42 @@ export function MapsSearchPanel() {
     };
   }, []);
 
-  // Which of the current results are already contacts (chunked RLS-scoped read).
+  // Which of the current results are already contacts (chunked RLS-scoped read),
+  // plus each one's delivered email tier (person / company / catch_all) — the
+  // projections pull two scalars out of enrichment_data, not the whole blob.
   const refreshInCrm = useCallback(async (ids: string[]) => {
     if (ids.length === 0) {
       setInCrm(new Set());
+      setCrmTier(new Map());
       return;
     }
     try {
       const supabase = createClient();
       const found = new Set<string>();
+      const tiers = new Map<string, EmailTier>();
+      type CrmRow = {
+        google_place_id: string | null;
+        email: string | null;
+        company_email: string | null;
+        email_kind: string | null;
+        email_provider_status: string | null;
+      };
       for (let i = 0; i < ids.length; i += 300) {
         const { data } = await supabase
           .from("contacts")
-          .select("google_place_id")
+          .select(
+            "google_place_id, email, company_email, email_kind:enrichment_data->enrichment->email->>kind, email_provider_status:enrichment_data->enrichment->email->>provider_status",
+          )
           .in("google_place_id", ids.slice(i, i + 300));
-        for (const r of (data as { google_place_id: string | null }[] | null) ?? []) {
-          if (r.google_place_id) found.add(r.google_place_id);
+        for (const r of (data as unknown as CrmRow[] | null) ?? []) {
+          if (!r.google_place_id) continue;
+          found.add(r.google_place_id);
+          const tier = classifyEmailTier(r);
+          if (tier !== "none") tiers.set(r.google_place_id, tier);
         }
       }
       setInCrm(found);
+      setCrmTier(tiers);
     } catch {
       /* non-fatal — flags just don't show */
     }
@@ -293,6 +316,7 @@ export function MapsSearchPanel() {
     setMinStars(c.minStars ?? "");
     setAddNaming(Boolean(c.addNaming));
     setAddVerify(Boolean(c.addVerify));
+    setAddCatchAll(Boolean(c.addCatchAll));
     if (typeof c.maxResults === "number") setMaxResults(c.maxResults);
     if (!searchName) setSearchName(p.name);
     setPresetSlug(p.slug);
@@ -301,7 +325,7 @@ export function MapsSearchPanel() {
   const saveAsPreset = async () => {
     const name = window.prompt("Save this niche as a preset. Name:", searchName || searchTerms[0] || "");
     if (!name) return;
-    const config: MapsConfig = { searchTerms, websiteFilter, minStars, addNaming, addVerify, maxResults };
+    const config: MapsConfig = { searchTerms, websiteFilter, minStars, addNaming, addVerify, addCatchAll, maxResults };
     try {
       const res = await fetch(appUrl("/api/admin/prospecting/maps-search-presets"), {
         method: "POST",
@@ -339,7 +363,7 @@ export function MapsSearchPanel() {
           levers: { searchTerms, locationQuery: location.trim(), websiteFilter, minStars },
           max_results: maxResults,
           name: searchName.trim() || undefined,
-          addons: { naming: addNaming, verify: addVerify },
+          addons: { naming: addNaming, verify: addVerify, include_catch_all: addCatchAll },
           preset_slug: presetSlug || undefined,
         }),
       });
@@ -402,7 +426,22 @@ export function MapsSearchPanel() {
   const perLead = placeCost + scrapeCost + (addNaming ? namingCost + 0.004 : 0) + (addVerify ? 0.002 : 0);
   const estTotal = maxResults * perLead;
 
-  const results = detail?.results ?? [];
+  const rawResults = detail?.results ?? [];
+  // Found-first ordering on finished lists (owner ruling 2026-08-26): rows whose
+  // contact already delivered an email float to the top by tier — personal →
+  // company inbox → catch-all — with sourcing order preserved within a tier.
+  // A still-running search keeps pure arrival order so streamed rows don't jump.
+  const results = (() => {
+    if (detail?.status !== "complete" || crmTier.size === 0) return rawResults;
+    return rawResults
+      .map((r, i) => ({
+        r,
+        i,
+        rank: EMAIL_TIER_RANK[crmTier.get(r.google_place_id) ?? "none"],
+      }))
+      .sort((a, b) => a.rank - b.rank || a.i - b.i)
+      .map((x) => x.r);
+  })();
   const pageStart = (page - 1) * RESULTS_PAGE_SIZE;
   const pageResults = results.slice(pageStart, pageStart + RESULTS_PAGE_SIZE);
   const allOnPageSelected = pageResults.length > 0 && pageResults.every((r) => selected.has(r.google_place_id));
@@ -415,10 +454,11 @@ export function MapsSearchPanel() {
   const tiers = {
     personal: dc.tier_personal ?? 0,
     company: dc.tier_company ?? 0,
+    catch_all: dc.tier_catch_all ?? 0,
     phone: dc.tier_phone ?? 0,
     none: dc.tier_none ?? 0,
   };
-  const tierTotal = tiers.personal + tiers.company + tiers.phone + tiers.none;
+  const tierTotal = tiers.personal + tiers.company + tiers.catch_all + tiers.phone + tiers.none;
 
   const toggleRow = (id: string) =>
     setSelected((prev) => {
@@ -636,6 +676,15 @@ export function MapsSearchPanel() {
                 <span className="block text-xs text-muted-foreground">Million Verifier every found email before it&apos;s used.</span>
               </span>
             </label>
+            <label className="flex items-start gap-2 text-sm cursor-pointer">
+              <input type="checkbox" checked={addCatchAll} onChange={(e) => setAddCatchAll(e.target.checked)} className="mt-0.5 cursor-pointer" />
+              <span>
+                <span className="font-medium">Include catch-all guesses</span>
+                <span className="block text-xs text-muted-foreground">
+                  On domains that accept every address, keep the best pattern guess (flagged Catch-all) instead of discarding it. No extra cost.
+                </span>
+              </span>
+            </label>
           </div>
 
           {error && (
@@ -751,6 +800,27 @@ export function MapsSearchPanel() {
                                 In CRM
                               </span>
                             )}
+                            {(() => {
+                              // Delivered-email tier badge (person / company inbox /
+                              // catch-all) — mirrors the found-first row ordering.
+                              const tier = crmTier.get(r.google_place_id);
+                              if (!tier || tier === "none") return null;
+                              const cls =
+                                tier === "person"
+                                  ? "bg-[#EDEEFF] text-[#1C24B8]"
+                                  : tier === "company"
+                                    ? "bg-emerald-50 text-emerald-700"
+                                    : "bg-orange-50 text-orange-700";
+                              const label =
+                                tier === "person" ? "Personal email" : tier === "company" ? "Company inbox" : "Catch-all";
+                              return (
+                                <span
+                                  className={`ml-1.5 inline-flex items-center rounded-full px-1.5 py-0.5 align-middle text-[9px] font-medium ${cls}`}
+                                >
+                                  {label}
+                                </span>
+                              );
+                            })()}
                           </TableCell>
                           <TableCell className="text-xs text-muted-foreground">{r.category_label ?? r.category}</TableCell>
                           <TableCell className="text-xs text-muted-foreground">
@@ -823,7 +893,7 @@ function MapsOutcomeRadial({
   total,
   verified,
 }: {
-  tiers: { personal: number; company: number; phone: number; none: number };
+  tiers: { personal: number; company: number; catch_all: number; phone: number; none: number };
   total: number;
   verified: number;
 }) {
@@ -832,9 +902,12 @@ function MapsOutcomeRadial({
   const segs = [
     { key: "personal", v: tiers.personal, color: "#2E37FE", label: "Personal email" },
     { key: "company", v: tiers.company, color: "#10b981", label: "Company inbox" },
+    { key: "catch_all", v: tiers.catch_all, color: "#f97316", label: "Catch-all guess" },
     { key: "phone", v: tiers.phone, color: "#f59e0b", label: "Phone only" },
     { key: "none", v: tiers.none, color: "#94a3b8", label: "No contact info" },
   ];
+  // Catch-all guesses are deliberately NOT in the headline email count — they're
+  // unprovable addresses, charted as their own segment.
   const withEmail = tiers.personal + tiers.company;
   let acc = 0;
   return (

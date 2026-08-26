@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { useSWRConfig } from "swr";
 import { useSupabaseQuery } from "@/hooks/use-supabase-query";
 import { ADMIN_CONTACTS_KEY, fetchAdminContacts } from "@/lib/admin-queries";
+import { classifyEmailTier, emailTierRank } from "@/lib/enrichment/email-tier";
 import { useSort } from "@/hooks/use-sort";
 import { useUser } from "@/hooks/use-user";
 import { SortableHead } from "@/components/ui/sortable-head";
@@ -347,8 +348,13 @@ export default function ContactsPage() {
     ...contact,
     fullName: [contact.first_name, contact.last_name].filter(Boolean).join(" ") || "—",
     clientName: contact.client_id ? clientMap.get(contact.client_id) || "—" : "—",
+    email_tier: classifyEmailTier(contact),
+    email_tier_rank: emailTierRank(contact),
   }));
-  const { sorted, sortConfig, requestSort } = useSort(rows, "created_at", "desc");
+  // Default order = found-first email tiers (person → company inbox → catch-all
+  // → none; owner ruling 2026-08-26). Stable sort keeps newest-first within a
+  // tier (rows arrive created_at desc); any column click still re-sorts.
+  const { sorted, sortConfig, requestSort } = useSort(rows, "email_tier_rank", "asc");
 
   const [page, setPage] = useState(1);
   useEffect(() => {
@@ -372,6 +378,7 @@ export default function ContactsPage() {
   const [enrichRunActivity, setEnrichRunActivity] = useState(false);
   const [enrichRunVerify, setEnrichRunVerify] = useState(false);
   const [enrichRunNaming, setEnrichRunNaming] = useState(false);
+  const [enrichIncludeCatchAll, setEnrichIncludeCatchAll] = useState(false);
   const [enrichStarting, setEnrichStarting] = useState(false);
   const [enrichError, setEnrichError] = useState<string | null>(null);
   // Org waterfall config (migration 00075) — fetched when the dialog opens so
@@ -609,6 +616,7 @@ export default function ContactsPage() {
           run_activity: enrichRunActivity,
           run_verify: enrichRunVerify,
           run_naming: enrichRunNaming,
+          include_catch_all: enrichIncludeCatchAll,
         }),
       });
       const data = (await res.json()) as {
@@ -1172,6 +1180,24 @@ export default function ContactsPage() {
                         <div className="flex flex-col gap-0.5">
                           <span className="inline-flex items-center gap-1.5">
                             {row.email ?? <span className="text-xs">—</span>}
+                            {row.email && row.email_tier === "catch_all" && (
+                              <Badge
+                                variant="secondary"
+                                className="border-amber-200 bg-amber-50 text-amber-700 text-[10px]"
+                                title="Pattern guess on a catch-all domain — the mailbox can't be individually verified (confidence 40); sends go out flagged risky"
+                              >
+                                Catch-all
+                              </Badge>
+                            )}
+                            {row.email && row.email_tier === "company" && (
+                              <Badge
+                                variant="secondary"
+                                className="border-slate-200 bg-slate-50 text-slate-600 text-[10px]"
+                                title="Generic company inbox backfilled from the website scrape — not a personal address"
+                              >
+                                Company inbox
+                              </Badge>
+                            )}
                             {(() => {
                               const b = verificationBadge(row.email_verification_status);
                               return b ? (
@@ -1773,6 +1799,23 @@ export default function ContactsPage() {
                   <span className="block text-[11px] text-muted-foreground">
                     ≈ $0.015 per business · for name-less company leads (e.g. Google Maps) —
                     finds the owner&apos;s name &amp; title, then builds their personal email
+                  </span>
+                </span>
+              </label>
+              <label className="flex items-start gap-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={enrichIncludeCatchAll}
+                  onChange={(e) => setEnrichIncludeCatchAll(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-border accent-[#2E37FE] cursor-pointer"
+                />
+                <span>
+                  Include catch-all guesses{" "}
+                  <span className="text-[9px] uppercase tracking-wide text-[#2E37FE]/70">add-on</span>
+                  <span className="block text-[11px] text-muted-foreground">
+                    no extra cost · on domains that accept every address, keep the best
+                    pattern guess (flagged Catch-all, confidence 40) instead of discarding
+                    it — sends go out flagged risky and bounces auto-suppress
                   </span>
                 </span>
               </label>

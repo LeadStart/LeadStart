@@ -46,6 +46,11 @@ const CONTACT_LIST_COLUMNS =
   "pipeline_notes, pipeline_follow_up_date, pipeline_added_at, " +
   "email_verification_status, email_verification_subresult, " +
   "email_verified_at, email_did_you_mean, " +
+  // Scalar projections out of enrichment_data (kept out of the select above for
+  // weight) so the list can tier/badge emails: generic-inbox kind + catch-all
+  // provenance. PostgREST JSON-path selection — not real columns.
+  "email_kind:enrichment_data->enrichment->email->>kind, " +
+  "email_provider_status:enrichment_data->enrichment->email->>provider_status, " +
   "created_at, updated_at";
 
 // ---------- Overview ----------
