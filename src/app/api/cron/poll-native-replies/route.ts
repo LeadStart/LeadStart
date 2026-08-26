@@ -25,6 +25,8 @@ import { GmailClient, GmailConfigError } from "@/lib/gmail/client";
 import { loadGmailClientForOrg } from "@/lib/gmail/org";
 import { parseGmailMessage, isBounce, bounceSeverity, isAutoSubmitted, extractFailedRecipient } from "@/lib/gmail/mime";
 import { escapeLikePattern } from "@/lib/utils";
+import { shouldTripCircuitBreaker, enterTimers, CB_RATE_SAMPLE } from "@/lib/deliverability/lifecycle";
+import { enqueueOwnerAlert } from "@/lib/notifications/owner-alerts";
 import type { NativeMailbox } from "@/types/app";
 
 export const maxDuration = 60;
@@ -75,6 +77,10 @@ export async function GET(request: NextRequest) {
   const clientIdByCampaign = new Map<string, string | null>();
   let processed = 0;
   const summary = { replies: 0, bounces: 0, softBounces: 0, dropped: 0 };
+  // Domains that took a HARD bounce this tick — evaluated once each, after the
+  // loop, by the bounce circuit breaker (fast burn-prevention: a burst of hard
+  // bounces tires the domain within a minute, ahead of the hourly health rollup).
+  const bouncedDomains = new Set<string>();
 
   for (const mailbox of mailboxes) {
     if (processed >= MAX_MESSAGES_PER_TICK) break;
@@ -202,6 +208,8 @@ export async function GET(request: NextRequest) {
               .eq("organization_id", mailbox.organization_id)
               .ilike("email", escapeLikePattern(recipient));
           }
+          // Track this domain for the post-loop bounce circuit breaker.
+          if (mailbox.domain_id) bouncedDomains.add(mailbox.domain_id);
           processed++;
           summary.bounces++;
           continue;
@@ -311,7 +319,150 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  return NextResponse.json({ status: "ok", processed, ...summary });
+  // Fast bounce circuit breaker: evaluate every domain that took a hard bounce
+  // this tick (rare, so at most a few one-off queries per affected domain).
+  const breaker = await evaluateCircuitBreakers(admin, [...bouncedDomains], Date.now());
+
+  return NextResponse.json({ status: "ok", processed, ...summary, breaker });
+}
+
+// ── Bounce circuit breaker ──────────────────────────────────────────────────
+// A burst of hard bounces means a poisoned list segment is actively torching a
+// domain. This reacts within a minute (poll runs every minute) — well ahead of
+// the hourly health rollup — by tiring the domain: closing it to NEW leads while
+// its in-flight follow-ups drain. Gated by organizations.domain_lifecycle_enabled
+// (migration 00082): OFF → observe (log only, no write), matching the lifecycle
+// cron. Only warming/active domains can be tripped; the trip is a guarded CAS
+// update so a concurrent lifecycle-cron transition can't be clobbered.
+async function evaluateCircuitBreakers(
+  admin: ReturnType<typeof createAdminClient>,
+  domainIds: string[],
+  now: number,
+): Promise<{ evaluated: number; tripped: number; observed: number }> {
+  const result = { evaluated: 0, tripped: 0, observed: 0 };
+  if (domainIds.length === 0) return result;
+
+  const since24h = new Date(now - 24 * 60 * 60 * 1000).toISOString();
+  const nowIso = new Date(now).toISOString();
+
+  // Only warming/active domains are trip candidates (tired/resting/etc. already
+  // closed intake).
+  const { data: domRows, error: domErr } = await admin
+    .from("sending_domains")
+    .select("id, organization_id, domain, lifecycle_status, drain_until")
+    .in("id", domainIds)
+    .in("lifecycle_status", ["warming", "active"]);
+  if (domErr) {
+    console.error("[cron/native-replies] breaker domain read failed:", domErr.message);
+    return result;
+  }
+  const domains = (domRows ?? []) as {
+    id: string;
+    organization_id: string;
+    domain: string;
+    lifecycle_status: string;
+    drain_until: string | null;
+  }[];
+  if (domains.length === 0) return result;
+
+  // Per-org lifecycle gate.
+  const orgIds = [...new Set(domains.map((d) => d.organization_id))];
+  const { data: orgRows } = await admin
+    .from("organizations")
+    .select("id, domain_lifecycle_enabled")
+    .in("id", orgIds);
+  const enabledByOrg = new Map<string, boolean>(
+    ((orgRows ?? []) as { id: string; domain_lifecycle_enabled: boolean | null }[]).map((o) => [
+      o.id,
+      o.domain_lifecycle_enabled ?? false,
+    ]),
+  );
+
+  // All mailbox ids per candidate domain (bounces/sends are counted across the
+  // whole domain, not just the mailboxes polled this tick).
+  const { data: mbRows } = await admin
+    .from("native_mailboxes")
+    .select("id, domain_id")
+    .in("domain_id", domains.map((d) => d.id));
+  const mbByDomain = new Map<string, string[]>();
+  for (const mb of (mbRows ?? []) as { id: string; domain_id: string | null }[]) {
+    if (!mb.domain_id) continue;
+    const arr = mbByDomain.get(mb.domain_id) ?? [];
+    arr.push(mb.id);
+    mbByDomain.set(mb.domain_id, arr);
+  }
+
+  for (const d of domains) {
+    const mbIds = mbByDomain.get(d.id) ?? [];
+    if (mbIds.length === 0) continue;
+    result.evaluated += 1;
+
+    // Trailing-24h hard bounces (count-only) + the most-recent-sends sample.
+    const { count: hb24 } = await admin
+      .from("native_sends")
+      .select("id", { count: "exact", head: true })
+      .in("mailbox_id", mbIds)
+      .eq("status", "bounced")
+      .gte("bounced_at", since24h);
+    const { data: recent } = await admin
+      .from("native_sends")
+      .select("status")
+      .in("mailbox_id", mbIds)
+      .order("sent_at", { ascending: false })
+      .limit(CB_RATE_SAMPLE);
+    const sample = (recent ?? []) as { status: string }[];
+    const recentHardBounces = sample.filter((r) => r.status === "bounced").length;
+
+    if (
+      !shouldTripCircuitBreaker({
+        hardBounces24h: hb24 ?? 0,
+        recentSends: sample.length,
+        recentHardBounces,
+      })
+    ) {
+      continue;
+    }
+
+    if (!(enabledByOrg.get(d.organization_id) ?? false)) {
+      // Observe-only: the lifecycle gate is off, so report but don't tire.
+      result.observed += 1;
+      console.warn(
+        `[cron/native-replies] circuit breaker WOULD tire ${d.domain} ` +
+          `(${hb24 ?? 0} hard bounces/24h) — domain_lifecycle_enabled is off.`,
+      );
+      continue;
+    }
+
+    // Trip: tire the domain. Guarded CAS on lifecycle_status so a concurrent
+    // lifecycle-cron transition isn't clobbered. Set the drain timer if absent.
+    const update: Record<string, unknown> = {
+      lifecycle_status: "tired",
+      lifecycle_changed_at: nowIso,
+    };
+    if (!d.drain_until) update.drain_until = enterTimers("tired", now).drain_until;
+    const { error: tripErr } = await admin
+      .from("sending_domains")
+      .update(update)
+      .eq("id", d.id)
+      .in("lifecycle_status", ["warming", "active"]);
+    if (tripErr) {
+      console.error(`[cron/native-replies] breaker trip of ${d.domain} failed:`, tripErr.message);
+      continue;
+    }
+    await enqueueOwnerAlert({
+      admin,
+      kind: "domain_lifecycle",
+      subject: `Domain ${d.domain} tired by the bounce circuit breaker`,
+      summary:
+        `${d.domain} took ${hb24 ?? 0} hard bounce${(hb24 ?? 0) === 1 ? "" : "s"} in the last 24 hours, ` +
+        `so it was closed to new leads immediately to stop the damage. In-flight follow-ups drain, then it rests. ` +
+        `Check the recipient list that caused it before reactivating.`,
+      context: { domain: d.domain, hard_bounces_24h: hb24 ?? 0, trigger: "circuit_breaker" },
+    });
+    result.tripped += 1;
+  }
+
+  return result;
 }
 
 // Pull the bare email out of a "Name <email>" header (or a raw address).

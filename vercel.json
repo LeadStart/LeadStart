@@ -64,6 +64,10 @@
     {
       "path": "/app/api/cron/run-placement-tests",
       "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/app/api/cron/manage-mailbox-lifecycle",
+      "schedule": "45 * * * *"
     }
   ]
 }

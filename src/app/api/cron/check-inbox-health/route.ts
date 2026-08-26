@@ -32,8 +32,9 @@ import {
   placementSignalFromTest,
 } from "@/lib/deliverability/placement-runner";
 import { PLACEMENT_FRESHNESS_DAYS } from "@/lib/deliverability/placement";
+import { nextWatchStreak } from "@/lib/deliverability/lifecycle";
 import { enqueueOwnerAlert } from "@/lib/notifications/owner-alerts";
-import type { NativeMailbox } from "@/types/app";
+import type { HealthBand, HealthComponent, NativeMailbox } from "@/types/app";
 
 // See dispatch-owner-alerts/route.ts — force-dynamic so a Vercel cron never
 // gets an edge-cached response instead of running the body.
@@ -84,6 +85,32 @@ export async function GET(request: NextRequest) {
   const orgMap = new Map<string, OrgSettings>(
     ((orgRows ?? []) as OrgSettings[]).map((o) => [o.id, o]),
   );
+
+  // 2b) Prior domain rollup state (migration 00081) — the watch_streak and last
+  // check date, for the daily watch-streak accounting below. Keyed by domain_id.
+  // A read error here is non-fatal: domains just start their streak fresh (the
+  // rollup is advisory and nothing enforces on it yet).
+  const domainIds = Array.from(
+    new Set(mailboxes.map((m) => m.domain_id).filter((id): id is string => !!id)),
+  );
+  const priorDomain = new Map<string, { watch_streak: number; health_checked_at: string | null }>();
+  if (domainIds.length > 0) {
+    const { data: domRows, error: domErr } = await admin
+      .from("sending_domains")
+      .select("id, watch_streak, health_checked_at")
+      .in("id", domainIds);
+    if (domErr) {
+      console.error("[cron/check-inbox-health] prior domain-rollup read failed:", domErr.message);
+    } else {
+      for (const d of (domRows ?? []) as {
+        id: string;
+        watch_streak: number | null;
+        health_checked_at: string | null;
+      }[]) {
+        priorDomain.set(d.id, { watch_streak: d.watch_streak ?? 0, health_checked_at: d.health_checked_at });
+      }
+    }
+  }
 
   // 3) Send stats per mailbox from ONE 14-day sweep of native_sends: the 7-day
   // hard+soft bounce counts (bounce components) and the 14-day send volume (the
@@ -160,12 +187,22 @@ export async function GET(request: NextRequest) {
   // same for every mailbox on it).
   const domainCache = new Map<string, { domainAuth: DomainAuth; mx: AuthCheck; dbl: DblResult }>();
 
+  // Per-domain health rollup accumulator (migration 00081). A domain shares its
+  // reputation across every inbox on it, so its health is that of its WORST
+  // (lowest-scoring) member mailbox — the weakest inbox is the burn risk. The
+  // worst mailbox's components come along so the domain card's score and its
+  // "why" always agree. Keyed by domain_id; written after the loop. Choice of
+  // "worst inbox" is deliberately conservative and Phase-5-tunable (nothing
+  // enforces on this rollup yet).
+  const domainRollup = new Map<string, { score: number; band: HealthBand; components: HealthComponent[] }>();
+
   const tally = {
     mailboxes: mailboxes.length,
     scored: 0,
     snapshots: 0,
     auto_paused: 0,
     degraded_alerts: 0,
+    domains_rolled: 0,
     errors: 0,
   };
 
@@ -205,6 +242,18 @@ export async function GET(request: NextRequest) {
           return pt ? placementSignalFromTest(pt) : null;
         })(),
       });
+
+      // Feed the per-domain rollup: keep the worst (lowest) member score.
+      if (mb.domain_id) {
+        const cur = domainRollup.get(mb.domain_id);
+        if (!cur || health.score < cur.score) {
+          domainRollup.set(mb.domain_id, {
+            score: health.score,
+            band: health.band,
+            components: health.components,
+          });
+        }
+      }
 
       const prevScore = mb.health_score;
       const prevBand = mb.health_band;
@@ -298,6 +347,42 @@ export async function GET(request: NextRequest) {
         `[cron/check-inbox-health] failed for ${mb.email_address}:`,
         err instanceof Error ? err.message : err,
       );
+    }
+  }
+
+  // Persist the per-domain health rollups (migration 00081). watch_streak counts
+  // CONSECUTIVE DAYS in the 'watch' band (the future lifecycle cron tires a
+  // domain at WATCH_STREAK_FOR_TIRED consecutive days): it advances at most once
+  // per UTC day, and resets to 0 the moment the domain leaves 'watch' — a
+  // 'critical' domain tires via the band directly, not via the streak. Purely
+  // additive: nothing reads these columns yet except the (future) lifecycle cron.
+  const rollupIso = new Date(now).toISOString();
+  for (const [domainId, roll] of domainRollup) {
+    const prior = priorDomain.get(domainId);
+    const watchStreak = nextWatchStreak(
+      roll.band,
+      prior?.watch_streak ?? 0,
+      prior?.health_checked_at ?? null,
+      rollupIso,
+    );
+    const { error: rollErr } = await admin
+      .from("sending_domains")
+      .update({
+        health_score: roll.score,
+        health_band: roll.band,
+        health_components: roll.components,
+        health_checked_at: rollupIso,
+        watch_streak: watchStreak,
+      })
+      .eq("id", domainId);
+    if (rollErr) {
+      tally.errors += 1;
+      console.error(
+        `[cron/check-inbox-health] domain rollup update failed for ${domainId}:`,
+        rollErr.message,
+      );
+    } else {
+      tally.domains_rolled += 1;
     }
   }
 

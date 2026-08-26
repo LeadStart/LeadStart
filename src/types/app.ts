@@ -802,11 +802,19 @@ export interface NativeMailbox {
   client_id: string | null;
   email_address: string;
   display_name: string | null;
-  provider: "gmail";
+  provider: "gmail" | "smtp";     // 'smtp' = self-hosted tier (Phase 4)
   status: NativeMailboxStatus;
+  // Link to the sending_domains row for this inbox's domain (migration 00081).
+  // Null on legacy rows until backfilled. Drives domain-level lifecycle/drain.
+  domain_id: string | null;
   ramp_started_at: string;        // 'YYYY-MM-DD'
   max_daily_cap: number;
   daily_cap_override: number | null;
+  // All-time-send offset for the warmup ramp (migration 00081). 0 = unchanged;
+  // set to the current send count when re-activating a RESTED mailbox so it
+  // re-warms from ramp stage 1 instead of resuming at full cap. Applied at the
+  // dispatcher's effectiveDailyCap() call site — ramp.ts math is untouched.
+  ramp_baseline_sent: number;
   last_error: string | null;
   last_error_at: string | null;
   last_polled_at: string | null;
@@ -820,6 +828,66 @@ export interface NativeMailbox {
   health_components: HealthComponent[] | null;
   health_checked_at: string | null;
   health_paused_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// ---------- Sending domains + lifecycle (migration 00081) ----------
+
+// The two sending tiers. gmail = Google Workspace inbox on Google's IPs
+// (premium, protect); smtp = self-hosted mail server on our own IPs (cheap,
+// disposable, rotated). See docs/plans/deliverability-infrastructure-plan.md.
+export type DomainTier = "gmail" | "smtp";
+
+// Where an automated-provisioning domain was bought. 'manual' = pre-existing /
+// hand-registered (every backfilled domain).
+export type DomainRegistrar = "porkbun" | "spaceship" | "manual";
+
+// The burn-prevention state machine. Transition rules live in
+// src/lib/deliverability/lifecycle.ts (pure, unit-tested).
+//   provisioning  bought; DNS/DKIM pending; not sendable
+//   warming       mailboxes ramping; sendable at ramp caps
+//   active        full duty
+//   tired         intake CLOSED to new leads; in-flight follow-ups drain
+//   resting       all mailboxes paused; DNS/MX live so late replies still arrive
+//   burned        DBL-listed or still failing after a full rest — never reused
+//   retired       not renewed (terminal)
+export type DomainLifecycle =
+  | "provisioning"
+  | "warming"
+  | "active"
+  | "tired"
+  | "resting"
+  | "burned"
+  | "retired";
+
+// One sending domain (migration 00081). The layer that lets a domain be rested
+// and re-warmed instead of burned, and the home for domain-scoped facts
+// (registrar, age, IP, health rollup) that per-mailbox rows had nowhere to hold.
+export interface SendingDomain {
+  id: string;
+  organization_id: string;
+  domain: string; // lowercased bare domain
+  tier: DomainTier;
+  lifecycle_status: DomainLifecycle;
+  lifecycle_changed_at: string;
+  drain_until: string | null; // tired: when drain ends → resting
+  rest_until: string | null; // resting: when rest ends → (re-)warming
+  registrar: DomainRegistrar;
+  registered_at: string | null; // 'YYYY-MM-DD' — drives the age gate
+  expires_at: string | null; // 'YYYY-MM-DD'
+  purchase_price_usd: number | null;
+  dkim_verified_at: string | null;
+  ip_address: string | null; // SMTP tier only
+  // Optional hard ceiling on cold sends/day across ALL this domain's mailboxes
+  // (migration 00083; defense-in-depth over per-mailbox ramp caps). Null = no cap.
+  max_daily_sends: number | null;
+  health_score: number | null;
+  health_band: HealthBand | null;
+  health_components: HealthComponent[] | null;
+  health_checked_at: string | null;
+  watch_streak: number; // consecutive daily rollups in 'watch'
+  notes: string | null;
   created_at: string;
   updated_at: string;
 }

@@ -45,10 +45,12 @@ import { renderSpintax } from "@/lib/spintax";
 import { buildTokenMap, applyTokens } from "@/lib/native/tokens";
 import { loadVerifierStates, finalizeVerifierStates } from "@/lib/millionverifier/org-state";
 import { gateContactVerification } from "@/lib/millionverifier/verify-contact";
+import { domainOpenForNewLeads } from "@/lib/deliverability/lifecycle";
 import type {
   CampaignEnrollment,
   CampaignStep,
   Contact,
+  DomainLifecycle,
   NativeMailbox,
 } from "@/types/app";
 
@@ -258,6 +260,49 @@ export async function GET(request: NextRequest) {
     for (const mb of (mbData ?? []) as NativeMailbox[]) mailboxMap.set(mb.id, mb);
   }
 
+  // Domain lifecycle for drain-mode routing (migration 00081). A domain that is
+  // NOT open to new leads (tired = draining, resting, etc.) accepts no fresh
+  // step-0 enrollments — but its in-flight sticky follow-ups continue untouched,
+  // because the sticky path below never consults this. A mailbox with no
+  // domain_id (legacy / pre-backfill) is treated as open. On day one every
+  // backfilled domain is 'active', so this filter is a no-op until the lifecycle
+  // cron (or the fast bounce breaker) starts tiring domains.
+  const domainStatusByMailbox = new Map<string, DomainLifecycle>();
+  // Domains WITH an optional daily send cap (migration 00083). Empty for the
+  // common case (no caps) → all cap bookkeeping below is skipped.
+  const capByDomainId = new Map<string, number>();
+  const domainIds = [
+    ...new Set(
+      [...mailboxMap.values()].map((m) => m.domain_id).filter((id): id is string => !!id),
+    ),
+  ];
+  if (domainIds.length > 0) {
+    const { data: domainRows } = await admin
+      .from("sending_domains")
+      .select("id, lifecycle_status, max_daily_sends")
+      .in("id", domainIds);
+    const statusById = new Map<string, DomainLifecycle>();
+    for (const d of (domainRows ?? []) as {
+      id: string;
+      lifecycle_status: DomainLifecycle;
+      max_daily_sends: number | null;
+    }[]) {
+      statusById.set(d.id, d.lifecycle_status);
+      if (d.max_daily_sends != null) capByDomainId.set(d.id, d.max_daily_sends);
+    }
+    for (const mb of mailboxMap.values()) {
+      const st = mb.domain_id ? statusById.get(mb.domain_id) : undefined;
+      if (st) domainStatusByMailbox.set(mb.id, st);
+    }
+  }
+  // A mailbox is eligible for NEW step-0 leads only if its domain is open
+  // (warming/active). Unknown/legacy domains default open. Sticky follow-ups
+  // bypass this entirely — a draining domain must still finish its threads.
+  const domainOpenFor = (mb: NativeMailbox): boolean => {
+    const st = domainStatusByMailbox.get(mb.id);
+    return st == null || domainOpenForNewLeads(st);
+  };
+
   // Sends already made today, per mailbox (ET-day boundary, matching the cap) —
   // both the count (for the daily cap) and the most-recent send time (for the
   // pacing gate below).
@@ -328,8 +373,55 @@ export async function GET(request: NextRequest) {
     return w;
   };
 
+  // Optional per-domain daily send cap (migration 00083). Inert unless some
+  // domain has max_daily_sends set — then count the domain's TRUE sends today
+  // across ALL its mailboxes (not just this campaign's pool) so the ceiling
+  // holds domain-wide. domainInTick tracks this tick's sends per domain.
+  const domainSentToday = new Map<string, number>();
+  const domainInTick = new Map<string, number>();
+  if (capByDomainId.size > 0) {
+    const cappedIds = [...capByDomainId.keys()];
+    const { data: cappedMbs } = await admin
+      .from("native_mailboxes")
+      .select("id, domain_id")
+      .in("domain_id", cappedIds);
+    const domainByMailbox = new Map<string, string>();
+    const cappedMailboxIds: string[] = [];
+    for (const m of (cappedMbs ?? []) as { id: string; domain_id: string | null }[]) {
+      if (!m.domain_id) continue;
+      domainByMailbox.set(m.id, m.domain_id);
+      cappedMailboxIds.push(m.id);
+    }
+    if (cappedMailboxIds.length > 0) {
+      const { data: capSends } = await admin
+        .from("native_sends")
+        .select("mailbox_id")
+        .in("mailbox_id", cappedMailboxIds)
+        .gte("sent_at", dayStart);
+      for (const s of (capSends ?? []) as { mailbox_id: string }[]) {
+        const dId = domainByMailbox.get(s.mailbox_id);
+        if (dId) domainSentToday.set(dId, (domainSentToday.get(dId) ?? 0) + 1);
+      }
+    }
+  }
+  // A mailbox whose domain has hit its daily send ceiling is ineligible — for
+  // ALL sends (sticky follow-ups included), since the cap is a domain-wide daily
+  // volume limit. No cap set (the common case) → always true.
+  const domainUnderCap = (mb: NativeMailbox): boolean => {
+    if (!mb.domain_id) return true;
+    const cap = capByDomainId.get(mb.domain_id);
+    if (cap == null) return true;
+    const used = (domainSentToday.get(mb.domain_id) ?? 0) + (domainInTick.get(mb.domain_id) ?? 0);
+    return used < cap;
+  };
+
+  // ramp_baseline_sent (migration 00081) offsets the all-time count before the
+  // ramp reads it, so a re-activated RESTED mailbox re-warms from stage 1 instead
+  // of resuming at full cap. 0 for every existing mailbox → identical behavior.
+  const rampSent = (mb: NativeMailbox) =>
+    Math.max(0, (totalSent[mb.id] ?? 0) - (mb.ramp_baseline_sent ?? 0));
   const remaining = (mb: NativeMailbox) =>
-    effectiveDailyCap(mb, totalSent[mb.id] ?? 0) - (sentToday[mb.id] ?? 0) - (inTick[mb.id] ?? 0);
+    effectiveDailyCap(mb, rampSent(mb)) - (sentToday[mb.id] ?? 0) - (inTick[mb.id] ?? 0);
   // Spacing gate: an inbox that already sent today must wait out its dynamic
   // interval (day's remaining allotment spread over the window's remaining time,
   // floored at 5 min) before sending again. Its first send of the day is ungated.
@@ -344,7 +436,8 @@ export async function GET(request: NextRequest) {
     mb.status === "active" &&
     remaining(mb) > 0 &&
     (inTick[mb.id] ?? 0) < PER_MAILBOX_PER_TICK &&
-    paced(mb, campaign);
+    paced(mb, campaign) &&
+    domainUnderCap(mb);
 
   let sent = 0;
   const results: Array<{ enrollment_id: string; result: string }> = [];
@@ -448,10 +541,12 @@ export async function GET(request: NextRequest) {
       mailbox = mailboxMap.get(enrollment.native_mailbox_id);
       if (!mailbox || !eligible(mailbox, campaign)) continue;
     } else {
-      // Step 0: choose the least-loaded eligible mailbox in the pool.
+      // Step 0: choose the least-loaded eligible mailbox in the pool whose
+      // domain is still open to new leads (drain mode excludes tired/resting
+      // domains from NEW first-touches; their in-flight threads continue above).
       const pool = (poolByCampaign.get(campaign.id) ?? [])
         .map((id) => mailboxMap.get(id))
-        .filter((mb): mb is NativeMailbox => !!mb && eligible(mb, campaign));
+        .filter((mb): mb is NativeMailbox => !!mb && eligible(mb, campaign) && domainOpenFor(mb));
       if (pool.length === 0) continue; // nothing available this tick
       pool.sort((a, b) => remaining(b) - remaining(a) || (inTick[a.id] ?? 0) - (inTick[b.id] ?? 0));
       mailbox = pool[0];
@@ -647,6 +742,11 @@ export async function GET(request: NextRequest) {
     sentToday[mailbox.id] = (sentToday[mailbox.id] ?? 0) + 1;
     inTick[mailbox.id] = (inTick[mailbox.id] ?? 0) + 1;
     lastSentTodayMs[mailbox.id] = tickNow.getTime();
+    // Count this send against the domain's daily cap (no-op unless the domain
+    // has one set).
+    if (mailbox.domain_id && capByDomainId.has(mailbox.domain_id)) {
+      domainInTick.set(mailbox.domain_id, (domainInTick.get(mailbox.domain_id) ?? 0) + 1);
+    }
     // Count this first-touch against the campaign's new-leads/day cap.
     if (enrollment.current_step_index === 0) {
       newLeadsInTick[campaign.id] = (newLeadsInTick[campaign.id] ?? 0) + 1;
