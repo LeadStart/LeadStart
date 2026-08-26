@@ -380,6 +380,7 @@ export function NativeSequenceCard({
                       subject={s.subject}
                       body={s.body}
                       campaignId={campaignId}
+                      isFirstStep={i === 0}
                       onApplySpintax={(n) => updateStep(i, { subject: n.subject ?? s.subject, body: n.body })}
                     />
                   </div>

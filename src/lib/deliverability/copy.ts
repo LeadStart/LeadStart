@@ -12,7 +12,8 @@
 //     carrying a per-step breakdown with categorized matches + suggestions.
 
 import { SPAM_PHRASES, type SpamCategory, type SpamSeverity } from "./spam-words";
-import { parseSpintax, textSegments } from "../spintax";
+import { parseSpintax, textSegments, hasSpintax } from "../spintax";
+import { extractCampaignTokens } from "../native/tokens";
 
 export interface CopyIssue {
   severity: "warn" | "info";
@@ -153,6 +154,34 @@ function capsWordCount(subject: string): number {
     .filter((w) => w.length > 2 && w === w.toUpperCase() && /[A-Z]/.test(w)).length;
 }
 
+/**
+ * ALL-CAPS words in a body: len>3 with >=2 uppercase letters and no lowercase.
+ * len>3 lets common acronyms through (LLC, USA, CRM); requiring several before
+ * it fires means a lone ASAP/HVAC never trips.
+ */
+function bodyCapsWordCount(body: string): number {
+  return body.split(/\s+/).filter((w) => {
+    const caps = (w.match(/[A-Z]/g) ?? []).length;
+    return w.length > 3 && caps >= 2 && w === w.toUpperCase();
+  }).length;
+}
+
+// Emoji matcher. Built with `new RegExp` — a `\p{...}` regex LITERAL fails the
+// TS 5.5+ syntax check at the project's ES2017 target; the runtime (Node 20 +
+// evergreen browsers) supports the constructed form. The negative lookahead
+// excludes ™ / ® / © (Extended_Pictographic, but "Acme™" is not an emoji).
+const EMOJI_RE = new RegExp("(?![\\u00A9\\u00AE\\u2122])\\p{Extended_Pictographic}", "gu");
+
+/** Count emoji in a chunk of text (ignores lastIndex — safe to reuse). */
+function emojiCount(text: string): number {
+  return (text.match(EMOJI_RE) ?? []).length;
+}
+
+/** First step of a sequence starts its subject with a fake "Re:"/"Fwd:". */
+function isFakeReplySubject(subject: string): boolean {
+  return /^\s*(re|fwd?)\s*:/i.test(subject);
+}
+
 /** Spintax-validation warnings for one field, mapped to per-step CopyIssues. */
 function spintaxIssues(text: string): CopyIssue[] {
   const issues: CopyIssue[] = [];
@@ -170,6 +199,61 @@ function spintaxIssues(text: string): CopyIssue[] {
       });
     }
   }
+  return issues;
+}
+
+/**
+ * Structural per-step advisories, shared by the builder card, the deliverability
+ * card, and the activation pre-flight so all three agree by construction. Covers
+ * the four original per-step structural checks plus the four W4 additions, but
+ * DELIBERATELY excludes spam-phrase matches and spintax-validation issues —
+ * StepCopyCheck surfaces those separately (chips + a warnings list), and the
+ * pre-flight reads them off the scoreCopy result. `isFirstStep` gates the
+ * fake-reply check: later steps legitimately thread as "Re:".
+ */
+export function quickStepAdvisories(
+  step: { subject: string; body: string },
+  opts: { isFirstStep: boolean },
+): CopyIssue[] {
+  const issues: CopyIssue[] = [];
+  const { subject, body } = step;
+
+  // — the four original structural checks (wording unchanged) —
+  const links = linkCount(`${subject}\n${body}`);
+  if (links > 2) {
+    issues.push({ severity: "warn", message: `${links} links in this step — cold email lands best with 0–1.` });
+  }
+  if (capsWordCount(subject) >= 2) {
+    issues.push({ severity: "warn", message: "Subject uses ALL-CAPS words." });
+  }
+  if (/[!?]{2,}/.test(`${subject}\n${body}`)) {
+    issues.push({ severity: "info", message: "Repeated !!/?? punctuation reads as spammy." });
+  }
+  if (body.trim().length < 40) {
+    issues.push({ severity: "info", message: "Body is very short." });
+  }
+
+  // — the four W4 additions —
+  if (bodyCapsWordCount(body) >= 3) {
+    issues.push({ severity: "warn", message: "Body uses several ALL-CAPS words — reads as shouting." });
+  }
+  if (opts.isFirstStep && isFakeReplySubject(subject)) {
+    issues.push({
+      severity: "warn",
+      message: 'Subject starts with "Re:" or "Fwd:" — faking a reply on a first email is a spam trigger.',
+    });
+  }
+  if (subject.trim().length > 60) {
+    issues.push({ severity: "info", message: "Subject is over 60 characters — shorter subjects land better." });
+  }
+  if (emojiCount(subject) > 0) {
+    issues.push({ severity: "info", message: "Subject contains an emoji — cold outreach lands better without them." });
+  }
+  const bodyEmoji = emojiCount(body);
+  if (bodyEmoji >= 3) {
+    issues.push({ severity: "info", message: `Body has ${bodyEmoji} emoji — heavy emoji use reads as promotional.` });
+  }
+
   return issues;
 }
 
@@ -231,30 +315,79 @@ export function scoreCopy(steps: { subject: string; body: string }[]): CopyScore
     }
   });
 
+  // ── W4 additions (appended so untouched copy scores exactly as before) ──
+  steps.forEach((s, i) => {
+    if (bodyCapsWordCount(s.body) >= 3) {
+      issues.push({
+        severity: "warn",
+        message: `Step ${i + 1} body uses several ALL-CAPS words — reads as shouting.`,
+      });
+    }
+  });
+  if (steps[0] && isFakeReplySubject(steps[0].subject)) {
+    issues.push({
+      severity: "warn",
+      message: `First email's subject starts with "Re:" or "Fwd:" — faking a reply is a spam trigger and breaks trust.`,
+    });
+  }
+  steps.forEach((s, i) => {
+    if (s.subject.trim().length > 60) {
+      issues.push({
+        severity: "info",
+        message: `Step ${i + 1} subject is over 60 characters — long subjects get cut off and read as marketing.`,
+      });
+    }
+  });
+  steps.forEach((s, i) => {
+    if (emojiCount(s.subject) > 0) {
+      issues.push({
+        severity: "info",
+        message: `Step ${i + 1} subject contains an emoji — cold outreach lands better without them.`,
+      });
+    }
+    const be = emojiCount(s.body);
+    if (be >= 3) {
+      issues.push({
+        severity: "info",
+        message: `Step ${i + 1} body has ${be} emoji — heavy emoji use reads as promotional.`,
+      });
+    }
+  });
+
+  // Zero-personalization: one aggregate warn when the WHOLE sequence has no
+  // merge tags and no spintax anywhere — every recipient gets a byte-identical
+  // email. extractCampaignTokens excludes sender tokens, so {{your_name}}-only
+  // copy still counts as unpersonalized. Skips the degenerate all-empty case.
+  const allTemplates = steps.flatMap((s) => [s.subject, s.body]);
+  const anyContent = allTemplates.some((t) => t.trim().length > 0);
+  if (anyContent) {
+    const tokens = extractCampaignTokens(allTemplates);
+    const anySpintax = allTemplates.some((t) => hasSpintax(t));
+    if (tokens.standard.length === 0 && tokens.custom.length === 0 && !anySpintax) {
+      issues.push({
+        severity: "warn",
+        message:
+          "No personalization — every email reads identical. Add merge tags like {{first_name}} or spintax variations so messages differ per recipient.",
+      });
+    }
+  }
+
   const warns = issues.filter((x) => x.severity === "warn").length;
   const infos = issues.filter((x) => x.severity === "info").length;
   const score = Math.max(0, 100 - warns * 15 - infos * 5);
 
   // ── Per-step ────────────────────────────────────────────────────────────────
   const perStep: StepCopyResult[] = steps.map((s, i) => {
-    const stepIssues: CopyIssue[] = [];
+    // Structural advisories (the four original + the four W4 checks) come from
+    // the shared helper, so the builder, deliverability card, and pre-flight
+    // agree by construction.
+    const stepIssues: CopyIssue[] = [...quickStepAdvisories(s, { isFirstStep: i === 0 })];
     const matches = [
       ...findSpamMatches(s.subject, "subject"),
       ...findSpamMatches(s.body, "body"),
     ];
 
-    const stepLinks = linkCount(`${s.subject}\n${s.body}`);
-    if (stepLinks > 2) {
-      stepIssues.push({
-        severity: "warn",
-        message: `${stepLinks} links in this step — cold email lands best with 0–1.`,
-      });
-    }
-
-    if (capsWordCount(s.subject) >= 2) {
-      stepIssues.push({ severity: "warn", message: "Subject uses ALL-CAPS words." });
-    }
-
+    // Spam-phrase matches stay here (surfaced as chips by StepCopyCheck).
     const hiMed = matches.filter((m) => m.severity !== "low").map((m) => m.phrase);
     if (hiMed.length > 0) {
       stepIssues.push({
@@ -269,14 +402,6 @@ export function scoreCopy(steps: { subject: string; body: string }[]): CopyScore
           message: `Mild spammy phrases: ${low.slice(0, 6).join(", ")}${low.length > 6 ? "…" : ""}.`,
         });
       }
-    }
-
-    if (/[!?]{2,}/.test(`${s.subject}\n${s.body}`)) {
-      stepIssues.push({ severity: "info", message: "Repeated !!/?? punctuation reads as spammy." });
-    }
-
-    if (s.body.trim().length < 40) {
-      stepIssues.push({ severity: "info", message: "Body is very short." });
     }
 
     // Spintax-validation issues (deduped per code, per field, folded together).

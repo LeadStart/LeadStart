@@ -21,6 +21,8 @@ import { Button } from "@/components/ui/button";
 import { MoreHorizontal, Pause, Play, Rocket, Trash2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { appUrl } from "@/lib/api-url";
+import { ActivatePreflightDialog } from "@/components/campaigns/activate-preflight-dialog";
+import type { PreflightWarning } from "@/lib/deliverability/preflight";
 
 type CampaignStatus = "active" | "paused" | "draft" | "completed" | null;
 
@@ -43,19 +45,37 @@ export function CampaignRowActions({
   const [error, setError] = useState<string | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [typedName, setTypedName] = useState("");
+  const [preflight, setPreflight] = useState<PreflightWarning[] | null>(null);
 
-  async function callLifecycle(action: "activate" | "pause" | "resume" | "delete") {
+  async function callLifecycle(
+    action: "activate" | "pause" | "resume" | "delete",
+    acknowledge = false,
+  ) {
     setBusy(action);
     setError(null);
     try {
-      const res = await fetch(
-        appUrl(`/api/admin/campaigns/${campaignId}/${action}`),
-        { method: "POST" },
-      );
-      const json = await res.json().catch(() => ({}));
+      const res = await fetch(appUrl(`/api/admin/campaigns/${campaignId}/${action}`), {
+        method: "POST",
+        ...(action === "activate"
+          ? {
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ acknowledge_warnings: acknowledge }),
+            }
+          : {}),
+      });
+      const json = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        warnings?: PreflightWarning[];
+      };
+      if (action === "activate" && res.status === 409 && Array.isArray(json.warnings)) {
+        setPreflight(json.warnings);
+        setBusy(null);
+        return;
+      }
       if (!res.ok) {
         throw new Error(json.error || `${action} failed (${res.status})`);
       }
+      setPreflight(null);
       onChanged();
       if (action === "delete") {
         setDeleteOpen(false);
@@ -233,6 +253,17 @@ export function CampaignRowActions({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ActivatePreflightDialog
+        campaignName={campaignName}
+        open={preflight !== null}
+        warnings={preflight ?? []}
+        busy={busy === "activate"}
+        onOpenChange={(o) => {
+          if (!o) setPreflight(null);
+        }}
+        onConfirm={() => callLifecycle("activate", true)}
+      />
     </>
   );
 }

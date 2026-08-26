@@ -31,6 +31,7 @@ import { ArrowLeft, Inbox, Upload, AlertCircle, CheckCircle2 } from "lucide-reac
 import { NativeImportPanel } from "@/components/campaigns/native-import-panel";
 import { CampaignContactsCard, type CampaignContactRow } from "./campaign-contacts-card";
 import { NativeSequenceSection } from "./native-sequence-section";
+import { CampaignProbeCard } from "@/components/campaigns/campaign-probe-card";
 import { StageFlowCard, type StageRow } from "./stage-flow-card";
 import { CampaignLifecycleButton } from "./campaign-lifecycle-button";
 import type { Campaign, CampaignSnapshot, Client } from "@/types/app";
@@ -400,6 +401,8 @@ export default async function AdminCampaignDetailPage({
             initialNewLeadsCap={resolveDailyNewLeadsCap(campaign)}
             initialStrategy={sendingStrategy}
           />
+
+          <CampaignProbeCard campaignId={campaign.id} />
         </>
       )}
 

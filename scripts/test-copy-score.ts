@@ -21,7 +21,7 @@
  *   npx tsx scripts/test-copy-score.ts
  */
 
-import { findSpamMatches, scoreCopy } from "../src/lib/deliverability/copy.ts";
+import { findSpamMatches, scoreCopy, quickStepAdvisories } from "../src/lib/deliverability/copy.ts";
 
 // ---------- Test harness ----------
 let pass = 0;
@@ -140,19 +140,19 @@ console.log("\n■ scoreCopy returns a per-step breakdown");
 console.log("\n■ aggregate parity: exact score + issue count on a spintax-free fixture");
 {
   // Fixture: subject "hi", body "act now".
-  //   - "act now" is a med-severity phrase → ONE aggregate warn
-  //     ("Spam-trigger phrases present: act now.").
-  //   - body "act now" trimmed length 7 < 40 → ONE aggregate info
-  //     ("Step 1 body is very short.").
-  //   - No >2 links, no ALL-CAPS (>=2 caps words), no [!?]{2,} punctuation.
-  //   ⇒ warns=1, infos=1 ⇒ score = 100 − 1×15 − 1×5 = 80.
+  //   - "act now" is a med-severity phrase → ONE aggregate warn.
+  //   - body "act now" trimmed length 7 < 40 → ONE aggregate info.
+  //   - RECONCILED for the W4 zero-personalization check: this fixture has no
+  //     merge tags and no spintax, so it now ALSO trips the aggregate
+  //     zero-personalization warn (intended behavior change, not a regression).
+  //   ⇒ warns=2, infos=1 ⇒ score = 100 − 2×15 − 1×5 = 65.
   const r = scoreCopy([{ subject: "hi", body: "act now" }]);
   const warns = r.issues.filter((i) => i.severity === "warn").length;
   const infos = r.issues.filter((i) => i.severity === "info").length;
-  assert(warns === 1, `exactly 1 aggregate warn (got ${warns})`);
+  assert(warns === 2, `exactly 2 aggregate warns — phrase + zero-personalization (got ${warns})`);
   assert(infos === 1, `exactly 1 aggregate info (got ${infos})`);
-  assert(r.issues.length === 2, `exactly 2 aggregate issues total (got ${r.issues.length})`);
-  assert(r.score === 80, `aggregate score is exactly 80 per 100−15−5 (got ${r.score})`);
+  assert(r.issues.length === 3, `exactly 3 aggregate issues total (got ${r.issues.length})`);
+  assert(r.score === 65, `aggregate score is exactly 65 per 100−2×15−5 (got ${r.score})`);
   assert(
     r.issues.some((i) => i.severity === "warn" && i.message.includes("act now")),
     "the warn names the offending phrase",
@@ -162,15 +162,17 @@ console.log("\n■ aggregate parity: exact score + issue count on a spintax-free
     "the info flags the short body",
   );
 
-  // A fully clean fixture scores 100 with zero issues.
+  // A fully clean AND personalized fixture scores 100 with zero issues. (Post-W4
+  // a clean email must carry a merge tag or spintax, else zero-personalization
+  // fires — which is correct: an unpersonalized cold email is a real signal.)
   const clean = scoreCopy([
     {
       subject: "A note on your onboarding",
-      body: "Hi there, I run a small team and put together a short overview that might be useful to you. Happy to share it whenever suits.",
+      body: "Hi {{first_name}}, I run a small team and put together a short overview that might be useful to you. Happy to share it whenever suits.",
     },
   ]);
-  assert(clean.score === 100, `a clean fixture scores exactly 100 (got ${clean.score})`);
-  assert(clean.issues.length === 0, `a clean fixture has zero aggregate issues (got ${clean.issues.length})`);
+  assert(clean.score === 100, `a clean personalized fixture scores exactly 100 (got ${clean.score})`);
+  assert(clean.issues.length === 0, `a clean personalized fixture has zero aggregate issues (got ${clean.issues.length})`);
 }
 
 // ---------- 7. alternatives populated for known offenders ----------
@@ -214,6 +216,119 @@ console.log("\n■ unbalanced brace surfaces a WARN spintax issue on the step");
   ]);
   const info = r2.perStep[0].issues.find((i) => /merge tag/i.test(i.message));
   assert(info !== undefined && info.severity === "info", "merge tag inside spintax surfaces an INFO issue");
+}
+
+// ---------- 9. W4 new copy checks ----------
+console.log("\n■ W4: ALL-CAPS body");
+{
+  const longBody = "for your team, comfortably long enough to clear the short-body flag";
+  assert(
+    quickStepAdvisories({ subject: "hi there", body: `this is a GREAT AMAZING OFFER ${longBody}` }, { isFirstStep: false })
+      .some((i) => /ALL-CAPS words/.test(i.message)),
+    "3 ALL-CAPS body words (len>3) → warn",
+  );
+  assert(
+    !quickStepAdvisories({ subject: "hi there", body: `this is a GREAT AMAZING deal ${longBody}` }, { isFirstStep: false })
+      .some((i) => /ALL-CAPS words/.test(i.message)),
+    "2 ALL-CAPS body words → no warn",
+  );
+  assert(
+    !quickStepAdvisories({ subject: "hi there", body: `our LLC USA CRM stack ${longBody}` }, { isFirstStep: false })
+      .some((i) => /ALL-CAPS words/.test(i.message)),
+    "len-3 acronyms (LLC/USA/CRM) → no warn",
+  );
+}
+
+console.log("\n■ W4: fake-reply subject (first step only)");
+{
+  const body = "a body comfortably long enough to clear the short-body flag entirely here";
+  assert(
+    quickStepAdvisories({ subject: "Re: our chat", body }, { isFirstStep: true }).some((i) => /faking a reply/.test(i.message)),
+    '"Re:" on the first step → warn',
+  );
+  assert(
+    quickStepAdvisories({ subject: "FWD: quick one", body }, { isFirstStep: true }).some((i) => /faking a reply/.test(i.message)),
+    '"FWD:" on the first step → warn',
+  );
+  assert(
+    !quickStepAdvisories({ subject: "Re: our chat", body }, { isFirstStep: false }).some((i) => /faking a reply/.test(i.message)),
+    '"Re:" on a LATER step → no warn (threads legitimately)',
+  );
+  assert(
+    !quickStepAdvisories({ subject: "Regarding your project", body }, { isFirstStep: true }).some((i) => /faking a reply/.test(i.message)),
+    '"Regarding" is not a fake reply',
+  );
+}
+
+console.log("\n■ W4: zero-personalization (aggregate)");
+{
+  const plain = "Hi there, I put together a short overview that might help your team out a good deal.";
+  assert(
+    scoreCopy([{ subject: "A quick note for you", body: plain }]).issues.some((i) => /No personalization/.test(i.message)),
+    "no tokens + no spintax → zero-personalization warn",
+  );
+  assert(
+    !scoreCopy([{ subject: "A quick note for {{first_name}}", body: `Hi {{first_name}}, ${plain}` }]).issues.some((i) => /No personalization/.test(i.message)),
+    "{{first_name}} present → no zero-personalization warn",
+  );
+  assert(
+    !scoreCopy([{ subject: "A quick note", body: `{Hi|Hey} there, ${plain}` }]).issues.some((i) => /No personalization/.test(i.message)),
+    "spintax present → no zero-personalization warn",
+  );
+  assert(
+    scoreCopy([{ subject: "A quick note for you", body: `${plain} Best, {{your_name}}` }]).issues.some((i) => /No personalization/.test(i.message)),
+    "{{your_name}}-only (sender token) STILL trips zero-personalization",
+  );
+}
+
+console.log("\n■ W4: subject length + emoji");
+{
+  const body = "a body comfortably long enough to clear the short-body flag entirely here yes";
+  assert(
+    quickStepAdvisories({ subject: "x".repeat(61), body }, { isFirstStep: false }).some((i) => /over 60 characters/.test(i.message)),
+    "61-char subject → info",
+  );
+  assert(
+    !quickStepAdvisories({ subject: "x".repeat(60), body }, { isFirstStep: false }).some((i) => /over 60 characters/.test(i.message)),
+    "60-char subject → no info",
+  );
+  assert(
+    quickStepAdvisories({ subject: "Hello 🚀 there", body }, { isFirstStep: false }).some((i) => /Subject contains an emoji/.test(i.message)),
+    "emoji in subject → info",
+  );
+  assert(
+    quickStepAdvisories({ subject: "hello there", body: "great 🎉 offer 🔥 today 🚀 for the team, long enough to pass here" }, { isFirstStep: false })
+      .some((i) => /Body has \d+ emoji/.test(i.message)),
+    "3 emoji in body → info",
+  );
+  assert(
+    !quickStepAdvisories({ subject: "hello there", body: "great 🎉 offer 🔥 today for the team, comfortably long enough here" }, { isFirstStep: false })
+      .some((i) => /Body has \d+ emoji/.test(i.message)),
+    "2 emoji in body → no info",
+  );
+  assert(
+    !quickStepAdvisories({ subject: "Acme™ update ® ©", body }, { isFirstStep: false }).some((i) => /emoji/.test(i.message)),
+    "™ ® © are not counted as emoji",
+  );
+}
+
+console.log("\n■ W4: quickStepAdvisories ⊆ perStep + exact fixture");
+{
+  const step = { subject: `Re: GREAT DEAL 🚀 ${"x".repeat(60)}`, body: "BUY NOW CHEAP FAST!! wow" };
+  const adv = quickStepAdvisories(step, { isFirstStep: true });
+  const full = new Set(scoreCopy([step]).perStep[0].issues.map((i) => i.message));
+  assert(adv.length > 0 && adv.every((a) => full.has(a.message)), "every quickStepAdvisories issue also appears in the perStep issues");
+
+  const oneWarn = scoreCopy([
+    { subject: "A short clean note", body: "Hi there, here is a friendly overview that is comfortably long enough to pass along." },
+  ]);
+  assert(
+    oneWarn.issues.length === 1 &&
+      oneWarn.issues[0].severity === "warn" &&
+      /No personalization/.test(oneWarn.issues[0].message),
+    "a clean-but-unpersonalized single step yields exactly the zero-personalization warn",
+  );
+  assert(oneWarn.score === 85, `clean-but-unpersonalized single step → score 85 (got ${oneWarn.score})`);
 }
 
 // ---------- Summary ----------

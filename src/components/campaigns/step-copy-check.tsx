@@ -37,7 +37,8 @@ import {
   renderSpintax,
   type SpintaxWarning,
 } from "@/lib/spintax";
-import { findSpamMatches, type SpamMatch } from "@/lib/deliverability/copy";
+import { findSpamMatches, quickStepAdvisories, type SpamMatch } from "@/lib/deliverability/copy";
+import type { CopyIssue } from "@/lib/deliverability/copy";
 import { applyTokens, SAMPLE_TOKENS, sampleFallback } from "@/lib/native/tokens";
 
 interface Props {
@@ -48,6 +49,8 @@ interface Props {
   // When neither is set, the preview uses sample data only.
   campaignId?: string;
   clientId?: string;
+  // Step 0 gets the fake-reply ("Re:"/"Fwd:") advisory; later steps thread.
+  isFirstStep?: boolean;
 }
 
 // GET /api/admin/campaign-preview-context response shape.
@@ -99,7 +102,14 @@ interface GenState {
   result: { subject: string | null; body: string } | null;
 }
 
-export function StepCopyCheck({ subject, body, onApplySpintax, campaignId, clientId }: Props) {
+export function StepCopyCheck({
+  subject,
+  body,
+  onApplySpintax,
+  campaignId,
+  clientId,
+  isFirstStep = false,
+}: Props) {
   const dSubject = useDebounced(subject, 300);
   const dBody = useDebounced(body, 300);
 
@@ -123,6 +133,11 @@ export function StepCopyCheck({ subject, body, onApplySpintax, campaignId, clien
       ...findSpamMatches(dBody, "body"),
     ];
 
+    const advisories: CopyIssue[] = quickStepAdvisories(
+      { subject: dSubject, body: dBody },
+      { isFirstStep },
+    );
+
     return {
       subjectHasSpin,
       bodyHasSpin,
@@ -131,8 +146,9 @@ export function StepCopyCheck({ subject, body, onApplySpintax, campaignId, clien
       bodyVariants: bodyHasSpin ? countVariants(dBody) : 0,
       warnings,
       spamMatches,
+      advisories,
     };
-  }, [dSubject, dBody]);
+  }, [dSubject, dBody, isFirstStep]);
 
   // ── Live preview ──────────────────────────────────────────────────────────
   // A toggle-open panel that renders the outgoing email with spintax resolved to
@@ -202,7 +218,10 @@ export function StepCopyCheck({ subject, body, onApplySpintax, campaignId, clien
   }
 
   const nothingToSay =
-    !analysis.anySpin && analysis.spamMatches.length === 0 && analysis.warnings.length === 0;
+    !analysis.anySpin &&
+    analysis.spamMatches.length === 0 &&
+    analysis.warnings.length === 0 &&
+    analysis.advisories.length === 0;
 
   // Generate-spintax dialog state.
   const [genOpen, setGenOpen] = useState(false);
@@ -281,6 +300,17 @@ export function StepCopyCheck({ subject, body, onApplySpintax, campaignId, clien
               {analysis.warnings.map((w) => (
                 <li key={w.code} className={warnClass(w.code)}>
                   {w.message}
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {/* 2b. Structural advisories (caps, fake-reply, length, emoji, …) */}
+          {analysis.advisories.length > 0 && (
+            <ul className="space-y-0.5">
+              {analysis.advisories.map((a, idx) => (
+                <li key={idx} className={a.severity === "warn" ? "text-amber-700" : "text-slate-500"}>
+                  {a.message}
                 </li>
               ))}
             </ul>

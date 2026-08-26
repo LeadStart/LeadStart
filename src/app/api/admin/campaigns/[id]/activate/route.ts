@@ -9,12 +9,26 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { SourceChannel } from "@/types/app";
 import { controlInstantlyCampaign } from "@/lib/instantly/campaign-lifecycle";
+import { runActivationPreflight } from "@/lib/deliverability/preflight";
+
+// checkDomainAuth in the pre-flight uses node:dns.
+export const runtime = "nodejs";
 
 export async function POST(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id: campaignId } = await params;
+
+  // Optional { acknowledge_warnings } — a body-less POST (every existing
+  // caller) parses to {} and behaves exactly as before.
+  let ackWarnings = false;
+  try {
+    const body = (await req.json()) as { acknowledge_warnings?: boolean };
+    ackWarnings = body?.acknowledge_warnings === true;
+  } catch {
+    ackWarnings = false;
+  }
 
   const supabase = await createClient();
   const {
@@ -88,6 +102,16 @@ export async function POST(
         { error: "This campaign has no steps to send." },
         { status: 400 },
       );
+    }
+
+    // Advisory pre-flight (warn-with-override): surface copy / auth / placement
+    // concerns the first time, then activate on the acknowledged re-submit.
+    // Never blocks — the hard blocks above already did their job.
+    if (!ackWarnings) {
+      const preflightWarnings = await runActivationPreflight(admin, campaignId);
+      if (preflightWarnings.length > 0) {
+        return NextResponse.json({ warnings: preflightWarnings }, { status: 409 });
+      }
     }
   }
 

@@ -27,6 +27,7 @@ import Link from "next/link";
 import { appUrl } from "@/lib/api-url";
 import { useUser } from "@/hooks/use-user";
 import { StepCopyCheck } from "@/components/campaigns/step-copy-check";
+import { CampaignProbeCard } from "@/components/campaigns/campaign-probe-card";
 import type { Client, NativeMailbox } from "@/types/app";
 
 type StepDraft = {
@@ -342,6 +343,7 @@ export default function NewNativeCampaignPage() {
                       subject={i === 0 ? step.subject_template : ""}
                       body={step.body_template}
                       clientId={clientId || undefined}
+                      isFirstStep={i === 0}
                       onApplySpintax={(n) => {
                         if (i === 0 && n.subject !== null) updateStep(i, "subject_template", n.subject);
                         updateStep(i, "body_template", n.body);
@@ -354,6 +356,8 @@ export default function NewNativeCampaignPage() {
           ))}
         </CardContent>
       </Card>
+
+      <CampaignProbeCard />
 
       <div className="flex items-center gap-3">
         <Button onClick={handleSave} disabled={saving} className="gap-1.5 text-white" style={{ background: "#2E37FE" }}>
