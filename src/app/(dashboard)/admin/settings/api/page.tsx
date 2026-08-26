@@ -20,6 +20,7 @@ import { useUser } from "@/hooks/use-user";
 import { ApifySpendCard } from "./apify-spend-card";
 import { WaterfallSettingsCard } from "./waterfall-settings-card";
 import { RegistrarSettingsCard } from "./registrar-settings-card";
+import { MsOauthSettingsCard } from "./ms-oauth-settings-card";
 import {
   Key,
   RefreshCw,
@@ -1284,6 +1285,9 @@ export default function IntegrationsPage() {
 
       {/* Domain registrars — Porkbun/Spaceship keys + spend cap (Phase 2, migration 00084) */}
       <RegistrarSettingsCard />
+
+      {/* Microsoft OAuth app — connect Outlook/M365 seed inboxes (migration 00085) */}
+      <MsOauthSettingsCard />
 
       {/* Anthropic — decision-maker enrichment Layer 1 */}
       <Card className="border-border/50 shadow-sm">

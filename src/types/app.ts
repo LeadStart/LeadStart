@@ -931,26 +931,58 @@ export interface HealthComponent {
   detail: string;
 }
 
-// ---------- Seed inboxes + placement tests (migration 00068) ----------
+// ---------- Seed inboxes + placement tests (migrations 00068 + 00085) ----------
 
 export type SeedInboxStatus = "active" | "paused" | "error";
 
-// A Google Workspace inbox we control on a DWD-authorized domain. Sending
-// mailboxes probe it; the placement checker reads it (gmail.readonly) to see
-// where the probe landed. v1 is Workspace-only; the provider column reserves
-// room for IMAP / Microsoft Graph seeds later.
+// How a seed inbox is read back (migration 00085):
+//   google_workspace — org-level service account + DWD (the original path)
+//   microsoft_graph  — per-seed OAuth refresh token, Graph Mail.Read
+//   imap             — app-password IMAP (Yahoo, consumer Gmail, generic)
+// Consumer Gmail deliberately rides IMAP, not OAuth: gmail.readonly is a
+// restricted scope (unverified apps blocked; testing-mode tokens die in 7
+// days), while app passwords are durable and Gmail's IMAP extensions still
+// expose the Promotions verdict.
+export type SeedProvider = "google_workspace" | "microsoft_graph" | "imap";
+
+// Rotation role: 'veteran' = long-lived reputation reference; 'fresh' =
+// rotated quarterly (the panel nudges past 90 days). NULL = untracked.
+export type SeedRole = "veteran" | "fresh";
+
+export interface SeedImapAuth {
+  host: string;
+  port: number;
+  username: string;
+  password: string;
+}
+
+export interface SeedGraphAuth {
+  refresh_token: string;
+  connected_at: string;
+}
+
+// An inbox we control that sending mailboxes probe; the placement checker
+// reads it to see where the probe landed. Browser-safe shape: the credentials
+// column is excluded here and never served by the API (column-level grant in
+// migration 00085 backs that up at the DB layer).
 export interface SeedInbox {
   id: string;
   organization_id: string;
   email_address: string;
   label: string | null;
-  provider: "google_workspace";
+  provider: SeedProvider;
+  role: SeedRole | null;
   status: SeedInboxStatus;
   last_error: string | null;
   last_error_at: string | null;
   created_at: string;
   updated_at: string;
 }
+
+/** Server-side row shape (service-role reads). Never returned by API routes. */
+export type SeedInboxWithAuth = SeedInbox & {
+  auth: SeedImapAuth | SeedGraphAuth | null;
+};
 
 // What a placement test sends: a neutral, realistic note (reputation + auth in
 // isolation) or the first step of the campaign this mailbox is pooled into,

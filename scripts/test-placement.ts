@@ -10,6 +10,8 @@
 
 import {
   classifyPlacement,
+  classifyGraphPlacement,
+  classifyImapPlacement,
   parseAuthenticationResults,
   isAuthFailure,
   stripMessageIdBrackets,
@@ -48,6 +50,45 @@ console.log("\n■ classifyPlacement");
   assert(classifyPlacement(["UNREAD"]) === "other", "present but not in inbox/spam → other");
   assert(classifyPlacement([]) === "other", "no labels → other");
   assert(classifyPlacement(null) === "other", "null labels → other");
+}
+
+// ---------- 1b. Microsoft Graph folder classification (migration 00085) ----------
+console.log("\n■ classifyGraphPlacement");
+{
+  assert(classifyGraphPlacement("junkemail") === "spam", "junkemail → spam");
+  assert(classifyGraphPlacement("inbox") === "inbox", "inbox → inbox");
+  assert(classifyGraphPlacement("Archive") === "other", "archive folder → other");
+  assert(classifyGraphPlacement("Client rules") === "other", "user-rule folder → other");
+}
+
+// ---------- 1c. IMAP classification (migration 00085) ----------
+console.log("\n■ classifyImapPlacement");
+{
+  // Generic servers (Yahoo etc.) — folder is the whole verdict.
+  assert(classifyImapPlacement({ folder: "junk" }) === "spam", "generic junk → spam");
+  assert(classifyImapPlacement({ folder: "inbox" }) === "inbox", "generic inbox → inbox");
+  assert(classifyImapPlacement({ folder: null }) === "other", "no folder → other");
+  // Gmail-over-IMAP — labels present, promotions verdict from the second search.
+  assert(
+    classifyImapPlacement({ folder: "inbox", gmLabels: ["\\Inbox"], promotionsHit: true }) ===
+      "promotions",
+    "gmail inbox + promotions hit → promotions",
+  );
+  assert(
+    classifyImapPlacement({ folder: "inbox", gmLabels: ["\\Inbox"], promotionsHit: false }) ===
+      "inbox",
+    "gmail inbox, no promotions hit → inbox",
+  );
+  assert(
+    classifyImapPlacement({ folder: "inbox", gmLabels: ["\\Inbox"], promotionsHit: null }) ===
+      "inbox",
+    "gmail inbox, promotions unknown → inbox (never guessed)",
+  );
+  assert(
+    classifyImapPlacement({ folder: "archive", gmLabels: ["\\Important"] }) === "other",
+    "gmail archived (no \\Inbox label) → other",
+  );
+  assert(classifyImapPlacement({ folder: "junk", gmLabels: [] }) === "spam", "gmail spam folder → spam");
 }
 
 // ---------- 2. Message-ID ----------

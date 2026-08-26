@@ -1,7 +1,8 @@
 // Inbox-placement testing — the I/O half. Sends probes from a sending mailbox
-// to the org's seed panel, later reads each seed back via the Gmail API, and
+// to the org's seed panel, later reads each seed back through its provider's
+// reader (Workspace DWD / Microsoft Graph / IMAP — see ./readers.ts), and
 // persists both halves to placement_tests / placement_test_results
-// (migration 00068). The pure classification/roll-up logic lives in
+// (migrations 00068 + 00085). The pure classification/roll-up logic lives in
 // ./placement.ts; the health scorer consumes placementSignalFromTest().
 //
 // Three entry points, shared by the admin routes and the cron:
@@ -31,13 +32,12 @@ import {
   MAX_SEEDS_PER_TEST,
   PLACEMENT_TIMEOUT_MS,
   buildNeutralProbe,
-  classifyPlacement,
-  parseAuthenticationResults,
-  stripMessageIdBrackets,
   summarizeAuth,
   summarizeResults,
   type ProbeCopy,
 } from "./placement";
+import { readerFor, SeedReadAuthError, type ProbeLookup, type ReaderContext } from "./readers";
+import { loadMsOauthAppForOrg } from "@/lib/msgraph/org";
 import type { PlacementSignal } from "./inbox-health";
 import type {
   NativeMailbox,
@@ -45,6 +45,7 @@ import type {
   PlacementTest,
   PlacementTestResult,
   SeedInbox,
+  SeedInboxWithAuth,
 } from "@/types/app";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
@@ -354,6 +355,26 @@ export async function checkPlacementTest(
     .maybeSingle();
   const mailbox = mbRow as NativeMailbox | null;
 
+  // Seed rows for the pending results, fetched once per check — the reader
+  // dispatch needs each seed's provider and (for external providers) its
+  // credentials. Service-role read, so `auth` is visible here.
+  const pendingSeedIds = Array.from(
+    new Set(pending.map((r) => r.seed_inbox_id).filter((id): id is string => !!id)),
+  );
+  const seedById = new Map<string, SeedInboxWithAuth>();
+  if (pendingSeedIds.length > 0) {
+    const { data: seedRows, error: seedError } = await admin
+      .from("seed_inboxes")
+      .select("*")
+      .in("id", pendingSeedIds);
+    if (seedError) throw new Error(`seed_inboxes read failed: ${seedError.message}`);
+    for (const s of (seedRows ?? []) as SeedInboxWithAuth[]) seedById.set(s.id, s);
+  }
+  // Load the org's Entra app only when a Microsoft seed is actually pending.
+  const needsGraph = Array.from(seedById.values()).some((s) => s.provider === "microsoft_graph");
+  const msApp = needsGraph ? await loadMsOauthAppForOrg(admin, test.organization_id) : null;
+  const ctx: ReaderContext = { admin, gmail, msApp };
+
   // The sender's bounce notices are scanned at most once per check, and only
   // once some probe has actually timed out.
   let dsns: DsnIndex | null = null;
@@ -370,19 +391,24 @@ export async function checkPlacementTest(
       continue;
     }
 
-    let found: GmailListEntry[];
+    // A seed row deleted mid-test falls back to the original DWD-by-email
+    // read — its address is the only thing we still know about it.
+    const seed =
+      (r.seed_inbox_id ? seedById.get(r.seed_inbox_id) : undefined) ??
+      ({
+        provider: "google_workspace",
+        email_address: r.seed_email,
+        auth: null,
+      } as SeedInboxWithAuth);
+
+    let lookup: ProbeLookup;
     try {
-      found = await gmail.listMessages(
-        r.seed_email,
-        `rfc822msgid:${stripMessageIdBrackets(r.rfc_message_id)}`,
-        5,
-        true,
-      );
+      lookup = await readerFor(seed, ctx).findProbe(seed, r.rfc_message_id);
     } catch (err) {
-      if (err instanceof GmailAuthError) {
-        // The SEED's delegation is broken — that's our config, not the
-        // sender's deliverability. Exclude the seed (never count it as
-        // missing) and bench it until an owner fixes Google Admin.
+      if (err instanceof SeedReadAuthError) {
+        // The SEED's credentials/consent/delegation are broken — that's our
+        // config, not the sender's deliverability. Exclude the seed (never
+        // count it as missing) and bench it until an owner fixes it.
         if (r.seed_inbox_id) {
           await admin
             .from("seed_inboxes")
@@ -392,6 +418,16 @@ export async function checkPlacementTest(
         await patch(r.id, {
           status: "unreadable",
           detail: err.message.slice(0, 500),
+          checked_at: nowIso,
+        });
+      } else if (timedOut(r)) {
+        // Still failing past the timeout window (dead IMAP host, flaky
+        // server): give up on THIS probe as unreadable — excluded from the
+        // totals, seed NOT benched — so one unreachable host can't pin the
+        // test in 'awaiting' forever.
+        await patch(r.id, {
+          status: "unreadable",
+          detail: `Seed could not be read before the timeout: ${(err instanceof Error ? err.message : String(err)).slice(0, 400)}`,
           checked_at: nowIso,
         });
       } else {
@@ -404,21 +440,11 @@ export async function checkPlacementTest(
       continue;
     }
 
-    if (found.length > 0) {
-      const msg = await gmail.getMessage(r.seed_email, found[0].id, "metadata", [
-        "Authentication-Results",
-        "ARC-Authentication-Results",
-      ]);
-      const labels = msg.labelIds ?? [];
-      const headers = msg.payload?.headers ?? [];
-      const authHeader =
-        headers.find((h) => h.name.toLowerCase() === "authentication-results")?.value ??
-        headers.find((h) => h.name.toLowerCase() === "arc-authentication-results")?.value ??
-        null;
+    if (lookup.found) {
       await patch(r.id, {
-        status: classifyPlacement(labels),
-        labels,
-        auth_results: parseAuthenticationResults(authHeader),
+        status: lookup.bucket,
+        labels: lookup.labels,
+        auth_results: lookup.authResults,
         found_at: nowIso,
         checked_at: nowIso,
       });

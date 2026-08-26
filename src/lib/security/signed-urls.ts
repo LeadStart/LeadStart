@@ -182,3 +182,74 @@ export async function verifyReplyUrl(
 
   return { replyId: parsed.replyId };
 }
+
+// ── OAuth CSRF state (migration 00085 — Microsoft seed connect flow) ──────
+//
+// Same base64url + HMAC + URL_SIGNING_SECRET machinery as the reply URLs, but
+// a different job: a `state` parameter round-tripped through Microsoft's
+// consent screen so the callback can prove the request it's completing was the
+// one THIS session started (the classic OAuth CSRF guard the Unipile precedent
+// left open). Not single-use — the callback additionally requires a live owner
+// session whose org matches the state, so a replay by that same owner is an
+// idempotent upsert, not an exploit. TTL-only.
+
+const OAUTH_STATE_TTL_MS = 15 * 60 * 1000; // 15 minutes — a consent screen round-trip
+
+interface OAuthStatePayload {
+  o: string; // organizationId
+  u: string; // userId
+  e: number; // expiresAtMs
+}
+
+/** Mint a signed OAuth `state` binding the org + user that started the flow. */
+export function signOAuthState(
+  organizationId: string,
+  userId: string,
+  ttlMs: number = OAUTH_STATE_TTL_MS,
+): string {
+  const secret = requireSecret();
+  const payload: OAuthStatePayload = { o: organizationId, u: userId, e: Date.now() + ttlMs };
+  const payloadB64 = base64urlEncode(Buffer.from(JSON.stringify(payload)));
+  const mac = hmacOver(payloadB64, secret);
+  return `${payloadB64}.${base64urlEncode(mac)}`;
+}
+
+/** Verify + decode an OAuth `state`. Returns null on any failure (bad MAC, expired, malformed). */
+export function verifyOAuthState(
+  state: string,
+  now = Date.now(),
+): { orgId: string; userId: string } | null {
+  let secret: string;
+  try {
+    secret = requireSecret();
+  } catch {
+    return null;
+  }
+
+  const parts = state.split(".");
+  if (parts.length !== 2) return null;
+  const [payloadB64, macB64] = parts;
+
+  let given: Buffer;
+  try {
+    given = base64urlDecode(macB64);
+  } catch {
+    return null;
+  }
+  const expected = hmacOver(payloadB64, secret);
+  if (given.length !== expected.length) return null;
+  if (!timingSafeEqual(given, expected)) return null;
+
+  let payload: OAuthStatePayload;
+  try {
+    payload = JSON.parse(base64urlDecode(payloadB64).toString("utf8"));
+  } catch {
+    return null;
+  }
+  if (typeof payload?.o !== "string" || typeof payload?.u !== "string" || typeof payload?.e !== "number") {
+    return null;
+  }
+  if (payload.e <= now) return null;
+
+  return { orgId: payload.o, userId: payload.u };
+}

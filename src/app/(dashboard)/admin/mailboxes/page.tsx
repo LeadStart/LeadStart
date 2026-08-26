@@ -22,6 +22,7 @@ import {
   Loader2,
   Target,
   Globe,
+  Mail,
   X,
 } from "lucide-react";
 import { appUrl } from "@/lib/api-url";
@@ -37,6 +38,7 @@ import type {
   PlacementTest,
   PlacementTestResult,
   SeedInbox,
+  SeedRole,
   SendingDomain,
 } from "@/types/app";
 
@@ -107,6 +109,15 @@ export default function MailboxesPage() {
   const [addingSeed, setAddingSeed] = useState(false);
   const [importingSeeds, setImportingSeeds] = useState(false);
   const [seedBusy, setSeedBusy] = useState<Record<string, boolean>>({});
+  // IMAP add form (Yahoo, consumer Gmail, generic)
+  const [imapOpen, setImapOpen] = useState(false);
+  const [imapEmail, setImapEmail] = useState("");
+  const [imapHost, setImapHost] = useState("");
+  const [imapPort, setImapPort] = useState("993");
+  const [imapUsername, setImapUsername] = useState("");
+  const [imapPassword, setImapPassword] = useState("");
+  const [imapLabel, setImapLabel] = useState("");
+  const [addingImap, setAddingImap] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -399,6 +410,103 @@ export default function MailboxesPage() {
       else setBanner({ kind: "error", message: data.error ?? "Delete failed" });
     });
   }
+
+  async function handleSetSeedRole(seed: SeedInbox, role: SeedRole | null) {
+    await withSeedBusy(seed.id, async () => {
+      const res = await fetch(appUrl(`/api/admin/seed-inboxes/${seed.id}`), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role }),
+      });
+      const data = await res.json();
+      if (res.ok) await loadSeeds();
+      else setBanner({ kind: "error", message: data.error ?? "Update failed" });
+    });
+  }
+
+  async function handleAddImapSeed() {
+    const email = imapEmail.trim();
+    const host = imapHost.trim();
+    if (!email || !host || !imapPassword) return;
+    setAddingImap(true);
+    setBanner(null);
+    try {
+      const res = await fetch(appUrl("/api/admin/seed-inboxes"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          provider: "imap",
+          email_address: email,
+          label: imapLabel.trim() || undefined,
+          imap: {
+            host,
+            port: Number(imapPort) || 993,
+            username: imapUsername.trim() || undefined,
+            password: imapPassword,
+          },
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setBanner({ kind: "success", message: `Added IMAP seed ${email} — sign-in verified.` });
+        setImapEmail("");
+        setImapHost("");
+        setImapPort("993");
+        setImapUsername("");
+        setImapPassword("");
+        setImapLabel("");
+        setImapOpen(false);
+        await loadSeeds();
+      } else {
+        setBanner({ kind: "error", message: data.error ?? "Failed to add IMAP seed" });
+      }
+    } catch (err) {
+      setBanner({ kind: "error", message: err instanceof Error ? err.message : "Failed to add IMAP seed" });
+    } finally {
+      setAddingImap(false);
+    }
+  }
+
+  async function handleConnectMicrosoft() {
+    setBanner(null);
+    try {
+      const res = await fetch(appUrl("/api/admin/seed-inboxes/oauth/microsoft/start"), {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (res.ok && data.url) {
+        window.location.href = data.url; // full-page nav to Microsoft consent
+      } else {
+        setBanner({ kind: "error", message: data.error ?? "Could not start the Microsoft connect flow" });
+      }
+    } catch (err) {
+      setBanner({
+        kind: "error",
+        message: err instanceof Error ? err.message : "Could not start the Microsoft connect flow",
+      });
+    }
+  }
+
+  // Surface the outcome of a Microsoft connect round-trip once, then clean the URL.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const seed = params.get("seed");
+    if (seed === "connected") {
+      setBanner({ kind: "success", message: "Microsoft seed connected." });
+    } else if (seed === "failed") {
+      const reason = params.get("reason");
+      setBanner({
+        kind: "error",
+        message: `Microsoft connect failed${reason ? ` (${reason.replace(/_/g, " ")})` : ""}. Please try again.`,
+      });
+    }
+    if (seed) {
+      params.delete("seed");
+      params.delete("reason");
+      const qs = params.toString();
+      window.history.replaceState(null, "", window.location.pathname + (qs ? `?${qs}` : ""));
+    }
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -828,10 +936,11 @@ export default function MailboxesPage() {
               Seed inboxes {seeds.length > 0 && <span className="text-muted-foreground font-normal">({seeds.length})</span>}
             </CardTitle>
             <p className="text-xs text-muted-foreground">
-              Inboxes you control on other delegation-authorized domains. A placement test sends a
-              probe from a mailbox to every seed on a different domain, then reads each seed to see
-              where it landed — Inbox, Promotions, or Spam — and what the receiver said about
-              SPF, DKIM, and DMARC. Nothing in a seed is ever modified.
+              Inboxes you control that we read to see where your mail lands — Workspace inboxes, or
+              external Yahoo / consumer Gmail accounts by IMAP. A placement test sends a probe from a
+              mailbox to every seed on a different domain, then reads each seed to see where it
+              landed — Inbox, Promotions, or Spam — and what the receiver said about SPF, DKIM, and
+              DMARC. Nothing in a seed is ever modified.
             </p>
           </div>
         </CardHeader>
@@ -839,44 +948,86 @@ export default function MailboxesPage() {
           {seeds.length === 0 ? (
             <p className="text-sm text-muted-foreground py-2">
               No seed inboxes yet. The quickest panel is your own sending mailboxes — any two on
-              different domains can probe each other — or add a dedicated Workspace inbox below.
+              different domains can probe each other — then add an external Yahoo or consumer Gmail
+              seed below to see how those providers really treat your mail.
             </p>
           ) : (
             <div className="divide-y divide-border rounded-lg border">
-              {seeds.map((seed) => (
-                <div key={seed.id} className="flex items-center gap-3 px-3 py-2 text-sm">
-                  <div className="min-w-0 flex-1">
-                    <div className="font-medium text-[#0f172a] truncate">{seed.email_address}</div>
-                    {seed.label && <div className="text-xs text-muted-foreground">{seed.label}</div>}
-                    {seed.status === "error" && seed.last_error && (
-                      <div className="text-xs text-red-600 flex items-center gap-1 mt-0.5">
-                        <AlertTriangle size={12} /> {seed.last_error}
+              {seeds.map((seed) => {
+                const provider = seedProviderMeta(seed.provider);
+                const ageDays = seedAgeDays(seed.created_at);
+                const dueForRotation = seed.role === "fresh" && ageDays > 90;
+                return (
+                  <div key={seed.id} className="flex items-center gap-3 px-3 py-2 text-sm">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-[#0f172a] truncate">{seed.email_address}</span>
+                        <span
+                          className={`shrink-0 rounded border px-1.5 py-0.5 text-[10px] font-medium ${provider.cls}`}
+                        >
+                          {provider.label}
+                        </span>
                       </div>
-                    )}
-                  </div>
-                  <SeedStatusBadge status={seed.status} />
-                  <div className="flex items-center gap-1">
-                    <Button
-                      variant="outline"
-                      size="sm"
+                      {seed.label && <div className="text-xs text-muted-foreground">{seed.label}</div>}
+                      <div className="text-[11px] text-muted-foreground mt-0.5">
+                        Added {ageDays} day{ageDays === 1 ? "" : "s"} ago
+                        {dueForRotation && (
+                          <span className="ml-1 font-medium text-amber-600">· due for rotation</span>
+                        )}
+                      </div>
+                      {seed.status === "error" && seed.last_error && (
+                        <div className="text-xs text-red-600 flex items-center gap-1 mt-0.5">
+                          <AlertTriangle size={12} /> {seed.last_error}
+                        </div>
+                      )}
+                    </div>
+                    <select
+                      value={seed.role ?? ""}
                       disabled={seedBusy[seed.id]}
-                      onClick={() => handleToggleSeed(seed)}
-                      title={seed.status === "active" ? "Pause (skip this seed)" : "Resume"}
+                      onChange={(e) =>
+                        handleSetSeedRole(seed, e.target.value === "" ? null : (e.target.value as SeedRole))
+                      }
+                      className="shrink-0 cursor-pointer rounded-md border border-border bg-white px-1.5 py-1 text-xs text-slate-600"
+                      title="Rotation role — a 'fresh' seed is one you rotate quarterly for a true first-contact read"
                     >
-                      {seed.status === "active" ? <Pause size={14} /> : <Play size={14} />}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={seedBusy[seed.id]}
-                      onClick={() => handleDeleteSeed(seed)}
-                      title="Remove seed inbox"
-                    >
-                      <Trash2 size={14} className="text-red-500" />
-                    </Button>
+                      <option value="">Role…</option>
+                      <option value="veteran">Veteran</option>
+                      <option value="fresh">Fresh</option>
+                    </select>
+                    <SeedStatusBadge status={seed.status} />
+                    <div className="flex items-center gap-1">
+                      {seed.provider === "microsoft_graph" && seed.status === "error" && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleConnectMicrosoft}
+                          title="Reconnect this Microsoft seed (its sign-in expired)"
+                        >
+                          Reconnect
+                        </Button>
+                      )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={seedBusy[seed.id]}
+                        onClick={() => handleToggleSeed(seed)}
+                        title={seed.status === "active" ? "Pause (skip this seed)" : "Resume"}
+                      >
+                        {seed.status === "active" ? <Pause size={14} /> : <Play size={14} />}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={seedBusy[seed.id]}
+                        onClick={() => handleDeleteSeed(seed)}
+                        title="Remove seed inbox"
+                      >
+                        <Trash2 size={14} className="text-red-500" />
+                      </Button>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
 
@@ -906,7 +1057,7 @@ export default function MailboxesPage() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Button onClick={handleAddSeed} disabled={addingSeed || !seedEmail.trim()}>
-              {addingSeed ? "Verifying…" : "Add seed inbox"}
+              {addingSeed ? "Verifying…" : "Add Workspace seed"}
             </Button>
             <Button
               variant="outline"
@@ -916,17 +1067,103 @@ export default function MailboxesPage() {
             >
               {importingSeeds ? "Adding…" : "Use sending mailboxes as seeds"}
             </Button>
+            <Button
+              variant="outline"
+              onClick={() => setImapOpen((v) => !v)}
+              title="Add a Yahoo, consumer Gmail, or other mailbox by IMAP app password"
+            >
+              <Mail size={14} className="mr-1" /> Add IMAP seed
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleConnectMicrosoft}
+              title="Connect an Outlook.com / Microsoft 365 inbox by OAuth (needs the Microsoft OAuth app in Settings)"
+            >
+              Connect Microsoft seed
+            </Button>
           </div>
+
+          {imapOpen && (
+            <div className="rounded-lg border border-violet-200 bg-violet-50/40 p-3 space-y-3">
+              <p className="text-xs text-muted-foreground">
+                Add an inbox on a provider your prospects actually use — a consumer Gmail, Outlook,
+                or Yahoo account you control — read over IMAP with an app password. This measures
+                real cold placement to that provider, which your own sending domains can&apos;t.
+                <br />
+                <span className="text-slate-500">
+                  Yahoo: host <code className="text-slate-700">imap.mail.yahoo.com</code>, port 993 —
+                  create an app password under Account Security. Consumer Gmail: host{" "}
+                  <code className="text-slate-700">imap.gmail.com</code>, port 993 — turn on
+                  2-Step Verification, then create an app password.
+                </span>
+              </p>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="space-y-1">
+                  <Label className="text-xs font-medium">Email address</Label>
+                  <Input value={imapEmail} onChange={(e) => setImapEmail(e.target.value)} placeholder="seed@gmail.com" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs font-medium">Label (optional)</Label>
+                  <Input value={imapLabel} onChange={(e) => setImapLabel(e.target.value)} placeholder="Consumer Gmail – fresh" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs font-medium">IMAP host</Label>
+                  <Input value={imapHost} onChange={(e) => setImapHost(e.target.value)} placeholder="imap.gmail.com" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs font-medium">Port</Label>
+                  <Input value={imapPort} onChange={(e) => setImapPort(e.target.value)} placeholder="993" inputMode="numeric" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs font-medium">Username (optional — defaults to the email)</Label>
+                  <Input value={imapUsername} onChange={(e) => setImapUsername(e.target.value)} placeholder="seed@gmail.com" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs font-medium">App password</Label>
+                  <Input type="password" value={imapPassword} onChange={(e) => setImapPassword(e.target.value)} placeholder="16-character app password" />
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  onClick={handleAddImapSeed}
+                  disabled={addingImap || !imapEmail.trim() || !imapHost.trim() || !imapPassword}
+                >
+                  {addingImap ? "Verifying sign-in…" : "Add IMAP seed"}
+                </Button>
+                <Button variant="ghost" onClick={() => setImapOpen(false)}>
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          )}
+
           <p className="text-[11px] text-muted-foreground">
-            A seed must be a Google Workspace inbox on a domain that has authorized the service
-            account (same setup as a sending mailbox). Seeds on a mailbox&apos;s own domain are
-            skipped for that mailbox — same-tenant delivery is never filtered, so it can&apos;t
-            measure anything.
+            A seed is any inbox you control that we can read. A <strong>Workspace</strong> seed is on
+            a domain that authorized the service account (same setup as a sending mailbox); an{" "}
+            <strong>IMAP</strong> seed (Yahoo, consumer Gmail, other) is read with an app password —
+            the way to measure placement on the providers your prospects use. Seeds on a
+            mailbox&apos;s own domain are skipped for that mailbox — same-tenant delivery is never
+            filtered, so it can&apos;t measure anything. Nothing in a seed is ever modified.
           </p>
         </CardContent>
       </Card>
     </div>
   );
+}
+
+function seedProviderMeta(provider: SeedInbox["provider"]): { label: string; cls: string } {
+  switch (provider) {
+    case "google_workspace":
+      return { label: "Workspace", cls: "border-blue-200 bg-blue-50 text-blue-700" };
+    case "microsoft_graph":
+      return { label: "Microsoft", cls: "border-sky-200 bg-sky-50 text-sky-700" };
+    case "imap":
+      return { label: "IMAP", cls: "border-violet-200 bg-violet-50 text-violet-700" };
+  }
+}
+
+function seedAgeDays(createdAt: string): number {
+  return Math.max(0, Math.floor((Date.now() - new Date(createdAt).getTime()) / 86_400_000));
 }
 
 // ── Placement rendering ───────────────────────────────────────────────────

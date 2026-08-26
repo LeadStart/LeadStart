@@ -1,14 +1,22 @@
-// PATCH  /api/admin/seed-inboxes/[id] — pause/resume or relabel a seed.
-//                                       Resuming clears a stale read error.
+// PATCH  /api/admin/seed-inboxes/[id] — pause/resume, relabel, or set the
+//                                       rotation role of a seed. Resuming
+//                                       clears a stale read error. Credentials
+//                                       (`auth`) are NOT patchable — change an
+//                                       IMAP password by removing + re-adding;
+//                                       reconnect a Microsoft seed.
 // DELETE /api/admin/seed-inboxes/[id] — remove a seed. Past results keep the
 //                                       seed's address (FK is SET NULL), so
 //                                       history stays readable.
-// Owner only. Migration 00068.
+// Owner only. Migrations 00068 + 00085.
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { SeedInbox } from "@/types/app";
+
+// Browser-safe columns — never expose the `auth` credential column.
+const SEED_SELECT =
+  "id, organization_id, email_address, label, provider, role, status, last_error, last_error_at, created_at, updated_at";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -35,6 +43,7 @@ async function requireOwner() {
 interface PatchBody {
   status?: string;
   label?: string | null;
+  role?: string | null;
 }
 
 export async function PATCH(req: NextRequest, { params }: RouteParams) {
@@ -62,6 +71,12 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
     }
   }
   if (body.label !== undefined) update.label = body.label?.trim() || null;
+  if (body.role !== undefined) {
+    if (body.role !== null && !["veteran", "fresh"].includes(body.role)) {
+      return NextResponse.json({ error: "Invalid seed role" }, { status: 400 });
+    }
+    update.role = body.role ?? null;
+  }
   if (Object.keys(update).length === 0) {
     return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
   }
@@ -72,7 +87,7 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
     .update(update)
     .eq("id", id)
     .eq("organization_id", organizationId)
-    .select("*")
+    .select(SEED_SELECT)
     .maybeSingle();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (!data) return NextResponse.json({ error: "Seed inbox not found" }, { status: 404 });

@@ -64,6 +64,46 @@ export function stripMessageIdBrackets(messageId: string): string {
   return messageId.trim().replace(/^<|>$/g, "");
 }
 
+/**
+ * Map a Microsoft Graph message's folder to a placement bucket. The reader
+ * resolves the message's parentFolderId against the account's well-known
+ * "inbox" and "junkemail" folder ids and passes the resolved name here (or
+ * the raw display name for anything else — archive, a user rule's folder).
+ * Outlook has no Promotions concept; Focused/Other is a different axis and is
+ * recorded in `labels` by the reader, never classified as promotions.
+ */
+export function classifyGraphPlacement(
+  folder: "inbox" | "junkemail" | (string & {}),
+): Extract<PlacementResultStatus, "inbox" | "promotions" | "spam" | "other"> {
+  if (folder === "junkemail") return "spam";
+  if (folder === "inbox") return "inbox";
+  return "other";
+}
+
+/**
+ * Map an IMAP probe lookup to a placement bucket. Two shapes arrive here:
+ *   - Gmail-over-IMAP (X-GM-EXT-1): folder reflects All Mail/Spam membership,
+ *     gmLabels carries X-GM-LABELS, and promotionsHit is the result of a
+ *     second `category:promotions` search — the Promotions verdict plain IMAP
+ *     folder inspection can't see.
+ *   - Generic IMAP (Yahoo etc.): folder is inbox/junk from a per-folder
+ *     search; gmLabels/promotionsHit are null.
+ * "archive" = found in All Mail without the \\Inbox label (filtered/archived).
+ */
+export function classifyImapPlacement(r: {
+  folder: "inbox" | "junk" | "archive" | null;
+  gmLabels?: readonly string[] | null;
+  promotionsHit?: boolean | null;
+}): Extract<PlacementResultStatus, "inbox" | "promotions" | "spam" | "other"> {
+  if (r.folder === "junk") return "spam";
+  if (r.folder === "archive") return "other";
+  if (r.folder === "inbox") {
+    if (r.gmLabels != null) return r.promotionsHit ? "promotions" : "inbox";
+    return "inbox";
+  }
+  return "other";
+}
+
 // ── Receiver-side authentication ────────────────────────────────────────
 
 /**
