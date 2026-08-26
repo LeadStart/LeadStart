@@ -1,6 +1,6 @@
 # LeadStart — Project Status
 
-> Last updated: 2026-08-22
+> Last updated: 2026-08-26
 
 ## Current State: Deployed to Production, native-Gmail-only
 
@@ -146,11 +146,31 @@ pattern-mv 9/9, domain-discovery 30/30; live — compass I/O + pricing, Maps
 sourcing→import→dedup, site_scrape on name-less trades domains, and the **full cron
 pipeline end-to-end in the real app** (see the bullet above).
 
-**Remaining to activate the owner-name add-on:** save an **Anthropic** (and optionally
-Perplexity) key in Settings → Integrations (MV key already present), then run a Maps
-search with "Find owner names" on and confirm names + a pattern_mv personal email land.
-Everything else is live on deploy. Full decisions, schema, e2e evidence, machine-move
-checklist, and next steps: [`RESUME-MAPS-VEIN.md`](RESUME-MAPS-VEIN.md).
+**Owner-name add-on LIVE-VALIDATED (2026-08-26):** the naming → pattern_mv flow ran
+end-to-end on the 12 Dallas leads (local drive of the real crons, env Anthropic key):
+**6/9 owner names found** (all via the Claude web-search Layer 2; Layer 1 site-reads
+0/9) and **3/9 MV-`ok` verified personal emails** written to contacts. The run exposed
+and fixed a latent API bug — both Claude web_search tool declarations were missing the
+required `name` field, 400-ing every Layer 2 / domain-discovery call (commit `e07a0fd`).
+Measured reality: the Claude web-search fallback costs ~$0.06–0.07/business (the
+`NAMING_COST_USD` $0.015 estimate understates it — correction is a named open item);
+a **Perplexity key in Settings → Integrations** is the economics lever (~5–10× cheaper
+Layer 2) before any scaled naming run.
+
+**Catch-all handling + found-first lists (shipped 2026-08-26):** "Include catch-all
+guesses" is a per-run add-on in the Contacts enrich dialog and both Prospecting panels
+(ORs over the org-level `accept_catch_all_guesses` setting via the run's config
+snapshot); kept guesses store at confidence 40 with `provider_status: catch_all`,
+badge amber everywhere, chart as their own radial segment, and land in a new exclusive
+`tier_catch_all` ledger bucket so they never count toward the verified-personal price
+tier. All finished lists (Contacts table, both panel results tables) sort found-first:
+person → company inbox → catch-all → none (shared classifier
+`src/lib/enrichment/email-tier.ts`, 15/15 + outcomes 31/31 unit-tested). Named open
+item: the send-time "risky last" dispatch ordering in `run-native-sequences` (send
+catch-alls only after verified-clean sends drain, small per-mailbox daily cap).
+
+Full decisions, schema, e2e evidence, machine-move checklist, and next steps:
+[`RESUME-MAPS-VEIN.md`](RESUME-MAPS-VEIN.md).
 
 ## Other initiative: LinkedIn Channel via Unipile
 

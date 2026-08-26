@@ -145,11 +145,26 @@ Both former blockers were cleared and everything ran live through the real app:
 - The 12 imported Dallas janitorial leads were **kept** (real usable leads, tagged
   `maps`/`prospecting`, source `maps-prospecting`).
 
-**Still not exercised live: the naming phase** (org has NO Anthropic key — its no-key
-fail-soft path is what runs today). First live naming run = add the key, then enrich a
-few Maps leads with "Find owner names" on and confirm first/last/title land + pattern_mv
-produces a personal email. The $0.20 owner-name pricing tier's hit-rate is unvalidated
-until then.
+**✅ Naming phase LIVE-VALIDATED (2026-08-26)** — driven locally through the real crons
+(dev login + CRON_SECRET tick loop; env `ANTHROPIC_API_KEY` fallback, org key still
+unset). Results on the 12 Dallas leads (9 email-less in scope): **6/9 owner names**
+(Traci Haws/AHI, Ernesto Ramirez/AJT, Sarah Boltz/Corporate Building Services,
+Gerardo Garza/Embassy, Raquel Nipp/Raquel's, + 1 artifact "Chat kiat"/CBSI) and
+**3/9 MV-`ok` verified personal emails** (tracihaws@ahifs.com, eramirez@ajtjanitorialsvc.com,
+sboltz@ccleaning.com — the last on the shared ccleaning.com domain, i.e. the unpinned-GMB-
+website attribution risk, see the domain-pinning next step). 2 more died on catch-all
+domains (now recoverable via the include-catch-all add-on), 1 indeterminate.
+- **Bug found + fixed by this run:** both Claude web_search tool declarations lacked the
+  required `name: "web_search"` field → every Layer 2 / domain-discovery call 400'd
+  (run 1 went 0/9). Fixed in `layer2.ts` + the discovery caller (commit `e07a0fd`).
+- **All 6 names came from Layer 2 web search; Layer 1 site-reads found 0/9** — small-biz
+  sites don't name owners. Measured Layer 2 cost ≈ $0.06–0.07/business on the Claude
+  web-search path (token-only accrual; per-search fees uncounted), ~4× the
+  `NAMING_COST_USD` $0.015 estimate. **Perplexity key = the economics lever** (~5–10×
+  cheaper) before scaling; the code already prefers it when present.
+- Validation spend: two runs, ~$0.68 accrued (~$0.75–0.90 true incl. unmetered search
+  fees) vs a $0.55 approved cap — the overrun drove the always-ask-budget rule now in
+  session memory.
 
 ## Known niggles (small, non-blocking)
 
@@ -186,9 +201,17 @@ until then.
 
 ## What's next (priority order)
 
-1. **Activate naming:** save an Anthropic key (Settings → Integrations), run one Maps
-   enrichment with "Find owner names" on, validate the name hit-rate + a pattern_mv
-   personal email (the $0.20 tier's economics).
+1. ~~Activate naming~~ **DONE 2026-08-26** (see the validation block above). Follow-ons
+   it produced, in order: (a) save a **Perplexity key** in Settings → Integrations before
+   any scaled naming run (Layer 2 economics — the Claude web-search fallback measured
+   ~$0.06–0.07/business); (b) save the **Anthropic org key** too (the validation ran on
+   the dev env fallback, so prod naming is still keyless); (c) correct `NAMING_COST_USD`
+   (and the Maps panel's "~$0.02/lead" copy) to the measured per-provider reality;
+   (d) **domain pinning** at the waterfall seam — reuse `nameTokenMatch` +
+   `confirmViaHomepage` from domain-discovery on GMB-supplied websites (the
+   sboltz@ccleaning.com shared-domain attribution is the live example); (e) the
+   **send-risky-last dispatch rule** in run-native-sequences for catch-all contacts
+   (verified-clean sends drain first, small per-mailbox daily risky cap).
 2. **The monetization funnel (next plan — the big one):** themed niche landing pages
    (`/lp/<slug>` resolving the global preset tier) → self-serve signup/tenancy →
    billing enforcement priced against the delivered-outcome ledger. Hooks are ready:
