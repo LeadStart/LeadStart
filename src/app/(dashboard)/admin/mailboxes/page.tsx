@@ -21,6 +21,7 @@ import {
   FlaskConical,
   Loader2,
   Target,
+  Globe,
   X,
 } from "lucide-react";
 import { appUrl } from "@/lib/api-url";
@@ -28,6 +29,7 @@ import { useUser } from "@/hooks/use-user";
 import { bandBadgeClass, bandLabel } from "@/lib/deliverability/inbox-health";
 import { describeCounts, placementStatusLabel } from "@/lib/deliverability/placement";
 import type {
+  DomainLifecycle,
   HealthComponent,
   NativeMailbox,
   PlacementProbe,
@@ -35,6 +37,7 @@ import type {
   PlacementTest,
   PlacementTestResult,
   SeedInbox,
+  SendingDomain,
 } from "@/types/app";
 
 type MailboxRow = NativeMailbox & {
@@ -44,6 +47,19 @@ type MailboxRow = NativeMailbox & {
   total_sent: number;
   warmed: boolean;
   latest_placement: PlacementTest | null;
+};
+
+type DomainRow = SendingDomain & { mailbox_count: number };
+
+// Lifecycle → chip label + Tailwind classes for the Sending domains card.
+const LIFECYCLE_META: Record<DomainLifecycle, { label: string; cls: string }> = {
+  provisioning: { label: "Provisioning", cls: "bg-slate-100 text-slate-600 border-slate-200" },
+  warming: { label: "Warming", cls: "bg-amber-100 text-amber-800 border-amber-200" },
+  active: { label: "Active", cls: "bg-emerald-100 text-emerald-800 border-emerald-200" },
+  tired: { label: "Tired · draining", cls: "bg-orange-100 text-orange-800 border-orange-200" },
+  resting: { label: "Resting", cls: "bg-blue-100 text-blue-800 border-blue-200" },
+  burned: { label: "Burned", cls: "bg-red-100 text-red-800 border-red-200" },
+  retired: { label: "Retired", cls: "bg-slate-100 text-slate-500 border-slate-200" },
 };
 
 type PlacementDetail = {
@@ -59,6 +75,7 @@ const PLACEMENT_POLL_MS = 10_000;
 export default function MailboxesPage() {
   const { user } = useUser();
   const [mailboxes, setMailboxes] = useState<MailboxRow[]>([]);
+  const [domains, setDomains] = useState<DomainRow[]>([]);
   const [seedCount, setSeedCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [banner, setBanner] = useState<Banner>(null);
@@ -98,6 +115,7 @@ export default function MailboxesPage() {
       const data = await res.json();
       if (res.ok) {
         setMailboxes(data.mailboxes ?? []);
+        setDomains(data.domains ?? []);
         setSeedCount(data.seed_count ?? 0);
       } else setBanner({ kind: "error", message: data.error ?? "Failed to load mailboxes" });
     } catch (err) {
@@ -731,6 +749,69 @@ export default function MailboxesPage() {
                   ))}
                 </tbody>
               </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Sending domains */}
+      <Card className="border-border/50 shadow-sm">
+        <CardHeader className="flex flex-row items-center gap-2 pb-3">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600">
+            <Globe size={16} className="text-white" />
+          </div>
+          <div>
+            <CardTitle className="text-base">
+              Sending domains{" "}
+              {domains.length > 0 && (
+                <span className="text-muted-foreground font-normal">({domains.length})</span>
+              )}
+            </CardTitle>
+            <p className="text-xs text-muted-foreground">
+              The domains your mailboxes send from, with their burn-prevention lifecycle and health.
+              A domain warms up, runs active, then rests and re-warms instead of getting burned.
+              Lifecycle automation stays off until it&rsquo;s enabled for your organization.
+            </p>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {domains.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No sending domains yet — add a mailbox and its domain appears here.
+            </p>
+          ) : (
+            <div className="divide-y divide-border/50">
+              {domains.map((d) => {
+                const meta = LIFECYCLE_META[d.lifecycle_status];
+                return (
+                  <div key={d.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5">
+                    <span className="text-sm font-medium">{d.domain}</span>
+                    <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600">
+                      {d.tier === "gmail" ? "Google" : "SMTP"}
+                    </span>
+                    <span
+                      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${meta.cls}`}
+                    >
+                      {meta.label}
+                    </span>
+                    {d.health_band && (
+                      <Badge className={`${bandBadgeClass(d.health_band)} text-[10px]`}>
+                        {bandLabel(d.health_band)}
+                        {typeof d.health_score === "number" ? ` · ${d.health_score}` : ""}
+                      </Badge>
+                    )}
+                    {d.lifecycle_status === "active" && d.watch_streak > 0 && (
+                      <span className="text-[10px] font-medium text-amber-600">
+                        watch {d.watch_streak}d
+                      </span>
+                    )}
+                    <span className="ml-auto text-xs text-muted-foreground">
+                      {d.mailbox_count} inbox{d.mailbox_count === 1 ? "" : "es"}
+                      {d.max_daily_sends != null && ` · cap ${d.max_daily_sends}/day`}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           )}
         </CardContent>

@@ -24,7 +24,7 @@ import {
   ABSOLUTE_MAX_DAILY_CAP,
 } from "@/lib/gmail/ramp";
 import { latestPlacementTests } from "@/lib/deliverability/placement-runner";
-import type { NativeMailbox } from "@/types/app";
+import type { NativeMailbox, SendingDomain } from "@/types/app";
 
 async function requireOwner() {
   const supabase = await createClient();
@@ -89,7 +89,7 @@ export async function GET() {
   // Count-only queries (head:true), one per mailbox, run in parallel — and in
   // parallel with the placement + seed lookups, which are independent.
   const totalSent: Record<string, number> = {};
-  const [, latestPlacement, seedCountResult] = await Promise.all([
+  const [, latestPlacement, seedCountResult, domainRes] = await Promise.all([
     Promise.all(
       mailboxes.map(async (mb) => {
         const { count } = await admin
@@ -108,6 +108,13 @@ export async function GET() {
       .select("id", { count: "exact", head: true })
       .eq("organization_id", organizationId)
       .eq("status", "active"),
+    // Sending domains (migration 00081) with their lifecycle + health rollup,
+    // for the domain grouping on the Mailboxes page.
+    admin
+      .from("sending_domains")
+      .select("*")
+      .eq("organization_id", organizationId)
+      .order("domain", { ascending: true }),
   ]);
 
   const enriched = mailboxes.map((mb) => {
@@ -123,7 +130,21 @@ export async function GET() {
     };
   });
 
-  return NextResponse.json({ mailboxes: enriched, seed_count: seedCountResult.count ?? 0 });
+  // Domains + their mailbox counts (for the "group by domain" view).
+  const mbCountByDomain: Record<string, number> = {};
+  for (const mb of mailboxes) {
+    if (mb.domain_id) mbCountByDomain[mb.domain_id] = (mbCountByDomain[mb.domain_id] ?? 0) + 1;
+  }
+  const domains = ((domainRes.data ?? []) as SendingDomain[]).map((d) => ({
+    ...d,
+    mailbox_count: mbCountByDomain[d.id] ?? 0,
+  }));
+
+  return NextResponse.json({
+    mailboxes: enriched,
+    seed_count: seedCountResult.count ?? 0,
+    domains,
+  });
 }
 
 interface CreateBody {
