@@ -341,9 +341,15 @@ export default function TasksPage() {
               <TableBody>
                 {pageRows.map((task) => (
                   <TableRow key={task.id}>
-                    <TableCell>
-                      <p className="font-medium">{task.title}</p>
-                      {task.description && <p className="text-xs text-muted-foreground line-clamp-1">{task.description}</p>}
+                    <TableCell className="align-top">
+                      <div className="max-w-[380px] min-w-[160px]">
+                        <p className="font-medium break-words">{task.title}</p>
+                        {task.description && (
+                          <p className="mt-0.5 text-xs text-muted-foreground whitespace-normal break-words">
+                            {task.description}
+                          </p>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell>
                       <button
