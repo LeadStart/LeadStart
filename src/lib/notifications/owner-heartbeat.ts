@@ -34,6 +34,7 @@ import {
   type CompletionProjection,
 } from "@/lib/gmail/ramp";
 import type { Client, ReplyClass, HealthBand } from "@/types/app";
+import { domainOf } from "@/lib/deliverability/check";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
@@ -102,6 +103,15 @@ interface InboxHealthRow {
   autoPaused: boolean; // health_paused_at set = auto-benched for health
 }
 
+// One sending domain's rollup (sending_domains, populated by the same hourly
+// check-inbox-health cron — worst-member score + lifecycle state).
+interface DomainHealthLine {
+  domain: string;
+  score: number | null;
+  band: HealthBand | null;
+  lifecycle: string; // sending_domains.lifecycle_status (active / warming / tired / …)
+}
+
 interface InboxHealthSection {
   total: number;
   healthy: number;
@@ -112,6 +122,7 @@ interface InboxHealthSection {
   freshestIso: string | null; // most recent health_checked_at across the pool
   stale: boolean; // freshest check > 3h old (or none) → check-inbox-health cron may be down
   mailboxes: InboxHealthRow[]; // all, worst-first
+  domains: DomainHealthLine[]; // per sending domain, worst-first
   error: string | null;
 }
 
@@ -441,6 +452,7 @@ async function queryInboxHealth(
     freshestIso: null,
     stale: false,
     mailboxes: [],
+    domains: [],
     error: null,
   };
 
@@ -491,6 +503,38 @@ async function queryInboxHealth(
   section.freshestIso = freshest > 0 ? new Date(freshest).toISOString() : null;
   section.stale =
     rows.length > 0 && (freshest === 0 || now.getTime() - freshest > 3 * 60 * 60 * 1000);
+
+  // Domain-level rollup (sending_domains, populated by the same cron). Read-only,
+  // fail-soft: a read error just leaves domains empty — never fails the section.
+  try {
+    const liveDomains = new Set(rows.map((r) => domainOf(r.email_address)));
+    const { data: dData, error: dErr } = await admin
+      .from("sending_domains")
+      .select("domain, health_score, health_band, lifecycle_status");
+    if (!dErr && dData) {
+      const dRank = (b: HealthBand | null): number =>
+        b === "critical" ? 0 : b === "watch" ? 1 : b === "healthy" ? 2 : 3;
+      section.domains = (
+        dData as {
+          domain: string;
+          health_score: number | null;
+          health_band: HealthBand | null;
+          lifecycle_status: string;
+        }[]
+      )
+        .filter((d) => liveDomains.has(d.domain))
+        .map((d) => ({
+          domain: d.domain,
+          score: d.health_score,
+          band: d.health_band,
+          lifecycle: d.lifecycle_status,
+        }))
+        .sort((a, b) => dRank(a.band) - dRank(b.band) || (a.score ?? 101) - (b.score ?? 101));
+    }
+  } catch {
+    // sending_domains may not exist yet in some environments — leave domains empty.
+  }
+
   return section;
 }
 
@@ -1090,6 +1134,29 @@ function inboxHealthHtml(h: InboxHealthSection): string {
       ? `<p style="margin:6px 0 0;font-size:11px;color:#9194AD;text-align:center;">+ ${h.mailboxes.length - MAX} more &#8212; see the dashboard.</p>`
       : "";
 
+  // Per-domain rollup (the reputational unit): band-colored score + a lifecycle
+  // tag when the domain is anything other than plain 'active'.
+  const domainRows =
+    h.domains.length > 0
+      ? `<div style="margin:2px 0 10px;">
+      <div style="font-size:10px;font-weight:600;color:#9194AD;text-transform:uppercase;letter-spacing:0.03em;margin-bottom:3px;">Sending domains</div>
+      <table width="100%" role="presentation">${h.domains
+        .map((d) => {
+          const color = bandColor(d.band);
+          const scoreTxt = d.score == null ? "&#8212;" : String(d.score);
+          const lc =
+            d.lifecycle && d.lifecycle !== "active"
+              ? ` <span style="font-size:10px;color:#9194AD;">(${escapeHtml(d.lifecycle)})</span>`
+              : "";
+          return `<tr>
+        <td style="padding:3px 0;font-size:12px;color:#3D3D5C;"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${color};margin-right:7px;"></span>${escapeHtml(d.domain)}${lc}</td>
+        <td style="padding:3px 0;text-align:right;font-size:12.5px;font-weight:700;color:${color};white-space:nowrap;">${scoreTxt}</td>
+      </tr>`;
+        })
+        .join("")}</table>
+    </div>`
+      : "";
+
   return `
   <div style="background:${bg};border:1px solid ${bd};border-radius:12px;padding:16px;margin:0 0 12px;">
     <table width="100%" role="presentation"><tr>
@@ -1097,6 +1164,7 @@ function inboxHealthHtml(h: InboxHealthSection): string {
       <td style="text-align:right;font-size:11px;color:#6B6E8A;">${freshNote}</td>
     </tr></table>
     <div style="margin:8px 0 10px;line-height:1.9;">${chips}</div>
+    ${domainRows}
     <table width="100%" role="presentation">${rows}</table>
     ${more}
   </div>`;
