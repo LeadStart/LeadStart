@@ -55,38 +55,50 @@ N-way variant testing measured on **positive-reply-rate**. Migration **00090** =
 - [x] `flow-editor.tsx` — A/B variant editor on email nodes.
 - [x] Winner: auto-pause-on-significance — see section 4.
 
-### 4. A/B auto-winner (significance-test auto-pause)  [x]
-Once a variant has gathered enough sends, a one-sided two-proportion **z-test on
-positive-reply rate** pauses the losers so NEW leads route to the leader. Pure,
-unit-tested decision + a runtime pause flag stored in the graph JSONB (**no
-migration**). Measured on positive-reply rate only (never opens/clicks).
+### 4. A/B auto-winner (opt-in, significant + real lead)  [x]
+**OFF by default, opt-in per node with a per-campaign default.** When on, a variant
+is declared the winner (and losers auto-pause so NEW leads route to it) only when it
+beats **every** rival on **positive-reply rate** under a rigorous rule. Pure,
+unit-tested. Measured on positive-reply rate only (never opens/clicks).
+
+**Winner rule (locked, all must hold to pause a challenger):** ≥30 sends/variant &
+≥60 total (volume) · leader ≥3 positive replies (evidence) · leader leads by ≥1.0
+pt (real lead) · one-sided two-proportion z-test with a **Bonferroni** correction
+across live challengers (significance; 3+ variants demand a higher bar). All six
+knobs are per-node-tunable; the winner is only *locked* once one variant has beaten
+all others.
+
 - [x] `src/lib/flow/ab-winner.ts` — pure `decideAbWinner(stats, config)` (z-test via an
-  Acklam probit; monotonic — only ever adds pauses; never pauses the leader/last active),
-  `DEFAULT_AB_WINNER_CONFIG` (30 sends/variant · 60 total · 95% one-sided), per-node
-  override via `EmailNode.ab_config`, plus pure graph merges `mergePausedIntoGraph`
-  (evaluator) + `mergeStoredPauses` (save-route preserve). Unit 41/41.
-- [x] `EmailNode.paused_variant_ids` (JSONB) — server-owned pause flag; `emailVariants`
-  annotates `ResolvedVariant.paused`; `activeVariants` helper.
+  Acklam probit + Bonferroni; monotonic — only adds pauses, never the leader/last active;
+  evidence + real-lead gates). `DEFAULT_AB_WINNER_CONFIG` = **autoPause:false** · 30/60 ·
+  3 positives · 1.0pt · 95%. `resolveAbConfig(node, campaignDefault)` cascade: node override
+  → campaign default → false. Pure merges `mergePausedIntoGraph` + `mergeStoredPauses`. Unit 57/57.
+- [x] Opt-in storage: `EmailNode.ab_config` (JSONB — `autoPause` + threshold overrides) and
+  **`campaigns.ab_auto_pause_default`** (migration **00091**, applied). `EmailNode.paused_variant_ids`
+  is the server-owned pause flag; `emailVariants`→`ResolvedVariant.paused`; `activeVariants`.
 - [x] `pickVariant(node, contactId, {assignedId})` — EXCLUDES paused for new assignments,
   STICKY to a recorded assignment (a lead mid-thread never re-routes).
-- [x] `computeVariantStats` — per-variant `paused`, leader among ACTIVE, `winnerId`/`decided`.
+- [x] `computeVariantStats(…, campaignDefault?)` — per-variant `paused`, leader among ACTIVE,
+  `winnerId`/`decided`, effective `autoPause` (for the display).
 - [x] Evaluator `src/lib/flow/ab-winner-eval.ts` `evaluateAbWinners` — runs in the **hourly
   `sync-analytics` cron** (NOT the send hot-path), off the send log + replies it already
-  pages; merge-safe write (re-read → union → persist only if grown). Sender only READS the flag.
-- [x] `update-sequence` route re-applies stored pauses onto a manual save (`mergeStoredPauses`)
-  so a builder edit can't wipe an auto-pause.
-- [x] `ab-results.tsx` — Winner (trophy) + Paused (amber) + provisional Leading badges.
-- [x] Sticky threading: sender prefetches each contact's recorded first-email `variant_id`
-  so a follow-up "Re:" subject can't flip when a variant is paused mid-thread.
-- [x] Tests: unit `test-ab-winner.ts` 41/41 + `test-flow-variants.ts` +14 (33/33) +
-  `test-ab-results-render.ts` 12/12; live-DB e2e `e2e-ab-winner.ts` 10/10 (real
-  sends/replies → real evaluator → pause in JSONB → sender read-path → save-preserve →
-  idempotent; self-cleaning draft).
+  pages; takes the campaign default; merge-safe write. Sender only READS the flag.
+- [x] `update-sequence` re-applies stored pauses onto a manual save (`mergeStoredPauses`);
+  also persists `ab_auto_pause_default`.
+- [x] UI: campaign-settings toggle (`campaign-detail-workspace`) + per-node tri-state select
+  (Inherit / On / Off) in the builder (`flow-editor` `EmailVariants`); `ab-results.tsx` — Winner
+  (trophy) + Paused (amber) + Leading badges, caption reflects on/off.
+- [x] Sticky threading: sender prefetches each contact's first-email `variant_id`.
+- [x] Tests: `test-ab-winner.ts` 57/57 (opt-in, evidence, real-lead, Bonferroni, cascade) +
+  `test-flow-variants.ts` 36/36 + `test-ab-results-render.ts` 16/16; live-DB e2e
+  `e2e-ab-winner.ts` 13/13 (off-by-default → campaign-default inherit → pause → sender read-path
+  → save-preserve → idempotent; self-cleaning draft, column round-trip verified).
 
-**Auto-winner decisions (locked):** significance only (never a bare threshold) — a slow
-market simply never triggers a pause, which is correct; pause is MONOTONIC + server-owned
-(a manual "reset test" affordance is a future add, not accidental un-pause); evaluation
-lives in the analytics cron so a bug there can never stop sends.
+**Auto-winner decisions (locked):** OFF by default — opt-in per node (tri-state Inherit/On/Off)
+over a per-campaign default (`ab_auto_pause_default`, migration 00091). Winner = **significant +
+a real ≥1pt lead + enough evidence**, never bare significance; 3+ variants get a Bonferroni bar.
+Pause is MONOTONIC + server-owned (manual "reset test" is a future add). Evaluation lives in the
+analytics cron so a bug there can never stop sends.
 
 ## Decisions locked (don't relitigate)
 - **No open/click tracking, ever** — no pixels, no link-wrapping (deliverability). So `opened`/`clicked` conditions are dead by design (retired from the builder), and all measurement (conditions, A/B, analytics) runs on **inbound** signals: replies (+ class), bounces.

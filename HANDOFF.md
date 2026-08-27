@@ -5,6 +5,47 @@
 
 ---
 
+## 2026-08-26 — A/B auto-winner made OPT-IN + rigorous winner rule (owner-directed); LOCAL-ONLY, awaiting push
+
+Follow-up to the auto-winner entry below, per owner review ("too aggressive; make it
+per-node configurable" + "winner determination needs to be better defined"). Two changes:
+
+**1. OFF by default, opt-in.** The auto-winner no longer runs on every A/B test. Resolution:
+per-node `EmailNode.ab_config.autoPause` (tri-state: on / off / **inherit**) → per-campaign
+`campaigns.ab_auto_pause_default` (migration **00091**, applied) → false. UI: a campaign-settings
+toggle (Schedule tab of `campaign-detail-workspace`) + a per-node "Auto-winner" select in the
+builder (`flow-editor` `EmailVariants`, shown only on A/B nodes). `resolveAbConfig(node,
+campaignDefault)` does the cascade; `evaluateAbWinners` takes the campaign default (read in
+`sync-analytics`); the display shows the effective on/off.
+
+**2. Winner rule "better defined"** (owner picked "Significant + real lead"). A challenger is
+paused only when ALL hold: ≥30 sends/variant & ≥60 total · leader ≥3 positives · leader leads by
+**≥1.0 pt** on positive-reply rate · one-sided two-proportion z-test with a **Bonferroni**
+correction across live challengers (3+ variants ⇒ higher bar). Winner is locked only once it has
+beaten every rival. Replaces the old bare-significance test (which could crown a trivially-
+significant or thin-evidence lead). All six knobs per-node-tunable; `DEFAULT_AB_WINNER_CONFIG`
+= autoPause:false · 30/60 · 3 positives · 1.0pt · 95%.
+
+**Storage note (why a migration this time):** the per-node flag rides in `flow_graph` JSONB (no
+migration), but the per-campaign DEFAULT is a first-class campaign setting saved through
+`update-sequence` alongside `daily_new_leads_cap`/`sending_strategy` — so it's a campaign column.
+Migration 00091 = `campaigns.ab_auto_pause_default boolean not null default false` (additive,
+idempotent, applied to prod ahead of the push like 00089/00090).
+
+**Verification:** tsc clean (0 new; 19 pre-existing) · eslint clean · unit **213** (ab-winner 57,
+flow-variants 36, ab-results-render 16, runtime 63, progress 18, graph 13, edit 10) · live-DB e2e
+`e2e-ab-winner.ts` **13/13** — proves off-by-default, the campaign-default column round-trip +
+inheritance, the pause write/JSONB round-trip, sender exclude/sticky, save-preserve, idempotency
+(self-cleaning draft, `.invalid` emails, zero spend). Builder select + settings toggle are
+tsc+eslint-verified; live visual sign-off defers to post-deploy (deep campaign route is
+rAF-hang-flaky in the hidden preview — [[project_preview_pane_raf_hydration]]).
+
+**Deploy note:** migration 00091 is live; the code is local. The column defaults false, so even
+post-deploy nothing auto-pauses until someone turns it on (campaign settings or a node). Everything
+below in the prior entry still applies.
+
+---
+
 ## 2026-08-26 — A/B AUTO-WINNER: significance-test auto-pause of losing variants; LOCAL-ONLY, awaiting push
 
 Built on top of the A/B stack below (which is itself awaiting the same push). Once a
