@@ -83,7 +83,8 @@ export function CampaignLifecycleButton({
     }
   }
 
-  const label = action === "activate" ? "Activate campaign" : action === "pause" ? "Pause" : "Resume";
+  const label =
+    action === "activate" ? "Launch campaign" : action === "pause" ? "Pause campaign" : "Resume campaign";
   const Icon = action === "activate" ? Rocket : action === "pause" ? Pause : Play;
 
   return (
@@ -91,12 +92,11 @@ export function CampaignLifecycleButton({
       <Button
         onClick={() => run(false)}
         disabled={busy}
-        size="sm"
         variant={action === "activate" ? undefined : "outline"}
         className="gap-1.5 shrink-0"
         style={action === "activate" ? { background: "#16a34a", color: "white" } : undefined}
       >
-        {busy ? <Loader2 size={15} className="animate-spin" /> : <Icon size={15} />}
+        {busy ? <Loader2 size={14} className="animate-spin" /> : <Icon size={14} />}
         {label}
       </Button>
       <ActivatePreflightDialog
