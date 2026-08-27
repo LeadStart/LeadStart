@@ -32,7 +32,9 @@ import type { SendingStrategy } from "@/types/app";
 import { type FlowGraph, graphToSteps, validateGraph } from "@/lib/flow/graph";
 import { FlowEditor } from "@/components/campaigns/flow/flow-editor";
 import { FlowProgress } from "@/components/campaigns/flow/flow-progress";
+import { AbResults } from "@/components/campaigns/flow/ab-results";
 import type { FlowProgressData } from "@/lib/flow/progress";
+import type { AbNodeStats } from "@/lib/flow/variants";
 import { NativeImportPanel } from "@/components/campaigns/native-import-panel";
 import { CampaignProbeCard } from "@/components/campaigns/campaign-probe-card";
 import { CampaignLifecycleButton } from "./campaign-lifecycle-button";
@@ -78,6 +80,7 @@ export function CampaignDetailWorkspace({
   initialStrategy,
   nativeStats,
   flowProgress,
+  abStats,
   stageRows,
   projection,
   strategyLabel,
@@ -95,6 +98,7 @@ export function CampaignDetailWorkspace({
   initialStrategy: SendingStrategy;
   nativeStats: NativeStatsView;
   flowProgress: FlowProgressData | null;
+  abStats: AbNodeStats[];
   stageRows: StageRow[];
   projection: CompletionProjection | null;
   strategyLabel: string;
@@ -445,6 +449,7 @@ export function CampaignDetailWorkspace({
         {/* Analytics */}
         <TabsContent value="analytics" className="min-h-0 space-y-4 overflow-y-auto pt-4">
           {flowProgress && <FlowProgress graph={initialGraph} data={flowProgress} />}
+          {abStats.length > 0 && <AbResults stats={abStats} />}
           <div className="grid grid-cols-3 gap-4">
             <Stat label="Sent" value={nativeStats.sent} color="text-[#2E37FE]" />
             <Stat label="Replied" value={nativeStats.replied} color="text-emerald-600" />

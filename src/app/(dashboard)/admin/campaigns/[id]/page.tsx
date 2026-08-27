@@ -35,12 +35,13 @@ import { CampaignProbeCard } from "@/components/campaigns/campaign-probe-card";
 import { StageFlowCard, type StageRow } from "./stage-flow-card";
 import { CampaignLifecycleButton } from "./campaign-lifecycle-button";
 import { CampaignDetailWorkspace } from "./campaign-detail-workspace";
-import { stepsToGraph, type FlowGraph } from "@/lib/flow/graph";
+import { stepsToGraph, walkAll, isAbTest, type FlowGraph } from "@/lib/flow/graph";
 import {
   computeFlowProgress,
   type FlowProgressData,
   type ProgressEnrollment,
 } from "@/lib/flow/progress";
+import { computeVariantStats, type AbNodeStats } from "@/lib/flow/variants";
 import type { Campaign, CampaignSnapshot, Client, ReplyClass } from "@/types/app";
 
 const SNAPSHOT_COLUMNS =
@@ -224,6 +225,7 @@ export default async function AdminCampaignDetailPage({
     // read-only branch view. Only computed for a real (stored) flow graph — for
     // legacy/linear campaigns current_node_id is null and the linear funnel serves.
     let flowProgress: FlowProgressData | null = null;
+    let abStats: AbNodeStats[] = [];
     if (isFlowCampaign) {
       const [progEnrRes, progReplyRes] = await Promise.all([
         admin
@@ -261,6 +263,24 @@ export default async function AdminCampaignDetailPage({
         };
       });
       flowProgress = computeFlowProgress(initialGraph, progEnrollments, replyByEmail);
+
+      // A/B: per-variant reply stats, only when the graph actually tests a node.
+      let hasAb = false;
+      walkAll(initialGraph.nodes, (n) => {
+        if (n.kind === "email" && isAbTest(n)) hasAb = true;
+      });
+      if (hasAb) {
+        const { data: sendRows } = await admin
+          .from("native_sends")
+          .select("variant_id, to_email")
+          .eq("campaign_id", campaignId)
+          .not("variant_id", "is", null);
+        abStats = computeVariantStats(
+          initialGraph,
+          (sendRows ?? []) as { variant_id: string | null; to_email: string | null }[],
+          replyByEmail,
+        );
+      }
     }
 
     return (
@@ -285,6 +305,7 @@ export default async function AdminCampaignDetailPage({
           activeMailboxCount: nativeStats.activeMailboxCount,
         }}
         flowProgress={flowProgress}
+        abStats={abStats}
         stageRows={stageRows}
         projection={projection}
         strategyLabel={strategyLabel}
