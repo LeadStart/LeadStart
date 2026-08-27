@@ -51,7 +51,8 @@ import {
   firstPrimaryEmail,
   type FlowSignals,
 } from "@/lib/flow/runtime";
-import type { FlowGraph } from "@/lib/flow/graph";
+import { isAbTest, type FlowGraph } from "@/lib/flow/graph";
+import { pickVariant } from "@/lib/flow/variants";
 import { createManualTask, manualTaskKindForLinkedIn } from "@/lib/manual-tasks/create";
 import { runInternalNode } from "@/lib/notifications/internal-automations";
 import type {
@@ -535,6 +536,7 @@ export async function GET(request: NextRequest) {
     stepIndex: number;
     inReplyTo: string | null;
     references: string | null;
+    variantId?: string | null; // A/B variant this send used (null = single-variant)
   }): Promise<DispatchResult> {
     const { campaign, enrollment, contact, mailbox, gmail, subject, bodyText, stepIndex, inReplyTo, references } = args;
     const to = contact.email as string; // caller guarantees a non-empty address
@@ -616,6 +618,7 @@ export async function GET(request: NextRequest) {
       step_index: stepIndex,
       to_email: to,
       email_verification_result: gate.result,
+      variant_id: args.variantId ?? null,
       rfc_message_id: rfcMessageId,
       gmail_message_id: sendResult.id,
       gmail_thread_id: sendResult.threadId,
@@ -810,27 +813,35 @@ export async function GET(request: NextRequest) {
       mailbox = pool[0];
     }
 
-    // Render subject + body from the email NODE (not campaign_steps).
-    const bodyText = renderTemplate(action.node.body ?? "", contact, mailbox, `${contact.id}:${stepIndex}:body`);
+    // A/B: deterministically assign this contact a variant (sticky). A single-
+    // variant node just yields variant A (the node's own subject/body) and a null
+    // variantId, so native_sends records it as a normal (non-A/B) send.
+    const variant = pickVariant(action.node, contact.id);
+    const variantId = isAbTest(action.node) ? variant.id : null;
+
+    // Render subject + body from the chosen variant.
+    const bodyText = renderTemplate(variant.body ?? "", contact, mailbox, `${contact.id}:${stepIndex}:body`);
     if (!bodyText) {
       await markEnrollmentFailed(admin, enrollment.id, "Rendered email body is empty.");
       return { result: "failed_empty_body" };
     }
     let subject: string;
     if (isFirst) {
-      subject = renderTemplate(action.node.subject ?? "", contact, mailbox, `${contact.id}:0:subject`);
+      subject = renderTemplate(variant.subject ?? "", contact, mailbox, `${contact.id}:0:subject`);
       if (!subject) {
         await markEnrollmentFailed(admin, enrollment.id, "First email has no subject.");
         return { result: "failed_no_subject" };
       }
-    } else if ((action.node.subject ?? "").trim()) {
-      subject = renderTemplate(action.node.subject ?? "", contact, mailbox, `${contact.id}:${stepIndex}:subject`);
+    } else if ((variant.subject ?? "").trim()) {
+      subject = renderTemplate(variant.subject ?? "", contact, mailbox, `${contact.id}:${stepIndex}:subject`);
     } else {
-      // Re: fallback — thread on the FIRST primary-path email's subject, rendered
-      // with the step-0 seed key so it's byte-identical to the original send.
+      // Re: fallback — thread on the first primary-path email's subject as THIS
+      // contact received it (their assigned variant), rendered with the step-0
+      // seed key so it's byte-identical to the original send.
       const firstEmail = firstPrimaryEmail(graph);
+      const firstVariant = firstEmail ? pickVariant(firstEmail, contact.id) : null;
       const baseSubject =
-        renderTemplate(firstEmail?.subject ?? "", contact, mailbox, `${contact.id}:0:subject`) || "(no subject)";
+        renderTemplate(firstVariant?.subject ?? "", contact, mailbox, `${contact.id}:0:subject`) || "(no subject)";
       subject = baseSubject.toLowerCase().startsWith("re:") ? baseSubject : `Re: ${baseSubject}`;
     }
 
@@ -857,6 +868,7 @@ export async function GET(request: NextRequest) {
       stepIndex,
       inReplyTo: isFirst ? null : enrollment.last_rfc_message_id,
       references: isFirst ? null : enrollment.last_rfc_message_id,
+      variantId,
     });
     if (d.status === "hold" || d.status === "retry" || d.status === "mailbox_auth") {
       return { result: d.resultTag };
