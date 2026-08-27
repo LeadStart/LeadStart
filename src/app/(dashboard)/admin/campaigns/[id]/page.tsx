@@ -36,7 +36,12 @@ import { StageFlowCard, type StageRow } from "./stage-flow-card";
 import { CampaignLifecycleButton } from "./campaign-lifecycle-button";
 import { CampaignDetailWorkspace } from "./campaign-detail-workspace";
 import { stepsToGraph, type FlowGraph } from "@/lib/flow/graph";
-import type { Campaign, CampaignSnapshot, Client } from "@/types/app";
+import {
+  computeFlowProgress,
+  type FlowProgressData,
+  type ProgressEnrollment,
+} from "@/lib/flow/progress";
+import type { Campaign, CampaignSnapshot, Client, ReplyClass } from "@/types/app";
 
 const SNAPSHOT_COLUMNS =
   "id, campaign_id, snapshot_date, total_leads, emails_sent, replies, " +
@@ -203,16 +208,61 @@ export default async function AdminCampaignDetailPage({
   // falling back to a linear graph derived from campaign_steps for legacy rows.
   if (campaign.source_channel === "native_email" && nativeStats) {
     const stored = (campaign as unknown as { flow_graph?: FlowGraph | null }).flow_graph;
-    const initialGraph: FlowGraph =
-      stored && typeof stored === "object" && Array.isArray((stored as FlowGraph).nodes)
-        ? (stored as FlowGraph)
-        : stepsToGraph(
-            nativeStats.steps.map((s) => ({
-              wait_days: s.wait_days,
-              subject_template: s.subject || null,
-              body_template: s.body,
-            })),
-          );
+    const isFlowCampaign =
+      !!stored && typeof stored === "object" && Array.isArray((stored as FlowGraph).nodes);
+    const initialGraph: FlowGraph = isFlowCampaign
+      ? (stored as FlowGraph)
+      : stepsToGraph(
+          nativeStats.steps.map((s) => ({
+            wait_days: s.wait_days,
+            subject_template: s.subject || null,
+            body_template: s.body,
+          })),
+        );
+
+    // Flow-progress: live per-node occupancy + reply-outcome rollup for the
+    // read-only branch view. Only computed for a real (stored) flow graph — for
+    // legacy/linear campaigns current_node_id is null and the linear funnel serves.
+    let flowProgress: FlowProgressData | null = null;
+    if (isFlowCampaign) {
+      const [progEnrRes, progReplyRes] = await Promise.all([
+        admin
+          .from("campaign_enrollments")
+          .select("current_node_id, current_step_index, status, contacts(email)")
+          .eq("campaign_id", campaignId),
+        admin
+          .from("lead_replies")
+          .select("lead_email, final_class, received_at")
+          .eq("campaign_id", campaignId)
+          .order("received_at", { ascending: false }),
+      ]);
+      const replyByEmail = new Map<string, ReplyClass | null>();
+      for (const row of (progReplyRes.data ?? []) as {
+        lead_email: string | null;
+        final_class: ReplyClass | null;
+      }[]) {
+        const em = row.lead_email?.trim().toLowerCase();
+        if (em && !replyByEmail.has(em)) replyByEmail.set(em, row.final_class ?? null);
+      }
+      const progEnrollments: ProgressEnrollment[] = (
+        (progEnrRes.data ?? []) as {
+          current_node_id: string | null;
+          current_step_index: number | null;
+          status: string;
+          contacts: { email: string | null } | { email: string | null }[] | null;
+        }[]
+      ).map((e) => {
+        const c = Array.isArray(e.contacts) ? e.contacts[0] : e.contacts;
+        return {
+          current_node_id: e.current_node_id,
+          current_step_index: e.current_step_index,
+          status: e.status,
+          email: c?.email ?? null,
+        };
+      });
+      flowProgress = computeFlowProgress(initialGraph, progEnrollments, replyByEmail);
+    }
+
     return (
       <CampaignDetailWorkspace
         campaignId={campaign.id}
@@ -234,6 +284,7 @@ export default async function AdminCampaignDetailPage({
           dailyInboxCapacity: nativeStats.dailyInboxCapacity,
           activeMailboxCount: nativeStats.activeMailboxCount,
         }}
+        flowProgress={flowProgress}
         stageRows={stageRows}
         projection={projection}
         strategyLabel={strategyLabel}

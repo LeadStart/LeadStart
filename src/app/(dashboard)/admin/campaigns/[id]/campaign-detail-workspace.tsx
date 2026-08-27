@@ -31,6 +31,8 @@ import { formatSendWindow, type SendWindowConfig, type CompletionProjection } fr
 import type { SendingStrategy } from "@/types/app";
 import { type FlowGraph, graphToSteps, validateGraph } from "@/lib/flow/graph";
 import { FlowEditor } from "@/components/campaigns/flow/flow-editor";
+import { FlowProgress } from "@/components/campaigns/flow/flow-progress";
+import type { FlowProgressData } from "@/lib/flow/progress";
 import { NativeImportPanel } from "@/components/campaigns/native-import-panel";
 import { CampaignProbeCard } from "@/components/campaigns/campaign-probe-card";
 import { CampaignLifecycleButton } from "./campaign-lifecycle-button";
@@ -75,6 +77,7 @@ export function CampaignDetailWorkspace({
   initialNewLeadsCap,
   initialStrategy,
   nativeStats,
+  flowProgress,
   stageRows,
   projection,
   strategyLabel,
@@ -91,6 +94,7 @@ export function CampaignDetailWorkspace({
   initialNewLeadsCap: number;
   initialStrategy: SendingStrategy;
   nativeStats: NativeStatsView;
+  flowProgress: FlowProgressData | null;
   stageRows: StageRow[];
   projection: CompletionProjection | null;
   strategyLabel: string;
@@ -440,6 +444,7 @@ export function CampaignDetailWorkspace({
 
         {/* Analytics */}
         <TabsContent value="analytics" className="min-h-0 space-y-4 overflow-y-auto pt-4">
+          {flowProgress && <FlowProgress graph={initialGraph} data={flowProgress} />}
           <div className="grid grid-cols-3 gap-4">
             <Stat label="Sent" value={nativeStats.sent} color="text-[#2E37FE]" />
             <Stat label="Replied" value={nativeStats.replied} color="text-emerald-600" />
