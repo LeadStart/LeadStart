@@ -282,6 +282,14 @@ export interface CampaignSnapshot {
   emails_sent: number;
   replies: number;
   unique_replies: number;
+  /**
+   * Distinct contacts (deduped by email across the campaign) first-touched on
+   * snapshot_date who have since replied — the numerator for the per-contact
+   * (cohort) reply rate. Written by the sync-analytics cron; migration 00093.
+   * Optional so the app tolerates snapshots read before that column exists /
+   * is populated (calculateMetrics falls back to unique_replies).
+   */
+  cohort_replies?: number;
   positive_replies: number;
   bounces: number;
   unsubscribes: number;

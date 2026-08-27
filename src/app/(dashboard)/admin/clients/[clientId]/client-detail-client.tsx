@@ -101,7 +101,7 @@ export function ClientDetailClient({
 
   const periodSnapshots = filterByPeriod(allSnapshots, period);
   const periodMetrics = calculateMetrics(periodSnapshots);
-  const lifetimeMetrics = calculateMetrics(allSnapshots, "lifetime");
+  const lifetimeMetrics = calculateMetrics(allSnapshots);
 
   const periodLabel =
     period === "7d"
@@ -275,10 +275,7 @@ export function ClientDetailClient({
                   period,
                 );
                 const campPeriodMetrics = calculateMetrics(campPeriodSnapshots);
-                const campLifetimeMetrics = calculateMetrics(
-                  campAllSnapshots,
-                  "lifetime",
-                );
+                const campLifetimeMetrics = calculateMetrics(campAllSnapshots);
 
                 return (
                   <Link

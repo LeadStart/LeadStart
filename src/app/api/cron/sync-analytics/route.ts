@@ -16,6 +16,7 @@ import { checkCronAuth } from "@/lib/security/cron-auth";
 import { HOT_REPLY_CLASSES, type ReplyClass } from "@/types/app";
 import { InstantlyClient } from "@/lib/instantly/client";
 import { evaluateAbWinners } from "@/lib/flow/ab-winner-eval";
+import { computeCohortReplies } from "@/lib/kpi/cohort";
 import type { FlowGraph } from "@/lib/flow/graph";
 
 // Force dynamic rendering on every invocation. Without this, a Vercel cron
@@ -135,6 +136,11 @@ export async function GET(request: NextRequest) {
           if (r.final_class === "meeting_booked") b.meetings++;
         }
 
+        // Cohort attribution for the per-contact reply rate: re-bucket distinct
+        // repliers by each contact's first-touch day (uses the send log +
+        // replies already paged above — no extra fetch).
+        const cohortByDay = computeCohortReplies(sends, replies);
+
         if (byDay.size > 0) {
           const rows = [...byDay.entries()].map(([snapshot_date, b]) => {
             const uniqueReplies = b.repliers.size || b.replies;
@@ -145,6 +151,7 @@ export async function GET(request: NextRequest) {
               emails_sent: b.sent,
               replies: b.replies,
               unique_replies: uniqueReplies,
+              cohort_replies: cohortByDay.get(snapshot_date) ?? 0,
               positive_replies: b.positive,
               bounces: b.bounces,
               unsubscribes: b.unsub,
@@ -310,6 +317,10 @@ export async function GET(request: NextRequest) {
                 emails_sent: b.sent,
                 replies: b.replies,
                 unique_replies: uniqueReplies,
+                // Instantly send volume is aggregate (no local per-contact send
+                // log), so cohort attribution isn't possible — best-effort to
+                // the unique count. (Dormant channel; not live.)
+                cohort_replies: uniqueReplies,
                 positive_replies: b.positive,
                 bounces: b.bounces,
                 unsubscribes: b.unsub,

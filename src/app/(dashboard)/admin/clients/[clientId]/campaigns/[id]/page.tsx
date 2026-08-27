@@ -34,7 +34,7 @@ import type {
 // Snapshot columns minus raw_data (the JSONB blob is write-only).
 const SNAPSHOT_COLUMNS =
   "id, campaign_id, snapshot_date, total_leads, emails_sent, replies, " +
-  "unique_replies, positive_replies, bounces, unsubscribes, meetings_booked, " +
+  "unique_replies, cohort_replies, positive_replies, bounces, unsubscribes, meetings_booked, " +
   "new_leads_contacted, reply_rate, positive_reply_rate, bounce_rate, " +
   "unsubscribe_rate, fetched_at";
 
@@ -102,7 +102,7 @@ export default async function CampaignDetailPage({
   const feedback = (feedbackRes.data ?? []) as LeadFeedback[];
   const stepMetrics = (stepMetricsRes.data ?? []) as CampaignStepMetric[];
 
-  const metrics = calculateMetrics(snapshots, "lifetime");
+  const metrics = calculateMetrics(snapshots);
   const campaignInfoMap = new Map([
     [
       campaignId,
