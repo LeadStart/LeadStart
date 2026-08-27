@@ -43,15 +43,19 @@ export interface EmailVariant {
 }
 
 /**
- * Per-A/B-node auto-winner threshold override (optional). When absent the
- * evaluator uses DEFAULT_AB_WINNER_CONFIG (src/lib/flow/ab-winner.ts). Every
- * field is optional so a node can tune just one knob. Defined here (not in
+ * Per-A/B-node auto-winner config (optional). The auto-winner is OFF by default
+ * and opt-in per node: it only ever acts when `autoPause === true`. Every other
+ * field tunes the winner rule; when absent the evaluator uses
+ * DEFAULT_AB_WINNER_CONFIG (src/lib/flow/ab-winner.ts). Defined here (not in
  * ab-winner.ts) so graph.ts stays dependency-free — ab-winner imports graph.
  */
 export interface EmailAbConfig {
-  minSentPerVariant?: number;
-  minTotalSent?: number;
-  confidence?: number; // e.g. 0.95 — significance level for the pause decision
+  autoPause?: boolean; // MUST be true for the auto-winner to touch this node
+  minSentPerVariant?: number; // both sides of a comparison need ≥ this many sends
+  minTotalSent?: number; // ≥ this many sends across active variants before deciding
+  minPositives?: number; // the leader needs ≥ this many positive replies
+  minAbsoluteLeadPct?: number; // leader must lead by ≥ this many percentage points
+  confidence?: number; // family-wise significance (Bonferroni across challengers)
 }
 
 export interface EmailNode extends FlowNodeBase {

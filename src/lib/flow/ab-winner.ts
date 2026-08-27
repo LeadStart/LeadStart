@@ -21,30 +21,48 @@ import {
 import type { AbNodeStats, VariantStat } from "./variants";
 
 export interface AbWinnerConfig {
-  /** Each variant in a leader-vs-challenger comparison needs ≥ this many sends. */
+  /** MUST be true for the auto-winner to pause anything on this node (opt-in). */
+  autoPause: boolean;
+  /** Both sides of a leader-vs-challenger comparison need ≥ this many sends. */
   minSentPerVariant: number;
-  /** The node needs ≥ this many sends across its active variants before deciding. */
+  /** The node needs ≥ this many sends across active variants before deciding. */
   minTotalSent: number;
-  /** One-sided confidence level for the pause decision (e.g. 0.95). */
+  /** The leader needs ≥ this many positive replies (don't crown on a lucky one). */
+  minPositives: number;
+  /** The leader must lead a challenger's positive-reply rate by ≥ this many points. */
+  minAbsoluteLeadPct: number;
+  /** Family-wise one-sided confidence; Bonferroni-split across live challengers. */
   confidence: number;
 }
 
-// Conservative defaults. Positive-reply rates are low, so a verdict needs real
-// volume before it fires — that's the point: never call a winner prematurely.
-// Tunable per node via EmailNode.ab_config.
+// OFF by default (autoPause:false), and conservative once on. Positive-reply
+// rates are low, so a verdict needs real volume AND a real gap before it fires —
+// never call a winner on noise. Tunable per node via EmailNode.ab_config.
 export const DEFAULT_AB_WINNER_CONFIG: AbWinnerConfig = {
+  autoPause: false,
   minSentPerVariant: 30,
   minTotalSent: 60,
+  minPositives: 3,
+  minAbsoluteLeadPct: 1,
   confidence: 0.95,
 };
 
-/** Resolve a node's effective config (per-node override → defaults). */
-export function resolveAbConfig(node: EmailNode): AbWinnerConfig {
+/**
+ * Resolve a node's effective config. autoPause cascades node override → campaign
+ * default → false; thresholds cascade node override → system default. So a node
+ * with no ab_config inherits the campaign's `ab_auto_pause_default`, and a node
+ * that sets ab_config.autoPause (true OR false) overrides that campaign default.
+ */
+export function resolveAbConfig(node: EmailNode, campaignDefault?: boolean): AbWinnerConfig {
   const o = node.ab_config;
+  const d = DEFAULT_AB_WINNER_CONFIG;
   return {
-    minSentPerVariant: o?.minSentPerVariant ?? DEFAULT_AB_WINNER_CONFIG.minSentPerVariant,
-    minTotalSent: o?.minTotalSent ?? DEFAULT_AB_WINNER_CONFIG.minTotalSent,
-    confidence: o?.confidence ?? DEFAULT_AB_WINNER_CONFIG.confidence,
+    autoPause: o?.autoPause ?? campaignDefault ?? d.autoPause,
+    minSentPerVariant: o?.minSentPerVariant ?? d.minSentPerVariant,
+    minTotalSent: o?.minTotalSent ?? d.minTotalSent,
+    minPositives: o?.minPositives ?? d.minPositives,
+    minAbsoluteLeadPct: o?.minAbsoluteLeadPct ?? d.minAbsoluteLeadPct,
+    confidence: o?.confidence ?? d.confidence,
   };
 }
 
@@ -122,6 +140,17 @@ export function decideAbWinner(
   node: AbNodeStats,
   config: AbWinnerConfig = DEFAULT_AB_WINNER_CONFIG,
 ): AbDecision {
+  // Opt-in: the auto-winner never touches a node unless it's explicitly enabled.
+  if (!config.autoPause) {
+    return {
+      nodeId: node.nodeId,
+      leaderId: null,
+      pauseIds: [],
+      decided: false,
+      reason: "auto-pause disabled for this node",
+    };
+  }
+
   const active = node.variants.filter((v) => !v.paused);
 
   // 0 or 1 active variant → nothing left to test. It's "decided" iff a survivor
@@ -153,22 +182,34 @@ export function decideAbWinner(
     (a, b) => b.positiveRatePct - a.positiveRatePct || b.sent - a.sent || (a.id < b.id ? -1 : 1),
   );
   const leader = ranked[0];
-  if (leader.sent < config.minSentPerVariant || leader.positive <= 0) {
+  // Evidence gate: the leader needs real volume AND enough positives — never
+  // crown on a thin sample or one lucky reply.
+  if (leader.sent < config.minSentPerVariant || leader.positive < config.minPositives) {
     return {
       nodeId: node.nodeId,
       leaderId: leader.id,
       pauseIds: [],
       decided: false,
-      reason: `leader needs more evidence (${leader.sent} sent / ${leader.positive} positive)`,
+      reason: `leader needs more evidence (${leader.sent} sent / ${leader.positive} positive; need ${config.minSentPerVariant}/${config.minPositives})`,
     };
   }
 
-  const zCrit = zCritOneSided(config.confidence);
+  // Only challengers with enough sends are compared; a still-thin rival keeps the
+  // test open (never paused, never a premature winner).
+  const challengers = active.filter(
+    (v) => v.id !== leader.id && v.sent >= config.minSentPerVariant,
+  );
+  // Bonferroni: hold the family-wise error to (1 - confidence) across the
+  // comparisons we make this pass, so 3+ variants demand a higher per-test bar.
+  const k = Math.max(1, challengers.length);
+  const zCrit = zCritOneSided(1 - (1 - config.confidence) / k);
+  const leaderRate = leader.positive / leader.sent;
+
   const pauseIds: string[] = [];
-  for (const chal of active) {
-    if (chal.id === leader.id) continue;
-    if (chal.sent < config.minSentPerVariant) continue; // not enough data on this challenger
-    if (leaderBeats(leader, chal, zCrit)) pauseIds.push(chal.id);
+  for (const chal of challengers) {
+    const leadPts = (leaderRate - chal.positive / chal.sent) * 100;
+    if (leadPts < config.minAbsoluteLeadPct) continue; // significant but not a MEANINGFUL lead
+    if (leaderBeats(leader, chal, zCrit)) pauseIds.push(chal.id); // significant at the corrected level
   }
 
   const remainingActive = active.length - pauseIds.length;
@@ -179,8 +220,8 @@ export function decideAbWinner(
     decided: pauseIds.length > 0 && remainingActive === 1,
     reason:
       pauseIds.length === 0
-        ? `no variant significantly worse than ${leader.label} yet`
-        : `${leader.label} wins on positive-reply rate at ${Math.round(config.confidence * 100)}% (one-sided); pausing ${pauseIds.length}`,
+        ? `${leader.label} leads but hasn't decisively beaten every rival yet`
+        : `${leader.label} wins: ≥${config.minAbsoluteLeadPct}pt lead + ${Math.round(config.confidence * 100)}% significance (Bonferroni k=${k}); pausing ${pauseIds.length}`,
   };
 }
 

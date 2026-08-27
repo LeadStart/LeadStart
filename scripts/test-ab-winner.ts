@@ -16,6 +16,7 @@ import {
 import type { AbNodeStats, VariantStat } from "../src/lib/flow/variants.ts";
 import {
   decideAbWinner,
+  resolveAbConfig,
   zCritOneSided,
   mergePausedIntoGraph,
   mergeStoredPauses,
@@ -65,7 +66,7 @@ function vs(id: string, label: string, sent: number, positive: number, paused = 
   };
 }
 function node(nodeId: string, variants: VariantStat[]): AbNodeStats {
-  return { nodeId, firstEmail: true, variants, leaderId: null, winnerId: null, decided: false };
+  return { nodeId, firstEmail: true, variants, leaderId: null, winnerId: null, decided: false, autoPause: true };
 }
 function pausedOf(graph: FlowGraph, id: string): string[] {
   let out: string[] = [];
@@ -75,6 +76,17 @@ function pausedOf(graph: FlowGraph, id: string): string[] {
   return out;
 }
 
+// Auto-pause ENABLED at the default thresholds. The rule is off unless opted in,
+// so every "should decide" test passes this.
+const ON: AbWinnerConfig = {
+  autoPause: true,
+  minSentPerVariant: 30,
+  minTotalSent: 60,
+  minPositives: 3,
+  minAbsoluteLeadPct: 1,
+  confidence: 0.95,
+};
+
 // ── zCritOneSided (probit) ───────────────────────────────────────────────────
 console.log("zCritOneSided — inverse-normal critical values");
 near(zCritOneSided(0.95), 1.6449, 0.001, "95% one-sided ≈ 1.6449");
@@ -82,19 +94,28 @@ near(zCritOneSided(0.975), 1.96, 0.001, "97.5% one-sided ≈ 1.9600");
 near(zCritOneSided(0.99), 2.3263, 0.001, "99% one-sided ≈ 2.3263");
 near(zCritOneSided(0.9), 1.2816, 0.001, "90% one-sided ≈ 1.2816");
 
-// ── decideAbWinner ───────────────────────────────────────────────────────────
+// ── decideAbWinner: opt-in gate ──────────────────────────────────────────────
+console.log("decideAbWinner — OFF by default; only acts when opted in");
+{
+  const blowout = node("e1", [vs("e1", "A", 50, 20), vs("vb", "B", 50, 0)]);
+  const off = decideAbWinner(blowout); // DEFAULT config → autoPause false
+  eq(off.pauseIds, [], "disabled (default) → no pause even on a blowout");
+  ok(off.reason.includes("disabled"), "reason says auto-pause disabled");
+  eq(decideAbWinner(blowout, ON).pauseIds, ["vb"], "same node, opted in → pauses the loser");
+}
+
+// ── decideAbWinner: the winner rule ──────────────────────────────────────────
 console.log("decideAbWinner — gates on volume");
 {
-  // Below minTotalSent → no verdict.
-  const d = decideAbWinner(node("e1", [vs("e1", "A", 10, 3), vs("vb", "B", 10, 0)]));
+  const d = decideAbWinner(node("e1", [vs("e1", "A", 10, 3), vs("vb", "B", 10, 0)]), ON);
   eq(d.pauseIds, [], "too few sends → no pause");
   eq(d.decided, false, "not decided while gathering");
 }
 
 console.log("decideAbWinner — pauses a clearly-losing variant");
 {
-  // A 6/50 (12%) vs B 0/50 (0%): one-sided z ≈ 2.53 > 1.6449 → pause B.
-  const d = decideAbWinner(node("e1", [vs("e1", "A", 50, 6), vs("vb", "B", 50, 0)]));
+  // A 6/50 (12%) vs B 0/50 (0%): z ≈ 2.53 > 1.6449, 12pt lead, 6 positives → pause B.
+  const d = decideAbWinner(node("e1", [vs("e1", "A", 50, 6), vs("vb", "B", 50, 0)]), ON);
   eq(d.leaderId, "e1", "leader = A");
   eq(d.pauseIds, ["vb"], "significant loser B paused");
   eq(d.decided, true, "2-way with a pause → decided");
@@ -102,36 +123,60 @@ console.log("decideAbWinner — pauses a clearly-losing variant");
 
 console.log("decideAbWinner — a close gap is NOT significant");
 {
-  // A 6/50 (12%) vs B 4/50 (8%): z ≈ 0.67 → keep both.
-  const d = decideAbWinner(node("e1", [vs("e1", "A", 50, 6), vs("vb", "B", 50, 4)]));
+  const d = decideAbWinner(node("e1", [vs("e1", "A", 50, 6), vs("vb", "B", 50, 4)]), ON);
   eq(d.pauseIds, [], "small difference → no pause");
   eq(d.decided, false, "not decided");
 }
 
 console.log("decideAbWinner — ties + zero-evidence never pause");
 {
-  eq(decideAbWinner(node("e1", [vs("e1", "A", 50, 5), vs("vb", "B", 50, 5)])).pauseIds, [], "equal rates → no pause");
-  eq(decideAbWinner(node("e1", [vs("e1", "A", 50, 0), vs("vb", "B", 50, 0)])).pauseIds, [], "0 vs 0 positives → no pause (degenerate SE)");
+  eq(decideAbWinner(node("e1", [vs("e1", "A", 50, 5), vs("vb", "B", 50, 5)]), ON).pauseIds, [], "equal rates → no lead → no pause");
+  eq(decideAbWinner(node("e1", [vs("e1", "A", 50, 0), vs("vb", "B", 50, 0)]), ON).pauseIds, [], "0 positives → leader fails the evidence gate → no pause");
 }
 
 console.log("decideAbWinner — leader needs its own minimum evidence");
 {
-  // Big challenger sample but the leader itself has < minSent sends.
-  const d = decideAbWinner(node("e1", [vs("e1", "A", 10, 3), vs("vb", "B", 60, 0)]));
-  eq(d.pauseIds, [], "leader under minSent → no verdict");
+  // Best rate but < minSent sends.
+  eq(decideAbWinner(node("e1", [vs("e1", "A", 10, 3), vs("vb", "B", 60, 0)]), ON).pauseIds, [], "leader under minSent → no verdict");
+  // Volume but < minPositives positives → the evidence gate blocks it.
+  const thin = decideAbWinner(node("e1", [vs("e1", "A", 50, 2), vs("vb", "B", 50, 0)]), ON);
+  eq(thin.pauseIds, [], "leader with 2 positives (<3) → no verdict");
+  ok(thin.reason.includes("positive"), "reason cites the evidence gate");
+}
+
+console.log("decideAbWinner — a REAL lead is required (not just significance)");
+{
+  // Huge n makes a 0.5pt gap wildly significant, but it's below the 1pt floor.
+  const variants = [vs("e1", "A", 100000, 5500), vs("vb", "B", 100000, 5000)]; // 5.5% vs 5.0%
+  eq(decideAbWinner(node("e1", variants), ON).pauseIds, [], "significant but <1pt lead → no pause");
+  const loose: AbWinnerConfig = { ...ON, minAbsoluteLeadPct: 0.4 };
+  eq(decideAbWinner(node("e1", variants), loose).pauseIds, ["vb"], "drop the lead floor to 0.4pt → pauses");
+}
+
+console.log("decideAbWinner — Bonferroni raises the bar for 3+ variants");
+{
+  // A 14% vs B 4%: pairwise z ≈ 1.75 — clears the 2-way bar (1.6449) but not the
+  // 3-way corrected bar (1.96).
+  eq(decideAbWinner(node("e1", [vs("e1", "A", 50, 7), vs("vb", "B", 50, 2)]), ON).pauseIds, ["vb"], "2-way (k=1): B is beaten");
+  eq(
+    decideAbWinner(node("e1", [vs("e1", "A", 50, 7), vs("vb", "B", 50, 2), vs("vc", "C", 50, 6)]), ON).pauseIds,
+    [],
+    "3-way (k=2, z-crit 1.96): the same gap no longer clears the bar",
+  );
 }
 
 console.log("decideAbWinner — N-way progressive elimination");
 {
-  // Round 1: A 9/60 (15%), B 1/60 (1.7%), C 6/60 (10%). B loses to A, C survives.
-  const r1 = decideAbWinner(node("e1", [vs("e1", "A", 60, 9), vs("vb", "B", 60, 1), vs("vc", "C", 60, 6)]));
+  // Round 1: A 9/60 (15%), B 1/60, C 6/60 (10%). k=2 → z-crit 1.96. B loses, C survives.
+  const r1 = decideAbWinner(node("e1", [vs("e1", "A", 60, 9), vs("vb", "B", 60, 1), vs("vc", "C", 60, 6)]), ON);
   eq(r1.leaderId, "e1", "leader = A");
-  eq(r1.pauseIds, ["vb"], "only B is significantly worse");
+  eq(r1.pauseIds, ["vb"], "only B clears the corrected bar");
   eq(r1.decided, false, "two active remain → not decided");
 
-  // Round 2: B already paused, C now weak. A 12/80 (15%) vs C 4/80 (5%) → pause C.
+  // Round 2: B paused, C now weak. A 12/80 (15%) vs C 4/80 (5%), k=1 → pause C.
   const r2 = decideAbWinner(
     node("e1", [vs("e1", "A", 80, 12), vs("vb", "B", 60, 1, true), vs("vc", "C", 80, 4)]),
+    ON,
   );
   eq(r2.pauseIds, ["vc"], "C now loses");
   eq(r2.decided, true, "lone survivor → decided");
@@ -139,7 +184,7 @@ console.log("decideAbWinner — N-way progressive elimination");
 
 console.log("decideAbWinner — a lone survivor is already decided");
 {
-  const d = decideAbWinner(node("e1", [vs("e1", "A", 80, 12), vs("vb", "B", 60, 1, true)]));
+  const d = decideAbWinner(node("e1", [vs("e1", "A", 80, 12), vs("vb", "B", 60, 1, true)]), ON);
   eq(d.pauseIds, [], "nothing new to pause");
   eq(d.leaderId, "e1", "leader = the survivor");
   eq(d.decided, true, "one active + a prior pause → decided");
@@ -148,13 +193,36 @@ console.log("decideAbWinner — a lone survivor is already decided");
 console.log("decideAbWinner — per-node config lowers the bar");
 {
   const variants = [vs("e1", "A", 20, 4), vs("vb", "B", 20, 0)]; // 20 each < default minSent 30
-  eq(decideAbWinner(node("e1", variants)).pauseIds, [], "default config → not enough sends");
-  const cfg: AbWinnerConfig = { minSentPerVariant: 15, minTotalSent: 30, confidence: 0.95 };
+  eq(decideAbWinner(node("e1", variants), ON).pauseIds, [], "default thresholds → not enough sends");
+  const cfg: AbWinnerConfig = { autoPause: true, minSentPerVariant: 15, minTotalSent: 30, minPositives: 3, minAbsoluteLeadPct: 1, confidence: 0.95 };
   eq(decideAbWinner(node("e1", variants), cfg).pauseIds, ["vb"], "looser config → B paused");
 }
 
-console.log("decideAbWinner — default config shape");
-eq(DEFAULT_AB_WINNER_CONFIG, { minSentPerVariant: 30, minTotalSent: 60, confidence: 0.95 }, "documented defaults");
+console.log("decideAbWinner — default config shape (auto-pause OFF)");
+eq(
+  DEFAULT_AB_WINNER_CONFIG,
+  { autoPause: false, minSentPerVariant: 30, minTotalSent: 60, minPositives: 3, minAbsoluteLeadPct: 1, confidence: 0.95 },
+  "documented defaults",
+);
+
+// ── resolveAbConfig: node override → campaign default → false ─────────────────
+console.log("resolveAbConfig — autoPause cascade");
+{
+  const plain = emailNode("s", "b", "e1"); // no ab_config
+  eq(resolveAbConfig(plain).autoPause, false, "no config, no campaign default → off");
+  eq(resolveAbConfig(plain, true).autoPause, true, "no node config → inherits campaign default (on)");
+  eq(resolveAbConfig(plain, false).autoPause, false, "no node config → inherits campaign default (off)");
+
+  const forcedOff = emailNode("s", "b", "e2");
+  forcedOff.ab_config = { autoPause: false };
+  eq(resolveAbConfig(forcedOff, true).autoPause, false, "node OFF overrides a campaign default of on");
+
+  const forcedOn = emailNode("s", "b", "e3");
+  forcedOn.ab_config = { autoPause: true, minSentPerVariant: 5 };
+  eq(resolveAbConfig(forcedOn, false).autoPause, true, "node ON overrides a campaign default of off");
+  eq(resolveAbConfig(forcedOn).minSentPerVariant, 5, "node threshold override flows through");
+  eq(resolveAbConfig(forcedOn).minPositives, 3, "unset thresholds fall back to defaults");
+}
 
 // ── mergePausedIntoGraph ─────────────────────────────────────────────────────
 console.log("mergePausedIntoGraph — union, dedup, validate, recurse");

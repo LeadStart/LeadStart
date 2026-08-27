@@ -208,5 +208,21 @@ console.log("computeVariantStats — mid-test (no pause) → leader but no winne
   eq(node.leaderId, "e1", "A leads (holds the positive)");
 }
 
+console.log("computeVariantStats — autoPause reflects node config + campaign default");
+{
+  const on = emailNode("Sa", "Ba", "e1");
+  on.variants = [emailVariant("Sb", "Bb", "vb")];
+  on.ab_config = { autoPause: true };
+  const g1: FlowGraph = { version: 1, nodes: [on] };
+  eq(computeVariantStats(g1, [{ variant_id: "e1", to_email: "x@x.com" }], new Map())[0].autoPause, true, "node ab_config.autoPause=true → autoPause true");
+
+  const plain = emailNode("Sa", "Ba", "e2");
+  plain.variants = [emailVariant("Sb", "Bb", "vb2")];
+  const g2: FlowGraph = { version: 1, nodes: [plain] };
+  const sends = [{ variant_id: "e2", to_email: "y@x.com" }];
+  eq(computeVariantStats(g2, sends, new Map())[0].autoPause, false, "no node config, no campaign default → false");
+  eq(computeVariantStats(g2, sends, new Map(), true)[0].autoPause, true, "no node config → inherits campaign default (true)");
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

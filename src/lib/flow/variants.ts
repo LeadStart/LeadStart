@@ -90,13 +90,21 @@ export interface AbNodeStats {
   winnerId: string | null;
   /** Auto-winner reached a verdict (winnerId is set). */
   decided: boolean;
+  /** This node opted into auto-pause (EmailNode.ab_config.autoPause). Display hint. */
+  autoPause: boolean;
 }
 
-/** Per-A/B-node variant tallies, from native_sends.variant_id + lead_replies. */
+/**
+ * Per-A/B-node variant tallies, from native_sends.variant_id + lead_replies.
+ * `campaignAutoPauseDefault` (campaigns.ab_auto_pause_default) is the fallback a
+ * node inherits when it hasn't overridden auto-pause — used only to set each
+ * node's display `autoPause` (the effective on/off shown in the results table).
+ */
 export function computeVariantStats(
   graph: FlowGraph,
   sends: { variant_id: string | null; to_email: string | null }[],
   replyByEmail: Map<string, ReplyClass | null>,
+  campaignAutoPauseDefault?: boolean,
 ): AbNodeStats[] {
   const abNodes: { node: EmailNode; variants: ResolvedVariant[] }[] = [];
   walkAll(graph.nodes, (n) => {
@@ -164,6 +172,7 @@ export function computeVariantStats(
       leaderId,
       winnerId,
       decided: winnerId !== null,
+      autoPause: node.ab_config?.autoPause ?? campaignAutoPauseDefault ?? false,
     };
   });
 }
