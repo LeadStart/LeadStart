@@ -5,6 +5,57 @@
 
 ---
 
+## 2026-08-26 — #3 GRAPH RUNTIME built + verified + migration applied; LOCAL-ONLY, awaiting the push
+
+The native sender now EXECUTES `campaigns.flow_graph` (branches + linkedin +
+internal nodes run), not just the derived linear steps. Built in worktree
+`.claude/worktrees/graph-runtime-phase3` on branch `claude/graph-runtime-phase3`.
+**Committed locally, NOT pushed** — pushing rewrites how live campaigns send (no
+staging); owner validates post-deploy on a controlled campaign.
+
+### What changed
+- **Migration `00089`** (APPLIED to prod 2026-08-26): `campaign_enrollments.current_node_id text`
+  (nullable, additive). The enrollment's position INSIDE the graph. Legacy/linear
+  campaigns (`flow_graph` NULL) ignore it and keep using `current_step_index` — zero regression.
+- **`src/lib/flow/runtime.ts`** — the PURE walker `resolveFlowAction(graph, position, signals)`:
+  resume after `current_node_id`, accumulate wait days, route conditions, return the
+  next actionable node (email/linkedin/internal) or `complete`. Lazy re-eval each tick
+  so a mid-wait reply re-routes. Unit-tested 39/39 (`scripts/test-flow-runtime.ts`).
+- **`run-native-sequences/route.ts`** — a flow branch (`runFlowEnrollment`) walks the
+  graph; email → shared `dispatchEmail` (the linear send block was refactored onto the
+  SAME helper — one send path, no drift), linkedin → `createManualTask` (session C),
+  internal → `runInternalNode` (session B). A per-tick action budget bounds side-effects.
+- **`flow-editor.tsx`** — a "needs tracking" note on opened/clicked/manual conditions
+  (no signal → they take the NO arm at runtime; the YES arm won't fire).
+
+### Condition semantics (PRE-DECIDED, implemented)
+- `replied` → yes iff `contact.status==='replied'` OR a `lead_replies` row (campaign+email); else no.
+- `bounced` → yes iff `contact.status==='bounced'`; else no.
+- `opened`/`clicked`/`manual` → **always NO** (open/link tracking off by default; no signal). Fail-safe: never peel on an unmeasurable signal; flagged in the builder.
+- Global reply-halt reconciliation: on an email action, if the contact replied and NO
+  replied-condition was traversed to reach it → halt (status='replied'), same as today.
+  If a replied-condition governs, the walk already routed (yes arm) — no pre-empt.
+- `current_step_index` keeps counting EMAILS for flow campaigns too (0=first touch), so
+  the send machinery (subject/threading, new-leads cap, sticky mailbox) is unchanged.
+- Pre-migration in-flight flow enrollments (current_node_id NULL, step>0) resolve their
+  resume node from `current_step_index` → NO re-send.
+
+### Verification
+- tsc clean (0 new errors in touched files; the 26 remaining are the documented
+  pre-existing strict-null/asset-import pages). Unit 39/39. e2e 11/11 against the LIVE DB
+  on a self-cleaning DRAFT campaign (`scripts/e2e-flow-runtime.ts`): flow_graph JSONB
+  round-trip, real signal read, routing both arms, real `manual_tasks` insert + flow_node
+  dedup, cleanup verified (0 orphans).
+
+### Deploy risk (the one gate)
+- Push auto-deploys; the sender's per-tick behavior changes for **flow campaigns only**.
+  In-flight flow enrollments will start executing previously-skipped condition/linkedin/
+  internal nodes (LinkedIn tasks appear in the to-dos inbox; internal notifies fire only
+  if an org enabled automations — OFF by default). Legacy/linear campaigns: byte-identical.
+- Post-deploy validation: a controlled flow campaign with a branch, watch routing + tasks.
+
+---
+
 ## 2026-08-26 — Flow builder shipped; internal-automations (B) + LinkedIn VA-tasks (C) MERGED; #3 (graph runtime) is next
 
 ### Shipped & deployed to prod (master @ `778b97c`)
