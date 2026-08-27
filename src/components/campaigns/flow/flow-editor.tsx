@@ -36,12 +36,29 @@ function LinkedInGlyph({ size = 16 }: { size?: number }) {
 }
 
 const TRIGGER_LABELS: Record<FlowConditionTrigger, string> = {
-  replied: "they reply",
-  opened: "they open, no reply",
-  clicked: "they click a link",
+  replied: "they reply (any)",
+  reply_interested: "they reply — interested",
+  reply_objection: "they reply — objection",
+  reply_not_interested: "they reply — not interested",
+  reply_ooo: "they reply — out of office",
   bounced: "it bounces",
-  manual: "a VA marks it",
+  // Retired — shown only if a stored graph still uses one (never offered anew).
+  opened: "they open a message (retired)",
+  clicked: "they click a link (retired)",
+  manual: "a VA marks it (retired)",
 };
+
+// The triggers the builder OFFERS. We route on inbound signals only — replies
+// (+ classifier sentiment) and bounces. opened/clicked need open/link tracking we
+// deliberately never add (deliverability); manual has no automation — all retired.
+const OFFERED_TRIGGERS: FlowConditionTrigger[] = [
+  "replied",
+  "reply_interested",
+  "reply_objection",
+  "reply_not_interested",
+  "reply_ooo",
+  "bounced",
+];
 
 type ElementKind = "email" | "wait" | "linkedin" | "internal" | "condition";
 
@@ -467,11 +484,15 @@ export function FlowEditor({
                 <div className={styles.condBody}>
                   <span className={styles.condEyebrow}>Condition</span>
                   <select className={styles.condSel} value={n.trigger} onChange={(e) => patch(n.id, { trigger: e.target.value })}>
-                    {Object.entries(TRIGGER_LABELS).map(([k, label]) => (
+                    {OFFERED_TRIGGERS.map((k) => (
                       <option key={k} value={k}>
-                        If {label}
+                        If {TRIGGER_LABELS[k]}
                       </option>
                     ))}
+                    {/* A stored graph on a retired trigger keeps showing it (so it can be re-picked). */}
+                    {!OFFERED_TRIGGERS.includes(n.trigger) && (
+                      <option value={n.trigger}>If {TRIGGER_LABELS[n.trigger]}</option>
+                    )}
                   </select>
                 </div>
                 <button type="button" className={`${styles.iconbtn} ${styles.danger}`} onClick={() => del(n.id)} aria-label="Delete condition">
@@ -495,10 +516,9 @@ export function FlowEditor({
                     padding: "6px 8px",
                   }}
                 >
-                  <b>Needs tracking.</b> There’s no signal for this yet, so at
-                  runtime everyone follows the <b>No</b> path — the <b>Yes</b>{" "}
-                  branch won’t fire. (Open &amp; click tracking are off by default
-                  for deliverability; “a VA marks it” has no automation.)
+                  <b>Retired trigger.</b> We don’t track opens or clicks — it hurts
+                  deliverability — so this can’t fire; everyone follows the{" "}
+                  <b>No</b> path. Switch to a reply- or bounce-based condition.
                 </p>
               )}
             </div>
