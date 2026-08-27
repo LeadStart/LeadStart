@@ -60,6 +60,7 @@ import type {
   Contact,
   DomainLifecycle,
   NativeMailbox,
+  ReplyClass,
 } from "@/types/app";
 
 export const maxDuration = 60;
@@ -266,13 +267,14 @@ export async function GET(request: NextRequest) {
   }
 
   // ---- Flow-runtime reply signal ----
-  // A flow `condition` node can branch on "did the contact reply?". The signal is
-  // contact.status==='replied' OR a lead_replies row for this campaign+contact.
-  // lead_replies has no contact_id, so we key by campaign_id + the contact's
-  // email. Only queried when a flow campaign is in this tick's batch. Bounces use
-  // contact.status==='bounced' (no separate lead-level table), so no prefetch.
-  // Key: `${campaign_id}\n${lowercased email}`.
-  const repliedFlowKeys = new Set<string>();
+  // A flow `condition` node can branch on the reply — its existence (`replied`)
+  // OR its classifier sentiment (`reply_interested` / `_objection` / …), read
+  // from lead_replies.final_class. lead_replies has no contact_id, so we key by
+  // campaign_id + the contact's email. Presence in the map = replied; value = the
+  // LATEST reply's final_class (null if unclassified). Only queried when a flow
+  // campaign is in this tick's batch; bounces use contact.status. Key:
+  // `${campaign_id}\n${lowercased email}`.
+  const replyClassByKey = new Map<string, ReplyClass | null>();
   if (flowGraphByCampaign.size > 0) {
     const flowCampaignIds = [...flowGraphByCampaign.keys()];
     const emailCandidates = new Set<string>();
@@ -287,13 +289,20 @@ export async function GET(request: NextRequest) {
     if (emailCandidates.size > 0) {
       const { data: replyRows } = await admin
         .from("lead_replies")
-        .select("campaign_id, lead_email")
+        .select("campaign_id, lead_email, final_class, received_at")
         .in("campaign_id", flowCampaignIds)
-        .in("lead_email", [...emailCandidates]);
-      for (const r of (replyRows ?? []) as { campaign_id: string | null; lead_email: string | null }[]) {
-        if (r.campaign_id && r.lead_email) {
-          repliedFlowKeys.add(`${r.campaign_id}\n${r.lead_email.trim().toLowerCase()}`);
-        }
+        .in("lead_email", [...emailCandidates])
+        .order("received_at", { ascending: false });
+      for (const r of (replyRows ?? []) as {
+        campaign_id: string | null;
+        lead_email: string | null;
+        final_class: ReplyClass | null;
+        received_at: string | null;
+      }[]) {
+        if (!r.campaign_id || !r.lead_email) continue;
+        const key = `${r.campaign_id}\n${r.lead_email.trim().toLowerCase()}`;
+        // Rows are newest-first, so the FIRST sighting of a key is the latest reply.
+        if (!replyClassByKey.has(key)) replyClassByKey.set(key, r.final_class ?? null);
       }
     }
   }
@@ -668,14 +677,19 @@ export async function GET(request: NextRequest) {
     }
 
     // Condition signals (per campaign+contact). replied = contact.status OR a
-    // lead_replies row; bounced = contact.status. opened/clicked/manual have no
-    // signal and take the NO branch (see resolveFlowAction).
+    // lead_replies row; replyClass = the latest reply's classifier class (drives
+    // the reply_* sentiment triggers); bounced = contact.status. opened/clicked/
+    // manual have no signal and take the NO branch (see resolveFlowAction).
     const emailKey = (contact.email ?? "").trim().toLowerCase();
-    const hasReplied =
-      contact.status === "replied" ||
-      (emailKey.length > 0 && repliedFlowKeys.has(`${campaign.id}\n${emailKey}`));
+    const replyKey = `${campaign.id}\n${emailKey}`;
+    const hasReplyRow = emailKey.length > 0 && replyClassByKey.has(replyKey);
+    const hasReplied = contact.status === "replied" || hasReplyRow;
     const hasBounced = contact.status === "bounced";
-    const signals: FlowSignals = { hasReplied, hasBounced };
+    const signals: FlowSignals = {
+      hasReplied,
+      hasBounced,
+      replyClass: hasReplyRow ? replyClassByKey.get(replyKey) ?? null : null,
+    };
 
     const action = resolveFlowAction(
       graph,
@@ -697,12 +711,13 @@ export async function GET(request: NextRequest) {
       if (Date.now() < dueAt) return { result: "flow_wait" };
     }
 
-    // Reply-halt reconciliation: if the contact replied and NO replied-condition
-    // governs the path to this action, halt the enrollment exactly as the linear
-    // sender does (a human takes over). When a replied-condition IS on the path
-    // the walk already routed on the reply, so we don't pre-empt — the graph owns
-    // it. Applies to EVERY action type.
-    if (hasReplied && !action.passedTriggers.has("replied")) {
+    // Reply-halt reconciliation: if the contact replied and NO reply-family
+    // condition MATCHED en route to this action, halt the enrollment exactly as
+    // the linear sender does (a human takes over) — this also fail-safes an
+    // unhandled reply CLASS (replied, but no matching sentiment branch routed
+    // them). When a reply condition did match, the graph is handling the reply so
+    // we don't pre-empt. Applies to EVERY action type.
+    if (hasReplied && !action.matchedReplyRoute) {
       await admin.from("campaign_enrollments").update({ status: "replied" }).eq("id", enrollment.id);
       return { result: "already_replied" };
     }

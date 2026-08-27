@@ -76,8 +76,8 @@ const GRAPH: FlowGraph = {
     ),
   ],
 };
-const NEITHER: FlowSignals = { hasReplied: false, hasBounced: false };
-const REPLIED: FlowSignals = { hasReplied: true, hasBounced: false };
+const NEITHER: FlowSignals = { hasReplied: false, hasBounced: false, replyClass: null };
+const REPLIED: FlowSignals = { hasReplied: true, hasBounced: false, replyClass: null };
 
 async function main() {
   // Attach to a real org via any existing client (campaign.client_id is denormed
@@ -185,7 +185,7 @@ async function main() {
       .eq("campaign_id", campaignId)
       .eq("lead_email", email);
     const hasReplied = status === "replied" || (replies?.length ?? 0) > 0;
-    const signals: FlowSignals = { hasReplied, hasBounced: status === "bounced" };
+    const signals: FlowSignals = { hasReplied, hasBounced: status === "bounced", replyClass: null };
     ok(!signals.hasReplied, "not-replied signal computed from real tables");
 
     // Walk from the stored position (parked at E1) with the not-replied signal.
