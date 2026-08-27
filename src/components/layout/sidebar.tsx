@@ -189,7 +189,7 @@ export function Sidebar({ role, open = false, onClose }: { role: AppRole; open?:
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 space-y-0.5 px-3 pt-3 pb-4 overflow-y-auto">
+        <nav className="flex-1 space-y-0.5 px-3 pt-3 pb-4 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {nav.map((item) => (
             <NavLink key={item.href} item={item} active={pathname === item.href} />
           ))}
