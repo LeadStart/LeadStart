@@ -54,7 +54,9 @@ const REPLIED_ANY: FlowSignals = { hasReplied: true, hasBounced: false, replyCla
 const INTERESTED: FlowSignals = { hasReplied: true, hasBounced: false, replyClass: "true_interest" };
 const OBJECTION: FlowSignals = { hasReplied: true, hasBounced: false, replyClass: "objection_price" };
 const NOT_INT: FlowSignals = { hasReplied: true, hasBounced: false, replyClass: "not_interested" };
-const OOO: FlowSignals = { hasReplied: true, hasBounced: false, replyClass: "ooo" };
+// An out-of-office is an AUTO reply — the poller doesn't set contact.status, so
+// hasReplied is false, but its class is still ingested (replyClass 'ooo').
+const OOO: FlowSignals = { hasReplied: false, hasBounced: false, replyClass: "ooo" };
 const BOUNCED: FlowSignals = { hasReplied: false, hasBounced: true, replyClass: null };
 
 const g = (nodes: FlowNode[]): FlowGraph => ({ version: 1, nodes });
@@ -84,8 +86,10 @@ eq(evalCondition("reply_interested", NONE), false, "reply_interested + no reply 
 eq(evalCondition("reply_objection", OBJECTION), true, "reply_objection + objection class → yes");
 eq(evalCondition("reply_objection", INTERESTED), false, "reply_objection + interested class → no");
 eq(evalCondition("reply_not_interested", NOT_INT), true, "reply_not_interested + not_interested → yes");
-eq(evalCondition("reply_ooo", OOO), true, "reply_ooo + ooo → yes");
+eq(evalCondition("reply_ooo", OOO), true, "reply_ooo + ooo → yes (matches on class, not hasReplied)");
 eq(evalCondition("reply_ooo", INTERESTED), false, "reply_ooo + interested → no");
+eq(evalCondition("replied", OOO), false, "replied + OOO auto-reply → NO (not a human reply → never halts)");
+eq(evalCondition("reply_interested", OOO), false, "reply_interested + OOO → no");
 
 console.log("trigger helpers + class grouping");
 eq(isUntrackedTrigger("opened"), true, "opened is untracked");
@@ -221,6 +225,40 @@ console.log("reply-class routing (sentiment groups)");
     info(resolveFlowAction(graph, pos, NOT_INT)),
     { type: "email", id: "e2", waitDays: 0, matched: false },
     "not-interested (unhandled class) → both NO → e2, matched=FALSE (sender halts)",
+  );
+}
+
+// ── Out-of-office handling (auto-reply must not halt) ────────────────────────
+console.log("out-of-office routing (auto-reply never halts)");
+{
+  // reply_ooo can route an OOO (e.g. wait longer, then resume).
+  const graph = g([
+    emailNode("Hi", "b", "e1"),
+    conditionNode(
+      "reply_ooo",
+      [waitNode(5, "w"), emailNode("Re", "resume", "resume")],
+      [emailNode("", "cont", "e2")],
+      "c1",
+    ),
+  ]);
+  eq(
+    info(resolveFlowAction(graph, { currentNodeId: "e1", emailsSent: 1 }, OOO)),
+    { type: "email", id: "resume", waitDays: 5, matched: true },
+    "OOO → reply_ooo YES → wait 5 + resume (matched=true; hasReplied=false so no halt either way)",
+  );
+}
+{
+  // A plain `replied` condition ignores an OOO (not a human reply) → No branch,
+  // matched=false, and hasReplied=false so the sender does NOT halt: the sequence
+  // continues through an out-of-office rather than treating it as engagement.
+  const graph = g([
+    emailNode("Hi", "b", "e1"),
+    conditionNode("replied", [internalNode("notify", "n", "int")], [emailNode("", "cont", "e2")], "c1"),
+  ]);
+  eq(
+    info(resolveFlowAction(graph, { currentNodeId: "e1", emailsSent: 1 }, OOO)),
+    { type: "email", id: "e2", waitDays: 0, matched: false },
+    "OOO → plain `replied` does NOT match → continues (no false peel-off)",
   );
 }
 

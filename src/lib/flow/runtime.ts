@@ -29,13 +29,17 @@
 //    reconciliation with the global reply-halt) ───────────────────────────────
 // We route on INBOUND signals only (replies + bounces) — never on opens/clicks,
 // which would need tracking pixels/links we deliberately don't add.
-//   replied              → yes iff the contact replied (any class).
-//   reply_interested     → yes iff replied AND final_class ∈ {true_interest,
+//   replied              → yes iff the contact sent a HUMAN reply (hasReplied =
+//                          contact.status==='replied'; the reply poller sets this
+//                          only for non-auto replies, so OOO/auto never trips it
+//                          or the global halt — matching the linear sender).
+//   reply_interested     → yes iff the latest reply's final_class ∈ {true_interest,
 //                          meeting_booked, qualifying_question, referral_forward}.
-//   reply_objection      → yes iff replied AND final_class ∈ {objection_price, objection_timing}.
-//   reply_not_interested → yes iff replied AND final_class ∈ {not_interested,
+//   reply_objection      → yes iff final_class ∈ {objection_price, objection_timing}.
+//   reply_not_interested → yes iff final_class ∈ {not_interested,
 //                          wrong_person_no_referral, unsubscribe}.
-//   reply_ooo            → yes iff replied AND final_class === 'ooo'.
+//   reply_ooo            → yes iff final_class === 'ooo' (matches an auto-reply
+//                          even though hasReplied is false → route it without halting).
 //   bounced              → yes iff the contact bounced.
 //   opened/clicked/manual→ NO branch, ALWAYS. No signal (tracking off / no
 //                          automation). Retired from the builder; kept only so
@@ -159,14 +163,18 @@ export function evalCondition(
       return signals.hasReplied;
     case "bounced":
       return signals.hasBounced;
+    // Sentiment triggers key on the reply CLASS (from lead_replies), NOT the
+    // human-reply flag: reply_ooo must be able to match an out-of-office
+    // auto-reply, which correctly does NOT set hasReplied / halt the sequence.
+    // A non-null class means a reply of that class was ingested for this campaign.
     case "reply_interested":
-      return signals.hasReplied && group === "interested";
+      return group === "interested";
     case "reply_objection":
-      return signals.hasReplied && group === "objection";
+      return group === "objection";
     case "reply_not_interested":
-      return signals.hasReplied && group === "not_interested";
+      return group === "not_interested";
     case "reply_ooo":
-      return signals.hasReplied && group === "ooo";
+      return group === "ooo";
     // opened / clicked / manual: no reliable signal → NO (continue). Fail-safe.
     default:
       return false;

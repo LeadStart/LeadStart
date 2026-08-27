@@ -679,19 +679,20 @@ export async function GET(request: NextRequest) {
       return { result: "failed_no_contact" };
     }
 
-    // Condition signals (per campaign+contact). replied = contact.status OR a
-    // lead_replies row; replyClass = the latest reply's classifier class (drives
-    // the reply_* sentiment triggers); bounced = contact.status. opened/clicked/
-    // manual have no signal and take the NO branch (see resolveFlowAction).
+    // Condition signals (per campaign+contact). hasReplied is the HUMAN-reply halt
+    // signal: contact.status==='replied', which the reply poller sets ONLY for
+    // non-auto replies — so an out-of-office / auto-reply never halts the sequence
+    // (it still writes a lead_replies row, which we read as replyClass). replyClass
+    // = the latest ingested reply's class (incl. 'ooo'), driving the reply_*
+    // sentiment triggers. bounced = contact.status. opened/clicked/manual → NO.
     const emailKey = (contact.email ?? "").trim().toLowerCase();
     const replyKey = `${campaign.id}\n${emailKey}`;
-    const hasReplyRow = emailKey.length > 0 && replyClassByKey.has(replyKey);
-    const hasReplied = contact.status === "replied" || hasReplyRow;
+    const hasReplied = contact.status === "replied";
     const hasBounced = contact.status === "bounced";
     const signals: FlowSignals = {
       hasReplied,
       hasBounced,
-      replyClass: hasReplyRow ? replyClassByKey.get(replyKey) ?? null : null,
+      replyClass: emailKey.length > 0 ? replyClassByKey.get(replyKey) ?? null : null,
     };
 
     const action = resolveFlowAction(

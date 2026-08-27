@@ -23,6 +23,13 @@ stay; `opened`/`clicked`/`manual` **retired** from the builder (kept legacy-safe
 Runtime `matchedReplyRoute`: a matching reply-condition stands the global reply-halt down, but
 an **unhandled** reply class still halts (never re-email a replier). **No migration.**
 
+**OOO fix (post-push, commit after the stack):** `hasReplied` (the halt signal + the plain
+`replied` trigger) keys on `contact.status==='replied'` ONLY — which the reply poller sets
+just for HUMAN replies (it deliberately skips out-of-office/auto-replies). An OOO still writes
+a `lead_replies` row, so `replyClass='ooo'` drives `reply_ooo` (route it — e.g. wait + resume)
+without halting. The earlier "contact.status OR a lead_replies row" signal wrongly halted flow
+sequences on an OOO (auto-reply); linear campaigns were never affected. Runtime 63/63.
+
 ### 2. Flow observability
 Read-only **"Flow progress"** view on the campaign Analytics tab: per-node live occupancy
 ("N here"), each condition's Yes/No branch split, and a rollup (enrolled/active/peeled/
