@@ -125,7 +125,7 @@ export default function AllCampaignsPage() {
                   const campaignHref = `/admin/campaigns/${row.id}`;
                   const clientHref = isOrphan ? null : `/admin/clients/${row.client_id}`;
                   return (
-                    <TableRow key={row.id} className="group">
+                    <TableRow key={row.id} href={campaignHref} className="group">
                       <TableCell><div className="flex items-center gap-3"><div className="flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold text-white shrink-0" style={{ background: '#2E37FE' }}><Mail size={14} /></div><Link href={campaignHref} className="font-medium text-foreground hover:text-[#2E37FE] transition-colors">{row.name}</Link></div></TableCell>
                       <TableCell>{clientHref ? <Link href={clientHref} className="text-muted-foreground hover:text-foreground transition-colors">{row.clientName || "—"}</Link> : <Badge variant="secondary" className="badge-amber">Unlinked</Badge>}</TableCell>
                       <TableCell><Badge variant="secondary" className={row.status === "active" ? "badge-green" : row.status === "paused" ? "badge-amber" : "badge-slate"}>{row.status}</Badge></TableCell>

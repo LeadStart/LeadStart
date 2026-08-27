@@ -478,7 +478,7 @@ export default function AdminOverviewPage() {
                   {pageRows.map((row) => {
                     const href = `/admin/clients/${row.id}`;
                     return (
-                      <TableRow key={row.id} className="group">
+                      <TableRow key={row.id} href={href} className="group">
                         <TableCell>
                           <div className="flex items-center gap-3">
                             <div

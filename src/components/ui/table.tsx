@@ -1,8 +1,16 @@
 "use client"
 
 import * as React from "react"
+import { useRouter } from "next/navigation"
 
 import { cn } from "@/lib/utils"
+import { appUrl } from "@/lib/api-url"
+
+// Descendants that own their own click and must NOT trigger a clickable row's
+// navigation (links elsewhere, buttons, menus, form controls). Put
+// data-row-click-ignore on anything else that should stay independent.
+const ROW_INTERACTIVE_SELECTOR =
+  'a,button,input,select,textarea,label,[role="button"],[role="menuitem"],[role="menu"],[role="checkbox"],[role="switch"],[data-row-click-ignore]'
 
 function Table({ className, ...props }: React.ComponentProps<"table">) {
   return (
@@ -52,14 +60,62 @@ function TableFooter({ className, ...props }: React.ComponentProps<"tfoot">) {
   )
 }
 
-function TableRow({ className, ...props }: React.ComponentProps<"tr">) {
+function TableRow({
+  className,
+  href,
+  onClick,
+  ...props
+}: React.ComponentProps<"tr"> & { href?: string }) {
+  const router = useRouter()
+
+  if (!href) {
+    return (
+      <tr
+        data-slot="table-row"
+        className={cn(
+          "border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted",
+          className
+        )}
+        onClick={onClick}
+        {...props}
+      />
+    )
+  }
+
+  // Whole-row navigation: a click anywhere in the row (except on a genuinely-
+  // interactive descendant) opens `href`, so the entire row behaves like its
+  // primary link. The row keeps its real inner <Link> as the keyboard/AT anchor
+  // — this is a pointer-only convenience on top. Modifier / middle click opens a
+  // new tab, at parity with a real link (window.open bypasses the router, so it
+  // needs the basePath that appUrl adds).
+  const fromInteractive = (target: EventTarget | null) =>
+    target instanceof Element && !!target.closest(ROW_INTERACTIVE_SELECTOR)
+
+  const handleClick = (e: React.MouseEvent<HTMLTableRowElement>) => {
+    onClick?.(e)
+    if (e.defaultPrevented || fromInteractive(e.target)) return
+    if (e.metaKey || e.ctrlKey) {
+      window.open(appUrl(href), "_blank", "noopener")
+      return
+    }
+    router.push(href)
+  }
+
+  const handleAuxClick = (e: React.MouseEvent<HTMLTableRowElement>) => {
+    if (e.button !== 1 || fromInteractive(e.target)) return
+    e.preventDefault()
+    window.open(appUrl(href), "_blank", "noopener")
+  }
+
   return (
     <tr
       data-slot="table-row"
       className={cn(
-        "border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted",
+        "border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted cursor-pointer",
         className
       )}
+      onClick={handleClick}
+      onAuxClick={handleAuxClick}
       {...props}
     />
   )
