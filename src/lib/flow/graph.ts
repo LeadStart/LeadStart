@@ -12,10 +12,19 @@
 // (linkedin/internal) nodes so an email's cadence is preserved.
 
 export type FlowConditionTrigger =
-  | "replied"
+  // Inbound signals we route on — no outbound tracking required.
+  | "replied" // any inbound reply, regardless of class
+  | "reply_interested" // reply classified interested/positive (the hot classes)
+  | "reply_objection" // reply classified as an objection (price / timing)
+  | "reply_not_interested" // not interested / wrong person / unsubscribe
+  | "reply_ooo" // out-of-office auto-reply
+  | "bounced"
+  // Legacy triggers kept ONLY so stored graphs still type-check + load. They are
+  // NOT offered in the builder and evaluate to the NO branch at runtime: opened/
+  // clicked need open/link tracking we deliberately never add (deliverability),
+  // and `manual` has no automation. See src/lib/flow/runtime.ts.
   | "opened"
   | "clicked"
-  | "bounced"
   | "manual";
 
 export type FlowInternalAction = "notify" | "task" | "webhook";
@@ -131,9 +140,10 @@ export function emptyGraph(): FlowGraph {
 
 /**
  * The starter template a new native campaign opens with: a first email, then a
- * "did they reply?" fork (yes → notify the account manager; no → follow up and
- * a "did they open?" fork → nurture vs. break-up). Shows the branching flow on
- * load; the executed path is the three emails down the `no` branches.
+ * "did they reply?" fork (yes → notify the account manager; no → two follow-ups).
+ * Shows the branching flow on load; the executed path is the three emails down
+ * the `no` branch. Reply-based only — we don't track opens/clicks, so the fork
+ * routes on the one inbound signal we actually have.
  */
 export function starterGraph(): FlowGraph {
   const first = emailNode(
@@ -144,19 +154,14 @@ export function starterGraph(): FlowGraph {
     "",
     "Just following up, {{first_name}} — worth a quick 15-minute chat to see if there's a fit?",
   );
-  const nurture = emailNode(
-    "",
-    "Still think this could help {{company}} — happy to send a 2-minute overview if it's useful.",
-  );
   const breakup = emailNode(
     "",
     "Closing the loop here. If the timing's off, no worries — reach out anytime.",
   );
-  const opened = conditionNode("opened", [waitNode(2), nurture], [breakup]);
   const replied = conditionNode(
     "replied",
-    [internalNode("notify", "Notify the account manager in Slack")],
-    [waitNode(3), followUp, opened],
+    [internalNode("notify", "Notify the account manager")],
+    [waitNode(3), followUp, waitNode(2), breakup],
   );
   return { version: 1, nodes: [first, replied] };
 }

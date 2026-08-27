@@ -27,15 +27,23 @@
 //
 // ── Condition semantics (PRE-DECIDED — see run-native-sequences for the full
 //    reconciliation with the global reply-halt) ───────────────────────────────
-//   replied  → yes iff the contact replied (contact.status==='replied' OR a
-//              lead_replies row for this campaign+contact); else no.
-//   bounced  → yes iff the contact bounced (contact.status==='bounced'); else no.
-//   opened   → NO branch, always. Open tracking is OFF by default (deliberate,
-//   clicked  → NO branch, always. link tracking OFF too) so there is no reliable
-//   manual   → NO branch, always. no automatic signal — a human decision we don't
-//              model. Fail-safe: never peel a lead on a signal we can't measure.
-// The three untracked triggers are flagged "needs tracking" in the builder
-// (isUntrackedTrigger) so an author knows their YES arm will not fire.
+// We route on INBOUND signals only (replies + bounces) — never on opens/clicks,
+// which would need tracking pixels/links we deliberately don't add.
+//   replied              → yes iff the contact replied (any class).
+//   reply_interested     → yes iff replied AND final_class ∈ {true_interest,
+//                          meeting_booked, qualifying_question, referral_forward}.
+//   reply_objection      → yes iff replied AND final_class ∈ {objection_price, objection_timing}.
+//   reply_not_interested → yes iff replied AND final_class ∈ {not_interested,
+//                          wrong_person_no_referral, unsubscribe}.
+//   reply_ooo            → yes iff replied AND final_class === 'ooo'.
+//   bounced              → yes iff the contact bounced.
+//   opened/clicked/manual→ NO branch, ALWAYS. No signal (tracking off / no
+//                          automation). Retired from the builder; kept only so
+//                          legacy stored graphs still load. isUntrackedTrigger.
+// When a reply-family condition MATCHES (takes yes), the walk sets
+// matchedReplyRoute so the sender knows the author is handling that reply and the
+// global reply-halt stands down — but an UNHANDLED reply class still halts (a
+// replied contact is never emailed again unless a matching branch routes them).
 
 import {
   flattenPrimaryPath,
@@ -47,6 +55,7 @@ import {
   type ConditionNode,
   type FlowConditionTrigger,
 } from "./graph";
+import type { ReplyClass } from "@/types/app";
 
 // ── Signals + actions ────────────────────────────────────────────────────────
 
@@ -54,21 +63,24 @@ import {
 export interface FlowSignals {
   hasReplied: boolean;
   hasBounced: boolean;
+  /** The classifier's final_class for the latest reply; null if none/unclassified. */
+  replyClass: ReplyClass | null;
 }
 
 /**
  * The next thing the sender should do for an enrollment this tick.
- *  - email/linkedin/internal: the actionable node reached, plus the wait days
+ *  - email/linkedin/internal: the actionable node reached, the wait days
  *    accumulated from the resume point (the cron gates the action on
- *    reference_time + waitDays before performing it), plus the set of condition
- *    triggers traversed to reach it (drives the reply-halt reconciliation).
+ *    reference_time + waitDays before performing it), and matchedReplyRoute —
+ *    true when a reply-family condition MATCHED en route, which stands the global
+ *    reply-halt down (the graph is handling the reply).
  *  - complete: the walk ran off the end of the tree (or the parked node was
  *    deleted / the enrollment is past the graph) — mark the enrollment completed.
  */
 export type FlowRuntimeAction =
-  | { type: "email"; node: EmailNode; waitDays: number; passedTriggers: Set<FlowConditionTrigger> }
-  | { type: "linkedin"; node: LinkedInNode; waitDays: number; passedTriggers: Set<FlowConditionTrigger> }
-  | { type: "internal"; node: InternalNode; waitDays: number; passedTriggers: Set<FlowConditionTrigger> }
+  | { type: "email"; node: EmailNode; waitDays: number; matchedReplyRoute: boolean }
+  | { type: "linkedin"; node: LinkedInNode; waitDays: number; matchedReplyRoute: boolean }
+  | { type: "internal"; node: InternalNode; waitDays: number; matchedReplyRoute: boolean }
   | { type: "complete" };
 
 /** An enrollment's position in the graph, as stored on campaign_enrollments. */
@@ -92,16 +104,69 @@ export function isUntrackedTrigger(t: FlowConditionTrigger): boolean {
   return UNTRACKED_TRIGGERS.includes(t);
 }
 
+// Reply-family triggers route on an inbound reply (existence or class). When one
+// MATCHES (evaluates true), the walk records matchedReplyRoute so the sender's
+// global reply-halt stands down — the author is handling that reply.
+export const REPLY_TRIGGERS: readonly FlowConditionTrigger[] = [
+  "replied",
+  "reply_interested",
+  "reply_objection",
+  "reply_not_interested",
+  "reply_ooo",
+];
+
+/** True for the reply-family triggers (any-reply + the sentiment classes). */
+export function isReplyTrigger(t: FlowConditionTrigger): boolean {
+  return REPLY_TRIGGERS.includes(t);
+}
+
+// Sentiment groups over the classifier's ReplyClass. "interested" mirrors
+// HOT_REPLY_CLASSES. `needs_review` matches no group (only a plain `replied`
+// condition catches it) — deliberately, so ambiguous replies don't auto-route.
+const INTERESTED_CLASSES: readonly ReplyClass[] = [
+  "true_interest",
+  "meeting_booked",
+  "qualifying_question",
+  "referral_forward",
+];
+const OBJECTION_CLASSES: readonly ReplyClass[] = ["objection_price", "objection_timing"];
+const NOT_INTERESTED_CLASSES: readonly ReplyClass[] = [
+  "not_interested",
+  "wrong_person_no_referral",
+  "unsubscribe",
+];
+
+/** Which sentiment group a reply class falls in (null = none, e.g. needs_review). */
+export function replyClassGroup(
+  cls: ReplyClass | null,
+): "interested" | "objection" | "not_interested" | "ooo" | null {
+  if (cls == null) return null;
+  if (INTERESTED_CLASSES.includes(cls)) return "interested";
+  if (OBJECTION_CLASSES.includes(cls)) return "objection";
+  if (NOT_INTERESTED_CLASSES.includes(cls)) return "not_interested";
+  if (cls === "ooo") return "ooo";
+  return null;
+}
+
 /** Evaluate a condition: true → take YES, false → take NO. */
 export function evalCondition(
   trigger: FlowConditionTrigger,
   signals: FlowSignals,
 ): boolean {
+  const group = replyClassGroup(signals.replyClass);
   switch (trigger) {
     case "replied":
       return signals.hasReplied;
     case "bounced":
       return signals.hasBounced;
+    case "reply_interested":
+      return signals.hasReplied && group === "interested";
+    case "reply_objection":
+      return signals.hasReplied && group === "objection";
+    case "reply_not_interested":
+      return signals.hasReplied && group === "not_interested";
+    case "reply_ooo":
+      return signals.hasReplied && group === "ooo";
     // opened / clicked / manual: no reliable signal → NO (continue). Fail-safe.
     default:
       return false;
@@ -185,7 +250,7 @@ export function resolveFlowAction(
 
   // Clone frames so we can advance indices without mutating the caller's graph.
   const stack: Frame[] = resolved.map((f) => ({ list: f.list, index: f.index }));
-  const passedTriggers = new Set<FlowConditionTrigger>();
+  let matchedReplyRoute = false;
   let waitDays = 0;
 
   while (stack.length > 0) {
@@ -203,16 +268,18 @@ export function resolveFlowAction(
     }
     if (node.kind === "condition") {
       const cond = node as ConditionNode;
-      passedTriggers.add(cond.trigger);
       const takeYes = evalCondition(cond.trigger, signals);
+      // A reply-family condition that MATCHED means the author is handling this
+      // reply → the sender's global reply-halt stands down (run-native-sequences).
+      if (takeYes && isReplyTrigger(cond.trigger)) matchedReplyRoute = true;
       top.index += 1; // step past the condition first, so exhausting the chosen
       stack.push({ list: takeYes ? cond.yes : cond.no, index: 0 }); // branch rejoins here
       continue;
     }
     // Actionable node — stop here.
-    if (node.kind === "email") return { type: "email", node, waitDays, passedTriggers };
-    if (node.kind === "linkedin") return { type: "linkedin", node, waitDays, passedTriggers };
-    return { type: "internal", node, waitDays, passedTriggers };
+    if (node.kind === "email") return { type: "email", node, waitDays, matchedReplyRoute };
+    if (node.kind === "linkedin") return { type: "linkedin", node, waitDays, matchedReplyRoute };
+    return { type: "internal", node, waitDays, matchedReplyRoute };
   }
   return { type: "complete" };
 }
