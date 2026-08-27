@@ -42,6 +42,18 @@ export interface EmailVariant {
   body: string;
 }
 
+/**
+ * Per-A/B-node auto-winner threshold override (optional). When absent the
+ * evaluator uses DEFAULT_AB_WINNER_CONFIG (src/lib/flow/ab-winner.ts). Every
+ * field is optional so a node can tune just one knob. Defined here (not in
+ * ab-winner.ts) so graph.ts stays dependency-free — ab-winner imports graph.
+ */
+export interface EmailAbConfig {
+  minSentPerVariant?: number;
+  minTotalSent?: number;
+  confidence?: number; // e.g. 0.95 — significance level for the pause decision
+}
+
 export interface EmailNode extends FlowNodeBase {
   kind: "email";
   subject: string; // may be "" on follow-ups — they thread as "Re:"
@@ -52,6 +64,16 @@ export interface EmailNode extends FlowNodeBase {
   // graphToSteps + the linear derivation use variant A only, so a node with no
   // extras behaves exactly as before.
   variants?: EmailVariant[];
+  // A/B auto-winner (runtime-managed, NOT authored in the builder). Variant ids
+  // (a variant id is the node id for A, or an EmailVariant.id for B/C/…) that
+  // the auto-winner has PAUSED because they lost on positive-reply rate. Paused
+  // variants are excluded from NEW assignments (pickVariant) so fresh leads
+  // route to the leader, but a lead already assigned one stays sticky (its
+  // thread never re-routes). Server-owned: the evaluator adds ids and the
+  // update-sequence route re-applies them across manual edits.
+  paused_variant_ids?: string[];
+  // Optional per-node override for the auto-winner thresholds (see EmailAbConfig).
+  ab_config?: EmailAbConfig;
 }
 
 export interface WaitNode extends FlowNodeBase {
@@ -225,27 +247,45 @@ export interface ResolvedVariant {
   label: string;
   subject: string;
   body: string;
+  /** Auto-winner has paused this variant — excluded from new assignments. */
+  paused: boolean;
 }
 
 /**
  * All variants of an email node for sending + measurement: variant A is the
  * node's own subject/body (id = the node id), then any extras (B, C…). A node
  * with no `variants` returns just [A], so callers treat single + A/B uniformly.
+ * Each variant is annotated with its `paused` state from paused_variant_ids.
  */
 export function emailVariants(node: EmailNode): ResolvedVariant[] {
+  const paused = new Set(node.paused_variant_ids ?? []);
   const a: ResolvedVariant = {
     id: node.id,
     label: "A",
     subject: node.subject,
     body: node.body,
+    paused: paused.has(node.id),
   };
   const extras = (node.variants ?? []).map((v, i) => ({
     id: v.id,
     label: String.fromCharCode(66 + i), // B, C, D…
     subject: v.subject,
     body: v.body,
+    paused: paused.has(v.id),
   }));
   return [a, ...extras];
+}
+
+/**
+ * Variants still eligible for NEW assignments (not auto-paused). Falls back to
+ * ALL variants if every one is somehow paused, so the sender can never be left
+ * with nothing to send — the auto-winner never pauses the leader, so this
+ * fallback is a pure safety net.
+ */
+export function activeVariants(node: EmailNode): ResolvedVariant[] {
+  const all = emailVariants(node);
+  const active = all.filter((v) => !v.paused);
+  return active.length > 0 ? active : all;
 }
 
 /** True when an email node is A/B testing (≥1 extra variant → ≥2 total). */

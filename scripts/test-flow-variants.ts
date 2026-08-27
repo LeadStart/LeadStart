@@ -8,6 +8,7 @@ import {
   emailNode,
   emailVariant,
   emailVariants,
+  activeVariants,
   isAbTest,
   type FlowGraph,
 } from "../src/lib/flow/graph.ts";
@@ -130,6 +131,81 @@ console.log("computeVariantStats — no A/B nodes → empty");
 {
   const graph: FlowGraph = { version: 1, nodes: [emailNode("S", "B", "e1")] };
   eq(computeVariantStats(graph, [{ variant_id: "e1", to_email: "x@x.com" }], new Map()).length, 0, "no A/B nodes → []");
+}
+
+// ── paused variants: annotation + activeVariants ─────────────────────────────
+console.log("emailVariants — paused annotation + activeVariants");
+{
+  const ab = emailNode("Sa", "Ba", "e1");
+  ab.variants = [emailVariant("Sb", "Bb", "vb"), emailVariant("Sc", "Bc", "vc")];
+  ab.paused_variant_ids = ["vb"];
+  eq(
+    emailVariants(ab).map((v) => [v.id, v.paused]),
+    [["e1", false], ["vb", true], ["vc", false]],
+    "paused flag reflects paused_variant_ids",
+  );
+  eq(activeVariants(ab).map((v) => v.id), ["e1", "vc"], "activeVariants drops paused");
+
+  // Safety: every variant paused → fall back to all (never leave nothing to send).
+  const allP = emailNode("x", "y", "n1");
+  allP.variants = [emailVariant("x2", "y2", "v2")];
+  allP.paused_variant_ids = ["n1", "v2"];
+  eq(activeVariants(allP).map((v) => v.id), ["n1", "v2"], "all paused → fall back to every variant");
+}
+
+// ── pickVariant: excludes paused for new leads, sticky for assigned ──────────
+console.log("pickVariant — excludes paused (new) + sticky (assigned)");
+{
+  const ab = emailNode("Sa", "Ba", "e1");
+  ab.variants = [emailVariant("Sb", "Bb", "vb")]; // A, B
+  ab.paused_variant_ids = ["vb"]; // B paused
+
+  const ids = new Set<string>();
+  for (let i = 0; i < 200; i++) ids.add(pickVariant(ab, `c${i}`).id);
+  eq([...ids], ["e1"], "paused B excluded → every new lead gets A");
+
+  // Sticky: a lead already assigned B keeps B even though it's now paused (no
+  // mid-thread re-route). An active assignment is honored too; a stale id falls
+  // back to a fresh active pick.
+  eq(pickVariant(ab, "cX", { assignedId: "vb" }).id, "vb", "assignedId honors a PAUSED variant (sticky)");
+  eq(pickVariant(ab, "cY", { assignedId: "e1" }).id, "e1", "assignedId honors an active variant");
+  eq(pickVariant(ab, "cZ", { assignedId: "gone" }).id, "e1", "stale assignedId → fresh active pick");
+}
+
+// ── computeVariantStats: paused reflected + locked winner ────────────────────
+console.log("computeVariantStats — paused variants + locked winner");
+{
+  const e1 = emailNode("Subject A", "Body A", "e1");
+  e1.variants = [emailVariant("Subject B", "Body B", "vb")];
+  e1.paused_variant_ids = ["vb"]; // B paused → A the lone survivor
+  const graph: FlowGraph = { version: 1, nodes: [e1] };
+  const replies = new Map<string, ReplyClass | null>([["a1@x.com", "true_interest"]]);
+  const sends = [
+    { variant_id: "e1", to_email: "a1@x.com" },
+    { variant_id: "e1", to_email: "a2@x.com" },
+    { variant_id: "vb", to_email: "b1@x.com" },
+  ];
+  const [node] = computeVariantStats(graph, sends, replies);
+  eq(node.variants.map((v) => [v.label, v.paused]), [["A", false], ["B", true]], "B flagged paused");
+  eq(node.leaderId, "e1", "leader = A (the only active with a positive)");
+  eq(node.winnerId, "e1", "winner locked = A (B paused, A stands alone)");
+  eq(node.decided, true, "decided once a survivor stands alone");
+}
+
+console.log("computeVariantStats — mid-test (no pause) → leader but no winner");
+{
+  const e1 = emailNode("Subject A", "Body A", "e1");
+  e1.variants = [emailVariant("Subject B", "Body B", "vb")];
+  const graph: FlowGraph = { version: 1, nodes: [e1] };
+  const replies = new Map<string, ReplyClass | null>([["a1@x.com", "true_interest"]]);
+  const sends = [
+    { variant_id: "e1", to_email: "a1@x.com" },
+    { variant_id: "vb", to_email: "b1@x.com" },
+  ];
+  const [node] = computeVariantStats(graph, sends, replies);
+  eq(node.winnerId, null, "no pause → no locked winner");
+  eq(node.decided, false, "not decided");
+  eq(node.leaderId, "e1", "A leads (holds the positive)");
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);
