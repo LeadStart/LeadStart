@@ -20,6 +20,16 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { appUrl } from "@/lib/api-url";
 import { normalizeDomain } from "@/lib/apify/domain";
+// Shared CSV core (single parser + header-normalization rule + stage list), so
+// this Path-B importer no longer keeps its own copy that can drift from the
+// campaign importer. The alias TABLES below stay local — they're deliberately
+// mode-split (a standard CSV keeps Website/Profile/Domain as custom variables).
+import {
+  parseCSV,
+  splitTags,
+  normalizeHeader,
+  VALID_STAGES,
+} from "@/lib/csv/parse-contacts";
 import {
   Download,
   FileText,
@@ -35,56 +45,6 @@ type OwnerView = "leadstart" | "client";
 type ImportMode = "standard" | "linkedin";
 
 type ClientLite = { id: string; name: string };
-
-// Minimal RFC4180-ish CSV parser. Handles quoted fields with commas and
-// escaped quotes (""). Good enough for Apollo / LinkedIn / Sheets exports.
-function parseCSV(text: string): string[][] {
-  const rows: string[][] = [];
-  let row: string[] = [];
-  let field = "";
-  let inQuotes = false;
-  let i = 0;
-  const s = text.replace(/^﻿/, ""); // strip BOM
-  while (i < s.length) {
-    const c = s[i];
-    if (inQuotes) {
-      if (c === '"') {
-        if (s[i + 1] === '"') {
-          field += '"';
-          i += 2;
-          continue;
-        }
-        inQuotes = false;
-        i++;
-      } else {
-        field += c;
-        i++;
-      }
-    } else if (c === '"') {
-      inQuotes = true;
-      i++;
-    } else if (c === ",") {
-      row.push(field);
-      field = "";
-      i++;
-    } else if (c === "\n" || c === "\r") {
-      row.push(field);
-      field = "";
-      if (!(row.length === 1 && row[0] === "")) rows.push(row);
-      row = [];
-      if (c === "\r" && s[i + 1] === "\n") i += 2;
-      else i++;
-    } else {
-      field += c;
-      i++;
-    }
-  }
-  if (field !== "" || row.length) {
-    row.push(field);
-    rows.push(row);
-  }
-  return rows.filter((r) => r.some((c) => c.trim() !== ""));
-}
 
 const HEADER_ALIASES: Record<string, string> = {
   "first name": "first_name",
@@ -147,15 +107,6 @@ const LINKEDIN_HEADER_ALIASES: Record<string, string> = {
   "email in text": "email",
 };
 
-const VALID_STAGES: ProspectStage[] = [
-  "lead",
-  "contacted",
-  "meeting",
-  "proposal",
-  "closed",
-  "lost",
-];
-
 // Normalized headers that land in a dedicated contact column. Anything else
 // in the CSV is kept as a custom merge variable (contacts.custom_fields).
 const STANDARD_FIELDS = new Set([
@@ -173,19 +124,6 @@ const STANDARD_FIELDS = new Set([
   "notes",
   "pipeline_stage",
 ]);
-
-function normalizeHeader(h: string, aliases: Record<string, string>): string {
-  const key = h.trim().toLowerCase().replace(/_/g, " ");
-  return aliases[key] ?? key.replace(/\s+/g, "_");
-}
-
-// Tags cell may be ;-separated OR ,-separated (already unquoted by parseCSV).
-function splitTags(v: string): string[] {
-  return v
-    .split(/[;,]/)
-    .map((t) => t.trim())
-    .filter(Boolean);
-}
 
 function cleanDomainCell(v: string): string | null {
   const t = v.trim();

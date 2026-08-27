@@ -37,6 +37,7 @@ import { AbResults } from "@/components/campaigns/flow/ab-results";
 import type { FlowProgressData } from "@/lib/flow/progress";
 import type { AbNodeStats } from "@/lib/flow/variants";
 import { NativeImportPanel } from "@/components/campaigns/native-import-panel";
+import { CrmPullPanel } from "@/components/campaigns/crm-pull-panel";
 import { CampaignProbeCard } from "@/components/campaigns/campaign-probe-card";
 import { CampaignLifecycleButton } from "./campaign-lifecycle-button";
 import { CampaignContactsCard, type CampaignContactRow } from "./campaign-contacts-card";
@@ -288,6 +289,7 @@ export function CampaignDetailWorkspace({
         {/* Leads */}
         <TabsContent value="leads" className="min-h-0 space-y-4 overflow-y-auto pt-4">
           <NativeImportPanel campaignId={campaignId} />
+          <CrmPullPanel campaignId={campaignId} />
           <CampaignContactsCard
             campaignId={campaignId}
             contacts={contacts}

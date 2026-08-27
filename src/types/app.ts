@@ -1,3 +1,7 @@
+import type { CampaignVariable } from "@/lib/native/tokens";
+
+export type { CampaignVariable };
+
 export type AppRole = "owner" | "va" | "client";
 
 export type FeedbackStatus =
@@ -161,6 +165,10 @@ export interface Campaign {
   // User-chosen CSV header → LeadStart field mapping, persisted per
   // campaign so re-uploads pre-populate the mapping UI (migration 00055).
   csv_column_mapping: Record<string, string> | null;
+  // Persisted variable registry (migration 00092): the ordered set of merge
+  // variables this campaign expects (schema), reconciled from copy tokens +
+  // mapped list columns. Values live in contacts.custom_fields. Defaults to [].
+  variables: CampaignVariable[];
   name: string;
   status: CampaignStatus;
   // Channel discriminator. 'native_email' for the Gmail-API email channel;

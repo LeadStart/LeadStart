@@ -10,6 +10,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import type { SourceChannel } from "@/types/app";
 import { controlInstantlyCampaign } from "@/lib/instantly/campaign-lifecycle";
 import { runActivationPreflight } from "@/lib/deliverability/preflight";
+import { gatherLaunchReadiness } from "@/lib/campaigns/launch-readiness";
 
 // checkDomainAuth in the pre-flight uses node:dns.
 export const runtime = "nodejs";
@@ -43,13 +44,14 @@ export async function POST(
   const admin = createAdminClient();
   const { data: campaign } = await admin
     .from("campaigns")
-    .select("id, organization_id, source_channel, instantly_campaign_id, status")
+    .select("id, organization_id, client_id, source_channel, instantly_campaign_id, status")
     .eq("id", campaignId)
     .maybeSingle();
   const c = campaign as
     | {
         id: string;
         organization_id: string;
+        client_id: string | null;
         source_channel: SourceChannel;
         instantly_campaign_id: string | null;
         status: string | null;
@@ -84,22 +86,23 @@ export async function POST(
     );
   }
 
-  // Guard against activating a campaign that would just idle: native email
-  // needs at least one mailbox in its pool and at least one step.
+  // Hard launch-readiness gate for native email — the SAME rule that drives the
+  // campaign detail badges + disables the Launch button (src/lib/campaigns/
+  // launch-readiness.ts): a client assigned, a connected sending mailbox, and an
+  // email step with a subject line. Server-enforced so the gate can't be bypassed.
   if (c.source_channel === "native_email") {
-    const [{ count: mailboxCount }, { count: stepCount }] = await Promise.all([
-      admin.from("campaign_mailboxes").select("mailbox_id", { count: "exact", head: true }).eq("campaign_id", campaignId),
-      admin.from("campaign_steps").select("id", { count: "exact", head: true }).eq("campaign_id", campaignId),
-    ]);
-    if ((mailboxCount ?? 0) === 0) {
+    const readiness = await gatherLaunchReadiness(admin, {
+      id: c.id,
+      client_id: c.client_id,
+    });
+    if (!readiness.canLaunch) {
       return NextResponse.json(
-        { error: "Add at least one sending mailbox to this campaign before activating." },
-        { status: 400 },
-      );
-    }
-    if ((stepCount ?? 0) === 0) {
-      return NextResponse.json(
-        { error: "This campaign has no steps to send." },
+        {
+          error: `Not ready to launch — ${readiness.blockers
+            .map((b) => b.label.toLowerCase())
+            .join("; ")}.`,
+          blockers: readiness.blockers,
+        },
         { status: 400 },
       );
     }

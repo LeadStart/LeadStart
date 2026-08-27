@@ -43,6 +43,7 @@ import {
 import { updateNode, removeNode, insertAfter, appendToBranch } from "@/lib/flow/edit";
 import { isUntrackedTrigger } from "@/lib/flow/runtime";
 import { StepCopyCheck } from "@/components/campaigns/step-copy-check";
+import { appUrl } from "@/lib/api-url";
 import styles from "./flow.module.css";
 
 // lucide v1 dropped brand icons; inline the LinkedIn glyph (matches the mockup).
@@ -325,6 +326,66 @@ export function FlowEditor({
   const firstEmail = primaryPath.find((n) => n.kind === "email") as EmailNode | undefined;
   const firstEmailId = firstEmail?.id ?? null;
   const firstEmailSubject = firstEmail?.subject.trim() ?? "";
+
+  // ---- variable picker (Insert: chips) --------------------------------------
+  // Custom variables this campaign defines (from the persisted registry), so an
+  // author inserts only variables the list can actually fill. Standard chips are
+  // always available. Refs + last-focused let a chip insert {{token}} at the
+  // caret of whichever field (subject/body) the author last touched.
+  const [customChips, setCustomChips] = useState<string[]>([]);
+  const subjectRef = useRef<HTMLInputElement>(null);
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
+  const lastFocused = useRef<"subject" | "body">("body");
+
+  useEffect(() => {
+    if (!campaignId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(appUrl(`/api/campaigns/${campaignId}/client-import`));
+        if (!res.ok) return;
+        const data = (await res.json()) as {
+          variables?: { token: string; kind: string }[];
+        };
+        if (cancelled) return;
+        setCustomChips(
+          (data.variables ?? [])
+            .filter((v) => v.kind === "custom")
+            .map((v) => `{{${v.token}}}`),
+        );
+      } catch {
+        /* chips fall back to the standard defaults */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [campaignId]);
+
+  function insertToken(token: string) {
+    if (!openId) return;
+    let field: "subject" | "body" = lastFocused.current;
+    let el: HTMLInputElement | HTMLTextAreaElement | null =
+      field === "subject" ? subjectRef.current : bodyRef.current;
+    if (!el) {
+      field = "body";
+      el = bodyRef.current;
+    }
+    if (!el) return;
+    const cur = el.value;
+    const start = el.selectionStart ?? cur.length;
+    const end = el.selectionEnd ?? cur.length;
+    patch(openId, { [field]: cur.slice(0, start) + token + cur.slice(end) });
+    const caret = start + token.length;
+    const target = el;
+    // Restore focus + caret after the controlled re-render commits.
+    setTimeout(() => {
+      target.focus();
+      target.setSelectionRange(caret, caret);
+    }, 0);
+  }
+
+  const insertChips = [...new Set([...INSERT_TOKENS, ...customChips])];
 
   // Lock body scroll + wire Esc-to-close while the modal is open.
   useEffect(() => {
@@ -688,11 +749,13 @@ export function FlowEditor({
             <label className={styles.label}>{isFirst ? "Subject line" : "Subject (optional)"}</label>
             <div className={styles.subjWrap}>
               <input
+                ref={subjectRef}
                 className={`${styles.input} ${!isFirst ? styles.ghostable : ""}`}
                 value={n.subject}
                 placeholder={
                   isFirst ? "Quick question, {{first_name}}" : `Re: ${firstEmailSubject || "the first email’s subject"}`
                 }
+                onFocus={() => (lastFocused.current = "subject")}
                 onChange={(e) => patch(n.id, { subject: e.target.value })}
               />
               {!isFirst && (
@@ -719,19 +782,30 @@ export function FlowEditor({
           </div>
           <div className={styles.varRow}>
             <span className={styles.varLbl}>Insert:</span>
-            {INSERT_TOKENS.map((v) => (
-              <span key={v} className={styles.varChip}>
+            {insertChips.map((v) => (
+              <button
+                key={v}
+                type="button"
+                className={styles.varChip}
+                // preventDefault keeps the field's focus + caret, so the token
+                // lands at the cursor instead of appending after a blur.
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => insertToken(v)}
+                title={`Insert ${v} at the cursor`}
+              >
                 {v}
-              </span>
+              </button>
             ))}
           </div>
           <div className={styles.field}>
             <label className={styles.label}>Body</label>
             <textarea
+              ref={bodyRef}
               className={styles.textarea}
               rows={9}
               value={n.body}
               placeholder="Plain text. Placeholders: {{first_name}} {{company}} {{title}} {{intro_line}}"
+              onFocus={() => (lastFocused.current = "body")}
               onChange={(e) => patch(n.id, { body: e.target.value })}
             />
             <StepCopyCheck

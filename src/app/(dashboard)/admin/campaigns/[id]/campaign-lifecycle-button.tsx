@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { appUrl } from "@/lib/api-url";
 import { ActivatePreflightDialog } from "@/components/campaigns/activate-preflight-dialog";
 import type { PreflightWarning } from "@/lib/deliverability/preflight";
+import type { ReadinessItem } from "@/lib/campaigns/launch-readiness";
 
 type Status = "active" | "paused" | "draft" | "completed" | null;
 
@@ -21,11 +22,15 @@ export function CampaignLifecycleButton({
   campaignName,
   status,
   sourceChannel,
+  blockers = [],
 }: {
   campaignId: string;
   campaignName: string;
   status: Status;
   sourceChannel: string;
+  // Hard launch blockers (native email). When present, the Launch button is
+  // disabled — the same rule the activate endpoint enforces server-side.
+  blockers?: ReadinessItem[];
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -86,15 +91,20 @@ export function CampaignLifecycleButton({
   const label =
     action === "activate" ? "Launch campaign" : action === "pause" ? "Pause campaign" : "Resume campaign";
   const Icon = action === "activate" ? Rocket : action === "pause" ? Pause : Play;
+  // Disable Launch while hard blockers remain (the readiness card lists them).
+  const notReady = action === "activate" && blockers.length > 0;
 
   return (
     <>
       <Button
         onClick={() => run(false)}
-        disabled={busy}
+        disabled={busy || notReady}
         variant={action === "activate" ? undefined : "outline"}
         className="gap-1.5 shrink-0"
-        style={action === "activate" ? { background: "#16a34a", color: "white" } : undefined}
+        style={
+          action === "activate" && !notReady ? { background: "#16a34a", color: "white" } : undefined
+        }
+        title={notReady ? `Not ready to launch: ${blockers.map((b) => b.label).join("; ")}` : undefined}
       >
         {busy ? <Loader2 size={14} className="animate-spin" /> : <Icon size={14} />}
         {label}

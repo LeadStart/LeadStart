@@ -19,6 +19,7 @@ import {
   CUSTOM_TARGET_PREFIX,
   type ParsedContactRowWithCustom,
 } from "@/lib/csv/parse-contacts";
+import { normalizeVarKey } from "@/lib/native/tokens";
 import { Button } from "@/components/ui/button";
 import {
   FileText,
@@ -27,21 +28,35 @@ import {
   CheckCircle2,
   Loader2,
   X,
+  Check,
   ArrowRight,
 } from "lucide-react";
 import { appUrl } from "@/lib/api-url";
 
 interface CampaignTokens {
-  standard: { token: string; key: string; fields: string[] }[];
-  custom: { token: string; key: string }[];
+  standard: { token: string; key: string; fields: string[]; hasFallback: boolean }[];
+  custom: { token: string; key: string; hasFallback: boolean }[];
+}
+
+interface CampaignVariable {
+  token: string;
+  key: string;
+  kind: "standard" | "custom";
+  fields?: string[];
 }
 
 interface Bootstrap {
   campaign: { id: string; name: string; status: string };
   tokens: CampaignTokens;
+  // The persisted variable registry (migration 00092): every variable the
+  // campaign knows about (copy tokens + previously-mapped list columns).
+  variables: CampaignVariable[];
   saved_mapping: Record<string, string> | null;
   max_rows: number;
 }
+
+// Sentinel <option> value that opens the inline "name a new variable" input.
+const NEW_VAR_SENTINEL = "__new_variable__";
 
 interface ImportResult {
   inserted: number;
@@ -64,6 +79,9 @@ export function NativeImportPanel({ campaignId }: { campaignId: string }) {
   const [filename, setFilename] = useState<string | null>(null);
   const [grid, setGrid] = useState<string[][] | null>(null);
   const [columnMapping, setColumnMapping] = useState<Record<string, string>>({});
+  // Which header is currently in "name a new variable" input mode, and its text.
+  const [newVarHeader, setNewVarHeader] = useState<string | null>(null);
+  const [newVarText, setNewVarText] = useState("");
   const [parseError, setParseError] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
@@ -100,6 +118,24 @@ export function NativeImportPanel({ campaignId }: { campaignId: string }) {
     () => bootstrap?.tokens.custom ?? [],
     [bootstrap],
   );
+  // Every custom variable the campaign already knows about (copy tokens +
+  // list columns mapped on earlier imports), for the dropdown + re-matching a
+  // re-uploaded column to an existing var before minting a new one.
+  const knownCustomVars = useMemo(
+    (): { token: string; key: string }[] => {
+      const fromRegistry = (bootstrap?.variables ?? [])
+        .filter((v) => v.kind === "custom")
+        .map((v) => ({ token: v.token, key: v.key }));
+      // Union with copy custom tokens, in case the registry hasn't been
+      // persisted yet for this campaign; dedupe by normalized key.
+      const byKey = new Map<string, { token: string; key: string }>();
+      for (const v of [...fromRegistry, ...customTokens]) {
+        if (v.key && !byKey.has(v.key)) byKey.set(v.key, { token: v.token, key: v.key });
+      }
+      return [...byKey.values()];
+    },
+    [bootstrap, customTokens],
+  );
 
   const csvHeaders = useMemo(
     () => (grid ? grid[0].map((h) => h.trim()) : []),
@@ -115,24 +151,26 @@ export function NativeImportPanel({ campaignId }: { campaignId: string }) {
     [grid, columnMapping, emailMapped],
   );
 
-  // Campaign variables with no CSV column mapped to them (advisory — a
-  // missing token renders literally at send time, and linked contacts may
-  // already carry the value).
+  // Custom variables the copy uses with no CSV column mapped to them (advisory).
+  // A token that carries an inline {{token|default}} everywhere can never blank,
+  // so it's excluded. Match by normalized key so a re-spelled column still counts.
   const unmappedCustom = useMemo(() => {
-    const mapped = new Set(Object.values(columnMapping));
-    return customTokens.filter(
-      (t) => !mapped.has(CUSTOM_TARGET_PREFIX + t.token),
+    const mappedKeys = new Set(
+      Object.values(columnMapping)
+        .filter((t) => t.startsWith(CUSTOM_TARGET_PREFIX))
+        .map((t) => normalizeVarKey(t.slice(CUSTOM_TARGET_PREFIX.length))),
     );
+    return customTokens.filter((t) => !t.hasFallback && !mappedKeys.has(t.key));
   }, [customTokens, columnMapping]);
 
-  // Standard tokens the templates use whose backing contact field has no
-  // mapped column — those render BLANK at send time (buildTokenMap falls
-  // back to "" for missing standard fields).
+  // Standard tokens the templates use whose backing contact field has no mapped
+  // column — those render BLANK at send time (buildTokenMap falls back to "" for
+  // a missing standard field). Fully-defaulted tokens are excluded.
   const unmappedStandard = useMemo(() => {
     if (!bootstrap) return [];
     const mapped = new Set(Object.values(columnMapping));
     return bootstrap.tokens.standard.filter(
-      (t) => !t.fields.some((f) => mapped.has(f)),
+      (t) => !t.hasFallback && !t.fields.some((f) => mapped.has(f)),
     );
   }, [bootstrap, columnMapping]);
 
@@ -152,6 +190,8 @@ export function NativeImportPanel({ campaignId }: { campaignId: string }) {
     setFilename(null);
     setGrid(null);
     setColumnMapping({});
+    setNewVarHeader(null);
+    setNewVarText("");
     setParseError(null);
     setImportError(null);
     setResult(null);
@@ -181,11 +221,12 @@ export function NativeImportPanel({ campaignId }: { campaignId: string }) {
     const headers = parsed[0].map((h) => h.trim());
     setFilename(file.name);
     setGrid(parsed);
+    setNewVarHeader(null);
     setColumnMapping(
       buildInitialMappingForTargets(
         headers,
         bootstrap?.saved_mapping ?? null,
-        customTokens,
+        knownCustomVars,
       ),
     );
   }
@@ -203,6 +244,29 @@ export function NativeImportPanel({ campaignId }: { campaignId: string }) {
       next[header] = target;
       return next;
     });
+  }
+
+  // "+ New variable…" flow: open an inline text input seeded with the column's
+  // current custom name (or its header), commit to a custom: target on Enter/✓.
+  function startNewVar(header: string) {
+    const cur = columnMapping[header] ?? "";
+    setNewVarText(
+      cur.startsWith(CUSTOM_TARGET_PREFIX)
+        ? cur.slice(CUSTOM_TARGET_PREFIX.length)
+        : header,
+    );
+    setNewVarHeader(header);
+  }
+  function commitNewVar(header: string) {
+    const name = newVarText.trim();
+    if (!name) return; // empty → stay in input mode
+    updateMapping(header, CUSTOM_TARGET_PREFIX + name);
+    setNewVarHeader(null);
+    setNewVarText("");
+  }
+  function cancelNewVar() {
+    setNewVarHeader(null);
+    setNewVarText("");
   }
 
   async function handleImport() {
@@ -233,13 +297,29 @@ export function NativeImportPanel({ campaignId }: { campaignId: string }) {
         return;
       }
       setResult(data);
-      // The server just persisted this mapping; keep the local bootstrap in
-      // sync so a second upload in the same session pre-fills from it rather
-      // than the now-stale mapping captured at mount.
-      setBootstrap((b) => (b ? { ...b, saved_mapping: activeMapping } : b));
+      // The server just persisted this mapping AND reconciled the registry; keep
+      // the local bootstrap in sync so a second upload in the same session
+      // pre-fills from it and shows freshly-created variables as "known" (not new).
+      setBootstrap((b) => {
+        if (!b) return b;
+        const nextVars = [...b.variables];
+        const seen = new Set(nextVars.map((v) => v.key));
+        for (const target of Object.values(activeMapping)) {
+          if (!target.startsWith(CUSTOM_TARGET_PREFIX)) continue;
+          const tok = target.slice(CUSTOM_TARGET_PREFIX.length);
+          const key = normalizeVarKey(tok);
+          if (key && !seen.has(key)) {
+            seen.add(key);
+            nextVars.push({ token: tok, key, kind: "custom" });
+          }
+        }
+        return { ...b, saved_mapping: activeMapping, variables: nextVars };
+      });
       setFilename(null);
       setGrid(null);
       setColumnMapping({});
+      setNewVarHeader(null);
+      setNewVarText("");
       if (fileInputRef.current) fileInputRef.current.value = "";
     } catch (err) {
       setImportError(err instanceof Error ? err.message : String(err));
@@ -267,10 +347,10 @@ export function NativeImportPanel({ campaignId }: { campaignId: string }) {
     );
   }
 
-  if (bootstrap.campaign.status !== "active") {
+  if (bootstrap.campaign.status !== "active" && bootstrap.campaign.status !== "draft") {
     return (
       <p className="text-sm text-muted-foreground py-2">
-        Contacts can be added once this campaign is active.
+        Contacts can be added while this campaign is a draft or active.
       </p>
     );
   }
@@ -350,6 +430,24 @@ export function NativeImportPanel({ campaignId }: { campaignId: string }) {
               {csvHeaders.map((header, idx) => {
                 const sample = sampleRow[idx] ?? "";
                 const value = columnMapping[header] ?? "";
+                // Campaign-variable options for this column: every known var, plus
+                // the current custom selection if it's a not-yet-registered one
+                // (so a freshly-defaulted column still displays and can be re-picked).
+                const valueCustomTok = value.startsWith(CUSTOM_TARGET_PREFIX)
+                  ? value.slice(CUSTOM_TARGET_PREFIX.length)
+                  : null;
+                const varOptions = knownCustomVars.map((v) => ({ ...v, isNew: false }));
+                if (
+                  valueCustomTok &&
+                  !varOptions.some((v) => v.key === normalizeVarKey(valueCustomTok))
+                ) {
+                  varOptions.push({
+                    token: valueCustomTok,
+                    key: normalizeVarKey(valueCustomTok),
+                    isNew: true,
+                  });
+                }
+                const inNewMode = newVarHeader === header;
                 return (
                   <tr key={idx} className="border-t border-border/40">
                     <td className="px-3 py-2 font-medium">{header}</td>
@@ -357,27 +455,68 @@ export function NativeImportPanel({ campaignId }: { campaignId: string }) {
                       {sample || <span className="italic">empty</span>}
                     </td>
                     <td className="px-3 py-2">
-                      <select
-                        value={value}
-                        onChange={(e) => updateMapping(header, e.target.value)}
-                        disabled={importing}
-                        className={`w-full rounded-md border px-2 py-1 text-xs ${
-                          value
-                            ? "border-[#2E37FE]/30 bg-[#2E37FE]/5"
-                            : "border-border/60 bg-background"
-                        }`}
-                      >
-                        <option value="">— Skip —</option>
-                        <optgroup label="Contact fields">
-                          {MAPPING_TARGETS.map((f) => (
-                            <option key={f.value} value={f.value}>
-                              {f.label}
-                            </option>
-                          ))}
-                        </optgroup>
-                        {customTokens.length > 0 && (
+                      {inNewMode ? (
+                        <div className="flex items-center gap-1">
+                          <span className="text-muted-foreground">{"{{"}</span>
+                          <input
+                            autoFocus
+                            type="text"
+                            value={newVarText}
+                            onChange={(e) => setNewVarText(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                commitNewVar(header);
+                              } else if (e.key === "Escape") {
+                                cancelNewVar();
+                              }
+                            }}
+                            placeholder="variable name"
+                            disabled={importing}
+                            className="min-w-0 flex-1 rounded-md border border-[#2E37FE]/30 bg-[#2E37FE]/5 px-2 py-1 text-xs"
+                          />
+                          <span className="text-muted-foreground">{"}}"}</span>
+                          <button
+                            type="button"
+                            onClick={() => commitNewVar(header)}
+                            aria-label="Add variable"
+                            className="text-emerald-600 hover:text-emerald-700"
+                          >
+                            <Check size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={cancelNewVar}
+                            aria-label="Cancel new variable"
+                            className="text-muted-foreground hover:text-foreground"
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      ) : (
+                        <select
+                          value={value}
+                          onChange={(e) => {
+                            if (e.target.value === NEW_VAR_SENTINEL) startNewVar(header);
+                            else updateMapping(header, e.target.value);
+                          }}
+                          disabled={importing}
+                          className={`w-full rounded-md border px-2 py-1 text-xs ${
+                            value
+                              ? "border-[#2E37FE]/30 bg-[#2E37FE]/5"
+                              : "border-border/60 bg-background"
+                          }`}
+                        >
+                          <option value="">— Skip —</option>
+                          <optgroup label="Contact fields">
+                            {MAPPING_TARGETS.map((f) => (
+                              <option key={f.value} value={f.value}>
+                                {f.label}
+                              </option>
+                            ))}
+                          </optgroup>
                           <optgroup label="Campaign variables">
-                            {customTokens.map((t) => (
+                            {varOptions.map((t) => (
                               <option
                                 key={t.key}
                                 value={CUSTOM_TARGET_PREFIX + t.token}
@@ -385,11 +524,13 @@ export function NativeImportPanel({ campaignId }: { campaignId: string }) {
                                 {"{{"}
                                 {t.token}
                                 {"}}"}
+                                {t.isNew ? "  (new)" : ""}
                               </option>
                             ))}
+                            <option value={NEW_VAR_SENTINEL}>＋ New variable…</option>
                           </optgroup>
-                        )}
-                      </select>
+                        </select>
+                      )}
                     </td>
                   </tr>
                 );
@@ -420,7 +561,8 @@ export function NativeImportPanel({ campaignId }: { campaignId: string }) {
                 ))}{" "}
                 but no column is mapped to{" "}
                 {unmappedCustom.length === 1 ? "it" : "them"} — contacts
-                without a value will show the raw placeholder.
+                without a value (and no <code>{"{{token|default}}"}</code>) will
+                be left blank.
               </span>
             </div>
           )}

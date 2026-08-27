@@ -1,6 +1,6 @@
 # LeadStart — Project Status
 
-> Last updated: 2026-08-26
+> Last updated: 2026-08-27
 
 ## Current State: Deployed to Production, native-Gmail-only
 
@@ -11,6 +11,21 @@ Live at https://leadstart-ebon.vercel.app (LeadStart Vercel account, auto-deploy
 **LinkedIn channel:** code-complete via Unipile; not yet activated (gated on migrations + Unipile config).
 
 **Instantly channel (re-added 2026-07-19):** code-complete parallel email channel alongside native Gmail; **not live yet** — gated on applying migration `00065`, adding the API key in Settings, deploying, and registering the reply webhook. Native Gmail is unchanged. Full activation checklist + design decisions in [`RESUME-INSTANTLY-CHANNEL.md`](RESUME-INSTANTLY-CHANNEL.md).
+
+---
+
+## Current initiative: Contact-list ↔ campaign variable alignment (SHIPPED 2026-08-27 — migration 00092 applied, deployed)
+
+Instantly.ai-style alignment of CSV/CRM columns to a campaign's merge variables, with one persisted source of truth and a fail-safe send.
+
+- **Source of truth (Phase 1):** a persisted per-campaign variable registry (`campaigns.variables` JSONB, migration `00092`) reconciled from copy tokens (all A/B variants + both condition branches) ∪ mapped list columns. Registry = schema; `contacts.custom_fields` = values; `campaign_enrollments` = who receives. Engine in [`src/lib/native/tokens.ts`](src/lib/native/tokens.ts) (`reconcileCampaignVariables`, `splitToken`) + [`src/lib/flow/graph.ts`](src/lib/flow/graph.ts) (`allEmailTemplates`).
+- **Columns drive variables (Phase 1):** every CSV column is mappable — an unmatched column defaults to a NEW `custom:<Header>` variable (never silently dropped), with a "＋ New variable" inline namer in `native-import-panel.tsx`.
+- **Fail-safe send (Phase 1):** `{{token|default}}` inline fallbacks; the live sender passes a blank fallback so a send NEVER emits a raw `{{token}}` (blanks instead). Preview keeps its leave-untouched / sample behavior. 45 unit tests in `scripts/test-campaign-variables.ts`.
+- **Pull CRM contacts (Phase 2):** `CrmPullPanel` on the Leads tab — search/tag-select the client's contacts, coverage validation against the registry, enroll via `POST /api/campaigns/[id]/enroll-existing` (assigns `campaign_id` + upserts `campaign_enrollments`); search via `candidate-contacts`.
+- **Authoring picker + importer de-drift (Phase 3):** the flow-editor "Insert:" chips are clickable, insert `{{token}}` at the cursor, and are populated from the registry; the admin global importer (`admin/contacts/import-dialog.tsx`) now shares the parser/normalizer/stage-list with the campaign importer (`src/lib/csv/parse-contacts.ts`).
+- **Create-flow relaxation + launch readiness:** a campaign is created as a **draft from just a name** (client / mailboxes / a complete sequence all optional). [`src/lib/campaigns/launch-readiness.ts`](src/lib/campaigns/launch-readiness.ts) computes hard blockers (client assigned, a connected sending mailbox, a first email with subject + body) + soft warnings (no contacts yet), shown on the campaign detail page and gating **both** the Launch button and the activate endpoint. Contacts can be imported into a draft.
+
+**Verified:** migration `00092` applied to prod; create + import registry writes, CRM enroll (`campaign_id` + enrollment), and the readiness gate all e2e-verified on live + throwaway data; `tsc` clean; unit tests — campaign-variables 45/45, launch-readiness 14/14, plus existing suites green.
 
 ---
 

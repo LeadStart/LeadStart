@@ -40,9 +40,12 @@ import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   extractCampaignTokens,
+  reconcileCampaignVariables,
   normalizeVarKey,
   SENDER_TOKEN_KEYS,
+  type CampaignVariable,
 } from "@/lib/native/tokens";
+import { allEmailTemplates, type FlowGraph } from "@/lib/flow/graph";
 import { CUSTOM_TARGET_PREFIX, MAPPING_TARGETS } from "@/lib/csv/parse-contacts";
 import { enqueueOwnerAlert } from "@/lib/notifications/owner-alerts";
 
@@ -173,6 +176,31 @@ interface CampaignRow {
   status: string;
   source_channel: string;
   csv_column_mapping: Record<string, string> | null;
+  flow_graph: FlowGraph | null;
+  variables: CampaignVariable[] | null;
+}
+
+// The campaign's copy templates for token extraction: the full flow graph (all
+// A/B variants + both branches) when present, else the linear campaign_steps.
+async function loadCampaignTemplates(
+  admin: ReturnType<typeof createAdminClient>,
+  campaign: CampaignRow,
+): Promise<(string | null)[]> {
+  const graph = campaign.flow_graph;
+  if (graph && Array.isArray(graph.nodes)) return allEmailTemplates(graph);
+  const { data: steps } = await admin
+    .from("campaign_steps")
+    .select("subject_template, body_template")
+    .eq("campaign_id", campaign.id)
+    .order("step_index", { ascending: true });
+  const out: (string | null)[] = [];
+  for (const s of (steps ?? []) as {
+    subject_template: string | null;
+    body_template: string | null;
+  }[]) {
+    out.push(s.subject_template, s.body_template);
+  }
+  return out;
 }
 
 type Authorized = {
@@ -197,7 +225,7 @@ async function authorize(
   const { data } = await admin
     .from("campaigns")
     .select(
-      "id, organization_id, client_id, name, status, source_channel, csv_column_mapping",
+      "id, organization_id, client_id, name, status, source_channel, csv_column_mapping, flow_graph, variables",
     )
     .eq("id", campaignId)
     .maybeSingle();
@@ -250,23 +278,19 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
   if (auth instanceof NextResponse) return auth;
   const { campaign, admin } = auth;
 
-  const { data: steps } = await admin
-    .from("campaign_steps")
-    .select("subject_template, body_template")
-    .eq("campaign_id", campaign.id)
-    .order("step_index", { ascending: true });
-
-  const templates: (string | null)[] = [];
-  for (const s of (steps ?? []) as {
-    subject_template: string | null;
-    body_template: string | null;
-  }[]) {
-    templates.push(s.subject_template, s.body_template);
-  }
+  // Extract from the full flow graph (all A/B variants + both branches) so
+  // variant-B/C and yes-branch tokens are offered for mapping, not just the
+  // linear variant-A steps graphToSteps derives.
+  const tokens = extractCampaignTokens(await loadCampaignTemplates(admin, campaign));
+  // Reconcile-on-read: return a complete registry even for campaigns predating
+  // migration 00092 (stored variables '[]') or edited outside the builder. This
+  // is display-only; the registry is persisted on sequence save + CSV import.
+  const variables = reconcileCampaignVariables(campaign.variables ?? null, tokens, []);
 
   return NextResponse.json({
     campaign: { id: campaign.id, name: campaign.name, status: campaign.status },
-    tokens: extractCampaignTokens(templates),
+    tokens,
+    variables,
     saved_mapping: campaign.csv_column_mapping ?? null,
     max_rows: MAX_IMPORT_ROWS,
   });
@@ -321,11 +345,14 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   if (auth instanceof NextResponse) return auth;
   const { campaign, admin, userEmail, isAdmin } = auth;
 
-  // Active-only: matches the dispatcher's own gate so nothing sits enrolled
-  // on a campaign that will never send.
-  if (campaign.status !== "active") {
+  // Draft OR active: contacts can be added while building (draft) or after launch
+  // (active). A draft never sends until it's activated, so building the list first
+  // is safe; paused/completed reject.
+  if (campaign.status !== "active" && campaign.status !== "draft") {
     return NextResponse.json(
-      { error: "Contacts can only be imported into an active campaign" },
+      {
+        error: `Contacts can only be imported into a draft or active campaign (this one is ${campaign.status})`,
+      },
       { status: 409 },
     );
   }
@@ -593,7 +620,13 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   }
   const alreadyEnrolled = enrollIds.length - enrolled;
 
-  // ── Persist the column mapping for next upload ──────────────────────────
+  // ── Persist column mapping + reconcile the variable registry ────────────
+  // Both land in one campaigns update. The mapping pre-fills next upload; the
+  // registry (migration 00092) folds in any custom columns this import mapped —
+  // the LIST drives the campaign's variables, Instantly-style — plus the copy's
+  // own tokens, so a legacy campaign's registry backfills on first import too.
+  const campaignPatch: Record<string, unknown> = {};
+  const mappedCustom: { token: string; key: string }[] = [];
   if (body.column_mapping && typeof body.column_mapping === "object") {
     const mapping: Record<string, string> = {};
     for (const [header, target] of Object.entries(
@@ -616,11 +649,25 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       if (validTarget && cleanHeader) mapping[cleanHeader] = target;
     }
     if (Object.keys(mapping).length > 0) {
-      await admin
-        .from("campaigns")
-        .update({ csv_column_mapping: mapping })
-        .eq("id", campaign.id);
+      campaignPatch.csv_column_mapping = mapping;
     }
+    for (const target of Object.values(mapping)) {
+      if (target.startsWith(CUSTOM_TARGET_PREFIX)) {
+        const tok = target.slice(CUSTOM_TARGET_PREFIX.length).trim();
+        if (tok) mappedCustom.push({ token: tok, key: normalizeVarKey(tok) });
+      }
+    }
+  }
+
+  const tokenInfo = extractCampaignTokens(await loadCampaignTemplates(admin, campaign));
+  campaignPatch.variables = reconcileCampaignVariables(
+    campaign.variables ?? null,
+    tokenInfo,
+    mappedCustom,
+  );
+
+  if (Object.keys(campaignPatch).length > 0) {
+    await admin.from("campaigns").update(campaignPatch).eq("id", campaign.id);
   }
 
   // ── Owner alert (best-effort; enqueueOwnerAlert swallows its own errors) ─

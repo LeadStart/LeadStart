@@ -297,6 +297,25 @@ export function isAbTest(node: EmailNode): boolean {
   return (node.variants?.length ?? 0) >= 1;
 }
 
+/**
+ * Every email template string in the graph — subject + body of every A/B/C
+ * variant, across BOTH condition branches. This is the full set of copy the
+ * campaign can actually send, so token extraction sees B/C-variant and yes-branch
+ * tokens that graphToSteps (primary path, variant A only) would miss. Feeds the
+ * campaign variable registry + the import panel's variable list. Order:
+ * depth-first node order, subject before body, A before B/C.
+ */
+export function allEmailTemplates(graph: FlowGraph): string[] {
+  const out: string[] = [];
+  walkAll(graph.nodes, (n) => {
+    if (n.kind !== "email") return;
+    for (const v of emailVariants(n)) {
+      out.push(v.subject, v.body);
+    }
+  });
+  return out;
+}
+
 // ---- steps <-> graph ---------------------------------------------------
 
 /**

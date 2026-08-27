@@ -10,7 +10,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { mergeStoredPauses } from "@/lib/flow/ab-winner";
-import type { FlowGraph } from "@/lib/flow/graph";
+import { allEmailTemplates, type FlowGraph } from "@/lib/flow/graph";
+import {
+  extractCampaignTokens,
+  reconcileCampaignVariables,
+  type CampaignVariable,
+} from "@/lib/native/tokens";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -69,11 +74,17 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   const admin = createAdminClient();
   const { data: campaignRow } = await admin
     .from("campaigns")
-    .select("id, organization_id, source_channel, flow_graph")
+    .select("id, organization_id, source_channel, flow_graph, variables")
     .eq("id", campaignId)
     .maybeSingle();
   const campaign = campaignRow as
-    | { id: string; organization_id: string; source_channel: string; flow_graph: FlowGraph | null }
+    | {
+        id: string;
+        organization_id: string;
+        source_channel: string;
+        flow_graph: FlowGraph | null;
+        variables: CampaignVariable[] | null;
+      }
     | null;
   if (!campaign) return NextResponse.json({ error: "Campaign not found" }, { status: 404 });
   if (campaign.organization_id !== user.app_metadata?.organization_id) {
@@ -197,6 +208,25 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       ? mergeStoredPauses(incoming, campaign.flow_graph ?? null)
       : null;
   }
+
+  // Reconcile the variable registry (migration 00092) with the copy being saved:
+  // preserve existing entries (incl. custom vars added by a CSV/CRM ingest) and
+  // fold in the current copy tokens across all A/B variants + branches. Prefer the
+  // graph being stored; fall back to the linear steps for a graph-less save.
+  const finalGraph: FlowGraph | null =
+    body.flow_graph !== undefined
+      ? (campaignUpdate.flow_graph as FlowGraph | null)
+      : (campaign.flow_graph ?? null);
+  const registryTemplates =
+    finalGraph && Array.isArray(finalGraph.nodes)
+      ? allEmailTemplates(finalGraph)
+      : stepRows.flatMap((s) => [s.subject_template ?? "", s.body_template ?? ""]);
+  campaignUpdate.variables = reconcileCampaignVariables(
+    campaign.variables ?? null,
+    extractCampaignTokens(registryTemplates),
+    [],
+  );
+
   const { error: updErr } = await admin
     .from("campaigns")
     .update(campaignUpdate)

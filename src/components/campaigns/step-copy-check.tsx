@@ -39,7 +39,12 @@ import {
 } from "@/lib/spintax";
 import { findSpamMatches, quickStepAdvisories, type SpamMatch } from "@/lib/deliverability/copy";
 import type { CopyIssue } from "@/lib/deliverability/copy";
-import { applyTokens, SAMPLE_TOKENS, sampleFallback } from "@/lib/native/tokens";
+import {
+  applyTokens,
+  extractCampaignTokens,
+  SAMPLE_TOKENS,
+  sampleFallback,
+} from "@/lib/native/tokens";
 
 interface Props {
   subject: string;
@@ -194,10 +199,24 @@ export function StepCopyCheck({
   const preview = useMemo(() => {
     if (!dBody.trim()) return null;
     const seed = `preview:${nonce}`;
+    const subjSpun = dSubject.trim() ? renderSpintax(dSubject, seed) : "";
+    const bodySpun = renderSpintax(dBody, seed);
     const fill = (t: string) => applyTokens(t, tokenMap, isSample ? sampleFallback : undefined);
+    // Real-data mode only: which tokens in THIS render have no value and no
+    // inline {{token|default}}, so they'll send blank for this contact. Computed
+    // on the spintax-resolved text so an unchosen branch's tokens aren't flagged.
+    // Sample mode fills everything, so there's nothing to warn about.
+    let unresolved: { token: string; key: string }[] = [];
+    if (!isSample) {
+      const info = extractCampaignTokens([subjSpun, bodySpun]);
+      unresolved = [...info.standard, ...info.custom].filter(
+        (t) => !t.hasFallback && !(tokenMap[t.key] ?? "").trim(),
+      );
+    }
     return {
-      subject: dSubject.trim() ? fill(renderSpintax(dSubject, seed)) : "",
-      body: fill(renderSpintax(dBody, seed)),
+      subject: subjSpun ? fill(subjSpun) : "",
+      body: fill(bodySpun),
+      unresolved,
     };
   }, [dSubject, dBody, nonce, tokenMap, isSample]);
 
@@ -391,6 +410,23 @@ export function StepCopyCheck({
               <pre className="whitespace-pre-wrap break-words font-sans text-[11px] text-muted-foreground">
                 {preview?.body}
               </pre>
+              {preview?.unresolved && preview.unresolved.length > 0 && (
+                <p className="mt-2 border-t border-border/40 pt-1.5 text-[10px] text-amber-700">
+                  Blank for this contact:{" "}
+                  {preview.unresolved.map((t, i) => (
+                    <span key={t.key}>
+                      {i > 0 && ", "}
+                      <strong>
+                        {"{{"}
+                        {t.token}
+                        {"}}"}
+                      </strong>
+                    </span>
+                  ))}{" "}
+                  — map a column with a value, or add a default like{" "}
+                  <code>{"{{" + preview.unresolved[0].token + "|…}}"}</code>.
+                </p>
+              )}
             </>
           )}
         </div>

@@ -6,7 +6,7 @@
 // and row-to-payload normalization.
 
 import type { ProspectStage } from "@/types/app";
-import { normalizeVarKey } from "@/lib/native/tokens";
+import { normalizeVarKey, SENDER_TOKEN_KEYS } from "@/lib/native/tokens";
 
 // Minimal RFC4180-ish CSV parser. Handles quoted fields with commas and
 // escaped quotes (""). Good enough for Apollo / LinkedIn / Sheets exports.
@@ -113,9 +113,15 @@ export const VALID_STAGES: ProspectStage[] = [
   "lost",
 ];
 
-export function normalizeHeader(h: string): string {
+// Optional `aliases` lets a caller with its own alias table (e.g. the admin
+// global importer's LinkedIn-mode overlay) reuse the exact same normalization
+// rule without duplicating it. Defaults to the shared HEADER_ALIASES.
+export function normalizeHeader(
+  h: string,
+  aliases: Record<string, string> = HEADER_ALIASES,
+): string {
   const key = h.trim().toLowerCase().replace(/_/g, " ");
-  return HEADER_ALIASES[key] ?? key.replace(/\s+/g, "_");
+  return aliases[key] ?? key.replace(/\s+/g, "_");
 }
 
 // Tags cell may be ;-separated OR ,-separated (already unquoted by parseCSV).
@@ -147,7 +153,7 @@ export function rowsFromCSV(
   if (grid.length < 2) {
     return { error: "CSV must have a header row and at least one data row." };
   }
-  const headers = grid[0].map(normalizeHeader);
+  const headers = grid[0].map((h) => normalizeHeader(h));
   const emailIdx = headers.indexOf("email");
   if (emailIdx < 0) {
     return { error: "CSV is missing a required 'email' column." };
@@ -326,8 +332,14 @@ const VALID_TARGET_SET = new Set(MAPPING_TARGETS.map((f) => f.value));
 // Like buildInitialMapping, but target-aware for a campaign's own merge
 // variables: priority is saved mapping (custom: entries re-matched by
 // normalized key so a re-spelled template token still hits) → HEADER_ALIASES
-// auto-detect → header folding to a campaign token key → unmapped. One CSV
-// column per target, same as buildInitialMapping.
+// auto-detect → header folding to a campaign token key → NEW custom variable
+// named after the column. One CSV column per target, same as buildInitialMapping.
+//
+// Instantly-style: an unmatched column is never silently dropped — it defaults
+// to `custom:<Header>` (surfaced in the panel, editable, skippable), so the
+// LIST's columns drive the campaign's variables. `customTokens` are the campaign
+// variables already known (copy tokens + registry) for re-matching a saved or
+// same-named column to an existing var before minting a new one.
 export function buildInitialMappingForTargets(
   csvHeaders: string[],
   savedMapping: Record<string, string> | null,
@@ -360,8 +372,16 @@ export function buildInitialMappingForTargets(
     }
     const normalized = normalizeHeader(header);
     if (VALID_TARGET_SET.has(normalized) && claim(header, normalized)) continue;
-    const tok = customByKey.get(normalizeVarKey(header));
+    const key = normalizeVarKey(header);
+    const tok = customByKey.get(key);
     if (tok && claim(header, CUSTOM_TARGET_PREFIX + tok.token)) continue;
+    // Unmatched column → a NEW custom variable named after it. Skip only a
+    // blank/punctuation-only header (empty normalized key) or one that would
+    // shadow a sender-identity token ({{YourName}} etc.) — the import drops
+    // those anyway, so offering them as a destination would mislead.
+    if (key && !SENDER_TOKEN_KEYS.has(key) && claim(header, CUSTOM_TARGET_PREFIX + header)) {
+      continue;
+    }
     mapping[header] = "";
   }
 

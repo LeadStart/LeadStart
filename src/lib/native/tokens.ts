@@ -74,24 +74,53 @@ export function buildTokenMap(
   return map;
 }
 
-// Replace {{token}} placeholders against a resolved map. A token that matches
-// nothing is left in place unchanged — unless a `fallback` is supplied and
-// returns a non-null stand-in (used by SAMPLE mode so the preview reads
-// naturally even for custom tokens with no real value). Does NOT trim; the
-// caller trims if it needs to (the sender does).
+// Split a raw {{token}} body into its variable name and optional inline
+// fallback, on the FIRST "|":  "{{first_name | there}}" -> { name: "first_name",
+// fallback: "there" }; "{{first_name}}" -> { name: "first_name", fallback: null }.
+// Both sides are trimmed. Spintax is always resolved BEFORE tokens (see the
+// sender's renderTemplate), so a "|" inside {{ }} is never a spintax pipe — it is
+// always an author-written default.
+export function splitToken(raw: string): { name: string; fallback: string | null } {
+  const i = raw.indexOf("|");
+  if (i < 0) return { name: raw.trim(), fallback: null };
+  return { name: raw.slice(0, i).trim(), fallback: raw.slice(i + 1).trim() };
+}
+
+// Replace {{token}} placeholders against a resolved map, with support for an
+// inline default: {{token|fallback}}.
+//
+// Resolution order for each placeholder:
+//   1. A non-empty resolved value from the map wins.
+//   2. Else an inline `|fallback` (even an explicit empty one, {{token|}}, which
+//      means "blank it") fills the spot.
+//   3. Else a present-but-empty map value blanks it — identical to the prior
+//      behavior, where a standard token for a missing contact field resolved to
+//      "" rather than leaking.
+//   4. Else the caller's `fallback` fn decides. The live sender passes
+//      () => "" so a send NEVER emits a raw {{token}}; the builder preview passes
+//      sampleFallback (humanize) or nothing (leave the {{token}} visible so an
+//      author still spots a typo).
+//
+// Own-property lookup (Object.hasOwn) so a token normalizing to an
+// Object.prototype member ("constructor", "valueof") can't resolve to a
+// prototype function. Does NOT trim; the caller trims if it needs to.
 export function applyTokens(
   text: string,
   map: Record<string, string>,
   fallback?: (rawName: string) => string | null,
 ): string {
   return text.replace(/\{\{\s*([^{}]+?)\s*\}\}/g, (whole, rawName: string) => {
-    const key = normalizeVarKey(rawName);
-    if (key in map) return map[key];
+    const { name, fallback: inlineFallback } = splitToken(rawName);
+    const key = normalizeVarKey(name);
+    const val = Object.hasOwn(map, key) ? map[key] : undefined;
+    if (val) return val; // 1. non-empty resolved value
+    if (inlineFallback !== null) return inlineFallback; // 2. authored |default
+    if (val !== undefined) return val; // 3. present-but-empty → blank
     if (fallback) {
-      const alt = fallback(rawName);
+      const alt = fallback(name); // 4. caller's fallback (sender: "", preview: sample)
       if (alt != null) return alt;
     }
-    return whole; // unknown token: leave untouched
+    return whole; // truly unresolved, no fallback: leave untouched
   });
 }
 
@@ -121,42 +150,75 @@ export const STANDARD_TOKEN_FIELDS: Record<string, string[]> = {
 };
 
 export interface CampaignTokenInfo {
-  /** Tokens satisfied by standard contact columns. token = first raw spelling seen. */
-  standard: { token: string; key: string; fields: string[] }[];
+  /**
+   * Tokens satisfied by standard contact columns. token = first raw spelling
+   * seen (the variable name only, without any inline |fallback).
+   */
+  standard: { token: string; key: string; fields: string[]; hasFallback: boolean }[];
   /** Tokens that must come from contacts.custom_fields. */
-  custom: { token: string; key: string }[];
+  custom: { token: string; key: string; hasFallback: boolean }[];
 }
 
 // Extract the distinct {{token}} set a campaign's templates actually use,
 // classified standard vs custom, sender tokens excluded. The scan pattern is
-// byte-identical to applyTokens' so extraction and send-time substitution
-// can never disagree about what counts as a token. Deduped by normalized key
-// in first-appearance order; single-brace spintax {a|b} never matches.
+// byte-identical to applyTokens' so extraction and send-time substitution can
+// never disagree about what counts as a token. Deduped by normalized key in
+// first-appearance order; single-brace spintax {a|b} never matches.
+//
+// An inline default ({{token|there}}) is stripped before the name/key are
+// computed, so a fallback'd token is counted under its real variable name (not
+// "token|there"). `hasFallback` is true only when EVERY occurrence of the token
+// carries an inline default — i.e. the token can never render blank — so the
+// import/preview "this will be blank" warnings can suppress fully-defaulted vars.
 export function extractCampaignTokens(
   templates: (string | null | undefined)[],
 ): CampaignTokenInfo {
-  const standard: CampaignTokenInfo["standard"] = [];
-  const custom: CampaignTokenInfo["custom"] = [];
-  const seen = new Set<string>();
+  type Acc =
+    | { kind: "standard"; token: string; key: string; fields: string[]; hasFallback: boolean }
+    | { kind: "custom"; token: string; key: string; hasFallback: boolean };
+  const seen = new Map<string, Acc>();
 
   for (const text of templates) {
     if (!text) continue;
     for (const m of text.matchAll(/\{\{\s*([^{}]+?)\s*\}\}/g)) {
-      const token = m[1];
-      const key = normalizeVarKey(token);
-      if (!key || seen.has(key) || SENDER_TOKEN_KEYS.has(key)) continue;
-      seen.add(key);
+      const { name, fallback } = splitToken(m[1]);
+      const key = normalizeVarKey(name);
+      if (!key || SENDER_TOKEN_KEYS.has(key)) continue;
+      const has = fallback !== null;
+      const existing = seen.get(key);
+      if (existing) {
+        // "Protected" only if ALL uses default — one bare {{x}} can still blank.
+        existing.hasFallback = existing.hasFallback && has;
+        continue;
+      }
       // Object.hasOwn, not `key in`, so a token normalizing to an
       // Object.prototype member ("constructor", "tostring", "valueof")
       // isn't miscounted as a standard field.
       if (Object.hasOwn(STANDARD_TOKEN_FIELDS, key)) {
-        standard.push({ token, key, fields: STANDARD_TOKEN_FIELDS[key] });
+        seen.set(key, {
+          kind: "standard",
+          token: name,
+          key,
+          fields: STANDARD_TOKEN_FIELDS[key],
+          hasFallback: has,
+        });
       } else {
-        custom.push({ token, key });
+        seen.set(key, { kind: "custom", token: name, key, hasFallback: has });
       }
     }
   }
 
+  // Map preserves insertion (= first-appearance) order; split into the two
+  // classes keeping that relative order within each.
+  const standard: CampaignTokenInfo["standard"] = [];
+  const custom: CampaignTokenInfo["custom"] = [];
+  for (const v of seen.values()) {
+    if (v.kind === "standard") {
+      standard.push({ token: v.token, key: v.key, fields: v.fields, hasFallback: v.hasFallback });
+    } else {
+      custom.push({ token: v.token, key: v.key, hasFallback: v.hasFallback });
+    }
+  }
   return { standard, custom };
 }
 
@@ -212,4 +274,66 @@ export function sampleFallback(rawName: string): string {
   const key = normalizeVarKey(rawName);
   if (key in SAMPLE_CUSTOM) return SAMPLE_CUSTOM[key];
   return humanizeToken(rawName);
+}
+
+// ── Campaign variable registry ──────────────────────────────────────────────
+//
+// The persisted per-campaign variable SCHEMA (campaigns.variables JSONB,
+// migration 00092): the single source of truth for which merge variables a
+// campaign expects while building or in flight. It is the schema;
+// contacts.custom_fields holds the per-contact VALUES; campaign_enrollments is
+// WHO receives. Copy edits and CSV/CRM ingests both reconcile INTO this registry
+// rather than each being an independent truth.
+export interface CampaignVariable {
+  /** Canonical raw spelling (variable name only, no |fallback). */
+  token: string;
+  /** normalizeVarKey(token) — the identity used for de-duping + resolution. */
+  key: string;
+  kind: "standard" | "custom";
+  /** For standard vars: which contact columns satisfy the token. */
+  fields?: string[];
+}
+
+// Reconcile a campaign's stored variable registry with the current copy tokens
+// and any custom columns mapped on a list ingest. Returns the ordered, de-duped
+// (by key) UNION: existing registry first (preserving order, canonical spelling,
+// and kind), then copy standard tokens, then copy custom tokens, then mapped
+// custom columns that aren't referenced in the copy yet (the list drives them,
+// Instantly-style). Pure — callers persist the result.
+export function reconcileCampaignVariables(
+  existing: CampaignVariable[] | null | undefined,
+  copyTokens: CampaignTokenInfo,
+  mappedCustom?: { token: string; key: string }[] | null,
+): CampaignVariable[] {
+  const byKey = new Map<string, CampaignVariable>();
+  const add = (v: CampaignVariable) => {
+    if (!v.key || byKey.has(v.key)) return;
+    byKey.set(v.key, v);
+  };
+
+  if (Array.isArray(existing)) {
+    for (const v of existing) {
+      if (!v || typeof v.key !== "string" || typeof v.token !== "string") continue;
+      if (v.kind !== "standard" && v.kind !== "custom") continue;
+      add({
+        token: v.token,
+        key: v.key,
+        kind: v.kind,
+        ...(Array.isArray(v.fields) ? { fields: v.fields } : {}),
+      });
+    }
+  }
+  for (const t of copyTokens.standard) {
+    add({ token: t.token, key: t.key, kind: "standard", fields: t.fields });
+  }
+  for (const t of copyTokens.custom) {
+    add({ token: t.token, key: t.key, kind: "custom" });
+  }
+  for (const t of mappedCustom ?? []) {
+    if (t && typeof t.key === "string" && typeof t.token === "string") {
+      add({ token: t.token, key: t.key, kind: "custom" });
+    }
+  }
+
+  return [...byKey.values()];
 }

@@ -34,6 +34,8 @@ import { NativeSequenceSection } from "./native-sequence-section";
 import { CampaignProbeCard } from "@/components/campaigns/campaign-probe-card";
 import { StageFlowCard, type StageRow } from "./stage-flow-card";
 import { CampaignLifecycleButton } from "./campaign-lifecycle-button";
+import { gatherLaunchReadiness } from "@/lib/campaigns/launch-readiness";
+import { LaunchReadinessCard } from "@/components/campaigns/launch-readiness-card";
 import { CampaignDetailWorkspace } from "./campaign-detail-workspace";
 import { stepsToGraph, walkAll, isAbTest, type FlowGraph } from "@/lib/flow/graph";
 import {
@@ -83,6 +85,13 @@ export default async function AdminCampaignDetailPage({
   // the owner if any policy is misconfigured. Admin client is fine here
   // since the page is already owner-gated by the dashboard layout.
   const admin = createAdminClient();
+
+  // Launch readiness (native email): the checklist the detail page shows + the
+  // rule that gates the Launch button. Cheap; computed for native campaigns only.
+  const launchReadiness =
+    campaign.source_channel === "native_email"
+      ? await gatherLaunchReadiness(admin, { id: campaign.id, client_id: campaign.client_id })
+      : null;
 
   const [clientRes, snapshotsRes, clientsForLinkRes] =
     await Promise.all([
@@ -365,11 +374,16 @@ export default async function AdminCampaignDetailPage({
                 campaignName={campaign.name}
                 status={campaign.status}
                 sourceChannel={campaign.source_channel}
+                blockers={launchReadiness?.blockers ?? []}
               />
             </>
           }
         />
       </div>
+
+      {campaign.status === "draft" && launchReadiness && (
+        <LaunchReadinessCard readiness={launchReadiness} />
+      )}
 
       {/* Native email: send/reply stats, enrollment progress, mailbox pool, sequence */}
       {nativeStats && (

@@ -1215,7 +1215,12 @@ function renderTemplate(
   // buildTokenMap / applyTokens are the shared source of truth (also used by the
   // builder preview), keeping the send and the preview byte-identical.
   const map = buildTokenMap(contact, senderName);
-  return applyTokens(source, map).trim();
+  // Fail-safe: a LIVE email send (mailbox present) must NEVER emit a raw
+  // {{token}} to a recipient — an unresolved variable with no inline |default
+  // blanks instead of leaking braces. A VA-facing linkedin/internal task body
+  // (no mailbox) keeps the {{token}} visible so the human can fill it in.
+  const missing = mailbox ? () => "" : undefined;
+  return applyTokens(source, map, missing).trim();
 }
 
 async function markEnrollmentFailed(

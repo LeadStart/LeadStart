@@ -34,7 +34,7 @@ import { appUrl } from "@/lib/api-url";
 import { useUser } from "@/hooks/use-user";
 import { CampaignProbeCard } from "@/components/campaigns/campaign-probe-card";
 import { FlowEditor } from "@/components/campaigns/flow/flow-editor";
-import { type FlowGraph, graphToSteps, validateGraph, starterGraph } from "@/lib/flow/graph";
+import { type FlowGraph, graphToSteps, starterGraph } from "@/lib/flow/graph";
 import type { Client, NativeMailbox } from "@/types/app";
 
 type ClientOption = Pick<Client, "id" | "name">;
@@ -87,20 +87,10 @@ export default function NewNativeCampaignPage() {
 
   async function handleSave() {
     setError(null);
+    // Draft saves from just a name. Client, mailboxes, and a complete sequence are
+    // all optional here — the campaign's launch-readiness panel surfaces what's
+    // still needed, and the Launch button stays gated until it's ready.
     if (!name.trim()) return setError("Give the campaign a name.");
-    if (!clientId) {
-      setTab("options");
-      return setError("Pick a client under Setup.");
-    }
-    if (selectedMailboxes.size === 0) {
-      setTab("options");
-      return setError("Select at least one sending mailbox under Setup.");
-    }
-    const graphError = validateGraph(graph);
-    if (graphError) {
-      setTab("sequence");
-      return setError(graphError);
-    }
 
     const steps = graphToSteps(graph).map((s, i) => ({
       step_index: i,
@@ -116,7 +106,7 @@ export default function NewNativeCampaignPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: name.trim(),
-          client_id: clientId,
+          client_id: clientId || null,
           mailbox_ids: [...selectedMailboxes],
           steps,
           flow_graph: graph,
@@ -124,7 +114,7 @@ export default function NewNativeCampaignPage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || `Save failed (${res.status})`);
-      router.push(`/admin/clients/${clientId}/campaigns/${data.id}`);
+      router.push(`/admin/campaigns/${data.id}`);
     } catch (err) {
       setError((err as Error).message);
       setSaving(false);
