@@ -5,6 +5,52 @@
 
 ---
 
+## 2026-08-26 — Campaign-editor stack: reply-class conditions + flow observability + A/B testing; LOCAL-ONLY, awaiting push
+
+Three stacked builds on top of the (now-pushed) #3 graph runtime, same worktree/branch
+`claude/graph-runtime-phase3`. Committed LOCAL-ONLY; **awaiting the owner's push.**
+Living tracker: [`docs/plans/campaign-editor-roadmap.md`](docs/plans/campaign-editor-roadmap.md).
+
+Owner direction this session: dropped open/click tracking as a dead end (we never add
+tracking pixels/links — deliverability), so conditions/A/B/analytics all run on **inbound**
+signals (replies + class, bounces). Unipile stays parked (LinkedIn = manual VA tasks).
+
+### 1. Reply-class conditions
+Flow conditions can branch on the reply's **sentiment**, not just "did they reply." New
+triggers `reply_interested | reply_objection | reply_not_interested | reply_ooo` route on
+`lead_replies.final_class` (sentiment groups — mapping in the roadmap doc). `replied`/`bounced`
+stay; `opened`/`clicked`/`manual` **retired** from the builder (kept legacy-safe → NO branch).
+Runtime `matchedReplyRoute`: a matching reply-condition stands the global reply-halt down, but
+an **unhandled** reply class still halts (never re-email a replier). **No migration.**
+
+### 2. Flow observability
+Read-only **"Flow progress"** view on the campaign Analytics tab: per-node live occupancy
+("N here"), each condition's Yes/No branch split, and a rollup (enrolled/active/peeled/
+completed/failed + reply & positive-reply rates). Derived from `current_node_id` +
+`lead_replies.final_class` — **no migration**. Legacy/linear campaigns keep the linear funnel.
+
+### 3. A/B (and C/D…) testing
+`EmailNode.variants` (JSONB, backward-compatible — variant A = the node's own subject/body).
+Migration **00090** = `native_sends.variant_id` (applied). The sender assigns each contact a
+variant **deterministically** (even, sticky, no stored state) and stamps `variant_id`; the
+Analytics tab shows a per-variant table (sent / reply / positive-reply rate) with the leader
+flagged. Measured on inbound outcomes only. Builder gets an "Add variant" editor per email node.
+
+### Verification
+tsc clean · unit **96/96** (runtime 59, progress 18, variants 19) · e2e **11/11** (live DB,
+self-cleaning draft) · **browser-verified**: the builder (reply-class picker + A/B editor +
+honest starter) rendered live; FlowProgress + AbResults verified via SSR on a seeded draft
+(real numbers — Enrolled 6/Active 4/Peeled 1, reply 33.3%/positive 16.7%; variant A 66.7%
+reply vs B 0%) then cleaned up. Migrations applied: 00089 (#3), 00090 (A/B).
+
+### Deploy risk (same gate as #3)
+Push auto-deploys with no staging. Reply-class + A/B only affect **flow campaigns** (legacy
+byte-identical). The sender change is small (variant pick + variant_id stamp; reply-class
+routing already gated behind flow_graph). The Analytics additions are read-only. Validate
+post-deploy on a controlled flow campaign.
+
+---
+
 ## 2026-08-26 — #3 GRAPH RUNTIME built + verified + migration applied; LOCAL-ONLY, awaiting the push
 
 The native sender now EXECUTES `campaigns.flow_graph` (branches + linkedin +
