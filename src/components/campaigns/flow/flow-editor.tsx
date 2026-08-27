@@ -22,6 +22,7 @@ import {
   flattenPrimaryPath,
 } from "@/lib/flow/graph";
 import { updateNode, removeNode, insertAfter, appendToBranch } from "@/lib/flow/edit";
+import { isUntrackedTrigger } from "@/lib/flow/runtime";
 import { StepCopyCheck } from "@/components/campaigns/step-copy-check";
 import styles from "./flow.module.css";
 
@@ -481,6 +482,25 @@ export function FlowEditor({
                 <span className={styles.outY}>Yes</span>
                 <span className={styles.outN}>No</span>
               </div>
+              {isUntrackedTrigger(n.trigger) && (
+                <p
+                  style={{
+                    margin: "8px 10px 2px",
+                    fontSize: 11.5,
+                    lineHeight: 1.4,
+                    color: "#b45309",
+                    background: "#fffbeb",
+                    border: "1px solid #fde68a",
+                    borderRadius: 6,
+                    padding: "6px 8px",
+                  }}
+                >
+                  <b>Needs tracking.</b> There’s no signal for this yet, so at
+                  runtime everyone follows the <b>No</b> path — the <b>Yes</b>{" "}
+                  branch won’t fire. (Open &amp; click tracking are off by default
+                  for deliverability; “a VA marks it” has no automation.)
+                </p>
+              )}
             </div>
             <div className={styles.fork}>
               <div className={styles.arm}>
