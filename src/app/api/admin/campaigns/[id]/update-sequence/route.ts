@@ -30,6 +30,10 @@ interface Body {
   send_weekdays_only?: boolean | null;
   daily_new_leads_cap?: number | null;
   sending_strategy?: string | null;
+  // Campaign-level default for the A/B auto-winner (migration 00091). A flow
+  // email node inherits this unless ab_config.autoPause overrides it. Omitted →
+  // left untouched.
+  ab_auto_pause_default?: boolean | null;
   // The visual Flow builder graph. Persisted verbatim; the executed `steps` are
   // derived from it client-side. Omitted → the existing graph is left untouched.
   flow_graph?: unknown;
@@ -137,6 +141,15 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "Invalid sending strategy" }, { status: 400 });
   }
 
+  // ---- Validate A/B auto-winner campaign default (optional boolean) ----
+  if (
+    body.ab_auto_pause_default !== undefined &&
+    body.ab_auto_pause_default !== null &&
+    typeof body.ab_auto_pause_default !== "boolean"
+  ) {
+    return NextResponse.json({ error: "ab_auto_pause_default must be a boolean" }, { status: 400 });
+  }
+
   // ---- Replace steps ----
   const { error: delErr } = await admin.from("campaign_steps").delete().eq("campaign_id", campaignId);
   if (delErr) {
@@ -166,6 +179,11 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     sending_strategy: sendingStrategy,
     updated_at: new Date().toISOString(),
   };
+  // Campaign-level A/B auto-winner default — only touched when the caller sends
+  // it, so legacy callers don't reset it. Coerced to a hard boolean (NOT NULL col).
+  if (body.ab_auto_pause_default !== undefined) {
+    campaignUpdate.ab_auto_pause_default = body.ab_auto_pause_default ?? false;
+  }
   // Only touch flow_graph when the caller sent one, so legacy/linear callers
   // don't wipe a stored graph. paused_variant_ids is server-owned (the A/B
   // auto-winner writes it, not the builder), so re-apply the stored pauses onto

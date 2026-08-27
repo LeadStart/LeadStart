@@ -118,6 +118,7 @@ async function main() {
         status: "draft", // prod's active-only cron never touches this
         source_channel: "native_email",
         flow_graph: GRAPH,
+        ab_auto_pause_default: false, // node inherits this → starts OFF
       })
       .select("id")
       .single();
@@ -167,15 +168,27 @@ async function main() {
     ok((sends?.length ?? 0) === 10, "10 native_sends rows read back", sends?.length);
     ok((replies?.length ?? 0) === 3, "3 lead_replies rows read back", replies?.length);
 
-    // ---- Run the REAL evaluator (the same fn the cron calls) ----
-    const paused = await evaluateAbWinners(
-      admin,
-      campaignId!,
-      GRAPH,
-      (sends ?? []) as { variant_id: string | null; to_email: string | null }[],
-      (replies ?? []) as { final_class: string | null; lead_email: string | null }[],
-    );
-    ok(paused === 1, "evaluator paused exactly one variant", paused);
+    const sendRowsRead = (sends ?? []) as { variant_id: string | null; to_email: string | null }[];
+    const replyRowsRead = (replies ?? []) as { final_class: string | null; lead_email: string | null }[];
+    const campaignDefault = async () => {
+      const { data } = await admin
+        .from("campaigns")
+        .select("ab_auto_pause_default")
+        .eq("id", campaignId)
+        .single();
+      return (data as { ab_auto_pause_default: boolean }).ab_auto_pause_default;
+    };
+
+    // ---- OFF by default: node inherits the campaign default (false) → no pause ----
+    ok((await campaignDefault()) === false, "campaign default starts off (column round-trips)");
+    const offPass = await evaluateAbWinners(admin, campaignId!, GRAPH, sendRowsRead, replyRowsRead, false);
+    ok(offPass === 0, "auto-pause OFF (inherited) → the blowout is NOT paused");
+
+    // ---- Flip the campaign default on (the settings toggle) → node inherits ON ----
+    await admin.from("campaigns").update({ ab_auto_pause_default: true }).eq("id", campaignId);
+    ok((await campaignDefault()) === true, "campaign default flips on (column round-trips)");
+    const paused = await evaluateAbWinners(admin, campaignId!, GRAPH, sendRowsRead, replyRowsRead, true);
+    ok(paused === 1, "auto-pause ON (inherited from campaign) → paused exactly one variant", paused);
 
     // ---- The pause round-trips through campaigns.flow_graph JSONB ----
     const { data: campRead } = await admin
@@ -207,13 +220,7 @@ async function main() {
     ok((preservedE1.paused_variant_ids ?? []).includes("VB"), "mergeStoredPauses re-applies the pause a manual save dropped");
 
     // ---- Idempotency: a second pass adds nothing ----
-    const again = await evaluateAbWinners(
-      admin,
-      campaignId!,
-      storedGraph,
-      (sends ?? []) as { variant_id: string | null; to_email: string | null }[],
-      (replies ?? []) as { final_class: string | null; lead_email: string | null }[],
-    );
+    const again = await evaluateAbWinners(admin, campaignId!, storedGraph, sendRowsRead, replyRowsRead, true);
     ok(again === 0, "second pass is idempotent (already decided → 0 new pauses)", again);
   } finally {
     // ---- Cleanup: delete everything we created ----

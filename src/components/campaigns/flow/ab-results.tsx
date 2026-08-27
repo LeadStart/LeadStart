@@ -23,7 +23,9 @@ export function AbResults({ stats }: { stats: AbNodeStats[] }) {
                 {node.firstEmail ? "first email" : "follow-up"} ·{" "}
                 {node.decided
                   ? "winner locked — losers auto-paused"
-                  : "auto-winner by positive-reply rate"}
+                  : node.autoPause
+                    ? "auto-winner on — leader by positive-reply rate"
+                    : "leader by positive-reply rate (auto-pause off)"}
               </span>
             </div>
             <div className="overflow-x-auto">
@@ -97,10 +99,16 @@ export function AbResults({ stats }: { stats: AbNodeStats[] }) {
                   variant{pausedCount === 1 ? "" : "s"} paused; leads already in a paused
                   variant’s thread stay on it.
                 </>
+              ) : node.autoPause ? (
+                <>
+                  Even split, sticky per lead. Auto-winner is on: once there’s a decisive
+                  winner (95% significance + a ≥1&nbsp;pt lead on positive-reply rate) the
+                  losing variants pause automatically.
+                </>
               ) : (
                 <>
-                  Even split, sticky per lead. Variants keep gathering sends until one wins
-                  on positive-reply rate at significance — then the losers auto-pause.
+                  Even split, sticky per lead. Auto-winner is off — pick a winner yourself, or
+                  enable auto-pause on this step or in campaign settings.
                 </>
               )}
             </p>

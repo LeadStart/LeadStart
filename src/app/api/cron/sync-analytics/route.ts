@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
   {
     let nativeQuery = admin
       .from("campaigns")
-      .select("id, flow_graph")
+      .select("id, flow_graph, ab_auto_pause_default")
       .eq("source_channel", "native_email");
     // ?campaign_id= refreshes one campaign regardless of status; otherwise only
     // active campaigns are synced.
@@ -53,7 +53,11 @@ export async function GET(request: NextRequest) {
       : nativeQuery.eq("status", "active");
     const { data: nativeCampaigns } = await nativeQuery;
 
-    for (const nc of (nativeCampaigns ?? []) as { id: string; flow_graph: FlowGraph | null }[]) {
+    for (const nc of (nativeCampaigns ?? []) as {
+      id: string;
+      flow_graph: FlowGraph | null;
+      ab_auto_pause_default: boolean;
+    }[]) {
       try {
         // PostgREST caps a response at 1000 rows, so page through the send log
         // + replies (a full campaign can exceed 1000 sends). variant_id/to_email
@@ -163,7 +167,14 @@ export async function GET(request: NextRequest) {
         // flow campaigns with an A/B node do any work; everything else is a
         // cheap early return. Isolated in try/catch below via the same block.
         if (nc.flow_graph && Array.isArray(nc.flow_graph.nodes) && nc.flow_graph.nodes.length > 0) {
-          totalVariantsPaused += await evaluateAbWinners(admin, nc.id, nc.flow_graph, sends, replies);
+          totalVariantsPaused += await evaluateAbWinners(
+            admin,
+            nc.id,
+            nc.flow_graph,
+            sends,
+            replies,
+            nc.ab_auto_pause_default,
+          );
         }
 
         totalNativeSynced++;

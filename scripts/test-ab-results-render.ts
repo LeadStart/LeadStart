@@ -54,9 +54,10 @@ const decided: AbNodeStats = {
   leaderId: "E1",
   winnerId: "E1",
   decided: true,
+  autoPause: true,
 };
 
-// A running node: A leads, nothing paused yet.
+// A running node with auto-pause ON: A leads, nothing paused yet.
 const running: AbNodeStats = {
   nodeId: "E2",
   firstEmail: false,
@@ -67,6 +68,21 @@ const running: AbNodeStats = {
   leaderId: "E2",
   winnerId: null,
   decided: false,
+  autoPause: true,
+};
+
+// A running node with auto-pause OFF (manual).
+const manual: AbNodeStats = {
+  nodeId: "E3",
+  firstEmail: true,
+  variants: [
+    v("E3", "A", "Hello there", 40, 10, 6, false),
+    v("VD", "B", "Hi there", 40, 9, 5, false),
+  ],
+  leaderId: "E3",
+  winnerId: null,
+  decided: false,
+  autoPause: false,
 };
 
 console.log("AbResults — decided test renders Winner + Paused");
@@ -80,14 +96,23 @@ console.log("AbResults — decided test renders Winner + Paused");
   absent(html, "Leading", "a decided test does not show Leading");
 }
 
-console.log("AbResults — running test renders Leading, no Winner");
+console.log("AbResults — running test (auto-pause ON) renders Leading, no Winner");
 {
   const html = renderToStaticMarkup(createElement(AbResults, { stats: [running] }));
   has(html, "Leading", "shows the provisional Leading tag");
   absent(html, "Winner", "no Winner while undecided");
   absent(html, "Paused", "nothing paused yet");
   has(html, "threads as", "empty-subject variant shows the Re: hint");
-  has(html, "auto-winner by positive-reply rate", "header shows the running caption");
+  has(html, "auto-winner on", "header shows the auto-pause-on caption");
+}
+
+console.log("AbResults — auto-pause OFF renders the manual caption");
+{
+  const html = renderToStaticMarkup(createElement(AbResults, { stats: [manual] }));
+  has(html, "auto-pause off", "header flags auto-pause is off");
+  has(html, "Leading", "still shows the current leader");
+  absent(html, "Winner", "no auto-winner when off");
+  has(html, "pick a winner yourself", "footer tells the user to decide manually");
 }
 
 console.log("AbResults — empty stats renders nothing");

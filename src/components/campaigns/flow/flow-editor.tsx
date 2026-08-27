@@ -16,6 +16,7 @@ import {
   type FlowConditionTrigger,
   type EmailNode,
   type EmailVariant,
+  type EmailAbConfig,
   emailNode,
   emailVariant,
   waitNode,
@@ -128,11 +129,15 @@ function makeNode(kind: ElementKind): FlowNode {
 function EmailVariants({
   node,
   onChange,
+  onAbConfigChange,
   isFirst,
+  abAutoPauseDefault,
 }: {
   node: EmailNode;
   onChange: (variants: EmailVariant[]) => void;
+  onAbConfigChange: (cfg: EmailAbConfig | undefined) => void;
   isFirst: boolean;
+  abAutoPauseDefault: boolean;
 }) {
   const variants = node.variants ?? [];
   // Seed a new variant from A (same body; the common case is a subject-line test).
@@ -140,6 +145,17 @@ function EmailVariants({
   const update = (id: string, patch: Partial<EmailVariant>) =>
     onChange(variants.map((v) => (v.id === id ? { ...v, ...patch } : v)));
   const remove = (id: string) => onChange(variants.filter((v) => v.id !== id));
+
+  // Per-node auto-winner override: undefined = inherit the campaign default,
+  // true/false = force on/off for THIS A/B step.
+  const autoPause = node.ab_config?.autoPause;
+  const autoPauseValue = autoPause === undefined ? "inherit" : autoPause ? "on" : "off";
+  const setAutoPause = (v: string) => {
+    const next: EmailAbConfig = { ...(node.ab_config ?? {}) };
+    if (v === "inherit") delete next.autoPause;
+    else next.autoPause = v === "on";
+    onAbConfigChange(Object.keys(next).length > 0 ? next : undefined);
+  };
 
   return (
     <div className={styles.field}>
@@ -162,6 +178,29 @@ function EmailVariants({
           measure reply &amp; positive-reply rate per variant.{" "}
           {isFirst ? "Each variant needs its own subject." : "A blank subject threads as “Re:”."}
         </p>
+      )}
+      {variants.length > 0 && (
+        <div style={{ marginTop: 8 }}>
+          <label className={styles.label} style={{ margin: "0 0 3px" }}>
+            Auto-winner
+          </label>
+          <select
+            className={styles.input}
+            value={autoPauseValue}
+            onChange={(e) => setAutoPause(e.target.value)}
+          >
+            <option value="inherit">
+              Use campaign default ({abAutoPauseDefault ? "auto-pause on" : "off"})
+            </option>
+            <option value="on">Auto-pause losers on</option>
+            <option value="off">Off — decide manually</option>
+          </select>
+          <p className={styles.hint} style={{ marginTop: 2 }}>
+            When on, once this test has the volume it pauses the losing variants (95% significance
+            + a ≥1&nbsp;pt lead on positive-reply rate) so new leads route to the winner. Sticky:
+            a lead already in a variant’s thread stays there.
+          </p>
+        </div>
       )}
       {variants.map((v, i) => (
         <div
@@ -213,11 +252,14 @@ export function FlowEditor({
   onChange,
   clientId,
   campaignId,
+  abAutoPauseDefault = false,
 }: {
   value: FlowGraph;
   onChange: (g: FlowGraph) => void;
   clientId?: string;
   campaignId?: string;
+  /** Campaign-level A/B auto-pause default, shown as the per-node "inherit" state. */
+  abAutoPauseDefault?: boolean;
 }) {
   const [openPicker, setOpenPicker] = useState<string | null>(null);
 
@@ -461,7 +503,13 @@ export function FlowEditor({
                     }
                   />
                 </div>
-                <EmailVariants node={n} isFirst={isFirst} onChange={(variants) => patch(n.id, { variants })} />
+                <EmailVariants
+                  node={n}
+                  isFirst={isFirst}
+                  abAutoPauseDefault={abAutoPauseDefault}
+                  onChange={(variants) => patch(n.id, { variants })}
+                  onAbConfigChange={(ab_config) => patch(n.id, { ab_config })}
+                />
               </div>
             )}
           </div>

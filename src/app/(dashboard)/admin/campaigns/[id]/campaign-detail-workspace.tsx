@@ -22,6 +22,7 @@ import {
   BarChart3,
   AlertCircle,
   Inbox,
+  Trophy,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -78,6 +79,7 @@ export function CampaignDetailWorkspace({
   initialWindow,
   initialNewLeadsCap,
   initialStrategy,
+  initialAbAutoPauseDefault,
   nativeStats,
   flowProgress,
   abStats,
@@ -96,6 +98,7 @@ export function CampaignDetailWorkspace({
   initialWindow: SendWindowConfig;
   initialNewLeadsCap: number;
   initialStrategy: SendingStrategy;
+  initialAbAutoPauseDefault: boolean;
   nativeStats: NativeStatsView;
   flowProgress: FlowProgressData | null;
   abStats: AbNodeStats[];
@@ -111,6 +114,7 @@ export function CampaignDetailWorkspace({
   const [win, setWin] = useState<SendWindowConfig>(initialWindow);
   const [newLeadsCap, setNewLeadsCap] = useState<number>(initialNewLeadsCap);
   const [strategy, setStrategy] = useState<SendingStrategy>(initialStrategy);
+  const [abAutoPauseDefault, setAbAutoPauseDefault] = useState<boolean>(initialAbAutoPauseDefault);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<number | null>(null);
@@ -146,6 +150,7 @@ export function CampaignDetailWorkspace({
           send_weekdays_only: win.weekdaysOnly,
           daily_new_leads_cap: newLeadsCap,
           sending_strategy: strategy,
+          ab_auto_pause_default: abAutoPauseDefault,
         }),
       });
       const data = (await res.json()) as { error?: string };
@@ -272,7 +277,12 @@ export function CampaignDetailWorkspace({
 
         {/* Sequence — the Flow canvas */}
         <TabsContent value="sequence" className="flex min-h-0 flex-col pt-2">
-          <FlowEditor value={graph} onChange={setGraph} campaignId={campaignId} />
+          <FlowEditor
+            value={graph}
+            onChange={setGraph}
+            campaignId={campaignId}
+            abAutoPauseDefault={abAutoPauseDefault}
+          />
         </TabsContent>
 
         {/* Leads */}
@@ -386,6 +396,32 @@ export function CampaignDetailWorkspace({
                 />
               </div>
             </div>
+
+            <div className="space-y-3 rounded-xl border border-border/60 p-4">
+              <p className="inline-flex items-center gap-1.5 text-sm font-medium">
+                <Trophy size={14} /> A/B auto-winner
+              </p>
+              <label className="flex cursor-pointer items-start gap-3">
+                <input
+                  type="checkbox"
+                  checked={abAutoPauseDefault}
+                  onChange={(e) => setAbAutoPauseDefault(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 cursor-pointer accent-indigo-600"
+                />
+                <span className="text-sm">
+                  <span className="font-medium text-secondary-foreground">
+                    Auto-pause losing variants by default
+                  </span>
+                  <span className="mt-0.5 block text-xs text-muted-foreground">
+                    Once an A/B step gathers enough sends, pause the losers so new leads route to
+                    the winner — at 95% significance with a ≥1&nbsp;pt lead on positive-reply rate.
+                    Sticky: a lead already in a variant’s thread stays there. Each A/B step can
+                    override this default. Off unless you turn it on.
+                  </span>
+                </span>
+              </label>
+            </div>
+
             <p className="text-xs text-muted-foreground">Schedule changes save with the <strong>Save changes</strong> button above.</p>
           </div>
         </TabsContent>

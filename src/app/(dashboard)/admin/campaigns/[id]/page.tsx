@@ -279,6 +279,7 @@ export default async function AdminCampaignDetailPage({
           initialGraph,
           (sendRows ?? []) as { variant_id: string | null; to_email: string | null }[],
           replyByEmail,
+          campaign.ab_auto_pause_default ?? false,
         );
       }
     }
@@ -294,6 +295,7 @@ export default async function AdminCampaignDetailPage({
         initialWindow={sendWindow}
         initialNewLeadsCap={resolveDailyNewLeadsCap(campaign)}
         initialStrategy={sendingStrategy}
+        initialAbAutoPauseDefault={campaign.ab_auto_pause_default ?? false}
         nativeStats={{
           sent: nativeStats.sent,
           replied: nativeStats.replied,

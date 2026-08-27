@@ -34,6 +34,7 @@ export async function evaluateAbWinners(
   graph: FlowGraph,
   sends: { variant_id: string | null; to_email: string | null }[],
   replies: { final_class: string | null; lead_email: string | null }[],
+  campaignAutoPauseDefault = false,
 ): Promise<number> {
   // Skip cheaply unless the graph actually tests a variant.
   let hasAb = false;
@@ -59,7 +60,10 @@ export async function evaluateAbWinners(
   const plans: { nodeId: string; pauseIds: string[] }[] = [];
   for (const node of stats) {
     const def = nodeById.get(node.nodeId);
-    const decision = decideAbWinner(node, def ? resolveAbConfig(def) : undefined);
+    const decision = decideAbWinner(
+      node,
+      def ? resolveAbConfig(def, campaignAutoPauseDefault) : undefined,
+    );
     if (decision.pauseIds.length) plans.push({ nodeId: node.nodeId, pauseIds: decision.pauseIds });
   }
   if (plans.length === 0) return 0;

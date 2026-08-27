@@ -181,6 +181,9 @@ export interface Campaign {
   // follow-ups (migration 00066). NULL = inherit DEFAULT_SENDING_STRATEGY
   // ('finish_first'). See SendingStrategy above.
   sending_strategy: SendingStrategy | null;
+  // Campaign-level default for the A/B auto-winner (migration 00091). A flow
+  // email node inherits this unless its ab_config.autoPause overrides. Off by default.
+  ab_auto_pause_default: boolean;
   // Per-campaign Unipile account binding (migration 00046). Defaults to
   // clients.unipile_account_id but lives on the campaign so accounts can
   // rotate without invalidating campaign history.
