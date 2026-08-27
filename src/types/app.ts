@@ -239,6 +239,13 @@ export interface CampaignEnrollment {
   campaign_id: string;
   contact_id: string;
   current_step_index: number;
+  // Graph-runtime position (migration 00089). The campaigns.flow_graph node id
+  // whose action this enrollment last executed. NULL on legacy/linear campaigns
+  // (the sender walks campaign_steps by current_step_index) and on fresh flow
+  // enrollments (resolved from current_step_index until the first flow tick
+  // stamps it). current_step_index keeps counting EMAILS sent for flow campaigns
+  // too (0 = first touch) so the send machinery is unchanged.
+  current_node_id: string | null;
   last_action_at: string | null;
   status: EnrollmentStatus;
   started_at: string;
