@@ -14,7 +14,10 @@ import {
   type FlowGraph,
   type FlowNode,
   type FlowConditionTrigger,
+  type EmailNode,
+  type EmailVariant,
   emailNode,
+  emailVariant,
   waitNode,
   linkedinNode,
   internalNode,
@@ -117,6 +120,92 @@ function makeNode(kind: ElementKind): FlowNode {
     default:
       return emailNode("", "");
   }
+}
+
+// A/B/C… variant editor for an email node. Variant A is the node's own
+// subject/body (the fields above); this manages the extra variants. Leads split
+// evenly across all variants and we measure reply/positive-reply rate per one.
+function EmailVariants({
+  node,
+  onChange,
+  isFirst,
+}: {
+  node: EmailNode;
+  onChange: (variants: EmailVariant[]) => void;
+  isFirst: boolean;
+}) {
+  const variants = node.variants ?? [];
+  // Seed a new variant from A (same body; the common case is a subject-line test).
+  const add = () => onChange([...variants, emailVariant(isFirst ? node.subject : "", node.body)]);
+  const update = (id: string, patch: Partial<EmailVariant>) =>
+    onChange(variants.map((v) => (v.id === id ? { ...v, ...patch } : v)));
+  const remove = (id: string) => onChange(variants.filter((v) => v.id !== id));
+
+  return (
+    <div className={styles.field}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <label className={styles.label} style={{ margin: 0 }}>
+          A/B test{variants.length > 0 ? ` · ${variants.length + 1} variants` : ""}
+        </label>
+        <button
+          type="button"
+          className={styles.addDashed}
+          style={{ padding: "3px 8px", fontSize: 12, width: "auto" }}
+          onClick={add}
+        >
+          <Plus size={13} /> Add variant
+        </button>
+      </div>
+      {variants.length > 0 && (
+        <p className={styles.hint} style={{ marginTop: 2 }}>
+          Variant A is the email above. Leads split evenly across every variant; we
+          measure reply &amp; positive-reply rate per variant.{" "}
+          {isFirst ? "Each variant needs its own subject." : "A blank subject threads as “Re:”."}
+        </p>
+      )}
+      {variants.map((v, i) => (
+        <div
+          key={v.id}
+          style={{ marginTop: 8, border: "1px solid #e2e8f0", borderRadius: 8, padding: 10 }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              marginBottom: 6,
+            }}
+          >
+            <span style={{ fontSize: 12, fontWeight: 700, color: "#475569" }}>
+              Variant {String.fromCharCode(66 + i)}
+            </span>
+            <button
+              type="button"
+              className={`${styles.iconbtn} ${styles.danger}`}
+              onClick={() => remove(v.id)}
+              aria-label="Remove variant"
+            >
+              <Trash2 size={13} />
+            </button>
+          </div>
+          <input
+            className={styles.input}
+            value={v.subject}
+            placeholder={isFirst ? "Subject for this variant" : "Subject (optional — blank threads as “Re:”)"}
+            onChange={(e) => update(v.id, { subject: e.target.value })}
+            style={{ marginBottom: 6 }}
+          />
+          <textarea
+            className={styles.textarea}
+            rows={4}
+            value={v.body}
+            placeholder="Body for this variant. {{first_name}} {{company}} …"
+            onChange={(e) => update(v.id, { body: e.target.value })}
+          />
+        </div>
+      ))}
+    </div>
+  );
 }
 
 export function FlowEditor({
@@ -372,6 +461,7 @@ export function FlowEditor({
                     }
                   />
                 </div>
+                <EmailVariants node={n} isFirst={isFirst} onChange={(variants) => patch(n.id, { variants })} />
               </div>
             )}
           </div>
