@@ -15,6 +15,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { checkCronAuth } from "@/lib/security/cron-auth";
 import { HOT_REPLY_CLASSES, type ReplyClass } from "@/types/app";
 import { InstantlyClient } from "@/lib/instantly/client";
+import { evaluateAbWinners } from "@/lib/flow/ab-winner-eval";
+import type { FlowGraph } from "@/lib/flow/graph";
 
 // Force dynamic rendering on every invocation. Without this, a Vercel cron
 // (which hits the same URL with no query params) can receive an edge-cached
@@ -33,6 +35,7 @@ export async function GET(request: NextRequest) {
   const campaignId = request.nextUrl.searchParams.get("campaign_id");
 
   let totalNativeSynced = 0;
+  let totalVariantsPaused = 0;
 
   // ----- Native email analytics -----
   // Roll our own per-day snapshots from the local send log + reply pipeline.
@@ -41,7 +44,7 @@ export async function GET(request: NextRequest) {
   {
     let nativeQuery = admin
       .from("campaigns")
-      .select("id")
+      .select("id, flow_graph")
       .eq("source_channel", "native_email");
     // ?campaign_id= refreshes one campaign regardless of status; otherwise only
     // active campaigns are synced.
@@ -50,16 +53,23 @@ export async function GET(request: NextRequest) {
       : nativeQuery.eq("status", "active");
     const { data: nativeCampaigns } = await nativeQuery;
 
-    for (const nc of (nativeCampaigns ?? []) as { id: string }[]) {
+    for (const nc of (nativeCampaigns ?? []) as { id: string; flow_graph: FlowGraph | null }[]) {
       try {
         // PostgREST caps a response at 1000 rows, so page through the send log
-        // + replies (a full campaign can exceed 1000 sends).
-        type SendRow = { sent_at: string | null; status: string; step_index: number };
+        // + replies (a full campaign can exceed 1000 sends). variant_id/to_email
+        // feed the A/B auto-winner pass below.
+        type SendRow = {
+          sent_at: string | null;
+          status: string;
+          step_index: number;
+          variant_id: string | null;
+          to_email: string | null;
+        };
         const sends: SendRow[] = [];
         for (let from = 0; ; from += 1000) {
           const { data, error } = await admin
             .from("native_sends")
-            .select("sent_at, status, step_index")
+            .select("sent_at, status, step_index, variant_id, to_email")
             .eq("campaign_id", nc.id)
             .order("id", { ascending: true })
             .range(from, from + 999);
@@ -147,6 +157,15 @@ export async function GET(request: NextRequest) {
             .upsert(rows, { onConflict: "campaign_id,snapshot_date" });
           if (upsertErr) throw upsertErr;
         }
+
+        // A/B auto-winner: pause losing variants once a node has gathered enough
+        // sends (uses the send log + replies just paged, no extra fetch). Only
+        // flow campaigns with an A/B node do any work; everything else is a
+        // cheap early return. Isolated in try/catch below via the same block.
+        if (nc.flow_graph && Array.isArray(nc.flow_graph.nodes) && nc.flow_graph.nodes.length > 0) {
+          totalVariantsPaused += await evaluateAbWinners(admin, nc.id, nc.flow_graph, sends, replies);
+        }
+
         totalNativeSynced++;
       } catch (err) {
         console.error(`[cron/sync-analytics] native snapshot sync failed for ${nc.id}:`, err);
@@ -307,5 +326,6 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     native_synced: totalNativeSynced,
     instantly_synced: totalInstantlySynced,
+    variants_paused: totalVariantsPaused,
   });
 }
