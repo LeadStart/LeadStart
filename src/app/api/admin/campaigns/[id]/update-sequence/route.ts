@@ -28,6 +28,9 @@ interface Body {
   send_weekdays_only?: boolean | null;
   daily_new_leads_cap?: number | null;
   sending_strategy?: string | null;
+  // The visual Flow builder graph. Persisted verbatim; the executed `steps` are
+  // derived from it client-side. Omitted → the existing graph is left untouched.
+  flow_graph?: unknown;
 }
 
 const KNOWN_TZ = new Set([
@@ -151,18 +154,25 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "Could not save steps" }, { status: 500 });
   }
 
-  // ---- Update send window ----
+  // ---- Update send window (+ flow graph when provided) ----
+  const campaignUpdate: Record<string, unknown> = {
+    send_timezone: tz,
+    send_start_hour: startH,
+    send_end_hour: endH,
+    send_weekdays_only: body.send_weekdays_only ?? null,
+    daily_new_leads_cap: newLeadsCap,
+    sending_strategy: sendingStrategy,
+    updated_at: new Date().toISOString(),
+  };
+  // Only touch flow_graph when the caller sent one, so legacy/linear callers
+  // don't wipe a stored graph.
+  if (body.flow_graph !== undefined) {
+    campaignUpdate.flow_graph =
+      body.flow_graph && typeof body.flow_graph === "object" ? body.flow_graph : null;
+  }
   const { error: updErr } = await admin
     .from("campaigns")
-    .update({
-      send_timezone: tz,
-      send_start_hour: startH,
-      send_end_hour: endH,
-      send_weekdays_only: body.send_weekdays_only ?? null,
-      daily_new_leads_cap: newLeadsCap,
-      sending_strategy: sendingStrategy,
-      updated_at: new Date().toISOString(),
-    })
+    .update(campaignUpdate)
     .eq("id", campaignId);
   if (updErr) {
     return NextResponse.json({ error: "Steps saved, but the schedule failed to update" }, { status: 500 });

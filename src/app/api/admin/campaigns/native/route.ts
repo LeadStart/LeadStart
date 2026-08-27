@@ -20,6 +20,10 @@ interface CreateBody {
   client_id?: string;
   mailbox_ids?: string[];
   steps?: StepInput[];
+  // The visual Flow builder graph. Persisted verbatim on the campaign; the
+  // executed `steps` above are derived from it client-side. Optional so older
+  // callers (and linear campaigns) keep working.
+  flow_graph?: unknown;
 }
 
 export async function POST(req: NextRequest) {
@@ -97,6 +101,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "No valid mailboxes selected" }, { status: 400 });
   }
 
+  const flowGraph =
+    body.flow_graph && typeof body.flow_graph === "object" ? body.flow_graph : null;
+
   const { data: created, error: createError } = await admin
     .from("campaigns")
     .insert({
@@ -105,6 +112,7 @@ export async function POST(req: NextRequest) {
       name,
       status: "draft",
       source_channel: "native_email",
+      flow_graph: flowGraph,
     })
     .select("id")
     .single();

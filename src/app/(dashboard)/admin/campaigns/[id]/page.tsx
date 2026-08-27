@@ -34,6 +34,8 @@ import { NativeSequenceSection } from "./native-sequence-section";
 import { CampaignProbeCard } from "@/components/campaigns/campaign-probe-card";
 import { StageFlowCard, type StageRow } from "./stage-flow-card";
 import { CampaignLifecycleButton } from "./campaign-lifecycle-button";
+import { CampaignDetailWorkspace } from "./campaign-detail-workspace";
+import { stepsToGraph, type FlowGraph } from "@/lib/flow/graph";
 import type { Campaign, CampaignSnapshot, Client } from "@/types/app";
 
 const SNAPSHOT_COLUMNS =
@@ -194,6 +196,51 @@ export default async function AdminCampaignDetailPage({
       strategy: sendingStrategy,
       mailboxCount: nativeStats.activeMailboxCount,
     });
+  }
+
+  // Native email campaigns render the tabbed Flow workspace (same shell as the
+  // new-campaign builder). Load the authored graph from campaigns.flow_graph,
+  // falling back to a linear graph derived from campaign_steps for legacy rows.
+  if (campaign.source_channel === "native_email" && nativeStats) {
+    const stored = (campaign as unknown as { flow_graph?: FlowGraph | null }).flow_graph;
+    const initialGraph: FlowGraph =
+      stored && typeof stored === "object" && Array.isArray((stored as FlowGraph).nodes)
+        ? (stored as FlowGraph)
+        : stepsToGraph(
+            nativeStats.steps.map((s) => ({
+              wait_days: s.wait_days,
+              subject_template: s.subject || null,
+              body_template: s.body,
+            })),
+          );
+    return (
+      <CampaignDetailWorkspace
+        campaignId={campaign.id}
+        campaignName={campaign.name}
+        status={campaign.status}
+        sourceChannel={campaign.source_channel}
+        client={client}
+        initialGraph={initialGraph}
+        initialWindow={sendWindow}
+        initialNewLeadsCap={resolveDailyNewLeadsCap(campaign)}
+        initialStrategy={sendingStrategy}
+        nativeStats={{
+          sent: nativeStats.sent,
+          replied: nativeStats.replied,
+          bounced: nativeStats.bounced,
+          enrollments: nativeStats.enrollments,
+          verification: nativeStats.verification,
+          mailboxes: nativeStats.mailboxes,
+          dailyInboxCapacity: nativeStats.dailyInboxCapacity,
+          activeMailboxCount: nativeStats.activeMailboxCount,
+        }}
+        stageRows={stageRows}
+        projection={projection}
+        strategyLabel={strategyLabel}
+        contacts={campaignContacts}
+        contactsTruncated={contactsTruncated}
+      />
+    );
   }
 
   return (
