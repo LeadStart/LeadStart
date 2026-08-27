@@ -1601,3 +1601,46 @@ export interface EnrichmentRunItem {
   created_at: string;
   updated_at: string;
 }
+
+// ---- Manual VA tasks (migration 00088) ---------------------------------
+// The queue behind the admin "LinkedIn to-dos" inbox. A FlowGraph `linkedin`
+// node is authored in the visual campaign builder but never executes in the
+// native sender; the future graph-runtime drops a row here (via
+// createManualTask) for a VA to action by hand.
+
+export type ManualTaskKind = "linkedin_connect" | "linkedin_message";
+export type ManualTaskStatus = "open" | "done" | "skipped";
+
+export interface ManualTask {
+  id: string;
+  organization_id: string;
+  campaign_id: string;
+  contact_id: string;
+  client_id: string | null;
+  kind: ManualTaskKind;
+  flow_node_id: string | null;
+  rendered_body: string;
+  status: ManualTaskStatus;
+  assignee: string | null;
+  created_by: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// Contact fields the inbox surfaces (embedded via the contact_id FK).
+export interface ManualTaskContact {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
+  company_name: string | null;
+  title: string | null;
+  linkedin_url: string | null;
+  email: string | null;
+}
+
+// A task row joined with the contact + campaign context the inbox renders.
+export interface ManualTaskWithContext extends ManualTask {
+  contact: ManualTaskContact | null;
+  campaign: { id: string; name: string } | null;
+}
