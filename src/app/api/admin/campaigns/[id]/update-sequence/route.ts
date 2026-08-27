@@ -9,6 +9,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { mergeStoredPauses } from "@/lib/flow/ab-winner";
+import type { FlowGraph } from "@/lib/flow/graph";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -63,11 +65,11 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   const admin = createAdminClient();
   const { data: campaignRow } = await admin
     .from("campaigns")
-    .select("id, organization_id, source_channel")
+    .select("id, organization_id, source_channel, flow_graph")
     .eq("id", campaignId)
     .maybeSingle();
   const campaign = campaignRow as
-    | { id: string; organization_id: string; source_channel: string }
+    | { id: string; organization_id: string; source_channel: string; flow_graph: FlowGraph | null }
     | null;
   if (!campaign) return NextResponse.json({ error: "Campaign not found" }, { status: 404 });
   if (campaign.organization_id !== user.app_metadata?.organization_id) {
@@ -165,10 +167,17 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     updated_at: new Date().toISOString(),
   };
   // Only touch flow_graph when the caller sent one, so legacy/linear callers
-  // don't wipe a stored graph.
+  // don't wipe a stored graph. paused_variant_ids is server-owned (the A/B
+  // auto-winner writes it, not the builder), so re-apply the stored pauses onto
+  // the incoming graph — a manual sequence edit must never clear an auto-pause.
   if (body.flow_graph !== undefined) {
-    campaignUpdate.flow_graph =
-      body.flow_graph && typeof body.flow_graph === "object" ? body.flow_graph : null;
+    const incoming =
+      body.flow_graph && typeof body.flow_graph === "object"
+        ? (body.flow_graph as FlowGraph)
+        : null;
+    campaignUpdate.flow_graph = incoming
+      ? mergeStoredPauses(incoming, campaign.flow_graph ?? null)
+      : null;
   }
   const { error: updErr } = await admin
     .from("campaigns")

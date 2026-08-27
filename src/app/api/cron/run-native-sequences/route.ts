@@ -51,7 +51,7 @@ import {
   firstPrimaryEmail,
   type FlowSignals,
 } from "@/lib/flow/runtime";
-import { isAbTest, type FlowGraph } from "@/lib/flow/graph";
+import { isAbTest, emailVariants, type FlowGraph } from "@/lib/flow/graph";
 import { pickVariant } from "@/lib/flow/variants";
 import { createManualTask, manualTaskKindForLinkedIn } from "@/lib/manual-tasks/create";
 import { runInternalNode } from "@/lib/notifications/internal-automations";
@@ -305,6 +305,34 @@ export async function GET(request: NextRequest) {
         // Rows are newest-first, so the FIRST sighting of a key is the latest reply.
         if (!replyClassByKey.has(key)) replyClassByKey.set(key, r.final_class ?? null);
       }
+    }
+  }
+
+  // ---- Sticky A/B assignment for threading ----
+  // A follow-up with an empty subject threads as "Re: <first email subject>",
+  // rendered from the variant THIS contact received on the first email. Once the
+  // auto-winner pauses a variant, freshly re-deriving that assignment would drop
+  // the paused one and could flip a lead already mid-thread — so we read the
+  // variant they were ACTUALLY sent (native_sends.variant_id at step 0) and stay
+  // on it. Keyed `${campaign_id}\n${contact_id}`; only the first-email A/B case
+  // consults it, and only flow campaigns are in this tick's fetch set.
+  const firstVariantByContact = new Map<string, string>();
+  if (flowGraphByCampaign.size > 0) {
+    const { data: fvRows } = await admin
+      .from("native_sends")
+      .select("campaign_id, contact_id, variant_id")
+      .in("campaign_id", [...flowGraphByCampaign.keys()])
+      .in("contact_id", contactIds)
+      .eq("step_index", 0)
+      .not("variant_id", "is", null);
+    for (const r of (fvRows ?? []) as {
+      campaign_id: string | null;
+      contact_id: string | null;
+      variant_id: string | null;
+    }[]) {
+      if (!r.campaign_id || !r.contact_id || !r.variant_id) continue;
+      const key = `${r.campaign_id}\n${r.contact_id}`;
+      if (!firstVariantByContact.has(key)) firstVariantByContact.set(key, r.variant_id);
     }
   }
 
@@ -838,9 +866,18 @@ export async function GET(request: NextRequest) {
     } else {
       // Re: fallback — thread on the first primary-path email's subject as THIS
       // contact received it (their assigned variant), rendered with the step-0
-      // seed key so it's byte-identical to the original send.
+      // seed key so it's byte-identical to the original send. Prefer the variant
+      // they were ACTUALLY sent (sticky) so an auto-pause since then can't flip
+      // the thread's subject; fall back to a fresh pick when unrecorded.
       const firstEmail = firstPrimaryEmail(graph);
-      const firstVariant = firstEmail ? pickVariant(firstEmail, contact.id) : null;
+      let firstVariant = firstEmail ? pickVariant(firstEmail, contact.id) : null;
+      if (firstEmail) {
+        const recordedId = firstVariantByContact.get(`${campaign.id}\n${contact.id}`);
+        if (recordedId) {
+          const sticky = emailVariants(firstEmail).find((v) => v.id === recordedId);
+          if (sticky) firstVariant = sticky;
+        }
+      }
       const baseSubject =
         renderTemplate(firstVariant?.subject ?? "", contact, mailbox, `${contact.id}:0:subject`) || "(no subject)";
       subject = baseSubject.toLowerCase().startsWith("re:") ? baseSubject : `Re: ${baseSubject}`;
