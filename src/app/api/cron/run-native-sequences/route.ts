@@ -46,6 +46,14 @@ import { buildTokenMap, applyTokens } from "@/lib/native/tokens";
 import { loadVerifierStates, finalizeVerifierStates } from "@/lib/millionverifier/org-state";
 import { gateContactVerification } from "@/lib/millionverifier/verify-contact";
 import { domainOpenForNewLeads } from "@/lib/deliverability/lifecycle";
+import {
+  resolveFlowAction,
+  firstPrimaryEmail,
+  type FlowSignals,
+} from "@/lib/flow/runtime";
+import type { FlowGraph } from "@/lib/flow/graph";
+import { createManualTask, manualTaskKindForLinkedIn } from "@/lib/manual-tasks/create";
+import { runInternalNode } from "@/lib/notifications/internal-automations";
 import type {
   CampaignEnrollment,
   CampaignStep,
@@ -81,7 +89,24 @@ type CampaignRow = {
   send_weekdays_only: boolean | null;
   daily_new_leads_cap: number | null;
   sending_strategy: string | null;
+  // Visual Flow builder graph (migration 00086). NULL = legacy/linear campaign —
+  // the sender walks campaign_steps by current_step_index exactly as before.
+  // Present = the graph runtime (migration 00089) walks the tree from the
+  // enrollment's current_node_id (branches + linkedin/internal nodes execute).
+  flow_graph: FlowGraph | null;
 };
+
+// Result of the shared email-dispatch step (verify → send → log → count). The
+// caller (linear or flow) applies its own enrollment ADVANCE on "sent" and the
+// terminal effect on the failure variants. resultTag preserves the exact tick
+// tally string; failReason is the enrollment.last_error to write on a failure.
+type DispatchResult =
+  | { status: "sent"; rfcMessageId: string; threadId: string }
+  | { status: "hold"; resultTag: string }
+  | { status: "retry"; resultTag: string }
+  | { status: "mailbox_auth"; resultTag: string }
+  | { status: "skip"; resultTag: string; failReason: string }
+  | { status: "send_failed"; resultTag: string; failReason: string };
 
 export async function GET(request: NextRequest) {
   const authError = checkCronAuth(request);
@@ -145,10 +170,23 @@ export async function GET(request: NextRequest) {
 
   const { data: campaignsData } = await admin
     .from("campaigns")
-    .select("id, organization_id, client_id, status, source_channel, name, send_timezone, send_start_hour, send_end_hour, send_weekdays_only, daily_new_leads_cap, sending_strategy")
+    .select("id, organization_id, client_id, status, source_channel, name, send_timezone, send_start_hour, send_end_hour, send_weekdays_only, daily_new_leads_cap, sending_strategy, flow_graph")
     .in("id", campaignIds);
   const campaignMap = new Map<string, CampaignRow>();
   for (const c of (campaignsData ?? []) as CampaignRow[]) campaignMap.set(c.id, c);
+
+  // A campaign runs the GRAPH runtime only when its flow_graph is a well-formed,
+  // non-empty tree. A NULL / malformed / empty graph falls back to the LINEAR
+  // path (campaign_steps by current_step_index) — zero regression for every
+  // legacy campaign, and a safety net if a stored graph is ever corrupt (the
+  // derived campaign_steps still send). Parsed once per tick per campaign.
+  const flowGraphByCampaign = new Map<string, FlowGraph>();
+  for (const c of campaignMap.values()) {
+    const g = c.flow_graph;
+    if (g && typeof g === "object" && Array.isArray(g.nodes) && g.nodes.length > 0) {
+      flowGraphByCampaign.set(c.id, g);
+    }
+  }
 
   // Per-campaign strategy ordering. Within a campaign, reach_first processes new
   // first-touches (last_action_at NULL) before follow-ups; finish_first (the
@@ -224,6 +262,39 @@ export async function GET(request: NextRequest) {
         dncByEmail.set(key, s);
       }
       s.add(row.client_id ?? "*");
+    }
+  }
+
+  // ---- Flow-runtime reply signal ----
+  // A flow `condition` node can branch on "did the contact reply?". The signal is
+  // contact.status==='replied' OR a lead_replies row for this campaign+contact.
+  // lead_replies has no contact_id, so we key by campaign_id + the contact's
+  // email. Only queried when a flow campaign is in this tick's batch. Bounces use
+  // contact.status==='bounced' (no separate lead-level table), so no prefetch.
+  // Key: `${campaign_id}\n${lowercased email}`.
+  const repliedFlowKeys = new Set<string>();
+  if (flowGraphByCampaign.size > 0) {
+    const flowCampaignIds = [...flowGraphByCampaign.keys()];
+    const emailCandidates = new Set<string>();
+    for (const e of enrollments) {
+      if (!flowGraphByCampaign.has(e.campaign_id)) continue;
+      const em = contactMap.get(e.contact_id)?.email?.trim();
+      if (em) {
+        emailCandidates.add(em);
+        emailCandidates.add(em.toLowerCase());
+      }
+    }
+    if (emailCandidates.size > 0) {
+      const { data: replyRows } = await admin
+        .from("lead_replies")
+        .select("campaign_id, lead_email")
+        .in("campaign_id", flowCampaignIds)
+        .in("lead_email", [...emailCandidates]);
+      for (const r of (replyRows ?? []) as { campaign_id: string | null; lead_email: string | null }[]) {
+        if (r.campaign_id && r.lead_email) {
+          repliedFlowKeys.add(`${r.campaign_id}\n${r.lead_email.trim().toLowerCase()}`);
+        }
+      }
     }
   }
 
@@ -439,11 +510,374 @@ export async function GET(request: NextRequest) {
     paced(mb, campaign) &&
     domainUnderCap(mb);
 
+  // ── Shared email dispatch ───────────────────────────────────────────────────
+  // verify → build → send → read back Message-ID → log to native_sends → bump
+  // mailbox/domain/new-lead counters + flip the contact live. Does NOT advance
+  // the enrollment (linear and flow advance differently). BOTH paths funnel
+  // through here so the send mechanics can never drift between them.
+  async function dispatchEmail(args: {
+    campaign: CampaignRow;
+    enrollment: EnrollmentRow;
+    contact: Contact;
+    mailbox: NativeMailbox;
+    gmail: GmailClient;
+    subject: string;
+    bodyText: string;
+    stepIndex: number;
+    inReplyTo: string | null;
+    references: string | null;
+  }): Promise<DispatchResult> {
+    const { campaign, enrollment, contact, mailbox, gmail, subject, bodyText, stepIndex, inReplyTo, references } = args;
+    const to = contact.email as string; // caller guarantees a non-empty address
+
+    // Just-in-time email verification (Million Verifier). A hold leaves the
+    // enrollment active (retried next tick) and never consumes the mailbox slot;
+    // a skip fails it terminally. gate.result is snapshotted on the send row.
+    const gate = await gateContactVerification({
+      admin,
+      state: verifierByOrg.get(campaign.organization_id) ?? null,
+      contact,
+      now: tickNow,
+    });
+    if (gate.action === "hold") {
+      return { status: "hold", resultTag: `verify_hold_${gate.reason}` };
+    }
+    if (gate.action === "skip") {
+      return {
+        status: "skip",
+        resultTag: `verify_skip_${gate.status}`,
+        failReason: `Email verification: ${gate.reason}`,
+      };
+    }
+
+    const messageId = generateMessageId(mailbox.email_address);
+    const raw = buildRawEmail({
+      fromEmail: mailbox.email_address,
+      fromName: mailbox.display_name,
+      to,
+      subject,
+      bodyText,
+      messageId,
+      inReplyTo,
+      references,
+    });
+
+    let sendResult: { id: string; threadId: string };
+    try {
+      sendResult = await gmail.sendMessage(mailbox.email_address, raw, enrollment.gmail_thread_id ?? undefined);
+    } catch (err) {
+      if (err instanceof GmailAuthError) {
+        // Delegation broke for this mailbox — bench it (skips its enrollments the
+        // rest of the tick via eligible()) and leave the enrollment active.
+        await admin
+          .from("native_mailboxes")
+          .update({ status: "error", last_error: err.message, last_error_at: new Date().toISOString() })
+          .eq("id", mailbox.id);
+        mailbox.status = "error";
+        return { status: "mailbox_auth", resultTag: "mailbox_auth_error" };
+      }
+      if (err instanceof GmailRateLimitError || err instanceof GmailTransientError) {
+        return { status: "retry", resultTag: "retry_later" };
+      }
+      const msg =
+        err instanceof GmailPermanentError || err instanceof GmailConfigError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : String(err);
+      return { status: "send_failed", resultTag: "failed_send", failReason: `Send failed: ${msg}` };
+    }
+
+    // Read back the authoritative Message-ID for threading (non-fatal on failure).
+    let rfcMessageId = messageId;
+    try {
+      const meta = await gmail.getMessage(mailbox.email_address, sendResult.id, "metadata", ["Message-ID"]);
+      const hdr = meta.payload?.headers?.find((h) => h.name.toLowerCase() === "message-id");
+      if (hdr?.value) rfcMessageId = hdr.value;
+    } catch {
+      // Fall back to the generated Message-ID; threadId still threads.
+    }
+
+    await admin.from("native_sends").insert({
+      organization_id: campaign.organization_id,
+      campaign_id: campaign.id,
+      contact_id: contact.id,
+      enrollment_id: enrollment.id,
+      mailbox_id: mailbox.id,
+      step_index: stepIndex,
+      to_email: to,
+      email_verification_result: gate.result,
+      rfc_message_id: rfcMessageId,
+      gmail_message_id: sendResult.id,
+      gmail_thread_id: sendResult.threadId,
+      status: "sent",
+    });
+
+    // First send flips a queued/new contact to 'active' (it's now sending).
+    if (stepIndex === 0) {
+      await admin
+        .from("contacts")
+        .update({ status: "active" })
+        .eq("id", contact.id)
+        .in("status", ["new", "enriched", "queued", "uploaded"]);
+    }
+
+    sentToday[mailbox.id] = (sentToday[mailbox.id] ?? 0) + 1;
+    inTick[mailbox.id] = (inTick[mailbox.id] ?? 0) + 1;
+    lastSentTodayMs[mailbox.id] = tickNow.getTime();
+    if (mailbox.domain_id && capByDomainId.has(mailbox.domain_id)) {
+      domainInTick.set(mailbox.domain_id, (domainInTick.get(mailbox.domain_id) ?? 0) + 1);
+    }
+    if (stepIndex === 0) {
+      newLeadsInTick[campaign.id] = (newLeadsInTick[campaign.id] ?? 0) + 1;
+    }
+
+    return { status: "sent", rfcMessageId, threadId: sendResult.threadId };
+  }
+
+  // Advance a flow enrollment past a non-email node (linkedin / internal). Sets
+  // last_action_at so later waits measure from this action; does NOT bump
+  // current_step_index (that counts EMAILS only).
+  async function advanceFlowNode(enr: EnrollmentRow, nodeId: string): Promise<void> {
+    await admin
+      .from("campaign_enrollments")
+      .update({
+        current_node_id: nodeId,
+        last_action_at: new Date().toISOString(),
+        last_error: null,
+        status: "active",
+      })
+      .eq("id", enr.id);
+  }
+
+  // ── Flow-graph runtime: one enrollment, one due tick ────────────────────────
+  // Walk campaigns.flow_graph from the enrollment's current_node_id and perform
+  // the next actionable node: email → dispatchEmail (identical mechanics to the
+  // linear path), linkedin → a manual VA task, internal → the notify/webhook
+  // helper. Conditions route on real signals (see resolveFlowAction). Returns a
+  // tick-tally descriptor; `emailSent`/`sideAction` feed the per-tick budget.
+  async function runFlowEnrollment(
+    graph: FlowGraph,
+    enrollment: EnrollmentRow,
+    campaign: CampaignRow,
+  ): Promise<{ result: string; emailSent?: boolean; sideAction?: boolean }> {
+    const contact = contactMap.get(enrollment.contact_id);
+    if (!contact) {
+      await markEnrollmentFailed(admin, enrollment.id, "Contact no longer exists.");
+      return { result: "failed_no_contact" };
+    }
+
+    // Condition signals (per campaign+contact). replied = contact.status OR a
+    // lead_replies row; bounced = contact.status. opened/clicked/manual have no
+    // signal and take the NO branch (see resolveFlowAction).
+    const emailKey = (contact.email ?? "").trim().toLowerCase();
+    const hasReplied =
+      contact.status === "replied" ||
+      (emailKey.length > 0 && repliedFlowKeys.has(`${campaign.id}\n${emailKey}`));
+    const hasBounced = contact.status === "bounced";
+    const signals: FlowSignals = { hasReplied, hasBounced };
+
+    const action = resolveFlowAction(
+      graph,
+      { currentNodeId: enrollment.current_node_id ?? null, emailsSent: enrollment.current_step_index },
+      signals,
+    );
+
+    if (action.type === "complete") {
+      await admin.from("campaign_enrollments").update({ status: "completed" }).eq("id", enrollment.id);
+      return { result: "completed" };
+    }
+
+    // Wait gate — accumulated across the walk, measured from the last action (or
+    // enrollment start for the first). Checked BEFORE the reply-halt, matching
+    // the linear path (a reply is acted on only once the next step is due).
+    const referenceTime = enrollment.last_action_at ?? enrollment.started_at;
+    if (action.waitDays > 0 && referenceTime) {
+      const dueAt = new Date(referenceTime).getTime() + action.waitDays * 86_400_000;
+      if (Date.now() < dueAt) return { result: "flow_wait" };
+    }
+
+    // Reply-halt reconciliation: if the contact replied and NO replied-condition
+    // governs the path to this action, halt the enrollment exactly as the linear
+    // sender does (a human takes over). When a replied-condition IS on the path
+    // the walk already routed on the reply, so we don't pre-empt — the graph owns
+    // it. Applies to EVERY action type.
+    if (hasReplied && !action.passedTriggers.has("replied")) {
+      await admin.from("campaign_enrollments").update({ status: "replied" }).eq("id", enrollment.id);
+      return { result: "already_replied" };
+    }
+    // Unsubscribe is a hard opt-out across channels — stop the enrollment.
+    if (contact.status === "unsubscribed") {
+      await markEnrollmentFailed(admin, enrollment.id, "Contact is unsubscribed.");
+      return { result: "suppressed_unsubscribed" };
+    }
+
+    // ---- LinkedIn node → a manual VA task, then advance past it. ----
+    if (action.type === "linkedin") {
+      const renderedBody = renderTemplate(action.node.body ?? "", contact, null, `${contact.id}:${action.node.id}:li`);
+      const task = await createManualTask(admin, {
+        organizationId: campaign.organization_id,
+        campaignId: campaign.id,
+        contactId: contact.id,
+        kind: manualTaskKindForLinkedIn(action.node.li_kind),
+        renderedBody,
+        clientId: campaign.client_id,
+        flowNodeId: action.node.id, // idempotency: one task per node per contact
+      });
+      if (task.error) {
+        // Best-effort insert failed — leave parked and retry next tick.
+        console.error("[cron/native-sequences] manual-task insert failed:", task.error);
+        return { result: "flow_linkedin_error" };
+      }
+      await advanceFlowNode(enrollment, action.node.id);
+      return { result: task.created ? "flow_linkedin_task" : "flow_linkedin_dedup", sideAction: true };
+    }
+
+    // ---- Internal node → notify/webhook (best-effort), then advance. ----
+    if (action.type === "internal") {
+      await runInternalNode(
+        { id: action.node.id, action: action.node.action, label: action.node.label, target: action.node.target },
+        {
+          admin,
+          organizationId: campaign.organization_id,
+          campaignId: campaign.id,
+          contactId: contact.id,
+          clientId: campaign.client_id,
+        },
+      );
+      await advanceFlowNode(enrollment, action.node.id);
+      return { result: "flow_internal", sideAction: true };
+    }
+
+    // ---- Email node → the shared dispatch path. ----
+    if (!contact.email) {
+      await markEnrollmentFailed(admin, enrollment.id, "Contact has no email address.");
+      return { result: "failed_no_email" };
+    }
+    // Bounce + DNC are EMAIL-only suppressions (a dead address / an email opt-out);
+    // a bounced-condition can still route a bounced contact to a non-email arm
+    // above, before this check is reached.
+    if (hasBounced) {
+      await markEnrollmentFailed(admin, enrollment.id, "Contact is bounced.");
+      return { result: "suppressed_bounced" };
+    }
+    const dncClients = dncByEmail.get(emailKey);
+    if (dncClients && (dncClients.has(campaign.client_id ?? "*") || dncClients.has("*"))) {
+      await markEnrollmentFailed(admin, enrollment.id, "Contact is on the client's DNC list.");
+      return { result: "suppressed_dnc" };
+    }
+
+    const stepIndex = enrollment.current_step_index; // # emails already sent = this email's index
+    const isFirst = stepIndex === 0;
+
+    // Per-campaign new-leads/day gate for the first touch (identical to linear).
+    if (isFirst) {
+      const newLeadCap = resolveDailyNewLeadsCap(campaign);
+      if (newLeadCap <= 0) return { result: "new_leads_paused" };
+      if (resolveSendingStrategy(campaign) === "finish_first") {
+        const usedNewLeads = (newLeadsToday[campaign.id] ?? 0) + (newLeadsInTick[campaign.id] ?? 0);
+        if (usedNewLeads >= newLeadCap) return { result: "new_leads_cap_reached" };
+      }
+    }
+
+    // Mailbox pick — sticky after the first send, else least-loaded open mailbox
+    // in the pool (identical policy to the linear path).
+    let mailbox: NativeMailbox | undefined;
+    if (enrollment.native_mailbox_id) {
+      mailbox = mailboxMap.get(enrollment.native_mailbox_id);
+      if (!mailbox || !eligible(mailbox, campaign)) return { result: "flow_mailbox_wait" };
+    } else {
+      const pool = (poolByCampaign.get(campaign.id) ?? [])
+        .map((id) => mailboxMap.get(id))
+        .filter((mb): mb is NativeMailbox => !!mb && eligible(mb, campaign) && domainOpenFor(mb));
+      if (pool.length === 0) return { result: "flow_no_mailbox" };
+      pool.sort((a, b) => remaining(b) - remaining(a) || (inTick[a.id] ?? 0) - (inTick[b.id] ?? 0));
+      mailbox = pool[0];
+    }
+
+    // Render subject + body from the email NODE (not campaign_steps).
+    const bodyText = renderTemplate(action.node.body ?? "", contact, mailbox, `${contact.id}:${stepIndex}:body`);
+    if (!bodyText) {
+      await markEnrollmentFailed(admin, enrollment.id, "Rendered email body is empty.");
+      return { result: "failed_empty_body" };
+    }
+    let subject: string;
+    if (isFirst) {
+      subject = renderTemplate(action.node.subject ?? "", contact, mailbox, `${contact.id}:0:subject`);
+      if (!subject) {
+        await markEnrollmentFailed(admin, enrollment.id, "First email has no subject.");
+        return { result: "failed_no_subject" };
+      }
+    } else if ((action.node.subject ?? "").trim()) {
+      subject = renderTemplate(action.node.subject ?? "", contact, mailbox, `${contact.id}:${stepIndex}:subject`);
+    } else {
+      // Re: fallback — thread on the FIRST primary-path email's subject, rendered
+      // with the step-0 seed key so it's byte-identical to the original send.
+      const firstEmail = firstPrimaryEmail(graph);
+      const baseSubject =
+        renderTemplate(firstEmail?.subject ?? "", contact, mailbox, `${contact.id}:0:subject`) || "(no subject)";
+      subject = baseSubject.toLowerCase().startsWith("re:") ? baseSubject : `Re: ${baseSubject}`;
+    }
+
+    // Gmail client for the org (cached per tick).
+    if (!gmailByOrg.has(campaign.organization_id)) {
+      try {
+        gmailByOrg.set(campaign.organization_id, await loadGmailClientForOrg(admin, campaign.organization_id));
+      } catch (err) {
+        gmailByOrg.set(campaign.organization_id, null);
+        console.error("[cron/native-sequences] no Gmail creds for org", campaign.organization_id, err);
+      }
+    }
+    const gmail = gmailByOrg.get(campaign.organization_id);
+    if (!gmail) return { result: "flow_no_gmail" }; // org not configured; leave active
+
+    const d = await dispatchEmail({
+      campaign,
+      enrollment,
+      contact,
+      mailbox,
+      gmail,
+      subject,
+      bodyText,
+      stepIndex,
+      inReplyTo: isFirst ? null : enrollment.last_rfc_message_id,
+      references: isFirst ? null : enrollment.last_rfc_message_id,
+    });
+    if (d.status === "hold" || d.status === "retry" || d.status === "mailbox_auth") {
+      return { result: d.resultTag };
+    }
+    if (d.status === "skip" || d.status === "send_failed") {
+      await markEnrollmentFailed(admin, enrollment.id, d.failReason);
+      return { result: d.resultTag };
+    }
+    // Sent — advance PAST this email node (current_node_id = node.id) and bump the
+    // email counter. Stay 'active'; completion is detected on the next tick (when
+    // the walk runs off the end), so a late reply can still re-route until then.
+    await admin
+      .from("campaign_enrollments")
+      .update({
+        current_node_id: action.node.id,
+        current_step_index: stepIndex + 1,
+        last_action_at: new Date().toISOString(),
+        native_mailbox_id: mailbox.id,
+        gmail_thread_id: d.threadId,
+        last_rfc_message_id: d.rfcMessageId,
+        last_error: null,
+        status: "active",
+      })
+      .eq("id", enrollment.id);
+    return { result: "flow_email_sent", emailSent: true };
+  }
+
   let sent = 0;
+  // Non-email flow side-effects (linkedin tasks / internal notifies) this tick.
+  // Shares the per-tick action budget with `sent` so a tick can't fan out an
+  // unbounded number of outbound webhooks / task inserts.
+  let sideActions = 0;
   const results: Array<{ enrollment_id: string; result: string }> = [];
 
   for (const enrollment of enrollments) {
-    if (sent >= SENDS_PER_TICK) break;
+    if (sent + sideActions >= SENDS_PER_TICK) break;
 
     const campaign = campaignMap.get(enrollment.campaign_id);
     if (!campaign || campaign.status !== "active" || campaign.source_channel !== "native_email") {
@@ -457,6 +891,18 @@ export async function GET(request: NextRequest) {
       inWindowByCampaign.set(campaign.id, isInSendWindow(tickNow, windowFor(campaign)));
     }
     if (!inWindowByCampaign.get(campaign.id)) continue;
+
+    // ── Flow campaigns: walk the graph (branches + linkedin/internal execute).
+    // Legacy/linear campaigns (flow_graph NULL) fall through to the unchanged
+    // step-index path below. This branch is the ONLY behavioral difference.
+    const flowGraph = flowGraphByCampaign.get(campaign.id);
+    if (flowGraph) {
+      const outcome = await runFlowEnrollment(flowGraph, enrollment, campaign);
+      results.push({ enrollment_id: enrollment.id, result: outcome.result });
+      if (outcome.emailSent) sent++;
+      if (outcome.sideAction) sideActions++;
+      continue;
+    }
 
     const steps = stepsByCampaign.get(campaign.id);
     const step = steps?.get(enrollment.current_step_index);
@@ -614,106 +1060,29 @@ export async function GET(request: NextRequest) {
     const gmail = gmailByOrg.get(campaign.organization_id);
     if (!gmail) continue; // org not configured; leave enrollment active
 
-    // ---- Just-in-time email verification (Million Verifier) ----
-    // Last gate before the send: every check that can stop this enrollment for
-    // free (window, suppression, DNC, caps, mailbox slot, render, Gmail creds)
-    // has already passed, so a credit is only ever spent on an address we would
-    // send to right now. Fresh cached results (<=30d) send with no API call.
-    // A hold leaves the enrollment active (retried next tick) and never consumes
-    // the mailbox slot; a skip fails it terminally. gate.result is snapshotted
-    // on the send row (null = gate disarmed / no key configured).
-    const gate = await gateContactVerification({
-      admin,
-      state: verifierByOrg.get(campaign.organization_id) ?? null,
+    // ---- Gmail creds ready + every free gate passed → hand off to the shared
+    // dispatch (verify → send → log → count). Then advance the LINEAR position.
+    const d = await dispatchEmail({
+      campaign,
+      enrollment,
       contact,
-      now: tickNow,
-    });
-    if (gate.action === "hold") {
-      results.push({ enrollment_id: enrollment.id, result: `verify_hold_${gate.reason}` });
-      continue;
-    }
-    if (gate.action === "skip") {
-      await markEnrollmentFailed(admin, enrollment.id, `Email verification: ${gate.reason}`);
-      results.push({ enrollment_id: enrollment.id, result: `verify_skip_${gate.status}` });
-      continue;
-    }
-
-    const messageId = generateMessageId(mailbox.email_address);
-    const raw = buildRawEmail({
-      fromEmail: mailbox.email_address,
-      fromName: mailbox.display_name,
-      to: contact.email,
+      mailbox,
+      gmail,
       subject,
       bodyText,
-      messageId,
+      stepIndex: enrollment.current_step_index,
       inReplyTo: enrollment.current_step_index === 0 ? null : enrollment.last_rfc_message_id,
       references: enrollment.current_step_index === 0 ? null : enrollment.last_rfc_message_id,
     });
-
-    // ---- Send ----
-    let sendResult: { id: string; threadId: string };
-    try {
-      sendResult = await gmail.sendMessage(
-        mailbox.email_address,
-        raw,
-        enrollment.gmail_thread_id ?? undefined,
-      );
-    } catch (err) {
-      if (err instanceof GmailAuthError) {
-        // Delegation broke for this mailbox — bench it and skip its
-        // enrollments for the rest of the tick. Leave the enrollment active.
-        await admin
-          .from("native_mailboxes")
-          .update({ status: "error", last_error: err.message, last_error_at: new Date().toISOString() })
-          .eq("id", mailbox.id);
-        mailbox.status = "error";
-        results.push({ enrollment_id: enrollment.id, result: "mailbox_auth_error" });
-        continue;
-      }
-      if (err instanceof GmailRateLimitError || err instanceof GmailTransientError) {
-        // Retry next tick — do not advance.
-        results.push({ enrollment_id: enrollment.id, result: "retry_later" });
-        continue;
-      }
-      // GmailPermanentError (bad recipient etc.) or anything unexpected — fail
-      // the enrollment so it stops looping.
-      const msg =
-        err instanceof GmailPermanentError || err instanceof GmailConfigError
-          ? err.message
-          : err instanceof Error
-            ? err.message
-            : String(err);
-      await markEnrollmentFailed(admin, enrollment.id, `Send failed: ${msg}`);
-      results.push({ enrollment_id: enrollment.id, result: "failed_send" });
+    if (d.status === "hold" || d.status === "retry" || d.status === "mailbox_auth") {
+      results.push({ enrollment_id: enrollment.id, result: d.resultTag });
       continue;
     }
-
-    // ---- Read back the authoritative Message-ID for threading ----
-    let rfcMessageId = messageId;
-    try {
-      const meta = await gmail.getMessage(mailbox.email_address, sendResult.id, "metadata", ["Message-ID"]);
-      const hdr = meta.payload?.headers?.find((h) => h.name.toLowerCase() === "message-id");
-      if (hdr?.value) rfcMessageId = hdr.value;
-    } catch {
-      // Non-fatal: fall back to the Message-ID we generated (Gmail usually
-      // preserves it). Threading still works via threadId.
+    if (d.status === "skip" || d.status === "send_failed") {
+      await markEnrollmentFailed(admin, enrollment.id, d.failReason);
+      results.push({ enrollment_id: enrollment.id, result: d.resultTag });
+      continue;
     }
-
-    // ---- Log the send + advance the enrollment ----
-    await admin.from("native_sends").insert({
-      organization_id: campaign.organization_id,
-      campaign_id: campaign.id,
-      contact_id: contact.id,
-      enrollment_id: enrollment.id,
-      mailbox_id: mailbox.id,
-      step_index: enrollment.current_step_index,
-      to_email: contact.email,
-      email_verification_result: gate.result,
-      rfc_message_id: rfcMessageId,
-      gmail_message_id: sendResult.id,
-      gmail_thread_id: sendResult.threadId,
-      status: "sent",
-    });
 
     const nextIndex = enrollment.current_step_index + 1;
     const hasNext = steps?.has(nextIndex) ?? false;
@@ -723,34 +1092,13 @@ export async function GET(request: NextRequest) {
         current_step_index: nextIndex,
         last_action_at: new Date().toISOString(),
         native_mailbox_id: mailbox.id,
-        gmail_thread_id: sendResult.threadId,
-        last_rfc_message_id: rfcMessageId,
+        gmail_thread_id: d.threadId,
+        last_rfc_message_id: d.rfcMessageId,
         last_error: null,
         status: hasNext ? "active" : "completed",
       })
       .eq("id", enrollment.id);
 
-    // First send flips a queued/new contact to 'active' (it's now sending).
-    if (enrollment.current_step_index === 0) {
-      await admin
-        .from("contacts")
-        .update({ status: "active" })
-        .eq("id", contact.id)
-        .in("status", ["new", "enriched", "queued", "uploaded"]);
-    }
-
-    sentToday[mailbox.id] = (sentToday[mailbox.id] ?? 0) + 1;
-    inTick[mailbox.id] = (inTick[mailbox.id] ?? 0) + 1;
-    lastSentTodayMs[mailbox.id] = tickNow.getTime();
-    // Count this send against the domain's daily cap (no-op unless the domain
-    // has one set).
-    if (mailbox.domain_id && capByDomainId.has(mailbox.domain_id)) {
-      domainInTick.set(mailbox.domain_id, (domainInTick.get(mailbox.domain_id) ?? 0) + 1);
-    }
-    // Count this first-touch against the campaign's new-leads/day cap.
-    if (enrollment.current_step_index === 0) {
-      newLeadsInTick[campaign.id] = (newLeadsInTick[campaign.id] ?? 0) + 1;
-    }
     sent++;
     results.push({ enrollment_id: enrollment.id, result: hasNext ? "advanced" : "completed" });
   }
@@ -761,7 +1109,7 @@ export async function GET(request: NextRequest) {
   // (armed/suppressed/tripped, calls, cached, held, skipped) is greppable.
   const verification = await finalizeVerifierStates(admin, verifierByOrg);
 
-  return NextResponse.json({ status: "ok", sent, verification, results });
+  return NextResponse.json({ status: "ok", sent, sideActions, verification, results });
 }
 
 // Render sequence copy against a contact + the sending mailbox. Resolves
@@ -782,7 +1130,7 @@ export async function GET(request: NextRequest) {
 function renderTemplate(
   template: string,
   contact: Contact,
-  mailbox: NativeMailbox,
+  mailbox: NativeMailbox | null,
   spinKey?: string,
 ): string {
   // ORDERING IS LOAD-BEARING: resolve spintax BEFORE token substitution.
@@ -793,8 +1141,11 @@ function renderTemplate(
   // filled by the token pass below.
   const source = spinKey ? renderSpintax(template, spinKey) : template;
 
-  const senderName =
-    mailbox.display_name?.trim() || mailbox.email_address.split("@")[0];
+  // No mailbox (a linkedin / internal node body) → blank sender identity; the
+  // VA owns a linkedin task's copy anyway. Email sends always pass the mailbox.
+  const senderName = mailbox
+    ? mailbox.display_name?.trim() || mailbox.email_address.split("@")[0]
+    : "";
 
   // buildTokenMap / applyTokens are the shared source of truth (also used by the
   // builder preview), keeping the send and the preview byte-identical.
