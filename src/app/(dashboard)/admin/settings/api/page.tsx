@@ -20,6 +20,7 @@ import { useUser } from "@/hooks/use-user";
 import { ApifySpendCard } from "./apify-spend-card";
 import { WaterfallSettingsCard } from "./waterfall-settings-card";
 import { RegistrarSettingsCard } from "./registrar-settings-card";
+import { AutomationsSettingsCard } from "./automations-settings-card";
 import { MsOauthSettingsCard } from "./ms-oauth-settings-card";
 import {
   Key,
@@ -1288,6 +1289,9 @@ export default function IntegrationsPage() {
 
       {/* Microsoft OAuth app — connect Outlook/M365 seed inboxes (migration 00085) */}
       <MsOauthSettingsCard />
+
+      {/* Internal automations — reply-triggered Slack/webhook/email pings (migration 00087) */}
+      <AutomationsSettingsCard />
 
       {/* Anthropic — decision-maker enrichment Layer 1 */}
       <Card className="border-border/50 shadow-sm">

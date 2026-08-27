@@ -70,6 +70,10 @@ export interface Organization {
   // Configurable enrichment waterfall (migration 00075). NULL → code defaults
   // (DEFAULT_ENRICHMENT_SETTINGS). Read/merged via loadEnrichmentSettings.
   enrichment_settings: EnrichmentSettings | null;
+  // Internal-automation notify config (migration 00087). NULL → code defaults
+  // (DEFAULT_AUTOMATION_SETTINGS). Read/merged via loadAutomationSettings.
+  // Drives event-triggered Slack/webhook/email pings from the reply pipeline.
+  automation_settings: AutomationSettings | null;
   created_at: string;
   updated_at: string;
 }
@@ -1432,6 +1436,65 @@ export const DEFAULT_ENRICHMENT_SETTINGS: EnrichmentSettings = {
   // has no LinkedIn page (they'd otherwise dead-end with no domain, no email).
   domain_discovery_enabled: true,
 };
+
+// ── Internal automations (migration 00087) ───────────────────────────────
+// Org-level config for event-triggered "internal automation" notifications —
+// the delivery side of the Flow builder's kind:'internal' notify/webhook nodes.
+// Today these fire from the reply pipeline on a classified inbound reply; the
+// graph runtime will reuse the same targets for inline nodes later.
+
+// Which reply events fan out a notification.
+//   "hot"          → only HOT_REPLY_CLASSES (positive replies) — the default.
+//   "all_replies"  → every classified inbound reply, any class.
+export type AutomationNotifyOn = "hot" | "all_replies";
+
+export interface AutomationSettings {
+  // Master switch. OFF by default — nothing fires until an org opts in and
+  // configures at least one target.
+  enabled: boolean;
+  // Event filter (see AutomationNotifyOn).
+  notify_on: AutomationNotifyOn;
+  // Slack incoming-webhook URL. "" = Slack channel off. Treated as a secret
+  // (write-only in the settings API — never echoed back to the browser).
+  slack_webhook_url: string;
+  // Extra teammate address emailed on each event (via Resend). "" = off. This
+  // is org-level and independent of the per-client hot-lead notification_email.
+  notify_email: string;
+  // Generic outbound webhook — we POST a JSON event here. "" = off. Secret.
+  outbound_webhook_url: string;
+  // Optional shared secret. When set, the outbound POST carries an
+  // X-LeadStart-Signature: sha256=<hmac> header over the raw body. Secret.
+  outbound_webhook_secret: string;
+}
+
+// NULL in the DB → these code defaults (disabled, positive-only).
+export const DEFAULT_AUTOMATION_SETTINGS: AutomationSettings = {
+  enabled: false,
+  notify_on: "hot",
+  slack_webhook_url: "",
+  notify_email: "",
+  outbound_webhook_url: "",
+  outbound_webhook_secret: "",
+};
+
+// The three secret-ish fields the settings API never echoes back verbatim.
+export const AUTOMATION_SECRET_FIELDS = [
+  "slack_webhook_url",
+  "outbound_webhook_url",
+  "outbound_webhook_secret",
+] as const;
+
+// Masked read shape returned by GET /api/admin/automations/settings — non-secret
+// config as values, secrets collapsed to booleans (+ a host hint for URLs).
+export interface AutomationSettingsStatus {
+  enabled: boolean;
+  notify_on: AutomationNotifyOn;
+  notify_email: string;
+  slack_webhook_url_set: boolean;
+  outbound_webhook_url_set: boolean;
+  outbound_webhook_url_host: string | null;
+  outbound_webhook_secret_set: boolean;
+}
 
 export interface EnrichmentRun {
   id: string;

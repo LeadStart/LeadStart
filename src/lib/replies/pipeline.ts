@@ -15,6 +15,7 @@ import { runKeywordPrefilter } from "./keyword-prefilter";
 import { decideFinalClass } from "./decide";
 import { classifyReply, type ClassifierOutput } from "@/lib/ai/classifier";
 import { sendHotLeadNotification } from "@/lib/notifications/send-hot-lead";
+import { deliverReplyAutomations } from "@/lib/notifications/internal-automations";
 import { MissingAnthropicKeyError } from "@/lib/ai/client";
 import { escapeLikePattern } from "@/lib/utils";
 
@@ -173,6 +174,22 @@ export async function runReplyPipeline(
       }
     }
   }
+
+  // --- 4c. Internal automations (org-level Slack / webhook / teammate email) ---
+  // Event-triggered delivery of the "internal automation" notify targets an org
+  // configures under Settings → Integrations (migration 00087). Independent of
+  // the per-client hot-lead email below: this fires for every classified reply
+  // (orphan-client rows included) whose class matches the org's notify_on gate,
+  // even when the client has no notification_email. Best-effort + fully
+  // self-guarded — it never throws, so it can't affect classification or the
+  // hot-lead path. Idempotent via the already_classified early-return above.
+  await deliverReplyAutomations({
+    admin,
+    organizationId: reply.organization_id,
+    reply,
+    client,
+    finalClass: decision.final_class,
+  });
 
   // --- 5. Notify if hot ---
   // Orphan replies can't be notified because we don't know which client
