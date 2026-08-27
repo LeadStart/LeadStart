@@ -35,10 +35,23 @@ export interface FlowNodeBase {
   id: string;
 }
 
+/** One A/B/C… variant of an email node (its own subject + body). */
+export interface EmailVariant {
+  id: string;
+  subject: string; // may be "" on follow-ups — they thread as "Re:"
+  body: string;
+}
+
 export interface EmailNode extends FlowNodeBase {
   kind: "email";
   subject: string; // may be "" on follow-ups — they thread as "Re:"
   body: string;
+  // A/B/C… testing (optional). When ≥1 extra variant is present, the sender
+  // splits enrollments across variant A (this node's own subject/body) + these
+  // extras and stamps native_sends.variant_id for per-variant measurement.
+  // graphToSteps + the linear derivation use variant A only, so a node with no
+  // extras behaves exactly as before.
+  variants?: EmailVariant[];
 }
 
 export interface WaitNode extends FlowNodeBase {
@@ -107,6 +120,9 @@ export function newId(): string {
 
 export function emailNode(subject = "", body = "", id = newId()): EmailNode {
   return { id, kind: "email", subject, body };
+}
+export function emailVariant(subject = "", body = "", id = newId()): EmailVariant {
+  return { id, subject, body };
 }
 export function waitNode(wait_days = 3, id = newId()): WaitNode {
   return { id, kind: "wait", wait_days };
@@ -201,6 +217,42 @@ export function countEmails(graph: FlowGraph): number {
   return n;
 }
 
+// ---- email variants (A/B/C… testing) ----------------------------------------
+
+/** A resolved email variant with a display label (A, B, C…). */
+export interface ResolvedVariant {
+  id: string;
+  label: string;
+  subject: string;
+  body: string;
+}
+
+/**
+ * All variants of an email node for sending + measurement: variant A is the
+ * node's own subject/body (id = the node id), then any extras (B, C…). A node
+ * with no `variants` returns just [A], so callers treat single + A/B uniformly.
+ */
+export function emailVariants(node: EmailNode): ResolvedVariant[] {
+  const a: ResolvedVariant = {
+    id: node.id,
+    label: "A",
+    subject: node.subject,
+    body: node.body,
+  };
+  const extras = (node.variants ?? []).map((v, i) => ({
+    id: v.id,
+    label: String.fromCharCode(66 + i), // B, C, D…
+    subject: v.subject,
+    body: v.body,
+  }));
+  return [a, ...extras];
+}
+
+/** True when an email node is A/B testing (≥1 extra variant → ≥2 total). */
+export function isAbTest(node: EmailNode): boolean {
+  return (node.variants?.length ?? 0) >= 1;
+}
+
 // ---- steps <-> graph ---------------------------------------------------
 
 /**
@@ -259,10 +311,26 @@ export function validateGraph(graph: FlowGraph): string | null {
     if (!steps[i].body_template.trim()) return `Email ${i + 1} needs a body.`;
   }
   let branchError: string | null = null;
+  const firstEmailId =
+    flattenPrimaryPath(graph.nodes).find((n) => n.kind === "email")?.id ?? null;
   walkAll(graph.nodes, (n) => {
     if (branchError) return;
-    if (n.kind === "email" && !n.body.trim()) {
+    if (n.kind !== "email") return;
+    if (!n.body.trim()) {
       branchError = "Every email in the flow needs a body.";
+      return;
+    }
+    // A/B variants: each needs a body; variants of the first email also need a
+    // subject (the first email always sends under one).
+    for (const v of n.variants ?? []) {
+      if (!v.body.trim()) {
+        branchError = "Every A/B variant needs a body.";
+        return;
+      }
+      if (n.id === firstEmailId && !v.subject.trim()) {
+        branchError = "Each A/B variant of the first email needs a subject line.";
+        return;
+      }
     }
   });
   return branchError;
