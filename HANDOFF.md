@@ -5,6 +5,56 @@
 
 ---
 
+## 2026-08-26 — A/B AUTO-WINNER: significance-test auto-pause of losing variants; LOCAL-ONLY, awaiting push
+
+Built on top of the A/B stack below (which is itself awaiting the same push). Once a
+variant gathers enough sends, a **one-sided two-proportion z-test on positive-reply rate**
+auto-pauses the losers so NEW leads route to the leader. **No migration** (pause flag lives
+in the graph JSONB). Living tracker: [`docs/plans/campaign-editor-roadmap.md`](docs/plans/campaign-editor-roadmap.md) §4.
+
+### What changed (6 concerns)
+1. **Pure decision** — `src/lib/flow/ab-winner.ts`: `decideAbWinner(stats, config)` (z-test;
+   critical z from an Acklam probit; monotonic — only adds pauses, never pauses the leader or
+   the last active variant; degenerate SE → no pause). `DEFAULT_AB_WINNER_CONFIG` = 30
+   sends/variant · 60 total · 95% one-sided; per-node override via `EmailNode.ab_config`. Plus
+   pure graph merges `mergePausedIntoGraph` (union new pauses) + `mergeStoredPauses` (save-route preserve).
+2. **Pause storage** — `EmailNode.paused_variant_ids: string[]` (JSONB, additive, **no migration**);
+   `emailVariants` annotates `ResolvedVariant.paused`; new `activeVariants` helper.
+3. **Sender read-side (minimal, low deploy-risk)** — `pickVariant(node, id, {assignedId})` EXCLUDES
+   paused for new leads, STICKY to a recorded assignment; a per-tick prefetch of each contact's
+   first-email `variant_id` keeps a follow-up "Re:" subject on the variant they actually got. The
+   sender does NO stats + NO writes — it only reads the flag.
+4. **Evaluator OFF the hot-path** — `src/lib/flow/ab-winner-eval.ts` `evaluateAbWinners`, called
+   from the **hourly `sync-analytics` cron** on the send log + replies it already pages (no extra
+   fetch, cheap early-out unless the graph has an A/B node). Merge-safe write: re-read fresh graph →
+   union pauses → persist only if grown; touches only `flow_graph`. Returns `variants_paused` in the response.
+5. **Save-route preserve** — `update-sequence` re-applies stored pauses onto an incoming graph
+   (`mergeStoredPauses`), so a manual builder edit can't wipe an auto-pause (a stale builder that
+   loaded before the pause would otherwise clobber it).
+6. **Display** — `ab-results.tsx`: Winner (trophy) + Paused (amber) + provisional Leading badges;
+   `computeVariantStats` now exposes per-variant `paused` + `winnerId`/`decided`.
+
+### Verification
+tsc clean (0 new errors; 19 pre-existing) · eslint clean on touched files · unit **190**
+(ab-winner 41, flow-variants 33 [+14], ab-results-render 12, runtime 63, progress 18, graph 13,
+edit 10) · **live-DB e2e 10/10** (`scripts/e2e-ab-winner.ts` — real native_sends + lead_replies drive
+the REAL evaluator → pause written to flow_graph + round-trips JSONB → sender pickVariant excludes/sticky
+→ mergeStoredPauses preserves → idempotent second pass; self-cleaning DRAFT, `.invalid` emails, zero spend).
+Display verified via static-markup render (deep campaign route is rAF-hang-flaky in the hidden preview — [[project_preview_pane_raf_hydration]]).
+
+### Deploy risk (same gate as the stack)
+Push auto-deploys, no staging. Sender change is a READ + prefetch only (flow campaigns; legacy byte-identical).
+The evaluator is isolated in the hourly analytics cron — a bug there cannot stop sends. In production the
+default config (30/60/0.95) means a pause only fires after real volume; low positive-reply rates mean many
+campaigns never auto-pause (correct — never call a winner without evidence). Post-deploy: watch a live A/B
+campaign's `sync-analytics` response for `variants_paused` once a node crosses threshold.
+
+**Open follow-ups (not blocking):** (a) a builder "reset A/B test" affordance to manually un-pause
+(today pauses are monotonic + server-owned); (b) optional per-node `ab_config` editor UI (field + eval
+wired, no UI yet); (c) send-time "risky/paused last" ordering is unrelated (that's the catch-all item).
+
+---
+
 ## 2026-08-26 — Campaign-editor stack: reply-class conditions + flow observability + A/B testing; LOCAL-ONLY, awaiting push
 
 Three stacked builds on top of the (now-pushed) #3 graph runtime, same worktree/branch
