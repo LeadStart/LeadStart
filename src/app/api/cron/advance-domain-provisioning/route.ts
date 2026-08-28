@@ -62,11 +62,12 @@ export async function GET(request: NextRequest) {
   const orgCache = new Map<string, OrgClients | null>();
   const summary = { advanced: 0, dkim_watch: 0, warming: 0, alerted: 0, skipped_config: 0, errors: 0 };
 
-  async function orgClients(orgId: string): Promise<OrgClients | null> {
-    if (orgCache.has(orgId)) return orgCache.get(orgId) ?? null;
+  async function clientsFor(orgId: string, workspaceId: string | null): Promise<OrgClients | null> {
+    const key = `${orgId}|${workspaceId ?? "default"}`;
+    if (orgCache.has(key)) return orgCache.get(key) ?? null;
     let clients: OrgClients | null = null;
     try {
-      const workspace = await loadWorkspaceAdminForOrg(admin, orgId);
+      const workspace = await loadWorkspaceAdminForOrg(admin, orgId, { workspaceId });
       const gmail = await loadGmailClientForOrg(admin, orgId);
       const config = await loadRegistrarConfig(admin, orgId);
       clients = { workspace, gmail, config };
@@ -74,14 +75,14 @@ export async function GET(request: NextRequest) {
       if (!(err instanceof GoogleConfigError || err instanceof GmailConfigError)) throw err;
       clients = null; // config missing → the owner hasn't finished setup; skip.
     }
-    orgCache.set(orgId, clients);
+    orgCache.set(key, clients);
     return clients;
   }
 
   for (const domain of domains) {
     try {
       if (domain.provisioning && !domain.provisioning.completed_at) {
-        const clients = await orgClients(domain.organization_id);
+        const clients = await clientsFor(domain.organization_id, domain.workspace_id ?? null);
         if (!clients) {
           summary.skipped_config++;
           continue;

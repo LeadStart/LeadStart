@@ -43,6 +43,7 @@ import type {
 } from "@/types/app";
 import { ProvisionDomainPanel } from "./provision-domain-panel";
 import { DomainProvisioningDetail } from "./domain-provisioning-detail";
+import { DomainSetupModal } from "./domain-setup-modal";
 
 type MailboxRow = NativeMailbox & {
   sent_today: number;
@@ -81,6 +82,7 @@ export default function MailboxesPage() {
   const [mailboxes, setMailboxes] = useState<MailboxRow[]>([]);
   const [domains, setDomains] = useState<DomainRow[]>([]);
   const [expandedDomainId, setExpandedDomainId] = useState<string | null>(null);
+  const [setupDomain, setSetupDomain] = useState<DomainRow | null>(null);
   const [seedCount, setSeedCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [banner, setBanner] = useState<Banner>(null);
@@ -544,6 +546,10 @@ export default function MailboxesPage() {
         </div>
       )}
 
+      {/* Two-column board: inbox management on the left, domains + provisioning
+          on the right, so setting up a domain no longer sits far down the page. */}
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2 xl:items-start">
+      <div className="space-y-6">
       {/* Add mailbox */}
       <Card className="border-border/50 shadow-sm">
         <CardHeader className="flex flex-row items-center gap-2 pb-3">
@@ -864,7 +870,9 @@ export default function MailboxesPage() {
           )}
         </CardContent>
       </Card>
+      </div>
 
+      <div className="space-y-6">
       {/* Provision a domain */}
       <ProvisionDomainPanel onChange={load} />
 
@@ -933,6 +941,18 @@ export default function MailboxesPage() {
                         {d.mailbox_count} inbox{d.mailbox_count === 1 ? "" : "es"}
                         {d.max_daily_sends != null && ` · cap ${d.max_daily_sends}/day`}
                       </span>
+                      {d.lifecycle_status === "provisioning" && !d.provisioning && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSetupDomain(d);
+                          }}
+                          className="rounded-md bg-primary px-2.5 py-1 text-[11px] font-medium text-white hover:bg-primary/90"
+                        >
+                          Set up inboxes
+                        </button>
+                      )}
                       {expandable && (
                         <ChevronDown
                           size={14}
@@ -1175,6 +1195,16 @@ export default function MailboxesPage() {
           </p>
         </CardContent>
       </Card>
+      </div>
+      </div>
+
+      {setupDomain && (
+        <DomainSetupModal
+          domain={setupDomain}
+          onClose={() => setSetupDomain(null)}
+          onDone={load}
+        />
+      )}
     </div>
   );
 }

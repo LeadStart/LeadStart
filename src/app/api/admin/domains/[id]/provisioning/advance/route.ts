@@ -63,10 +63,12 @@ export async function POST(_req: NextRequest, { params }: RouteParams) {
     });
   }
 
-  // Full provisioning advance.
+  // Full provisioning advance, on the domain's chosen Workspace.
   let workspace;
   try {
-    workspace = await loadWorkspaceAdminForOrg(admin, organizationId);
+    workspace = await loadWorkspaceAdminForOrg(admin, organizationId, {
+      workspaceId: domain.workspace_id ?? null,
+    });
   } catch (err) {
     if (err instanceof GoogleConfigError) {
       return NextResponse.json({ error: err.message }, { status: 400 });

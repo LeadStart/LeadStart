@@ -40,6 +40,7 @@ export function ProvisionDomainPanel({ onChange }: { onChange: () => void }) {
   const [banner, setBanner] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
 
   const [trackDomain, setTrackDomain] = useState("");
+  const [trackRegistrar, setTrackRegistrar] = useState<"manual" | "porkbun" | "spaceship">("manual");
   const [tracking, setTracking] = useState(false);
 
   // Cheapest available registrar → the pre-selected "best price".
@@ -118,7 +119,7 @@ export function ProvisionDomainPanel({ onChange }: { onChange: () => void }) {
       const res = await fetch(appUrl("/api/admin/domains"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ domain: d }),
+        body: JSON.stringify({ domain: d, registrar: trackRegistrar }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -261,30 +262,36 @@ export function ProvisionDomainPanel({ onChange }: { onChange: () => void }) {
         </div>
 
         {/* Track an existing domain */}
-        <div className="border-t border-border/50 pt-3">
+        <div className="space-y-2 border-t border-border/50 pt-3">
+          <Label htmlFor="track-domain" className="text-xs">
+            Or track a domain you already own
+          </Label>
           <div className="flex items-end gap-2">
-            <div className="flex-1 space-y-1">
-              <Label htmlFor="track-domain" className="text-xs">
-                Or track a domain you already own
-              </Label>
-              <Input
-                id="track-domain"
-                placeholder="mail.acme.com"
-                value={trackDomain}
-                onChange={(e) => setTrackDomain(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && track()}
-              />
-            </div>
-            <Button
-              variant="outline"
-              onClick={track}
-              disabled={tracking || !trackDomain.trim()}
+            <Input
+              id="track-domain"
+              placeholder="mail.acme.com"
+              value={trackDomain}
+              onChange={(e) => setTrackDomain(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && track()}
+              className="flex-1"
+            />
+            <select
+              value={trackRegistrar}
+              onChange={(e) => setTrackRegistrar(e.target.value as "manual" | "porkbun" | "spaceship")}
+              className="h-9 rounded-md border border-input bg-background px-2 text-xs"
+              aria-label="Where this domain's DNS lives"
             >
+              <option value="manual">DNS: Manual</option>
+              <option value="porkbun">DNS: Porkbun</option>
+              <option value="spaceship">DNS: Spaceship</option>
+            </select>
+            <Button variant="outline" onClick={track} disabled={tracking || !trackDomain.trim()}>
               {tracking ? <Loader2 size={14} className="animate-spin" /> : "Track"}
             </Button>
           </div>
-          <p className="mt-1 text-[11px] text-muted-foreground">
-            No purchase — runs the same Workspace setup on a domain you control (zero registrar spend).
+          <p className="text-[11px] text-muted-foreground">
+            No purchase. Pick where the domain&rsquo;s DNS lives: a connected registrar lets LeadStart write
+            its DNS automatically; Manual means you add the records by hand.
           </p>
         </div>
       </CardContent>

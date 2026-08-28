@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, Plus, X, KeyRound, RefreshCw } from "lucide-react";
+import { Loader2, KeyRound, RefreshCw } from "lucide-react";
 import { appUrl } from "@/lib/api-url";
 import type {
   ProvisioningState,
@@ -66,7 +66,6 @@ export function DomainProvisioningDetail({
   onChange: () => void;
 }) {
   const prov = domain.provisioning as ProvisioningState | null;
-  const [specs, setSpecs] = useState([{ local_part: "", display_name: "" }]);
   const [busy, setBusy] = useState<string | null>(null);
   const [passwords, setPasswords] = useState<{ email: string; password: string }[]>([]);
   const [note, setNote] = useState<string | null>(null);
@@ -114,17 +113,6 @@ export function DomainProvisioningDetail({
     }
   }
 
-  async function startSetup() {
-    const users = specs
-      .map((s) => ({ local_part: s.local_part.trim().toLowerCase(), display_name: s.display_name.trim() }))
-      .filter((s) => s.local_part);
-    if (!users.length) {
-      setNote("Add at least one inbox name.");
-      return;
-    }
-    await post(`/api/admin/domains/${domain.id}/workspace`, { users }, "start");
-  }
-
   return (
     <div className="space-y-4 rounded-lg bg-muted/30 p-3 text-sm">
       {note && <div className="rounded border border-red-200 bg-red-50 p-2 text-xs text-red-800">{note}</div>}
@@ -152,57 +140,10 @@ export function DomainProvisioningDetail({
       {/* provisioning + not started → inbox setup form; started → stepper;
           any other status (e.g. active) → neither, just the DNS panel below */}
       {!prov && domain.lifecycle_status === "provisioning" ? (
-        <div className="space-y-2">
-          <Label className="text-xs">Set up inboxes (up to 3)</Label>
-          {specs.map((s, i) => (
-            <div key={i} className="flex items-center gap-2">
-              <Input
-                placeholder="jane"
-                value={s.local_part}
-                onChange={(e) => {
-                  const next = specs.slice();
-                  next[i] = { ...next[i], local_part: e.target.value };
-                  setSpecs(next);
-                }}
-                className="flex-1"
-              />
-              <span className="text-xs text-muted-foreground">@{domain.domain}</span>
-              <Input
-                placeholder="Display name"
-                value={s.display_name}
-                onChange={(e) => {
-                  const next = specs.slice();
-                  next[i] = { ...next[i], display_name: e.target.value };
-                  setSpecs(next);
-                }}
-                className="flex-1"
-              />
-              {specs.length > 1 && (
-                <button
-                  type="button"
-                  onClick={() => setSpecs(specs.filter((_, j) => j !== i))}
-                  className="text-muted-foreground hover:text-red-600"
-                >
-                  <X size={14} />
-                </button>
-              )}
-            </div>
-          ))}
-          <div className="flex items-center gap-2">
-            {specs.length < 3 && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setSpecs([...specs, { local_part: "", display_name: "" }])}
-              >
-                <Plus size={13} /> Add inbox
-              </Button>
-            )}
-            <Button size="sm" onClick={startSetup} disabled={busy === "start"}>
-              {busy === "start" ? <Loader2 size={13} className="animate-spin" /> : "Start setup"}
-            </Button>
-          </div>
-        </div>
+        <p className="text-xs text-muted-foreground">
+          Not set up yet. Use <span className="font-medium text-foreground">Set up inboxes</span> on this
+          domain&rsquo;s row to pick a Workspace and name the inboxes.
+        </p>
       ) : prov ? (
         <div className="space-y-2">
           <div className="flex items-center justify-between">

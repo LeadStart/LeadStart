@@ -18,6 +18,8 @@ type AdminClient = ReturnType<typeof createAdminClient>;
 export interface WorkspaceAdminClients {
   sa: GoogleServiceAccount;
   adminEmail: string;
+  /** The google_workspaces row used, or null when falling back to the org's admin email. */
+  workspaceId: string | null;
   directory: DirectoryClient;
   siteVerification: SiteVerificationClient;
   licensing: LicensingClient;
@@ -25,9 +27,19 @@ export interface WorkspaceAdminClients {
   licensingDefaults: { productId: string; skuId: string } | null;
 }
 
+/**
+ * Build the Workspace admin-subject clients for an org, targeting a specific
+ * Workspace when given (migration 00098). Resolution order:
+ *   opts.workspaceId → that google_workspaces row;
+ *   else the org's default (is_default, then oldest) Workspace row;
+ *   else the legacy single organizations.google_admin_email (pre-multi fallback).
+ * The service account (organizations.gmail_service_account_*) is shared across
+ * every Workspace; only the impersonated admin_email + license SKU differ.
+ */
 export async function loadWorkspaceAdminForOrg(
   admin: AdminClient,
   organizationId: string,
+  opts?: { workspaceId?: string | null },
 ): Promise<WorkspaceAdminClients> {
   const { data } = await admin
     .from("organizations")
@@ -50,9 +62,44 @@ export async function loadWorkspaceAdminForOrg(
       "Google service account is not configured. Add the service-account email + key in Settings, Integrations.",
     );
   }
-  if (!o.google_admin_email) {
+
+  // Resolve which Workspace tenant to impersonate.
+  type WsRow = {
+    id: string;
+    admin_email: string;
+    license_product_id: string | null;
+    license_sku_id: string | null;
+  };
+  let ws: WsRow | null = null;
+  if (opts?.workspaceId) {
+    const { data: wsData } = await admin
+      .from("google_workspaces")
+      .select("id, admin_email, license_product_id, license_sku_id")
+      .eq("id", opts.workspaceId)
+      .eq("organization_id", organizationId)
+      .maybeSingle();
+    if (!wsData) {
+      throw new GoogleConfigError("That Workspace was not found for this organization.");
+    }
+    ws = wsData as WsRow;
+  } else {
+    const { data: wsData } = await admin
+      .from("google_workspaces")
+      .select("id, admin_email, license_product_id, license_sku_id")
+      .eq("organization_id", organizationId)
+      .order("is_default", { ascending: false })
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    ws = (wsData as WsRow) ?? null;
+  }
+
+  const adminEmail = ws?.admin_email ?? o.google_admin_email ?? null;
+  const licenseProduct = ws?.license_product_id ?? o.google_license_product_id ?? null;
+  const licenseSku = ws?.license_sku_id ?? o.google_license_sku_id ?? null;
+  if (!adminEmail) {
     throw new GoogleConfigError(
-      "No Google admin email is set. Add a Workspace super-admin in Settings, Integrations — the Directory API impersonates an admin, not a mailbox.",
+      "No Google Workspace is configured. Add one (its super-admin email) in Settings, Integrations — the Directory API impersonates an admin, not a mailbox.",
     );
   }
 
@@ -60,17 +107,17 @@ export async function loadWorkspaceAdminForOrg(
     o.gmail_service_account_email,
     o.gmail_service_account_key,
   );
-  const adminEmail = o.google_admin_email;
 
   return {
     sa,
     adminEmail,
+    workspaceId: ws?.id ?? null,
     directory: new DirectoryClient(sa, adminEmail),
     siteVerification: new SiteVerificationClient(sa, adminEmail),
     licensing: new LicensingClient(sa, adminEmail),
     licensingDefaults:
-      o.google_license_product_id && o.google_license_sku_id
-        ? { productId: o.google_license_product_id, skuId: o.google_license_sku_id }
+      licenseProduct && licenseSku
+        ? { productId: licenseProduct, skuId: licenseSku }
         : null,
   };
 }

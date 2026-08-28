@@ -921,6 +921,25 @@ export interface SendingDomain {
   // Multi-step Google Workspace provisioning state (migration 00097); null for
   // domains not going through the workspace flow (backfilled / manual mailboxes).
   provisioning: ProvisioningState | null;
+  // Which Google Workspace this domain provisions into (migration 00098);
+  // null = the org's default Workspace.
+  workspace_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// A labeled Google Workspace tenant an org can provision inboxes into
+// (migration 00098). The same service account is DWD-authorized on each; what
+// differs is admin_email (the super-admin the Admin SDK impersonates) and the
+// optional license SKU.
+export interface GoogleWorkspace {
+  id: string;
+  organization_id: string;
+  label: string;
+  admin_email: string;
+  license_product_id: string | null;
+  license_sku_id: string | null;
+  is_default: boolean;
   created_at: string;
   updated_at: string;
 }

@@ -29,6 +29,8 @@ interface WorkspaceBody {
   users?: { local_part?: string; display_name?: string }[];
   licensing?: { product_id?: string; sku_id?: string } | null;
   dmarc_rua?: string;
+  /** Which Google Workspace to provision into; omitted = the org's default. */
+  workspace_id?: string;
 }
 
 export const maxDuration = 60;
@@ -91,10 +93,13 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     );
   }
 
-  // Load the Workspace admin clients (config errors are actionable 400s).
+  // Load the Workspace admin clients for the chosen (or default) Workspace
+  // (config errors are actionable 400s).
   let workspace;
   try {
-    workspace = await loadWorkspaceAdminForOrg(admin, organizationId);
+    workspace = await loadWorkspaceAdminForOrg(admin, organizationId, {
+      workspaceId: body?.workspace_id ?? domain.workspace_id ?? null,
+    });
   } catch (err) {
     if (err instanceof GoogleConfigError) {
       return NextResponse.json({ error: err.message }, { status: 400 });
@@ -123,7 +128,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
 
   const { data: claimed } = await admin
     .from("sending_domains")
-    .update({ provisioning: initState })
+    .update({ provisioning: initState, workspace_id: workspace.workspaceId })
     .eq("id", domain.id)
     .is("provisioning", null)
     .select("id")
