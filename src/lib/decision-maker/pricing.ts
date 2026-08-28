@@ -2,9 +2,9 @@
 // layers. Pricing is per-token (not per-million) so calculateCost can sum
 // directly. Update if Anthropic / Perplexity change their rates.
 //
-// Layer 1 always uses Claude Haiku 4.5. Layer 2 defaults to Perplexity
-// 'sonar' (cheapest of the three) but the worker falls back to the
-// Claude web_search tool if no Perplexity key is configured.
+// Layer 1 always uses Claude Haiku 4.5. Layer 2 uses Perplexity 'sonar' ONLY —
+// the Claude web_search fallback was removed (owner directive 2026-08-28). With
+// no Perplexity key, Layer 2 does not run.
 
 export const HAIKU_MODEL_ID = "claude-haiku-4-5-20251001";
 export const DEFAULT_LAYER2_MODEL = "sonar";

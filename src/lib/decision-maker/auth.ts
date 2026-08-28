@@ -15,10 +15,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
 //   if ("error" in ctx) return ctx.error;
 //   const { anthropicKey, perplexityKey, organizationId, admin, user } = ctx;
 //
-// Anthropic is required (400 if missing); Perplexity is optional and
-// returned as null when not configured. Routes that need Layer 2 should
-// check perplexityKey themselves and decide whether to fall back to
-// Claude's built-in web_search tool.
+// Anthropic is required (400 if missing) — Layer 1 site-read uses Haiku.
+// Perplexity powers Layer 2 web-search and there is NO Claude fallback (owner
+// directive 2026-08-28): with no Perplexity key, Layer 2 is skipped and the
+// item stays name-less. `perplexityKey` is null when not configured.
 
 export async function requireDecisionMakerContext(): Promise<
   | { error: NextResponse }

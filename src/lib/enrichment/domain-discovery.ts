@@ -292,7 +292,7 @@ async function discoverOne(
 export interface RunDomainDiscoveryOpts {
   deadlineMs: number;
   concurrency: number;
-  providerLabel: string; // "sonar" | "claude-web-search"
+  providerLabel: string; // "sonar" (Perplexity only)
 }
 
 // Discover domains for a batch. One paid LLM call per unique (name + location)

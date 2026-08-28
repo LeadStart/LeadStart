@@ -1,13 +1,12 @@
-// Layer 2 — web-search decision-maker fallback.
+// Layer 2 — web-search decision-maker lookup.
 //
-// Triggered only when Layer 1 returns no first_name and the run was
-// configured with use_layer2=true. Uses Perplexity Sonar by default
-// (cheap, real-time citations); falls back to Claude's web_search tool if
-// no Perplexity key is configured.
+// **Perplexity Sonar ONLY** (owner directive 2026-08-28): the Claude web_search
+// fallback was removed. Without a Perplexity key, Layer 2 is a no-op — the item
+// stays name-less and falls through to the generic path. Triggered only when
+// Layer 1 returns no first_name and the run was configured with use_layer2=true.
 //
 // Ported from server/enricher.ts:347-440 of the LeadEnrich reference build.
 
-import Anthropic from "@anthropic-ai/sdk";
 import { DEFAULT_LAYER2_PROMPT } from "./prompts";
 import {
   isPersonalEmail,
@@ -16,22 +15,31 @@ import {
   validateAiResult,
 } from "./validation";
 import { getSeniorityPriority, getSkipRoles } from "./seniority-maps";
-import {
-  calculateCost,
-  HAIKU_MODEL_ID,
-  DEFAULT_LAYER2_MODEL,
-  isPerplexityModel,
-} from "./pricing";
+import { DEFAULT_LAYER2_MODEL } from "./pricing";
 import { callPerplexity } from "../perplexity/client";
 import type { EnrichmentInput, EnrichmentOptions, EnrichmentResult } from "./types";
+
+const EMPTY = (notes: string, status: EnrichmentResult["status"], cost = 0): EnrichmentResult => ({
+  first_name: null,
+  last_name: null,
+  title: null,
+  personal_email: null,
+  other_emails: [],
+  enrichment_source: null,
+  enrichment_notes: notes,
+  status,
+  cost_usd: cost,
+});
 
 export async function enrichWithWebSearch(
   input: EnrichmentInput,
   opts: EnrichmentOptions,
 ): Promise<EnrichmentResult> {
-  // Pick layer-2 path: Perplexity Sonar if a key is configured, otherwise
-  // fall back to Claude's web_search tool.
-  const layer2Model = opts.perplexityKey ? DEFAULT_LAYER2_MODEL : "claude-web-search";
+  // Perplexity-only. No Claude web_search fallback — no key means Layer 2 does
+  // not run and the item stays name-less.
+  if (!opts.perplexityKey) {
+    return EMPTY("Layer 2 skipped — no Perplexity key configured", "complete");
+  }
 
   const prompt = DEFAULT_LAYER2_PROMPT
     .replace(/\{business_name\}/g, input.business_name)
@@ -49,38 +57,11 @@ export async function enrichWithWebSearch(
   let personalEmail: string | null = null;
   const otherEmails: string[] = [];
   let cost = 0;
-  let notes = "";
 
   try {
-    let responseText = "";
-
-    if (isPerplexityModel(layer2Model) && opts.perplexityKey) {
-      const result = await callPerplexity(opts.perplexityKey, prompt, layer2Model);
-      responseText = result.text;
-      cost += result.cost;
-    } else {
-      const anthropic = new Anthropic({ apiKey: opts.anthropicKey });
-      const message = await anthropic.messages.create({
-        model: HAIKU_MODEL_ID,
-        max_tokens: 4096,
-        // Claude's first-party web search tool — opts the model into
-        // grounded answers without us standing up our own search index.
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        tools: [{ type: "web_search_20250305", name: "web_search" } as any],
-        messages: [{ role: "user", content: prompt }],
-      });
-      cost += calculateCost(
-        { input_tokens: message.usage.input_tokens, output_tokens: message.usage.output_tokens },
-        HAIKU_MODEL_ID,
-      );
-      // The web_search tool can produce multiple text blocks; the final
-      // text block holds the answer (preceding blocks are search planning).
-      const textBlocks = message.content.filter(
-        (b): b is Extract<typeof b, { type: "text" }> => b.type === "text",
-      );
-      const lastText = textBlocks[textBlocks.length - 1];
-      responseText = lastText ? lastText.text : "";
-    }
+    const result = await callPerplexity(opts.perplexityKey, prompt, DEFAULT_LAYER2_MODEL);
+    const responseText = result.text;
+    cost += result.cost;
 
     if (responseText) {
       const jsonMatch = responseText.match(/\{[\s\S]*\}/);
@@ -115,24 +96,9 @@ export async function enrichWithWebSearch(
         }
       }
     }
-
-    const providerLabel = isPerplexityModel(layer2Model)
-      ? `Perplexity ${layer2Model}`
-      : "Claude web search";
-    notes = `${providerLabel} completed`;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return {
-      first_name: null,
-      last_name: null,
-      title: null,
-      personal_email: null,
-      other_emails: [],
-      enrichment_source: null,
-      enrichment_notes: `Web search error: ${message}`,
-      status: "error",
-      cost_usd: cost,
-    };
+    return EMPTY(`Web search error: ${message}`, "error", cost);
   }
 
   return {
@@ -142,7 +108,7 @@ export async function enrichWithWebSearch(
     personal_email: personalEmail,
     other_emails: otherEmails,
     enrichment_source: firstName ? "web_search" : null,
-    enrichment_notes: notes,
+    enrichment_notes: `Perplexity ${DEFAULT_LAYER2_MODEL} completed`,
     status: "complete",
     cost_usd: cost,
   };

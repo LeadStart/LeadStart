@@ -42,9 +42,7 @@ import { enqueueOwnerAlert } from "@/lib/notifications/owner-alerts";
 import { runPatternMv, type PatternMvItem } from "@/lib/enrichment/pattern-mv";
 import { hasUsableName, methodForItem } from "@/lib/enrichment/waterfall-routing";
 import { classifyContactOutcome, addOutcome, ALL_COUNT_KEYS } from "@/lib/enrichment/outcomes";
-import Anthropic from "@anthropic-ai/sdk";
 import { callPerplexity } from "@/lib/perplexity/client";
-import { calculateCost, HAIKU_MODEL_ID } from "@/lib/decision-maker/pricing";
 import { fetchPage } from "@/lib/decision-maker/fetcher";
 import { isSafeUrl } from "@/lib/decision-maker/validation";
 import { enrichBusiness, type EnrichmentInput, type EnrichmentResult } from "@/lib/decision-maker";
@@ -880,7 +878,8 @@ async function runPatternMvBatch(
 
 // Process one domain-discovery batch inline (no Apify run) — the domains-phase
 // fallback for contacts whose employer has no LinkedIn page. Web-looks-up each
-// company's website (Perplexity Sonar, else Claude web_search), strictly
+// company's website (Perplexity Sonar ONLY — no Claude web_search fallback,
+// owner directive 2026-08-28), strictly
 // validates it (name↔domain + citation + homepage), and writes company_domain
 // fill-only so the email waterfall can run. Per-item failures are inconclusive
 // (retried to the attempt cap); no key → not_found with a config note (run
@@ -906,15 +905,14 @@ async function runDomainDiscoveryBatch(
     return { status: "discovery_disabled" };
   }
 
-  // Org keys — Perplexity preferred, Claude web_search fallback.
+  // Org key — Perplexity ONLY (no Claude web_search fallback).
   const { data: orgRow } = await admin
     .from("organizations")
-    .select("anthropic_api_key, perplexity_api_key")
+    .select("perplexity_api_key")
     .eq("id", run.organization_id)
     .maybeSingle();
-  const org = orgRow as { anthropic_api_key: string | null; perplexity_api_key: string | null } | null;
+  const org = orgRow as { perplexity_api_key: string | null } | null;
   const perplexityKey = org?.perplexity_api_key?.trim() || process.env.PERPLEXITY_API_KEY?.trim() || null;
-  const anthropicKey = org?.anthropic_api_key?.trim() || process.env.ANTHROPIC_API_KEY?.trim() || null;
 
   // Claim a batch of name-only pending domain items.
   const { data: pendingData } = await admin
@@ -933,13 +931,13 @@ async function runDomainDiscoveryBatch(
   batch = await dropAlreadyDone(admin, run, "domains", cols, batch);
   if (batch.length === 0) return { status: "skipped_batch" };
 
-  // Neither key → discovery can't run. Mark not_found with a config-gap note.
-  if (!perplexityKey && !anthropicKey) {
+  // No Perplexity key → discovery can't run. Mark not_found with a config note.
+  if (!perplexityKey) {
     await admin
       .from("enrichment_run_items")
       .update({
         domain_status: "not_found",
-        domain_notes: "Anthropic or Perplexity API key required for website discovery (Settings → Integrations)",
+        domain_notes: "Perplexity API key required for website discovery (Settings → Integrations)",
       })
       .eq("run_id", run.id)
       .in("id", batch.map((b) => b.id));
@@ -961,44 +959,14 @@ async function runDomainDiscoveryBatch(
     for (const c of (data as DiscoveryContact[] | null) ?? []) contactMap.set(c.id, c);
   }
 
-  const providerLabel = perplexityKey ? "sonar" : "claude-web-search";
-  const llm: LlmSearchFn = perplexityKey
-    ? async (prompt) => {
-        const r = await callPerplexity(perplexityKey, prompt, "sonar", {
-          maxTokens: 300,
-          searchRecencyFilter: null,
-        });
-        return { text: r.text, citations: r.citations, cost: r.cost };
-      }
-    : async (prompt) => {
-        const anthropic = new Anthropic({ apiKey: anthropicKey as string });
-        const message = await anthropic.messages.create({
-          model: HAIKU_MODEL_ID,
-          max_tokens: 1024,
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          tools: [{ type: "web_search_20250305", name: "web_search" } as any],
-          messages: [{ role: "user", content: prompt }],
-        });
-        const cost = calculateCost(
-          { input_tokens: message.usage.input_tokens, output_tokens: message.usage.output_tokens },
-          HAIKU_MODEL_ID,
-        );
-        const textBlocks = message.content.filter(
-          (b): b is Extract<typeof b, { type: "text" }> => b.type === "text",
-        );
-        const lastText = textBlocks[textBlocks.length - 1];
-        // Grounding URLs from web_search_tool_result blocks → citations.
-        const citations: string[] = [];
-        for (const b of message.content) {
-          const bb = b as { type?: string; content?: unknown };
-          if (bb.type === "web_search_tool_result" && Array.isArray(bb.content)) {
-            for (const rr of bb.content as Array<{ url?: unknown }>) {
-              if (typeof rr.url === "string") citations.push(rr.url);
-            }
-          }
-        }
-        return { text: lastText ? lastText.text : "", citations, cost };
-      };
+  const providerLabel = "sonar";
+  const llm: LlmSearchFn = async (prompt) => {
+    const r = await callPerplexity(perplexityKey, prompt, "sonar", {
+      maxTokens: 300,
+      searchRecencyFilter: null,
+    });
+    return { text: r.text, citations: r.citations, cost: r.cost };
+  };
 
   const guardedFetch = (url: string): Promise<string> =>
     isSafeUrl(url) ? fetchPage(url) : Promise.resolve("");
@@ -1125,8 +1093,8 @@ async function runNamingBatch(
 ): Promise<Record<string, unknown>> {
   const cols = PHASE_COLS.naming;
 
-  // Org keys — Anthropic is mandatory (Layer 1 is Haiku); Perplexity optional
-  // (Layer 2 falls back to Claude web_search when it's absent).
+  // Org keys — Anthropic is mandatory (Layer 1 is Haiku); Perplexity required
+  // for Layer 2 web-search (no Claude fallback; Layer 2 is skipped without it).
   const { data: orgRow } = await admin
     .from("organizations")
     .select("anthropic_api_key, perplexity_api_key")
@@ -1212,7 +1180,7 @@ async function runNamingBatch(
       try {
         const res = await enrichBusiness(input, {
           serviceType: "operations",
-          useLayer2: true, // uses Perplexity if present, else Claude web_search
+          useLayer2: true, // Perplexity only; skipped if no Perplexity key
           anthropicKey: anthropicKey as string,
           perplexityKey: perplexityKey ?? undefined,
           perBusinessTimeoutMs: NAMING_PER_BUSINESS_TIMEOUT_MS,
