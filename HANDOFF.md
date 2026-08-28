@@ -5,6 +5,71 @@
 
 ---
 
+## 2026-08-27 — Maps DIY flow: Phases 2–5 SHIPPED to prod (admin). Only Phase 6 (client portal) remains.
+
+Built + verified + pushed the whole DIY Google-Maps lead-search flow through the
+admin surface. Everything below is live on master (auto-deployed). Migrations
+`00094` + `00095` are APPLIED to prod and `geo_places` is SEEDED. **The one
+remaining piece is Phase 6 — the client-portal surface — which is a deliberate
+HARD STOP pending Daniel's surface decision (new `/client` route + client
+auth/RLS + billing-ledger hooks).**
+
+**Phase 2 — multi-region cron fan-out (commit `38ee657`).** [`run-maps-searches`](src/app/api/cron/run-maps-searches/route.ts)
+now fans out ONE compass run per structured area, sequentially: start area[i] →
+poll → ingest+accumulate → dedupe by `google_place_id` → advance cursor → next
+area; when all done, slice the union to `target_max_results` and complete (then
+auto-import + enrich). Per-area cap = `ceil(target/areaCount)`. Single-area
+(`locationQuery`) rows keep the unchanged single-run path. Migration **`00094`**
+= `maps_searches.area_index` cursor (applied). Deploy-safe regardless of migration
+timing: the hot-path claim SELECT never references `area_index` (read lazily only
+in the multi-area handler). Pure helpers in [`maps-search.ts`](src/lib/apify/sourcing/maps-search.ts):
+`coerceMapsArea(s)`, `perAreaMaxItems`, `mergeMapsPlaces`, `ingestAreaResult`.
+Poll route [`maps-searches/[id]`](src/app/api/admin/prospecting/maps-searches/[id]/route.ts)
+overlays accumulated-∪-live. Verify: unit `scripts/test-maps-fanout.ts` 47/47;
+`scripts/e2e-maps-fanout.ts` 16/16 (live DB, `complete`-status throwaway row =
+zero Apify spend, never prod-cron-grabbable).
+
+**Phase 3 — areas[] route + shared gazetteer (commit `dc12c11`).** [`maps-search route`](src/app/api/admin/prospecting/maps-search/route.ts)
+accepts structured `areas: MapsArea[]`, validates via `coerceMapsAreas`, forces
+every state to its full NAME ("TX"→"Texas"), writes `query.levers.areas`; the
+`locationQuery` path stays (either/or, never both). **`geo_places` shared
+gazetteer** (migration **`00095`**, applied + seeded): 51 states + 3,143 counties
++ 19,452 incorporated cities = **22,646 rows** (Census reference; CDP noise
+dropped). Prefix + kind + trigram + natural-unique indexes; measured **~2ms**
+indexed lookup. Bundled [`src/lib/geo/us-states.ts`](src/lib/geo/us-states.ts)
+(51-row abbr↔name↔FIPS — the ONLY geo bit bundled). [`geo-typeahead endpoint`](src/app/api/admin/prospecting/geo-typeahead/route.ts)
+= balanced per-kind prefix query, served by the service-role client, **nothing in
+the browser bundle**. Seed pipeline: `scripts/build-geo-seed.ts` → committed
+`supabase/seed/geo-places.tsv` (666KB seed asset, NOT app-bundled) →
+`scripts/seed-geo-places.mjs`. **This table is the future LinkedIn fork's picker
+too** (shared reference DATA, veins still separate; replaces the retiring Scrap.io
+type-ahead). Verify: `scripts/test-us-states.ts` 25/25; `scripts/e2e-geo-typeahead.ts`
+13/13; endpoint live over HTTP; route 400 paths live.
+
+**Phases 4–5 — D+cart picker, mounted (commit `df14ad7`).** [`maps-diy-panel.tsx`](src/app/(dashboard)/admin/prospecting/maps-diy-panel.tsx):
+LEFT = "Where are your customers?" Smart Search picker (gazetteer type-ahead →
+grouped Cities/Counties/States dropdown + ZIP detection + quick-add states) →
+multi-region area chips, then ready-to-run audience cards; RIGHT = sticky "Your
+search" cart (Areas/Audiences/Enrichment/how-many-leads/estimate+tier-mix/Run),
+surgical updates. Sends `levers.areas`; reuses poll/import/preset/pricing/in-CRM/
+found-first/radial. Mounted in the Prospecting "Business (Google Maps)" tab,
+**replacing** `MapsSearchPanel` (deleted — superseded; single-area = one area).
+Verify (dev preview, sidebar client-nav per [[project_preview_pane_raf_hydration]]):
+renders, no console errors, "Dallas"→grouped Cities(7 states)+Counties(5), built a
+2-area cart + audience, estimate renders. Run NOT clicked (a live 2-area run needs
+a $ cap). tsc 0 new (19 baseline), eslint clean throughout.
+
+**REMAINING — Phase 6 (client portal), HARD STOP for Daniel's decision.** Expose
+the DIY flow to clients: a new `/client` prospecting route, client auth/RLS on
+`maps_searches` + `geo_places` reads, and the billing-ledger hooks the delivered-
+outcome ledger prices against (outcome-tier $0.05→$0.30/lead). The admin build is
+the reference. Also latent: the LinkedIn picker can now be swapped onto
+`geo-typeahead` (separate future fork). NOTE: a valid multi-area search POST
+creates a `pending` row prod's every-minute cron grabs → a REAL paid multi-region
+Apify run — so any live paid test needs a $ cap.
+
+---
+
 ## 2026-08-27 — Maps DIY prospecting flow: structured-geo + multi-region FOUNDATION SHIPPED; Phases 2–5 remain (autonomous build)
 
 **Goal:** a client-facing, DIY Google-Maps lead-search flow — "customers run their own
