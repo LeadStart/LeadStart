@@ -19,11 +19,30 @@ import { normalizeDomain } from "../domain";
 export const MAPS_SEARCH_ACTOR_ID =
   process.env.MAPS_SEARCH_ACTOR_ID?.trim() || "compass~google-maps-extractor";
 
-// App-facing levers. searchTerms are OR'd across searches; a location is required
-// (free text "City, ST" or "State"). websiteFilter/minStars/categoryFilterWords
-// each add a per-place filter charge, so they're sent ONLY when explicitly set.
+// A single, disambiguated search area mapped to the compass actor's STRUCTURED
+// geolocation fields. The actor nests Country ⊃ State ⊃ County ⊃ City and
+// intersects them, so those combine to disambiguate ("Dallas County" + "Texas");
+// ZIP (a ZCTA, outside that hierarchy) pairs with Country ONLY, one at a time.
+// The actor wants full state NAMES ("Texas", not "TX"). One MapsArea = one actor
+// run; a multi-region search fans out one run per area and merges by place-id.
+export type MapsAreaLevel = "city" | "county" | "state" | "zip";
+export interface MapsArea {
+  level: MapsAreaLevel;
+  name?: string; // city ("Dallas") or county ("Dallas County") name
+  state?: string; // full state NAME ("Texas") — city/county/state levels
+  postalCode?: string; // ZIP — zip level only
+  countryCode?: string; // ISO-2, default "us"
+  label?: string; // display only, e.g. "Dallas County, TX"
+}
+
+// App-facing levers. searchTerms are OR'd across searches. Location is supplied
+// EITHER as `areas` (structured, one-or-more regions — the DIY path) OR as the
+// legacy free-text `locationQuery` (one area). websiteFilter/minStars/
+// categoryFilterWords each add a per-place filter charge, so they're sent ONLY
+// when explicitly set.
 export interface MapsSearchLevers {
   searchTerms?: string[];
+  areas?: MapsArea[];
   locationQuery?: string;
   websiteFilter?: "all" | "with" | "without";
   minStars?: string; // "" | "3.5" | "4.0" | "4.5"
@@ -39,39 +58,87 @@ function cleanArr(v?: string[]): string[] | undefined {
   return out.length ? out : undefined;
 }
 
-export function buildMapsSearchInput(
-  levers: MapsSearchLevers,
-  opts: { maxItems: number },
-): Record<string, unknown> {
+// The parts of the actor input shared by both the legacy free-text path and the
+// structured per-area path: the search terms, the per-search cap, and the
+// detail/contacts opt-outs (we enrich domains ourselves — far cheaper than the
+// actor's per-place add-on events).
+function baseInput(levers: MapsSearchLevers, opts: { maxItems: number }): Record<string, unknown> {
   const terms = cleanArr(levers.searchTerms) ?? [];
-  const location = levers.locationQuery?.trim() ?? "";
   const cap = Math.max(1, Math.min(MAX_ITEMS_CAP, Math.round(opts.maxItems)));
   const perSearch = Math.max(1, Math.min(PER_SEARCH_CAP, Math.ceil(cap / Math.max(1, terms.length))));
-
-  const input: Record<string, unknown> = {
+  return {
     searchStringsArray: terms,
-    locationQuery: location,
     maxCrawledPlacesPerSearch: perSearch,
     language: "en",
-    // Detail pages + the actor's own contacts enrichment stay OFF — we enrich
-    // domains ourselves (site_scrape ~$0.003 + pattern_mv), far cheaper than the
-    // actor's per-place add-on events.
     scrapePlaceDetailPage: false,
     scrapeContacts: false,
     maximumLeadsEnrichmentRecords: 0,
   };
+}
 
-  // Each filter option adds a per-place `filter-applied` charge
-  // (billed = places × filter_price × #filters), so send them ONLY when the user
-  // asked. Closed places are dropped for free in parseMapsSearchResults instead
-  // of via skipClosedPlaces (which would bill a filter on every place).
+// Each filter option adds a per-place `filter-applied` charge (billed = places ×
+// filter_price × #filters), so send them ONLY when the user asked. Closed places
+// are dropped for free in parseMapsSearchResults instead of via skipClosedPlaces
+// (which would bill a filter on every place). Mutates `input`.
+function applyFilters(input: Record<string, unknown>, levers: MapsSearchLevers): void {
   if (levers.websiteFilter === "with") input.website = "withWebsite";
   else if (levers.websiteFilter === "without") input.website = "withoutWebsite";
   const minStars = levers.minStars?.trim();
   if (minStars) input.placeMinimumStars = minStars;
   const cats = cleanArr(levers.categoryFilterWords);
   if (cats) input.categoryFilterWords = cats;
+}
 
+// Map ONE area to the actor's structured 📡 Geolocation fields. Deliberately
+// omits `locationQuery` — the actor gives the 📍 Location field priority over
+// Geolocation, so a stray locationQuery would silently override these.
+export function geoFieldsForArea(area: MapsArea): Record<string, unknown> {
+  const g: Record<string, unknown> = { countryCode: (area.countryCode || "us").toLowerCase() };
+  const name = area.name?.trim();
+  const state = area.state?.trim();
+  const zip = area.postalCode?.trim();
+  switch (area.level) {
+    case "zip":
+      if (zip) g.postalCode = zip; // Country + ZIP only — never combine with city
+      break;
+    case "state":
+      if (state) g.state = state;
+      break;
+    case "county":
+      if (state) g.state = state;
+      if (name) g.county = name;
+      break;
+    case "city":
+      if (state) g.state = state;
+      if (name) g.city = name;
+      break;
+  }
+  return g;
+}
+
+// Legacy free-text builder (one area via `locationQuery`) — kept for searches
+// created before the structured/multi-region path and any non-DIY caller.
+export function buildMapsSearchInput(
+  levers: MapsSearchLevers,
+  opts: { maxItems: number },
+): Record<string, unknown> {
+  const input = baseInput(levers, opts);
+  input.locationQuery = levers.locationQuery?.trim() ?? "";
+  applyFilters(input, levers);
+  return input;
+}
+
+// Structured builder for ONE area of a (possibly multi-region) search. `maxItems`
+// is this area's slice of the total cap — the cron divides target_max_results
+// across the areas so the fan-out doesn't over-scrape.
+export function buildMapsSearchInputForArea(
+  levers: MapsSearchLevers,
+  area: MapsArea,
+  opts: { maxItems: number },
+): Record<string, unknown> {
+  const input = baseInput(levers, opts);
+  Object.assign(input, geoFieldsForArea(area));
+  applyFilters(input, levers);
   return input;
 }
 
