@@ -11,6 +11,7 @@ import type {
   RegisterResult,
   RegistrarProvider,
 } from "./types";
+import { diffDnsRecords, type DnsCurrentRecord } from "./dns";
 
 const BASE = "https://api.porkbun.com/api/json/v3";
 
@@ -105,17 +106,47 @@ export function createPorkbunProvider(creds: { apiKey: string; secretApiKey: str
     },
 
     async upsertDnsRecords(domain: string, records: DnsRecordInput[]): Promise<void> {
-      // Porkbun has no bulk upsert; create each. (The provisioning route writes a
-      // fresh domain's records, so there's nothing to dedupe against yet.)
-      for (const rec of records) {
+      // True upsert: read the live records (with Porkbun's ids), diff under the
+      // TXT-slot / exclusive-group rules, then create/edit/delete only what
+      // changed. Idempotent — re-running writes nothing when already in sync —
+      // and it never duplicates or clobbers unrelated records.
+      const current = await retrieveCurrent(domain);
+      const diff = diffDnsRecords(current, records);
+      for (const rec of diff.create) {
         await post(`/dns/create/${encodeURIComponent(domain)}`, toPorkbunRecord(rec));
+      }
+      for (const { current: cur, desired } of diff.edit) {
+        if (!cur.providerId) {
+          // No id to target (shouldn't happen via retrieveCurrent) — create it.
+          await post(`/dns/create/${encodeURIComponent(domain)}`, toPorkbunRecord(desired));
+          continue;
+        }
+        await post(
+          `/dns/edit/${encodeURIComponent(domain)}/${encodeURIComponent(cur.providerId)}`,
+          toPorkbunRecord(desired),
+        );
+      }
+      for (const cur of diff.del) {
+        if (cur.providerId) {
+          await post(`/dns/delete/${encodeURIComponent(domain)}/${encodeURIComponent(cur.providerId)}`);
+        }
       }
     },
 
     async getDnsRecords(domain: string): Promise<DnsRecordInput[]> {
-      const json = await post(`/dns/retrieve/${encodeURIComponent(domain)}`);
-      const records = (json.records ?? []) as Parameters<typeof fromPorkbunRecord>[0][];
-      return records.map((r) => fromPorkbunRecord(r, domain));
+      return retrieveCurrent(domain);
     },
   };
+
+  /** Retrieve the live records, keeping each record's Porkbun id for edit/delete. */
+  async function retrieveCurrent(domain: string): Promise<DnsCurrentRecord[]> {
+    const json = await post(`/dns/retrieve/${encodeURIComponent(domain)}`);
+    const records = (json.records ?? []) as (Parameters<
+      typeof fromPorkbunRecord
+    >[0] & { id?: string | number })[];
+    return records.map((r) => ({
+      ...fromPorkbunRecord(r, domain),
+      providerId: r.id != null ? String(r.id) : undefined,
+    }));
+  }
 }

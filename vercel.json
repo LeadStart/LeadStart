@@ -68,6 +68,10 @@
     {
       "path": "/app/api/cron/manage-mailbox-lifecycle",
       "schedule": "45 * * * *"
+    },
+    {
+      "path": "/app/api/cron/advance-domain-provisioning",
+      "schedule": "*/10 * * * *"
     }
   ]
 }

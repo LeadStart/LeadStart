@@ -44,6 +44,51 @@ async function requireOwner() {
   return { organizationId };
 }
 
+/**
+ * Resolve (or create) the sending_domains row for a mailbox's domain and return
+ * its id, so the new mailbox can be linked (domain_id). Mirrors the 00081
+ * backfill for hand-added mailboxes: Gmail-tier, already active. Non-fatal —
+ * returns null on any failure so the mailbox still saves (unlinked, as before).
+ * Handles the create race via the UNIQUE(org, domain) constraint.
+ */
+async function resolveDomainId(
+  admin: ReturnType<typeof createAdminClient>,
+  organizationId: string,
+  domain: string | undefined,
+): Promise<string | null> {
+  if (!domain) return null;
+  const bare = domain.trim().toLowerCase();
+  const select = () =>
+    admin
+      .from("sending_domains")
+      .select("id")
+      .eq("organization_id", organizationId)
+      .eq("domain", bare)
+      .maybeSingle();
+
+  const { data: found } = await select();
+  if (found?.id) return found.id as string;
+
+  const { data: created, error } = await admin
+    .from("sending_domains")
+    .insert({
+      organization_id: organizationId,
+      domain: bare,
+      tier: "gmail",
+      lifecycle_status: "active",
+      registrar: "manual",
+    })
+    .select("id")
+    .single();
+  if (created?.id) return created.id as string;
+  // Lost the create race (another request inserted the same domain) → re-select.
+  if (error?.code === "23505") {
+    const { data: raced } = await select();
+    return (raced?.id as string) ?? null;
+  }
+  return null;
+}
+
 export async function GET() {
   const auth = await requireOwner();
   if (auth.error) return auth.error;
@@ -191,9 +236,17 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Link the mailbox to its sending_domains row. A mailbox with a NULL
+  // domain_id is invisible to manage-mailbox-lifecycle, the domain health
+  // rollup, and the drain filter (that gap is what migration 00096 §3 repairs
+  // for existing rows). Resolve-or-create mirrors the 00081 backfill: a
+  // hand-added mailbox's domain is Gmail-tier and treated as already active.
+  const domainId = await resolveDomainId(admin, organizationId, email.split("@")[1]);
+
   const insert = {
     organization_id: organizationId,
     email_address: email,
+    domain_id: domainId,
     display_name: body.display_name?.trim() || null,
     client_id: body.client_id || null,
     max_daily_cap:

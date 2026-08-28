@@ -12,10 +12,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { loadRegistrarConfig, configuredProviders, providerFor } from "@/lib/registrar/auth";
-import { checkSpendCap, monthStartIso } from "@/lib/registrar/spend";
+import { loadRegistrarConfig, configuredProviders } from "@/lib/registrar/auth";
+import { checkSpendCap } from "@/lib/registrar/spend";
+import { sweepAvailability, monthToDateSpendUsd } from "@/lib/registrar/sweep";
 import { gmailTierRecords } from "@/lib/registrar/dns";
-import type { DomainAvailability, RegistrarId, RegistrarProvider } from "@/lib/registrar/types";
+import { enqueueOwnerAlert } from "@/lib/notifications/owner-alerts";
+import type { RegistrarId } from "@/lib/registrar/types";
 
 async function requireOwner() {
   const supabase = await createClient();
@@ -39,6 +41,8 @@ interface ProvisionBody {
   domain?: string;
   tier?: "gmail" | "smtp";
   dmarcRua?: string;
+  /** Force one registrar (the split selector). Omitted = buy where cheaper. */
+  registrar?: RegistrarId;
 }
 
 export async function POST(request: NextRequest) {
@@ -69,32 +73,35 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Optional forced registrar (the split selector on the provision card).
+  const requested = body?.registrar;
+  let sweepProviders = providers;
+  if (requested) {
+    sweepProviders = providers.filter((p) => p.id === requested);
+    if (sweepProviders.length === 0) {
+      return NextResponse.json(
+        { error: `The ${requested} registrar isn't configured. Add its API key in Settings first.` },
+        { status: 400 },
+      );
+    }
+  }
+
   // Availability sweep — one provider failing (bad key, outage) doesn't sink the
-  // others.
-  const quotes: { provider: RegistrarProvider; avail: DomainAvailability }[] = [];
-  const errors: string[] = [];
-  await Promise.all(
-    providers.map(async (p) => {
-      try {
-        const avail = await p.checkAvailability(domain);
-        if (avail.available) quotes.push({ provider: p, avail });
-      } catch (err) {
-        errors.push(`${p.id}: ${err instanceof Error ? err.message : String(err)}`);
-      }
-    }),
-  );
+  // others. With a forced registrar, the sweep is just that one.
+  const { quotes, errors } = await sweepAvailability(sweepProviders, domain);
   if (quotes.length === 0) {
     return NextResponse.json(
       {
-        error: `${domain} isn't available to register through your configured registrar(s).`,
+        error: `${domain} isn't available to register through your ${
+          requested ?? "configured"
+        } registrar(s).`,
         detail: errors.length ? errors.join("; ") : undefined,
       },
       { status: 409 },
     );
   }
 
-  // Cheapest available (a null/unknown price sorts last).
-  quotes.sort((a, b) => priceOrInf(a.avail.priceUsd) - priceOrInf(b.avail.priceUsd));
+  // Cheapest available (the sweep already sorted; a null/unknown price sorts last).
   const chosen = quotes[0];
   const priceUsd = chosen.avail.priceUsd;
   if (priceUsd == null || !(priceUsd > 0)) {
@@ -105,18 +112,24 @@ export async function POST(request: NextRequest) {
   }
 
   // Fail-closed spend cap: sum this month's purchases, then decide.
-  const { data: monthRows } = await admin
-    .from("sending_domains")
-    .select("purchase_price_usd")
-    .eq("organization_id", organizationId)
-    .gte("created_at", monthStartIso(Date.now()))
-    .not("purchase_price_usd", "is", null);
-  const monthToDateUsd = ((monthRows ?? []) as { purchase_price_usd: number | string | null }[]).reduce(
-    (sum, r) => sum + (r.purchase_price_usd != null ? Number(r.purchase_price_usd) : 0),
-    0,
-  );
+  const monthToDateUsd = await monthToDateSpendUsd(admin, organizationId);
   const cap = checkSpendCap({ capUsd: config.spendCapUsd, monthToDateUsd, priceUsd });
   if (!cap.allowed) {
+    // A blocked purchase is a fail-closed refusal the owner should see (mirrors
+    // the Million Verifier gate's alert on an outage).
+    await enqueueOwnerAlert({
+      admin,
+      kind: "registrar_spend_cap",
+      subject: "Domain purchase blocked by the monthly spend cap",
+      summary: cap.reason,
+      context: {
+        domain,
+        registrar: chosen.provider.id,
+        price_usd: priceUsd,
+        month_to_date_usd: monthToDateUsd,
+        cap_usd: config.spendCapUsd,
+      },
+    });
     return NextResponse.json({ error: cap.reason, spend: cap }, { status: 402 });
   }
 
@@ -141,7 +154,13 @@ export async function POST(request: NextRequest) {
     dnsError = err instanceof Error ? err.message : String(err);
   }
 
-  const today = new Date().toISOString().slice(0, 10);
+  const now = new Date();
+  const today = now.toISOString().slice(0, 10);
+  const expiresAt = new Date(
+    Date.UTC(now.getUTCFullYear() + 1, now.getUTCMonth(), now.getUTCDate()),
+  )
+    .toISOString()
+    .slice(0, 10);
   const { data: inserted, error: insertError } = await admin
     .from("sending_domains")
     .insert({
@@ -151,6 +170,7 @@ export async function POST(request: NextRequest) {
       lifecycle_status: "provisioning",
       registrar: chosen.provider.id as RegistrarId,
       registered_at: today,
+      expires_at: expiresAt,
       purchase_price_usd: registeredPrice,
     })
     .select("*")
@@ -176,8 +196,4 @@ export async function POST(request: NextRequest) {
     dns_error: dnsError,
     spend: cap,
   });
-}
-
-function priceOrInf(p: number | null): number {
-  return p == null || !Number.isFinite(p) ? Number.POSITIVE_INFINITY : p;
 }

@@ -22,17 +22,28 @@
 // smooth. Gmail's per-user quota (250 units/sec; a send costs 100) is far
 // above one-at-a-time sending. Add a bucket only if we ever parallelize.
 
-import { createSign, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 
-const TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
+import {
+  GoogleServiceAccount,
+  GoogleAuthError,
+  GoogleConfigError,
+  GooglePermanentError,
+  GoogleRateLimitError,
+  GoogleTransientError,
+} from "@/lib/google/auth";
+
 const GMAIL_BASE = "https://gmail.googleapis.com/gmail/v1/users/me";
 
 export const GMAIL_SCOPES =
   "https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.readonly";
 
 // ---------- Typed errors ----------
+// These subclass the generic Google* forms (src/lib/google/auth.ts) so the
+// shared token minter's errors translate cleanly (see asGmailError) while
+// every existing `instanceof GmailAuthError` call site keeps matching.
 
-export class GmailConfigError extends Error {
+export class GmailConfigError extends GoogleConfigError {
   constructor(message: string) {
     super(message);
     this.name = "GmailConfigError";
@@ -41,28 +52,28 @@ export class GmailConfigError extends Error {
 
 // Delegation not authorized / revoked for this mailbox, or the SA key is
 // bad. Permanent for this mailbox until an admin fixes the Google side.
-export class GmailAuthError extends Error {
+export class GmailAuthError extends GoogleAuthError {
   constructor(message: string) {
     super(message);
     this.name = "GmailAuthError";
   }
 }
 
-export class GmailRateLimitError extends Error {
+export class GmailRateLimitError extends GoogleRateLimitError {
   constructor(message = "Gmail rate-limited") {
     super(message);
     this.name = "GmailRateLimitError";
   }
 }
 
-export class GmailTransientError extends Error {
+export class GmailTransientError extends GoogleTransientError {
   constructor(message: string) {
     super(message);
     this.name = "GmailTransientError";
   }
 }
 
-export class GmailPermanentError extends Error {
+export class GmailPermanentError extends GooglePermanentError {
   constructor(message: string) {
     super(message);
     this.name = "GmailPermanentError";
@@ -105,34 +116,15 @@ export interface GmailSendResult {
   labelIds?: string[];
 }
 
-// ---------- base64url ----------
-
-function base64url(input: Buffer | string): string {
-  const buf = typeof input === "string" ? Buffer.from(input, "utf8") : input;
-  return buf
-    .toString("base64")
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
-}
-
-// ---------- Access-token cache (per impersonated mailbox) ----------
-
-interface CachedToken {
-  token: string;
-  expiresAtMs: number;
-}
-// Keyed by `${saEmail}|${subject}`. Tokens live ~1h; we refresh 60s early.
-const tokenCache = new Map<string, CachedToken>();
-
 /**
  * Gmail client scoped to a single service account. Call impersonate(email)
  * to act as one mailbox; the same client instance can impersonate any
- * mailbox on an authorized domain.
+ * mailbox on an authorized domain. Token minting lives in the shared
+ * GoogleServiceAccount (src/lib/google/auth.ts); this class composes it with
+ * the Gmail scopes + base URL.
  */
 export class GmailClient {
-  private saEmail: string;
-  private privateKeyPem: string;
+  private sa: GoogleServiceAccount;
 
   constructor(serviceAccountEmail: string, privateKeyPem: string) {
     const email = (serviceAccountEmail ?? "").trim();
@@ -142,86 +134,17 @@ export class GmailClient {
         "Gmail service account is not configured (email or private key missing).",
       );
     }
-    this.saEmail = email;
-    // Keys pasted from a Google service-account JSON arrive with literal
-    // "\n" escapes instead of real newlines — normalize so createSign gets
-    // a valid PEM either way.
-    this.privateKeyPem = key.replace(/\\n/g, "\n");
+    this.sa = new GoogleServiceAccount(email, key);
   }
 
   private async getAccessToken(subject: string): Promise<string> {
-    const cacheKey = `${this.saEmail}|${subject}`;
-    const cached = tokenCache.get(cacheKey);
-    const now = Date.now();
-    if (cached && cached.expiresAtMs - 60_000 > now) {
-      return cached.token;
-    }
-
-    const iat = Math.floor(now / 1000);
-    const exp = iat + 3600;
-    const header = base64url(JSON.stringify({ alg: "RS256", typ: "JWT" }));
-    const claims = base64url(
-      JSON.stringify({
-        iss: this.saEmail,
-        sub: subject, // the mailbox we impersonate
-        scope: GMAIL_SCOPES,
-        aud: TOKEN_ENDPOINT,
-        iat,
-        exp,
-      }),
-    );
-    const signingInput = `${header}.${claims}`;
-
-    let signature: string;
     try {
-      const signer = createSign("RSA-SHA256");
-      signer.update(signingInput);
-      signer.end();
-      signature = base64url(signer.sign(this.privateKeyPem));
+      return await this.sa.getAccessToken(subject, GMAIL_SCOPES);
     } catch (err) {
-      throw new GmailAuthError(
-        `Failed to sign JWT (bad service-account key?): ${
-          err instanceof Error ? err.message : String(err)
-        }`,
-      );
+      // The shared minter throws the generic Google* forms; translate to the
+      // Gmail* subclasses so callers' instanceof checks match.
+      throw asGmailError(err);
     }
-    const assertion = `${signingInput}.${signature}`;
-
-    const res = await fetch(TOKEN_ENDPOINT, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
-        assertion,
-      }),
-    });
-
-    const bodyText = await res.text();
-    if (!res.ok) {
-      // Google returns { error, error_description }. unauthorized_client /
-      // invalid_grant here almost always means the domain admin hasn't
-      // authorized this SA's client ID for these scopes on `subject`'s
-      // domain — a permanent per-mailbox condition.
-      throw classifyTokenError(res.status, bodyText, subject);
-    }
-
-    let parsed: { access_token?: string; expires_in?: number };
-    try {
-      parsed = JSON.parse(bodyText);
-    } catch {
-      throw new GmailTransientError(
-        `Token endpoint returned non-JSON: ${bodyText.slice(0, 200)}`,
-      );
-    }
-    if (!parsed.access_token) {
-      throw new GmailAuthError("Token endpoint returned no access_token.");
-    }
-
-    tokenCache.set(cacheKey, {
-      token: parsed.access_token,
-      expiresAtMs: now + (parsed.expires_in ?? 3600) * 1000,
-    });
-    return parsed.access_token;
   }
 
   private async gmailFetch(
@@ -330,32 +253,32 @@ export class GmailClient {
   }
 }
 
-function classifyTokenError(
-  status: number,
-  bodyText: string,
-  subject: string,
-): Error {
-  let errCode = "";
-  let desc = bodyText;
-  try {
-    const parsed = JSON.parse(bodyText) as {
-      error?: string;
-      error_description?: string;
-    };
-    errCode = parsed.error ?? "";
-    desc = parsed.error_description ?? bodyText;
-  } catch {
-    /* keep raw body */
+// Translate a generic Google* error from the shared token minter into the
+// matching Gmail* subclass. A parent-class instance is not `instanceof` its
+// child, so without this the Gmail* call sites would stop catching token
+// failures. Already-Gmail errors pass through untouched.
+function asGmailError(err: unknown): unknown {
+  if (
+    err instanceof GmailConfigError ||
+    err instanceof GmailAuthError ||
+    err instanceof GmailRateLimitError ||
+    err instanceof GmailTransientError ||
+    err instanceof GmailPermanentError
+  ) {
+    return err;
   }
-  if (status === 429) return new GmailRateLimitError(desc);
-  if (status >= 500) return new GmailTransientError(`Token ${status}: ${desc}`);
-  // 400/401/403 at the token endpoint = the SA can't impersonate this
-  // mailbox. Most common cause is missing domain-wide delegation.
-  return new GmailAuthError(
-    `Cannot impersonate ${subject} (${errCode || status}): ${desc}. ` +
-      `Check that the service account's client ID is authorized for ${GMAIL_SCOPES} ` +
-      `in Google Admin → Security → API Controls → Domain-wide Delegation for this domain.`,
-  );
+  if (err instanceof GoogleConfigError) return new GmailConfigError(err.message);
+  if (err instanceof GoogleRateLimitError) {
+    return new GmailRateLimitError(err.message);
+  }
+  if (err instanceof GoogleTransientError) {
+    return new GmailTransientError(err.message);
+  }
+  if (err instanceof GooglePermanentError) {
+    return new GmailPermanentError(err.message);
+  }
+  if (err instanceof GoogleAuthError) return new GmailAuthError(err.message);
+  return err;
 }
 
 function classifyApiError(status: number, bodyText: string): Error {

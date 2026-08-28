@@ -918,8 +918,64 @@ export interface SendingDomain {
   health_checked_at: string | null;
   watch_streak: number; // consecutive daily rollups in 'watch'
   notes: string | null;
+  // Multi-step Google Workspace provisioning state (migration 00096); null for
+  // domains not going through the workspace flow (backfilled / manual mailboxes).
+  provisioning: ProvisioningState | null;
   created_at: string;
   updated_at: string;
+}
+
+// ── Google Workspace provisioning state ──────────────────────────────────────
+// Stored on sending_domains.provisioning (migration 00096). The provisioning
+// cron (advance-domain-provisioning) and the "Check now" route advance this one
+// step at a time; the pure reducer lives in src/lib/deliverability/provisioning.ts.
+
+export type ProvisioningStepId =
+  | "dns_records" // tier DNS written at the registrar
+  | "workspace_domain" // Directory domains.insert (secondary domain on the tenant)
+  | "site_verification_token" // Site Verification getToken + apex TXT written
+  | "site_verification" // webResource.insert + domains.get verified
+  | "users" // Directory users.insert per inbox
+  | "licenses" // per-user license assignment (skipped when auto-licensing)
+  | "mailboxes" // getProfile probe + native_mailboxes row per inbox
+  | "dkim"; // manual DKIM generation observed live → dkim_verified_at stamped
+
+export type ProvisioningStepStatus =
+  | "pending"
+  | "in_progress"
+  | "done"
+  | "failed"
+  | "skipped";
+
+export interface ProvisioningStep {
+  status: ProvisioningStepStatus;
+  attempts: number;
+  updated_at: string;
+  last_error: string | null;
+  /** Set once when a stuck step first crosses its owner-alert threshold (alert-once latch). */
+  alerted?: boolean;
+}
+
+export interface ProvisioningUserSpec {
+  local_part: string; // "jane"
+  display_name: string; // "Jane Doe" → givenName/familyName split on the last space
+  email: string; // local_part@domain, derived once at init
+  created: boolean; // Directory users.insert done
+  licensed: boolean; // license assigned OR licensing skipped
+  mailbox_id: string | null; // native_mailboxes.id once inserted
+}
+
+export interface ProvisioningState {
+  version: 1;
+  started_at: string;
+  updated_at: string; // bumped on every state write — the CAS token
+  steps: Record<ProvisioningStepId, ProvisioningStep>;
+  site_verification_token: string | null; // full "google-site-verification=…" string
+  users: ProvisioningUserSpec[];
+  licensing: { product_id: string; sku_id: string } | null; // null = auto-licensing, skip the step
+  dmarc_rua: string | null;
+  last_error: string | null; // newest step error, for the UI banner
+  completed_at: string | null; // all steps terminal → the poller stops selecting the row
 }
 
 export type NativeSendStatus = "sent" | "bounced";

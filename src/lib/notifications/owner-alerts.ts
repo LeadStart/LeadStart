@@ -42,7 +42,9 @@ export type OwnerAlertKind =
   | "client_csv_upload"
   | "email_verifier_unavailable"
   | "email_verifier_credits_low"
-  | "domain_lifecycle";
+  | "domain_lifecycle"
+  | "registrar_spend_cap"
+  | "domain_provisioning";
 
 export interface OwnerAlertInput {
   admin: ReturnType<typeof createAdminClient>;
@@ -259,6 +261,8 @@ const KIND_LABEL: Record<OwnerAlertKind, string> = {
   email_verifier_unavailable: "Email verifier unavailable — new sends on hold",
   email_verifier_credits_low: "Email verifier credits low",
   domain_lifecycle: "Sending-domain lifecycle change",
+  registrar_spend_cap: "Domain purchase blocked by the spend cap",
+  domain_provisioning: "Domain provisioning needs attention",
 };
 
 const KIND_COLOR: Record<OwnerAlertKind, string> = {
@@ -276,6 +280,10 @@ const KIND_COLOR: Record<OwnerAlertKind, string> = {
   email_verifier_credits_low: "#c2410c",
   // Operational: a domain moved through its burn-prevention lifecycle.
   domain_lifecycle: "#c2410c",
+  // A fail-closed refusal (purchase blocked) and a stuck provisioning step —
+  // both need an owner to act, so amber like the other operational warnings.
+  registrar_spend_cap: "#c2410c",
+  domain_provisioning: "#c2410c",
 };
 
 function renderEventCard(input: {

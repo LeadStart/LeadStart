@@ -41,6 +41,8 @@ import type {
   SeedRole,
   SendingDomain,
 } from "@/types/app";
+import { ProvisionDomainPanel } from "./provision-domain-panel";
+import { DomainProvisioningDetail } from "./domain-provisioning-detail";
 
 type MailboxRow = NativeMailbox & {
   sent_today: number;
@@ -78,6 +80,7 @@ export default function MailboxesPage() {
   const { user } = useUser();
   const [mailboxes, setMailboxes] = useState<MailboxRow[]>([]);
   const [domains, setDomains] = useState<DomainRow[]>([]);
+  const [expandedDomainId, setExpandedDomainId] = useState<string | null>(null);
   const [seedCount, setSeedCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [banner, setBanner] = useState<Banner>(null);
@@ -862,6 +865,9 @@ export default function MailboxesPage() {
         </CardContent>
       </Card>
 
+      {/* Provision a domain */}
+      <ProvisionDomainPanel onChange={load} />
+
       {/* Sending domains */}
       <Card className="border-border/50 shadow-sm">
         <CardHeader className="flex flex-row items-center gap-2 pb-3">
@@ -891,32 +897,54 @@ export default function MailboxesPage() {
             <div className="divide-y divide-border/50">
               {domains.map((d) => {
                 const meta = LIFECYCLE_META[d.lifecycle_status];
+                // Every domain expands to its DNS panel (expected vs live records,
+                // SPF/DKIM/DMARC/MX); provisioning domains also show the setup stepper.
+                const expandable = true;
+                const isOpen = expandedDomainId === d.id;
                 return (
-                  <div key={d.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5">
-                    <span className="text-sm font-medium">{d.domain}</span>
-                    <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600">
-                      {d.tier === "gmail" ? "Google" : "SMTP"}
-                    </span>
-                    <span
-                      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${meta.cls}`}
+                  <div key={d.id} className="py-1">
+                    <div
+                      className={`flex flex-wrap items-center gap-x-3 gap-y-1 py-1.5 ${
+                        expandable ? "cursor-pointer" : ""
+                      }`}
+                      onClick={() => expandable && setExpandedDomainId(isOpen ? null : d.id)}
                     >
-                      {meta.label}
-                    </span>
-                    {d.health_band && (
-                      <Badge className={`${bandBadgeClass(d.health_band)} text-[10px]`}>
-                        {bandLabel(d.health_band)}
-                        {typeof d.health_score === "number" ? ` · ${d.health_score}` : ""}
-                      </Badge>
-                    )}
-                    {d.lifecycle_status === "active" && d.watch_streak > 0 && (
-                      <span className="text-[10px] font-medium text-amber-600">
-                        watch {d.watch_streak}d
+                      <span className="text-sm font-medium">{d.domain}</span>
+                      <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600">
+                        {d.tier === "gmail" ? "Google" : "SMTP"}
                       </span>
+                      <span
+                        className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${meta.cls}`}
+                      >
+                        {meta.label}
+                      </span>
+                      {d.health_band && (
+                        <Badge className={`${bandBadgeClass(d.health_band)} text-[10px]`}>
+                          {bandLabel(d.health_band)}
+                          {typeof d.health_score === "number" ? ` · ${d.health_score}` : ""}
+                        </Badge>
+                      )}
+                      {d.lifecycle_status === "active" && d.watch_streak > 0 && (
+                        <span className="text-[10px] font-medium text-amber-600">
+                          watch {d.watch_streak}d
+                        </span>
+                      )}
+                      <span className="ml-auto text-xs text-muted-foreground">
+                        {d.mailbox_count} inbox{d.mailbox_count === 1 ? "" : "es"}
+                        {d.max_daily_sends != null && ` · cap ${d.max_daily_sends}/day`}
+                      </span>
+                      {expandable && (
+                        <ChevronDown
+                          size={14}
+                          className={`text-muted-foreground transition-transform ${isOpen ? "rotate-180" : ""}`}
+                        />
+                      )}
+                    </div>
+                    {expandable && isOpen && (
+                      <div className="pb-2">
+                        <DomainProvisioningDetail domain={d} onChange={load} />
+                      </div>
                     )}
-                    <span className="ml-auto text-xs text-muted-foreground">
-                      {d.mailbox_count} inbox{d.mailbox_count === 1 ? "" : "es"}
-                      {d.max_daily_sends != null && ` · cap ${d.max_daily_sends}/day`}
-                    </span>
                   </div>
                 );
               })}
