@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireEnrichmentContext } from "@/lib/apify/auth";
-import { MAPS_SEARCH_ACTOR_ID, type MapsSearchLevers } from "@/lib/apify/sourcing/maps-search";
+import {
+  MAPS_SEARCH_ACTOR_ID,
+  coerceMapsAreas,
+  type MapsArea,
+  type MapsSearchLevers,
+} from "@/lib/apify/sourcing/maps-search";
+import { normalizeStateName } from "@/lib/geo/us-states";
 
 // POST /api/admin/prospecting/maps-search
 //
@@ -31,6 +37,28 @@ function clampInt(v: unknown, min: number, max: number, dflt: number): number {
   return Math.max(min, Math.min(max, Math.round(n)));
 }
 
+const MAX_AREAS = 25;
+
+// Validate + normalize the structured multi-region areas. coerceMapsAreas checks
+// each level's required fields; on top we force every state to its full name
+// ("TX" → "Texas") because the compass actor rejects abbreviations, and drop any
+// city/county/state area whose state doesn't resolve to a real US state. ZIP
+// areas need no state. Capped so one request can't fan out unboundedly.
+function normalizeAreas(raw: unknown): MapsArea[] {
+  const out: MapsArea[] = [];
+  for (const area of coerceMapsAreas(raw)) {
+    if (area.level === "zip") {
+      out.push(area);
+    } else {
+      const full = area.state ? normalizeStateName(area.state) : null;
+      if (!full) continue; // unrecognized state → not a usable area
+      out.push({ ...area, state: full });
+    }
+    if (out.length >= MAX_AREAS) break;
+  }
+  return out;
+}
+
 export async function POST(request: NextRequest) {
   const ctx = await requireEnrichmentContext();
   if ("error" in ctx) return ctx.error;
@@ -48,6 +76,10 @@ export async function POST(request: NextRequest) {
   const terms = Array.isArray(raw.searchTerms)
     ? Array.from(new Set(raw.searchTerms.filter((s): s is string => typeof s === "string").map((s) => s.trim()).filter(Boolean)))
     : [];
+  // Location is supplied EITHER as structured `areas` (the DIY multi-region path)
+  // OR the legacy free-text `locationQuery`. Never both — structured wins, and
+  // the cron's coerceMapsAreas keys off `areas` to fan out one run per region.
+  const areas = normalizeAreas(raw.areas);
   const location = typeof raw.locationQuery === "string" ? raw.locationQuery.trim() : "";
 
   if (terms.length === 0) {
@@ -56,8 +88,11 @@ export async function POST(request: NextRequest) {
       { status: 400 },
     );
   }
-  if (!location) {
-    return NextResponse.json({ error: "Add a location (city + state, or a state)" }, { status: 400 });
+  if (areas.length === 0 && !location) {
+    return NextResponse.json(
+      { error: "Add at least one area — a city, county, state, or ZIP" },
+      { status: 400 },
+    );
   }
 
   const websiteFilter = VALID_WEBSITE.has(raw.websiteFilter as string)
@@ -70,7 +105,7 @@ export async function POST(request: NextRequest) {
 
   const levers: MapsSearchLevers = {
     searchTerms: terms,
-    locationQuery: location,
+    ...(areas.length > 0 ? { areas } : { locationQuery: location }),
     websiteFilter,
     ...(minStars ? { minStars } : {}),
     ...(categoryFilterWords.length ? { categoryFilterWords } : {}),
