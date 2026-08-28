@@ -28,7 +28,9 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify({
         model: DEFAULT_LAYER2_MODEL,
         messages: [{ role: "user", content: "ping" }],
-        max_tokens: 4,
+        // Perplexity requires max_tokens >= 16 (a lower value 400s before the key
+        // is even checked). Keep it minimal — this is just a reachability probe.
+        max_tokens: 16,
       }),
     });
 
