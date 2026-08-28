@@ -42,6 +42,35 @@ send:
 > mail (replies + bounces). No `gmail.modify` — LeadStart never mutates the
 > mailbox.
 
+### 2a. Extra scopes for automated domain + inbox provisioning (Phase 3)
+
+To let LeadStart buy/track a domain and create its Workspace inboxes for you
+(Admin → Mailboxes → Provision a domain), the **same** service-account client ID
+needs four more scopes, and its Cloud project needs three APIs enabled.
+
+**Editing a client ID's scope list REPLACES it** — so paste ALL SIX at once, not
+just the new four:
+
+```
+https://www.googleapis.com/auth/gmail.send
+https://www.googleapis.com/auth/gmail.readonly
+https://www.googleapis.com/auth/admin.directory.domain
+https://www.googleapis.com/auth/admin.directory.user
+https://www.googleapis.com/auth/siteverification
+https://www.googleapis.com/auth/apps.licensing
+```
+
+Then, in the **Google Cloud console** for the service account's project, enable:
+**Admin SDK API**, **Site Verification API**, and **Enterprise License Manager API**.
+
+Finally, in **Settings → Integrations**, set **Google admin email** to a Workspace
+super-admin. Unlike sending (which impersonates each mailbox), the Directory /
+Site Verification / Licensing APIs impersonate an admin. If your tenant does NOT
+auto-license new users, also set the license product/SKU (otherwise the licensing
+step is skipped, which is correct for auto-licensing tenants). DKIM stays a manual
+one-click generate in the Admin console per domain; LeadStart detects it and
+advances the domain to warming automatically.
+
 ## 3. Configure LeadStart
 
 1. **Settings → Integrations → Native Email (Google).** Paste the service

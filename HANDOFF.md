@@ -70,6 +70,79 @@ Apify run — so any live paid test needs a $ cap.
 
 ---
 
+## 2026-08-28: DNS registrar + Google Workspace provisioning SHIPPED to prod; Google activation VERIFIED
+
+**Goal:** finish the two "API integrations" for the Gmail-tier growth path — buying/DNS-ing sending
+domains (plan Phase 2) and creating Google Workspace inboxes on them (Phase 3). Both are now
+code-complete and unit/build-verified. Full plan + activation checklist:
+[`docs/plans/deliverability-infrastructure-plan.md`](docs/plans/deliverability-infrastructure-plan.md)
+§5–§6 (status blocks refreshed). Session plan: `we-need-to-finish-glimmering-toucan.md`.
+
+**Context correction:** Phases 1/2/5 + a Phase-6 slice were already ON master (commits `557bae7`→
+`974745c`, migrations 00081–00085 applied) — the plan doc's "local, unpushed" notes were stale. The
+registrar layer existed but was unreachable (no UI), had no DNS-verify loop (a bought domain stuck in
+`provisioning` forever), Porkbun's upsert was append-only, and Spaceship was locked out by a
+price-parse bug. Google Workspace provisioning was 0%.
+
+**Built + SHIPPED this session (7 work packages, committed as `2d57e11` + `e603403`, pushed to master):**
+- **WP1** `src/lib/google/auth.ts` — extracted the DWD JWT minter into a shared `GoogleServiceAccount`
+  with a **scope-aware** token cache (old key was scope-blind). Gmail errors subclass the Google ones;
+  Gmail client public API byte-identical. `scripts/test-google-auth.ts` 23/23.
+- **WP2** DNS finish: pure `diffDnsRecords` (TXT by semantic slot, never deletes strangers; MX/A/etc
+  exclusive) → Porkbun true upsert (create/edit/delete), Spaceship read-merge-write + price-parse fix
+  + contacts + 202 async-op. `registrar/sweep.ts`; `/provision` gained a `registrar` forced-choice +
+  spend-cap owner alert + `expires_at`; `scripts/probe-spaceship.ts` (read-only). `test-registrar.ts` 84/84.
+- **WP3** migration `00096` (`organizations.google_admin_email` + license SKU cols; `sending_domains.provisioning`
+  JSONB; idempotent mailbox→domain re-backfill) + `ProvisioningState` types + **fixed the mailbox POST
+  never setting `domain_id`** (latent 00081 bug: every hand-added mailbox was invisible to lifecycle).
+- **WP4** `src/lib/google/{directory,site-verification,licensing,org}.ts` + `deliverability/provisioning.ts`
+  (pure) + `provisioning-runner.ts` (advancer). Passwords returned once, never stored. `test-provisioning.ts` 48/48.
+- **WP5** routes `POST /api/admin/domains` (track owned), `…/[id]/{workspace,provisioning/advance,dkim,dns,dns/apply}`,
+  `/api/admin/registrar/{quote,suggest}`, and cron `advance-domain-provisioning` (every 10 min, vercel.json).
+  The provisioning→warming flip is applied by the cron itself, NOT gated by `domain_lifecycle_enabled`.
+- **WP6** Admin → Mailboxes: **split Porkbun | Provision domain card** (quote → two price tiles, cheaper
+  pre-selected → buy), "track an existing domain", and a per-domain provisioning stepper (setup form,
+  Check now, DKIM paste, one-time password reveal, DNS panel). Plan/runbook/PROJECT_STATUS docs updated.
+
+**Verification:** `npm run build` ✓ (all 9 new routes registered); tsc clean (0 new; 19 pre-existing);
+eslint clean; unit — google-auth 23, registrar 84, provisioning 48, lifecycle 88 (regression). No live
+Google/registrar calls yet (WP7).
+
+**STATUS — WP7 (deploy + Google activation DONE; registrar keys + a paid provision test remain):**
+0. **DONE 2026-08-27:** migration `00096` APPLIED to prod via the Supabase Management API SQL endpoint
+   (`SUPABASE_ACCESS_TOKEN` in `.env.local`; scratchpad apply script, preview→apply→verify). All 4 columns
+   present; backfill linked 0 (the 5 existing mailboxes were already linked by 00081).
+0b. **DONE 2026-08-28 — Google Workspace setup COMPLETE + VERIFIED WORKING.** Driven via Claude in Chrome
+   on the `workwithdanielt.com` Workspace (admin `daniel@workwithdanielt.com`): added the 4 new DWD scopes
+   to the `leadstart-native-sender` SA client ID (client ID `100674264706186842509`), enabled Admin SDK +
+   Site Verification + Enterprise License Manager APIs on GCP project `leadstart-native-email` (owned by the
+   workwithdanielt account — Cloud console `authuser=daniel@workwithdanielt.com`), and set
+   `organizations.google_admin_email = daniel@workwithdanielt.com` (via Management API). **Read-only proof:**
+   `scripts/probe-google-workspace.ts` — Directory `getDomain(workwithdanielt.com)` → {exists,verified},
+   `getUser(daniel@…)` → {exists,not-suspended}. So the scopes, impersonation, APIs, and the src/lib/google
+   clients all work against real Google. The Gmail sending domain(s) live on this same Workspace.
+1. **Daniel (registrar only — Google is done):** Add Porkbun (+ Spaceship) API keys + the monthly spend cap
+   in Settings → Test each; Spaceship needs one saved contact in its dashboard. (Registrar is needed only to
+   BUY domains — the provisioning flow runs on already-owned domains without it.)
+2. **Claude:** `npx tsx scripts/probe-spaceship.ts` (pins Spaceship shapes); a zero-spend Workspace e2e via
+   "Track an existing domain" on a domain Daniel owns; then the first live ~$10 buy **only on explicit
+   go-ahead with the $ figure** (inside the $25/mo cap) → verify 3 inboxes land in Mailboxes `warming`.
+3. **DONE 2026-08-28:** committed (`2d57e11` + `e603403`) + PUSHED to master (prod deploy). Folded in per
+   Daniel's ask: every sending-domain row on Admin → Mailboxes now expands to a DNS panel (expected vs live
+   SPF/DKIM/DMARC/MX + registrar read-back). Cron `advance-domain-provisioning` is live but inert (no domain
+   in `provisioning` yet).
+
+**Still open:** (a) Daniel's registrar keys (item 1) to enable buying; (b) a first provision test, which
+creates REAL Google user seats (~$7-8/mo each until deleted) so it awaits an explicit go-ahead (suggest one
+inbox on a throwaway subdomain, then delete); (c) Daniel's visual sign-off on the new Mailboxes UI.
+
+**Standing rules (EMBED):** push to master = instant Vercel **PROD deploy** (this initiative is now pushed);
+further changes commit/push only on explicit word. Before push `gh auth switch --user LeadStart`, push, then
+switch back to `Kronelius`. Migrations apply via the prod Supabase SQL editor. Get a $ cap before any live
+paid registrar run.
+
+---
+
 ## 2026-08-27 — Maps DIY prospecting flow: structured-geo + multi-region FOUNDATION SHIPPED; Phases 2–5 remain (autonomous build)
 
 **Goal:** a client-facing, DIY Google-Maps lead-search flow — "customers run their own

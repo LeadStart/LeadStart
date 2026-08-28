@@ -14,6 +14,37 @@ Live at https://leadstart-ebon.vercel.app (LeadStart Vercel account, auto-deploy
 
 ---
 
+## Current initiative: DNS registrar + Google Workspace provisioning (BUILT 2026-08-27 — local, unpushed; migration 00096 APPLIED to prod; live activation = WP7)
+
+The two "API integrations" for Gmail-tier growth: buy/track a sending domain + write its DNS
+(registrar automation, plan Phase 2 — finished), and auto-create its Google Workspace inboxes
+(Phase 3 — new). Code-complete and build/unit-verified; only Daniel's Google/registrar setup + a
+live provision run remain.
+
+- **DNS finish:** true-upsert record diff (TXT by semantic slot, MX/A exclusive) so Porkbun no
+  longer dup's on retry and Spaceship read-merge-writes; Spaceship price-parse + contacts + async-op
+  fixes (still pending one `scripts/probe-spaceship.ts` run to pin shapes); a split **Porkbun |
+  Spaceship** selector + quote/suggest endpoints + a provision card on Admin → Mailboxes; the
+  orphaned `/provision` is now reachable and its `dns_written:false` case recoverable.
+- **Workspace provisioning:** shared DWD auth substrate (`src/lib/google/auth.ts`, scope-aware
+  cache) + Directory/SiteVerification/Licensing clients + an idempotent step machine
+  (`src/lib/deliverability/provisioning*.ts`) + routes + a 10-min `advance-domain-provisioning`
+  cron. Buy/track → add domain → verify (TXT) → create 1–3 users (one-time passwords, never stored)
+  → mailboxes (`domain_id` set) → DKIM detect → flips the domain to warming.
+- **Also fixed:** the mailbox POST never set `native_mailboxes.domain_id` (a latent 00081 bug making
+  hand-added mailboxes invisible to the lifecycle machinery); migration 00096 re-backfills existing rows.
+
+**Verified:** `npm run build` clean (9 new routes registered); tsc 0 new errors; unit — google-auth
+23/23, registrar 84/84, provisioning 48/48, lifecycle 88/88. No live Google/registrar calls yet.
+
+**Activation (WP7):** migration `00096` applied 2026-08-27. Remaining: Porkbun (+ Spaceship) keys +
+monthly spend cap + 6 DWD scopes + 3 Google Cloud APIs + `google_admin_email` (checklist in
+[`docs/plans/deliverability-infrastructure-plan.md`](docs/plans/deliverability-infrastructure-plan.md)
+§6 + [`docs/native-email-runbook.md`](docs/native-email-runbook.md) §2a); then a zero-spend "track an
+owned domain" e2e, then the first live buy on explicit go-ahead. Full session record in HANDOFF.md.
+
+---
+
 ## Current initiative: Contact-list ↔ campaign variable alignment (SHIPPED 2026-08-27 — migration 00092 applied, deployed)
 
 Instantly.ai-style alignment of CSV/CRM columns to a campaign's merge variables, with one persisted source of truth and a fail-safe send.

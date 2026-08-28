@@ -221,22 +221,30 @@ their domains are `active` (the only behavioral change on day one is protection)
 
 ## 5. Phase 2 — Registrar automation (Porkbun + Spaceship)
 
-> **BUILT 2026-08-26 (local, unpushed; migration 00084 applied to prod).** `src/lib/registrar/`:
-> pure core (`types`/`spend` fail-closed cap/`names` lookalike generator/`dns` tier builders) +
-> `porkbun`/`spaceship` clients implementing `RegistrarProvider` + `auth` loader/factory;
-> `scripts/test-registrar.ts` 50/50 (spend cap, name gen, per-type DNS record mapping). API:
-> `/api/admin/registrar/settings` (GET returns has_porkbun/has_spaceship + cap, NEVER secrets;
-> POST partial-saves keys + cap), `/test` (validates a key via a real availability call), and
-> `/provision` (availability sweep → cheapest → fail-closed $25/mo cap → register → Gmail-tier
-> DNS → `sending_domains` 'provisioning' row). Settings → Integrations **Domain registrars card**
-> (keys + cap + per-provider Test) — NEEDS Daniel visual sign-off. tsc-clean.
+> **SHIPPED to master 2026-08-26 (commit `b26ea0f`, migration 00084 applied); FINISHED 2026-08-27
+> (local, unpushed).** The base layer (`src/lib/registrar/`: pure core + `porkbun`/`spaceship`
+> clients + `auth` loader; `/api/admin/registrar/{settings,test,provision}`; the Settings Domain
+> registrars card) shipped on the 26th. The 2026-08-27 finish closed the real gaps:
+> - **True DNS upsert** (`dns.ts` `diffDnsRecords`): TXT matched by semantic slot (never deletes an
+>   unrelated token), MX/A/AAAA/CNAME claim their group exclusively (strays deleted). Porkbun now
+>   read-diff-creates/edits/deletes (was append-only, dup'd on retry); Spaceship read-merge-writes.
+> - **Spaceship fixes**: availability price now parses the standard fields (`extractRegistrationPrice`,
+>   was premiumPricing-only → every normal domain read null → locked out of buy-where-cheaper);
+>   `registerDomain` fetches the account's saved contact + polls the 202 async operation. STILL
+>   PENDING LIVE VERIFY (marked in-file): exact price field, contacts path, async-op path, DNS
+>   PUT replace-vs-merge — one read-only `scripts/probe-spaceship.ts` run pins them.
+> - **Reachability**: `/api/admin/registrar/quote` (price, no buy) + `suggest` (lookalikes) + a
+>   split **Porkbun | Spaceship** selector and provision card on Admin → Mailboxes (`registrar`
+>   forced-choice added to `/provision`). Provisioned-domain DNS is now readable/re-writable via
+>   `GET`/`POST /api/admin/domains/[id]/dns` (first real caller of `getDnsRecords`); the
+>   `dns_written:false` case is recoverable (Retry DNS).
+> - **Fail-closed alert**: a blocked purchase enqueues a `registrar_spend_cap` owner alert; the
+>   provision insert now writes `expires_at`; the unused `providerFor` import is gone.
+> - Tests: `scripts/test-registrar.ts` 84/84 (+34: diff slots/exclusivity, price-parse ordering).
 >
-> **Register endpoints are PENDING LIVE VERIFICATION** (Porkbun/Spaceship registration params +
-> Spaceship contact IDs) — confirm on the first real purchase once keys are added. **Not built
-> (best done interactively with Daniel — spends real money + visual sign-off):** a provisioning
-> UI form + the optional brand→candidates `/suggest` endpoint + the first live $10-ish buy.
-> **Daniel to-do:** create Porkbun + Spaceship accounts + API keys, enter them + the $25 cap in
-> Settings, Test each.
+> **Daniel to-do:** create Porkbun (+ Spaceship) API keys, enter them + the $25 cap in Settings,
+> Test each; Spaceship also needs one saved contact in its dashboard. Then run
+> `npx tsx scripts/probe-spaceship.ts` once to pin its response shapes before the first live buy.
 
 ~0.5–1 session. Both registrars verified (2026-08-26) to support availability checks,
 **registration/purchase**, and full DNS record CRUD via API.
@@ -263,6 +271,48 @@ their domains are `active` (the only behavioral change on day one is protection)
 ---
 
 ## 6. Phase 3 — Google Workspace provisioning (Gmail-tier growth)
+
+> **BUILT 2026-08-27 (local, unpushed; migration 00096 APPLIED to prod 2026-08-27).** The whole
+> flow is code-complete + unit-verified; migration is live (4 columns added, backfill linked 0 —
+> the existing 5 mailboxes were already linked by 00081). Only live activation (Daniel's Google
+> setup + a real provision) remains.
+> - **Auth substrate**: `src/lib/google/auth.ts` extracted the DWD JWT minter out of the Gmail
+>   client into a shared `GoogleServiceAccount` (scope-aware token cache — the old cache key was
+>   scope-blind and would have collided Gmail vs Directory tokens). Gmail errors now subclass the
+>   generic Google ones; the Gmail client's public API is byte-identical (`scripts/test-google-auth.ts`
+>   23/23).
+> - **Admin-subject clients**: `src/lib/google/{directory,site-verification,licensing}.ts` +
+>   `org.ts` (`loadWorkspaceAdminForOrg`). Per-API scopes (never a union), 409/412 = resume.
+> - **State machine**: `src/lib/deliverability/provisioning.ts` (pure) + `provisioning-runner.ts`
+>   (the impure advancer) run the steps in order — DNS → domains.insert → site-verify token+TXT →
+>   verify → users.insert → licenses → mailboxes (`native_mailboxes` row with `domain_id`) → DKIM.
+>   Idempotent/resumable; passwords returned once, never stored; `scripts/test-provisioning.ts`
+>   48/48. **Gmail send-as/signature step deliberately skipped** (our MIME builder writes the From
+>   header, so a server-side alias would never be read).
+> - **Routes + cron**: `POST /api/admin/domains/[id]/workspace` (start), `/provisioning/advance`
+>   (Check now), `/dkim` (paste the value → written via registrar), `/dns` + `/dns/apply`, plus
+>   `POST /api/admin/domains` (track an owned domain, zero spend). The `advance-domain-provisioning`
+>   cron (every 10 min, vercel.json) advances stuck steps, stamps `dkim_verified_at`, and applies
+>   the provisioning→warming flip **itself** (NOT gated by `domain_lifecycle_enabled`, since it's
+>   explicit owner-initiated setup; guarded provisioning→warming so it can't stomp a later state).
+>   Patience-thresholded `domain_provisioning` owner alerts.
+> - **UI**: the per-domain provisioning stepper (setup form, Check now, DKIM paste, password
+>   reveal, DNS panel) on Admin → Mailboxes. NEEDS Daniel visual sign-off.
+>
+> **DWD scopes Daniel adds to the existing SA client ID (paste ALL — editing REPLACES the list):**
+> ```
+> https://www.googleapis.com/auth/gmail.send
+> https://www.googleapis.com/auth/gmail.readonly
+> https://www.googleapis.com/auth/admin.directory.domain
+> https://www.googleapis.com/auth/admin.directory.user
+> https://www.googleapis.com/auth/siteverification
+> https://www.googleapis.com/auth/apps.licensing
+> ```
+> Plus enable **Admin SDK API + Site Verification API + Enterprise License Manager API** on the
+> SA's Google Cloud project, and set `google_admin_email` (a super-admin) in Settings. If the
+> tenant does NOT auto-license, also set the license product/SKU (else the licenses step skips).
+> **Zero-spend live test:** "Track an existing domain" on a domain Daniel already owns → the whole
+> flow runs without buying anything.
 
 ~1–1.5 sessions. Huge head start discovered in the survey: **domain-wide delegation is
 already the org auth model** (`organizations.gmail_service_account_email/key`) — new
