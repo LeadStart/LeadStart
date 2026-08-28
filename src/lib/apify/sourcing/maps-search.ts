@@ -142,6 +142,124 @@ export function buildMapsSearchInputForArea(
   return input;
 }
 
+// ---------- Multi-region fan-out (Phase 2) ----------
+//
+// A DIY search may carry several structured `areas`. The compass actor takes one
+// geolocation per run, so the cron fans out ONE run per area, sequentially, and
+// accumulates a de-duplicated union of places across areas. These pure helpers
+// hold the fan-out arithmetic + dedupe so the cron stays thin and the logic is
+// unit-testable without Apify or the DB.
+
+const VALID_AREA_LEVELS: readonly MapsAreaLevel[] = ["city", "county", "state", "zip"];
+
+// Coerce one stored/incoming value into a usable MapsArea, or null if it can't
+// address a real area. The level's identifying field is required (zip→postalCode;
+// city/county→name+state; state→state) — a half-filled area would silently widen
+// the search (e.g. a city with no state hits every same-named city nationwide).
+export function coerceMapsArea(raw: unknown): MapsArea | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  const level = typeof r.level === "string" ? (r.level as MapsAreaLevel) : null;
+  if (!level || !VALID_AREA_LEVELS.includes(level)) return null;
+
+  const name = typeof r.name === "string" ? r.name.trim() : "";
+  const state = typeof r.state === "string" ? r.state.trim() : "";
+  const postalCode = typeof r.postalCode === "string" ? r.postalCode.trim() : "";
+  const countryCode =
+    typeof r.countryCode === "string" && r.countryCode.trim()
+      ? r.countryCode.trim().toLowerCase()
+      : "us";
+  const label = typeof r.label === "string" ? r.label.trim() : "";
+
+  if (level === "zip" && !postalCode) return null;
+  if ((level === "city" || level === "county") && (!name || !state)) return null;
+  if (level === "state" && !state) return null;
+
+  const area: MapsArea = { level, countryCode };
+  if (name) area.name = name;
+  if (state) area.state = state;
+  if (postalCode) area.postalCode = postalCode;
+  if (label) area.label = label;
+  return area;
+}
+
+// The valid structured areas of a search, in order. Empty ⇒ NOT a multi-region
+// search → the caller uses the legacy free-text `locationQuery` path.
+export function coerceMapsAreas(raw: unknown): MapsArea[] {
+  if (!Array.isArray(raw)) return [];
+  const out: MapsArea[] = [];
+  for (const item of raw) {
+    const a = coerceMapsArea(item);
+    if (a) out.push(a);
+  }
+  return out;
+}
+
+// This area's slice of the overall target. Dividing the cap across areas keeps a
+// multi-region search from scraping `target × areaCount` places (and paying for
+// them). ceil so the union can still reach the target after cross-area dedupe.
+export function perAreaMaxItems(target: number, areaCount: number): number {
+  const t = Number.isFinite(target) ? Math.max(1, Math.round(target)) : 1;
+  const n = Number.isFinite(areaCount) ? Math.max(1, Math.round(areaCount)) : 1;
+  return Math.max(1, Math.ceil(t / n));
+}
+
+// Union two place lists, de-duplicated by google_place_id, existing-wins (a place
+// seen in an earlier area is not replaced by a later area's copy). Order-stable:
+// existing first, then first-seen new places. Places without an id are dropped
+// (they can't be dedupe-keyed — parseMapsSearchResults already excludes them).
+export function mergeMapsPlaces(existing: MapsPlace[], incoming: MapsPlace[]): MapsPlace[] {
+  const seen = new Set<string>();
+  const out: MapsPlace[] = [];
+  for (const p of existing) {
+    if (!p?.google_place_id || seen.has(p.google_place_id)) continue;
+    seen.add(p.google_place_id);
+    out.push(p);
+  }
+  for (const p of incoming) {
+    if (!p?.google_place_id || seen.has(p.google_place_id)) continue;
+    seen.add(p.google_place_id);
+    out.push(p);
+  }
+  return out;
+}
+
+export interface IngestAreaResult {
+  nextAreaIndex: number; // the cursor to persist (areaIndex + 1)
+  accumulated: MapsPlace[]; // the running de-duplicated union across areas so far
+  done: boolean; // true once every area has been ingested
+  finalResults?: MapsPlace[]; // present iff done — accumulated sliced to target
+  truncated?: boolean; // present iff done — union exceeded the target
+}
+
+// Fold one finished area's places into the running accumulation and decide
+// whether the fan-out is complete. On the last area, slices the de-duplicated
+// union down to the overall target (and flags truncation). Pure: the cron writes
+// {results, area_index, status} straight from this.
+export function ingestAreaResult(opts: {
+  areaIndex: number; // the area that just finished (0-based)
+  areaCount: number;
+  accumulated: MapsPlace[]; // union from earlier areas
+  incoming: MapsPlace[]; // this area's parsed places
+  target: number;
+}): IngestAreaResult {
+  const { areaIndex, areaCount, accumulated, incoming, target } = opts;
+  const merged = mergeMapsPlaces(accumulated, incoming);
+  const nextAreaIndex = areaIndex + 1;
+  const done = nextAreaIndex >= areaCount;
+  if (!done) return { nextAreaIndex, accumulated: merged, done: false };
+
+  const cap = Number.isFinite(target) ? Math.max(1, Math.round(target)) : merged.length;
+  const finalResults = merged.slice(0, cap);
+  return {
+    nextAreaIndex,
+    accumulated: finalResults,
+    done: true,
+    finalResults,
+    truncated: merged.length > cap,
+  };
+}
+
 type Rec = Record<string, unknown>;
 
 function str(v: unknown): string | null {

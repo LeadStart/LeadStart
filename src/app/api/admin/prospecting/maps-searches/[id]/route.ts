@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireEnrichmentContext } from "@/lib/apify/auth";
 import { ApifyClient } from "@/lib/apify/client";
-import { parseMapsSearchResults } from "@/lib/apify/sourcing/maps-search";
+import { mergeMapsPlaces, parseMapsSearchResults } from "@/lib/apify/sourcing/maps-search";
 import type { MapsPlace } from "@/types/app";
 
 // GET /api/admin/prospecting/maps-searches/[id]
@@ -55,14 +55,19 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
         .getAllDatasetItems(dsId, { maxItems: STREAM_ROW_CAP })
         .catch(() => [] as Record<string, unknown>[]),
     ]);
+    // The persisted `results` hold the de-duplicated union from ALREADY-finished
+    // areas (empty for a single-area search); `active_apify_dataset_id` is the
+    // CURRENT area's live dataset. Overlay = accumulated ∪ current area so the
+    // streaming table shows the growing total, not just the current area.
+    const accumulated = Array.isArray(search.results) ? search.results : [];
     if (typeof live === "number") {
       const target = search.target_max_results ?? live;
-      const soFar = Math.max(search.result_count ?? 0, Math.min(live, target));
+      const soFar = Math.max(search.result_count ?? 0, Math.min(accumulated.length + live, target));
       search.result_count = soFar;
       if (soFar > 0) search.progress_message = `Finding businesses… ${soFar} found`;
     }
     if (items.length > 0) {
-      search.results = parseMapsSearchResults(items);
+      search.results = mergeMapsPlaces(accumulated, parseMapsSearchResults(items));
     }
   }
 
