@@ -5,6 +5,82 @@
 
 ---
 
+## 2026-08-27 — Maps DIY prospecting flow: structured-geo + multi-region FOUNDATION SHIPPED; Phases 2–5 remain (autonomous build)
+
+**Goal:** a client-facing, DIY Google-Maps lead-search flow — "customers run their own
+search" — as a sequential **cart** experience. This session locked the design (mockups)
+and shipped the backend foundation. A fresh session should build Phases 2–5 autonomously.
+
+**SHIPPED to master (commit `deb0642`, live/inert):** [`src/lib/apify/sourcing/maps-search.ts`](src/lib/apify/sourcing/maps-search.ts)
+— added `MapsArea` type + `areas` lever + `geoFieldsForArea()` + `buildMapsSearchInputForArea()`
+(structured geolocation per area; refactored shared `baseInput`/`applyFilters`). Legacy
+`buildMapsSearchInput()` (free-text `locationQuery`) UNCHANGED. Nothing calls the new
+builders yet → inert additive. Unit test [`scripts/test-maps-geo.ts`](scripts/test-maps-geo.ts) **26/26**.
+
+**Design LOCKED** (mockups are the visual spec but are **gitignored/local-only** to worktree
+`sharp-bouman-213700` — they will NOT travel to a fresh worktree, so THIS spec is the durable source;
+if the worktree still exists, read `…/sharp-bouman-213700/mockups/diy-search-walkthrough-directions.html`
+and `…/location-picker-directions.html` for fidelity):
+- **Shape = "D + running cart".** LEFT column: page header, then a **"Where are your customers?"**
+  card (the location picker), then industry chips, then **ready-to-run audience cards** ("+ Add",
+  whole card clickable, **no per-card price**). RIGHT column: a **sticky "Your search" cart** that
+  **centers vertically in the viewport on scroll** — sections: **Areas (N)** list, **Audiences (N)**
+  list, **Enrichment** toggles, **How many leads**, outcome estimate + mix bar, **Run search**.
+  Updates are **surgical** (no full re-render / no flash).
+- **Location picker = SMART SEARCH (chosen; Daniel confirmed).** One search box → typing shows a
+  **grouped, state-qualified disambiguation dropdown** (Cities / Counties / ZIP codes / States) +
+  a few **quick-add** chips. Picking a result **ADDS an area** → **multi-region** (Daniel: "there
+  must be the ability to add multiple regions"). Each area is a removable chip in the picker and in
+  the cart's Areas list. **METRO is removed.** **NO business-count estimates** anywhere (Daniel cut
+  them — do not reintroduce "≈N businesses").
+- **Actor geo contract** (verified live; encoded in maps-search.ts + tested): city→`city`+`state`+`countryCode`;
+  county→`county`+`state`+`countryCode`; state→`state`+`countryCode`; **zip→`postalCode`+`countryCode` ONLY**
+  (never city/state/county). Full state NAMES ("Texas", not "TX"). **NEVER emit `locationQuery` with
+  structured fields** (the actor's 📍 Location overrides 📡 Geolocation). **One area = one actor run.**
+- **Pricing = outcome-tier per DELIVERED lead:** $0.05 record → $0.10 company email → $0.20 owner name
+  → $0.30 verified personal email. **Same $/lead regardless of area count** (multi-run cost is our COGS).
+- **Veins stay SEPARATE** (Daniel's concern — do NOT conflate): **Maps** = businesses, name-less,
+  structured area(s); **LinkedIn** = people, named, ICP filters + multi-location (country/state/city,
+  no zip/county). They meet only at enrichment ([`waterfall-routing.ts`](src/lib/enrichment/waterfall-routing.ts),
+  name-aware). A **LinkedIn client flow is a SEPARATE future initiative** — NOT part of this build.
+
+**REMAINING — build autonomously, verify each, push as you go (Daniel: "push and keep building"):**
+1. **Phase 2 — Cron fan-out + migration.** Rework [`run-maps-searches`](src/app/api/cron/run-maps-searches/route.ts)
+   from one-run-per-search → **one run per AREA, sequential**: start area[i] → poll → ingest+accumulate
+   → dedupe by `google_place_id` → area[i+1] → when all done, slice to `target_max_results` → complete.
+   Per-area cap = `ceil(target / areaCount)` into `buildMapsSearchInputForArea`. Needs a **small migration**
+   on `maps_searches` (area cursor + partial accumulation — e.g. `area_index int`, keep partial in `results`
+   JSONB). **BACKWARD-COMPAT:** rows with `query.levers.locationQuery` (no `areas`) keep the single-run path.
+   *Accept:* unit-test the fan-out/dedup; sandbox-rig e2e (2-area search). **No live paid Apify run without a $ cap.**
+2. **Phase 3 — Route + gazetteer.** [`maps-search route`](src/app/api/admin/prospecting/maps-search/route.ts)
+   accepts structured `areas: MapsArea[]` (validate; translate state abbr→full name), writes `query.levers.areas`;
+   keep the `locationQuery` path for BC. Bundle a **US gazetteer** (counties ~3,143 + states 51, with FIPS +
+   abbr↔full name) as a static module (`src/lib/geo/us-gazetteer.*`) for the picker's disambiguation + abbr→name.
+   Source: US Census Gazetteer files. *Accept:* route test; gazetteer lookups (Dallas→3 counties, Springfield→3 states).
+3. **Phase 4 — Component.** Convert the D+cart mockup to a real React component using the project's UI
+   primitives; **match [`maps-search-panel.tsx`](src/app/(dashboard)/admin/prospecting/maps-search-panel.tsx)**
+   for polling (`maps-searches/[id]`) + import (`maps-save`). Smart Search picker backed by the gazetteer;
+   multi-region areas; audiences (niche packs); add-ons (naming/verify/catch-all); outcome estimate.
+   *Accept:* tsc+eslint clean; render-verify via **sidebar client-nav or real Chrome** (hidden-preview deep-route
+   rAF hang — [[project_preview_pane_raf_hydration]]).
+4. **Phase 5 — Mount it (SURFACE).** **RECOMMENDED: admin Prospecting tab first** — replace/augment the current
+   `MapsSearchPanel`, reusing the working `requireEnrichmentContext` auth + backend. **HARD STOP** for the
+   **client-portal** version (new `/client` route + client auth/RLS + billing-ledger hooks) — that's the surface
+   decision Daniel still owes; build admin-first, leave client-exposure as a documented Phase 6.
+
+**Standing rules (EMBED):** push to master = instant Vercel **PROD deploy** (paying clients) — commit local,
+push only on explicit word, per change; **before push `gh auth switch --user LeadStart`, push, then switch back
+to the previously-active account (usually `Kronelius`)** — repo is `LeadStart/LeadStart`; a 404 "Repository not
+found" = wrong active gh account, not a token issue; git author = LeadStart / daniel@leadstart.io; **MOCKUPS are
+gitignored and NEVER committed**; **migrations apply via the prod Supabase dashboard SQL editor** (no local stack)
+— write the migration file but the APPLY is Daniel's step; **verify server-side against the SANDBOX Supabase rig,
+never prod**; **get a $ cap before any live paid Apify/MV run**.
+
+**Verification state:** Phase-1 foundation `npx tsx scripts/test-maps-geo.ts` **26/26**; pushed clean (identical
+base on master, clean rebase). Downstream (Phases 2–5) not started.
+
+---
+
 ## 2026-08-26 — A/B auto-winner made OPT-IN + rigorous winner rule (owner-directed); LOCAL-ONLY, awaiting push
 
 Follow-up to the auto-winner entry below, per owner review ("too aggressive; make it
