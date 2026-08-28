@@ -14,6 +14,15 @@ Also run `npm install` if `package.json` changed in the pull.
 
 Do not skip this even if the session appears to be a continuation — a different machine or session may have pushed since.
 
+# CRITICAL: Prospecting/enrichment flow — read the doc, don't reason from memory
+Both prospecting veins (Maps + LinkedIn) and the shared enrichment engine are
+documented canonically, with `file:line` citations and verified actor costs, in
+[`docs/PROSPECTING_FLOW.md`](docs/PROSPECTING_FLOW.md). **Before answering any
+question about how sourcing or enrichment works — especially anything about
+merging the two veins — read that doc and the code it cites. Do not describe the
+flow from memory.** Update the doc in the SAME change as any edit to a sourcing
+actor, an enrichment phase/provider, or the phase state machine.
+
 # CRITICAL: Local-only by default — NEVER push or commit without explicit permission
 
 **Do all work locally. Do not `git commit`, do not `git push`, and do not auto-deploy without the owner saying so in the current turn.**
