@@ -66,7 +66,7 @@ A run always starts at `phase:"profiles"` ([`enqueue-enrichment.ts:216`](../src/
 | **domains** | `harvestapi~linkedin-company` ([`company-harvestapi.ts:4`](../src/lib/apify/providers/company-harvestapi.ts)) + inline web-lookup discovery for name-only items | has a company LinkedIn ref, OR name-only w/ discovery on | `company_domain` | $0.004/company |
 | **naming** | decision-maker `enrichBusiness` — L1 reads the site, **L2 web-search = Perplexity Sonar ONLY** (no Claude fallback; skipped without a Perplexity key) ([`decision-maker/index.ts:68`](../src/lib/decision-maker/index.ts), [`layer2.ts`](../src/lib/decision-maker/layer2.ts)) | name-less, company-named, no email ([`route.ts:2418-2432`](../src/app/api/cron/run-apify-enrichment/route.ts)) | owner name + title | Perplexity ~$0.015/business |
 | **waterfall** | size-band method: `site_scrape` / `pattern_mv` / `bovi` ([`waterfall-routing.ts:20-35`](../src/lib/enrichment/waterfall-routing.ts)); name-less → forced `site_scrape` | has a domain | generic + personal email | site_scrape ~$0.003/lead; pattern_mv ≈ MV credits |
-| **activity** | `harvestapi~linkedin-profile-posts` ([`activity-harvestapi.ts:7`](../src/lib/apify/providers/activity-harvestapi.ts)) | has `linkedin_url` ([`route.ts:2450-2455`](../src/app/api/cron/run-apify-enrichment/route.ts)) | posting-recency score | $0.002/post |
+| **activity** | `harvestapi~linkedin-profile-posts` ([`activity-harvestapi.ts:7`](../src/lib/apify/providers/activity-harvestapi.ts)) | has `linkedin_url` ([`route.ts:2450-2455`](../src/app/api/cron/run-apify-enrichment/route.ts)) | posting-recency (last-posted date + in-30d flag) | $0.002/profile (samples 1 post only; $0.001 if none) |
 | **verify** | Million Verifier | has an email | verified status | ~$0.0037/decisive; catch-all/unknown/error **free** ([`pattern-mv.ts:68-72`](../src/lib/enrichment/pattern-mv.ts)) |
 | **complete** | — | — | finalize outcome ledger | — |
 
@@ -104,7 +104,7 @@ Because phases self-skip when no item qualifies, the lead's DATA decides the pat
 | `harvestapi~linkedin-profile-search` | LinkedIn sourcing | per search page / profile | $0.10/25 · $0.004 full · $0.01 +email |
 | `harvestapi~linkedin-profile-scraper` | enrich: profiles | per profile | $0.004 · **$0.01 +email** |
 | `harvestapi~linkedin-company` | enrich: domains | per company | $0.004 |
-| `harvestapi~linkedin-profile-posts` | enrich: activity | per post/reaction/comment | $0.002 (·$0.001 no-result) |
+| `harvestapi~linkedin-profile-posts` | enrich: activity | per post/reaction/comment | $0.002/profile (1 post sampled; ·$0.001 no-result) |
 | decision-maker (Anthropic/Perplexity) | enrich: naming | per business (LLM tokens) | ~$0.015 Perplexity / ~$0.06 Claude |
 | `site-contact-scraper` (`indispensable_nonagon`) | enrich: waterfall (site_scrape) | per place scraped | ~$0.003 |
 | pattern_mv + Million Verifier | enrich: waterfall / verify | per decisive verification | ~$0.0037 (catch-all/unknown free) |
@@ -116,4 +116,10 @@ Because phases self-skip when no item qualifies, the lead's DATA decides the pat
 - Answer flow questions from this doc + the cited code, never from memory.
 - Any change to a sourcing actor, an enrichment phase/provider, or the phase state
   machine updates this doc in the same change.
+- The in-app **Enrichment Flow Map** (Admin → Workflows,
+  [`src/components/workflows/enrichment-flow-map.data.ts`](../src/components/workflows/enrichment-flow-map.data.ts))
+  is the visual twin of this doc and MUST move with it: costs + default behaviour
+  auto-sync from the live constants, actor IDs are guarded by
+  `scripts/test-flow-map-sync.ts` (run it after any flow change), and the branch
+  structure is hand-drawn there — re-draw it when the topology changes.
 - If a claim here can't be traced to the cited line, treat it as stale and re-verify.

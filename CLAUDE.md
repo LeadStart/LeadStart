@@ -23,6 +23,15 @@ merging the two veins — read that doc and the code it cites. Do not describe t
 flow from memory.** Update the doc in the SAME change as any edit to a sourcing
 actor, an enrichment phase/provider, or the phase state machine.
 
+The in-app **Enrichment Flow Map** (Admin → Workflows) mirrors this doc and MUST
+stay in sync with it. Its content lives in
+[`src/components/workflows/enrichment-flow-map.data.ts`](src/components/workflows/enrichment-flow-map.data.ts):
+costs + default behaviour are derived from the live constants (auto-synced), and
+actor IDs are guarded by `scripts/test-flow-map-sync.ts`. So when you change a
+sourcing actor, a phase/provider, a cost, the default config, or the branch
+structure, update that data module (and re-draw its structure if the topology
+changed) in the SAME change, then run `npx tsx scripts/test-flow-map-sync.ts`.
+
 # CRITICAL: Local-only by default — NEVER push or commit without explicit permission
 
 **Do all work locally. Do not `git commit`, do not `git push`, and do not auto-deploy without the owner saying so in the current turn.**

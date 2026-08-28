@@ -1,14 +1,17 @@
 import { extractProfileId } from "../domain";
 import { trimRaw, type PhaseProvider, type PhaseResult, type ProviderItem } from "./types";
 
-// Phase 5 — LinkedIn posting recency. Same vendor + same profile URLs as the
+// Phase 5: LinkedIn posting recency. Same vendor + same profile URLs as the
 // profiles phase; returns each person's recent posts, from which we derive
 // last_posted_at and a recent-post count. No cookies.
 export const ACTIVITY_ACTOR_ID = "harvestapi~linkedin-profile-posts";
 
-// How many recent posts to sample per profile. Small: we only need "when did
-// they last post" + a rough cadence, and inactive people return 0 (cheap).
-const MAX_POSTS = 5;
+// How many recent posts to sample per profile. We only need "have they posted,
+// and when": the most recent post gives both the last-posted date and whether it
+// falls inside the 30-day window. We deliberately do NOT measure how active they
+// are (cadence/volume), so one post is enough. The actor returns newest first, so
+// a single post is the latest one. Inactive people return 0 (cheapest).
+const MAX_POSTS = 1;
 const RECENT_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 
 type Rec = Record<string, unknown>;
