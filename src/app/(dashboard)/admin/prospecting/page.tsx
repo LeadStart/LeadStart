@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Sparkles } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
 import { LinkedInSearchPanel } from "./linkedin-search-panel";
-import { MapsSearchPanel } from "./maps-search-panel";
+import { MapsDiyPanel } from "./maps-diy-panel";
 
 // Prospecting — two self-contained sourcing veins behind a tab switch:
 //   • LinkedIn people (harvestapi profile search, by ICP)
@@ -49,7 +49,7 @@ export default function ProspectingPage() {
       </div>
 
       {sourceMode === "linkedin" && <LinkedInSearchPanel />}
-      {sourceMode === "business" && <MapsSearchPanel />}
+      {sourceMode === "business" && <MapsDiyPanel />}
     </div>
   );
 }
