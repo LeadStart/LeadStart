@@ -1,5 +1,5 @@
 -- =============================================
--- Migration 00096: Google Workspace provisioning (Phase 3)
+-- Migration 00097: Google Workspace provisioning (Phase 3)
 --
 -- Adds the columns the automated domain + inbox provisioning flow needs
 -- (docs/plans/deliverability-infrastructure-plan.md, Phase 3), plus a one-time

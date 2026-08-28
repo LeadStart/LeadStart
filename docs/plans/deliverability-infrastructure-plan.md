@@ -272,7 +272,7 @@ their domains are `active` (the only behavioral change on day one is protection)
 
 ## 6. Phase 3 — Google Workspace provisioning (Gmail-tier growth)
 
-> **BUILT 2026-08-27 (local, unpushed; migration 00096 APPLIED to prod 2026-08-27).** The whole
+> **BUILT 2026-08-27 (local, unpushed; migration 00097 APPLIED to prod 2026-08-27).** The whole
 > flow is code-complete + unit-verified; migration is live (4 columns added, backfill linked 0 —
 > the existing 5 mailboxes were already linked by 00081). Only live activation (Daniel's Google
 > setup + a real provision) remains.

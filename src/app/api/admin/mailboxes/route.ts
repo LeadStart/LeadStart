@@ -238,7 +238,7 @@ export async function POST(req: NextRequest) {
 
   // Link the mailbox to its sending_domains row. A mailbox with a NULL
   // domain_id is invisible to manage-mailbox-lifecycle, the domain health
-  // rollup, and the drain filter (that gap is what migration 00096 §3 repairs
+  // rollup, and the drain filter (that gap is what migration 00097 §3 repairs
   // for existing rows). Resolve-or-create mirrors the 00081 backfill: a
   // hand-added mailbox's domain is Gmail-tier and treated as already active.
   const domainId = await resolveDomainId(admin, organizationId, email.split("@")[1]);

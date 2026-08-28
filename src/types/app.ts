@@ -918,7 +918,7 @@ export interface SendingDomain {
   health_checked_at: string | null;
   watch_streak: number; // consecutive daily rollups in 'watch'
   notes: string | null;
-  // Multi-step Google Workspace provisioning state (migration 00096); null for
+  // Multi-step Google Workspace provisioning state (migration 00097); null for
   // domains not going through the workspace flow (backfilled / manual mailboxes).
   provisioning: ProvisioningState | null;
   created_at: string;
@@ -926,7 +926,7 @@ export interface SendingDomain {
 }
 
 // ── Google Workspace provisioning state ──────────────────────────────────────
-// Stored on sending_domains.provisioning (migration 00096). The provisioning
+// Stored on sending_domains.provisioning (migration 00097). The provisioning
 // cron (advance-domain-provisioning) and the "Check now" route advance this one
 // step at a time; the pure reducer lives in src/lib/deliverability/provisioning.ts.
 

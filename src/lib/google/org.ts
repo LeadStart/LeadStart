@@ -1,5 +1,5 @@
 // Loads the Workspace admin-subject clients from an org's stored Google
-// credentials (migration 00096). Mirrors src/lib/gmail/org.ts — the credential
+// credentials (migration 00097). Mirrors src/lib/gmail/org.ts — the credential
 // lookup lives in one place, shared by the provisioning route + cron.
 //
 // Auth model: the SAME service account that sends Gmail (DWD) is used, but the

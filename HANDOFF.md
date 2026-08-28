@@ -92,7 +92,7 @@ price-parse bug. Google Workspace provisioning was 0%.
   exclusive) → Porkbun true upsert (create/edit/delete), Spaceship read-merge-write + price-parse fix
   + contacts + 202 async-op. `registrar/sweep.ts`; `/provision` gained a `registrar` forced-choice +
   spend-cap owner alert + `expires_at`; `scripts/probe-spaceship.ts` (read-only). `test-registrar.ts` 84/84.
-- **WP3** migration `00096` (`organizations.google_admin_email` + license SKU cols; `sending_domains.provisioning`
+- **WP3** migration `00097` (`organizations.google_admin_email` + license SKU cols; `sending_domains.provisioning`
   JSONB; idempotent mailbox→domain re-backfill) + `ProvisioningState` types + **fixed the mailbox POST
   never setting `domain_id`** (latent 00081 bug: every hand-added mailbox was invisible to lifecycle).
 - **WP4** `src/lib/google/{directory,site-verification,licensing,org}.ts` + `deliverability/provisioning.ts`
@@ -109,7 +109,7 @@ eslint clean; unit — google-auth 23, registrar 84, provisioning 48, lifecycle 
 Google/registrar calls yet (WP7).
 
 **STATUS — WP7 (deploy + Google activation DONE; registrar keys + a paid provision test remain):**
-0. **DONE 2026-08-27:** migration `00096` APPLIED to prod via the Supabase Management API SQL endpoint
+0. **DONE 2026-08-27:** migration `00097` APPLIED to prod via the Supabase Management API SQL endpoint
    (`SUPABASE_ACCESS_TOKEN` in `.env.local`; scratchpad apply script, preview→apply→verify). All 4 columns
    present; backfill linked 0 (the 5 existing mailboxes were already linked by 00081).
 0b. **DONE 2026-08-28 — Google Workspace setup COMPLETE + VERIFIED WORKING.** Driven via Claude in Chrome
