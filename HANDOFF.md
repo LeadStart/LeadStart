@@ -5,6 +5,24 @@
 
 ---
 
+## 2026-08-29 — Maps DIY: DONE + admin-only. OWNER DIRECTIVE: NO client-portal exposure yet (Phase 6 ON HOLD).
+
+The Maps DIY Google-Maps search flow is **complete and live on prod, ADMIN-ONLY** —
+`maps-diy-panel.tsx` in Admin → Prospecting → Business (Google Maps), backed by the
+multi-region cron fan-out, the DB-backed `geo_places` gazetteer + debounced
+`geo-typeahead` (dynamic search IS wired), and structured `areas[]`. Verified zero
+client exposure: no `/client/prospecting` route, clientNav has no Prospecting entry,
+routes gated by `requireEnrichmentContext` (owner/VA only).
+
+**OWNER DIRECTIVE (do not violate): NO client-portal exposure of prospecting yet — do
+NOT give clients visibility to ANY of this.** This supersedes the "only Phase 6 remains
+to build" framing in the entry just below: **Phase 6 (a client `/client` prospecting
+route + client auth/RLS + billing hooks) is ON HOLD / DO NOT BUILD** until Daniel
+explicitly greenlights it. Keep the flow admin-only. The admin build + delivered-outcome
+ledger stand ready for when he does. (A live multi-region run still spends Apify $ — cap first.)
+
+---
+
 ## 2026-08-27 — Maps DIY flow: Phases 2–5 SHIPPED to prod (admin). Only Phase 6 (client portal) remains.
 
 Built + verified + pushed the whole DIY Google-Maps lead-search flow through the

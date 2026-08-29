@@ -1,6 +1,6 @@
 ---
 name: project_maps_diy_flow
-description: Client-facing DIY Google-Maps search flow (D+cart, Smart Search picker, multi-region) — design locked, backend foundation shipped, Phases 2–5 remain
+description: DIY Google-Maps search flow (D+cart, Smart Search, multi-region) — SHIPPED live ADMIN-ONLY; client-portal exposure DEFERRED by owner (no client visibility yet)
 metadata:
   type: project
 ---
@@ -13,7 +13,7 @@ Building a **client-facing DIY Google-Maps lead-search flow** — "customers run
 
 **geo_places is the durable shared gazetteer** — 51 states + 3,143 counties + 19,452 cities, served by `geo-typeahead` (nothing in the browser bundle, ~2ms indexed lookups). It's REFERENCE data both veins' pickers share (Maps now; the LinkedIn fork later, replacing the retiring Scrap.io type-ahead) — sharing the dictionary, NOT the vein logic. Reseed via `scripts/seed-geo-places.mjs` (source = committed `supabase/seed/geo-places.tsv`). Bundled `src/lib/geo/us-states.ts` holds the 51-row abbr↔name map (the only geo bit bundled).
 
-**Remaining — Phase 6 ONLY (client portal), a HARD STOP for Daniel's surface decision.** New `/client` prospecting route + client auth/RLS on maps_searches/geo_places + billing-ledger hooks (the delivered-outcome ledger prices against outcome-tier $0.05→$0.30/lead). The admin build is the reference. WARNING: a valid multi-area search POST makes a `pending` row prod's cron grabs → a real PAID multi-region Apify run — any live paid test needs a $ cap ([[feedback_ask_spend_budget]]).
+**Phase 6 (client portal) is DEFERRED — OWNER DIRECTIVE 2026-08-29: NO client-portal exposure of prospecting yet; do NOT give clients visibility to ANY of this.** DO NOT build the `/client` prospecting route / client auth/RLS / billing hooks until Daniel explicitly says so — keep the flow admin-only. Verified currently zero client exposure (no `/client/prospecting` route, clientNav has no Prospecting entry, routes gated by `requireEnrichmentContext`). The admin build + delivered-outcome-ledger substrate stand ready for when he greenlights it. WARNING: a valid multi-area search POST makes a `pending` row prod's cron grabs → a real PAID multi-region Apify run — any live paid test needs a $ cap ([[feedback_ask_spend_budget]]).
 
 **Why:** Maps and LinkedIn veins are deliberately SEPARATE (Maps = businesses/name-less/structured-area; LinkedIn = people/named/ICP+multi-location, no zip/county) and must not be conflated — they meet only at enrichment ([[project_contact_status_source_of_truth]] area). Multi-region for Maps is what aligns it with LinkedIn for an eventual merge.
 
