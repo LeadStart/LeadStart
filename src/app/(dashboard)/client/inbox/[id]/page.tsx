@@ -498,7 +498,7 @@ export default function ReplyDossierPage() {
               </div>
 
               <div className="space-y-2">
-                <div>
+                <div className="flex flex-col gap-1.5">
                   <label className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                     Subject
                   </label>
@@ -510,7 +510,7 @@ export default function ReplyDossierPage() {
                     className="w-full rounded-lg border border-border/60 bg-card px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#2E37FE]/30 disabled:opacity-60"
                   />
                 </div>
-                <div>
+                <div className="flex flex-col gap-1.5">
                   <label className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                     Body
                   </label>

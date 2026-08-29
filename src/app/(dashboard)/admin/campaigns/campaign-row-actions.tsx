@@ -198,7 +198,7 @@ export function CampaignRowActions({
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-2">
+          <div className="flex flex-col gap-3">
             <label
               htmlFor={`confirm-delete-${campaignId}`}
               className="text-xs font-medium text-muted-foreground"
