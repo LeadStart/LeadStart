@@ -608,66 +608,65 @@ export function MapsDiyPanel() {
 
   return (
     <div className="space-y-6">
-      {/* Prior runs */}
-      {priorRuns.length > 0 && (
-        <Card className="border-border/50 shadow-sm">
-          <CardHeader className="flex flex-row items-center gap-2 pb-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-500">
-              <History size={16} className="text-white" />
-            </div>
-            <div>
-              <CardTitle className="text-base">Prior searches</CardTitle>
-              <p className="text-xs text-muted-foreground">Click to reload cached results — no new charges.</p>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {priorRuns.slice(0, 6).map((s) => {
-                const areaBit = s.query?.levers?.areas?.length
-                  ? `${s.query.levers.areas.length} area${s.query.levers.areas.length === 1 ? "" : "s"}`
-                  : s.query?.levers?.locationQuery;
-                const label =
-                  s.query?.name ||
-                  [s.query?.levers?.searchTerms?.join(", "), areaBit].filter(Boolean).join(" · ") ||
-                  "Search";
-                const isActive = s.id === searchId;
-                return (
-                  <button
-                    key={s.id}
-                    type="button"
-                    onClick={() => {
-                      if (s.id === searchId) return;
-                      stopPoll();
-                      setDetail(null);
-                      setSelected(new Set());
-                      setPage(1);
-                      setSaveMsg(null);
-                      setError(null);
-                      setSearchId(s.id);
-                    }}
-                    className={`w-full text-left flex items-center gap-3 rounded-md border px-3 py-2 transition-colors cursor-pointer ${
-                      isActive ? "border-indigo-400 bg-indigo-50/50" : "border-border/60 hover:bg-muted/40"
-                    }`}
-                  >
-                    <MapPin size={16} className={s.status === "complete" ? "text-emerald-600" : s.status === "failed" ? "text-red-500" : "text-amber-500"} />
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-medium">{label}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {s.result_count} found · {s.saved_count} saved · ${num(s.cost_usd).toFixed(3)}
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
       {/* D + running cart */}
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
         {/* LEFT — the build */}
         <div className="min-w-0 space-y-6">
+          {/* Prior searches — left column (half width) */}
+          {priorRuns.length > 0 && (
+            <Card className="border-border/50 shadow-sm">
+              <CardHeader className="flex flex-row items-center gap-2 pb-3">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-500">
+                  <History size={16} className="text-white" />
+                </div>
+                <div>
+                  <CardTitle className="text-base">Prior searches</CardTitle>
+                  <p className="text-xs text-muted-foreground">Click to reload cached results — no new charges.</p>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="grid gap-2">
+                  {priorRuns.slice(0, 6).map((s) => {
+                    const areaBit = s.query?.levers?.areas?.length
+                      ? `${s.query.levers.areas.length} area${s.query.levers.areas.length === 1 ? "" : "s"}`
+                      : s.query?.levers?.locationQuery;
+                    const label =
+                      s.query?.name ||
+                      [s.query?.levers?.searchTerms?.join(", "), areaBit].filter(Boolean).join(" · ") ||
+                      "Search";
+                    const isActive = s.id === searchId;
+                    return (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => {
+                          if (s.id === searchId) return;
+                          stopPoll();
+                          setDetail(null);
+                          setSelected(new Set());
+                          setPage(1);
+                          setSaveMsg(null);
+                          setError(null);
+                          setSearchId(s.id);
+                        }}
+                        className={`w-full text-left flex items-center gap-3 rounded-md border px-3 py-2 transition-colors cursor-pointer ${
+                          isActive ? "border-indigo-400 bg-indigo-50/50" : "border-border/60 hover:bg-muted/40"
+                        }`}
+                      >
+                        <MapPin size={16} className={s.status === "complete" ? "text-emerald-600" : s.status === "failed" ? "text-red-500" : "text-amber-500"} />
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-sm font-medium">{label}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {s.result_count} found · {s.saved_count} saved · ${num(s.cost_usd).toFixed(3)}
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          )}
           {/* Presets */}
           {presets.length > 0 && (
             <div className="flex flex-wrap items-center gap-2">
@@ -916,7 +915,8 @@ export function MapsDiyPanel() {
 
         {/* RIGHT — the running cart */}
         <div className="min-w-0">
-          <div className="lg:sticky lg:top-6 space-y-3">
+          {/* Lift the cart up to the page-header row and hold it sticky (lg only). */}
+          <div className="lg:sticky lg:top-6 lg:-mt-[164px] space-y-3">
             <Card className="border-indigo-200/70 shadow-md">
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-base">
