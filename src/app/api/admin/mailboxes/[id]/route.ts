@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ABSOLUTE_MAX_DAILY_CAP } from "@/lib/gmail/ramp";
+import { normalizeTags } from "@/lib/mailboxes/tags";
 import type { NativeMailbox } from "@/types/app";
 
 interface RouteParams {
@@ -39,6 +40,7 @@ interface PatchBody {
   display_name?: string | null;
   client_id?: string | null;
   ramp_started_at?: string;
+  tags?: unknown;
 }
 
 export async function PATCH(req: NextRequest, { params }: RouteParams) {
@@ -85,6 +87,7 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
   if (body.display_name !== undefined) update.display_name = body.display_name?.trim() || null;
   if (body.client_id !== undefined) update.client_id = body.client_id || null;
   if (body.ramp_started_at !== undefined) update.ramp_started_at = body.ramp_started_at;
+  if (body.tags !== undefined) update.tags = normalizeTags(body.tags);
 
   if (Object.keys(update).length === 0) {
     return NextResponse.json({ error: "Nothing to update" }, { status: 400 });

@@ -1,19 +1,22 @@
 // POST /api/admin/campaigns/[id]/link-client
 //
-// Owner-only. Attaches an orphan campaign (client_id IS NULL) to a
-// LeadStart client. Accepts a form-encoded body so the link-orphan form on
-// /admin/campaigns/[id] can submit without JS.
+// Owner-only. Sets (or changes, or clears) a campaign's client link. Two callers:
 //
-// Body: client_id=<uuid>
-// Success: 303 redirect back to the campaign detail page.
+//   1. The no-JS link-orphan form on /admin/campaigns/[id] — form-encoded
+//      `client_id=<uuid>`, answered with a 303 redirect back to the campaign.
+//      Form callers must pick a client (an empty value is rejected).
+//   2. The Setup tab on the campaign workspace — JSON `{ client_id: <uuid>|null }`,
+//      answered with JSON. A null/empty client_id unlinks the campaign (back to
+//      orphan); any client_id re-points it, at any time.
 //
 // Catch-up notifications: replies ingested while the campaign was an orphan
-// classified but skipped notification (client_id was NULL). On link we
-// backfill their client_id and, after the response, fire the deferred
-// hot-lead notifications — already-classified rows call
+// classified but skipped notification (client_id was NULL). When we link an
+// orphan to a client we backfill their client_id and, after the response, fire
+// the deferred hot-lead notifications — already-classified rows call
 // sendHotLeadNotification directly (runReplyPipeline early-returns on
-// classified rows), unclassified rows run the full pipeline. This is the
-// path the Instantly webhook's lazy-created orphans depend on.
+// classified rows), unclassified rows run the full pipeline. This is the path
+// the Instantly webhook's lazy-created orphans depend on. Changing between two
+// clients, or unlinking, does not re-fire notifications.
 
 import { NextRequest, NextResponse } from "next/server";
 import { after } from "next/server";
@@ -47,13 +50,29 @@ export async function POST(
     );
   }
 
-  const form = await req.formData();
-  const clientId = form.get("client_id");
-  if (typeof clientId !== "string" || clientId.length === 0) {
-    return NextResponse.json(
-      { error: "client_id is required" },
-      { status: 400 },
-    );
+  // Content-negotiate: JSON callers (the Setup tab) get JSON back and may pass
+  // null to unlink; form callers (the no-JS orphan linker) get a redirect and
+  // must supply a client_id.
+  const isJson = req.headers.get("content-type")?.includes("application/json");
+  let clientId: string | null;
+  if (isJson) {
+    let jsonBody: { client_id?: string | null };
+    try {
+      jsonBody = (await req.json()) as { client_id?: string | null };
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+    }
+    clientId =
+      typeof jsonBody.client_id === "string" && jsonBody.client_id
+        ? jsonBody.client_id
+        : null;
+  } else {
+    const form = await req.formData();
+    const raw = form.get("client_id");
+    if (typeof raw !== "string" || raw.length === 0) {
+      return NextResponse.json({ error: "client_id is required" }, { status: 400 });
+    }
+    clientId = raw;
   }
 
   const admin = createAdminClient();
@@ -76,26 +95,30 @@ export async function POST(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  // Verify the client is in the same org and load its notification config for
-  // the catch-up fan-out.
-  const { data: clientRow } = await admin
-    .from("clients")
-    .select("*")
-    .eq("id", clientId)
-    .maybeSingle();
-  if (!clientRow || (clientRow as Client).organization_id !== organizationId) {
-    return NextResponse.json(
-      { error: "Client not found in this organization" },
-      { status: 400 },
-    );
+  // Verify the target client is in the same org and load its notification config
+  // for the catch-up fan-out. Skipped when unlinking (clientId === null).
+  let client: Client | null = null;
+  if (clientId) {
+    const { data: clientRow } = await admin
+      .from("clients")
+      .select("*")
+      .eq("id", clientId)
+      .maybeSingle();
+    if (!clientRow || (clientRow as Client).organization_id !== organizationId) {
+      return NextResponse.json(
+        { error: "Client not found in this organization" },
+        { status: 400 },
+      );
+    }
+    client = clientRow as Client;
   }
-  const client = clientRow as Client;
 
   // Snapshot the orphan replies BEFORE linking so we know which rows this link
-  // owns. Only meaningful when the campaign is currently an orphan.
+  // owns. Only meaningful when the campaign is currently an orphan AND we're
+  // attaching it to a client (not unlinking).
   let replyIds: string[] = [];
   let alreadyClassifiedIds: string[] = [];
-  if (camp.client_id === null) {
+  if (camp.client_id === null && clientId) {
     const { data: orphanReplies } = await admin
       .from("lead_replies")
       .select("id, final_class")
@@ -122,8 +145,10 @@ export async function POST(
   }
 
   // Backfill client_id on the orphan replies + schedule the deferred
-  // notifications after the response returns.
-  if (replyIds.length > 0) {
+  // notifications after the response returns. Only reachable when linking an
+  // orphan to a client, so `client` is non-null here.
+  if (client && replyIds.length > 0) {
+    const linkedClient = client;
     const { error: backfillErr } = await admin
       .from("lead_replies")
       .update({ client_id: clientId })
@@ -152,15 +177,15 @@ export async function POST(
           if (!replyRow) continue;
           const reply = replyRow as LeadReply;
           if (!reply.final_class || reply.notified_at) continue;
-          if (!client.notification_email) continue;
-          if (!(client.auto_notify_classes || []).includes(reply.final_class)) {
+          if (!linkedClient.notification_email) continue;
+          if (!(linkedClient.auto_notify_classes || []).includes(reply.final_class)) {
             continue;
           }
           await sendHotLeadNotification(
             {
               reply,
-              clientNotificationEmail: client.notification_email,
-              clientNotificationCcEmails: client.notification_cc_emails ?? [],
+              clientNotificationEmail: linkedClient.notification_email,
+              clientNotificationCcEmails: linkedClient.notification_cc_emails ?? [],
             },
             admin,
           );
@@ -182,7 +207,11 @@ export async function POST(
     });
   }
 
-  // 303 so the browser does a GET on the redirect target after the POST.
+  // JSON callers (the Setup tab) get JSON; form callers get a 303 redirect so
+  // the browser does a GET on the campaign page after the POST.
+  if (isJson) {
+    return NextResponse.json({ success: true, client_id: clientId });
+  }
   const origin = req.nextUrl.origin;
   return NextResponse.redirect(
     new URL(`/app/admin/campaigns/${campaignId}`, origin),

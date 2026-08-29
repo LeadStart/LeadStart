@@ -34,11 +34,12 @@ import { appUrl } from "@/lib/api-url";
 import { useUser } from "@/hooks/use-user";
 import { CampaignProbeCard } from "@/components/campaigns/campaign-probe-card";
 import { FlowEditor } from "@/components/campaigns/flow/flow-editor";
+import { MailboxPoolPicker } from "@/components/campaigns/mailbox-pool-picker";
 import { type FlowGraph, graphToSteps, starterGraph } from "@/lib/flow/graph";
 import type { Client, NativeMailbox } from "@/types/app";
 
 type ClientOption = Pick<Client, "id" | "name">;
-type MailboxOption = Pick<NativeMailbox, "id" | "email_address" | "status">;
+type MailboxOption = Pick<NativeMailbox, "id" | "email_address" | "status" | "tags">;
 
 export default function NewNativeCampaignPage() {
   const router = useRouter();
@@ -72,18 +73,6 @@ export default function NewNativeCampaignPage() {
       })
       .catch(() => {});
   }, [organizationId]);
-
-  const activeMailboxes = mailboxes.filter((m) => m.status === "active");
-
-  function toggleMailbox(id: string) {
-    setSelectedMailboxes((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-    setError(null);
-  }
 
   async function handleSave() {
     setError(null);
@@ -209,37 +198,14 @@ export default function NewNativeCampaignPage() {
 
             <div className="space-y-2">
               <Label>Sending mailboxes</Label>
-              {activeMailboxes.length === 0 ? (
-                <p className="text-xs text-amber-700">
-                  No active mailboxes.{" "}
-                  <Link href="/admin/mailboxes" className="underline">
-                    Add one under Sending → Mailboxes
-                  </Link>{" "}
-                  first.
-                </p>
-              ) : (
-                <>
-                  <p className="text-[11px] text-muted-foreground">
-                    Emails rotate across the selected inboxes, paced per inbox.
-                  </p>
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    {activeMailboxes.map((mb) => (
-                      <label
-                        key={mb.id}
-                        className="flex cursor-pointer items-center gap-2 rounded-lg border border-border/50 px-3 py-2 text-sm hover:bg-muted/40"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={selectedMailboxes.has(mb.id)}
-                          onChange={() => toggleMailbox(mb.id)}
-                          className="h-4 w-4 accent-[#2E37FE]"
-                        />
-                        <span>{mb.email_address}</span>
-                      </label>
-                    ))}
-                  </div>
-                </>
-              )}
+              <MailboxPoolPicker
+                mailboxes={mailboxes}
+                selected={selectedMailboxes}
+                onChange={(next) => {
+                  setSelectedMailboxes(next);
+                  setError(null);
+                }}
+              />
             </div>
           </div>
         </TabsContent>

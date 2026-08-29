@@ -1,7 +1,7 @@
 "use client";
 import { PageHeader } from "@/components/layout/page-header";
 
-import { Fragment, useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,7 +24,9 @@ import {
   Globe,
   Mail,
   X,
+  Tag,
 } from "lucide-react";
+import { TagChipInput } from "@/components/mailboxes/tag-chip-input";
 import { appUrl } from "@/lib/api-url";
 import { useUser } from "@/hooks/use-user";
 import { bandBadgeClass, bandLabel } from "@/lib/deliverability/inbox-health";
@@ -95,6 +97,22 @@ export default function MailboxesPage() {
 
   // Per-row in-flight action guard (mailbox id → true)
   const [busy, setBusy] = useState<Record<string, boolean>>({});
+
+  // Tags: one inline per-row editor open at a time, plus bulk "tag selected".
+  const [tagsOpenId, setTagsOpenId] = useState<string | null>(null);
+  const [tagDraft, setTagDraft] = useState<string[]>([]);
+  // Mirror the draft in a ref so "Save tags" reads the freshest value even when
+  // an un-Entered chip is committed by the input's onBlur in the same click
+  // (the click's closure would otherwise see stale state → drop the tag).
+  const tagDraftRef = useRef<string[]>([]);
+  const setTagDraftSynced = (v: string[]) => {
+    tagDraftRef.current = v;
+    setTagDraft(v);
+  };
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkTagOpen, setBulkTagOpen] = useState(false);
+  const [bulkTagDraft, setBulkTagDraft] = useState<string[]>([]);
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   // Which mailbox's detail (health breakdown + placement) is expanded (one at a time).
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -325,6 +343,74 @@ export default function MailboxesPage() {
     });
   }
 
+  // ---- Tags ----
+
+  function openTags(mb: MailboxRow) {
+    setBanner(null);
+    if (tagsOpenId === mb.id) {
+      setTagsOpenId(null);
+      return;
+    }
+    setTagsOpenId(mb.id);
+    setTagDraftSynced(mb.tags ?? []);
+  }
+
+  async function saveTags(mb: MailboxRow) {
+    await withBusy(mb.id, async () => {
+      const res = await fetch(appUrl(`/api/admin/mailboxes/${mb.id}`), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tags: tagDraftRef.current }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setTagsOpenId(null);
+        await load();
+      } else setBanner({ kind: "error", message: data.error ?? "Failed to save tags" });
+    });
+  }
+
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function applyBulkTags() {
+    if (selectedIds.size === 0 || bulkTagDraft.length === 0) return;
+    setBulkBusy(true);
+    setBanner(null);
+    try {
+      const res = await fetch(appUrl("/api/admin/mailboxes/tags"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mailbox_ids: [...selectedIds], add: bulkTagDraft }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setBanner({
+          kind: "success",
+          message: `Tagged ${data.updated ?? selectedIds.size} inbox${
+            (data.updated ?? selectedIds.size) === 1 ? "" : "es"
+          } with ${bulkTagDraft.map((t) => `“${t}”`).join(", ")}.`,
+        });
+        setBulkTagDraft([]);
+        setBulkTagOpen(false);
+        setSelectedIds(new Set());
+        await load();
+      } else {
+        setBanner({ kind: "error", message: data.error ?? "Bulk tag failed" });
+      }
+    } catch (err) {
+      setBanner({ kind: "error", message: err instanceof Error ? err.message : "Bulk tag failed" });
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
   // ---- Seed panel actions ----
 
   async function handleAddSeed() {
@@ -513,6 +599,24 @@ export default function MailboxesPage() {
     }
   }, []);
 
+  // Distinct org tags (case-insensitive, first-casing wins) for autocomplete, and
+  // whether every listed inbox is bulk-selected (drives the header select-all).
+  const orgTags = (() => {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const m of mailboxes) {
+      for (const t of m.tags ?? []) {
+        const k = t.toLowerCase();
+        if (!seen.has(k)) {
+          seen.add(k);
+          out.push(t);
+        }
+      }
+    }
+    return out.sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+  })();
+  const allSelected = mailboxes.length > 0 && mailboxes.every((m) => selectedIds.has(m.id));
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -624,10 +728,84 @@ export default function MailboxesPage() {
               service account in Google Admin.
             </p>
           ) : (
+            <>
+            {/* Bulk "tag selected" toolbar — appears once any inbox is checked. */}
+            {selectedIds.size > 0 && (
+              <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-[#2E37FE]/30 bg-[#2E37FE]/5 px-3 py-2">
+                <span className="text-xs font-medium text-[#2E37FE]">
+                  {selectedIds.size} selected
+                </span>
+                {!bulkTagOpen ? (
+                  <>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setBulkTagOpen(true);
+                        setBulkTagDraft([]);
+                      }}
+                    >
+                      <Tag size={13} /> Add tag
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => setSelectedIds(new Set())}>
+                      Clear
+                    </Button>
+                  </>
+                ) : (
+                  <div className="flex flex-1 flex-wrap items-center gap-2">
+                    <div className="min-w-[12rem] flex-1">
+                      <TagChipInput
+                        value={bulkTagDraft}
+                        onChange={setBulkTagDraft}
+                        suggestions={orgTags}
+                        autoFocus
+                        disabled={bulkBusy}
+                        placeholder="Tag name…"
+                      />
+                    </div>
+                    <Button
+                      size="sm"
+                      onClick={applyBulkTags}
+                      disabled={bulkBusy || bulkTagDraft.length === 0}
+                    >
+                      {bulkBusy ? <Loader2 size={13} className="animate-spin" /> : <Tag size={13} />}{" "}
+                      Apply to {selectedIds.size}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        setBulkTagOpen(false);
+                        setBulkTagDraft([]);
+                      }}
+                      disabled={bulkBusy}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b text-left text-xs text-muted-foreground">
+                    <th className="py-2 pr-2 font-medium">
+                      <input
+                        type="checkbox"
+                        checked={allSelected}
+                        ref={(el) => {
+                          if (el) el.indeterminate = !allSelected && selectedIds.size > 0;
+                        }}
+                        onChange={() =>
+                          setSelectedIds(
+                            allSelected ? new Set() : new Set(mailboxes.map((m) => m.id)),
+                          )
+                        }
+                        className="h-3.5 w-3.5 accent-[#2E37FE]"
+                        aria-label="Select all mailboxes"
+                      />
+                    </th>
                     <th className="py-2 pr-3 font-medium">Mailbox</th>
                     <th className="py-2 px-3 font-medium">Status</th>
                     <th className="py-2 px-3 font-medium">Health</th>
@@ -642,6 +820,15 @@ export default function MailboxesPage() {
                   {mailboxes.map((mb) => (
                     <Fragment key={mb.id}>
                     <tr className="border-b last:border-0 align-middle">
+                      <td className="py-3 pr-2">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(mb.id)}
+                          onChange={() => toggleSelect(mb.id)}
+                          className="h-3.5 w-3.5 accent-[#2E37FE]"
+                          aria-label={`Select ${mb.email_address}`}
+                        />
+                      </td>
                       <td className="py-3 pr-3">
                         <div className="font-medium text-[#0f172a]">{mb.email_address}</div>
                         {mb.display_name && (
@@ -657,6 +844,25 @@ export default function MailboxesPage() {
                             <AlertTriangle size={12} /> Paused automatically by the health check — resume when it recovers.
                           </div>
                         )}
+                        <div className="mt-1 flex flex-wrap items-center gap-1">
+                          {(mb.tags ?? []).map((t) => (
+                            <span
+                              key={t}
+                              className="inline-flex items-center rounded-full bg-[#2E37FE]/10 px-1.5 py-0.5 text-[10px] font-medium text-[#2E37FE]"
+                            >
+                              {t}
+                            </span>
+                          ))}
+                          <button
+                            type="button"
+                            onClick={() => openTags(mb)}
+                            className="inline-flex cursor-pointer items-center gap-0.5 rounded-full border border-dashed border-border/70 px-1.5 py-0.5 text-[10px] text-muted-foreground hover:border-[#2E37FE]/50 hover:text-[#2E37FE]"
+                            aria-expanded={tagsOpenId === mb.id}
+                            title="Edit tags"
+                          >
+                            <Tag size={9} /> {(mb.tags ?? []).length ? "Edit" : "Tag"}
+                          </button>
+                        </div>
                       </td>
                       <td className="py-3 px-3">
                         <StatusBadge status={mb.status} />
@@ -772,9 +978,49 @@ export default function MailboxesPage() {
                         </div>
                       </td>
                     </tr>
+                    {tagsOpenId === mb.id && (
+                      <tr className="bg-slate-50/60 border-b last:border-0">
+                        <td colSpan={9} className="px-3 py-3">
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                            <div className="max-w-lg flex-1">
+                              <TagChipInput
+                                value={tagDraft}
+                                onChange={setTagDraftSynced}
+                                suggestions={orgTags}
+                                autoFocus
+                                disabled={busy[mb.id]}
+                                placeholder="Add a tag (e.g. Agency, Client A)…"
+                              />
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Button
+                                size="sm"
+                                disabled={busy[mb.id]}
+                                onClick={() => saveTags(mb)}
+                              >
+                                {busy[mb.id] && <Loader2 size={14} className="animate-spin" />}
+                                Save tags
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setTagsOpenId(null)}
+                                title="Cancel"
+                              >
+                                <X size={14} />
+                              </Button>
+                            </div>
+                          </div>
+                          <p className="mt-2 text-[11px] text-muted-foreground">
+                            Tags group inboxes into named pools you can add to a campaign all at
+                            once. Case-insensitive; type and press Enter.
+                          </p>
+                        </td>
+                      </tr>
+                    )}
                     {testOpenId === mb.id && (
                       <tr className="bg-slate-50/60 border-b last:border-0">
-                        <td colSpan={8} className="px-3 py-3">
+                        <td colSpan={9} className="px-3 py-3">
                           <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
                             <div className="space-y-1 flex-1 max-w-md">
                               <Label htmlFor={`test-to-${mb.id}`} className="text-xs font-medium">
@@ -820,7 +1066,7 @@ export default function MailboxesPage() {
                     )}
                     {expandedId === mb.id && (
                       <tr className="bg-slate-50/60 border-b last:border-0">
-                        <td colSpan={8} className="px-3 py-3">
+                        <td colSpan={9} className="px-3 py-3">
                           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
                             <div className="space-y-1.5">
                               <p className="text-xs font-semibold text-[#0f172a] uppercase tracking-wide">
@@ -865,6 +1111,7 @@ export default function MailboxesPage() {
                 </tbody>
               </table>
             </div>
+            </>
           )}
         </CardContent>
       </Card>

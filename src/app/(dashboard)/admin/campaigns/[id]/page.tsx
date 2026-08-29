@@ -27,7 +27,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ArrowLeft, Inbox, Upload, AlertCircle, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, Inbox, Upload, CheckCircle2 } from "lucide-react";
 import { NativeImportPanel } from "@/components/campaigns/native-import-panel";
 import { CampaignContactsCard, type CampaignContactRow } from "./campaign-contacts-card";
 import { NativeSequenceSection } from "./native-sequence-section";
@@ -93,7 +93,7 @@ export default async function AdminCampaignDetailPage({
       ? await gatherLaunchReadiness(admin, { id: campaign.id, client_id: campaign.client_id })
       : null;
 
-  const [clientRes, snapshotsRes, clientsForLinkRes] =
+  const [clientRes, snapshotsRes, orgClientsRes] =
     await Promise.all([
       campaign.client_id
         ? supabase
@@ -107,20 +107,19 @@ export default async function AdminCampaignDetailPage({
         .select(SNAPSHOT_COLUMNS)
         .eq("campaign_id", campaignId)
         .order("snapshot_date", { ascending: false }),
-      // For orphan campaigns, surface the list of clients in the org
-      // so the owner can link the campaign in one click.
-      campaign.client_id
-        ? Promise.resolve({ data: null })
-        : supabase
-            .from("clients")
-            .select("id, name")
-            .eq("organization_id", campaign.organization_id)
-            .order("name"),
+      // Every client in the org — feeds both the orphan-linker card (legacy
+      // render) and the Setup tab's client selector, which can re-point or
+      // unlink the campaign at any time.
+      supabase
+        .from("clients")
+        .select("id, name")
+        .eq("organization_id", campaign.organization_id)
+        .order("name"),
     ]);
 
   const client = clientRes.data as { id: string; name: string } | null;
   const snapshots = (snapshotsRes.data ?? []) as unknown as CampaignSnapshot[];
-  const clientsForLink = (clientsForLinkRes.data ?? []) as Pick<
+  const orgClients = (orgClientsRes.data ?? []) as Pick<
     Client,
     "id" | "name"
   >[];
@@ -293,6 +292,33 @@ export default async function AdminCampaignDetailPage({
       }
     }
 
+    // Setup tab: the full org mailbox pool + which ones are attached, so the
+    // owner can add/remove inboxes at any time. Contacts-tab badge keys off the
+    // launch-readiness contacts warning (enrollment count === 0).
+    const [allMailboxesRes, attachedRes] = await Promise.all([
+      admin
+        .from("native_mailboxes")
+        .select("id, email_address, status, tags")
+        .eq("organization_id", campaign.organization_id)
+        .order("email_address", { ascending: true }),
+      admin
+        .from("campaign_mailboxes")
+        .select("mailbox_id")
+        .eq("campaign_id", campaign.id),
+    ]);
+    const allMailboxes = (allMailboxesRes.data ?? []) as {
+      id: string;
+      email_address: string;
+      status: string;
+      tags: string[];
+    }[];
+    const attachedMailboxIds = (
+      (attachedRes.data ?? []) as { mailbox_id: string }[]
+    ).map((r) => r.mailbox_id);
+    const contactsMissing = (launchReadiness?.warnings ?? []).some(
+      (w) => w.key === "contacts",
+    );
+
     return (
       <CampaignDetailWorkspace
         campaignId={campaign.id}
@@ -300,6 +326,10 @@ export default async function AdminCampaignDetailPage({
         status={campaign.status}
         sourceChannel={campaign.source_channel}
         client={client}
+        clients={orgClients}
+        allMailboxes={allMailboxes}
+        attachedMailboxIds={attachedMailboxIds}
+        contactsMissing={contactsMissing}
         initialGraph={initialGraph}
         initialWindow={sendWindow}
         initialNewLeadsCap={resolveDailyNewLeadsCap(campaign)}
@@ -539,7 +569,7 @@ export default async function AdminCampaignDetailPage({
       />
 
       {/* Orphan: surface a client-linker so the owner can attach in one click */}
-      {!campaign.client_id && clientsForLink.length > 0 && (
+      {!campaign.client_id && orgClients.length > 0 && (
         <Card className="border-amber-200 bg-amber-50 shadow-sm">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm">Link to a client</CardTitle>
@@ -551,7 +581,7 @@ export default async function AdminCampaignDetailPage({
           <CardContent>
             <LinkOrphanForm
               campaignId={campaign.id}
-              clients={clientsForLink}
+              clients={orgClients}
             />
           </CardContent>
         </Card>

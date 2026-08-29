@@ -8,20 +8,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import { MoreHorizontal, Pause, Play, Rocket, Trash2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { appUrl } from "@/lib/api-url";
 import { ActivatePreflightDialog } from "@/components/campaigns/activate-preflight-dialog";
+import { DeleteCampaignDialog } from "@/components/campaigns/delete-campaign-dialog";
 import type { PreflightWarning } from "@/lib/deliverability/preflight";
 
 type CampaignStatus = "active" | "paused" | "draft" | "completed" | null;
@@ -41,14 +32,13 @@ export function CampaignRowActions({
   sourceChannel,
   onChanged,
 }: CampaignRowActionsProps) {
-  const [busy, setBusy] = useState<"activate" | "pause" | "resume" | "delete" | null>(null);
+  const [busy, setBusy] = useState<"activate" | "pause" | "resume" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [typedName, setTypedName] = useState("");
   const [preflight, setPreflight] = useState<PreflightWarning[] | null>(null);
 
   async function callLifecycle(
-    action: "activate" | "pause" | "resume" | "delete",
+    action: "activate" | "pause" | "resume",
     acknowledge = false,
   ) {
     setBusy(action);
@@ -77,13 +67,7 @@ export function CampaignRowActions({
       }
       setPreflight(null);
       onChanged();
-      if (action === "delete") {
-        setDeleteOpen(false);
-        setTypedName("");
-        toast.success(`Deleted "${campaignName}"`, {
-          description: "Campaign removed from LeadStart.",
-        });
-      } else if (action === "activate") {
+      if (action === "activate") {
         toast.success(`Activated "${campaignName}"`, {
           description: "Sending starts on the next cron tick during the send window.",
         });
@@ -105,7 +89,6 @@ export function CampaignRowActions({
     status === "draft" && (isLocalChannel || sourceChannel === "instantly");
   const canPause = status === "active";
   const canResume = status === "paused";
-  const confirmEnabled = typedName.trim() === campaignName.trim();
 
   return (
     <>
@@ -163,11 +146,7 @@ export function CampaignRowActions({
           )}
           {(canActivate || canPause || canResume) && <DropdownMenuSeparator />}
           <DropdownMenuItem
-            onClick={() => {
-              setError(null);
-              setTypedName("");
-              setDeleteOpen(true);
-            }}
+            onClick={() => setDeleteOpen(true)}
             disabled={busy !== null}
             className="text-red-600 focus:text-red-700 data-highlighted:bg-red-50"
           >
@@ -177,82 +156,17 @@ export function CampaignRowActions({
         </DropdownMenuContent>
       </DropdownMenu>
 
-      {error && !deleteOpen && (
+      {error && (
         <p className="absolute right-4 mt-1 text-[11px] text-red-600">{error}</p>
       )}
 
-      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-        <DialogContent className="sm:max-w-[480px]">
-          <DialogHeader>
-            <DialogTitle className="text-red-700">
-              Delete campaign?
-            </DialogTitle>
-            <DialogDescription>
-              This permanently removes{" "}
-              <span className="font-semibold text-foreground">
-                {campaignName}
-              </span>{" "}
-              from LeadStart. Lead replies and contacts tied to this
-              campaign are preserved but lose their campaign link. This
-              cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="flex flex-col gap-3">
-            <label
-              htmlFor={`confirm-delete-${campaignId}`}
-              className="text-xs font-medium text-muted-foreground"
-            >
-              Type{" "}
-              <span className="font-semibold text-foreground">
-                {campaignName}
-              </span>{" "}
-              to confirm:
-            </label>
-            <Input
-              id={`confirm-delete-${campaignId}`}
-              autoFocus
-              value={typedName}
-              onChange={(e) => setTypedName(e.target.value)}
-              placeholder={campaignName}
-              disabled={busy === "delete"}
-            />
-          </div>
-
-          {error && (
-            <div className="rounded-lg border border-red-200 bg-red-50 p-3">
-              <p className="text-xs font-semibold text-red-700">
-                Couldn&apos;t delete the campaign
-              </p>
-              <p className="mt-1 max-h-28 overflow-y-auto text-xs text-red-700/90 break-words whitespace-pre-wrap">
-                {error}
-              </p>
-            </div>
-          )}
-
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setDeleteOpen(false)}
-              disabled={busy === "delete"}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => callLifecycle("delete")}
-              disabled={!confirmEnabled || busy === "delete"}
-            >
-              {busy === "delete" ? (
-                <Loader2 size={14} className="animate-spin" />
-              ) : (
-                <Trash2 size={14} />
-              )}
-              Delete permanently
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <DeleteCampaignDialog
+        campaignId={campaignId}
+        campaignName={campaignName}
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        onDeleted={onChanged}
+      />
 
       <ActivatePreflightDialog
         campaignName={campaignName}

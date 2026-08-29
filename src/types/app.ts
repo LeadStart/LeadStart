@@ -840,6 +840,9 @@ export interface NativeMailbox {
   // Link to the sending_domains row for this inbox's domain (migration 00081).
   // Null on legacy rows until backfilled. Drives domain-level lifecycle/drain.
   domain_id: string | null;
+  // Free-form operator tags (migration 00101) — named pools the campaign mailbox
+  // picker can add en masse. Always an array; '{}' by default.
+  tags: string[];
   ramp_started_at: string;        // 'YYYY-MM-DD'
   max_daily_cap: number;
   daily_cap_override: number | null;

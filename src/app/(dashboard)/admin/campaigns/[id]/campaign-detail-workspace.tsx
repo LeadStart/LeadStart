@@ -9,6 +9,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { toast } from "sonner";
 import {
   Save,
   Loader2,
@@ -23,10 +24,13 @@ import {
   AlertCircle,
   Inbox,
   Trophy,
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { DeleteCampaignDialog } from "@/components/campaigns/delete-campaign-dialog";
+import { MailboxPoolPicker } from "@/components/campaigns/mailbox-pool-picker";
 import { appUrl } from "@/lib/api-url";
 import { formatSendWindow, type SendWindowConfig, type CompletionProjection } from "@/lib/gmail/ramp";
 import type { SendingStrategy } from "@/types/app";
@@ -70,12 +74,23 @@ export interface NativeStatsView {
   activeMailboxCount: number;
 }
 
+export interface SetupMailbox {
+  id: string;
+  email_address: string;
+  status: string;
+  tags: string[];
+}
+
 export function CampaignDetailWorkspace({
   campaignId,
   campaignName,
   status,
   sourceChannel,
   client,
+  clients,
+  allMailboxes,
+  attachedMailboxIds,
+  contactsMissing,
   initialGraph,
   initialWindow,
   initialNewLeadsCap,
@@ -95,6 +110,15 @@ export function CampaignDetailWorkspace({
   status: "active" | "paused" | "draft" | "completed" | null;
   sourceChannel: string;
   client: { id: string; name: string } | null;
+  // All clients in the org (for the Setup client selector).
+  clients: { id: string; name: string }[];
+  // All sending mailboxes in the org (for the Setup pool selector).
+  allMailboxes: SetupMailbox[];
+  // Mailbox ids currently attached to this campaign.
+  attachedMailboxIds: string[];
+  // Whether the campaign still has zero enrolled contacts (drives the Contacts
+  // tab badge). Server-computed from launch readiness.
+  contactsMissing: boolean;
   initialGraph: FlowGraph;
   initialWindow: SendWindowConfig;
   initialNewLeadsCap: number;
@@ -119,6 +143,79 @@ export function CampaignDetailWorkspace({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<number | null>(null);
+
+  // Setup tab — client link + mailbox pool are configurable at any time and
+  // auto-save on change (each is its own concern, separate from the sequence
+  // "Save changes" button). Local state is the source of truth for the badges.
+  const [clientId, setClientId] = useState<string>(client?.id ?? "");
+  const [clientSaving, setClientSaving] = useState(false);
+  const [mailboxIds, setMailboxIds] = useState<Set<string>>(new Set(attachedMailboxIds));
+  const [mailboxSaving, setMailboxSaving] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+
+  async function saveClient(nextId: string) {
+    const prev = clientId;
+    if (nextId === prev) return;
+    setClientId(nextId);
+    setClientSaving(true);
+    try {
+      const res = await fetch(appUrl(`/api/admin/campaigns/${campaignId}/link-client`), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ client_id: nextId || null }),
+      });
+      const json = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) throw new Error(json.error || `Failed (${res.status})`);
+      toast.success(nextId ? "Client linked" : "Client unlinked");
+      router.refresh();
+    } catch (err) {
+      setClientId(prev); // revert on failure
+      toast.error(err instanceof Error ? err.message : String(err));
+    } finally {
+      setClientSaving(false);
+    }
+  }
+
+  // The picker hands back the full desired set (individual toggles, tag/domain
+  // select-all) — persist it wholesale via the set-based endpoint.
+  async function applyMailboxes(next: Set<string>) {
+    const prev = mailboxIds;
+    setMailboxIds(next);
+    setMailboxSaving(true);
+    try {
+      const res = await fetch(appUrl(`/api/admin/campaigns/${campaignId}/mailboxes`), {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mailbox_ids: [...next] }),
+      });
+      const json = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) throw new Error(json.error || `Failed (${res.status})`);
+      router.refresh();
+    } catch (err) {
+      setMailboxIds(prev); // revert on failure
+      toast.error(err instanceof Error ? err.message : String(err));
+    } finally {
+      setMailboxSaving(false);
+    }
+  }
+
+  // Per-tab "missing sending-required setup" counts → the red count badges. The
+  // Sequence and Setup counts derive from live local state so editing updates
+  // the badge without a save; Contacts is server-computed (imports refresh the
+  // route). This mirrors src/lib/campaigns/launch-readiness.ts.
+  const seqSteps = graphToSteps(graph);
+  const seqFirst = seqSteps[0];
+  const sequenceMissing =
+    seqSteps.length === 0 ||
+    !seqFirst?.subject_template?.trim() ||
+    !seqFirst?.body_template?.trim()
+      ? 1
+      : 0;
+  const connectedMailboxCount = [...mailboxIds].filter(
+    (id) => allMailboxes.find((m) => m.id === id)?.status === "active",
+  ).length;
+  const setupMissing = (clientId ? 0 : 1) + (connectedMailboxCount === 0 ? 1 : 0);
+  const contactsBadge = contactsMissing ? 1 : 0;
 
   // Deliverability pre-flight
   const [checkResult, setCheckResult] = useState<DeliverabilityResult | null>(null);
@@ -257,16 +354,16 @@ export function CampaignDetailWorkspace({
       <Tabs value={tab} onValueChange={(v) => setTab(v as string)} className="min-h-0 flex-1">
         <TabsList variant="line" className="shrink-0 gap-1">
           <TabsTrigger value="sequence">
-            <Workflow /> Sequence
+            <Workflow /> Sequence <TabCount n={sequenceMissing} />
           </TabsTrigger>
           <TabsTrigger value="leads">
-            <Users /> Contacts
+            <Users /> Contacts <TabCount n={contactsBadge} />
           </TabsTrigger>
           <TabsTrigger value="schedule">
             <Calendar /> Schedule
           </TabsTrigger>
           <TabsTrigger value="options">
-            <SlidersHorizontal /> Setup
+            <SlidersHorizontal /> Setup <TabCount n={setupMissing} />
           </TabsTrigger>
           <TabsTrigger value="deliverability">
             <ShieldCheck /> Deliverability
@@ -428,44 +525,84 @@ export function CampaignDetailWorkspace({
           </div>
         </TabsContent>
 
-        {/* Setup — client + mailbox pool */}
+        {/* Setup — client link + mailbox pool (configurable at any time) + delete */}
         <TabsContent value="options" className="min-h-0 overflow-y-auto pt-4">
-          <div className="max-w-2xl space-y-5">
-            <div>
-              <p className="mb-1 text-xs font-medium text-secondary-foreground">Client</p>
-              {client ? (
-                <Link href={`/admin/clients/${client.id}`} className="text-sm underline">
-                  {client.name}
-                </Link>
-              ) : (
-                <p className="text-sm text-amber-700">Not linked to a client.</p>
-              )}
-            </div>
-            <div>
-              <p className="mb-2 text-xs font-medium text-secondary-foreground">Sending mailboxes</p>
-              {nativeStats.mailboxes.length === 0 ? (
-                <p className="text-xs text-amber-700">No mailboxes assigned to this campaign.</p>
-              ) : (
-                <div className="flex flex-wrap gap-2">
-                  {nativeStats.mailboxes.map((mb) => (
-                    <Badge
-                      key={mb.email}
-                      variant="secondary"
-                      className={
-                        mb.status === "active" ? "badge-green" : mb.status === "error" ? "badge-red" : "badge-slate"
-                      }
-                    >
-                      {mb.email}
-                    </Badge>
+          <div className="max-w-2xl space-y-6">
+            {/* Client link */}
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-2">
+                <p className="text-xs font-medium text-secondary-foreground">Client</p>
+                {clientSaving && (
+                  <Loader2 size={12} className="animate-spin text-muted-foreground" />
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <select
+                  value={clientId}
+                  onChange={(e) => saveClient(e.target.value)}
+                  disabled={clientSaving}
+                  className="w-full max-w-sm rounded-md border border-border/60 bg-background px-3 py-2 text-sm disabled:opacity-60"
+                >
+                  <option value="">— No client (orphan) —</option>
+                  {clients.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
                   ))}
-                </div>
-              )}
-              {nativeStats.activeMailboxCount > 0 && (
-                <p className="mt-2 text-[11px] text-muted-foreground">
-                  Combined capacity ~{nativeStats.dailyInboxCapacity}/day across {nativeStats.activeMailboxCount} active
-                  inbox{nativeStats.activeMailboxCount === 1 ? "" : "es"} (warmup-aware).
+                </select>
+                {clientId && (
+                  <Link
+                    href={`/admin/clients/${clientId}`}
+                    className="shrink-0 text-xs text-muted-foreground underline hover:text-foreground"
+                  >
+                    Open
+                  </Link>
+                )}
+              </div>
+              {!clientId && (
+                <p className="inline-flex items-center gap-1 text-[11px] text-amber-700">
+                  <AlertCircle size={11} /> Replies won&apos;t trigger client
+                  notifications until a client is linked.
                 </p>
               )}
+            </div>
+
+            {/* Sending mailbox pool */}
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-secondary-foreground">
+                Sending mailboxes
+              </p>
+              <MailboxPoolPicker
+                mailboxes={allMailboxes}
+                selected={mailboxIds}
+                onChange={applyMailboxes}
+                disabled={mailboxSaving}
+                saving={mailboxSaving}
+              />
+              {nativeStats.activeMailboxCount > 0 && (
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Combined capacity ~{nativeStats.dailyInboxCapacity}/day across{" "}
+                  {nativeStats.activeMailboxCount} active inbox
+                  {nativeStats.activeMailboxCount === 1 ? "" : "es"} (warmup-aware).
+                </p>
+              )}
+            </div>
+
+            {/* Danger zone */}
+            <div className="space-y-2 rounded-xl border border-red-200 bg-red-50/40 p-4">
+              <p className="text-xs font-semibold text-red-700">Danger zone</p>
+              <p className="text-[11px] text-muted-foreground">
+                Permanently delete this campaign. Lead replies and contacts are
+                preserved but lose their campaign link. This cannot be undone.
+              </p>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => setDeleteOpen(true)}
+                className="gap-1.5"
+              >
+                <Trash2 size={14} /> Delete campaign
+              </Button>
             </div>
           </div>
         </TabsContent>
@@ -526,7 +663,26 @@ export function CampaignDetailWorkspace({
           )}
         </TabsContent>
       </Tabs>
+
+      <DeleteCampaignDialog
+        campaignId={campaignId}
+        campaignName={campaignName}
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        onDeleted={() => router.push("/admin/campaigns")}
+      />
     </div>
+  );
+}
+
+// Small red count badge on a tab — the "# still missing sending-required setup"
+// for that category. Renders nothing at zero.
+function TabCount({ n }: { n: number }) {
+  if (!n) return null;
+  return (
+    <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold leading-none text-white">
+      {n}
+    </span>
   );
 }
 
