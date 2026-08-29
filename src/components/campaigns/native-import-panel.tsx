@@ -86,6 +86,12 @@ export function NativeImportPanel({ campaignId }: { campaignId: string }) {
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
   const [result, setResult] = useState<ImportResult | null>(null);
+  // Chunked-upload progress (rows sent / total) — drives the progress bar and the
+  // "keep this screen open" guard while a large list uploads batch by batch.
+  const [importProgress, setImportProgress] = useState<{
+    done: number;
+    total: number;
+  } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -113,7 +119,19 @@ export function NativeImportPanel({ campaignId }: { campaignId: string }) {
     };
   }, [campaignId]);
 
-  const maxRows = bootstrap?.max_rows ?? 500;
+  // While a chunked import is mid-flight the browser must stay open (the upload
+  // loop runs client-side), so guard against an accidental tab close / reload.
+  useEffect(() => {
+    if (!importing) return;
+    const warn = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [importing]);
+
+  const maxRows = bootstrap?.max_rows ?? 10000;
   const customTokens = useMemo(
     () => bootstrap?.tokens.custom ?? [],
     [bootstrap],
@@ -274,29 +292,66 @@ export function NativeImportPanel({ campaignId }: { campaignId: string }) {
     setImporting(true);
     setImportError(null);
     setResult(null);
+    setImportProgress({ done: 0, total: rows.length });
     try {
       const activeMapping: Record<string, string> = {};
       for (const [h, t] of Object.entries(columnMapping)) {
         if (t) activeMapping[h] = t;
       }
-      const res = await fetch(
-        appUrl(`/api/campaigns/${campaignId}/client-import`),
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            rows,
-            column_mapping: activeMapping,
-            filename,
-          }),
-        },
-      );
-      const data = (await res.json()) as ImportResult & { error?: string };
-      if (!res.ok) {
-        setImportError(data.error ?? `HTTP ${res.status}`);
-        return;
+      // Chunk the upload so a large list (up to the per-file cap) never exceeds
+      // the serverless request-body limit — each request stays small and the
+      // per-row counts accumulate across chunks. The trade-off: this loop runs in
+      // the browser, so the tab must stay open for the whole upload (we render a
+      // progress bar + a "keep this screen open" note + a beforeunload guard).
+      //
+      // TODO(background-import): for lists well beyond 10k, replace this with a
+      // true background importer — stash the file/rows server-side and let a
+      // worker cron process them so the user can close the tab. Tracked in the
+      // in-app Tasks list ("Build true background CSV importer").
+      const CHUNK = 1000;
+      const agg: ImportResult = {
+        inserted: 0,
+        linked: 0,
+        enrolled: 0,
+        already_enrolled: 0,
+        skipped_invalid_email: 0,
+        skipped_existing_elsewhere: 0,
+        skipped_dnc: 0,
+        skipped_suppressed: 0,
+        skipped_undeliverable: 0,
+        in_file_duplicates: 0,
+        total_received: 0,
+      };
+      for (let i = 0; i < rows.length; i += CHUNK) {
+        const batch = rows.slice(i, i + CHUNK);
+        const res = await fetch(
+          appUrl(`/api/campaigns/${campaignId}/client-import`),
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ rows: batch, column_mapping: activeMapping, filename }),
+          },
+        );
+        const data = (await res.json()) as ImportResult & { error?: string };
+        if (!res.ok) {
+          const done = agg.inserted + agg.linked;
+          setImportError(
+            done > 0
+              ? `${data.error ?? `HTTP ${res.status}`} — stopped after adding ${done} contact${done === 1 ? "" : "s"}.`
+              : data.error ?? `HTTP ${res.status}`,
+          );
+          if (done > 0) setResult(agg);
+          return;
+        }
+        for (const k of Object.keys(agg) as (keyof ImportResult)[]) {
+          agg[k] += (data[k] as number | undefined) ?? 0;
+        }
+        setImportProgress({
+          done: Math.min(i + CHUNK, rows.length),
+          total: rows.length,
+        });
       }
-      setResult(data);
+      setResult(agg);
       // The server just persisted this mapping AND reconciled the registry; keep
       // the local bootstrap in sync so a second upload in the same session
       // pre-fills from it and shows freshly-created variables as "known" (not new).
@@ -325,6 +380,7 @@ export function NativeImportPanel({ campaignId }: { campaignId: string }) {
       setImportError(err instanceof Error ? err.message : String(err));
     } finally {
       setImporting(false);
+      setImportProgress(null);
     }
   }
 
@@ -713,6 +769,37 @@ export function NativeImportPanel({ campaignId }: { campaignId: string }) {
             </div>
           );
         })()}
+
+      {importing && importProgress && (
+        <div className="space-y-2 rounded-lg border border-[#2E37FE]/20 bg-[#2E37FE]/5 p-3">
+          <div className="flex items-center justify-between text-xs">
+            <span className="flex items-center gap-1.5 font-medium text-[#2E37FE]">
+              <Loader2 size={12} className="animate-spin" />
+              Uploading {importProgress.done.toLocaleString()} of{" "}
+              {importProgress.total.toLocaleString()} contacts…
+            </span>
+            <span className="text-muted-foreground">
+              {Math.round(
+                (importProgress.done / Math.max(1, importProgress.total)) * 100,
+              )}
+              %
+            </span>
+          </div>
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-[#2E37FE]/15">
+            <div
+              className="h-full rounded-full bg-[#2E37FE] transition-all duration-300"
+              style={{
+                width: `${(importProgress.done / Math.max(1, importProgress.total)) * 100}%`,
+              }}
+            />
+          </div>
+          <p className="flex items-start gap-1.5 text-[11px] text-amber-700">
+            <AlertCircle size={11} className="mt-0.5 shrink-0" />
+            Keep this screen open until the upload finishes — closing it or
+            navigating away will stop the import partway.
+          </p>
+        </div>
+      )}
 
       <div className="flex items-center gap-2">
         <Button

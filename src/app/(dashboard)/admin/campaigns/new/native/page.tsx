@@ -87,10 +87,11 @@ export default function NewNativeCampaignPage() {
 
   async function handleSave() {
     setError(null);
-    // Draft saves from just a name. Client, mailboxes, and a complete sequence are
-    // all optional here — the campaign's launch-readiness panel surfaces what's
+    // Draft saves freely: if no name is typed yet, auto-name it "Untitled
+    // campaign" rather than block the save. Client, mailboxes, and a complete
+    // sequence are all optional here — the launch-readiness panel surfaces what's
     // still needed, and the Launch button stays gated until it's ready.
-    if (!name.trim()) return setError("Give the campaign a name.");
+    const campaignName = name.trim() || "Untitled campaign";
 
     const steps = graphToSteps(graph).map((s, i) => ({
       step_index: i,
@@ -105,7 +106,7 @@ export default function NewNativeCampaignPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: name.trim(),
+          name: campaignName,
           client_id: clientId || null,
           mailbox_ids: [...selectedMailboxes],
           steps,

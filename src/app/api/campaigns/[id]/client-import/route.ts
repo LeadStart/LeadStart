@@ -53,10 +53,16 @@ interface RouteParams {
   params: Promise<{ id: string }>;
 }
 
-const MAX_IMPORT_ROWS = 500;
-const MAX_BODY_BYTES = 5 * 1024 * 1024;
+// Rows accepted per REQUEST — kept modest so one chunk stays well under the
+// serverless request-body limit (~4.5MB). The client chunks a big list into
+// batches of this size or smaller, so this is NOT the per-list limit.
+const MAX_IMPORT_ROWS = 2000;
+// Rows accepted per FILE/list (sent to the client as max_rows). A list this large
+// uploads fine — the client splits it across several requests.
+const MAX_LIST_ROWS = 10000;
+const MAX_BODY_BYTES = 4 * 1024 * 1024;
 // Per-client rows/day across all uploads — flood brake, not a business quota.
-const DAILY_ROW_BUDGET = 5000;
+const DAILY_ROW_BUDGET = 50000;
 
 const MAX_CUSTOM_KEYS_PER_ROW = 30;
 const MAX_CUSTOM_KEY_LEN = 64;
@@ -292,7 +298,7 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
     tokens,
     variables,
     saved_mapping: campaign.csv_column_mapping ?? null,
-    max_rows: MAX_IMPORT_ROWS,
+    max_rows: MAX_LIST_ROWS,
   });
 }
 
