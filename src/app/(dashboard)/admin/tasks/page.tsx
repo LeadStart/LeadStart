@@ -1,7 +1,7 @@
 "use client";
 import { PageHeader } from "@/components/layout/page-header";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type KeyboardEvent } from "react";
 import { useSupabaseQuery } from "@/hooks/use-supabase-query";
 import { ADMIN_TASKS_KEY, fetchAdminTasks } from "@/lib/admin-queries";
 import { useSort } from "@/hooks/use-sort";
@@ -24,7 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { createClient } from "@/lib/supabase/client";
-import { CheckSquare, ListTodo, Clock, CheckCircle2, Plus, Circle, Trash2 } from "lucide-react";
+import { CheckSquare, ListTodo, Clock, CheckCircle2, Plus, Circle, Trash2, Pencil, Check, X } from "lucide-react";
 
 export type TaskStatus = "todo" | "in_progress" | "done";
 export type TaskPriority = "low" | "medium" | "high";
@@ -82,6 +82,16 @@ export default function TasksPage() {
   const [newPriority, setNewPriority] = useState<TaskPriority>("medium");
   const [newCategory, setNewCategory] = useState("");
   const [newDueDate, setNewDueDate] = useState("");
+
+  // Inline edit state — which row is being edited + a working copy of its fields.
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editTitle, setEditTitle] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [editStatus, setEditStatus] = useState<TaskStatus>("todo");
+  const [editPriority, setEditPriority] = useState<TaskPriority>("medium");
+  const [editCategory, setEditCategory] = useState("");
+  const [editDueDate, setEditDueDate] = useState("");
 
   const { data, loading, refetch } = useSupabaseQuery(
     ADMIN_TASKS_KEY,
@@ -172,6 +182,59 @@ export default function TasksPage() {
       return;
     }
     refetch();
+  }
+
+  function handleStartEdit(task: Task) {
+    setEditingId(task.id);
+    setEditTitle(task.title);
+    setEditDescription(task.description ?? "");
+    setEditStatus(task.status);
+    setEditPriority(task.priority);
+    setEditCategory(task.category ?? "");
+    // due_date may come back as a full timestamp; the date input wants YYYY-MM-DD.
+    setEditDueDate(task.due_date ? task.due_date.slice(0, 10) : "");
+    // Don't leave the add form open behind the edit row.
+    setShowAddForm(false);
+  }
+
+  function handleCancelEdit() {
+    setEditingId(null);
+  }
+
+  async function handleSaveEdit() {
+    if (!editingId || !editTitle.trim()) return;
+    setSavingEdit(true);
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("tasks")
+      .update({
+        title: editTitle.trim(),
+        description: editDescription.trim() || null,
+        status: editStatus,
+        priority: editPriority,
+        category: editCategory.trim() || null,
+        due_date: editDueDate || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", editingId);
+    setSavingEdit(false);
+    if (error) {
+      alert(`Failed to update task: ${error.message}`);
+      return;
+    }
+    setEditingId(null);
+    refetch();
+  }
+
+  // Enter saves, Escape cancels — for a quick keyboard-driven inline edit.
+  function handleEditKeyDown(e: KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      void handleSaveEdit();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      handleCancelEdit();
+    }
   }
 
   return (
@@ -333,59 +396,178 @@ export default function TasksPage() {
                   <SortableHead sortKey="category" sortConfig={sortConfig} onSort={requestSort}>Category</SortableHead>
                   <SortableHead sortKey="due_date" sortConfig={sortConfig} onSort={requestSort}>Due Date</SortableHead>
                   <SortableHead sortKey="created_at" sortConfig={sortConfig} onSort={requestSort}>Created</SortableHead>
-                  <TableHead className="w-12 text-right"></TableHead>
+                  <TableHead className="w-[88px] text-right"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {pageRows.map((task) => (
-                  <TableRow key={task.id}>
+                {pageRows.map((task) => {
+                  const isEditing = editingId === task.id;
+                  return (
+                  <TableRow key={task.id} className={isEditing ? "bg-purple-50/50" : undefined}>
+                    {/* Title (+ description) */}
                     <TableCell className="align-top">
-                      <div className="max-w-[380px] min-w-[160px]">
-                        <p className="font-medium break-words">{task.title}</p>
-                        {task.description && (
-                          <p className="mt-0.5 text-xs text-muted-foreground whitespace-normal break-words">
-                            {task.description}
-                          </p>
-                        )}
-                      </div>
+                      {isEditing ? (
+                        <div className="max-w-[380px] min-w-[180px] space-y-1.5">
+                          <Input
+                            value={editTitle}
+                            onChange={(e) => setEditTitle(e.target.value)}
+                            onKeyDown={handleEditKeyDown}
+                            placeholder="Task title"
+                            autoFocus
+                            style={{ height: "32px" }}
+                            className="text-sm"
+                          />
+                          <Textarea
+                            value={editDescription}
+                            onChange={(e) => setEditDescription(e.target.value)}
+                            placeholder="Optional description"
+                            rows={2}
+                            className="text-xs"
+                          />
+                        </div>
+                      ) : (
+                        <div className="max-w-[380px] min-w-[160px]">
+                          <p className="font-medium break-words">{task.title}</p>
+                          {task.description && (
+                            <p className="mt-0.5 text-xs text-muted-foreground whitespace-normal break-words">
+                              {task.description}
+                            </p>
+                          )}
+                        </div>
+                      )}
                     </TableCell>
+
+                    {/* Status */}
                     <TableCell>
-                      <button
-                        onClick={() => handleToggleStatus(task)}
-                        className="inline-flex items-center gap-1.5 cursor-pointer group"
-                        title={`Click to change to "${STATUS_LABELS[NEXT_STATUS[task.status]]}"`}
-                      >
-                        <Badge variant="secondary" className={`border ${STATUS_COLORS[task.status]} group-hover:opacity-80 transition-opacity`}>
-                          {task.status === "todo" && <Circle size={12} className="mr-1" />}
-                          {task.status === "in_progress" && <Clock size={12} className="mr-1" />}
-                          {task.status === "done" && <CheckCircle2 size={12} className="mr-1" />}
-                          {STATUS_LABELS[task.status]}
+                      {isEditing ? (
+                        <Select value={editStatus} onValueChange={(v) => setEditStatus(v as TaskStatus)}>
+                          <SelectTrigger className="w-[140px]" style={{ height: "32px" }}>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="todo">To Do</SelectItem>
+                            <SelectItem value="in_progress">In Progress</SelectItem>
+                            <SelectItem value="done">Done</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <button
+                          onClick={() => handleToggleStatus(task)}
+                          className="inline-flex items-center gap-1.5 cursor-pointer group"
+                          title={`Click to change to "${STATUS_LABELS[NEXT_STATUS[task.status]]}"`}
+                        >
+                          <Badge variant="secondary" className={`border ${STATUS_COLORS[task.status]} group-hover:opacity-80 transition-opacity`}>
+                            {task.status === "todo" && <Circle size={12} className="mr-1" />}
+                            {task.status === "in_progress" && <Clock size={12} className="mr-1" />}
+                            {task.status === "done" && <CheckCircle2 size={12} className="mr-1" />}
+                            {STATUS_LABELS[task.status]}
+                          </Badge>
+                        </button>
+                      )}
+                    </TableCell>
+
+                    {/* Priority */}
+                    <TableCell>
+                      {isEditing ? (
+                        <Select value={editPriority} onValueChange={(v) => setEditPriority(v as TaskPriority)}>
+                          <SelectTrigger className="w-[120px]" style={{ height: "32px" }}>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="low">Low</SelectItem>
+                            <SelectItem value="medium">Medium</SelectItem>
+                            <SelectItem value="high">High</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <Badge variant="secondary" className={PRIORITY_COLORS[task.priority]}>
+                          {task.priority.charAt(0).toUpperCase() + task.priority.slice(1)}
                         </Badge>
-                      </button>
+                      )}
                     </TableCell>
-                    <TableCell>
-                      <Badge variant="secondary" className={PRIORITY_COLORS[task.priority]}>
-                        {task.priority.charAt(0).toUpperCase() + task.priority.slice(1)}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{task.category || "—"}</TableCell>
+
+                    {/* Category */}
                     <TableCell className="text-sm text-muted-foreground">
-                      {task.due_date ? new Date(task.due_date).toLocaleDateString() : "—"}
+                      {isEditing ? (
+                        <Input
+                          value={editCategory}
+                          onChange={(e) => setEditCategory(e.target.value)}
+                          onKeyDown={handleEditKeyDown}
+                          placeholder="Category"
+                          style={{ height: "32px" }}
+                          className="w-[150px] text-sm"
+                        />
+                      ) : (
+                        task.category || "—"
+                      )}
                     </TableCell>
+
+                    {/* Due date */}
+                    <TableCell className="text-sm text-muted-foreground">
+                      {isEditing ? (
+                        <Input
+                          type="date"
+                          value={editDueDate}
+                          onChange={(e) => setEditDueDate(e.target.value)}
+                          onKeyDown={handleEditKeyDown}
+                          style={{ height: "32px" }}
+                          className="w-[160px] text-sm"
+                        />
+                      ) : task.due_date ? (
+                        new Date(task.due_date).toLocaleDateString()
+                      ) : (
+                        "—"
+                      )}
+                    </TableCell>
+
+                    {/* Created (read-only) */}
                     <TableCell className="text-sm text-muted-foreground">
                       {new Date(task.created_at).toLocaleDateString()}
                     </TableCell>
+
+                    {/* Actions */}
                     <TableCell className="text-right">
-                      <button
-                        onClick={() => handleDeleteTask(task)}
-                        className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-red-50 hover:text-red-600 transition-colors cursor-pointer"
-                        title="Delete task"
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                      {isEditing ? (
+                        <div className="flex items-center justify-end gap-1">
+                          <button
+                            onClick={handleSaveEdit}
+                            disabled={savingEdit || !editTitle.trim()}
+                            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-emerald-600 hover:bg-emerald-50 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                            title="Save changes"
+                          >
+                            <Check size={15} />
+                          </button>
+                          <button
+                            onClick={handleCancelEdit}
+                            disabled={savingEdit}
+                            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted transition-colors cursor-pointer"
+                            title="Cancel"
+                          >
+                            <X size={15} />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-end gap-1">
+                          <button
+                            onClick={() => handleStartEdit(task)}
+                            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-blue-50 hover:text-blue-600 transition-colors cursor-pointer"
+                            title="Edit task"
+                          >
+                            <Pencil size={14} />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteTask(task)}
+                            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-red-50 hover:text-red-600 transition-colors cursor-pointer"
+                            title="Delete task"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      )}
                     </TableCell>
                   </TableRow>
-                ))}
+                  );
+                })}
               </TableBody>
             </Table>
           )}
