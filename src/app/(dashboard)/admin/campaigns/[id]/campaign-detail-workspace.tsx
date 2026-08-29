@@ -6,10 +6,9 @@
 // Save persists the graph + the derived linear steps + the schedule via
 // /update-sequence. The other tabs reuse the existing stats / leads / probe cards.
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { toast } from "sonner";
 import {
   Save,
   Loader2,
@@ -29,6 +28,14 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { DeleteCampaignDialog } from "@/components/campaigns/delete-campaign-dialog";
 import { MailboxPoolPicker } from "@/components/campaigns/mailbox-pool-picker";
 import { appUrl } from "@/lib/api-url";
@@ -79,6 +86,9 @@ export interface SetupMailbox {
   email_address: string;
   status: string;
   tags: string[];
+  // Dedicated-inbox policy: claimed by another non-completed campaign.
+  inUse?: boolean;
+  inUseBy?: string | null;
 }
 
 export function CampaignDetailWorkspace({
@@ -144,58 +154,79 @@ export function CampaignDetailWorkspace({
   const [error, setError] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<number | null>(null);
 
-  // Setup tab — client link + mailbox pool are configurable at any time and
-  // auto-save on change (each is its own concern, separate from the sequence
-  // "Save changes" button). Local state is the source of truth for the badges.
+  // Setup tab — client link + mailbox pool are plain local edits (NO auto-save);
+  // like the sequence + schedule, they persist only via the "Save changes"
+  // button below. Local state also drives the badges.
   const [clientId, setClientId] = useState<string>(client?.id ?? "");
-  const [clientSaving, setClientSaving] = useState(false);
   const [mailboxIds, setMailboxIds] = useState<Set<string>>(new Set(attachedMailboxIds));
-  const [mailboxSaving, setMailboxSaving] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
-  async function saveClient(nextId: string) {
-    const prev = clientId;
-    if (nextId === prev) return;
-    setClientId(nextId);
-    setClientSaving(true);
-    try {
-      const res = await fetch(appUrl(`/api/admin/campaigns/${campaignId}/link-client`), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ client_id: nextId || null }),
-      });
-      const json = (await res.json().catch(() => ({}))) as { error?: string };
-      if (!res.ok) throw new Error(json.error || `Failed (${res.status})`);
-      toast.success(nextId ? "Client linked" : "Client unlinked");
-      router.refresh();
-    } catch (err) {
-      setClientId(prev); // revert on failure
-      toast.error(err instanceof Error ? err.message : String(err));
-    } finally {
-      setClientSaving(false);
-    }
-  }
+  // Last-saved snapshot of every editable field. Nothing here auto-saves: the
+  // Save button lights up only when the current state differs from this, and
+  // leaving the page with a difference prompts to save.
+  const [saved, setSaved] = useState(() => ({
+    graph: initialGraph,
+    win: initialWindow,
+    cap: initialNewLeadsCap,
+    strategy: initialStrategy,
+    ab: initialAbAutoPauseDefault,
+    clientId: client?.id ?? "",
+    mailboxSig: [...attachedMailboxIds].sort().join(","),
+  }));
+  const mailboxSig = [...mailboxIds].sort().join(",");
+  const seqScheduleDirty =
+    JSON.stringify([graph, win, newLeadsCap, strategy, abAutoPauseDefault]) !==
+    JSON.stringify([saved.graph, saved.win, saved.cap, saved.strategy, saved.ab]);
+  const clientDirty = clientId !== saved.clientId;
+  const mailboxesDirty = mailboxSig !== saved.mailboxSig;
+  const dirty = seqScheduleDirty || clientDirty || mailboxesDirty;
 
-  // The picker hands back the full desired set (individual toggles, tag/domain
-  // select-all) — persist it wholesale via the set-based endpoint.
-  async function applyMailboxes(next: Set<string>) {
-    const prev = mailboxIds;
-    setMailboxIds(next);
-    setMailboxSaving(true);
-    try {
-      const res = await fetch(appUrl(`/api/admin/campaigns/${campaignId}/mailboxes`), {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mailbox_ids: [...next] }),
-      });
-      const json = (await res.json().catch(() => ({}))) as { error?: string };
-      if (!res.ok) throw new Error(json.error || `Failed (${res.status})`);
-      router.refresh();
-    } catch (err) {
-      setMailboxIds(prev); // revert on failure
-      toast.error(err instanceof Error ? err.message : String(err));
-    } finally {
-      setMailboxSaving(false);
+  // Unsaved-changes exit guard. `beforeunload` covers reload / close / typing a
+  // URL; a document-level capture click handler covers every in-app link (the
+  // "← Campaigns" back link, the sidebar, the client "Open" link) so a click
+  // that would navigate away opens the confirm dialog instead.
+  const [leaveOpen, setLeaveOpen] = useState(false);
+  const [pendingHref, setPendingHref] = useState<string | null>(null);
+  const navigatingRef = useRef(false);
+
+  useEffect(() => {
+    if (!dirty) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [dirty]);
+
+  useEffect(() => {
+    if (!dirty) return;
+    const onClick = (e: MouseEvent) => {
+      if (navigatingRef.current || e.defaultPrevented) return;
+      // Let modified clicks (open-in-new-tab) through untouched.
+      if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      const a = (e.target as HTMLElement | null)?.closest?.("a");
+      if (!a) return;
+      const href = a.getAttribute("href");
+      if (!href || !href.startsWith("/")) return; // internal same-origin routes only
+      if (a.target === "_blank" || a.hasAttribute("download")) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setPendingHref(href);
+      setLeaveOpen(true);
+    };
+    document.addEventListener("click", onClick, true);
+    return () => document.removeEventListener("click", onClick, true);
+  }, [dirty]);
+
+  // Complete a guarded navigation. Strips the /app basePath so the SPA router
+  // doesn't double it (rendered hrefs carry it; router.push re-adds it).
+  function leaveTo(href: string | null) {
+    navigatingRef.current = true;
+    setLeaveOpen(false);
+    if (href) {
+      const path = href === "/app" ? "/" : href.startsWith("/app/") ? href.slice(4) : href;
+      router.push(path);
     }
   }
 
@@ -222,44 +253,79 @@ export function CampaignDetailWorkspace({
   const [checkLoading, setCheckLoading] = useState(false);
   const [checkError, setCheckError] = useState<string | null>(null);
 
-  async function save() {
+  // Persist only the groups that changed. Each group updates the saved snapshot
+  // as it succeeds, so a mid-batch failure leaves the succeeded groups clean and
+  // only the failed one dirty. Returns whether everything saved.
+  async function save(): Promise<boolean> {
     setError(null);
-    const graphError = validateGraph(graph);
-    if (graphError) {
-      setTab("sequence");
-      return setError(graphError);
-    }
-    const steps = graphToSteps(graph).map((s) => ({
-      wait_days: s.wait_days,
-      subject_template: s.subject_template,
-      body_template: s.body_template,
-    }));
-    setSaving(true);
-    try {
-      const res = await fetch(appUrl(`/api/admin/campaigns/${campaignId}/update-sequence`), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          steps,
-          flow_graph: graph,
-          send_timezone: win.timezone,
-          send_start_hour: win.startHour,
-          send_end_hour: win.endHour,
-          send_weekdays_only: win.weekdaysOnly,
-          daily_new_leads_cap: newLeadsCap,
-          sending_strategy: strategy,
-          ab_auto_pause_default: abAutoPauseDefault,
-        }),
-      });
-      const data = (await res.json()) as { error?: string };
-      if (!res.ok) {
-        setError(data.error ?? "Save failed.");
-        return;
+    if (seqScheduleDirty) {
+      const graphError = validateGraph(graph);
+      if (graphError) {
+        setTab("sequence");
+        setError(graphError);
+        return false;
       }
+    }
+    setSaving(true);
+    const next = { ...saved };
+    try {
+      if (seqScheduleDirty) {
+        const steps = graphToSteps(graph).map((s) => ({
+          wait_days: s.wait_days,
+          subject_template: s.subject_template,
+          body_template: s.body_template,
+        }));
+        const res = await fetch(appUrl(`/api/admin/campaigns/${campaignId}/update-sequence`), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            steps,
+            flow_graph: graph,
+            send_timezone: win.timezone,
+            send_start_hour: win.startHour,
+            send_end_hour: win.endHour,
+            send_weekdays_only: win.weekdaysOnly,
+            daily_new_leads_cap: newLeadsCap,
+            sending_strategy: strategy,
+            ab_auto_pause_default: abAutoPauseDefault,
+          }),
+        });
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        if (!res.ok) throw new Error(data.error ?? "Couldn't save the sequence.");
+        next.graph = graph;
+        next.win = win;
+        next.cap = newLeadsCap;
+        next.strategy = strategy;
+        next.ab = abAutoPauseDefault;
+      }
+      if (clientDirty) {
+        const res = await fetch(appUrl(`/api/admin/campaigns/${campaignId}/link-client`), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ client_id: clientId || null }),
+        });
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        if (!res.ok) throw new Error(data.error ?? "Couldn't update the client.");
+        next.clientId = clientId;
+      }
+      if (mailboxesDirty) {
+        const res = await fetch(appUrl(`/api/admin/campaigns/${campaignId}/mailboxes`), {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mailbox_ids: [...mailboxIds] }),
+        });
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        if (!res.ok) throw new Error(data.error ?? "Couldn't update the mailboxes.");
+        next.mailboxSig = mailboxSig;
+      }
+      setSaved(next);
       setSavedAt(Date.now());
       router.refresh();
+      return true;
     } catch (err) {
-      setError((err as Error).message);
+      setSaved(next); // keep whatever groups succeeded before the failure
+      setError(err instanceof Error ? err.message : String(err));
+      return false;
     } finally {
       setSaving(false);
     }
@@ -298,6 +364,11 @@ export function CampaignDetailWorkspace({
     sent: nativeStats.sent,
   };
 
+  // Header reflects the pending (local) client selection, so it stays in sync
+  // with the Setup selector + badge before a save.
+  const headerClient = clientId ? (clients.find((c) => c.id === clientId) ?? null) : null;
+  const canSave = dirty && !saving;
+
   return (
     <div className="flex h-[calc(100vh-8.5rem)] min-h-0 flex-col">
       {/* header */}
@@ -321,10 +392,10 @@ export function CampaignDetailWorkspace({
             </Badge>
           </div>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            {client ? (
+            {headerClient ? (
               <>
-                <Link href={`/admin/clients/${client.id}`} className="underline">
-                  {client.name}
+                <Link href={`/admin/clients/${headerClient.id}`} className="underline">
+                  {headerClient.name}
                 </Link>{" "}
                 · Native email
               </>
@@ -337,14 +408,28 @@ export function CampaignDetailWorkspace({
         </div>
         <div className="flex shrink-0 items-center gap-3">
           {error && <span className="max-w-xs text-sm text-red-600">{error}</span>}
-          {savedAt && !error && !saving && <span className="text-sm text-emerald-600">Saved</span>}
+          {dirty && !error && !saving && (
+            <span className="text-sm text-amber-600">Unsaved changes</span>
+          )}
+          {!dirty && savedAt && !error && !saving && (
+            <span className="text-sm text-emerald-600">Saved</span>
+          )}
           <CampaignLifecycleButton
             campaignId={campaignId}
             campaignName={campaignName}
             status={status}
             sourceChannel={sourceChannel}
+            disabled={dirty}
+            disabledTitle="Save your changes first"
           />
-          <Button onClick={save} disabled={saving} className="gap-1.5 text-white" style={{ background: "#2E37FE" }}>
+          <Button
+            onClick={() => void save()}
+            disabled={!canSave}
+            variant={canSave ? "default" : "secondary"}
+            className="gap-1.5"
+            style={canSave ? { background: "#2E37FE", color: "white" } : undefined}
+            title={dirty ? undefined : "No unsaved changes"}
+          >
             {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
             {saving ? "Saving…" : "Save changes"}
           </Button>
@@ -530,18 +615,12 @@ export function CampaignDetailWorkspace({
           <div className="max-w-2xl space-y-6">
             {/* Client link */}
             <div className="space-y-1.5">
-              <div className="flex items-center gap-2">
-                <p className="text-xs font-medium text-secondary-foreground">Client</p>
-                {clientSaving && (
-                  <Loader2 size={12} className="animate-spin text-muted-foreground" />
-                )}
-              </div>
+              <p className="text-xs font-medium text-secondary-foreground">Client</p>
               <div className="flex items-center gap-2">
                 <select
                   value={clientId}
-                  onChange={(e) => saveClient(e.target.value)}
-                  disabled={clientSaving}
-                  className="w-full max-w-sm rounded-md border border-border/60 bg-background px-3 py-2 text-sm disabled:opacity-60"
+                  onChange={(e) => setClientId(e.target.value)}
+                  className="w-full max-w-sm rounded-md border border-border/60 bg-background px-3 py-2 text-sm"
                 >
                   <option value="">— No client (orphan) —</option>
                   {clients.map((c) => (
@@ -575,9 +654,7 @@ export function CampaignDetailWorkspace({
               <MailboxPoolPicker
                 mailboxes={allMailboxes}
                 selected={mailboxIds}
-                onChange={applyMailboxes}
-                disabled={mailboxSaving}
-                saving={mailboxSaving}
+                onChange={setMailboxIds}
               />
               {nativeStats.activeMailboxCount > 0 && (
                 <p className="mt-1 text-[11px] text-muted-foreground">
@@ -671,6 +748,62 @@ export function CampaignDetailWorkspace({
         onOpenChange={setDeleteOpen}
         onDeleted={() => router.push("/admin/campaigns")}
       />
+
+      {/* Unsaved-changes guard when leaving the page */}
+      <Dialog
+        open={leaveOpen}
+        onOpenChange={(o) => {
+          if (!o && !saving) {
+            setLeaveOpen(false);
+            setPendingHref(null);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-[460px]">
+          <DialogHeader>
+            <DialogTitle>Unsaved changes</DialogTitle>
+            <DialogDescription>
+              You have unsaved changes to this campaign. Save them before leaving?
+            </DialogDescription>
+          </DialogHeader>
+          {error && (
+            <p className="text-sm text-red-600">{error}</p>
+          )}
+          <DialogFooter className="gap-2 sm:justify-between">
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setLeaveOpen(false);
+                setPendingHref(null);
+              }}
+              disabled={saving}
+            >
+              Keep editing
+            </Button>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={() => leaveTo(pendingHref)}
+                disabled={saving}
+              >
+                Leave without saving
+              </Button>
+              <Button
+                onClick={async () => {
+                  const ok = await save();
+                  if (ok) leaveTo(pendingHref);
+                }}
+                disabled={saving}
+                className="gap-1.5"
+                style={{ background: "#2E37FE", color: "white" }}
+              >
+                {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                Save and exit
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

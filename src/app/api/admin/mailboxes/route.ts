@@ -24,6 +24,7 @@ import {
   ABSOLUTE_MAX_DAILY_CAP,
 } from "@/lib/gmail/ramp";
 import { latestPlacementTests } from "@/lib/deliverability/placement-runner";
+import { mailboxUsageMap } from "@/lib/campaigns/mailbox-usage";
 import type { NativeMailbox, SendingDomain } from "@/types/app";
 
 async function requireOwner() {
@@ -134,7 +135,7 @@ export async function GET() {
   // Count-only queries (head:true), one per mailbox, run in parallel — and in
   // parallel with the placement + seed lookups, which are independent.
   const totalSent: Record<string, number> = {};
-  const [, latestPlacement, seedCountResult, domainRes] = await Promise.all([
+  const [, latestPlacement, seedCountResult, domainRes, usage] = await Promise.all([
     Promise.all(
       mailboxes.map(async (mb) => {
         const { count } = await admin
@@ -160,10 +161,14 @@ export async function GET() {
       .select("*")
       .eq("organization_id", organizationId)
       .order("domain", { ascending: true }),
+    // Which inboxes are claimed by another non-completed campaign (dedicated-inbox
+    // policy) — feeds the campaign builder's picker greying.
+    mailboxUsageMap(admin, organizationId),
   ]);
 
   const enriched = mailboxes.map((mb) => {
     const ts = totalSent[mb.id] ?? 0;
+    const owner = usage.get(mb.id);
     return {
       ...mb,
       sent_today: sentToday[mb.id] ?? 0,
@@ -172,6 +177,8 @@ export async function GET() {
       total_sent: ts,
       warmed: rampStage(ts).warmed,
       latest_placement: latestPlacement.get(mb.id) ?? null,
+      in_use: !!owner,
+      in_use_by: owner?.campaignName ?? null,
     };
   });
 

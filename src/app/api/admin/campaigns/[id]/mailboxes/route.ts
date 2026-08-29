@@ -10,6 +10,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { mailboxUsageMap } from "@/lib/campaigns/mailbox-usage";
 
 export async function PUT(
   req: NextRequest,
@@ -90,6 +91,26 @@ export async function PUT(
 
   const toAdd = [...desired].filter((id) => !current.has(id));
   const toRemove = [...current].filter((id) => !desired.has(id));
+
+  // Dedicated-inbox policy: an inbox may belong to only one non-completed
+  // campaign. Refuse to attach one already claimed elsewhere (the picker greys
+  // these, so this is the server-side backstop).
+  if (toAdd.length > 0) {
+    const usage = await mailboxUsageMap(admin, organizationId, campaignId);
+    const conflicts = toAdd.filter((id) => usage.has(id));
+    if (conflicts.length > 0) {
+      const owner = usage.get(conflicts[0])!;
+      return NextResponse.json(
+        {
+          error:
+            conflicts.length === 1
+              ? `That inbox is already used by "${owner.campaignName}". An inbox can belong to one campaign at a time.`
+              : `${conflicts.length} of those inboxes are already used by other campaigns. An inbox can belong to one campaign at a time.`,
+        },
+        { status: 409 },
+      );
+    }
+  }
 
   if (toAdd.length > 0) {
     const { error: insertError } = await admin

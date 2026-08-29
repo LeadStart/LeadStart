@@ -35,6 +35,7 @@ import { CampaignProbeCard } from "@/components/campaigns/campaign-probe-card";
 import { StageFlowCard, type StageRow } from "./stage-flow-card";
 import { CampaignLifecycleButton } from "./campaign-lifecycle-button";
 import { gatherLaunchReadiness } from "@/lib/campaigns/launch-readiness";
+import { mailboxUsageMap } from "@/lib/campaigns/mailbox-usage";
 import { LaunchReadinessCard } from "@/components/campaigns/launch-readiness-card";
 import { CampaignDetailWorkspace } from "./campaign-detail-workspace";
 import { stepsToGraph, walkAll, isAbTest, type FlowGraph } from "@/lib/flow/graph";
@@ -294,8 +295,9 @@ export default async function AdminCampaignDetailPage({
 
     // Setup tab: the full org mailbox pool + which ones are attached, so the
     // owner can add/remove inboxes at any time. Contacts-tab badge keys off the
-    // launch-readiness contacts warning (enrollment count === 0).
-    const [allMailboxesRes, attachedRes] = await Promise.all([
+    // launch-readiness contacts warning (enrollment count === 0). `usage` marks
+    // inboxes claimed by ANOTHER non-completed campaign (dedicated-inbox policy).
+    const [allMailboxesRes, attachedRes, usage] = await Promise.all([
       admin
         .from("native_mailboxes")
         .select("id, email_address, status, tags")
@@ -305,13 +307,19 @@ export default async function AdminCampaignDetailPage({
         .from("campaign_mailboxes")
         .select("mailbox_id")
         .eq("campaign_id", campaign.id),
+      mailboxUsageMap(admin, campaign.organization_id, campaign.id),
     ]);
-    const allMailboxes = (allMailboxesRes.data ?? []) as {
-      id: string;
-      email_address: string;
-      status: string;
-      tags: string[];
-    }[];
+    const allMailboxes = (
+      (allMailboxesRes.data ?? []) as {
+        id: string;
+        email_address: string;
+        status: string;
+        tags: string[];
+      }[]
+    ).map((m) => {
+      const owner = usage.get(m.id);
+      return { ...m, inUse: !!owner, inUseBy: owner?.campaignName ?? null };
+    });
     const attachedMailboxIds = (
       (attachedRes.data ?? []) as { mailbox_id: string }[]
     ).map((r) => r.mailbox_id);

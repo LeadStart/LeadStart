@@ -12,6 +12,7 @@ import {
   reconcileCampaignVariables,
 } from "@/lib/native/tokens";
 import { allEmailTemplates, type FlowGraph } from "@/lib/flow/graph";
+import { mailboxUsageMap } from "@/lib/campaigns/mailbox-usage";
 
 interface StepInput {
   step_index: number;
@@ -109,6 +110,19 @@ export async function POST(req: NextRequest) {
       .in("id", mailboxIds)
       .eq("organization_id", orgId);
     validMailboxIds = ((mbRows as { id: string }[] | null) ?? []).map((r) => r.id);
+
+    // Dedicated-inbox policy: reject any inbox already claimed by another
+    // non-completed campaign (the picker greys these; server backstop).
+    const usage = await mailboxUsageMap(admin, orgId);
+    const conflict = validMailboxIds.find((id) => usage.has(id));
+    if (conflict) {
+      return NextResponse.json(
+        {
+          error: `Inbox already used by "${usage.get(conflict)!.campaignName}". An inbox can belong to one campaign at a time.`,
+        },
+        { status: 409 },
+      );
+    }
   }
 
   const flowGraph =

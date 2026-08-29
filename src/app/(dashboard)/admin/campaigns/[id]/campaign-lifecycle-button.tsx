@@ -23,6 +23,8 @@ export function CampaignLifecycleButton({
   status,
   sourceChannel,
   blockers = [],
+  disabled = false,
+  disabledTitle,
 }: {
   campaignId: string;
   campaignName: string;
@@ -31,6 +33,10 @@ export function CampaignLifecycleButton({
   // Hard launch blockers (native email). When present, the Launch button is
   // disabled — the same rule the activate endpoint enforces server-side.
   blockers?: ReadinessItem[];
+  // Extra disable (e.g. the workspace has unsaved changes), with a reason for
+  // the tooltip. Blocks every lifecycle action, not just launch.
+  disabled?: boolean;
+  disabledTitle?: string;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -91,20 +97,27 @@ export function CampaignLifecycleButton({
   const label =
     action === "activate" ? "Launch campaign" : action === "pause" ? "Pause campaign" : "Resume campaign";
   const Icon = action === "activate" ? Rocket : action === "pause" ? Pause : Play;
-  // Disable Launch while hard blockers remain (the readiness card lists them).
+  // Disable Launch while hard blockers remain (the readiness card lists them),
+  // or while the caller says so (unsaved workspace changes).
   const notReady = action === "activate" && blockers.length > 0;
+  const blocked = busy || notReady || disabled;
+  const activateGreen = action === "activate" && !notReady && !disabled;
 
   return (
     <>
       <Button
         onClick={() => run(false)}
-        disabled={busy || notReady}
+        disabled={blocked}
         variant={action === "activate" ? undefined : "outline"}
         className="gap-1.5 shrink-0"
-        style={
-          action === "activate" && !notReady ? { background: "#16a34a", color: "white" } : undefined
+        style={activateGreen ? { background: "#16a34a", color: "white" } : undefined}
+        title={
+          disabled
+            ? disabledTitle
+            : notReady
+              ? `Not ready to launch: ${blockers.map((b) => b.label).join("; ")}`
+              : undefined
         }
-        title={notReady ? `Not ready to launch: ${blockers.map((b) => b.label).join("; ")}` : undefined}
       >
         {busy ? <Loader2 size={14} className="animate-spin" /> : <Icon size={14} />}
         {label}

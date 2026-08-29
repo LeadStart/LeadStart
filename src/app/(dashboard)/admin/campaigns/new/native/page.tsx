@@ -39,7 +39,10 @@ import { type FlowGraph, graphToSteps, starterGraph } from "@/lib/flow/graph";
 import type { Client, NativeMailbox } from "@/types/app";
 
 type ClientOption = Pick<Client, "id" | "name">;
-type MailboxOption = Pick<NativeMailbox, "id" | "email_address" | "status" | "tags">;
+type MailboxOption = Pick<NativeMailbox, "id" | "email_address" | "status" | "tags"> & {
+  inUse?: boolean;
+  inUseBy?: string | null;
+};
 
 export default function NewNativeCampaignPage() {
   const router = useRouter();
@@ -69,7 +72,18 @@ export default function NewNativeCampaignPage() {
     fetch(appUrl("/api/admin/mailboxes"))
       .then((r) => r.json())
       .then((d) => {
-        if (Array.isArray(d.mailboxes)) setMailboxes(d.mailboxes as MailboxOption[]);
+        if (Array.isArray(d.mailboxes)) {
+          setMailboxes(
+            (d.mailboxes as Record<string, unknown>[]).map((m) => ({
+              id: m.id as string,
+              email_address: m.email_address as string,
+              status: m.status as NativeMailbox["status"],
+              tags: (m.tags as string[]) ?? [],
+              inUse: !!m.in_use,
+              inUseBy: (m.in_use_by as string | null) ?? null,
+            })),
+          );
+        }
       })
       .catch(() => {});
   }, [organizationId]);
