@@ -7,7 +7,7 @@
  *   1. Literal-brace rule — {shrug}, {}, {{first_name}} pass through untouched
  *      with NO warning.
  *   2. Nesting — {a|{b|c} d} renders and countVariants multiplies/sums.
- *   3. Warnings — unbalanced_brace, empty_option, token_in_spintax fire.
+ *   3. Warnings: unbalanced_brace and empty_option fire.
  *   4. Determinism — same (template, seedKey) identical across 1000 calls.
  *   5. Distribution — 1000 distinct UUID-like seeds over {a|b} split ~50/50.
  *   6. Re:-coherence — a step-0 subject rendered twice with the same seedKey is
@@ -99,9 +99,9 @@ console.log("\n■ warnings fire correctly");
   assert(warnCodes("hi } there").includes("unbalanced_brace"), "stray top-level } warns");
   assert(warnCodes("{a||b}").includes("empty_option"), "{a||b} raises empty_option");
   assert(warnCodes("{a|}").includes("empty_option"), "{a|} (trailing empty) raises empty_option");
-  assert(warnCodes("{a|{{tok}}}").includes("token_in_spintax"), "{{tok}} inside spintax raises token_in_spintax");
-  // token_in_spintax must NOT fire when the token is outside any spin block.
-  assert(!warnCodes("{{tok}} {a|b}").includes("token_in_spintax"), "top-level {{tok}} does not raise token_in_spintax");
+  // A merge token inside a spin block is parsed correctly and raises NO warning
+  // (the advisory was removed — the engine handles it fine).
+  assert(renderSpintax("{a|{{tok}}}", "s").length > 0, "{{tok}} inside spintax renders without error");
   // An unbalanced brace never throws and still renders.
   assert(renderSpintax("{a|b", "s") === "{a|b", "unbalanced template renders verbatim (never throws)");
   // Empty option renders as "".

@@ -40,9 +40,7 @@ function sameTags(a: string[], b: string[]): boolean {
 /** True if parsing produced a structural spintax warning we must reject. */
 function hasBlockingWarning(template: string): boolean {
   const { warnings } = parseSpintax(template);
-  return warnings.some(
-    (w) => w.code === "unbalanced_brace" || w.code === "token_in_spintax",
-  );
+  return warnings.some((w) => w.code === "unbalanced_brace");
 }
 
 const SpintaxRewriteSchema = z.object({

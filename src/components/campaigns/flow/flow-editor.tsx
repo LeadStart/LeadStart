@@ -22,6 +22,7 @@ import {
   X,
   CornerDownRight,
   Maximize2,
+  Minimize2,
 } from "lucide-react";
 import {
   type FlowGraph,
@@ -321,6 +322,9 @@ export function FlowEditor({
   // click handler, so the portal below is only rendered client-side (openId is
   // null through SSR + hydration) — no document/SSR guard needed.
   const [openId, setOpenId] = useState<string | null>(null);
+  // Email modal "expand" toggle — a wider, taller focused view. Sticky across
+  // opens; only widens the email modal (the button lives only in its header).
+  const [expanded, setExpanded] = useState(false);
 
   const primaryPath = flattenPrimaryPath(value.nodes);
   const firstEmail = primaryPath.find((n) => n.kind === "email") as EmailNode | undefined;
@@ -409,6 +413,10 @@ export function FlowEditor({
     const el = canvasRef.current;
     if (!el || e.button !== 0) return;
     if ((e.target as HTMLElement).closest('input,textarea,select,button,a,label,[role="menu"],[data-tile]')) return;
+    // Clicking the empty canvas clears any active text selection. The mousedown
+    // preventDefault() below (needed for click-drag panning) otherwise suppresses
+    // the browser's native deselect, leaving a stale highlight behind.
+    window.getSelection()?.removeAllRanges();
     const startX = e.clientX;
     const startY = e.clientY;
     const sl = el.scrollLeft;
@@ -738,6 +746,15 @@ export function FlowEditor({
             <div className={`${styles.mEyebrow} ${styles.kEmail}`}>{isFirst ? "Email · first touch" : "Email · follow-up"}</div>
             <div className={styles.mTitle}>{titleText}</div>
           </div>
+          <button
+            type="button"
+            className={styles.mClose}
+            onClick={() => setExpanded((v) => !v)}
+            aria-label={expanded ? "Shrink email editor" : "Expand email editor"}
+            title={expanded ? "Shrink" : "Expand"}
+          >
+            {expanded ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
+          </button>
           <button type="button" className={styles.mClose} onClick={() => setOpenId(null)} aria-label="Close">
             <X size={16} />
           </button>
@@ -803,6 +820,7 @@ export function FlowEditor({
               ref={bodyRef}
               className={styles.textarea}
               rows={9}
+              style={expanded ? { minHeight: 360 } : undefined}
               value={n.body}
               placeholder="Plain text. Placeholders: {{first_name}} {{company}} {{title}} {{intro_line}}"
               onFocus={() => (lastFocused.current = "body")}
@@ -910,7 +928,11 @@ export function FlowEditor({
     return createPortal(
       <>
         <div className={styles.backdrop} onClick={() => setOpenId(null)} />
-        <div className={styles.modal} role="dialog" aria-modal="true">
+        <div
+          className={`${styles.modal} ${expanded && n.kind === "email" ? styles.modalWide : ""}`}
+          role="dialog"
+          aria-modal="true"
+        >
           {head}
           {body}
           <div className={styles.mFoot}>

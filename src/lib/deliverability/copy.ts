@@ -191,12 +191,6 @@ function spintaxIssues(text: string): CopyIssue[] {
       issues.push({ severity: "warn", message: "Unbalanced { } — check the spintax braces." });
     } else if (w.code === "empty_option") {
       issues.push({ severity: "info", message: w.message });
-    } else if (w.code === "token_in_spintax") {
-      issues.push({
-        severity: "info",
-        message:
-          "A merge tag sits inside a spintax block — keep merge tags outside the braces to be safe.",
-      });
     }
   }
   return issues;
@@ -367,7 +361,7 @@ export function scoreCopy(steps: { subject: string; body: string }[]): CopyScore
       issues.push({
         severity: "warn",
         message:
-          "No personalization — every email reads identical. Add merge tags like {{first_name}} or spintax variations so messages differ per recipient.",
+          "No personalization. Every email reads identical. Add variables like {{first_name}} or spintax variations so messages differ per recipient.",
       });
     }
   }

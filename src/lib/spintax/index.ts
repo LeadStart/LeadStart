@@ -42,7 +42,7 @@ export type SpinNode =
   | { type: "text"; value: string }
   | { type: "spin"; blockIndex: number; options: SpinNode[][] };
 
-export type SpintaxWarningCode = "unbalanced_brace" | "empty_option" | "token_in_spintax";
+export type SpintaxWarningCode = "unbalanced_brace" | "empty_option";
 
 export interface SpintaxWarning {
   code: SpintaxWarningCode;
@@ -77,8 +77,6 @@ export function fnv1a(str: string): number {
 const WARNING_MESSAGES: Record<SpintaxWarningCode, string> = {
   unbalanced_brace: "Unbalanced { } — check the spintax braces.",
   empty_option: "A spintax option is empty — it will render as blank text.",
-  token_in_spintax:
-    "A merge tag sits inside a spintax block — keep merge tags outside the braces to be safe.",
 };
 
 // ── Parser ───────────────────────────────────────────────────────────────────
@@ -140,7 +138,6 @@ function parseNodes(ctx: ParseCtx, stopAtGroupEnd: boolean, depth: number): Spin
       if (ctx.src[ctx.pos + 1] === "{") {
         const token = readOpaqueToken(ctx);
         literal += token;
-        if (depth > 0) warn(ctx, "token_in_spintax");
         continue;
       }
 

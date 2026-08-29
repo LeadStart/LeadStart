@@ -206,16 +206,16 @@ console.log("\n■ unbalanced brace surfaces a WARN spintax issue on the step");
   const warn = ps.issues.find((i) => i.severity === "warn" && /unbalanced/i.test(i.message));
   assert(warn !== undefined, "unbalanced brace produces a WARN-severity spintax issue on the step");
 
-  // A well-formed spintax step with a merge tag inside a spin block surfaces the
-  // token_in_spintax info (not a warn).
+  // A variable inside a spin block is valid copy and must NOT raise any spintax
+  // issue (the advisory was removed — the engine renders it correctly).
   const r2 = scoreCopy([
     {
       subject: "hi",
       body: "a nicely sized body that is comfortably past the short threshold {Hi|Hey {{first_name}}} there",
     },
   ]);
-  const info = r2.perStep[0].issues.find((i) => /merge tag/i.test(i.message));
-  assert(info !== undefined && info.severity === "info", "merge tag inside spintax surfaces an INFO issue");
+  const stale = r2.perStep[0].issues.find((i) => /merge tag/i.test(i.message));
+  assert(stale === undefined, "a variable inside spintax raises no merge-tag advisory");
 }
 
 // ---------- 9. W4 new copy checks ----------

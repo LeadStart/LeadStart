@@ -260,7 +260,7 @@ export function CampaignDetailWorkspace({
             <Workflow /> Sequence
           </TabsTrigger>
           <TabsTrigger value="leads">
-            <Users /> Leads
+            <Users /> Contacts
           </TabsTrigger>
           <TabsTrigger value="schedule">
             <Calendar /> Schedule
