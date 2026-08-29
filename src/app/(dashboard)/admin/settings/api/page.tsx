@@ -217,6 +217,20 @@ export default function IntegrationsPage() {
     { kind: "success"; credits: number } | { kind: "fail"; message: string } | null
   >(null);
 
+  // Findymail (catch-all email validation — migration 00099)
+  const [findymailKey, setFindymailKey] = useState("");
+  const [findymailMeta, setFindymailMeta] = useState<{ credits: number | null; checkedAt: string | null }>({
+    credits: null,
+    checkedAt: null,
+  });
+  const [savingFindymail, setSavingFindymail] = useState(false);
+  const [findymailSaved, setFindymailSaved] = useState(false);
+  const [findymailError, setFindymailError] = useState<string | null>(null);
+  const [testingFindymail, setTestingFindymail] = useState(false);
+  const [findymailTestResult, setFindymailTestResult] = useState<
+    { kind: "success"; credits: number } | { kind: "fail"; message: string } | null
+  >(null);
+
   // Apify (Contacts → Enrich: profile→email, company→domain, waterfall — migration 00070)
   const [apifyKey, setApifyKey] = useState("");
   const [savingApify, setSavingApify] = useState(false);
@@ -318,6 +332,17 @@ export default function IntegrationsPage() {
             checkedAt: mvOrg.millionverifier_credits_checked_at ?? null,
             lastError: mvOrg.millionverifier_last_error ?? null,
             lastErrorAt: mvOrg.millionverifier_last_error_at ?? null,
+          });
+          // Findymail (migration 00099). Stale-type cast until 00099 is applied.
+          const fmOrg = data as {
+            findymail_api_key?: string | null;
+            findymail_credits?: number | null;
+            findymail_credits_checked_at?: string | null;
+          };
+          if (fmOrg.findymail_api_key) setFindymailKey(fmOrg.findymail_api_key);
+          setFindymailMeta({
+            credits: fmOrg.findymail_credits ?? null,
+            checkedAt: fmOrg.findymail_credits_checked_at ?? null,
           });
         }
       });
@@ -826,6 +851,55 @@ export default function IntegrationsPage() {
     if (millionVerifierKey.trim()) void handleTestMillionVerifier();
   }
 
+  async function handleTestFindymail() {
+    setTestingFindymail(true);
+    setFindymailTestResult(null);
+    try {
+      const res = await fetch(appUrl("/api/admin/findymail/test"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ api_key: findymailKey }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setFindymailTestResult({ kind: "success", credits: data.credits ?? 0 });
+        setFindymailMeta((m) => ({
+          ...m,
+          credits: typeof data.credits === "number" ? data.credits : m.credits,
+          checkedAt: new Date().toISOString(),
+        }));
+      } else {
+        setFindymailTestResult({ kind: "fail", message: data.error ?? "Key check failed" });
+      }
+    } catch (err) {
+      setFindymailTestResult({ kind: "fail", message: err instanceof Error ? err.message : "Key check failed" });
+    } finally {
+      setTestingFindymail(false);
+    }
+  }
+
+  async function handleSaveFindymail() {
+    if (!organizationId) return;
+    setSavingFindymail(true);
+    setFindymailSaved(false);
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("organizations")
+      .update({ findymail_api_key: findymailKey.trim() || null })
+      .eq("id", organizationId);
+    setSavingFindymail(false);
+    if (error) {
+      // Surface it rather than claiming "Saved" — e.g. migration 00099 not
+      // applied yet (unknown column) fails the whole update.
+      setFindymailError(error.message);
+      return;
+    }
+    setFindymailError(null);
+    setFindymailSaved(true);
+    setTimeout(() => setFindymailSaved(false), 3000);
+    if (findymailKey.trim()) void handleTestFindymail();
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -1117,6 +1191,84 @@ export default function IntegrationsPage() {
               <span className="text-sm font-medium text-red-700">
                 {millionVerifierTestResult.message}
               </span>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Findymail — catch-all email validation (migration 00099) */}
+      <Card className="border-border/50 shadow-sm">
+        <CardHeader className="flex flex-row items-center gap-2 pb-3">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600">
+            <MailCheck size={16} className="text-white" />
+          </div>
+          <div>
+            <CardTitle className="text-base">Catch-all email validation (Findymail)</CardTitle>
+            <p className="text-xs text-muted-foreground">
+              Recovers deliverable emails on catch-all domains that pattern-matching
+              can&apos;t verify. Turn it on per search with the &quot;Validate catch-all
+              emails&quot; toggle. Pay-on-hit (~$0.049/email); with no key the step is skipped.
+            </p>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-1">
+            <Label htmlFor="findymailKey" className="text-sm font-medium">
+              Findymail API key
+            </Label>
+            <Input
+              id="findymailKey"
+              type="password"
+              value={findymailKey}
+              onChange={(e) => setFindymailKey(e.target.value)}
+              placeholder="Enter your Findymail API key"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Find your key at <span className="font-mono">app.findymail.com</span>. Charged 1
+              credit only when a deliverable email is found — misses and risky catch-alls are free.
+            </p>
+          </div>
+          {(findymailMeta.credits !== null || findymailMeta.checkedAt) && (
+            <p className="text-[11px] text-muted-foreground">
+              {findymailMeta.credits !== null
+                ? `${findymailMeta.credits.toLocaleString()} credits remaining`
+                : "Credits unknown"}
+              {findymailMeta.checkedAt
+                ? ` · checked ${new Date(findymailMeta.checkedAt).toLocaleString()}`
+                : ""}
+            </p>
+          )}
+          <div className="flex gap-2 items-center">
+            <Button onClick={handleSaveFindymail} disabled={savingFindymail} style={{ background: "#2E37FE" }}>
+              {savingFindymail ? "Saving..." : "Save"}
+            </Button>
+            <Button variant="outline" onClick={handleTestFindymail} disabled={testingFindymail || !findymailKey}>
+              {testingFindymail ? "Testing..." : "Test connection"}
+            </Button>
+            {findymailSaved && (
+              <span className="text-sm text-emerald-600 flex items-center gap-1">
+                <CheckCircle size={14} /> Saved
+              </span>
+            )}
+          </div>
+          {findymailError && (
+            <div className="flex items-center gap-2 rounded-lg bg-red-50 border border-red-200 p-3">
+              <XCircle size={16} className="text-red-500" />
+              <span className="text-sm font-medium text-red-700">Save failed: {findymailError}</span>
+            </div>
+          )}
+          {findymailTestResult?.kind === "success" && (
+            <div className="flex items-center gap-2 rounded-lg bg-emerald-50 border border-emerald-200 p-3">
+              <CheckCircle size={16} className="text-emerald-500" />
+              <span className="text-sm font-medium text-emerald-700">
+                Connected — {findymailTestResult.credits.toLocaleString()} credits remaining.
+              </span>
+            </div>
+          )}
+          {findymailTestResult?.kind === "fail" && (
+            <div className="flex items-center gap-2 rounded-lg bg-red-50 border border-red-200 p-3">
+              <XCircle size={16} className="text-red-500" />
+              <span className="text-sm font-medium text-red-700">{findymailTestResult.message}</span>
             </div>
           )}
         </CardContent>

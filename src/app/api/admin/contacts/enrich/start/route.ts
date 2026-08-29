@@ -33,6 +33,7 @@ type Body = {
   run_verify?: unknown;
   run_naming?: unknown;
   include_catch_all?: unknown;
+  validate_catch_all?: unknown;
 };
 
 type ContactRow = {
@@ -79,6 +80,11 @@ export async function POST(request: NextRequest) {
   // keeps the best catch-all guess (confidence 40, flagged) instead of dropping it.
   const includeCatchAll =
     body.include_catch_all === undefined ? false : Boolean(body.include_catch_all);
+  // Findymail catch-all validation add-on (default OFF): ORs over the org setting
+  // by flipping validate_catch_all on this run's config snapshot — the cron then
+  // hands catch-all misses to Findymail to recover a deliverable address.
+  const validateCatchAll =
+    body.validate_catch_all === undefined ? false : Boolean(body.validate_catch_all);
 
   if (contactIds.length === 0) {
     return NextResponse.json({ error: "contact_ids is required" }, { status: 400 });
@@ -324,7 +330,11 @@ export async function POST(request: NextRequest) {
       domain_actor: DOMAIN_ACTOR,
       waterfall_actor: runWaterfallEffective ? waterfallActor : null,
       activity_actor: runActivity ? ACTIVITY_ACTOR : null,
-      waterfall_config: includeCatchAll ? { ...settings, accept_catch_all_guesses: true } : settings,
+      waterfall_config: {
+        ...settings,
+        accept_catch_all_guesses: includeCatchAll ? true : settings.accept_catch_all_guesses,
+        validate_catch_all: validateCatchAll ? true : settings.validate_catch_all,
+      },
       run_profiles: runProfiles,
       run_domains: runDomains,
       run_waterfall: runWaterfallEffective,

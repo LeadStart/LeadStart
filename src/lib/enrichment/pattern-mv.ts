@@ -78,10 +78,13 @@ export interface PatternMvItem {
   company_domain: string | null;
 }
 
+// sawCatchAll marks that at least one candidate came back catch_all on this
+// domain — the signal the cron uses to route an item to Findymail catch-all
+// recovery. Optional: only set where a catch-all was actually seen.
 export type PatternMvOutcome =
-  | { kind: "found"; email: string; confidence: number; mvResult: "ok" | "catch_all"; credits: number; candidatesTried: number }
-  | { kind: "not_found"; credits: number; candidatesTried: number; note: string }
-  | { kind: "inconclusive"; credits: number; candidatesTried: number; note: string };
+  | { kind: "found"; email: string; confidence: number; mvResult: "ok" | "catch_all"; credits: number; candidatesTried: number; sawCatchAll?: boolean }
+  | { kind: "not_found"; credits: number; candidatesTried: number; note: string; sawCatchAll?: boolean }
+  | { kind: "inconclusive"; credits: number; candidatesTried: number; note: string; sawCatchAll?: boolean };
 
 export interface RunPatternMvOpts {
   // Write a catch-all guess (as a risky ~40-confidence hit) when no address
@@ -147,7 +150,7 @@ async function processItem(
   }
 
   if (catchAll && opts.acceptCatchAll) {
-    return { kind: "found", email: catchAll, confidence: 40, mvResult: "catch_all", credits, candidatesTried: tried };
+    return { kind: "found", email: catchAll, confidence: 40, mvResult: "catch_all", credits, candidatesTried: tried, sawCatchAll: true };
   }
   if (sawIndeterminate) {
     return {
@@ -155,6 +158,7 @@ async function processItem(
       credits,
       candidatesTried: tried,
       note: catchAll ? "catch-all only (not accepted) + indeterminate candidates" : "all candidates indeterminate",
+      sawCatchAll: catchAll !== null,
     };
   }
   return {
@@ -162,6 +166,7 @@ async function processItem(
     credits,
     candidatesTried: tried,
     note: catchAll ? "only catch-all guesses (not accepted)" : "no deliverable address in the common patterns",
+    sawCatchAll: catchAll !== null,
   };
 }
 

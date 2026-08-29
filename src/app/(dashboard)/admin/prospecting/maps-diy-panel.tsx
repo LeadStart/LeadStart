@@ -191,6 +191,7 @@ export function MapsDiyPanel() {
   const [addNaming, setAddNaming] = useState(false);
   const [addVerify, setAddVerify] = useState(false);
   const [addCatchAll, setAddCatchAll] = useState(false);
+  const [addValidateCatchAll, setAddValidateCatchAll] = useState(false);
   const [searchName, setSearchName] = useState("");
 
   // Smart Search picker.
@@ -479,7 +480,7 @@ export function MapsDiyPanel() {
           levers: { searchTerms: terms, areas, websiteFilter, minStars },
           max_results: maxResults,
           name: searchName.trim() || undefined,
-          addons: { naming: addNaming, verify: addVerify, include_catch_all: addCatchAll },
+          addons: { naming: addNaming, verify: addVerify, include_catch_all: addCatchAll, validate_catch_all: addValidateCatchAll },
           preset_slug: presetSlug || undefined,
         }),
       });
@@ -539,7 +540,15 @@ export function MapsDiyPanel() {
   const placeCost = num(pricing?.maps?.place) || 0.004;
   const scrapeCost = num(pricing?.enrich?.site_scrape) || 0.003;
   const namingCost = num(pricing?.enrich?.naming) || 0.015;
-  const perLead = placeCost + scrapeCost + (addNaming ? namingCost + 0.004 : 0) + (addVerify ? 0.002 : 0);
+  const catchAllCost = 0.049; // Findymail entry tier ($49/1k = $0.049/hit)
+  // Findymail is pay-on-hit and only on the catch-all subset — assume ~20% of
+  // leads yield a recoverable catch-all so the estimate isn't wildly overstated.
+  const perLead =
+    placeCost +
+    scrapeCost +
+    (addNaming ? namingCost + 0.004 : 0) +
+    (addVerify ? 0.002 : 0) +
+    (addValidateCatchAll ? catchAllCost * 0.2 : 0);
   const estTotal = maxResults * perLead;
 
   // ---- results view ----
@@ -896,6 +905,7 @@ export function MapsDiyPanel() {
                   <ToggleRow checked={addNaming} onChange={setAddNaming} title="Find owner names" sub="Owner/decision-maker + personal email (~$0.02/lead)" />
                   <ToggleRow checked={addVerify} onChange={setAddVerify} title="Verify emails" sub="Million Verifier every found email" />
                   <ToggleRow checked={addCatchAll} onChange={setAddCatchAll} title="Include catch-all guesses" sub="Keep the best pattern guess, flagged" />
+                  <ToggleRow checked={addValidateCatchAll} onChange={setAddValidateCatchAll} title="Validate catch-all emails" sub="Recover deliverable catch-all emails via Findymail (~$0.049/hit, pay-on-hit)" />
                 </div>
 
                 {/* How many leads */}

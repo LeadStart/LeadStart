@@ -173,6 +173,10 @@ export async function enqueueEnrichment(
   // snapshot flips accept_catch_all_guesses on so pattern_mv keeps the best
   // catch-all guess (confidence 40, flagged) instead of discarding it.
   const includeCatchAll = eligible.some((c) => addonsFor(c).include_catch_all);
+  // Per-search Findymail catch-all validation opt-in ORs over the org default:
+  // the run's config snapshot flips validate_catch_all on so the cron hands
+  // catch-all misses to Findymail's finder to recover a deliverable address.
+  const validateCatchAll = eligible.some((c) => addonsFor(c).validate_catch_all);
 
   // One active run per org → if busy, stamp the eligible contacts and bail.
   const { data: activeRows } = await admin
@@ -206,7 +210,11 @@ export async function enqueueEnrichment(
       domain_actor: DOMAIN_ACTOR,
       waterfall_actor: runWaterfall ? waterfallActor : null,
       activity_actor: runActivity ? ACTIVITY_ACTOR : null,
-      waterfall_config: includeCatchAll ? { ...settings, accept_catch_all_guesses: true } : settings,
+      waterfall_config: {
+        ...settings,
+        accept_catch_all_guesses: includeCatchAll ? true : settings.accept_catch_all_guesses,
+        validate_catch_all: validateCatchAll ? true : settings.validate_catch_all,
+      },
       run_profiles: true,
       run_domains: true,
       run_waterfall: runWaterfall,

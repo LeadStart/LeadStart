@@ -440,7 +440,10 @@ export type EmailProviderId =
   | "pattern_mv"
   | "site_scrape"
   // A personal email found by the decision-maker (naming) phase's Layer 1/2.
-  | "decision_maker";
+  | "decision_maker"
+  // A deliverable email recovered by Findymail's catch-all validation step —
+  // the one source that can crack catch-all domains pattern_mv is blind to.
+  | "findymail";
 
 export interface Contact {
   id: string;
@@ -1480,6 +1483,12 @@ export interface EnrichmentAddons {
   // accept_catch_all_guesses setting — the run's waterfall_config snapshot is
   // overridden to true when any enrolled contact carries this stamp.
   include_catch_all: boolean;
+  // Validate catch-all emails through Findymail: when pattern_mv is blind on a
+  // catch-all domain, hand the name+domain to Findymail's finder to recover a
+  // genuinely deliverable address (pay-on-hit ~$0.049/email). Per-run OR over
+  // the org-level EnrichmentSettings.validate_catch_all default. Needs a
+  // Findymail API key (Settings → Integrations); no key = the step no-ops.
+  validate_catch_all: boolean;
 }
 
 export const DEFAULT_ENRICHMENT_ADDONS: EnrichmentAddons = {
@@ -1487,6 +1496,7 @@ export const DEFAULT_ENRICHMENT_ADDONS: EnrichmentAddons = {
   verify: false,
   naming: false,
   include_catch_all: false,
+  validate_catch_all: false,
 };
 
 // Org-level enrichment/waterfall config (organizations.enrichment_settings, JSONB).
@@ -1503,6 +1513,11 @@ export interface EnrichmentSettings {
   unknown_method: EnrichmentWaterfallMethod;
   // Whether pattern_mv may auto-write a catch-all guess (Phase 2 gate).
   accept_catch_all_guesses: boolean;
+  // Org-level default for Findymail catch-all validation (the per-run
+  // EnrichmentAddons.validate_catch_all toggle ORs over this). When on, catch-all
+  // leads pattern_mv can't verify are handed to Findymail to recover a genuinely
+  // deliverable address. No-ops without a Findymail API key.
+  validate_catch_all: boolean;
   // Max pages the site scraper crawls per domain (Phase 3).
   scrape_max_pages: number;
   // Kill-switch: when true, a completed LinkedIn search auto-imports every
@@ -1526,6 +1541,9 @@ export const DEFAULT_ENRICHMENT_SETTINGS: EnrichmentSettings = {
   large_method: "pattern_mv",
   unknown_method: "pattern_mv",
   accept_catch_all_guesses: false,
+  // Off by default: Findymail catch-all recovery is opt-in per search and needs
+  // a Findymail key, same posture as accept_catch_all_guesses.
+  validate_catch_all: false,
   // 6 (not 4): owner wants team/leadership/staff pages in the crawl — they're
   // where personMatch hits live. Discovery-driven selection keeps this cheap.
   scrape_max_pages: 6,

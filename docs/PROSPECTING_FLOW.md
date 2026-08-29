@@ -76,6 +76,20 @@ Because phases self-skip when no item qualifies, the lead's DATA decides the pat
 - **LinkedIn lead** (has `linkedin_url`): **profiles** (primary email source — scrapes the profile by URL), domains (company domain), waterfall (**fallback** for profiles that returned no email), activity (post recency), verify.
 - **Maps lead** (name-less business, no `linkedin_url`): profiles → **skips** (no URL); **domains** → web-lookup discovery (name → domain); **naming** → owner-name discovery (if the add-on is on); **waterfall** → `site_scrape` (generic info@) + `pattern_mv` for items naming just named; activity → **skips** (no URL); verify.
 
+**Catch-all recovery (Findymail, add-on — migration 00099).** When a run opts into
+"validate catch-all emails" (per-search toggle OR the org
+`EnrichmentSettings.validate_catch_all` default) AND a Findymail key is set, the
+waterfall's `pattern_mv` DEFERS its catch-all outcomes (a confidence-40 guess, or a
+catch-all miss — flagged by `PatternMvOutcome.sawCatchAll`) instead of writing them,
+then hands each to **Findymail's finder** (`app.findymail.com/api/search/name`,
+name+domain) to recover a genuinely deliverable address on catch-all domains
+pattern_mv is structurally blind to. A hit writes `contacts.email` clean (provider
+`findymail`, conf 75); a miss OR any Findymail error falls back to the original
+pattern_mv outcome, so no lead is lost. Findymail is **pay-on-hit** and NOT a send
+gate — a definitive error just stops calling for the rest of the batch, never holds
+the run. Code: `runPatternMvBatch` in [`run-apify-enrichment/route.ts`](../src/app/api/cron/run-apify-enrichment/route.ts),
+client [`src/lib/findymail/client.ts`](../src/lib/findymail/client.ts).
+
 ---
 
 ## 4. Where each email actually comes from (the part that was gotten wrong)
@@ -84,6 +98,7 @@ Because phases self-skip when no item qualifies, the lead's DATA decides the pat
 - **Maps generic email (info@):** the **`site_scrape`** actor (`site-contact-scraper`) reads the company website; the generic inbox is backfilled onto `contacts.email` ([`run-apify-enrichment/route.ts:1893-1910`](../src/app/api/cron/run-apify-enrichment/route.ts)).
 - **Maps personal email:** **naming** finds the owner → **`pattern_mv`** guesses `first.last@domain` and Million Verifier confirms the deliverable one ([`pattern-mv.ts:40-66,106-166`](../src/lib/enrichment/pattern-mv.ts)).
 - **Million Verifier is verify-only, never a finder.** It also runs as the pre-send gate in `run-native-sequences`.
+- **Findymail catch-all recovery (add-on):** the ONE finder that returns deliverable emails on catch-all domains (its own catch-all recovery classifies deliverable vs risky and returns only the deliverable ones). Fed name+domain from the deferred pattern_mv catch-all items; pay-on-hit, so misses/risky catch-alls cost nothing. See §5's routing note.
 
 ---
 
@@ -108,6 +123,7 @@ Because phases self-skip when no item qualifies, the lead's DATA decides the pat
 | decision-maker (Anthropic/Perplexity) | enrich: naming | per business (LLM tokens) | ~$0.015 Perplexity / ~$0.06 Claude |
 | `site-contact-scraper` (`indispensable_nonagon`) | enrich: waterfall (site_scrape) | per place scraped | ~$0.003 |
 | pattern_mv + Million Verifier | enrich: waterfall / verify | per decisive verification | ~$0.0037 (catch-all/unknown free) |
+| Findymail (`app.findymail.com`) | enrich: waterfall catch-all recovery (add-on) | per verified email FOUND | ~$0.049/hit ($49/1k entry; $249/15k ≈ $0.017); misses/risky catch-alls free |
 
 ---
 

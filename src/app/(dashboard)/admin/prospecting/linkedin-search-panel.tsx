@@ -827,6 +827,7 @@ export function LinkedInSearchPanel() {
   const [addActivity, setAddActivity] = useState(false);
   const [addCatchAll, setAddCatchAll] = useState(false);
   const [addVerify, setAddVerify] = useState(false);
+  const [addValidateCatchAll, setAddValidateCatchAll] = useState(false);
   // Org kill-switch: does a finished search auto-import + enrich? Only changes
   // the panel's "sourced" caption. Fetched once from enrichment settings.
   const [autoRun, setAutoRun] = useState(true);
@@ -1242,7 +1243,7 @@ export function LinkedInSearchPanel() {
           depth,
           max_results: maxResults,
           name: searchNameInput.trim(),
-          addons: { activity: addActivity, verify: addVerify, include_catch_all: addCatchAll },
+          addons: { activity: addActivity, verify: addVerify, include_catch_all: addCatchAll, validate_catch_all: addValidateCatchAll },
         }),
       });
       const data = await res.json();
@@ -1451,8 +1452,10 @@ export function LinkedInSearchPanel() {
         naming: false,
         include_catch_all:
           (detail.query.addons as { include_catch_all?: unknown }).include_catch_all === true,
+        validate_catch_all:
+          (detail.query.addons as { validate_catch_all?: unknown }).validate_catch_all === true,
       }
-    : { activity: addActivity, verify: addVerify, naming: false, include_catch_all: addCatchAll };
+    : { activity: addActivity, verify: addVerify, naming: false, include_catch_all: addCatchAll, validate_catch_all: addValidateCatchAll };
 
   // Actual-spend breakdown (the "What did this cost?" popover). Sourcing +
   // enrichment are both real Apify usageTotalUsd figures; together they reconcile
@@ -1709,6 +1712,21 @@ export function LinkedInSearchPanel() {
                   <span className="block text-[11px] text-muted-foreground">
                     On domains that accept every address, keep the best pattern guess
                     (flagged Catch-all, confidence 40) instead of discarding it. No extra cost.
+                  </span>
+                </span>
+              </label>
+              <label className="flex cursor-pointer items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={addValidateCatchAll}
+                  onChange={(e) => setAddValidateCatchAll(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 cursor-pointer rounded border-border accent-[#2E37FE]"
+                />
+                <span>
+                  Validate catch-all emails
+                  <span className="block text-[11px] text-muted-foreground">
+                    Recover genuinely deliverable emails on catch-all domains via Findymail
+                    (~$0.049 per hit, charged only when one is found). Needs a Findymail key.
                   </span>
                 </span>
               </label>

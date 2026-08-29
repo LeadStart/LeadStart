@@ -20,6 +20,7 @@ import {
   WATERFALL_LEAD_COST_USD,
   ACTIVITY_COST_USD,
   MV_CREDIT_COST_USD,
+  FINDYMAIL_CATCHALL_COST_USD,
 } from "@/lib/apify/pricing";
 import {
   DEFAULT_ENRICHMENT_SETTINGS,
@@ -39,7 +40,8 @@ import {
   shouldAlertAccountError,
 } from "@/lib/millionverifier/policy";
 import { enqueueOwnerAlert } from "@/lib/notifications/owner-alerts";
-import { runPatternMv, type PatternMvItem } from "@/lib/enrichment/pattern-mv";
+import { runPatternMv, type PatternMvItem, type PatternMvOutcome } from "@/lib/enrichment/pattern-mv";
+import { FindymailClient, FindymailError, type FindymailResult } from "@/lib/findymail/client";
 import { hasUsableName, methodForItem } from "@/lib/enrichment/waterfall-routing";
 import { classifyContactOutcome, addOutcome, ALL_COUNT_KEYS } from "@/lib/enrichment/outcomes";
 import { callPerplexity } from "@/lib/perplexity/client";
@@ -701,11 +703,12 @@ async function runPatternMvBatch(
   cols: { status: string; runId: string; notes: string },
   tickStart: number,
 ): Promise<Record<string, unknown>> {
-  // Org MV key + error/suppression state.
+  // Org MV key + error/suppression state, plus the Findymail key for catch-all
+  // recovery (a finder, not a send gate — a Findymail failure just skips recovery).
   const { data: orgRow } = await admin
     .from("organizations")
     .select(
-      "millionverifier_api_key, millionverifier_last_error_kind, millionverifier_last_error_at, millionverifier_error_streak",
+      "millionverifier_api_key, millionverifier_last_error_kind, millionverifier_last_error_at, millionverifier_error_streak, findymail_api_key",
     )
     .eq("id", run.organization_id)
     .maybeSingle();
@@ -714,6 +717,7 @@ async function runPatternMvBatch(
     millionverifier_last_error_kind: string | null;
     millionverifier_last_error_at: string | null;
     millionverifier_error_streak: number | null;
+    findymail_api_key: string | null;
   } | null;
   const key = org?.millionverifier_api_key?.trim() || process.env.MILLIONVERIFIER_API_KEY?.trim() || null;
 
@@ -761,6 +765,11 @@ async function runPatternMvBatch(
   }
 
   const config = run.waterfall_config ?? DEFAULT_ENRICHMENT_SETTINGS;
+  // Findymail catch-all recovery opt-in: when the run's config asks for it AND a
+  // Findymail key is present, catch-all items pattern_mv can't verify are deferred
+  // past the normal write and handed to Findymail for a deliverable address.
+  const findymailKey = org?.findymail_api_key?.trim() || process.env.FINDYMAIL_API_KEY?.trim() || null;
+  const doRecovery = config.validate_catch_all === true && !!findymailKey;
   const client = new MillionVerifierClient(key);
   const deadlineMs = tickStart + PATTERN_MV_DEADLINE_SEC * 1000;
   const mvItems: PatternMvItem[] = batch.map((b) => ({
@@ -808,12 +817,53 @@ async function runPatternMvBatch(
   let skipped = 0;
   let inconclusive = 0;
   let totalCredits = 0;
+  // Catch-all items held back for the Findymail recovery pass (a found-catch_all
+  // guess, or a catch-all miss). Deferring their write keeps the fill-only
+  // contacts.email slot free so a clean Findymail hit can take it instead of a
+  // confidence-40 guess.
+  const deferred: { item: ItemRow; outcome: PatternMvOutcome; share: number }[] = [];
+
+  // Write an item's ORIGINAL pattern_mv outcome — the fallback used when recovery
+  // is off, misses, or errors: a found-catch_all guess via writeEmail, else a
+  // not_found finalize. Closes over the counters above.
+  const writeOriginal = async (item: ItemRow, outcome: PatternMvOutcome, share: number): Promise<void> => {
+    if (outcome.kind === "found") {
+      const contact = contactMap.get(item.contact_id);
+      const res: PhaseResult = {
+        status: "found",
+        email: outcome.email,
+        confidence: outcome.confidence,
+        extra: { waterfall_status: outcome.mvResult },
+      };
+      const r = await writeEmail(admin, cols, item, res, contact, "pattern_mv", share, "pattern_mv");
+      if (r === "found") found++;
+      else if (r === "skipped") skipped++;
+      else notFound++;
+    } else {
+      await admin
+        .from("enrichment_run_items")
+        .update({ waterfall_status: "not_found", waterfall_notes: outcome.note, cost_usd: share })
+        .eq("id", item.id);
+      notFound++;
+    }
+  };
 
   for (const item of batch) {
     const outcome = outcomes.get(item.id);
     if (!outcome) continue; // hit the deadline — stays pending for the next tick
     totalCredits += outcome.credits;
     const share = outcome.credits * MV_CREDIT_COST_USD;
+
+    // A catch-all outcome (an accepted confidence-40 guess, or a catch-all miss)
+    // is deferred to Findymail when recovery is on. Inconclusive items are left
+    // to retry — they resolve to found/not_found on a later tick, then recover.
+    const isCatchAll =
+      (outcome.kind === "found" && outcome.mvResult === "catch_all") ||
+      (outcome.kind === "not_found" && outcome.sawCatchAll === true);
+    if (doRecovery && isCatchAll) {
+      deferred.push({ item, outcome, share });
+      continue;
+    }
 
     if (outcome.kind === "found") {
       const contact = contactMap.get(item.contact_id);
@@ -856,24 +906,76 @@ async function runPatternMvBatch(
     }
   }
 
-  if (totalCredits > 0) {
-    const add = totalCredits * MV_CREDIT_COST_USD;
-    await admin
-      .from("enrichment_runs")
-      .update({ cost_usd: (Number(run.cost_usd) || 0) + add })
-      .eq("id", run.id);
-    run.cost_usd = (Number(run.cost_usd) || 0) + add;
+  // ── Findymail catch-all recovery pass ──────────────────────────────────────
+  // For each deferred catch-all item, ask Findymail for a genuinely deliverable
+  // address (pay-on-hit). A hit is written clean (provider findymail, conf 75);
+  // a miss, or any Findymail error, falls back to the original pattern_mv outcome
+  // so no lead is lost. Findymail is NOT a send gate — errors never hold the run,
+  // and a definitive error just stops calling for the rest of this batch.
+  let recovered = 0;
+  let findymailCost = 0;
+  if (deferred.length > 0) {
+    const fmClient = findymailKey ? new FindymailClient(findymailKey) : null;
+    let fmDown = false;
+    for (const d of deferred) {
+      if (!fmClient || fmDown) {
+        await writeOriginal(d.item, d.outcome, d.share);
+        continue;
+      }
+      const name = [d.item.first_name, d.item.last_name].filter(Boolean).join(" ");
+      let result: FindymailResult;
+      try {
+        result = await fmClient.findByNameDomain(name, d.item.company_domain ?? "");
+      } catch (err) {
+        if (err instanceof FindymailError && err.definitive) fmDown = true;
+        await writeOriginal(d.item, d.outcome, d.share);
+        continue;
+      }
+      if (result.found && result.email) {
+        const contact = contactMap.get(d.item.contact_id);
+        const res: PhaseResult = {
+          status: "found",
+          email: result.email,
+          confidence: 75,
+          extra: { waterfall_status: "findymail_recovered" },
+        };
+        // Charge the item both the MV verify share and the Findymail credit.
+        const r = await writeEmail(admin, cols, d.item, res, contact, "findymail", d.share + FINDYMAIL_CATCHALL_COST_USD, "findymail");
+        findymailCost += FINDYMAIL_CATCHALL_COST_USD;
+        if (r === "found") {
+          found++;
+          recovered++;
+        } else if (r === "skipped") {
+          skipped++;
+        } else {
+          notFound++;
+        }
+      } else {
+        // Findymail found nothing (no charge) — keep the original outcome.
+        await writeOriginal(d.item, d.outcome, d.share);
+      }
+    }
   }
 
+  const totalCost = totalCredits * MV_CREDIT_COST_USD + findymailCost;
+  if (totalCost > 0) {
+    await admin
+      .from("enrichment_runs")
+      .update({ cost_usd: (Number(run.cost_usd) || 0) + totalCost })
+      .eq("id", run.id);
+    run.cost_usd = (Number(run.cost_usd) || 0) + totalCost;
+  }
+
+  const recoverNote = recovered > 0 ? ` · ${recovered} catch-all recovered (Findymail)` : "";
   await admin
     .from("enrichment_runs")
     .update({
-      progress_message: `Pattern+verify: ${found} found · ${notFound} miss · ${inconclusive} retrying (${totalCredits} MV credits)`,
+      progress_message: `Pattern+verify: ${found} found · ${notFound} miss · ${inconclusive} retrying (${totalCredits} MV credits)${recoverNote}`,
       locked_at: null,
     })
     .eq("id", run.id);
 
-  return { status: "pattern_mv", found, not_found: notFound, skipped, inconclusive, credits: totalCredits };
+  return { status: "pattern_mv", found, not_found: notFound, skipped, inconclusive, credits: totalCredits, recovered };
 }
 
 // Process one domain-discovery batch inline (no Apify run) — the domains-phase
