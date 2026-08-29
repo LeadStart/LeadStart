@@ -33,6 +33,19 @@ import {
   Hash,
   Map as MapIcon,
   Landmark,
+  Sparkles,
+  Stethoscope,
+  Activity,
+  Wind,
+  HardHat,
+  Droplets,
+  SprayCan,
+  Scale,
+  Dumbbell,
+  Car,
+  Trees,
+  Home,
+  type LucideIcon,
 } from "lucide-react";
 import { appUrl } from "@/lib/api-url";
 import { createClient } from "@/lib/supabase/client";
@@ -53,19 +66,19 @@ const RESULTS_PAGE_SIZE = 25;
 const GEO_DEBOUNCE_MS = 180;
 
 // Ready-to-run audiences — each adds a bundle of Google Maps search terms.
-const AUDIENCES: { label: string; terms: string[]; blurb: string }[] = [
-  { label: "Med spas", terms: ["med spa", "medical spa"], blurb: "Aesthetic & wellness clinics" },
-  { label: "Dentists", terms: ["dentist", "dental clinic"], blurb: "General & cosmetic dental" },
-  { label: "Chiropractors", terms: ["chiropractor"], blurb: "Chiro & wellness" },
-  { label: "HVAC", terms: ["hvac contractor", "air conditioning repair"], blurb: "Heating & cooling" },
-  { label: "Roofers", terms: ["roofing contractor"], blurb: "Residential & commercial roofing" },
-  { label: "Plumbers", terms: ["plumber"], blurb: "Plumbing services" },
-  { label: "Commercial cleaning", terms: ["commercial cleaning service", "janitorial service"], blurb: "Janitorial & office cleaning" },
-  { label: "Law firms", terms: ["law firm", "attorney"], blurb: "Attorneys & legal practices" },
-  { label: "Gyms & studios", terms: ["gym", "fitness studio"], blurb: "Fitness & training" },
-  { label: "Auto repair", terms: ["auto repair shop"], blurb: "Mechanics & body shops" },
-  { label: "Landscaping", terms: ["landscaping service"], blurb: "Lawn & landscape" },
-  { label: "Real estate", terms: ["real estate agency"], blurb: "Agencies & brokerages" },
+const AUDIENCES: { label: string; terms: string[]; blurb: string; icon: LucideIcon }[] = [
+  { label: "Med spas", terms: ["med spa", "medical spa"], blurb: "Aesthetic & wellness clinics", icon: Sparkles },
+  { label: "Dentists", terms: ["dentist", "dental clinic"], blurb: "General & cosmetic dental", icon: Stethoscope },
+  { label: "Chiropractors", terms: ["chiropractor"], blurb: "Chiro & wellness", icon: Activity },
+  { label: "HVAC", terms: ["hvac contractor", "air conditioning repair"], blurb: "Heating & cooling", icon: Wind },
+  { label: "Roofers", terms: ["roofing contractor"], blurb: "Residential & commercial roofing", icon: HardHat },
+  { label: "Plumbers", terms: ["plumber"], blurb: "Plumbing services", icon: Droplets },
+  { label: "Commercial cleaning", terms: ["commercial cleaning service", "janitorial service"], blurb: "Janitorial & office cleaning", icon: SprayCan },
+  { label: "Law firms", terms: ["law firm", "attorney"], blurb: "Attorneys & legal practices", icon: Scale },
+  { label: "Gyms & studios", terms: ["gym", "fitness studio"], blurb: "Fitness & training", icon: Dumbbell },
+  { label: "Auto repair", terms: ["auto repair shop"], blurb: "Mechanics & body shops", icon: Car },
+  { label: "Landscaping", terms: ["landscaping service"], blurb: "Lawn & landscape", icon: Trees },
+  { label: "Real estate", terms: ["real estate agency"], blurb: "Agencies & brokerages", icon: Home },
 ];
 
 // A couple of one-tap big-state adds beneath the picker.
@@ -787,24 +800,54 @@ export function MapsDiyPanel() {
               <p className="text-xs text-muted-foreground">Tap a ready-to-run audience, or type your own business type.</p>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* Audience cards */}
-              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+              {/* Audience cards — whole card is the click target */}
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 {AUDIENCES.map((a) => {
                   const active = audienceActive(a.terms);
+                  const Icon = a.icon;
                   return (
                     <button
                       key={a.label}
                       type="button"
                       onClick={() => addAudience(a.terms)}
-                      className={`flex items-start justify-between gap-2 rounded-lg border px-3 py-2.5 text-left transition-colors cursor-pointer ${
-                        active ? "border-indigo-400 bg-indigo-50/60" : "border-border/60 hover:border-indigo-300 hover:bg-muted/30"
+                      className={`group flex cursor-pointer flex-col gap-2.5 rounded-xl border p-4 text-left transition-colors ${
+                        active
+                          ? "border-primary bg-primary/[0.04] ring-1 ring-inset ring-primary"
+                          : "border-border/70 hover:border-indigo-300"
                       }`}
                     >
-                      <span className="min-w-0">
-                        <span className="block text-sm font-medium">{a.label}</span>
-                        <span className="block text-[11px] text-muted-foreground">{a.blurb}</span>
+                      <div className="flex items-center gap-2.5">
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-primary/10 text-primary">
+                          <Icon size={17} />
+                        </span>
+                        <span className="text-sm font-semibold leading-tight">{a.label}</span>
+                      </div>
+                      <p className="flex-1 text-xs leading-relaxed text-muted-foreground">{a.blurb}</p>
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+                        <span className="inline-flex items-center gap-1">
+                          <CheckCircle2 size={11} /> Owner names
+                        </span>
+                        <span className="inline-flex items-center gap-1">
+                          <CheckCircle2 size={11} /> Verified emails
+                        </span>
+                      </div>
+                      <span
+                        className={`mt-0.5 inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-lg border text-[13px] font-medium transition-colors ${
+                          active
+                            ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                            : "border-border bg-background text-foreground group-hover:border-indigo-300 group-hover:text-primary"
+                        }`}
+                      >
+                        {active ? (
+                          <>
+                            <CheckCircle2 size={14} /> Added
+                          </>
+                        ) : (
+                          <>
+                            <Plus size={14} /> Add
+                          </>
+                        )}
                       </span>
-                      {active ? <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-indigo-600" /> : <Plus size={16} className="mt-0.5 shrink-0 text-muted-foreground" />}
                     </button>
                   );
                 })}
