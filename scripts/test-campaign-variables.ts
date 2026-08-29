@@ -9,7 +9,7 @@
  *     (a live send blanks an unresolved token instead of emitting raw braces).
  *   - extractCampaignTokens: strips |default from the key, flags hasFallback
  *     (AND across occurrences), catches A/B-variant + branch tokens.
- *   - reconcileCampaignVariables: ordered, de-duped union (registry ∪ copy ∪ list).
+ *   - reconcileCampaignVariables: registry customs come from mapped columns ONLY (registry ∪ copy STANDARD ∪ mapped); a copy-only custom token never registers.
  *   - buildInitialMappingForTargets: an unmatched column becomes a NEW custom var.
  *   - allEmailTemplates: every variant + both branches feed extraction.
  */
@@ -138,14 +138,16 @@ console.log("\nreconcileCampaignVariables — ordered de-duped union");
   const out = reconcileCampaignVariables(existing, copy, mapped);
   eq(
     out.map((v) => v.key),
-    ["oldvar", "firstname", "newvar", "csvonly"],
-    "order: existing → copy standard → copy custom → mapped custom",
+    ["oldvar", "firstname", "csvonly"],
+    "order: existing → copy standard → mapped custom (copy CUSTOM never registers)",
   );
+  eq(out.find((v) => v.key === "newvar"), undefined, "a copy-only custom token is NOT registered (columns drive customs)");
   eq(out.find((v) => v.key === "firstname")?.kind, "standard", "first_name classified standard");
   eq(out.find((v) => v.key === "csvonly")?.kind, "custom", "csv-only column classified custom");
 }
 {
-  // Dedup: a copy token that already exists keeps the registry's canonical spelling.
+  // An already-registered custom (from an earlier mapping) carries forward; a copy
+  // token that normalizes to it does NOT add a duplicate (copy customs don't register).
   const existing: CampaignVariable[] = [{ token: "PropertyAddress", key: "propertyaddress", kind: "custom" }];
   const copy = extractCampaignTokens(["{{property address}}"]);
   const out = reconcileCampaignVariables(existing, copy, []);

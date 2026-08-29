@@ -294,12 +294,17 @@ export interface CampaignVariable {
   fields?: string[];
 }
 
-// Reconcile a campaign's stored variable registry with the current copy tokens
-// and any custom columns mapped on a list ingest. Returns the ordered, de-duped
-// (by key) UNION: existing registry first (preserving order, canonical spelling,
-// and kind), then copy standard tokens, then copy custom tokens, then mapped
-// custom columns that aren't referenced in the copy yet (the list drives them,
-// Instantly-style). Pure — callers persist the result.
+// Reconcile a campaign's stored variable registry. CUSTOM variables come ONLY
+// from mapped list columns (`mappedCustom`) or ones already registered from an
+// earlier mapping (carried forward via `existing`). A {{token}} typed in the copy
+// NEVER registers a variable on its own (owner call 2026-08-29: columns drive the
+// variable set, Instantly-style — this reverses the earlier 00092 "copy ∪ columns"
+// behavior). An unmapped copy token is flagged at import + in the editor and sends
+// blank; it never becomes a phantom Insert chip. STANDARD tokens (first_name,
+// company, …) map to built-in contact columns, so they always stay. Returns the
+// ordered, de-duped (by key) union: existing registry first (preserving order,
+// spelling, kind), then copy STANDARD tokens, then mapped custom columns. Pure —
+// callers persist the result.
 export function reconcileCampaignVariables(
   existing: CampaignVariable[] | null | undefined,
   copyTokens: CampaignTokenInfo,
@@ -326,9 +331,7 @@ export function reconcileCampaignVariables(
   for (const t of copyTokens.standard) {
     add({ token: t.token, key: t.key, kind: "standard", fields: t.fields });
   }
-  for (const t of copyTokens.custom) {
-    add({ token: t.token, key: t.key, kind: "custom" });
-  }
+  // Copy CUSTOM tokens deliberately do NOT register — only a mapped column does.
   for (const t of mappedCustom ?? []) {
     if (t && typeof t.key === "string" && typeof t.token === "string") {
       add({ token: t.token, key: t.key, kind: "custom" });
