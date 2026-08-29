@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createCheckoutSessionForQuote } from "@/lib/stripe/helpers";
-import type { Client, PricingPlan, Quote } from "@/types/app";
+import type { Client, Quote } from "@/types/app";
 
 /**
  * Public endpoint: recipient clicks "Accept & pay" on the hosted quote page.
@@ -24,7 +24,7 @@ export async function POST(
     return NextResponse.json({ error: "Missing token" }, { status: 400 });
   }
 
-  const supabase = await createClient();
+  const supabase = createAdminClient();
 
   const { data: quoteRow } = await supabase
     .from("quotes")
@@ -73,23 +73,12 @@ export async function POST(
     return NextResponse.json({ error: "Client missing" }, { status: 500 });
   }
 
-  let plan: PricingPlan | null = null;
-  if (quote.plan_id) {
-    const { data: planRow } = await supabase
-      .from("pricing_plans")
-      .select()
-      .eq("id", quote.plan_id)
-      .single();
-    plan = (planRow as unknown as PricingPlan | null) ?? null;
-  }
-
   const origin = req.nextUrl.origin;
   let session;
   try {
     session = await createCheckoutSessionForQuote({
       quote,
       client,
-      plan,
       origin,
     });
   } catch (err) {
@@ -136,7 +125,7 @@ export async function POST(
     client_id: client.id,
     quote_id: quote.id,
     stripe_checkout_session_id: session.session_id,
-    stripe_checkout_url: session.checkout_url,
+    stripe_checkout_url: null,
     status: "pending",
     created_at: now,
     expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
@@ -144,7 +133,9 @@ export async function POST(
   } as Record<string, unknown>);
 
   return NextResponse.json({
-    checkout_url: session.checkout_url,
+    client_secret: session.client_secret,
+    publishable_key: session.publishable_key,
     session_id: session.session_id,
+    demo_redirect_url: session.demo_redirect_url,
   });
 }

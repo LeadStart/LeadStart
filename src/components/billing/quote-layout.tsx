@@ -1,5 +1,6 @@
 import { CheckCircle } from "lucide-react";
 import type { ReactNode } from "react";
+import { computeLaunchDate } from "@/lib/billing/schedule";
 
 function formatCents(cents: number): string {
   const dollars = cents / 100;
@@ -9,34 +10,34 @@ function formatCents(cents: number): string {
 }
 
 export interface QuoteLayoutProps {
-  quoteNumber: string;
-  /** When true, the layout adds a "(draft)" label next to the quote number. */
+  /** When true, the layout adds a "(draft)" label next to the issue date. */
   isDraft?: boolean;
   contactName: string;
   contactEmail: string;
-  planNameSnapshot: string;
   monthlyCents: number;
   setupCents: number;
+  contactSourcingCents: number;
+  contactsCount: number | null;
   scope: string;
   terms: string;
   /** Issue date (defaults to now if omitted). */
   issuedAt?: Date | string | null;
   /** Either an ISO date string or a YYYY-MM-DD date input value. */
   expiresAt?: string | null;
-  /** Days between payment and first subscription charge. Defaults to 14. */
+  /** Warm-up window in calendar days. Defaults to 14. */
   warmingDays?: number;
   /** Slot rendered after the terms — admin preview shows a hint, hosted page shows Accept button. */
   trailingSlot?: ReactNode;
 }
 
 export function QuoteLayout({
-  quoteNumber,
   isDraft,
   contactName,
   contactEmail,
-  planNameSnapshot,
   monthlyCents,
   setupCents,
+  contactSourcingCents,
+  contactsCount,
   scope,
   terms,
   issuedAt,
@@ -45,11 +46,10 @@ export function QuoteLayout({
   trailingSlot,
 }: QuoteLayoutProps) {
   const issueDate = issuedAt ? new Date(issuedAt) : new Date();
-  const warmingEnds = new Date(
-    issueDate.getTime() + warmingDays * 24 * 60 * 60 * 1000,
-  );
+  // Estimated launch (and first-charge) day for someone reading the quote now.
+  const launch = computeLaunchDate(new Date(), warmingDays);
   const scopeLines = scope.split("\n").filter((s) => s.trim());
-  const totalToday = setupCents;
+  const dueToday = setupCents + (contactSourcingCents > 0 ? contactSourcingCents : 0);
 
   return (
     <div className="space-y-5 text-[#0f172a]">
@@ -67,15 +67,14 @@ export function QuoteLayout({
               LEADSTART PROPOSAL
             </p>
             <h2 className="mt-1 text-lg sm:text-xl font-bold">
-              {planNameSnapshot || "Custom"} engagement
+              Outbound lead generation
             </h2>
           </div>
           <div className="text-left sm:text-right text-xs text-[#64748b] space-y-0.5">
             <p>
-              <span className="font-mono text-[#0f172a]">{quoteNumber}</span>
+              Issued {issueDate.toLocaleDateString()}
               {isDraft && " (draft)"}
             </p>
-            <p>Issued {issueDate.toLocaleDateString()}</p>
             <p>
               Valid until{" "}
               {expiresAt ? new Date(expiresAt).toLocaleDateString() : "—"}
@@ -108,7 +107,7 @@ export function QuoteLayout({
               <li key={i} className="flex items-start gap-2 text-sm">
                 <CheckCircle
                   size={14}
-                  className="mt-0.5 text-emerald-500 shrink-0"
+                  className="mt-0.5 text-emerald-600 shrink-0"
                 />
                 <span>{line}</span>
               </li>
@@ -123,12 +122,28 @@ export function QuoteLayout({
           PRICING
         </p>
         <div className="rounded-xl border border-border/60 bg-muted/30 p-4 space-y-3">
+          {contactSourcingCents > 0 && (
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-sm font-medium">Contact sourcing</p>
+                <p className="text-xs text-muted-foreground">
+                  {contactsCount
+                    ? `${contactsCount.toLocaleString()} verified contacts`
+                    : "Verified contacts"}{" "}
+                  — one-time.
+                </p>
+              </div>
+              <p className="text-sm font-semibold shrink-0">
+                {formatCents(contactSourcingCents)}
+              </p>
+            </div>
+          )}
           {setupCents > 0 && (
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
                 <p className="text-sm font-medium">One-time setup fee</p>
                 <p className="text-xs text-muted-foreground">
-                  Inbox setup and {warmingDays}-day warming before campaigns
+                  Inbox setup and {warmingDays} calendar days of warming before
                   launch.
                 </p>
               </div>
@@ -140,11 +155,11 @@ export function QuoteLayout({
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
               <p className="text-sm font-medium">
-                {planNameSnapshot || "Custom"} — monthly subscription
+                Lead management — monthly subscription
               </p>
               <p className="text-xs text-muted-foreground">
-                First charge {warmingEnds.toLocaleDateString()} (after{" "}
-                {warmingDays}-day warming).
+                First charge {launch.toLocaleDateString()} — on launch day,
+                after {warmingDays} calendar days of warming.
               </p>
             </div>
             <p className="text-sm font-semibold shrink-0">
@@ -157,7 +172,7 @@ export function QuoteLayout({
           <div className="border-t border-border/60 pt-3 flex items-center justify-between">
             <p className="text-sm font-semibold">Due at acceptance</p>
             <p className="text-base font-bold text-[#2E37FE]">
-              {formatCents(totalToday)}
+              {formatCents(dueToday)}
             </p>
           </div>
         </div>

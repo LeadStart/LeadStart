@@ -4,6 +4,12 @@ import type { createClient } from "@/lib/supabase/server";
 import { buildSubscriptionStartedEmail } from "@/lib/email/subscription-started";
 import { buildPaymentFailedEmail } from "@/lib/email/payment-failed";
 import { buildInvoiceEmail } from "@/lib/email/invoice";
+import { buildQuoteSignedEmail } from "@/lib/email/quote-signed";
+import { computeLaunchDate } from "@/lib/billing/schedule";
+import { getAppUrl } from "./client";
+
+// Owner alert recipient for new signed clients.
+const OWNER_ALERT_EMAIL = "daniel.tuccillo92@gmail.com";
 
 type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
 
@@ -83,7 +89,6 @@ async function handleCheckoutCompleted(
   const md = session.metadata ?? {};
   const organizationId = md.organization_id;
   const clientId = md.client_id;
-  const planId = md.plan_id || null;
   const quoteId = md.quote_id || null;
   const subscriptionId =
     typeof session.subscription === "string"
@@ -98,20 +103,35 @@ async function handleCheckoutCompleted(
     return;
   }
 
-  // Upsert subscription — field set intentionally minimal; the
-  // customer.subscription.updated event fires right after and fills in
-  // period bounds, trial_end, etc.
+  // Pricing snapshot from the accepted quote (carried in session metadata).
+  const monthlyCents = Number(md.monthly_cents) || 0;
+  const setupCents = Number(md.setup_fee_cents) || 0;
+  const contactSourcingCents = Number(md.contact_sourcing_cents) || 0;
+  const contactsCount = md.contacts_count ? Number(md.contacts_count) : null;
+  const warmingDays = Number(md.warming_days) || 14;
+  const sellsContacts = contactSourcingCents > 0;
+  const dueTodayCents = setupCents + contactSourcingCents;
+  const launch = computeLaunchDate(new Date(), warmingDays);
+
+  // Upsert subscription with the pricing snapshot (tiers retired — no plan
+  // row to read). The customer.subscription.updated event fills in period
+  // bounds + trial_end right after.
   if (subscriptionId) {
     await supabase.from("client_subscriptions").upsert(
       {
         organization_id: organizationId,
         client_id: clientId,
-        plan_id: planId,
+        plan_id: null,
         quote_id: quoteId,
         stripe_customer_id: customerId,
         stripe_subscription_id: subscriptionId,
         status: "trialing",
+        setup_fee_cents: setupCents,
         setup_fee_paid_at: new Date().toISOString(),
+        monthly_price_cents: monthlyCents,
+        contact_sourcing_cents: contactSourcingCents,
+        contacts_count: contactsCount,
+        warming_days_at_signup: warmingDays,
       } as Record<string, unknown>,
       { onConflict: "stripe_subscription_id" },
     );
@@ -132,8 +152,7 @@ async function handleCheckoutCompleted(
     .update({ stripe_customer_id: customerId } as Record<string, unknown>)
     .eq("id", clientId);
 
-  // Quote status should already be 'accepted' from /accept endpoint; this
-  // is a safety net in case the recipient went through a different entry.
+  // Safety net in case the recipient reached completion via a different entry.
   if (quoteId) {
     await supabase
       .from("quotes")
@@ -143,43 +162,41 @@ async function handleCheckoutCompleted(
       .eq("id", quoteId);
   }
 
-  // "You're in — first charge on {date}" email via Resend.
+  const { data: clientRow } = await supabase
+    .from("clients")
+    .select()
+    .eq("id", clientId)
+    .single();
+  const clientName =
+    (clientRow as unknown as { name?: string } | null)?.name || "";
+
+  // Owner alert — always fire when a client signs and pays.
+  await sendEmail(
+    OWNER_ALERT_EMAIL,
+    `${clientName || "A client"} — Quote signed`,
+    buildQuoteSignedEmail({
+      clientName,
+      monthlyCents,
+      dueTodayCents,
+      warmingDays,
+      launchDate: launch.toISOString(),
+      contactsCount,
+      adminUrl: `${getAppUrl()}/admin/billing`,
+    }),
+  );
+
+  // Client confirmation — "You're all set".
   const toEmail = session.customer_email || session.customer_details?.email;
   if (toEmail) {
-    const { data: clientRow } = await supabase
-      .from("clients")
-      .select()
-      .eq("id", clientId)
-      .single();
-    const client = clientRow as unknown as { name: string } | null;
-    let planName = "Custom";
-    let monthlyCents = 0;
-    if (planId) {
-      const { data: planRow } = await supabase
-        .from("pricing_plans")
-        .select()
-        .eq("id", planId)
-        .single();
-      const plan = planRow as unknown as {
-        name: string;
-        monthly_price_cents: number;
-      } | null;
-      if (plan) {
-        planName = plan.name;
-        monthlyCents = plan.monthly_price_cents;
-      }
-    }
-    const firstCharge = new Date(
-      Date.now() + 14 * 24 * 60 * 60 * 1000,
-    ).toISOString();
     await sendEmail(
       toEmail,
-      "You're in — campaigns launching soon",
+      "You're all set — campaigns launching soon",
       buildSubscriptionStartedEmail({
-        clientName: client?.name || "",
-        planName,
-        firstChargeDate: firstCharge,
+        clientName,
         monthlyCents,
+        firstChargeDate: launch.toISOString(),
+        warmingDays,
+        sellsContacts,
       }),
     );
   }

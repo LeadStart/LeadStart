@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import Image from "next/image";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import type { Quote, Client } from "@/types/app";
 import { QuoteLayout } from "@/components/billing/quote-layout";
 import { ViewTracker } from "./view-tracker";
@@ -21,7 +21,7 @@ export default async function HostedQuotePage({ params, searchParams }: Props) {
   const { t: token } = await searchParams;
   if (!token) notFound();
 
-  const supabase = await createClient();
+  const supabase = createAdminClient();
 
   const { data: quoteRow } = await supabase
     .from("quotes")
@@ -61,7 +61,7 @@ export default async function HostedQuotePage({ params, searchParams }: Props) {
             className="h-24 w-auto"
           />
           <span className="text-xs text-muted-foreground hidden sm:block">
-            Proposal &middot; {quote.quote_number}
+            Proposal
           </span>
         </div>
       </header>
@@ -90,12 +90,13 @@ export default async function HostedQuotePage({ params, searchParams }: Props) {
         ) : null}
 
         <QuoteLayout
-          quoteNumber={quote.quote_number}
           contactName={client?.name || "—"}
           contactEmail={quote.sent_to_email || client?.contact_email || ""}
-          planNameSnapshot={quote.plan_name_snapshot || "Custom"}
           monthlyCents={quote.monthly_price_cents}
           setupCents={quote.setup_fee_cents}
+          contactSourcingCents={quote.contact_sourcing_cents}
+          contactsCount={quote.contacts_count}
+          warmingDays={quote.warming_days}
           scope={quote.scope_of_work || ""}
           terms={quote.terms || ""}
           issuedAt={quote.sent_at || quote.created_at}

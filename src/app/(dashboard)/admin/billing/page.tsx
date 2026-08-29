@@ -98,11 +98,6 @@ function clientName(clientId: string, clients: Client[]): string {
   return clients.find((c) => c.id === clientId)?.name ?? "Unknown";
 }
 
-function planName(planId: string | null, plans: PricingPlan[]): string {
-  if (!planId) return "Custom";
-  return plans.find((p) => p.id === planId)?.name ?? "Unknown";
-}
-
 // ---------- status badges ----------
 function SubStatusBadge({ status }: { status: SubscriptionStatus }) {
   const styles: Record<SubscriptionStatus, string> = {
@@ -390,9 +385,12 @@ function PlanEditDialog({
 type QuoteDraft = {
   client_id: string;
   plan_id: string | null;
-  plan_name_snapshot: string;
+  plan_name_snapshot: string | null;
   monthly_price_cents: number;
   setup_fee_cents: number;
+  contact_sourcing_cents: number;
+  contacts_count: number | null;
+  warming_days: number;
   currency: string;
   scope_of_work: string;
   terms: string;
@@ -401,7 +399,7 @@ type QuoteDraft = {
 };
 
 const DEFAULT_TERMS =
-  "Auto-charged monthly via Stripe after the 14-day warming period. Net 0.";
+  "Auto-charged monthly via Stripe once the warm-up period ends. Cancel anytime with 30 days' notice.";
 
 function defaultExpiry(): string {
   return new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
@@ -424,10 +422,12 @@ function NewQuoteDialog({
   plans: PricingPlan[];
 }) {
   const [contactId, setContactId] = useState<string>("");
-  const [planId, setPlanId] = useState<string>("custom");
-  const [planNameSnapshot, setPlanNameSnapshot] = useState("");
+  const [sellsContacts, setSellsContacts] = useState(true);
+  const [contactsCount, setContactsCount] = useState("1000");
+  const [contactSourcingDollars, setContactSourcingDollars] = useState("0");
   const [monthlyDollars, setMonthlyDollars] = useState("0");
   const [setupDollars, setSetupDollars] = useState("0");
+  const [warmingDays, setWarmingDays] = useState("21");
   const [scope, setScope] = useState("");
   const [terms, setTerms] = useState(DEFAULT_TERMS);
   const [recipientEmail, setRecipientEmail] = useState("");
@@ -439,10 +439,12 @@ function NewQuoteDialog({
   useEffect(() => {
     if (open) {
       setContactId("");
-      setPlanId("custom");
-      setPlanNameSnapshot("Custom");
+      setSellsContacts(true);
+      setContactsCount("1000");
+      setContactSourcingDollars("0");
       setMonthlyDollars("0");
       setSetupDollars("0");
+      setWarmingDays("21");
       setScope("");
       setTerms(DEFAULT_TERMS);
       setRecipientEmail("");
@@ -451,24 +453,11 @@ function NewQuoteDialog({
     }
   }, [open]);
 
-  function handleContactChange(id: string) {
+  function handleContactChange(id: string | null) {
+    if (!id) return;
     setContactId(id);
     const c = clients.find((cl) => cl.id === id);
     if (c?.contact_email) setRecipientEmail(c.contact_email);
-  }
-
-  function handlePlanChange(id: string) {
-    setPlanId(id);
-    if (id === "custom") {
-      setPlanNameSnapshot("Custom");
-      return;
-    }
-    const p = plans.find((pl) => pl.id === id);
-    if (p) {
-      setPlanNameSnapshot(p.name);
-      setMonthlyDollars(centsToDollarInput(p.monthly_price_cents));
-      if (p.scope_template) setScope(p.scope_template);
-    }
   }
 
   async function handleSubmit(sendNow: boolean) {
@@ -478,10 +467,15 @@ function NewQuoteDialog({
       await onCreate(
         {
           client_id: contactId,
-          plan_id: planId === "custom" ? null : planId,
-          plan_name_snapshot: planNameSnapshot || "Custom",
+          plan_id: null,
+          plan_name_snapshot: null,
           monthly_price_cents: dollarInputToCents(monthlyDollars),
           setup_fee_cents: dollarInputToCents(setupDollars),
+          contact_sourcing_cents: sellsContacts
+            ? dollarInputToCents(contactSourcingDollars)
+            : 0,
+          contacts_count: sellsContacts ? parseInt(contactsCount, 10) || 0 : null,
+          warming_days: parseInt(warmingDays, 10) || 14,
           currency: "usd",
           scope_of_work: scope,
           terms: terms,
@@ -495,7 +489,7 @@ function NewQuoteDialog({
     }
   }
 
-  const canSubmit = contactId.length > 0 && planNameSnapshot.trim().length > 0;
+  const canSubmit = contactId.length > 0;
   const canSend = canSubmit && recipientEmail.trim().length > 0;
   const selectedContact = clients.find((c) => c.id === contactId);
 
@@ -515,92 +509,105 @@ function NewQuoteDialog({
 
         {previewMode ? (
           <QuoteLayout
-            quoteNumber={`Q-${new Date().getFullYear()}-NEW`}
             isDraft
             contactName={selectedContact?.name || "(no contact selected)"}
             contactEmail={recipientEmail}
-            planNameSnapshot={planNameSnapshot}
             monthlyCents={dollarInputToCents(monthlyDollars)}
             setupCents={dollarInputToCents(setupDollars)}
+            contactSourcingCents={
+              sellsContacts ? dollarInputToCents(contactSourcingDollars) : 0
+            }
+            contactsCount={
+              sellsContacts ? parseInt(contactsCount, 10) || 0 : null
+            }
+            warmingDays={parseInt(warmingDays, 10) || 14}
             scope={scope}
             terms={terms}
             expiresAt={expiresAt}
             trailingSlot={
               <div className="rounded-xl border border-dashed border-[#2E37FE]/30 bg-[#2E37FE]/5 p-4 text-xs text-muted-foreground">
                 Once sent, the recipient sees this exact layout at a signed URL
-                with an <strong>Accept &amp; pay</strong> button that opens
-                Stripe Checkout.
+                with an <strong>Accept &amp; pay</strong> button that opens an
+                on-site Stripe payment modal.
               </div>
             }
           />
         ) : (
           <div className="space-y-4 pb-2">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Contact</Label>
-                <Select value={contactId} onValueChange={handleContactChange}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Pick a contact">
-                      {(value) => {
-                        if (typeof value !== "string" || !value)
-                          return "Pick a contact";
-                        return (
-                          clients.find((c) => c.id === value)?.name ?? value
-                        );
-                      }}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {clients.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Plan</Label>
-                <Select value={planId} onValueChange={handlePlanChange}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Pick a plan">
-                      {(value) => {
-                        if (typeof value !== "string" || !value)
-                          return "Pick a plan";
-                        if (value === "custom") return "Custom (no template)";
-                        const plan = plans.find((p) => p.id === value);
-                        return plan
-                          ? `${plan.name} — ${formatCents(plan.monthly_price_cents)}/mo`
-                          : value;
-                      }}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {plans
-                      .filter((p) => p.active)
-                      .map((p) => (
-                        <SelectItem key={p.id} value={p.id}>
-                          {p.name} — {formatCents(p.monthly_price_cents)}/mo
-                        </SelectItem>
-                      ))}
-                    <SelectItem value="custom">Custom (no template)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+            <div className="space-y-1.5">
+              <Label>Contact</Label>
+              <Select value={contactId} onValueChange={handleContactChange}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Pick a contact">
+                    {(value) => {
+                      if (typeof value !== "string" || !value)
+                        return "Pick a contact";
+                      return clients.find((c) => c.id === value)?.name ?? value;
+                    }}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {clients.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="q-plan-name">Plan name on quote</Label>
-              <Input
-                id="q-plan-name"
-                value={planNameSnapshot}
-                onChange={(e) => setPlanNameSnapshot(e.target.value)}
-              />
+            <div className="rounded-lg border border-border/60 p-3 space-y-3">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={sellsContacts}
+                  onChange={(e) => setSellsContacts(e.target.checked)}
+                  className="h-4 w-4 rounded border-input accent-[#2E37FE]"
+                />
+                <span className="text-sm font-medium">Selling contacts</span>
+                <span className="text-xs text-muted-foreground">
+                  adds a one-time contact-sourcing line
+                </span>
+              </label>
+              {sellsContacts && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="q-ccount">Contacts (qty)</Label>
+                    <Input
+                      id="q-ccount"
+                      type="number"
+                      min="0"
+                      step="50"
+                      value={contactsCount}
+                      onChange={(e) => setContactsCount(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="q-csourcing">Contact sourcing (USD)</Label>
+                    <div className="relative">
+                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                        $
+                      </span>
+                      <Input
+                        id="q-csourcing"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        className="pl-6"
+                        value={contactSourcingDollars}
+                        onChange={(e) =>
+                          setContactSourcingDollars(e.target.value)
+                        }
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label htmlFor="q-monthly">Monthly (USD)</Label>
+                <Label htmlFor="q-monthly">Lead management / mo (USD)</Label>
                 <div className="relative">
                   <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
                     $
@@ -633,6 +640,22 @@ function NewQuoteDialog({
                   />
                 </div>
               </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="q-warming">Warming period (calendar days)</Label>
+              <Input
+                id="q-warming"
+                type="number"
+                min="0"
+                step="1"
+                value={warmingDays}
+                onChange={(e) => setWarmingDays(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Days of inbox warming before campaigns launch. Launch (and the
+                first monthly charge) rolls to the next Mon–Fri.
+              </p>
             </div>
 
             <div className="space-y-1.5">
@@ -1035,7 +1058,7 @@ export default function BillingPage() {
     .filter((s) => s.status === "active" || s.status === "trialing")
     .reduce((sum, s) => {
       const plan = plans.find((p) => p.id === s.plan_id);
-      return sum + (plan?.monthly_price_cents ?? 0);
+      return sum + (s.monthly_price_cents ?? plan?.monthly_price_cents ?? 0);
     }, 0);
 
   const activeCount = subscriptions.filter((s) => s.status === "active").length;
@@ -1309,7 +1332,7 @@ export default function BillingPage() {
                         </div>
                       </TableCell>
                       <TableCell className="hidden sm:table-cell text-sm">
-                        {q.plan_name_snapshot || planName(q.plan_id, plans)}
+                        {q.plan_name_snapshot || "Lead management"}
                       </TableCell>
                       <TableCell className="text-right font-medium">
                         {formatCents(q.monthly_price_cents)}
@@ -1407,10 +1430,14 @@ export default function BillingPage() {
                           </div>
                         </TableCell>
                         <TableCell className="hidden sm:table-cell text-sm">
-                          {plan?.name ?? "—"}
+                          {plan?.name ?? "Lead management"}
                         </TableCell>
                         <TableCell className="text-right font-medium">
-                          {plan ? formatCents(plan.monthly_price_cents) : "—"}
+                          {s.monthly_price_cents != null
+                            ? formatCents(s.monthly_price_cents)
+                            : plan
+                              ? formatCents(plan.monthly_price_cents)
+                              : "—"}
                         </TableCell>
                         <TableCell>
                           <SubStatusBadge status={s.status} />

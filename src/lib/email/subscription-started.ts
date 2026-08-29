@@ -1,8 +1,11 @@
 export interface SubscriptionStartedEmailData {
   clientName: string;
-  planName: string;
-  firstChargeDate: string;
   monthlyCents: number;
+  /** Launch day = first monthly charge (business-day adjusted). */
+  firstChargeDate: string;
+  warmingDays: number;
+  /** When true, the "sourcing your contacts and" clause is included. */
+  sellsContacts: boolean;
 }
 
 function formatCents(cents: number): string {
@@ -23,13 +26,16 @@ function formatDate(iso: string): string {
 export function buildSubscriptionStartedEmail(
   data: SubscriptionStartedEmailData,
 ): string {
+  const contactsClause = data.sellsContacts
+    ? "sourcing your contacts and "
+    : "";
   return `
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>You're in — LeadStart</title>
+  <title>You're all set — LeadStart</title>
 </head>
 <body style="margin: 0; padding: 0; background-color: #F4F5F9; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; -webkit-font-smoothing: antialiased;">
   <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color: #F4F5F9;">
@@ -42,7 +48,7 @@ export function buildSubscriptionStartedEmail(
                 Welcome aboard
               </p>
               <h1 style="margin: 6px 0 0; color: #ffffff; font-size: 26px; font-weight: 700; letter-spacing: -0.5px;">
-                You&rsquo;re in.
+                You&rsquo;re all set.
               </h1>
             </td>
           </tr>
@@ -52,25 +58,25 @@ export function buildSubscriptionStartedEmail(
                 Hi ${data.clientName || "there"},
               </p>
               <p style="margin: 0 0 20px; font-size: 15px; color: #3D3D5C; line-height: 1.65;">
-                Thanks for accepting. Your setup fee has been charged and we&rsquo;ve kicked off the 14-day inbox warming process. Your ${data.planName} campaigns will launch right after.
+                We greatly appreciate your business. We will get started on ${contactsClause}setting up your domains and inboxes right away. Your campaigns will launch after ${data.warmingDays} calendar days, and your first monthly charge will be assessed on the day we launch.
               </p>
               <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background: #EDEEFF; border: 1px solid #D1D3FF; border-radius: 12px;">
                 <tr>
                   <td style="padding: 18px 20px;">
                     <p style="margin: 0; font-size: 11px; color: #2E37FE; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;">
-                      First subscription charge
+                      First monthly charge
                     </p>
                     <p style="margin: 6px 0 0; font-size: 22px; font-weight: 700; color: #1A1A2E;">
                       ${formatCents(data.monthlyCents)}<span style="color: #6B6E8A; font-size: 14px; font-weight: 500;">/mo</span>
                     </p>
                     <p style="margin: 4px 0 0; font-size: 13px; color: #3D3D5C;">
-                      On ${formatDate(data.firstChargeDate)} &mdash; right when your campaigns go live.
+                      On ${formatDate(data.firstChargeDate)} &mdash; the day we launch.
                     </p>
                   </td>
                 </tr>
               </table>
               <p style="margin: 24px 0 0; font-size: 13px; color: #6B6E8A; line-height: 1.55;">
-                Your LeadStart contact will reach out this week with onboarding details. Stripe has sent a receipt for today&rsquo;s charge separately.
+                Stripe has sent a receipt for today&rsquo;s charge separately. Questions? You can reach out to us any time at <a href="mailto:daniel@leadstart.io" style="color: #2E37FE; font-weight: 600; text-decoration: none;">daniel@leadstart.io</a>.
               </p>
             </td>
           </tr>

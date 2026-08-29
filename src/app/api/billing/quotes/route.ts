@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { createClient } from "@/lib/supabase/server";
 import { appUrl } from "@/lib/api-url";
 import { buildQuoteProposalEmail } from "@/lib/email/quote-proposal";
@@ -8,9 +8,12 @@ import type { Quote, Client } from "@/types/app";
 interface CreateQuoteBody {
   client_id: string;
   plan_id: string | null;
-  plan_name_snapshot: string;
+  plan_name_snapshot: string | null;
   monthly_price_cents: number;
   setup_fee_cents: number;
+  contact_sourcing_cents: number;
+  contacts_count: number | null;
+  warming_days: number;
   currency: string;
   scope_of_work: string | null;
   terms: string | null;
@@ -76,13 +79,6 @@ export async function POST(req: NextRequest) {
       { status: 400 },
     );
   }
-  if (!body.plan_name_snapshot?.trim()) {
-    return NextResponse.json(
-      { error: "plan_name_snapshot required" },
-      { status: 400 },
-    );
-  }
-
   const now = new Date().toISOString();
   const sendNow = body.send_now === true;
 
@@ -90,16 +86,17 @@ export async function POST(req: NextRequest) {
   const signedUrlHash = randomBytes(24).toString("hex");
 
   const newQuote: Quote = {
-    id: `quote-${Date.now().toString(36)}-${Math.random()
-      .toString(36)
-      .slice(2, 8)}`,
+    id: randomUUID(),
     organization_id: organizationId,
     client_id: body.client_id,
     quote_number: quoteNumber,
-    plan_id: body.plan_id,
-    plan_name_snapshot: body.plan_name_snapshot,
+    plan_id: null,
+    plan_name_snapshot: body.plan_name_snapshot ?? null,
     monthly_price_cents: body.monthly_price_cents,
     setup_fee_cents: body.setup_fee_cents,
+    contact_sourcing_cents: body.contact_sourcing_cents ?? 0,
+    contacts_count: body.contacts_count ?? null,
+    warming_days: body.warming_days ?? 14,
     currency: body.currency || "usd",
     scope_of_work: body.scope_of_work || null,
     terms: body.terms || null,
@@ -149,13 +146,13 @@ export async function POST(req: NextRequest) {
           process.env.EMAIL_FROM ||
           "LeadStart <info@no-reply.leadstart.io>",
         to: body.sent_to_email,
-        subject: `Your LeadStart proposal — ${quote.quote_number}`,
+        subject: `Your LeadStart proposal is ready`,
         html: buildQuoteProposalEmail({
           contactName: client?.name || "",
-          quoteNumber: quote.quote_number,
-          planName: quote.plan_name_snapshot || "Custom",
           monthlyCents: quote.monthly_price_cents,
           setupCents: quote.setup_fee_cents,
+          contactSourcingCents: quote.contact_sourcing_cents,
+          contactsCount: quote.contacts_count,
           quoteUrl,
           expiresAt: quote.expires_at,
         }),

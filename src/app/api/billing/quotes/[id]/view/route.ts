@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import type { Quote } from "@/types/app";
 
 /**
@@ -16,7 +16,7 @@ export async function POST(
     return NextResponse.json({ error: "Missing token" }, { status: 400 });
   }
 
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   const { data: row } = await supabase
     .from("quotes")
     .select()

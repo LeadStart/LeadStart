@@ -2,6 +2,7 @@ import "server-only";
 import { appUrl } from "@/lib/api-url";
 import type { Client, PricingPlan, Quote } from "@/types/app";
 import { getStripe, isStripeDemoMode } from "./client";
+import { computeLaunchDate } from "@/lib/billing/schedule";
 
 export interface PlanStripeIds {
   stripe_product_id: string;
@@ -116,51 +117,49 @@ export async function syncPlanToStripe(
 
 export interface CheckoutSessionResult {
   session_id: string;
-  checkout_url: string;
+  /** Embedded Checkout client secret (null in demo mode). */
+  client_secret: string | null;
+  /** Stripe publishable key so the client can init Stripe.js (null in demo). */
+  publishable_key: string | null;
   /** Stripe Customer id to persist on the client, or null in demo mode. */
   customer_id: string | null;
+  /** Demo-only: where to send the client since there's no real Checkout. */
+  demo_redirect_url: string | null;
 }
 
 /**
- * Create a Stripe Checkout session for an accepted quote.
+ * Create an EMBEDDED Stripe Checkout session for an accepted quote.
  *
- * Line items: (1) one-time setup fee as ad-hoc `price_data` using the
- * per-client amount from the quote, and (2) the stored monthly Price from the
- * plan with `trial_period_days: 14` so the first recurring charge fires after
- * the 14-day warming window.
+ * Tiers are retired, so every line is ad-hoc `price_data`: one-time contact
+ * sourcing (if sold) + one-time setup fee (if any) + the recurring Lead
+ * management subscription. The warm-up is a per-quote trial whose `trial_end`
+ * lands on the Mon–Fri launch day, so the first monthly charge is assessed on
+ * launch day.
  *
- * In demo mode, returns a deterministic URL pointing straight to the in-app
- * welcome page (no real Stripe hop), so the full accept flow is clickable
- * without keys.
+ * `ui_mode: "embedded"` returns a `client_secret` the client mounts inside our
+ * own on-site modal (no redirect to Stripe). In demo mode (no key) we return a
+ * `demo_redirect_url` straight to the welcome page so the flow stays clickable.
  */
 export async function createCheckoutSessionForQuote({
   quote,
   client,
-  plan,
   origin,
 }: {
   quote: Quote;
   client: Client;
-  plan: PricingPlan | null;
   origin: string;
 }): Promise<CheckoutSessionResult> {
-  const successUrl = `${origin}${appUrl("/billing/welcome")}?session_id={CHECKOUT_SESSION_ID}`;
-  const cancelUrl = `${origin}${appUrl(`/quote/${quote.id}`)}?t=${quote.signed_url_hash}&canceled=1`;
+  const returnUrl = `${origin}${appUrl("/billing/welcome")}?session_id={CHECKOUT_SESSION_ID}`;
 
   if (isStripeDemoMode()) {
     const sessionId = `cs_demo_${Date.now().toString(36)}`;
-    const url = `${origin}${appUrl("/billing/welcome")}?session_id=${sessionId}&demo=1&quote_id=${quote.id}`;
     return {
       session_id: sessionId,
-      checkout_url: url,
+      client_secret: null,
+      publishable_key: null,
       customer_id: null,
+      demo_redirect_url: `${origin}${appUrl("/billing/welcome")}?session_id=${sessionId}&demo=1&quote_id=${quote.id}`,
     };
-  }
-
-  if (!plan?.stripe_monthly_price_id) {
-    throw new Error(
-      "Plan missing stripe_monthly_price_id — sync the plan to Stripe first.",
-    );
   }
 
   const stripe = getStripe();
@@ -186,6 +185,24 @@ export async function createCheckoutSessionForQuote({
   >;
   type LineItem = NonNullable<CreateParams["line_items"]>[number];
   const lineItems: LineItem[] = [];
+
+  // One-time: contact sourcing (if sold).
+  if (quote.contact_sourcing_cents > 0) {
+    lineItems.push({
+      price_data: {
+        currency: quote.currency,
+        unit_amount: quote.contact_sourcing_cents,
+        product_data: {
+          name: `Contact sourcing — ${client.name}`,
+          description: quote.contacts_count
+            ? `${quote.contacts_count.toLocaleString()} verified contacts (one-time).`
+            : "One-time contact sourcing.",
+        },
+      },
+      quantity: 1,
+    });
+  }
+  // One-time: setup fee.
   if (quote.setup_fee_cents > 0) {
     lineItems.push({
       price_data: {
@@ -199,40 +216,61 @@ export async function createCheckoutSessionForQuote({
       quantity: 1,
     });
   }
+  // Recurring: Lead management (ad-hoc — no stored plan price).
   lineItems.push({
-    price: plan.stripe_monthly_price_id,
+    price_data: {
+      currency: quote.currency,
+      unit_amount: quote.monthly_price_cents,
+      recurring: { interval: "month" },
+      product_data: {
+        name: "Lead management",
+        description: "Monthly managed cold-email service.",
+      },
+    },
     quantity: 1,
   });
 
   const metadata: Record<string, string> = {
     client_id: client.id,
-    plan_id: plan.id,
     quote_id: quote.id,
     organization_id: client.organization_id,
+    monthly_cents: String(quote.monthly_price_cents),
+    setup_fee_cents: String(quote.setup_fee_cents),
+    contact_sourcing_cents: String(quote.contact_sourcing_cents),
+    contacts_count:
+      quote.contacts_count != null ? String(quote.contacts_count) : "",
+    warming_days: String(quote.warming_days),
   };
+
+  // Warm-up → trial that ends on the Mon–Fri launch day; first charge lands then.
+  const launch = computeLaunchDate(new Date(), quote.warming_days);
+  const useTrial =
+    quote.warming_days >= 1 && launch.getTime() > Date.now() + 3600 * 1000;
+  const trialEndUnix = Math.floor(launch.getTime() / 1000);
 
   const session = await stripe.checkout.sessions.create(
     {
       mode: "subscription",
+      ui_mode: "embedded_page",
       customer: customerId,
       client_reference_id: client.id,
       line_items: lineItems,
       subscription_data: {
-        trial_period_days: 14,
+        ...(useTrial ? { trial_end: trialEndUnix } : {}),
         metadata,
       },
       metadata,
-      success_url: successUrl,
-      cancel_url: cancelUrl,
+      return_url: returnUrl,
       payment_method_types: ["card"],
-      expires_at: Math.floor(Date.now() / 1000) + 24 * 60 * 60,
     },
     { idempotencyKey: `quote_accept_${quote.id}` },
   );
 
   return {
     session_id: session.id,
-    checkout_url: session.url || "",
+    client_secret: session.client_secret ?? null,
+    publishable_key: process.env.STRIPE_PUBLISHABLE_KEY ?? null,
     customer_id: customerId,
+    demo_redirect_url: null,
   };
 }

@@ -582,6 +582,11 @@ export interface Quote {
   monthly_price_cents: number;
   setup_fee_cents: number;
   currency: string;
+  /** Per-quote inbox-warming window (calendar days). Set at send time. */
+  warming_days: number;
+  /** Optional contact-sourcing line item (null / 0 when contacts aren't sold). */
+  contacts_count: number | null;
+  contact_sourcing_cents: number;
   scope_of_work: string | null;
   terms: string | null;
   signed_url_hash: string;
@@ -625,6 +630,10 @@ export interface ClientSubscription {
   canceled_at: string | null;
   setup_fee_cents: number | null;
   setup_fee_paid_at: string | null;
+  /** Pricing snapshot from the accepted quote (tiers retired — no plan to read). */
+  monthly_price_cents: number | null;
+  contact_sourcing_cents: number | null;
+  contacts_count: number | null;
   warming_days_at_signup: number;
   created_at: string;
   updated_at: string;

@@ -1,9 +1,11 @@
 export interface QuoteEmailData {
   contactName: string;
-  quoteNumber: string;
-  planName: string;
+  /** Lead management monthly subscription price. */
   monthlyCents: number;
   setupCents: number;
+  /** Contact-sourcing one-time charge (0 when contacts aren't sold). */
+  contactSourcingCents: number;
+  contactsCount: number | null;
   quoteUrl: string;
   expiresAt: string | null;
 }
@@ -28,14 +30,25 @@ export function buildQuoteProposalEmail(data: QuoteEmailData): string {
     ? `This proposal is valid through <strong style="color: #1A1A2E;">${formatDate(data.expiresAt)}</strong>.`
     : "This proposal remains valid until withdrawn.";
 
+  const contactsRow =
+    data.contactSourcingCents > 0
+      ? `
+        <tr>
+          <td style="padding: 12px 0; color: #3D3D5C; font-size: 14px;">Contact sourcing${data.contactsCount ? ` <span style="color:#8792a2;font-size:12px;">(${data.contactsCount.toLocaleString()} contacts)</span>` : ""}</td>
+          <td style="padding: 12px 0; text-align: right; color: #1A1A2E; font-weight: 600;">${formatCents(data.contactSourcingCents)}</td>
+        </tr>`
+      : "";
+
   const setupRow =
     data.setupCents > 0
       ? `
         <tr>
-          <td style="padding: 12px 0; color: #3D3D5C; font-size: 14px;">One-time setup fee</td>
-          <td style="padding: 12px 0; text-align: right; color: #1A1A2E; font-weight: 600;">${formatCents(data.setupCents)}</td>
+          <td style="padding: 12px 0; ${contactsRow ? "border-top: 1px solid rgba(46,55,254,0.15);" : ""} color: #3D3D5C; font-size: 14px;">One-time setup fee</td>
+          <td style="padding: 12px 0; ${contactsRow ? "border-top: 1px solid rgba(46,55,254,0.15);" : ""} text-align: right; color: #1A1A2E; font-weight: 600;">${formatCents(data.setupCents)}</td>
         </tr>`
       : "";
+
+  const topBorder = contactsRow || setupRow ? "border-top: 1px solid rgba(46,55,254,0.15);" : "";
 
   return `
 <!DOCTYPE html>
@@ -43,7 +56,7 @@ export function buildQuoteProposalEmail(data: QuoteEmailData): string {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Your LeadStart proposal — ${data.quoteNumber}</title>
+  <title>Your proposal is ready</title>
 </head>
 <body style="margin: 0; padding: 0; background-color: #F4F5F9; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; -webkit-font-smoothing: antialiased;">
 
@@ -59,11 +72,8 @@ export function buildQuoteProposalEmail(data: QuoteEmailData): string {
                 LeadStart Proposal
               </p>
               <h1 style="margin: 6px 0 0; color: #ffffff; font-size: 26px; font-weight: 700; letter-spacing: -0.5px;">
-                Your ${data.planName} proposal is ready
+                Your proposal is ready!
               </h1>
-              <p style="margin: 8px 0 0; color: rgba(255,255,255,0.7); font-size: 14px;">
-                ${data.quoteNumber}
-              </p>
             </td>
           </tr>
 
@@ -76,7 +86,7 @@ export function buildQuoteProposalEmail(data: QuoteEmailData): string {
               <p style="margin: 0 0 24px; font-size: 15px; color: #3D3D5C; line-height: 1.6;">
                 Here's the proposal we prepared for you. Review the scope and
                 pricing, then click <strong style="color: #1A1A2E;">Review proposal</strong>
-                below to accept and get your inboxes warming.
+                below to accept and get started.
               </p>
 
               <!-- Pricing card -->
@@ -87,12 +97,12 @@ export function buildQuoteProposalEmail(data: QuoteEmailData): string {
                       At a glance
                     </p>
                     <table role="presentation" cellpadding="0" cellspacing="0" width="100%">
-                      ${setupRow}
+                      ${contactsRow}${setupRow}
                       <tr>
-                        <td style="padding: 12px 0; border-top: 1px solid rgba(46,55,254,0.15); color: #3D3D5C; font-size: 14px;">
-                          ${data.planName} — monthly
+                        <td style="padding: 12px 0; ${topBorder} color: #3D3D5C; font-size: 14px;">
+                          Lead management &mdash; monthly
                         </td>
-                        <td style="padding: 12px 0; border-top: 1px solid rgba(46,55,254,0.15); text-align: right; color: #1A1A2E; font-weight: 600;">
+                        <td style="padding: 12px 0; ${topBorder} text-align: right; color: #1A1A2E; font-weight: 600;">
                           ${formatCents(data.monthlyCents)}<span style="color: #6B6E8A; font-weight: 500; font-size: 13px;">/mo</span>
                         </td>
                       </tr>
