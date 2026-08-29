@@ -333,9 +333,7 @@ export default function AdminOverviewPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Welcome back, Daniel"
         title="Overview"
-        subtitle={`${totalClients} client${totalClients === 1 ? "" : "s"} · ${overview.totalActive} active campaign${overview.totalActive === 1 ? "" : "s"}`}
       />
 
       {/* ---------- Segment chips ---------- */}

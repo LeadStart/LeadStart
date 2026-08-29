@@ -79,9 +79,7 @@ export default function ClientActivityPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Real-Time Updates"
         title="Activity Feed"
-        subtitle={`${events.length} events across your campaigns`}
       />
 
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">

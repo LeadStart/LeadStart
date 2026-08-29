@@ -60,9 +60,7 @@ export default function ReportPreviewPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Email Templates"
         title="Weekly KPI Report Preview"
-        subtitle="This is what clients see when you send a weekly report"
       />
 
       {/* Controls */}

@@ -416,9 +416,7 @@ export function ReportsClient({
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Client Reporting"
         title="KPI Reports"
-        subtitle={`${reports.length} total · ${sentCount} sent · ${draftCount} draft`}
       />
 
       {/* Report Builder */}

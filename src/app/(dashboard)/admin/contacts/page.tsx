@@ -885,13 +885,7 @@ export default function ContactsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow={
-          ownerView === "leadstart"
-            ? "Agency Prospects"
-            : "Client Campaign Recipients"
-        }
         title="Contacts"
-        subtitle={`${totalContacts} total · ${enrichedCount} enriched · ${uploadedCount} uploaded`}
         actions={
           <>
             <Button onClick={() => setImportOpen(true)} variant="outline">

@@ -102,9 +102,7 @@ export default function ClientsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Client Management"
         title="Clients"
-        subtitle={`${activeCount} active · ${formerCount} former · ${campaigns.filter(c => c.status === "active").length} active campaigns`}
       />
       <AddClientForm />
       <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">

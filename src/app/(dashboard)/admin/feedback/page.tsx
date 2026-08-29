@@ -46,9 +46,7 @@ export default function FeedbackPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Client Submissions"
         title="Lead Feedback"
-        subtitle={`${total} total submissions from clients`}
       />
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <StatCard label="Total Feedback" value={total} icon={<MessageSquare size={18} className="text-[#2E37FE]" />} iconBg="bg-[#2E37FE]/10" />

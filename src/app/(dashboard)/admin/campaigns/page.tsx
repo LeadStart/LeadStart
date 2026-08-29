@@ -78,9 +78,7 @@ export default function AllCampaignsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Campaign Management"
         title="All Campaigns"
-        subtitle={`${active} active · ${paused} paused · ${campaigns.length} total`}
         actions={
           <div className="flex flex-wrap items-center justify-end gap-2">
             <Link href="/admin/campaigns/new/native">

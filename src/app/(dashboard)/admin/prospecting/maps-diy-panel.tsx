@@ -221,6 +221,7 @@ export function MapsDiyPanel() {
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cartRef = useRef<HTMLDivElement | null>(null);
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(1);
@@ -267,6 +268,42 @@ export function MapsDiyPanel() {
       .then((r) => r.json())
       .then((d) => setPricing(d as LivePricing))
       .catch(() => {});
+  }, []);
+
+  // Keep the sticky "Your search" cart vertically centered in the viewport while
+  // the page scrolls (lg only). The sticky `top` is set to the offset that centers
+  // the cart's box. Two escapes: below lg the cart isn't sticky (clear the override),
+  // and when the cart is taller than the viewport we drop the pin entirely — a
+  // pinned over-tall cart would park its Run button below the fold, unreachable.
+  // Re-runs on viewport resize and whenever the cart's height changes (areas/audiences).
+  useEffect(() => {
+    const el = cartRef.current;
+    if (!el) return;
+    const recenter = () => {
+      if (window.innerWidth < 1024) {
+        el.style.top = "";
+        el.style.position = "";
+        return;
+      }
+      const vh = window.innerHeight;
+      const ch = el.offsetHeight;
+      if (ch > vh - 32) {
+        // Taller than the viewport — scroll normally so the whole cart is reachable.
+        el.style.position = "static";
+        el.style.top = "";
+      } else {
+        el.style.position = ""; // revert to the lg:sticky class
+        el.style.top = `${Math.max(16, Math.round((vh - ch) / 2))}px`;
+      }
+    };
+    recenter();
+    window.addEventListener("resize", recenter);
+    const ro = new ResizeObserver(recenter);
+    ro.observe(el);
+    return () => {
+      window.removeEventListener("resize", recenter);
+      ro.disconnect();
+    };
   }, []);
 
   useEffect(() => {
@@ -915,8 +952,9 @@ export function MapsDiyPanel() {
 
         {/* RIGHT — the running cart */}
         <div className="min-w-0">
-          {/* Lift the cart up to the page-header row and hold it sticky (lg only). */}
-          <div className="lg:sticky lg:top-6 lg:-mt-[164px] space-y-3">
+          {/* Lift the cart toward the page-header row; held sticky and vertically
+              centered in the viewport on scroll (lg only — see the cartRef effect). */}
+          <div ref={cartRef} className="lg:sticky lg:top-6 lg:-mt-[120px] space-y-3">
             <Card className="border-indigo-200/70 shadow-md">
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-base">

@@ -176,9 +176,7 @@ export default function LinkedInTasksPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="VA Queue"
         title="LinkedIn to-dos"
-        subtitle="Manual LinkedIn touches from campaign flows — sent by hand, not by the platform."
       />
 
       {/* Stat cards — reflect the full set, not the current filter */}

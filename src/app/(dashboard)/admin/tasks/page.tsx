@@ -177,9 +177,7 @@ export default function TasksPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Internal Tracker"
         title="Tasks"
-        subtitle={`${total} total tasks across all categories`}
       />
 
       {/* Stat cards */}

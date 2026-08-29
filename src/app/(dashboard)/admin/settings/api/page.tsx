@@ -903,9 +903,7 @@ export default function IntegrationsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Settings"
         title="Integrations"
-        subtitle="Manage API connections, email, and sync schedules"
       />
 
       {/* Inbox health — Spamhaus blocklist key + auto-pause threshold (migration 00061) */}

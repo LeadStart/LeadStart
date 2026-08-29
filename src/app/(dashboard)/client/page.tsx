@@ -124,9 +124,7 @@ export default function ClientDashboardPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Welcome back"
         title={client.name}
-        subtitle={`${campaigns.length} campaign${campaigns.length !== 1 ? "s" : ""}`}
       />
 
       {/* Row 1: Campaign Performance */}

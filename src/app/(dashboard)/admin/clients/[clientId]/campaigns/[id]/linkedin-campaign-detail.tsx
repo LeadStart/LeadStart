@@ -164,11 +164,6 @@ export function LinkedinCampaignDetail({
         <PageHeader
           className="mt-3"
           title={campaign.name}
-          subtitle={
-            campaign.unipile_account_id ? (
-              <span className="font-mono">account: {campaign.unipile_account_id}</span>
-            ) : undefined
-          }
           actions={
             <>
               <Badge

@@ -171,9 +171,7 @@ export default function TeamPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Settings"
         title="Team Management"
-        subtitle={`${members.length} team member${members.length !== 1 ? "s" : ""}`}
       />
 
       {/* Invite Form */}

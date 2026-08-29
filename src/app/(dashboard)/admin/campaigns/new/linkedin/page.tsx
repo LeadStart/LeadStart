@@ -220,9 +220,7 @@ export default function NewLinkedinCampaignPage() {
         </Link>
         <PageHeader
           className="mt-3"
-          eyebrow="New Campaign"
           title="LinkedIn sequence"
-          subtitle="Build a multi-step outreach sequence. Saved as a draft — nothing dispatches until you activate it from the campaign detail page."
         />
       </div>
 

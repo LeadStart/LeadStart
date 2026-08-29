@@ -110,9 +110,7 @@ export default function ClientInboxPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Hot Leads"
         title="Inbox"
-        subtitle="Pick up the phone and call them — the first 5 minutes matter most."
       />
 
       {/* Stats */}

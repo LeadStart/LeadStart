@@ -516,9 +516,7 @@ export default function MailboxesPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Sending"
         title="Mailboxes"
-        subtitle="Google Workspace inboxes LeadStart sends from directly. New inboxes ramp up automatically as they send — 5/day, then +1 each day up to a 20/day cap — so a paused inbox never skips its warmup. Seed placement tests show where each inbox's mail actually lands."
       />
 
       {banner && (

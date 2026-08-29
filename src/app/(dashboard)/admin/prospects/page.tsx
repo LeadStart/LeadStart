@@ -469,9 +469,7 @@ export default function ProspectsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Sales Pipeline"
         title="Prospects"
-        subtitle={`${inPipeline.length} in pipeline · ${activeCount} active · ${closedWon} won`}
         actions={
           <Button onClick={() => setShowAdd(true)}>
             <Plus size={16} className="mr-1" />

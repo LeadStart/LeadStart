@@ -43,7 +43,7 @@ export default function ClientFeedbackPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader eyebrow="Lead Quality Tracking" title="My Feedback" />
+      <PageHeader title="My Feedback" />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <StatCard label="Total Submitted" value={total} icon={<MessageSquare size={18} className="text-[#2E37FE]" />} iconBg="bg-[#2E37FE]/10" />

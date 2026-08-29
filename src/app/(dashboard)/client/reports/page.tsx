@@ -54,9 +54,7 @@ export default function ClientReportsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Performance History"
         title="KPI Reports"
-        subtitle={`${reports.length} report${reports.length !== 1 ? "s" : ""} delivered`}
       />
 
       {reports.length === 0 ? (

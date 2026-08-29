@@ -338,23 +338,7 @@ export default async function AdminCampaignDetailPage({
         </Link>
         <PageHeader
           className="mt-3"
-          eyebrow={campaign.source_channel}
           title={campaign.name}
-          subtitle={
-            client ? (
-              <>
-                Linked to{" "}
-                <Link href={`/admin/clients/${client.id}`} className="underline">
-                  {client.name}
-                </Link>
-              </>
-            ) : (
-              <span className="inline-flex items-center gap-1 text-amber-700">
-                <AlertCircle size={14} /> Orphan campaign — not linked to a
-                LeadStart client
-              </span>
-            )
-          }
           actions={
             <>
               <Badge

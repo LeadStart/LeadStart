@@ -148,9 +148,7 @@ export function InboxClient({ replies }: { replies: InboxRowReply[] }) {
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Reply Routing"
         title="Inbox Oversight"
-        subtitle="Every inbound reply across all clients, grouped by what it needs. Clients act; you observe, coach, and reclassify misses."
       />
 
       {/* Stats */}

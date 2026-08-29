@@ -18,13 +18,11 @@ export default function ProspectingPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Lead generation"
         title={
           <span className="inline-flex items-center gap-2">
             <Sparkles size={20} /> Prospecting
           </span>
         }
-        subtitle="Source new leads two ways — LinkedIn people by ICP, or Google Maps businesses by niche and location — then save selected leads into your CRM. Searches run in the background."
       />
 
       <div className="inline-flex rounded-lg border border-border/60 bg-muted/30 p-0.5">

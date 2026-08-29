@@ -137,12 +137,6 @@ export function ClientDetailClient({
               </Badge>
             </span>
           }
-          subtitle={
-            <>
-              {campaigns.length} campaign{campaigns.length !== 1 ? "s" : ""} ·{" "}
-              {linkedUsers.length} portal user{linkedUsers.length !== 1 ? "s" : ""}
-            </>
-          }
           actions={
             <Button
               variant="outline"
