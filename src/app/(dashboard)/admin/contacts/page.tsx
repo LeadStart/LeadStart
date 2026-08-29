@@ -379,6 +379,7 @@ export default function ContactsPage() {
   const [enrichRunVerify, setEnrichRunVerify] = useState(false);
   const [enrichRunNaming, setEnrichRunNaming] = useState(false);
   const [enrichIncludeCatchAll, setEnrichIncludeCatchAll] = useState(false);
+  const [enrichValidateCatchAll, setEnrichValidateCatchAll] = useState(false);
   const [enrichStarting, setEnrichStarting] = useState(false);
   const [enrichError, setEnrichError] = useState<string | null>(null);
   // Org waterfall config (migration 00075) — fetched when the dialog opens so
@@ -617,6 +618,7 @@ export default function ContactsPage() {
           run_verify: enrichRunVerify,
           run_naming: enrichRunNaming,
           include_catch_all: enrichIncludeCatchAll,
+          validate_catch_all: enrichValidateCatchAll,
         }),
       });
       const data = (await res.json()) as {
@@ -1816,6 +1818,22 @@ export default function ContactsPage() {
                     no extra cost · on domains that accept every address, keep the best
                     pattern guess (flagged Catch-all, confidence 40) instead of discarding
                     it — sends go out flagged risky and bounces auto-suppress
+                  </span>
+                </span>
+              </label>
+              <label className="flex items-start gap-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={enrichValidateCatchAll}
+                  onChange={(e) => setEnrichValidateCatchAll(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-border accent-[#2E37FE] cursor-pointer"
+                />
+                <span>
+                  Validate catch-all emails{" "}
+                  <span className="text-[9px] uppercase tracking-wide text-[#2E37FE]/70">add-on</span>
+                  <span className="block text-[11px] text-muted-foreground">
+                    ~$0.049 per hit · recover genuinely deliverable emails on catch-all domains via
+                    Findymail (charged only when one is found). Needs a Findymail key.
                   </span>
                 </span>
               </label>

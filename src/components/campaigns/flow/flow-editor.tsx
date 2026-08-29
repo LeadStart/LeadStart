@@ -24,6 +24,7 @@ import {
   Maximize2,
   Minimize2,
 } from "lucide-react";
+import { extractCampaignTokens, normalizeVarKey } from "@/lib/native/tokens";
 import {
   type FlowGraph,
   type FlowNode,
@@ -814,6 +815,27 @@ export function FlowEditor({
               </button>
             ))}
           </div>
+          {(() => {
+            // Flag copy tokens with no mapped contact column — under the
+            // columns-drive-variables model they never register a variable and
+            // send blank. Mirrors the import panel's warning, at authoring time.
+            const mapped = new Set(customChips.map((c) => normalizeVarKey(c.replace(/[{}]/g, ""))));
+            const unmapped = extractCampaignTokens([n.subject, n.body]).custom.filter((t) => !mapped.has(t.key));
+            if (unmapped.length === 0) return null;
+            return (
+              <p
+                style={{
+                  margin: "0 0 2px", fontSize: "11.5px", lineHeight: 1.45,
+                  color: "#8a5a0b", background: "#f6eddc",
+                  border: "1px solid #e6d3a3", borderRadius: 7, padding: "6px 10px",
+                }}
+              >
+                Not mapped to a contact column:{" "}
+                <b>{unmapped.map((t) => `{{${t.token}}}`).join(", ")}</b> — map a column when you
+                import contacts, or these send blank.
+              </p>
+            );
+          })()}
           <div className={styles.field}>
             <label className={styles.label}>Body</label>
             <textarea

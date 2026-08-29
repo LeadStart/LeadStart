@@ -109,6 +109,8 @@ const ENRICH_RATES = {
   waterfall: 0.022,
   activity: 0.005,
   verify: 0.0037,
+  // Findymail catch-all recovery (pay-on-hit; only the catch-all subset).
+  catch_all: 0.049,
   // Web lookup for companies with no LinkedIn page. Only that subset incurs it,
   // but it's counted per-person in the ceiling estimate (see the breakdown note).
   domain_discovery: 0.005,
@@ -1366,6 +1368,9 @@ export function LinkedInSearchPanel() {
     addActivity && !activePosters ? (livePricing?.enrich.activity ?? ENRICH_RATES.activity) : 0;
   // Verify is an add-on (Million Verifier credits, not an Apify list price).
   const verifyRate = addVerify ? ENRICH_RATES.verify : 0;
+  // Findymail catch-all validation (pay-on-hit; ~20% of leads yield a recoverable
+  // catch-all, so the per-person ceiling is a fraction of the per-hit rate).
+  const catchAllRate = addValidateCatchAll ? ENRICH_RATES.catch_all * 0.2 : 0;
   // Website discovery — a web lookup for the subset of people whose company has
   // no LinkedIn page. Counted per-person as a small ceiling addition (only that
   // subset actually incurs it), unless discovery is turned off in settings.
@@ -1373,7 +1378,7 @@ export function LinkedInSearchPanel() {
     ? (livePricing?.enrich.domain_discovery ?? ENRICH_RATES.domain_discovery)
     : 0;
   const perPersonEnrich =
-    emailRate + domainRate + ENRICH_RATES.waterfall + activityRate + verifyRate + discoveryRate;
+    emailRate + domainRate + ENRICH_RATES.waterfall + activityRate + verifyRate + catchAllRate + discoveryRate;
   const projectedTotal = estimate + perPersonEnrich * maxResults;
   const pricesLive = livePricing?.source === "live" || livePricing?.source === "partial";
   // Est. cost per email type for the results radial, from the same live rates as
@@ -2429,6 +2434,16 @@ export function LinkedInSearchPanel() {
                     <span className="text-[9px] uppercase tracking-wide text-[#2E37FE]/70">add-on</span>
                   </span>
                   <span className="font-mono tabular-nums">${verifyRate.toFixed(4)}</span>
+                </div>
+              )}
+              {addValidateCatchAll && (
+                <div className="flex items-center justify-between">
+                  <span>
+                    Validate catch-all · <span className="font-mono">Findymail</span>{" "}
+                    <span className="text-[9px] uppercase tracking-wide text-[#2E37FE]/70">add-on</span>{" "}
+                    <span className="text-[9px] text-muted-foreground">(~$0.049/hit, pay-on-hit)</span>
+                  </span>
+                  <span className="font-mono tabular-nums">${catchAllRate.toFixed(4)}</span>
                 </div>
               )}
               <div className="flex items-center justify-between border-t border-border/60 pt-0.5 font-medium text-foreground">
