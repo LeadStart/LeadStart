@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Topbar } from "@/components/layout/topbar";
+import { MobileTabBar } from "@/components/layout/mobile-tab-bar";
 import { AdminPrefetcher } from "@/components/layout/admin-prefetcher";
 import type { AppRole } from "@/types/app";
 
@@ -55,11 +56,14 @@ export function DashboardShell({
           onMenuClick={() => setSidebarOpen(true)}
         />
         {/* `.app-main` (globals.css, desktop) zeroes the left padding so pages
-            share the floating topbar's left gridline */}
-        <main className="app-main flex-1 p-4 sm:p-6">
+            share the floating topbar's left gridline. Extra bottom padding on
+            mobile clears the fixed MobileTabBar; reset at `lg` where the bar hides. */}
+        <main className="app-main flex-1 p-4 sm:p-6 pb-24 lg:pb-6">
           {children}
         </main>
       </div>
+      {/* Mobile primary nav — fixed bottom tab bar (hidden at lg) */}
+      <MobileTabBar role={role} />
     </div>
   );
 }
