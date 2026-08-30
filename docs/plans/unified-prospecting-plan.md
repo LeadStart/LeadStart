@@ -24,13 +24,17 @@ check could have disqualified.
    (never full+email at source time; enrichment does emails on kept leads only).
 3. **Dedup (free)** - merge on linkedin_url, then google_place_id, then
    company_domain, BEFORE any enrichment spend. Nothing is enriched twice.
-4. **Cheap enrichment floor** - site_scrape generic info@ + phone ($0.003/lead);
+4. **Cheap enrichment floor** - site_scrape generic info@ + phone (~$0.003 per site (compute), not per lead);
    **catch-all pre-gate**: one MV probe per domain (~$0.004 normal, free verdict
    on catch-all) - catch-all domains never enter the personal-email machinery.
 5. **Person-resolution, gated + cost-ordered.** Gate = has domain AND not
    catch-all AND quality bar (claimed, >=10 reviews, >=4.0 stars, in-ICP; ~57%
    of the WA sample) :
-   1. compass business-leads: $0.0075 **billed per HIT only** (miss = $0).
+   1. compass business-leads: $0.0075 **billed per HIT only** (miss = $0), but
+      the `maximumLeadsEnrichmentRecords` cap is **PER PLACE, not per run** (we
+      always send ≤3); uncapped it dumps whole chain rosters (the 2026-08-30
+      $14.17 incident was an uncapped 400/place). Full semantics:
+      [`docs/APIFY_ACTOR_COSTS.md`](../APIFY_ACTOR_COSTS.md).
       ~33% hit (n=15). Hit delivers name + title + LinkedIn URL + often email.
    2. Live profile scrape on ANY LinkedIn URL: $0.01 incl. email search (the
       profiles phase already does this by URL). Includes the **entity-authority
@@ -114,19 +118,23 @@ outcome ledger into a per-tier ROI instrument, not just billing substrate.
 ## Efficiency mechanisms
 
 1. Cost-ordered gating (each stage prunes the next).
-2. Per-hit sources before per-attempt sources (compass is free on miss).
+2. Per-hit sources before per-attempt sources (compass is free on miss, but its
+   `maximumLeadsEnrichmentRecords` cap is PER PLACE, always send ≤3).
 3. Catch-all pre-gate before naming (kills doomed personal-email spend).
 4. URL-first resolution ($0.01 live scrape beats ~$0.025 naming+pattern, fresher).
 5. Franchise/mismatch guard ($0.01 turns confidently-wrong into a caught flag).
 6. Router native-ness (filters run where they are free).
 7. Dedup at every boundary (linkedin_url / google_place_id / company_domain).
-8. Perplexity key = the ~4-5x naming lever (currently missing; Claude path runs).
+8. Perplexity key = the ~4-5x naming lever (wired 2026-08-28; Layer 2 is
+   Perplexity-only, so no key = naming no-ops).
 
 ## Build plan (Claude-session estimates)
 
 - **A. Cross-feed (~1 session):** compass business-leads as an opt-in Maps
   add-on -> write linkedin_url onto the contact -> existing profiles phase picks
-  it up -> franchise guard on mismatch.
+  it up -> franchise guard on mismatch. ⚠️ Wire `maximumLeadsEnrichmentRecords`
+  as a cap PER PLACE (always ≤3), never per run: the 2026-08-30 $14.17 incident
+  was an uncapped 400/place. See [`docs/APIFY_ACTOR_COSTS.md`](../APIFY_ACTOR_COSTS.md).
 - **B. Gates (~1 session):** catch-all pre-gate before naming in
   run-apify-enrichment + the quality bar as config (automatic selectivity).
 - **B2. Naming accuracy hardening (~1 session, prompt audit 2026-08-28):**

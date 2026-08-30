@@ -202,11 +202,11 @@ domains (now recoverable via the include-catch-all add-on), 1 indeterminate.
 ## What's next (priority order)
 
 1. ~~Activate naming~~ **DONE 2026-08-26** (see the validation block above). Follow-ons
-   it produced, in order: (a) save a **Perplexity key** in Settings → Integrations before
-   any scaled naming run (Layer 2 economics — the Claude web-search fallback measured
-   ~$0.06–0.07/business); (b) save the **Anthropic org key** too (the validation ran on
-   the dev env fallback, so prod naming is still keyless); (c) correct `NAMING_COST_USD`
-   (and the Maps panel's "~$0.02/lead" copy) to the measured per-provider reality;
+   it produced, in order: (a) ~~save a **Perplexity key** in Settings → Integrations~~ **DONE**
+   (key wired 2026-08-28; Layer 2 is Perplexity-only, no key = no-op); (b) save the **Anthropic org key** too (the validation ran on
+   the dev env fallback, so prod naming is still keyless); (c) ~~correct `NAMING_COST_USD`
+   (and the Maps panel's "~$0.02/lead" copy)~~ **MOOT** ($0.015 + MV ≈ $0.02/lead
+   is right now that Layer 2 is Perplexity-only);
    (d) **domain pinning** at the waterfall seam — reuse `nameTokenMatch` +
    `confirmViaHomepage` from domain-discovery on GMB-supplied websites (the
    sboltz@ccleaning.com shared-domain attribution is the live example); (e) the

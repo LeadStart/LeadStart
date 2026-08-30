@@ -5,6 +5,37 @@
 
 ---
 
+## 2026-08-30: Apify spend audit COMPLETE (find + adversarial verify). Fix gate OPEN. $4.61 credit left this cycle.
+
+Triggered by the $14.17 per-place-cap incident (a probe sent compass's
+`maximumLeadsEnrichmentRecords: 400` believing per-RUN; schema says per PLACE;
+chains delivered rosters). Full multi-agent audit of the actor/spend subsystem:
+6 finder lanes → 4 adversarial verifiers + 2 direct reproductions.
+**Reconciled: 74 candidates − 16 dupes = 58 unique = 53 CONFIRMED + 1 partial +
+4 REFUTED; +13 verifier-found; ~69 areas clean.** Living record:
+[`APIFY_SPEND_AUDIT.md`](APIFY_SPEND_AUDIT.md); registry:
+[`AUDITS.md`](AUDITS.md); canonical costs (live-pulled):
+[`docs/APIFY_ACTOR_COSTS.md`](docs/APIFY_ACTOR_COSTS.md) +
+`scripts/pull-actor-costs.mjs` (mandatory pre-run protocol).
+
+Top confirmed: no `maxTotalChargeUsd`/app budget anywhere (every run's platform
+cap = entire remaining credit); dead circuit breaker in run-apify-enrichment
+(`:278` reset clobbers the increment, no kill, no alert); start-before-persist
+orphan window in all 3 actor crons (a network blip = orphaned billing run +
+duplicate start); deep-search bills per SEGMENT page (billed 4.5x a real panel
+estimate); search cost recording reads once pre-aggregation (measured 961x
+under); Contacts dialog "up to ~$" omits its own naming/Findymail toggles;
+"live pricing" serves FREE tier on our BRONZE account; add-on OR-merge runs
+paid phases over whole merged runs; the per-place cap trap is documented
+NOWHERE forward-looking (flow doc + unified plan).
+
+**OPERATIONAL: $4.61 of $29 Apify credit left until 9/23 (hard 403 at cap).**
+5 fix batches proposed in the audit doc; NOTHING ships without Daniel's
+explicit go-ahead. Also still parked: leads-toggle keep/scrap (half-built,
+lever currently unreachable), MV-verify the 23 probe emails (≤$0.09).
+
+---
+
 ## 2026-08-29 — Maps DIY: DONE + admin-only. OWNER DIRECTIVE: NO client-portal exposure yet (Phase 6 ON HOLD).
 
 The Maps DIY Google-Maps search flow is **complete and live on prod, ADMIN-ONLY** —

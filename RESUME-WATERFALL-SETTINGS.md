@@ -101,7 +101,8 @@ waterfall phase (cron tick)
   status catch_all, confidence 40 — the send-gate already treats catch-all as
   risky-but-sendable). MV outage/no-credits: mark items `error`+retry, mirroring the
   send-gate's fail-closed posture ([policy.ts](src/lib/millionverifier/policy.ts)).
-  Cost ≈ ≤6 MV credits/contact (~$0.004 worst case), 30-day MV cache applies.
+  Cost ≈ 1 MV credit/contact typical (~$0.004); real ≤6-credit worst case ≈ $0.022
+  at $0.0037/credit. 30-day MV cache applies.
 - **site_scrape (apify, new, ours):** private actor `leadstart/site-contact-scraper`.
   Input `{targets:[{domain, firstName?, lastName?}], maxPagesPerDomain: 6,
   pageKeywords?: string[], unblockerKey?: string}`. Per domain: fetch

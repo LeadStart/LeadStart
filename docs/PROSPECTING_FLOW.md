@@ -33,9 +33,9 @@ vs name-less-business). This IS the "veins meet at enrichment" design, already b
 ### 2a. Maps sourcing
 - Actor `compass~google-maps-extractor` ([`maps-search.ts:19`](../src/lib/apify/sourcing/maps-search.ts)). Scrapes public Google Maps (not the official API).
 - Returns: place_id, name, categories, website, phone, address parts, lat/lng, rating, review count, claimed, open/closed. **No email** ([`maps-search.ts:11-18`](../src/lib/apify/sourcing/maps-search.ts)).
-- We deliberately keep the actor's OWN add-ons OFF (`scrapeContacts:false`, `maximumLeadsEnrichmentRecords:0`, `scrapePlaceDetailPage:false`) — we enrich ourselves, cheaper ([`maps-search.ts:65-77`](../src/lib/apify/sourcing/maps-search.ts)).
+- We keep the actor's OWN add-ons OFF BY DEFAULT (`scrapeContacts:false`, `scrapePlaceDetailPage:false`, and `maximumLeadsEnrichmentRecords:0` unless the `linkedinLeads` lever opts in): we enrich ourselves, cheaper ([`baseInput` in maps-search.ts](../src/lib/apify/sourcing/maps-search.ts)). ⚠️ `maximumLeadsEnrichmentRecords` is a cap **PER PLACE**, not per run, so we always send ≤`MAPS_LEADS_PER_PLACE` (3); an uncapped value dumps whole chain rosters (the 2026-08-30 $14.17 incident). Full semantics in [`docs/APIFY_ACTOR_COSTS.md`](APIFY_ACTOR_COSTS.md).
 - Flow: `maps-search` route → `maps_searches` row → `run-maps-searches` cron (multi-area fan-out, one actor run per structured area, merge/dedupe by `google_place_id`) → `importMapsPlaces` → `contacts` with `company_domain`, `company_phone`, `google_place_id`, **`email:null`** ([`import-maps-places.ts:73-105`](../src/lib/apify/import-maps-places.ts)).
-- **Cost:** ~$0.004/place on our tier (~$4/1k; Free $0.005 → Business $0.0021, verified). Optional add-on events (we keep off): company-contacts $0.003/place, business-leads $0.0075/found-lead, email-verify $0.004/decisive.
+- **Cost:** ~$0.004/place on our tier (~$4/1k; Free $0.005 → Business/GOLD $0.0021, verified). Optional add-on events (off by default): company-contacts $0.003/place, **business-leads $0.0075 per PERSON found** (pay-on-hit, but the `maximumLeadsEnrichmentRecords` cap is PER PLACE, so always send ≤3; the 2026-08-30 $14.17 incident was an uncapped 400/place dumping chain rosters), email-verify $0.004/decisive.
 
 ### 2b. LinkedIn sourcing
 - Actor `harvestapi~linkedin-profile-search` ([`profile-search.ts:12`](../src/lib/apify/sourcing/profile-search.ts)). Live, **cookieless** LinkedIn scraping; searches by ICP filters (titles, locations, companies, headcount, industry, seniority) ([`profile-search.ts:28-47`](../src/lib/apify/sourcing/profile-search.ts)).
@@ -65,7 +65,7 @@ A run always starts at `phase:"profiles"` ([`enqueue-enrichment.ts:216`](../src/
 | **profiles** | `harvestapi~linkedin-profile-scraper` (by URL) ([`profile-harvestapi.ts:4,58-63`](../src/lib/apify/providers/profile-harvestapi.ts)) — feeds `urls: [linkedin_url]` | has `linkedin_url` | live profile + email | $0.004/profile, **$0.01 with email** (mode used) |
 | **domains** | `harvestapi~linkedin-company` ([`company-harvestapi.ts:4`](../src/lib/apify/providers/company-harvestapi.ts)) + inline web-lookup discovery for name-only items | has a company LinkedIn ref, OR name-only w/ discovery on | `company_domain` | $0.004/company |
 | **naming** | decision-maker `enrichBusiness` — L1 reads the site, **L2 web-search = Perplexity Sonar ONLY** (no Claude fallback; skipped without a Perplexity key) ([`decision-maker/index.ts:68`](../src/lib/decision-maker/index.ts), [`layer2.ts`](../src/lib/decision-maker/layer2.ts)) | name-less, company-named, no email ([`route.ts:2418-2432`](../src/app/api/cron/run-apify-enrichment/route.ts)) | owner name + title | Perplexity ~$0.015/business |
-| **waterfall** | size-band method: `site_scrape` / `pattern_mv` / `bovi` ([`waterfall-routing.ts:20-35`](../src/lib/enrichment/waterfall-routing.ts)); name-less → forced `site_scrape` | has a domain | generic + personal email | site_scrape ~$0.003/lead; pattern_mv ≈ MV credits |
+| **waterfall** | size-band method: `site_scrape` / `pattern_mv` / `bovi` ([`waterfall-routing.ts:20-35`](../src/lib/enrichment/waterfall-routing.ts)); name-less → forced `site_scrape` | has a domain | generic + personal email | site_scrape ~$0.003 per site (compute); pattern_mv ≈ MV credits |
 | **activity** | `harvestapi~linkedin-profile-posts` ([`activity-harvestapi.ts:7`](../src/lib/apify/providers/activity-harvestapi.ts)) | has `linkedin_url` ([`route.ts:2450-2455`](../src/app/api/cron/run-apify-enrichment/route.ts)) | posting-recency (last-posted date + in-30d flag) | $0.002/profile (samples 1 post only; $0.001 if none) |
 | **verify** | Million Verifier | has an email | verified status | ~$0.0037/decisive; catch-all/unknown/error **free** ([`pattern-mv.ts:68-72`](../src/lib/enrichment/pattern-mv.ts)) |
 | **complete** | — | — | finalize outcome ledger | — |
@@ -120,8 +120,8 @@ client [`src/lib/findymail/client.ts`](../src/lib/findymail/client.ts).
 | `harvestapi~linkedin-profile-scraper` | enrich: profiles | per profile | $0.004 · **$0.01 +email** |
 | `harvestapi~linkedin-company` | enrich: domains | per company | $0.004 |
 | `harvestapi~linkedin-profile-posts` | enrich: activity | per post/reaction/comment | $0.002/profile (1 post sampled; ·$0.001 no-result) |
-| decision-maker (Anthropic/Perplexity) | enrich: naming | per business (LLM tokens) | ~$0.015 Perplexity / ~$0.06 Claude |
-| `site-contact-scraper` (`indispensable_nonagon`) | enrich: waterfall (site_scrape) | per place scraped | ~$0.003 |
+| decision-maker (Anthropic/Perplexity) | enrich: naming | per business (LLM tokens) | ~$0.015 Perplexity (L2 is Perplexity-only since 2026-08-28) |
+| `site-contact-scraper` (`indispensable_nonagon`) | enrich: waterfall (site_scrape) | per site (compute) | ~$0.003 |
 | pattern_mv + Million Verifier | enrich: waterfall / verify | per decisive verification | ~$0.0037 (catch-all/unknown free) |
 | Findymail (`app.findymail.com`) | enrich: waterfall catch-all recovery (add-on) | per verified email FOUND | ~$0.049/hit ($49/1k entry; $249/15k ≈ $0.017); misses/risky catch-alls free |
 

@@ -23,6 +23,11 @@
 >
 > Everything below is retained for design/context; treat all `verify` /
 > `michael.g` / "Layer 4" / 5-phase references as **historical**.
+>
+> **Also historical (noted 2026-08-30): `vdrmota~contact-info-scraper` was FULLY
+> REMOVED 2026-08-24.** Treat the step-3 waterfall row (:54) and its I/O + pricing
+> (:114-122) as historical too; the waterfall now routes site_scrape / pattern_mv /
+> bovi (canonical costs: [`docs/APIFY_ACTOR_COSTS.md`](APIFY_ACTOR_COSTS.md)).
 
 ## Context
 
