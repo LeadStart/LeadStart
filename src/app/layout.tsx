@@ -18,14 +18,24 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
+  applicationName: "LeadStart",
   title: "LeadStart — Cold Email Dashboard",
   description: "Campaign management and client portal for cold email outreach",
+  // Home-screen / PWA icon for iOS. The `apple-icon.png` file-convention in
+  // this dir auto-emits <link rel="apple-touch-icon">; these tags make iOS
+  // launch it standalone with a clean "LeadStart" label under the icon.
+  appleWebApp: {
+    capable: true,
+    title: "LeadStart",
+    statusBarStyle: "default",
+  },
 };
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 5,
+  themeColor: "#ffffff",
 };
 
 export default function RootLayout({
