@@ -26,7 +26,7 @@ interface RouteParams {
 }
 
 interface WorkspaceBody {
-  users?: { local_part?: string; display_name?: string }[];
+  users?: { local_part?: string; display_name?: string; given_name?: string; family_name?: string }[];
   licensing?: { product_id?: string; sku_id?: string } | null;
   dmarc_rua?: string;
   /** Which Google Workspace to provision into; omitted = the org's default. */
@@ -46,7 +46,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   // Validate the inbox specs: 1-3 users, valid local parts, deduped.
   const rawUsers = Array.isArray(body?.users) ? body!.users : [];
   const seen = new Set<string>();
-  const users: { local_part: string; display_name: string }[] = [];
+  const users: { local_part: string; display_name: string; given_name?: string; family_name?: string }[] = [];
   for (const u of rawUsers) {
     const local = (u?.local_part ?? "").trim().toLowerCase();
     if (!/^[a-z0-9._-]{1,40}$/.test(local)) {
@@ -57,11 +57,21 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     }
     if (seen.has(local)) continue;
     seen.add(local);
-    users.push({ local_part: local, display_name: (u?.display_name ?? "").trim() || local });
+    const given = (u?.given_name ?? "").trim();
+    const family = (u?.family_name ?? "").trim();
+    const display = (u?.display_name ?? "").trim() || [given, family].filter(Boolean).join(" ") || local;
+    users.push({
+      local_part: local,
+      display_name: display,
+      given_name: given || undefined,
+      family_name: family || undefined,
+    });
   }
-  if (users.length === 0 || users.length > 3) {
+  // Advisory ceiling: 3/domain is the deliverability sweet spot, but the operator
+  // may add more (warmed slowly). 10 is a hard safety backstop.
+  if (users.length === 0 || users.length > 10) {
     return NextResponse.json(
-      { error: "Provide 1 to 3 mailboxes (3 inboxes/domain is the volume ceiling)." },
+      { error: "Provide 1 to 10 mailboxes (3 per domain is the recommended max for deliverability)." },
       { status: 400 },
     );
   }

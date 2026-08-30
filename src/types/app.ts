@@ -992,7 +992,9 @@ export interface ProvisioningStep {
 
 export interface ProvisioningUserSpec {
   local_part: string; // "jane"
-  display_name: string; // "Jane Doe" → givenName/familyName split on the last space
+  display_name: string; // "Jane Doe" — the From name recipients see
+  given_name?: string; // explicit first name (preferred over splitting display_name)
+  family_name?: string; // explicit last name
   email: string; // local_part@domain, derived once at init
   created: boolean; // Directory users.insert done
   licensed: boolean; // license assigned OR licensing skipped

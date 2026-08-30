@@ -43,7 +43,7 @@ import type {
   SeedRole,
   SendingDomain,
 } from "@/types/app";
-import { ProvisionDomainPanel } from "./provision-domain-panel";
+import { AddMailboxWizard } from "./add-mailbox-wizard";
 import { DomainProvisioningDetail } from "./domain-provisioning-detail";
 import { DomainSetupModal } from "./domain-setup-modal";
 
@@ -89,11 +89,8 @@ export default function MailboxesPage() {
   const [loading, setLoading] = useState(true);
   const [banner, setBanner] = useState<Banner>(null);
 
-  // Add form
-  const [newEmail, setNewEmail] = useState("");
-  const [newName, setNewName] = useState("");
-  const [newCap, setNewCap] = useState("20");
-  const [adding, setAdding] = useState(false);
+  // Add wizard — the single entry point for inbox / domain / connect.
+  const [wizardOpen, setWizardOpen] = useState(false);
 
   // Per-row in-flight action guard (mailbox id → true)
   const [busy, setBusy] = useState<Record<string, boolean>>({});
@@ -207,37 +204,6 @@ export default function MailboxesPage() {
     }, PLACEMENT_POLL_MS);
     return () => clearInterval(timer);
   }, [mailboxes, loadPlacement]);
-
-  async function handleAdd() {
-    if (!newEmail.trim()) return;
-    setAdding(true);
-    setBanner(null);
-    try {
-      const res = await fetch(appUrl("/api/admin/mailboxes"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email_address: newEmail.trim(),
-          display_name: newName.trim() || undefined,
-          max_daily_cap: Number(newCap) || undefined,
-        }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setBanner({ kind: "success", message: `Added ${newEmail.trim()} — delegation verified.` });
-        setNewEmail("");
-        setNewName("");
-        setNewCap("20");
-        await load();
-      } else {
-        setBanner({ kind: "error", message: data.error ?? "Failed to add mailbox" });
-      }
-    } catch (err) {
-      setBanner({ kind: "error", message: err instanceof Error ? err.message : "Failed to add" });
-    } finally {
-      setAdding(false);
-    }
-  }
 
   async function withBusy(id: string, fn: () => Promise<void>) {
     setBusy((b) => ({ ...b, [id]: true }));
@@ -621,6 +587,17 @@ export default function MailboxesPage() {
     <div className="space-y-6">
       <PageHeader
         title="Mailboxes"
+        actions={
+          <Button onClick={() => setWizardOpen(true)}>
+            <Plus size={16} className="mr-1" /> Add
+          </Button>
+        }
+      />
+      <AddMailboxWizard
+        open={wizardOpen}
+        onOpenChange={setWizardOpen}
+        domains={domains}
+        onDone={load}
       />
 
       {banner && (
@@ -652,63 +629,6 @@ export default function MailboxesPage() {
           on the right, so setting up a domain no longer sits far down the page. */}
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2 xl:items-start">
       <div className="space-y-6">
-      {/* Add mailbox */}
-      <Card className="border-border/50 shadow-sm">
-        <CardHeader className="flex flex-row items-center gap-2 pb-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#EA4335]">
-            <Plus size={16} className="text-white" />
-          </div>
-          <div>
-            <CardTitle className="text-base">Add a mailbox</CardTitle>
-            <p className="text-xs text-muted-foreground">
-              We verify domain-wide delegation for this address before saving it.
-            </p>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <div className="space-y-1 sm:col-span-1">
-              <Label htmlFor="newEmail" className="text-sm font-medium">
-                Email address
-              </Label>
-              <Input
-                id="newEmail"
-                value={newEmail}
-                onChange={(e) => setNewEmail(e.target.value)}
-                placeholder="outreach@client-domain.com"
-              />
-            </div>
-            <div className="space-y-1 sm:col-span-1">
-              <Label htmlFor="newName" className="text-sm font-medium">
-                Display name (optional)
-              </Label>
-              <Input
-                id="newName"
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                placeholder="Jane from Acme"
-              />
-            </div>
-            <div className="space-y-1 sm:col-span-1">
-              <Label htmlFor="newCap" className="text-sm font-medium">
-                Daily cap (max 20)
-              </Label>
-              <Input
-                id="newCap"
-                type="number"
-                min={1}
-                max={20}
-                value={newCap}
-                onChange={(e) => setNewCap(e.target.value)}
-              />
-            </div>
-          </div>
-          <Button onClick={handleAdd} disabled={adding || !newEmail.trim()} style={{ background: "#2E37FE" }}>
-            {adding ? "Verifying…" : "Add mailbox"}
-          </Button>
-        </CardContent>
-      </Card>
-
       {/* List */}
       <Card className="border-border/50 shadow-sm">
         <CardHeader className="flex flex-row items-center gap-2 pb-3">
@@ -1118,9 +1038,6 @@ export default function MailboxesPage() {
       </div>
 
       <div className="space-y-6">
-      {/* Provision a domain */}
-      <ProvisionDomainPanel onChange={load} />
-
       {/* Sending domains */}
       <Card className="border-border/50 shadow-sm">
         <CardHeader className="flex flex-row items-center gap-2 pb-3">

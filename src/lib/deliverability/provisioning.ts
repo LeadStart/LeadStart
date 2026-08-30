@@ -31,7 +31,7 @@ export const PROVISIONING_STEP_ORDER: ProvisioningStepId[] = [
 export interface InitProvisioningInput {
   now: string; // ISO
   domain: string;
-  users: { local_part: string; display_name: string }[];
+  users: { local_part: string; display_name: string; given_name?: string; family_name?: string }[];
   licensing: { product_id: string; sku_id: string } | null;
   dmarcRua: string | null;
 }
@@ -44,6 +44,8 @@ export function initProvisioningState(input: InitProvisioningInput): Provisionin
   const users: ProvisioningUserSpec[] = input.users.map((u) => ({
     local_part: u.local_part,
     display_name: u.display_name,
+    given_name: u.given_name,
+    family_name: u.family_name,
     email: `${u.local_part}@${input.domain}`,
     created: false,
     licensed: false,

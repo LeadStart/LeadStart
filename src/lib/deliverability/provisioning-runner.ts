@@ -280,7 +280,9 @@ async function usersStep(
 
   for (const u of users) {
     if (u.created) continue;
-    const { givenName, familyName } = splitDisplayName(u.display_name);
+    const split = splitDisplayName(u.display_name);
+    const givenName = u.given_name?.trim() || split.givenName;
+    const familyName = u.family_name?.trim() || split.familyName;
     const password = genPassword();
     try {
       const res = await deps.workspace.directory.insertUser({
