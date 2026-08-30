@@ -2,7 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomBytes, randomUUID } from "node:crypto";
 import { createClient } from "@/lib/supabase/server";
 import { appUrl } from "@/lib/api-url";
-import { buildQuoteProposalEmail } from "@/lib/email/quote-proposal";
+import {
+  buildQuoteProposalEmail,
+  QUOTE_EMAIL_SUBJECT,
+  QUOTE_EMAIL_FROM_FALLBACK,
+} from "@/lib/email/quote-proposal";
+import { DEFAULT_WARMING_DAYS } from "@/lib/billing/schedule";
 import type { Quote, Client } from "@/types/app";
 
 interface CreateQuoteBody {
@@ -96,7 +101,7 @@ export async function POST(req: NextRequest) {
     setup_fee_cents: body.setup_fee_cents,
     contact_sourcing_cents: body.contact_sourcing_cents ?? 0,
     contacts_count: body.contacts_count ?? null,
-    warming_days: body.warming_days ?? 14,
+    warming_days: body.warming_days ?? DEFAULT_WARMING_DAYS,
     currency: body.currency || "usd",
     scope_of_work: body.scope_of_work || null,
     terms: body.terms || null,
@@ -142,11 +147,9 @@ export async function POST(req: NextRequest) {
       const { Resend } = await import("resend");
       const resend = new Resend(process.env.RESEND_API_KEY);
       await resend.emails.send({
-        from:
-          process.env.EMAIL_FROM ||
-          "LeadStart <info@no-reply.leadstart.io>",
+        from: process.env.EMAIL_FROM || QUOTE_EMAIL_FROM_FALLBACK,
         to: body.sent_to_email,
-        subject: `Your LeadStart proposal is ready`,
+        subject: QUOTE_EMAIL_SUBJECT,
         html: buildQuoteProposalEmail({
           contactName: client?.name || "",
           monthlyCents: quote.monthly_price_cents,

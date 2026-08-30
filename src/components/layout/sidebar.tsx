@@ -23,6 +23,7 @@ import {
   Settings,
   Sparkles,
   Workflow,
+  Rocket,
   X,
 } from "lucide-react";
 
@@ -57,6 +58,7 @@ const adminSettingsNav: NavItem[] = [
 
 const adminWorkflowsNav: NavItem[] = [
   { href: "/admin/workflows", label: "Outbound pipeline", icon: <Workflow size={18} /> },
+  { href: "/admin/workflows/onboarding", label: "Onboarding", icon: <Rocket size={18} /> },
 ];
 
 const clientNav: NavItem[] = [

@@ -32,6 +32,20 @@ sourcing actor, a phase/provider, a cost, the default config, or the branch
 structure, update that data module (and re-draw its structure if the topology
 changed) in the SAME change, then run `npx tsx scripts/test-flow-map-sync.ts`.
 
+# The in-app Onboarding Preview must render the REAL client-facing surfaces
+The **Onboarding Preview** (Admin → Workflows → Onboarding) shows exactly what a
+client sees while coming aboard — the proposal email, the hosted quote page, and
+the welcome page — by rendering the REAL production code
+(`buildQuoteProposalEmail`, `<QuoteLayout>`, `<WelcomeContent>`) fed by the live
+default config. Its inputs live in
+[`src/components/workflows/onboarding-preview.data.ts`](src/components/workflows/onboarding-preview.data.ts):
+the defaults (warm-up, quote-expiry, email subject + sender) are DERIVED from the
+shared constants in `src/lib/billing/schedule.ts` + `src/lib/email/quote-proposal.ts`,
+so **never re-hard-code those literals** — import the constant. When you touch one
+of those defaults, a rendered surface, or the `WelcomeContent` split, run
+`npx tsx scripts/test-onboarding-preview-sync.ts` (it fails if the preview or any
+customer-facing consumer drifts).
+
 # CRITICAL: Local-only by default — NEVER push or commit without explicit permission
 
 **Do all work locally. Do not `git commit`, do not `git push`, and do not auto-deploy without the owner saying so in the current turn.**

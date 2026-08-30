@@ -1,6 +1,6 @@
 import { CheckCircle } from "lucide-react";
 import type { ReactNode } from "react";
-import { computeLaunchDate } from "@/lib/billing/schedule";
+import { computeLaunchDate, DEFAULT_WARMING_DAYS } from "@/lib/billing/schedule";
 
 function formatCents(cents: number): string {
   const dollars = cents / 100;
@@ -24,7 +24,7 @@ export interface QuoteLayoutProps {
   issuedAt?: Date | string | null;
   /** Either an ISO date string or a YYYY-MM-DD date input value. */
   expiresAt?: string | null;
-  /** Warm-up window in calendar days. Defaults to 14. */
+  /** Warm-up window in calendar days. Defaults to DEFAULT_WARMING_DAYS. */
   warmingDays?: number;
   /** Slot rendered after the terms — admin preview shows a hint, hosted page shows Accept button. */
   trailingSlot?: ReactNode;
@@ -42,7 +42,7 @@ export function QuoteLayout({
   terms,
   issuedAt,
   expiresAt,
-  warmingDays = 14,
+  warmingDays = DEFAULT_WARMING_DAYS,
   trailingSlot,
 }: QuoteLayoutProps) {
   const issueDate = issuedAt ? new Date(issuedAt) : new Date();

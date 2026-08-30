@@ -5,7 +5,7 @@ import { buildSubscriptionStartedEmail } from "@/lib/email/subscription-started"
 import { buildPaymentFailedEmail } from "@/lib/email/payment-failed";
 import { buildInvoiceEmail } from "@/lib/email/invoice";
 import { buildQuoteSignedEmail } from "@/lib/email/quote-signed";
-import { computeLaunchDate } from "@/lib/billing/schedule";
+import { computeLaunchDate, DEFAULT_WARMING_DAYS } from "@/lib/billing/schedule";
 import { getAppUrl } from "./client";
 
 // Owner alert recipient for new signed clients.
@@ -108,7 +108,7 @@ async function handleCheckoutCompleted(
   const setupCents = Number(md.setup_fee_cents) || 0;
   const contactSourcingCents = Number(md.contact_sourcing_cents) || 0;
   const contactsCount = md.contacts_count ? Number(md.contacts_count) : null;
-  const warmingDays = Number(md.warming_days) || 14;
+  const warmingDays = Number(md.warming_days) || DEFAULT_WARMING_DAYS;
   const sellsContacts = contactSourcingCents > 0;
   const dueTodayCents = setupCents + contactSourcingCents;
   const launch = computeLaunchDate(new Date(), warmingDays);

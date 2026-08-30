@@ -36,6 +36,10 @@ import { appUrl } from "@/lib/api-url";
 import { useApiQuery } from "@/hooks/use-api-query";
 import { API_BILLING_DATA_PATH } from "@/lib/admin-queries";
 import { QuoteLayout } from "@/components/billing/quote-layout";
+import {
+  DEFAULT_WARMING_DAYS,
+  DEFAULT_QUOTE_EXPIRY_DAYS,
+} from "@/lib/billing/schedule";
 import type {
   PricingPlan,
   Quote,
@@ -402,7 +406,7 @@ const DEFAULT_TERMS =
   "Auto-charged monthly via Stripe once the warm-up period ends. Cancel anytime with 30 days' notice.";
 
 function defaultExpiry(): string {
-  return new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+  return new Date(Date.now() + DEFAULT_QUOTE_EXPIRY_DAYS * 24 * 60 * 60 * 1000)
     .toISOString()
     .split("T")[0];
 }
@@ -475,7 +479,7 @@ function NewQuoteDialog({
             ? dollarInputToCents(contactSourcingDollars)
             : 0,
           contacts_count: sellsContacts ? parseInt(contactsCount, 10) || 0 : null,
-          warming_days: parseInt(warmingDays, 10) || 14,
+          warming_days: parseInt(warmingDays, 10) || DEFAULT_WARMING_DAYS,
           currency: "usd",
           scope_of_work: scope,
           terms: terms,
@@ -520,7 +524,7 @@ function NewQuoteDialog({
             contactsCount={
               sellsContacts ? parseInt(contactsCount, 10) || 0 : null
             }
-            warmingDays={parseInt(warmingDays, 10) || 14}
+            warmingDays={parseInt(warmingDays, 10) || DEFAULT_WARMING_DAYS}
             scope={scope}
             terms={terms}
             expiresAt={expiresAt}

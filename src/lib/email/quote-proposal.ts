@@ -1,3 +1,12 @@
+/** Subject line for the proposal email. Shared by the send path + the preview. */
+export const QUOTE_EMAIL_SUBJECT = "Your LeadStart proposal is ready";
+
+/**
+ * Fallback "From" when EMAIL_FROM isn't set in the environment. This is the
+ * sender clients actually see, so the admin Onboarding preview shows it too.
+ */
+export const QUOTE_EMAIL_FROM_FALLBACK = "LeadStart <info@no-reply.leadstart.io>";
+
 export interface QuoteEmailData {
   contactName: string;
   /** Lead management monthly subscription price. */
