@@ -49,6 +49,12 @@ export interface ProfileSearchLevers {
 const RESULTS_PER_PAGE = 25;
 const MAX_ITEMS_CAP = 2500;
 const MAX_PAGES = 100;
+// SPEND-04 (Apify spend audit 2026-08-30): under autoQuerySegmentation the actor
+// opens up to `takePages` pages PER SEGMENT, and segments are bounded by no input
+// we send; every page bills $0.10 (the search-page floor). Cap per-segment pages
+// so total pages ≈ segments × this budget instead of segments × ceil(maxItems/25)
+// (a ~250-segment sweep at ceil(2500/25)=100 pages/segment ≈ $1,000).
+const MAX_PAGES_PER_SEGMENT = 2;
 
 function cleanArr(v?: string[]): string[] | undefined {
   if (!v) return undefined;
@@ -78,7 +84,11 @@ export function buildProfileSearchInput(
   opts: { depth: ProfileSearchDepth; maxItems: number },
 ): Record<string, unknown> {
   const maxItems = Math.max(1, Math.min(MAX_ITEMS_CAP, Math.round(opts.maxItems)));
-  const takePages = Math.max(1, Math.min(MAX_PAGES, Math.ceil(maxItems / RESULTS_PER_PAGE)));
+  // SPEND-04: takePages bills PER segment when segmentation is on, so clamp it to
+  // a small per-segment page budget; when off, keep the full ceil(maxItems/25).
+  const takePages = levers.autoSegment
+    ? MAX_PAGES_PER_SEGMENT
+    : Math.max(1, Math.min(MAX_PAGES, Math.ceil(maxItems / RESULTS_PER_PAGE)));
   const input: Record<string, unknown> = {
     profileScraperMode: PROFILE_SEARCH_MODE_LABEL[opts.depth],
     maxItems,

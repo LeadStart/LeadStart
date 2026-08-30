@@ -157,6 +157,10 @@ export async function GET(request: NextRequest) {
     await admin.from("linkedin_searches").update({ locked_at: null, ...patch }).eq("id", row.id);
   };
 
+  // Hoisted so the outer catch (SPEND-10) can abort an in-flight run when a
+  // transient poll error trips the breaker.
+  let client: ApifyClient | null = null;
+
   try {
     const token = await loadApifyToken(admin, row.organization_id);
     if (!token) {
@@ -167,7 +171,7 @@ export async function GET(request: NextRequest) {
       });
       return NextResponse.json({ status: "failed", id: row.id, reason: "no_token" });
     }
-    const client = new ApifyClient(token);
+    client = new ApifyClient(token);
 
     // (A) A run is in flight → poll it.
     if (row.active_apify_run_id) {
@@ -295,17 +299,45 @@ export async function GET(request: NextRequest) {
       depth: row.query?.depth ?? "short",
       maxItems: row.target_max_results,
     });
-    const run = await client.startActorRun(row.actor, input, { timeoutSec: APIFY_TIMEOUT_SEC });
-    await release({
-      active_apify_run_id: run.id,
-      active_apify_dataset_id: run.defaultDatasetId,
-      active_batch_started_at: new Date().toISOString(),
-      progress_message: "Search queued on Apify…",
+    // Hard per-run charge cap (~$0.05/profile ceiling; real ~$0.014 + the $0.10/page
+    // floor). Apify aborts at this $, bounding the deep-search page/segment
+    // blow-up even beyond the per-segment page clamp. SPEND-01.
+    const run = await client.startActorRun(row.actor, input, {
+      timeoutSec: APIFY_TIMEOUT_SEC,
+      maxTotalChargeUsd: Math.max(2, row.target_max_results * 0.05),
     });
+    // Claim the active-run slot with a CAS guard (mirrors run-apify-enrichment):
+    // only persist this run id if none is set. An overlapping tick (a >90s local
+    // tick vs a prod tick, SPEND-15) or a racing retry (SPEND-14) that already
+    // claimed it means this run would bill orphaned, so abort it best-effort and
+    // yield instead of persisting a second id.
+    const { data: claimedSlot } = await admin
+      .from("linkedin_searches")
+      .update({
+        locked_at: null,
+        active_apify_run_id: run.id,
+        active_apify_dataset_id: run.defaultDatasetId,
+        active_batch_started_at: new Date().toISOString(),
+        progress_message: "Search queued on Apify…",
+      })
+      .eq("id", row.id)
+      .is("active_apify_run_id", null)
+      .select("id");
+    if (!claimedSlot || claimedSlot.length === 0) {
+      await client.abortRun(run.id).catch(() => {});
+      return NextResponse.json({ status: "lost_race", id: row.id });
+    }
     return NextResponse.json({ status: "started", id: row.id, apify_run_id: run.id });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     const failures = row.consecutive_failures + 1;
+    // SPEND-10: a transient poll error (e.g. getRun threw) that trips the breaker
+    // parks the search failed, leaving the in-flight actor to keep billing to its
+    // 20-min timeout with nobody left to poll or ingest it. Abort it best-effort
+    // before marking failed (only when a run id is actually known).
+    if (failures >= MAX_CONSECUTIVE_FAILURES && row.active_apify_run_id && client) {
+      await client.abortRun(row.active_apify_run_id).catch(() => {});
+    }
     await release({
       consecutive_failures: failures,
       progress_message: `Retrying after error: ${message.slice(0, 200)}`,

@@ -32,6 +32,11 @@ export async function callPerplexity(
     systemPrompt?: string;
     // "year" (default) | any recency string | null to omit the filter entirely.
     searchRecencyFilter?: string | null;
+    // Hard client-side timeout. Perplexity is called inline inside 60s-budget
+    // crons (naming Layer 2, domain discovery); without this a single hung
+    // request blows the whole tick past maxDuration and loses the batch's work
+    // (SPEND-11). Defaults to 25s, comfortably inside the per-item budgets.
+    timeoutMs?: number;
   } = {},
 ): Promise<PerplexityCallResult> {
   const maxTokens = opts.maxTokens ?? 200;
@@ -50,14 +55,29 @@ export async function callPerplexity(
   };
   if (recency) body.search_recency_filter = recency;
 
-  const response = await fetch("https://api.perplexity.ai/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? 25_000);
+  let response: Response;
+  try {
+    response = await fetch("https://api.perplexity.ai/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+  } catch (err) {
+    const timedOut = controller.signal.aborted;
+    throw new Error(
+      `Perplexity request ${timedOut ? "timed out" : "failed"}: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
+  } finally {
+    clearTimeout(timer);
+  }
 
   if (!response.ok) {
     const errText = await response.text();

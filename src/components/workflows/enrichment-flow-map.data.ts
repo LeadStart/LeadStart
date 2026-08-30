@@ -51,12 +51,12 @@ const addonTag = (on: boolean) => (on ? "(add-on, on)" : "(add-on, off)");
 // figures). Low-drift; provenance noted so the sync test / a reader can trace them.
 const SEARCH_SHORT_USD = 0.004; // harvestapi profile-search Short = $0.10 / 25 results
 const ACTIVITY_PER_POST_USD = 0.002; // harvestapi profile-posts, per post (MAX_POSTS=1 → ~$0.002)
-const SITE_SCRAPE_MEASURED_USD = 0.003; // live-pricing measured (compute-billed; estimate const is $0.006)
+const SITE_SCRAPE_MEASURED_USD = 0.003; // live-pricing measured (compute-billed; matches SITE_SCRAPE_COST_USD)
 
 // ---------------------------------------------------------------- LinkedIn vein
 export const LI_NODES: FlowNode[] = [
   { id: "src", kind: "box", x: 50, y: 20, w: 300, h: 66, tone: "srcLi",
-    lines: [{ t: "Source · ICP search", s: "title" }, { t: ACTORS.profileSearch, s: "actor" }, { t: `${usd(SEARCH_SHORT_USD)} / profile · ON HIT`, s: "hit" }] },
+    lines: [{ t: "Source · ICP search", s: "title" }, { t: ACTORS.profileSearch, s: "actor" }, { t: `per search page · $${(SEARCH_SHORT_USD * 25).toFixed(2)}/25`, s: "hit" }] },
   { id: "prof", kind: "box", x: 50, y: 128, w: 300, h: 66, tone: "step",
     lines: [{ t: "Phase 1 · Profiles  (primary email)", s: "title" }, { t: ACTORS.profileScraper, s: "actor" }, { t: `${usd(PROFILE_EMAIL_COST_USD)} / profile · PER QUERY`, s: "pq" }] },
   { id: "d1", kind: "diamond", x: 120, y: 236, w: 160, h: 72, tone: "dia",

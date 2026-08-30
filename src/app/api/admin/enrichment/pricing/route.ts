@@ -10,6 +10,10 @@ import {
   DOMAIN_DISCOVERY_COST_USD,
   NAMING_COST_USD,
   MAPS_PLACE_COST_USD,
+  MAPS_FILTER_COST_USD,
+  SOURCING_SHORT_USD,
+  SOURCING_FULL_USD,
+  SOURCING_FULL_EMAIL_USD,
 } from "@/lib/apify/pricing";
 
 // GET /api/admin/enrichment/pricing
@@ -24,9 +28,10 @@ function staticFallback(): LivePricing {
   return {
     source: "fallback",
     fetchedAt: new Date().toISOString(),
-    tier: "FREE",
-    sourcing: { short: 0.004, full: 0.008, full_email: 0.014 },
-    maps: { place: MAPS_PLACE_COST_USD },
+    // These constants are calibrated to our BRONZE/Starter tier (SPEND-28).
+    tier: "BRONZE",
+    sourcing: { short: SOURCING_SHORT_USD, full: SOURCING_FULL_USD, full_email: SOURCING_FULL_EMAIL_USD },
+    maps: { place: MAPS_PLACE_COST_USD, filter: MAPS_FILTER_COST_USD },
     enrich: {
       profile: PROFILE_EMAIL_COST_USD,
       domain: DOMAIN_COST_USD,
@@ -49,7 +54,8 @@ export async function GET() {
     return NextResponse.json(staticFallback());
   }
   try {
-    const pricing = await fetchLivePricing(apifyToken);
+    // Our account is on the Starter (BRONZE) tier, so price at that tier, not FREE.
+    const pricing = await fetchLivePricing(apifyToken, "BRONZE");
     return NextResponse.json(pricing);
   } catch (err) {
     console.error("[enrichment/pricing] live fetch failed:", err);

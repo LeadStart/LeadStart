@@ -52,6 +52,16 @@ import { createClient } from "@/lib/supabase/client";
 import { classifyEmailTier, EMAIL_TIER_RANK, type EmailTier } from "@/lib/enrichment/email-tier";
 import type { MapsPlace, MapsSearchStatus } from "@/types/app";
 import type { MapsArea } from "@/lib/apify/sourcing/maps-search";
+import {
+  MAPS_PLACE_COST_USD,
+  MAPS_FILTER_COST_USD,
+  SITE_SCRAPE_COST_USD,
+  NAMING_COST_USD,
+  MV_CREDIT_COST_USD,
+  FINDYMAIL_CATCHALL_COST_USD,
+  estimatePatternMvCost,
+} from "@/lib/apify/pricing";
+import { PlanFloorNote } from "@/components/prospecting/plan-floor-note";
 
 // The DIY Google-Maps lead-search flow — a "D + running cart" build experience.
 // LEFT: where your customers are (a Smart Search location picker → multi-region),
@@ -155,7 +165,7 @@ type MapsConfig = {
 type Campaign = { id: string; name: string };
 
 type LivePricing = {
-  maps?: { place?: number };
+  maps?: { place?: number; filter?: number };
   enrich?: { site_scrape?: number; naming?: number; domain_discovery?: number };
 };
 
@@ -586,18 +596,26 @@ export function MapsDiyPanel() {
     }
   };
 
-  // ---- estimate ----
-  const placeCost = num(pricing?.maps?.place) || 0.004;
-  const scrapeCost = num(pricing?.enrich?.site_scrape) || 0.003;
-  const namingCost = num(pricing?.enrich?.naming) || 0.015;
-  const catchAllCost = 0.049; // Findymail entry tier ($49/1k = $0.049/hit)
-  // Findymail is pay-on-hit and only on the catch-all subset — assume ~20% of
+  // ---- estimate (an "up to" ceiling; see the card) ----
+  // Fallbacks derive from pricing.ts so they never drift from the live values (SPEND-35).
+  const placeCost = num(pricing?.maps?.place) || MAPS_PLACE_COST_USD;
+  const filterCost = num(pricing?.maps?.filter) || MAPS_FILTER_COST_USD;
+  const scrapeCost = num(pricing?.enrich?.site_scrape) || SITE_SCRAPE_COST_USD;
+  const namingCost = num(pricing?.enrich?.naming) || NAMING_COST_USD;
+  const catchAllCost = FINDYMAIL_CATCHALL_COST_USD; // pay-on-hit ($49/1k = $0.049/hit)
+  // compass bills filter-applied per place PER active filter, and we send website
+  // and/or min-rating when set, so add one filter charge per active filter (SPEND-25).
+  // Findymail is pay-on-hit and only on the catch-all subset, so assume ~20% of
   // leads yield a recoverable catch-all so the estimate isn't wildly overstated.
   const perLead =
     placeCost +
+    (websiteFilter !== "all" ? filterCost : 0) +
+    (minStars ? filterCost : 0) +
     scrapeCost +
-    (addNaming ? namingCost + 0.004 : 0) +
-    (addVerify ? 0.002 : 0) +
+    // Naming = the owner-name lookup + its downstream pattern_mv email step priced
+    // at the honest ceiling (estimatePatternMvCost), not the 1-credit best case (SPEND-31).
+    (addNaming ? namingCost + estimatePatternMvCost(1) : 0) +
+    (addVerify ? MV_CREDIT_COST_USD : 0) +
     (addValidateCatchAll ? catchAllCost * 0.2 : 0);
   const estTotal = maxResults * perLead;
 
@@ -1008,10 +1026,10 @@ export function MapsDiyPanel() {
                 {/* Outcome estimate + tier mix */}
                 <div className="rounded-lg border border-border/60 bg-muted/20 p-3">
                   <div className="flex items-baseline justify-between">
-                    <span className="text-xs text-muted-foreground">Est. cost</span>
+                    <span className="text-xs text-muted-foreground">Est. cost · up to</span>
                     <span className="text-lg font-bold tabular-nums">${estTotal.toFixed(2)}</span>
                   </div>
-                  <div className="mb-2 text-right text-[10px] text-muted-foreground">~${perLead.toFixed(3)}/lead{addNaming ? " · incl. owner names" : ""}</div>
+                  <div className="mb-2 text-right text-[10px] text-muted-foreground">up to ~${perLead.toFixed(3)}/lead{addNaming ? " · incl. owner names" : ""}</div>
                   <TierMixBar />
                   <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-muted-foreground">
                     <span><b className="text-slate-600">$0.05</b> record</span>
@@ -1020,6 +1038,8 @@ export function MapsDiyPanel() {
                     <span><b className="text-[#2E37FE]">$0.30</b> verified personal</span>
                   </div>
                 </div>
+
+                <PlanFloorNote />
 
                 {error && (
                   <div className="flex items-center gap-2 rounded-md bg-red-50 px-3 py-2 text-xs text-red-700">

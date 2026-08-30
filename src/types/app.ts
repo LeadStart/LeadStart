@@ -1332,6 +1332,22 @@ export type MapsSearchStatus = "pending" | "running" | "complete" | "failed";
 // google_place_id is the identity/dedupe key (like LinkedInProspect.linkedin_url
 // and ScrapioBusiness.google_id). company_domain is derived from `website` via
 // normalizeDomain (null when the place has no site or only a social page).
+// One person surfaced by the compass business-leads add-on ("Find people on
+// LinkedIn" toggle): the company's LinkedIn-matched staff, ≤3 per place.
+// email/phone here are REFERENCE data only, never written to contacts.email at
+// import (org-unique index + unverified); the profiles phase re-scrapes fresh.
+export interface MapsLead {
+  full_name: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  title: string | null;
+  seniority: string | null; // owner|founder|c_suite|partner|head|vp|director|manager|senior|entry|intern
+  linkedin_url: string | null;
+  email: string | null;
+  company_website: string | null;
+  company_linkedin: string | null;
+}
+
 export interface MapsPlace {
   google_place_id: string;
   name: string | null;
@@ -1354,6 +1370,8 @@ export interface MapsPlace {
   maps_url: string | null;
   temporarily_closed: boolean;
   claimed: boolean | null;
+  // Present only when the search ran with the LinkedIn-people add-on on.
+  leads?: MapsLead[];
 }
 
 // Cached Maps-search audit row + async Apify run tracking — the Google-Maps twin

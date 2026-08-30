@@ -21,6 +21,13 @@ export const maxDuration = 15;
 const DEFAULT_MAX = 200;
 const HARD_CAP = 5000;
 const MAX_NAME = 80;
+// SPEND-05 (Apify spend audit 2026-08-30): compass bills places ≈ areas ×
+// N_terms once the per-term cap floors at 1 (perSearch = max(1, ceil(cap/N)) in
+// maps-search.ts:baseInput), so an uncapped term list (audience packs stack
+// terms in one click) voids the target cap. Cap the term count here so billed
+// places stay bounded by areas × MAX_TERMS regardless of the target. Authoritative
+// server-side guard (the panel caps too, but this is the last line before spend).
+const MAX_TERMS = 25;
 const VALID_WEBSITE = new Set(["all", "with", "without"]);
 
 type Body = {
@@ -73,9 +80,14 @@ export async function POST(request: NextRequest) {
 
   const body = (await request.json().catch(() => ({}))) as Body;
   const raw = body.levers ?? {};
-  const terms = Array.isArray(raw.searchTerms)
+  const dedupedTerms = Array.isArray(raw.searchTerms)
     ? Array.from(new Set(raw.searchTerms.filter((s): s is string => typeof s === "string").map((s) => s.trim()).filter(Boolean)))
     : [];
+  // SPEND-05: hard-cap the term count so billed places can't exceed
+  // areas × MAX_TERMS × per-term cap. Trim (fail-safe) rather than reject, and
+  // surface a note so the run still succeeds on the first MAX_TERMS terms.
+  const termsTrimmed = dedupedTerms.length > MAX_TERMS;
+  const terms = dedupedTerms.slice(0, MAX_TERMS);
   // Location is supplied EITHER as structured `areas` (the DIY multi-region path)
   // OR the legacy free-text `locationQuery`. Never both — structured wins, and
   // the cron's coerceMapsAreas keys off `areas` to fan out one run per region.
@@ -170,5 +182,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: error?.message ?? "Failed to start search" }, { status: 500 });
   }
 
-  return NextResponse.json({ search_id: (row as { id: string }).id, target: maxResults });
+  return NextResponse.json({
+    search_id: (row as { id: string }).id,
+    target: maxResults,
+    ...(termsTrimmed
+      ? { note: `Only the first ${MAX_TERMS} search terms were used (per-search spend cap).` }
+      : {}),
+  });
 }

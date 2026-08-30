@@ -47,6 +47,19 @@ import {
 import { appUrl } from "@/lib/api-url";
 import { classifyEmailTier, EMAIL_TIER_RANK, type EmailTier } from "@/lib/enrichment/email-tier";
 import type { LivePricing } from "@/lib/apify/live-pricing";
+import {
+  PROFILE_EMAIL_COST_USD,
+  DOMAIN_COST_USD,
+  ACTIVITY_COST_USD,
+  MV_CREDIT_COST_USD,
+  DOMAIN_DISCOVERY_COST_USD,
+  FINDYMAIL_CATCHALL_COST_USD,
+  SOURCING_SHORT_USD,
+  SOURCING_FULL_USD,
+  SOURCING_FULL_EMAIL_USD,
+  estimatePatternMvCost,
+} from "@/lib/apify/pricing";
+import { PlanFloorNote } from "@/components/prospecting/plan-floor-note";
 import { createClient } from "@/lib/supabase/client";
 import type {
   LinkedInProspect,
@@ -90,30 +103,33 @@ type SearchConfig = {
 // profiles = $0.004/profile) for Short, + $0.004/profile to open each profile
 // for Full, + ~$0.01/profile for the email lookup on Full+email. Confirmed
 // against live runs ($0.28 for 18 and $0.33 for 25, both Full+email ≈ $0.014).
+// Rates derive from pricing.ts (single source of truth, SPEND-35). The actor
+// bills per search page, so these per-profile figures are page price / 25.
 const DEPTHS: { value: Depth; label: string; hint: string; rate: number }[] = [
-  { value: "short", label: "Short", hint: "cheapest · basic profile", rate: 0.004 },
-  { value: "full", label: "Full", hint: "opens each profile", rate: 0.008 },
-  { value: "full_email", label: "Full + email", hint: "adds an email search", rate: 0.014 },
+  { value: "short", label: "Short", hint: "cheapest · basic profile", rate: SOURCING_SHORT_USD },
+  { value: "full", label: "Full", hint: "opens each profile", rate: SOURCING_FULL_USD },
+  { value: "full_email", label: "Full + email", hint: "adds an email search", rate: SOURCING_FULL_EMAIL_USD },
 ];
 
 // Per-person enrichment rates (the Contacts waterfall), for the cost breakdown.
 // Actors: profile-scraper (email), linkedin-company (domain), pattern + verify
 // (2nd pass — the default method), profile-posts (activity); verify is Million
 // Verifier (not Apify).
-// waterfall/verify are Million Verifier credits at the 10K-bundle rate
-// ($0.0037/credit, owner call 2026-08-25): waterfall = 6-candidate upper bound,
-// verify = 1 credit. Keep in sync with MV_CREDIT_COST_USD in lib/apify/pricing.
+// All rates derive from pricing.ts (single source of truth, SPEND-35), so they
+// can never drift from the constants two lines away. waterfall/verify are Million
+// Verifier credits at the 10K-bundle rate: waterfall = the 6-candidate upper bound
+// (estimatePatternMvCost of one contact), verify = 1 credit.
 const ENRICH_RATES = {
-  email: 0.01,
-  domain: 0.004,
-  waterfall: 0.022,
-  activity: 0.005,
-  verify: 0.0037,
+  email: PROFILE_EMAIL_COST_USD,
+  domain: DOMAIN_COST_USD,
+  waterfall: estimatePatternMvCost(1),
+  activity: ACTIVITY_COST_USD,
+  verify: MV_CREDIT_COST_USD,
   // Findymail catch-all recovery (pay-on-hit; only the catch-all subset).
-  catch_all: 0.049,
+  catch_all: FINDYMAIL_CATCHALL_COST_USD,
   // Web lookup for companies with no LinkedIn page. Only that subset incurs it,
   // but it's counted per-person in the ceiling estimate (see the breakdown note).
-  domain_discovery: 0.005,
+  domain_discovery: DOMAIN_DISCOVERY_COST_USD,
 };
 
 // Deep search (auto query-segmentation) sweeps many sub-queries and opens far
@@ -2459,19 +2475,10 @@ export function LinkedInSearchPanel() {
           </div>
 
           <p className="text-[11px]">
-            A ceiling, not a bill: sourcing charges only for profiles the actor can return; enrichment bills only on people you actually import (usually a subset), and each waterfall pass only touches people the previous one left without an email. Activity and verification bill only when you toggle them on above. With Deep search on, sourcing sweeps sub-queries to actually reach your Max people, so the sourcing figure is realistic rather than a rarely-hit ceiling.
+            A ceiling, not a bill: sourcing is billed per search page opened (up to 25 profiles/page) plus per profile opened, not per profile you keep; enrichment bills only on people you actually import (usually a subset), and each waterfall pass only touches people the previous one left without an email. Activity and verification bill only when you toggle them on above. With Deep search on, sourcing sweeps sub-queries and opens far more pages than it returns, so the sourcing figure is realistic rather than a rarely-hit ceiling.
           </p>
 
-          <div className="rounded-md border border-border bg-muted/40 px-2.5 py-2 text-[11px]">
-            <p className="font-medium text-foreground">Plus your Apify plan&apos;s monthly minimum</p>
-            <p className="mt-0.5">
-              These are usage charges that draw against your Apify plan&apos;s prepaid balance
-              (Starter = <span className="font-mono">$29</span>/mo). That minimum is a floor, not
-              additive per run — but it <span className="font-medium text-foreground">doesn&apos;t roll over</span>, so a
-              light month still bills $29. Residential proxy and compute are already bundled into the
-              per-result prices above — no separate proxy or compute-unit line.
-            </p>
-          </div>
+          <PlanFloorNote />
         </div>
       </InfoDialog>
 
@@ -2884,7 +2891,7 @@ export function LinkedInSearchPanel() {
             />
             {isComplete && (
               <div className="flex items-center justify-between border-t border-border/60 pt-2.5 text-[11px] text-muted-foreground">
-                <span>Actual Apify cost for this search — billed per profile returned, not per target</span>
+                <span>Actual Apify cost for this search: billed per search page opened (up to 25 profiles/page) plus per profile opened. Deep search opens more pages than it returns.</span>
                 <span className="flex items-center gap-1.5">
                   <span className="font-mono tabular-nums font-medium text-foreground">
                     ${actualCost.toFixed(2)}

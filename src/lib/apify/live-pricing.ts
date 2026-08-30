@@ -22,6 +22,10 @@ import {
   DOMAIN_DISCOVERY_COST_USD,
   NAMING_COST_USD,
   MAPS_PLACE_COST_USD,
+  MAPS_FILTER_COST_USD,
+  SOURCING_SHORT_USD,
+  SOURCING_FULL_USD,
+  SOURCING_FULL_EMAIL_USD,
 } from "./pricing";
 
 const SOURCING_ACTOR = "harvestapi~linkedin-profile-search";
@@ -43,8 +47,9 @@ export interface LivePricing {
   fetchedAt: string;
   tier: string;
   sourcing: { short: number; full: number; full_email: number };
-  // Google Maps business sourcing (compass~google-maps-extractor, per place).
-  maps: { place: number };
+  // Google Maps business sourcing (compass~google-maps-extractor). `place` =
+  // place-scraped; `filter` = filter-applied (per place, per active filter).
+  maps: { place: number; filter: number };
   enrich: {
     profile: number;
     domain: number;
@@ -71,7 +76,10 @@ function priceOf(events: Events | null, key: string, tier: string): number | nul
   if (!ev) return null;
   if (typeof ev.eventPriceUsd === "number") return ev.eventPriceUsd;
   const tiered = ev.eventTieredPricingUsd;
-  const t = tiered?.[tier]?.tieredEventPriceUsd ?? tiered?.FREE?.tieredEventPriceUsd;
+  // Only the caller's tier. No hard FREE fallback (SPEND-28): if this tier has no
+  // tiered price, return null so the caller falls back to the static BRONZE
+  // constant, which is closer than a FREE price on a paid account.
+  const t = tiered?.[tier]?.tieredEventPriceUsd;
   return typeof t === "number" ? t : null;
 }
 
@@ -95,7 +103,7 @@ const round4 = (n: number) => Math.round(n * 1e4) / 1e4;
 const cache = new Map<string, { at: number; value: LivePricing }>();
 const TTL_MS = 60 * 60 * 1000;
 
-export async function fetchLivePricing(token: string, tier = "FREE"): Promise<LivePricing> {
+export async function fetchLivePricing(token: string, tier = "BRONZE"): Promise<LivePricing> {
   const hit = cache.get(token);
   if (hit && Date.now() - hit.at < TTL_MS) return hit.value;
 
@@ -115,9 +123,9 @@ export async function fetchLivePricing(token: string, tier = "FREE"): Promise<Li
   const fullProfile = priceOf(src, "full-profile", tier);
   const fullEmail = priceOf(src, "full-profile-with-email", tier);
   const perPage = searchPage != null ? searchPage / RESULTS_PER_PAGE : null;
-  const short = perPage ?? 0.004;
-  const full = perPage != null && fullProfile != null ? round4(perPage + fullProfile) : 0.008;
-  const full_email = perPage != null && fullEmail != null ? round4(perPage + fullEmail) : 0.014;
+  const short = perPage ?? SOURCING_SHORT_USD;
+  const full = perPage != null && fullProfile != null ? round4(perPage + fullProfile) : SOURCING_FULL_USD;
+  const full_email = perPage != null && fullEmail != null ? round4(perPage + fullEmail) : SOURCING_FULL_EMAIL_USD;
   if (src == null) missing.push("sourcing");
 
   // Enrichment per-item.
@@ -126,11 +134,12 @@ export async function fetchLivePricing(token: string, tier = "FREE"): Promise<Li
   const domain = priceOf(dom, "apify-default-dataset-item", tier) ?? DOMAIN_COST_USD;
   if (dom == null) missing.push("domain");
   const postPrice = priceOf(act, "post", tier);
-  const activity = postPrice != null ? round4(postPrice * 2.5) : ACTIVITY_COST_USD; // ~2.5 posts/person
+  const activity = postPrice != null ? round4(postPrice * 1) : ACTIVITY_COST_USD; // maxPosts:1 -> 1 post/person (SPEND-34)
   if (act == null) missing.push("activity");
   const boviPrice = priceOf(bovi, "email-found", tier) ?? BOVI_COST_USD;
   if (bovi == null) missing.push("bovi");
   const mapsPlace = priceOf(maps, "place-scraped", tier) ?? MAPS_PLACE_COST_USD;
+  const mapsFilter = priceOf(maps, "filter-applied", tier) ?? MAPS_FILTER_COST_USD;
   if (maps == null) missing.push("maps");
 
   const gotAll = [src, prof, dom, act, bovi, maps].every(Boolean);
@@ -143,7 +152,7 @@ export async function fetchLivePricing(token: string, tier = "FREE"): Promise<Li
     fetchedAt: new Date().toISOString(),
     tier,
     sourcing: { short: round4(short), full, full_email },
-    maps: { place: round4(mapsPlace) },
+    maps: { place: round4(mapsPlace), filter: round4(mapsFilter) },
     enrich: {
       profile: round4(profile),
       domain: round4(domain),

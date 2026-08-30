@@ -22,7 +22,12 @@ export const waterfallBoviProvider: PhaseProvider = {
         lastName: it.last_name,
         domain: it.company_domain,
       }));
-    return { people, verifySmtp: true, maxAlternatives: 0 };
+    // SPEND-06 (Apify spend audit 2026-08-30): this actor's schema documents
+    // maxItems "0 = no limit", and omitting it leaves the total unbounded. Pin
+    // maxItems to the batch size (Math.max(1, …) so we never send the ambiguous 0)
+    // so billed records can't exceed one per person however 0 is interpreted, and
+    // keep maxAlternatives explicit at 0 (no alternates; schema default is 5).
+    return { people, verifySmtp: true, maxAlternatives: 0, maxItems: Math.max(1, people.length) };
   },
 
   parseItems(datasetItems: unknown[], items: ProviderItem[]): Map<string, PhaseResult> {

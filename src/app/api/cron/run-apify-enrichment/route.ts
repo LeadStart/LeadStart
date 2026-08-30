@@ -4,7 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { checkCronAuth } from "@/lib/security/cron-auth";
 import { ApifyClient } from "@/lib/apify/client";
 import { isInProgress, isTerminalBad, isTerminalOk } from "@/lib/apify/types";
-import { loadApifyToken, normalizeEnrichmentSettings } from "@/lib/apify/auth";
+import { loadApifyToken, normalizeAddons, normalizeEnrichmentSettings } from "@/lib/apify/auth";
 import { extractCompanyId, extractCompanySlug } from "@/lib/apify/domain";
 import {
   getProvider,
@@ -74,6 +74,12 @@ const APIFY_TIMEOUT_SEC = 1200;
 const MAX_ITEM_ATTEMPTS = 2;
 const MAX_CONSECUTIVE_FAILURES = 3;
 const START_BUDGET_SEC = 45;
+
+// Completion-time cost reconciliation (SPEND-22): read every distinct Apify run
+// this enrichment run spanned, via a small concurrent pool bounded by a
+// wall-clock budget so even large (many-batch) runs reconcile within the tick.
+const RECONCILE_CONCURRENCY = 8;
+const RECONCILE_BUDGET_MS = 20_000;
 
 // pattern_mv (direct method) tuning. A small MV pool + wall-clock deadline keeps
 // a batch inside the 60s tick; leftover items stay pending for the next tick.
@@ -275,7 +281,14 @@ export async function GET(request: NextRequest) {
     } else {
       result = await runPhase(admin, client, run, tickStart);
     }
-    await admin.from("enrichment_runs").update({ consecutive_failures: 0 }).eq("id", run.id);
+    // Only a successful/progressing tick clears the failure streak. A failed or
+    // aborted batch already recorded its own incremented streak inside runPhase;
+    // resetting here unconditionally (the bug fixed 2026-08-30, SPEND-09) meant
+    // the run-level breaker + owner alert could NEVER fire on failing batches,
+    // so a deterministically-failing actor relaunched paid batches forever.
+    if (result.status !== "batch_failed" && result.status !== "failed") {
+      await admin.from("enrichment_runs").update({ consecutive_failures: 0 }).eq("id", run.id);
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error(`[cron/run-apify-enrichment] run ${run.id} phase ${run.phase} threw:`, err);
@@ -345,6 +358,18 @@ async function runPhase(
         await recordBadRunCost(admin, run, apRun);
         await requeueOrFail(admin, run, cols, "stuck >20min; aborted");
         await clearActive(admin, run.id);
+        // A stuck+aborted batch counts toward the breaker too (SPEND-09). Before,
+        // this path never incremented, so a run that timed out every tick could
+        // relaunch paid batches indefinitely with no kill and no owner alert.
+        const stuckFailures = (run.consecutive_failures ?? 0) + 1;
+        if (stuckFailures >= MAX_CONSECUTIVE_FAILURES) {
+          await failRun(admin, run.id, `Apify batch stuck/aborted ${MAX_CONSECUTIVE_FAILURES}x`);
+          return { status: "failed", apify_status: apRun.status, note: "stuck" };
+        }
+        await admin
+          .from("enrichment_runs")
+          .update({ consecutive_failures: stuckFailures })
+          .eq("id", run.id);
         return { status: "batch_failed", apify_status: apRun.status, note: "stuck" };
       }
       await admin
@@ -494,9 +519,13 @@ async function startNextBatch(
   // is caught by the tick's try/catch — the only crash window is between this
   // POST and the item update, which at worst orphans one paid run (no data
   // corruption), and the lease prevents a concurrent second start.
+  // Hard per-run charge cap (~$0.06/item ceiling; the worst real per-phase
+  // per-item is ~$0.022). Apify aborts the batch at this $, so a semantics
+  // surprise can't run to the whole monthly credit. SPEND-01.
   const apRun = await client.startActorRun(provider.actorId, input, {
     waitForFinishSec: waitSec,
     timeoutSec: APIFY_TIMEOUT_SEC,
+    maxTotalChargeUsd: Math.max(1, batch.length * 0.06),
   });
 
   // Mark the batch in-flight with this run id.
@@ -708,7 +737,7 @@ async function runPatternMvBatch(
   const { data: orgRow } = await admin
     .from("organizations")
     .select(
-      "millionverifier_api_key, millionverifier_last_error_kind, millionverifier_last_error_at, millionverifier_error_streak, findymail_api_key",
+      "millionverifier_api_key, millionverifier_last_error_kind, millionverifier_last_error_at, millionverifier_error_streak, findymail_api_key, enrichment_settings",
     )
     .eq("id", run.organization_id)
     .maybeSingle();
@@ -718,6 +747,7 @@ async function runPatternMvBatch(
     millionverifier_last_error_at: string | null;
     millionverifier_error_streak: number | null;
     findymail_api_key: string | null;
+    enrichment_settings: unknown;
   } | null;
   const key = org?.millionverifier_api_key?.trim() || process.env.MILLIONVERIFIER_API_KEY?.trim() || null;
 
@@ -770,6 +800,22 @@ async function runPatternMvBatch(
   // past the normal write and handed to Findymail for a deliverable address.
   const findymailKey = org?.findymail_api_key?.trim() || process.env.FINDYMAIL_API_KEY?.trim() || null;
   const doRecovery = config.validate_catch_all === true && !!findymailKey;
+  // Per-item Findymail gate (SPEND-36): the run's validate_catch_all is an
+  // OR-merge, so one opted contact would otherwise Findymail-validate (paid,
+  // ~$0.049/hit) EVERY catch-all in a drain-merged run of strangers. Recover an
+  // item only when the org enables validate_catch_all globally, OR this item's own
+  // contact opted in via its enrichment_data.addons stamp, OR the contact carries
+  // no addons stamp at all (the explicit Enrich-dialog flow sets no per-contact
+  // stamp, and its run-level choice is a deliberate all-selected intent).
+  const orgBaseValidate = normalizeEnrichmentSettings(org?.enrichment_settings).validate_catch_all;
+  const itemWantsValidate = (contact: Contact | undefined): boolean => {
+    if (orgBaseValidate) return true;
+    const ed = contact?.enrichment_data;
+    const addonsRaw =
+      ed && typeof ed === "object" ? (ed as { addons?: unknown }).addons : undefined;
+    if (addonsRaw === undefined || addonsRaw === null) return true; // no stamp → run-level intent
+    return normalizeAddons(addonsRaw).validate_catch_all;
+  };
   const client = new MillionVerifierClient(key);
   const deadlineMs = tickStart + PATTERN_MV_DEADLINE_SEC * 1000;
   const mvItems: PatternMvItem[] = batch.map((b) => ({
@@ -860,7 +906,7 @@ async function runPatternMvBatch(
     const isCatchAll =
       (outcome.kind === "found" && outcome.mvResult === "catch_all") ||
       (outcome.kind === "not_found" && outcome.sawCatchAll === true);
-    if (doRecovery && isCatchAll) {
+    if (doRecovery && isCatchAll && itemWantsValidate(contactMap.get(item.contact_id))) {
       deferred.push({ item, outcome, share });
       continue;
     }
@@ -1530,13 +1576,14 @@ async function runVerifyPhase(
   // Claim a batch of pending verify items.
   const { data: pendingData } = await admin
     .from("enrichment_run_items")
-    .select("id, contact_id, email")
+    .select("id, contact_id, email, attempts")
     .eq("run_id", run.id)
     .eq("verify_status", "pending")
     .order("created_at", { ascending: true })
     .order("id", { ascending: true })
     .limit(VERIFY_BATCH);
-  const batch = (pendingData as { id: string; contact_id: string; email: string | null }[] | null) ?? [];
+  const batch =
+    (pendingData as { id: string; contact_id: string; email: string | null; attempts: number }[] | null) ?? [];
   if (batch.length === 0) {
     await advancePhase(admin, apify, run);
     return { status: "advanced", phase: run.phase };
@@ -1625,7 +1672,19 @@ async function runVerifyPhase(
           errBox.e = err;
           return;
         }
-        // transient / per-address failure — leave pending, retry next tick.
+        // Transient / per-address failure. Bump this item's attempts so the same
+        // oldest VERIFY_BATCH items can't be re-selected every tick forever. That
+        // spin left the item pending with no progress and head-of-line blocked the
+        // org's whole enrichment queue (SPEND-12). At the attempt cap, finalize the
+        // item (not_found + verification_result 'error') so the phase drains.
+        const a = item.attempts ?? 0;
+        if (a < MAX_ITEM_ATTEMPTS) {
+          await admin.from("enrichment_run_items").update({ attempts: a + 1 }).eq("id", item.id);
+        } else {
+          await writeVerifyItem(admin, item.id, "error", `verification failed after ${a + 1} transient errors`);
+          bad++;
+          processed++;
+        }
         continue;
       }
       const { patch } = decideFromResult(res, contact?.email_verification_attempts ?? 0, now);
@@ -2202,21 +2261,14 @@ async function recoverOrphans(
   run: RunRow,
   cols: { status: string; runId: string; notes: string },
 ): Promise<void> {
-  // In-flight items with no active run on the run row are orphans from a crash.
-  const { data } = await admin
-    .from("enrichment_run_items")
-    .select(`id, ${cols.runId}`)
-    .eq("run_id", run.id)
-    .eq(cols.status, "in_flight");
-  const rows = (data as Record<string, string | null>[] | null) ?? [];
-  if (rows.length === 0) return;
-  // Without an active_apify_run_id on the run, we can't safely resume — put them
-  // back to pending (Apify runs, if any, are cheap to re-do / already billed).
-  const ids = rows.map((r) => r.id as string);
-  await admin
-    .from("enrichment_run_items")
-    .update({ [cols.status]: "pending", [cols.runId]: null })
-    .in("id", ids);
+  // In-flight items with no active run on the run row are orphans from a crash
+  // (e.g. a tick died between the Apify POST and persisting the active slot).
+  // Route them through the same requeue-with-attempt-bump path as a failed batch
+  // so a crash-loop in the start window is bounded by MAX_ITEM_ATTEMPTS instead
+  // of re-billing the item forever (SPEND-14, was: reset to pending with no bump).
+  // requeueOrFail also preserves the orphan run id (SPEND-18) so reconcileRunCost
+  // can still capture its Apify charge, and finalizes items past the cap as error.
+  await requeueOrFail(admin, run, cols, "orphaned batch recovered after crash; exceeded retry cap");
 }
 
 async function requeueOrFail(
@@ -2246,9 +2298,16 @@ async function requeueOrFail(
     }
   }
   for (const [attempts, ids] of byAttempts) {
+    // Preserve the failed run id (was nulled here) so reconcileRunCost, which
+    // harvests run ids from the item columns at completion, can re-read this
+    // batch's final, late-settling pay-per-event charges (SPEND-18). The id is
+    // inert on a pending item (ingest keys off the run row's active id, not this
+    // column) and is overwritten when startNextBatch re-marks the item in_flight.
+    // recordBadRunCost (called on every bad path before requeueOrFail) remains the
+    // guaranteed at-failure capture for the fully-retried-and-succeeded edge.
     await admin
       .from("enrichment_run_items")
-      .update({ [cols.status]: "pending", [cols.runId]: null, attempts: attempts + 1 })
+      .update({ [cols.status]: "pending", attempts: attempts + 1 })
       .in("id", ids);
   }
   if (dead.length) {
@@ -2332,19 +2391,35 @@ async function reconcileRunCost(admin: Admin, client: ApifyClient, run: RunRow):
       }
       if (rows.length < 1000) break;
     }
-    // No Apify runs (pure pattern_mv/discovery run) or an implausible pile-up —
-    // leave the accrued figure alone.
-    if (ids.size === 0 || ids.size > 40) return;
+    // No Apify runs (pure pattern_mv/discovery run) → nothing to reconcile.
+    // Previously this ALSO bailed when a run spanned >40 Apify runs, which left
+    // the largest (most expensive) runs permanently undercounted (SPEND-22). Now
+    // every distinct run is read via a small concurrent pool bounded by a
+    // wall-clock budget, so a large run reconciles too. A run that somehow exceeds
+    // the budget reconciles partially, which is safe: the max() below never
+    // lowers the recorded figure.
+    if (ids.size === 0) return;
 
+    const idList = Array.from(ids);
+    const reconcileDeadline = Date.now() + RECONCILE_BUDGET_MS;
     let apifyFinal = 0;
-    for (const id of ids) {
-      try {
-        const apRun = await client.getRun(id);
-        if (typeof apRun.usageTotalUsd === "number") apifyFinal += apRun.usageTotalUsd;
-      } catch {
-        // best-effort per run
+    let cursor = 0;
+    const reconcileWorker = async (): Promise<void> => {
+      for (;;) {
+        if (Date.now() > reconcileDeadline) return;
+        const i = cursor++;
+        if (i >= idList.length) return;
+        try {
+          const apRun = await client.getRun(idList[i]);
+          if (typeof apRun.usageTotalUsd === "number") apifyFinal += apRun.usageTotalUsd;
+        } catch {
+          // best-effort per run
+        }
       }
-    }
+    };
+    await Promise.all(
+      Array.from({ length: Math.min(RECONCILE_CONCURRENCY, idList.length) }, () => reconcileWorker()),
+    );
     const accrued = Number(run.cost_usd) || 0;
     if (apifyFinal > accrued) {
       await admin.from("enrichment_runs").update({ cost_usd: apifyFinal }).eq("id", run.id);
@@ -2517,11 +2592,18 @@ async function advancePhase(admin: Admin, client: ApifyClient, run: RunRow): Pro
     if (phase === "waterfall") {
       phase = "activity";
       if (run.run_activity) {
-        // Score posting recency for anyone with a LinkedIn profile URL.
+        // Score posting recency for anyone with a LinkedIn profile URL, but only
+        // items still un-stamped for activity (activity_status null). Auto-enqueued
+        // runs pre-stamp non-opted / skip_activity contacts as 'skipped' at enqueue
+        // (SPEND-36); this must not overwrite them back to 'pending'. It used to
+        // blanket EVERY linkedin_url item, pulling strangers into the paid activity
+        // phase on one contact's opt-in. Explicit-dialog runs leave activity_status
+        // null, so their items still seed here exactly as before.
         await admin
           .from("enrichment_run_items")
           .update({ activity_status: "pending", attempts: 0 })
           .eq("run_id", run.id)
+          .is("activity_status", null)
           .not("linkedin_url", "is", null);
         const n = await countPending(admin, run.id, "activity_status");
         if (n > 0) break;

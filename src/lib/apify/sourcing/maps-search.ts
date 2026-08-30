@@ -1,5 +1,6 @@
-import type { MapsPlace } from "@/types/app";
+import type { MapsLead, MapsPlace } from "@/types/app";
 import { normalizeDomain } from "../domain";
+import { MAPS_LEADS_PER_PLACE } from "../pricing";
 
 // Google Maps business-search sourcing — the second top-of-funnel actor (the
 // LinkedIn twin is profile-search.ts). Finds NEW businesses by niche keywords +
@@ -16,6 +17,14 @@ import { normalizeDomain } from "../domain";
 //     phoneUnformatted, address, street, city, state, postalCode, countryCode,
 //     location{lat,lng}, totalScore, reviewsCount, permanentlyClosed,
 //     temporarilyClosed, claimThisBusiness, url. (No email — we enrich ourselves.)
+//
+// Business-leads add-on (probe 2026-08-30, run phplPwGZ7lGaE2Yv7):
+//   `maximumLeadsEnrichmentRecords` is the max leads PER PLACE (schema title:
+//   "Maximum leads per place"), NOT a per-run total. Billed per `lead-scraped`
+//   event ($0.0075/person found; zero-lead places charge nothing). Output nests
+//   under place.leadsEnrichment[]: firstName/lastName/fullName, jobTitle,
+//   seniority (owner|founder|c_suite|…|entry), linkedinProfile, email,
+//   companyWebsite, companyLinkedin. We always send the small per-place cap.
 export const MAPS_SEARCH_ACTOR_ID =
   process.env.MAPS_SEARCH_ACTOR_ID?.trim() || "compass~google-maps-extractor";
 
@@ -47,6 +56,9 @@ export interface MapsSearchLevers {
   websiteFilter?: "all" | "with" | "without";
   minStars?: string; // "" | "3.5" | "4.0" | "4.5"
   categoryFilterWords?: string[];
+  // "Find people on LinkedIn": the compass business-leads add-on, capped at
+  // MAPS_LEADS_PER_PLACE per place ($0.0075/person found, pay-on-hit).
+  linkedinLeads?: boolean;
 }
 
 const MAX_ITEMS_CAP = 5000;
@@ -72,7 +84,8 @@ function baseInput(levers: MapsSearchLevers, opts: { maxItems: number }): Record
     language: "en",
     scrapePlaceDetailPage: false,
     scrapeContacts: false,
-    maximumLeadsEnrichmentRecords: 0,
+    // PER-PLACE cap (verified 2026-08-30); 0 disables the add-on entirely.
+    maximumLeadsEnrichmentRecords: levers.linkedinLeads ? MAPS_LEADS_PER_PLACE : 0,
   };
 }
 
@@ -275,6 +288,71 @@ function slugCategory(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 }
 
+// One raw leadsEnrichment record → MapsLead (nulls for anything missing).
+function parseMapsLead(raw: Rec): MapsLead {
+  return {
+    full_name: str(raw.fullName),
+    first_name: str(raw.firstName),
+    last_name: str(raw.lastName),
+    title: str(raw.jobTitle),
+    seniority: str(raw.seniority),
+    linkedin_url: str(raw.linkedinProfile),
+    email: str(raw.email),
+    company_website: str(raw.companyWebsite),
+    company_linkedin: str(raw.companyLinkedin),
+  };
+}
+
+// Seniority rank for pick-best (compass vocabulary, probed 2026-08-30). Unknown
+// seniority sits above known-junior: a titled person with no bucket beats an
+// explicit "entry".
+const SENIORITY_SCORE: Record<string, number> = {
+  owner: 100,
+  founder: 95,
+  c_suite: 90,
+  partner: 80,
+  head: 65,
+  vp: 65,
+  director: 60,
+  manager: 40,
+  senior: 20,
+  entry: 10,
+  intern: 0,
+};
+const DECISION_TITLE_RE =
+  /\b(owner|founder|co-?founder|ceo|president|principal|managing (partner|director)|medical director)\b/i;
+
+/**
+ * Pick the person most likely to be the decision-maker: seniority first, then a
+ * decision-title regex boost, a LinkedIn-URL bonus (the whole point of the
+ * add-on), and a company-website sanity check against the place's own domain,
+ * matching confirms the right company; a DIFFERENT domain suggests a wrong-
+ * company match (the §5 "franchise CEO" trap) and is penalized. Deterministic:
+ * ties keep the actor's order.
+ */
+export function pickBestMapsLead(
+  leads: MapsLead[],
+  placeDomain: string | null,
+): MapsLead | null {
+  let best: MapsLead | null = null;
+  let bestScore = -Infinity;
+  for (const l of leads) {
+    if (!l.full_name && !l.first_name) continue; // nameless record is useless here
+    let score = SENIORITY_SCORE[l.seniority ?? ""] ?? 25;
+    if (l.title && DECISION_TITLE_RE.test(l.title)) score += 40;
+    if (l.linkedin_url) score += 15;
+    if (placeDomain && l.company_website) {
+      const leadDomain = normalizeDomain(l.company_website);
+      score += leadDomain === placeDomain ? 10 : -30;
+    }
+    if (score > bestScore) {
+      bestScore = score;
+      best = l;
+    }
+  }
+  return best;
+}
+
 // Flatten + de-duplicate a dataset (by placeId). Permanently-closed businesses
 // are dropped (never a lead; cheaper than the skipClosedPlaces filter charge).
 // Rows with no placeId are dropped — they can't be dedupe-keyed.
@@ -293,6 +371,15 @@ export function parseMapsSearchResults(datasetItems: unknown[]): MapsPlace[] {
     const loc = raw.location && typeof raw.location === "object" ? (raw.location as Rec) : null;
     const categories = Array.isArray(raw.categories)
       ? (raw.categories as unknown[]).map((c) => str(c)).filter((c): c is string => Boolean(c))
+      : [];
+    // Business-leads add-on output (only present when the add-on ran). Kept to
+    // the per-place cap defensively; each record was billed, but source_row
+    // bloat is ours to control.
+    const leads = Array.isArray(raw.leadsEnrichment)
+      ? (raw.leadsEnrichment as Rec[])
+          .filter((l) => l && typeof l === "object")
+          .slice(0, MAPS_LEADS_PER_PLACE)
+          .map(parseMapsLead)
       : [];
 
     out.push({
@@ -320,6 +407,7 @@ export function parseMapsSearchResults(datasetItems: unknown[]): MapsPlace[] {
       // The actor flags a place that CAN be claimed (i.e. currently unclaimed);
       // invert to "claimed". Absent → unknown (null).
       claimed: typeof raw.claimThisBusiness === "boolean" ? !raw.claimThisBusiness : null,
+      ...(leads.length ? { leads } : {}),
     });
   }
   return out;

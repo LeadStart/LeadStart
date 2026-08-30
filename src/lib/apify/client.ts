@@ -118,7 +118,18 @@ export class ApifyClient {
   async startActorRun(
     actorId: string,
     input: unknown,
-    opts: { waitForFinishSec?: number; timeoutSec?: number; memoryMbytes?: number } = {},
+    opts: {
+      waitForFinishSec?: number;
+      timeoutSec?: number;
+      memoryMbytes?: number;
+      // Hard per-run charge ceiling the PLATFORM enforces: Apify aborts the run
+      // once billed charges reach this dollar amount. The single guardrail that
+      // turns a semantics surprise (the 2026-08-30 $14.17 per-place-cap incident)
+      // into a bounded loss. Every caller should pass one derived from the run's
+      // own worst-case estimate. Omitted → Apify auto-caps at the ENTIRE
+      // remaining monthly credit, which is what let $0.40 of intent bill $14.
+      maxTotalChargeUsd?: number;
+    } = {},
   ): Promise<ApifyRun> {
     const searchParams: Record<string, string | number> = {};
     if (opts.waitForFinishSec != null) {
@@ -126,6 +137,11 @@ export class ApifyClient {
     }
     if (opts.timeoutSec != null) searchParams.timeout = Math.round(opts.timeoutSec);
     if (opts.memoryMbytes != null) searchParams.memory = Math.round(opts.memoryMbytes);
+    if (opts.maxTotalChargeUsd != null && Number.isFinite(opts.maxTotalChargeUsd)) {
+      // Round UP to the cent so a fractional estimate never caps below the work
+      // we actually intend to let through.
+      searchParams.maxTotalChargeUsd = Math.ceil(opts.maxTotalChargeUsd * 100) / 100;
+    }
 
     const { body } = await this.request<{ data: ApifyRun }>(
       `/acts/${encodeURIComponent(actorId)}/runs`,

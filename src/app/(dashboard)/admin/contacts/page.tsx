@@ -48,10 +48,13 @@ import {
   ACTIVITY_COST_USD,
   MV_CREDIT_COST_USD,
   DOMAIN_DISCOVERY_COST_USD,
+  NAMING_COST_USD,
+  FINDYMAIL_CATCHALL_COST_USD,
   estimateBoviCost,
   estimatePatternMvCost,
   estimateScrapeCost,
 } from "@/lib/apify/pricing";
+import { PlanFloorNote } from "@/components/prospecting/plan-floor-note";
 import { toast } from "sonner";
 import Link from "next/link";
 import {
@@ -554,6 +557,11 @@ export default function ContactsPage() {
   // Verifiable emails: those already on a contact + those we expect to find.
   const enrichVerifyCount =
     selectedContacts.filter((c) => c.email).length + enrichNeedsEmail;
+  // Name-less company leads (e.g. Google Maps): the naming add-on runs the
+  // decision-maker orchestrator per business to find an owner name (SPEND-24).
+  const enrichNamelessCount = selectedContacts.filter(
+    (c) => !c.first_name && !c.last_name && (c.company_name || c.company_domain),
+  ).length;
   // The waterfall crawls per company DOMAIN (unique known domains + contacts that
   // may still gain one), pulling up to the configured lead cap per domain — each
   // lead billed. This is the honest per-domain math; the old per-contact estimate
@@ -593,7 +601,12 @@ export default function ContactsPage() {
       : 0) +
     (enrichRunWaterfall ? waterfallEstimate : 0) +
     (enrichRunActivity ? enrichActivityCount * ENRICH_COST_ACTIVITY : 0) +
-    (enrichRunVerify ? enrichVerifyCount * ENRICH_COST_VERIFY : 0);
+    (enrichRunVerify ? enrichVerifyCount * ENRICH_COST_VERIFY : 0) +
+    // Naming add-on: ~$0.015/business for each name-less company lead (SPEND-24).
+    (enrichRunNaming ? enrichNamelessCount * NAMING_COST_USD : 0) +
+    // Validate catch-all (Findymail): pay-on-hit on the catch-all subset (~20%)
+    // of the emailed set, so it moves the "up to" ceiling (SPEND-24).
+    (enrichValidateCatchAll ? enrichVerifyCount * FINDYMAIL_CATCHALL_COST_USD * 0.2 : 0);
   const unverifiedSelected = selectedContacts.filter(
     (c) =>
       !c.email ||
@@ -1836,7 +1849,7 @@ export default function ContactsPage() {
                   Score LinkedIn activity (last posted){" "}
                   <span className="text-[9px] uppercase tracking-wide text-[#2E37FE]/70">add-on</span>
                   <span className="block text-[11px] text-muted-foreground">
-                    ≈ $0.005 per profile · stamps a recency rank to prioritize outreach
+                    {`≈ $${ENRICH_COST_ACTIVITY.toFixed(3)} per profile`} · stamps a recency rank to prioritize outreach
                   </span>
                 </span>
               </label>
@@ -1867,7 +1880,7 @@ export default function ContactsPage() {
                   Find owner names (decision-maker){" "}
                   <span className="text-[9px] uppercase tracking-wide text-[#2E37FE]/70">add-on</span>
                   <span className="block text-[11px] text-muted-foreground">
-                    ≈ $0.015 per business · for name-less company leads (e.g. Google Maps) —
+                    {`≈ $${NAMING_COST_USD.toFixed(3)} per business`} · for name-less company leads (e.g. Google Maps):
                     finds the owner&apos;s name &amp; title, then builds their personal email
                   </span>
                 </span>
@@ -1900,7 +1913,7 @@ export default function ContactsPage() {
                   Validate catch-all emails{" "}
                   <span className="text-[9px] uppercase tracking-wide text-[#2E37FE]/70">add-on</span>
                   <span className="block text-[11px] text-muted-foreground">
-                    ~$0.049 per hit · recover genuinely deliverable emails on catch-all domains via
+                    {`~$${FINDYMAIL_CATCHALL_COST_USD.toFixed(3)} per hit`} · recover genuinely deliverable emails on catch-all domains via
                     Findymail (charged only when one is found). Needs a Findymail key.
                   </span>
                 </span>
@@ -1913,6 +1926,7 @@ export default function ContactsPage() {
             <p className="text-xs text-muted-foreground">
               Estimated cost: up to ~${enrichEstimate.toFixed(3)}
             </p>
+            <PlanFloorNote />
             {enrichError && (
               <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-md px-2.5 py-1.5">
                 {enrichError}{" "}

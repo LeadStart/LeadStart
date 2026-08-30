@@ -72,8 +72,15 @@ function buildItemRows(
     // eligible even with no domain (naming's Layer 2 web-searches by name + city).
     // Gated on the per-contact addon stamp so a run without naming doesn't pull in
     // contacts it can't work.
+    // Per-contact add-on opt-ins (stamped on enrichment_data.addons at import).
+    // These pre-stamp each item's paid-phase status below, so the shared cron
+    // seeders run naming/verify/activity only for the contacts that opted in.
+    // A drain-merged run no longer runs a paid phase over strangers (SPEND-36).
+    const addons = normalizeAddons((c.enrichment_data as { addons?: unknown } | null)?.addons);
+    const skipActivity =
+      (c.enrichment_data as { skip_activity?: boolean } | null)?.skip_activity === true;
     const wantNaming =
-      normalizeAddons((c.enrichment_data as { addons?: unknown } | null)?.addons).naming &&
+      addons.naming &&
       !c.email &&
       !c.first_name &&
       !c.last_name &&
@@ -106,6 +113,14 @@ function buildItemRows(
               ? "company not on LinkedIn (website discovery off)"
               : "no parseable company LinkedIn URL",
       waterfall_status: null,
+      // Pre-stamp the opt-in add-on phases per contact (SPEND-36). Non-opted →
+      // 'skipped' so the cron seeders never pull this contact into a paid add-on
+      // phase (verify/naming seeders filter on status null; the activity seeder is
+      // now guarded on status null too). Opted → null so the seeder picks it up
+      // when the item is eligible (e.g. verify once an email exists).
+      verify_status: addons.verify ? null : "skipped",
+      naming_status: addons.naming ? null : "skipped",
+      activity_status: addons.activity && !skipActivity ? null : "skipped",
       email: c.email,
       created_at: now,
       updated_at: now,
@@ -155,18 +170,19 @@ export async function enqueueEnrichment(
 
   // Add-on gating (migration 00077). Activity + verify default OFF; a contact
   // opts in via the `addons` stamped on its enrichment_data at import time
-  // (import-prospects). `.some` is generous to a drain-merged mixed batch: if any
-  // person wanted an add-on, the run does that phase. Activity additionally
-  // respects the "already active on LinkedIn" skip so we don't re-measure what
-  // the search already filtered on.
+  // (import-prospects). The run-level flags are an OR-merge: a phase is ENABLED
+  // if any eligible contact opted in. Each item is then pre-stamped per its
+  // own opt-in (buildItemRows), so the cron seeders run each paid add-on phase
+  // ONLY over the contacts that opted in, not the whole drain-merged batch
+  // (SPEND-36). Activity additionally honors the per-contact "already active on
+  // LinkedIn" skip so we don't re-measure what the search already filtered on.
   const eligibleSet = new Set(eligibleContactIds);
   const eligible = contacts.filter((c) => eligibleSet.has(c.id));
   const addonsFor = (c: ContactRow) =>
     normalizeAddons((c.enrichment_data as { addons?: unknown } | null)?.addons);
-  const allSkipActivity = eligible.every(
-    (c) => (c.enrichment_data as { skip_activity?: boolean } | null)?.skip_activity === true,
-  );
-  const runActivity = eligible.some((c) => addonsFor(c).activity) && !allSkipActivity;
+  const skipActivityFor = (c: ContactRow) =>
+    (c.enrichment_data as { skip_activity?: boolean } | null)?.skip_activity === true;
+  const runActivity = eligible.some((c) => addonsFor(c).activity && !skipActivityFor(c));
   const runVerify = eligible.some((c) => addonsFor(c).verify);
   const runNaming = eligible.some((c) => addonsFor(c).naming);
   // Per-search catch-all opt-in ORs over the org-level setting: the run's config
