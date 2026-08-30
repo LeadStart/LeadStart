@@ -128,6 +128,38 @@ export default function ClientsPage() {
                 : "No former clients yet."}
             </p>
           ) : (
+            <>
+            {/* Mobile: stacked cards — no sideways-scrolling table */}
+            <div className="space-y-2.5 lg:hidden">
+              {pageRows.map((row) => {
+                const rowStatus: ClientStatus = (row.status ?? "active") as ClientStatus;
+                return (
+                  <div key={row.id} className="rounded-xl border border-border bg-card p-4">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-9 w-9 items-center justify-center rounded-lg text-xs font-bold text-white shrink-0" style={{ background: "#2E37FE" }}>{row.name.charAt(0)}</div>
+                      <div className="min-w-0 flex-1">
+                        <Link href={`/admin/clients/${row.id}`} className="block font-medium text-foreground truncate hover:text-[#2E37FE]">{row.name}</Link>
+                        <p className="text-xs text-muted-foreground">{row.activeCampaigns} active / {row.totalCampaigns} total campaigns</p>
+                      </div>
+                      <Badge variant="secondary" className={`shrink-0 ${row.userCount > 0 ? "badge-green" : "badge-amber"}`}>{row.userCount > 0 ? `${row.userCount} user${row.userCount !== 1 ? "s" : ""}` : "Not invited"}</Badge>
+                    </div>
+                    <div className="mt-3 flex items-center gap-2 border-t border-border/60 pt-3">
+                      <Button variant="ghost" size="sm" disabled={pendingId === row.id} onClick={() => toggleStatus(row.id, rowStatus)} className="h-8 px-2 text-xs text-muted-foreground hover:text-[#2E37FE]">
+                        {rowStatus === "active" ? (<><Archive size={13} /> Archive</>) : (<><ArchiveRestore size={13} /> Restore</>)}
+                      </Button>
+                      {rowStatus === "former" && (
+                        <Button variant="ghost" size="sm" className="h-8 px-2 text-xs text-muted-foreground hover:text-red-600" onClick={() => setDeleteTarget({ id: row.id, name: row.name })}>
+                          <Trash2 size={13} /> Delete
+                        </Button>
+                      )}
+                      <Link href={`/admin/clients/${row.id}`} className="ml-auto flex items-center gap-1 text-sm font-medium text-[#2E37FE]">View <ArrowRight size={13} /></Link>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            {/* Desktop: full sortable table */}
+            <div className="hidden lg:block">
             <Table>
               <TableHeader><TableRow><SortableHead sortKey="name" sortConfig={sortConfig} onSort={requestSort}>Name</SortableHead><SortableHead sortKey="activeCampaigns" sortConfig={sortConfig} onSort={requestSort}>Campaigns</SortableHead><SortableHead sortKey="userCount" sortConfig={sortConfig} onSort={requestSort}>Portal Access</SortableHead><TableHead></TableHead></TableRow></TableHeader>
               <TableBody>
@@ -173,6 +205,8 @@ export default function ClientsPage() {
                 })}
               </TableBody>
             </Table>
+            </div>
+            </>
           )}
           <PaginationControls
             currentPage={safePage}

@@ -137,6 +137,40 @@ export default function AllCampaignsPage() {
               </p>
               <PeriodToggle period={period} onChange={setPeriod} />
             </div>
+            {/* Mobile: stacked cards — no sideways-scrolling table */}
+            <div className="space-y-2.5 lg:hidden">
+              {pageRows.map((row) => {
+                const isOrphan = row.client_id === null;
+                const campaignHref = `/admin/campaigns/${row.id}`;
+                const clientHref = isOrphan ? null : `/admin/clients/${row.client_id}`;
+                return (
+                  <div key={row.id} className="rounded-xl border border-border bg-card p-4">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-9 w-9 items-center justify-center rounded-lg text-white shrink-0" style={{ background: "#2E37FE" }}><Mail size={15} /></div>
+                      <div className="min-w-0 flex-1">
+                        <Link href={campaignHref} className="block font-medium text-foreground truncate hover:text-[#2E37FE]">{row.name}</Link>
+                        <div className="text-xs text-muted-foreground truncate">
+                          {clientHref ? <Link href={clientHref} className="hover:text-foreground">{row.clientName || "—"}</Link> : <span className="text-amber-600">Unlinked</span>}
+                        </div>
+                      </div>
+                      <Badge variant="secondary" className={`shrink-0 ${row.status === "active" ? "badge-green" : row.status === "paused" ? "badge-amber" : "badge-slate"}`}>{row.status}</Badge>
+                    </div>
+                    <div className="mt-3 grid grid-cols-4 gap-2 border-t border-border/60 pt-3">
+                      <div className="min-w-0"><p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Sent</p><p className="text-sm font-semibold tabular-nums truncate">{row.metrics.emails_sent.toLocaleString()}</p></div>
+                      <div className="min-w-0"><p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Reply</p><p className={`text-sm font-semibold tabular-nums ${row.metrics.reply_rate >= 5 ? "text-emerald-600" : row.metrics.reply_rate >= 2 ? "text-amber-600" : "text-red-600"}`}>{row.metrics.reply_rate}%</p></div>
+                      <div className="min-w-0"><p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Bounce</p><p className={`text-sm font-semibold tabular-nums ${row.metrics.bounce_rate <= 2 ? "text-emerald-600" : "text-red-600"}`}>{row.metrics.bounce_rate}%</p></div>
+                      <div className="min-w-0"><p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Positive</p><p className="text-sm font-semibold tabular-nums">{row.metrics.meetings_booked}</p></div>
+                    </div>
+                    <div className="mt-3 flex items-center gap-1 border-t border-border/60 pt-3">
+                      <CampaignRowActions campaignId={row.id} campaignName={row.name} status={row.status as "active" | "paused" | "draft" | "completed" | null} sourceChannel={row.source_channel} onChanged={refetch} />
+                      <Link href={campaignHref} className="ml-auto flex items-center gap-1 text-sm font-medium text-[#2E37FE]">View <ArrowRight size={13} /></Link>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            {/* Desktop: full sortable table */}
+            <div className="hidden lg:block">
             <Table>
               <TableHeader><TableRow><SortableHead sortKey="name" sortConfig={sortConfig} onSort={requestSort}>Campaign</SortableHead><SortableHead sortKey="clientName" sortConfig={sortConfig} onSort={requestSort}>Client</SortableHead><SortableHead sortKey="status" sortConfig={sortConfig} onSort={requestSort}>Status</SortableHead><SortableHead sortKey="metrics.emails_sent" sortConfig={sortConfig} onSort={requestSort} className="text-right">Sent{period === "7d" ? " (7d)" : period === "30d" ? " (30d)" : ""}</SortableHead><SortableHead sortKey="metrics.reply_rate" sortConfig={sortConfig} onSort={requestSort} className="text-right">Reply Rate</SortableHead><SortableHead sortKey="metrics.bounce_rate" sortConfig={sortConfig} onSort={requestSort} className="text-right">Bounce Rate</SortableHead><SortableHead sortKey="metrics.meetings_booked" sortConfig={sortConfig} onSort={requestSort} className="text-right">Positive</SortableHead><TableHead></TableHead></TableRow></TableHeader>
               <TableBody>
@@ -180,6 +214,7 @@ export default function AllCampaignsPage() {
                 })}
               </TableBody>
             </Table>
+            </div>
             <PaginationControls
               currentPage={safePage}
               totalItems={sorted.length}
