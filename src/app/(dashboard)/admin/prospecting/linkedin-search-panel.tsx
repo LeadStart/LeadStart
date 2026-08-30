@@ -1477,9 +1477,9 @@ export function LinkedInSearchPanel() {
       {/* Form (left) + live enrichment status (right) */}
       <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
       <Card className="border-border/50 shadow-sm">
-        <CardHeader className="flex flex-row items-start justify-between gap-2 pb-3">
+        <CardHeader className="flex flex-col items-start gap-3 pb-3 sm:flex-row sm:justify-between">
           <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE] shrink-0">
               <UserSearch size={16} className="text-white" />
             </div>
             <div>
