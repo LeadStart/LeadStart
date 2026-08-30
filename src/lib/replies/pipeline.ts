@@ -15,6 +15,7 @@ import { runKeywordPrefilter } from "./keyword-prefilter";
 import { decideFinalClass } from "./decide";
 import { classifyReply, type ClassifierOutput } from "@/lib/ai/classifier";
 import { sendHotLeadNotification } from "@/lib/notifications/send-hot-lead";
+import { sendHotLeadPush } from "@/lib/notifications/web-push";
 import { deliverReplyAutomations } from "@/lib/notifications/internal-automations";
 import { MissingAnthropicKeyError } from "@/lib/ai/client";
 import { escapeLikePattern } from "@/lib/utils";
@@ -216,6 +217,21 @@ export async function runReplyPipeline(
       notifySkippedReason: "class_not_in_auto_notify",
     };
   }
+
+  // Admin web-push — fire it here (before the client-email checks below) so the
+  // owner is pinged even when the client has no notification_email. Self-guarded
+  // (never throws) and no-ops until VAPID keys are set, so it can't affect the
+  // hot-lead email path. Awaited so it completes before this serverless fn ends.
+  await sendHotLeadPush({
+    admin,
+    organizationId: reply.organization_id,
+    replyId,
+    leadName: reply.lead_name,
+    leadCompany: reply.lead_company,
+    replySubject: reply.subject,
+    replyBodyText: reply.body_text,
+    finalClass: decision.final_class,
+  });
 
   if (!client.notification_email) {
     return {

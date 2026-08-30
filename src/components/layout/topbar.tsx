@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Bell, Settings, LogOut, ChevronDown, User, MessageSquare, Mail, FileText, Menu } from "lucide-react";
 import { useSupabaseQuery } from "@/hooks/use-supabase-query";
 import { GlobalSearch } from "@/components/layout/global-search";
+import { NotificationsToggle } from "@/components/layout/notifications-toggle";
 import type { Notification } from "@/types/app";
 import {
   DropdownMenu,
@@ -198,6 +199,8 @@ export function Topbar({ userEmail, role, actualRole, onRoleSwitch, onMenuClick 
                 <Settings size={14} className="mr-2" />
                 Settings
               </DropdownMenuItem>
+              {/* Web-push opt-in — renders nothing where push isn't supported */}
+              <NotificationsToggle />
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
