@@ -219,6 +219,7 @@ function computeVerdict(s: HeartbeatSections): HealthVerdict {
   if (s.stuck.stalledHotLeadRetries > 0) return "yellow";
   if (s.deliveryGap.reportsBounced24h + s.deliveryGap.hotLeadsBounced24h > 0) return "yellow";
   if (s.inboxHealth.critical > 0) return "yellow";
+  if (s.inboxHealth.watch > 0) return "yellow";
   if (s.inboxHealth.autoPaused > 0) return "yellow";
   if (s.inboxHealth.stale) return "yellow";
 
@@ -946,6 +947,7 @@ function countSignals(s: HeartbeatSections): number {
   if (s.deliveryGap.reportsBounced24h + s.deliveryGap.hotLeadsBounced24h > 0)
     n++;
   if (s.inboxHealth.critical > 0) n++;
+  if (s.inboxHealth.watch > 0) n++;
   if (s.inboxHealth.autoPaused > 0) n++;
   if (s.inboxHealth.stale) n++;
   return n;
@@ -964,15 +966,6 @@ function etShortDate(now: Date): string {
     month: "short",
     day: "numeric",
   }).format(now);
-}
-
-// Short ET time, e.g. "5:31 PM" — for the "checked at" note on inbox health.
-function etTime(iso: string): string {
-  return new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/New_York",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(iso));
 }
 
 // Absolute admin dashboard URL. NEXT_PUBLIC_APP_URL already includes the /app
@@ -1051,10 +1044,6 @@ function campaignCardHtml(c: CampaignActivity): string {
           .map((n) => `<b style="color:#3D3D5C;">${n.toLocaleString()}</b>`)
           .join(' <span style="color:#c3c6d4;">&#8594;</span> ')} <span style="color:#9194AD;">(step 1&#8594;${c.stepCount})</span></div>`
       : "";
-  const repliesExtra =
-    c.positiveRepliesYesterday > 0
-      ? ` <span style="font-size:9px;color:#059669;">(${c.positiveRepliesYesterday} pos)</span>`
-      : "";
   const warmNote = warming
     ? ` · <span style="color:#b45309;">${c.warmingCount} inbox${c.warmingCount === 1 ? "" : "es"} warming</span>`
     : "";
@@ -1066,107 +1055,108 @@ function campaignCardHtml(c: CampaignActivity): string {
     </tr></table>
     <div style="margin:10px 0 4px;background:#eef0f5;border-radius:6px;height:8px;overflow:hidden;"><div style="width:${pct}%;height:8px;background:${barColor};border-radius:6px;"></div></div>
     <p style="margin:0 0 12px;font-size:11px;color:#9194AD;">${c.pctComplete}% of the sequence complete · ${c.active.toLocaleString()} active contacts${warmNote}</p>
-    <table width="100%" role="presentation"><tr>
-      <td width="33%" style="text-align:center;"><div style="font-size:19px;font-weight:800;color:#1A1A2E;">${c.sentYesterday.toLocaleString()}</div><div style="font-size:9.5px;color:#6B6E8A;text-transform:uppercase;letter-spacing:.3px;">Sent yest</div></td>
-      <td width="33%" style="text-align:center;border-left:1px solid #E2E3ED;border-right:1px solid #E2E3ED;"><div style="font-size:19px;font-weight:800;color:#1d4ed8;">${c.scheduledToday.toLocaleString()}</div><div style="font-size:9.5px;color:#6B6E8A;text-transform:uppercase;letter-spacing:.3px;">Today</div></td>
-      <td width="33%" style="text-align:center;"><div style="font-size:19px;font-weight:800;color:#10b981;">${c.repliesYesterday.toLocaleString()}</div><div style="font-size:9.5px;color:#6B6E8A;text-transform:uppercase;letter-spacing:.3px;">Replies${repliesExtra}</div></td>
-    </tr></table>
     ${stageLine}
   </div>`;
 }
 
-// Inbox health card — always shown when there are native mailboxes. A summary
-// chip row (healthy / watch / critical / auto-paused / unscored) over a per-inbox
-// list (worst first) with a colored score. Card tint reflects the worst state so
-// a bad inbox is visible at a glance, and a stale-checks note flags a dead cron.
+// Which inboxes/domains the health cron has flagged — a mailbox or domain on
+// the watch or critical band, or an auto-benched mailbox. Everything else is
+// healthy and stays hidden; the morning brief only surfaces what needs a look.
+// Shared by the inbox card (renders the list) and the system-checks card
+// (folds the all-clear count in when nothing is flagged).
+function inboxAttention(h: InboxHealthSection): {
+  mailboxes: InboxHealthRow[];
+  domains: DomainHealthLine[];
+  any: boolean;
+  hasCritical: boolean;
+} {
+  const mailboxes = h.mailboxes.filter(
+    (m) => m.band === "critical" || m.band === "watch" || m.autoPaused,
+  );
+  const domains = h.domains.filter(
+    (d) => d.band === "critical" || d.band === "watch",
+  );
+  const hasCritical =
+    mailboxes.some((m) => m.band === "critical" || m.autoPaused) ||
+    domains.some((d) => d.band === "critical");
+  return {
+    mailboxes,
+    domains,
+    any: mailboxes.length + domains.length > 0,
+    hasCritical,
+  };
+}
+
+// Inbox health card — surfaced ONLY when the cron has flagged something (a
+// mailbox/domain on watch or critical, or an auto-paused inbox). When every
+// inbox is healthy this renders nothing and the all-clear count rides along in
+// the system-checks card instead, keeping the quiet-morning brief short. Card
+// tint is red when anything is critical/auto-paused, amber for watch-only.
 function inboxHealthHtml(h: InboxHealthSection): string {
   if (h.error) {
     return `<div style="margin:0 0 12px;padding:10px 12px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;color:#b91c1c;font-size:12px;">Couldn't load inbox health: ${escapeHtml(h.error)}</div>`;
   }
   if (h.total === 0) return "";
 
+  const attn = inboxAttention(h);
+  if (!attn.any) return "";
+
   const bandColor = (b: HealthBand | null): string =>
-    b === "critical" ? "#b91c1c" : b === "watch" ? "#b45309" : b === "healthy" ? "#059669" : "#94a3b8";
+    b === "critical" ? "#b91c1c" : b === "watch" ? "#b45309" : "#94a3b8";
+  const bg = attn.hasCritical ? "#fef2f2" : "#fffbeb";
+  const bd = attn.hasCritical ? "#fecaca" : "#fde68a";
+  const titleColor = attn.hasCritical ? "#b91c1c" : "#b45309";
+  const scoreOf = (s: number | null): string => (s == null ? "&#8212;" : String(s));
 
-  const bad = h.critical > 0 || h.autoPaused > 0 || h.stale;
-  const warn = !bad && (h.watch > 0 || h.unscored > 0);
-  const bg = bad ? "#fef2f2" : warn ? "#fffbeb" : "#ecfdf5";
-  const bd = bad ? "#fecaca" : warn ? "#fde68a" : "#a7f3d0";
-  const titleColor = bad ? "#b91c1c" : warn ? "#b45309" : "#065f46";
-
-  const freshNote = h.stale
-    ? `<span style="color:#b91c1c;font-weight:600;">checks stale &#8212; health cron may be down</span>`
-    : h.freshestIso
-      ? `checked ${escapeHtml(etTime(h.freshestIso))}`
-      : `not yet checked`;
-
-  const chipStyle = (fg: string, bgc: string) =>
-    `font-size:11px;background:${bgc};color:${fg};border-radius:5px;padding:2px 8px;font-weight:600;white-space:nowrap;`;
-  const chips = [
-    h.healthy > 0 ? `<span style="${chipStyle("#059669", "#ecfdf5")}">${h.healthy} healthy</span>` : "",
-    h.watch > 0 ? `<span style="${chipStyle("#b45309", "#fffbeb")}">${h.watch} watch</span>` : "",
-    h.critical > 0 ? `<span style="${chipStyle("#b91c1c", "#fef2f2")}">${h.critical} critical</span>` : "",
-    h.autoPaused > 0 ? `<span style="${chipStyle("#b91c1c", "#fef2f2")}">${h.autoPaused} auto-paused</span>` : "",
-    h.unscored > 0 ? `<span style="${chipStyle("#475569", "#f1f5f9")}">${h.unscored} unscored</span>` : "",
-  ]
-    .filter(Boolean)
-    .join(" ");
-
-  const MAX = 10;
-  const rows = h.mailboxes
-    .slice(0, MAX)
-    .map((m) => {
-      const color = bandColor(m.band);
-      const scoreTxt = m.score == null ? "&#8212;" : String(m.score);
-      const tag = m.autoPaused
-        ? ` <span style="font-size:10px;color:#b91c1c;">(auto-paused)</span>`
-        : m.status !== "active"
-          ? ` <span style="font-size:10px;color:#9194AD;">(${escapeHtml(m.status)})</span>`
-          : "";
-      return `<tr>
-      <td style="padding:4px 0;font-size:12px;color:#3D3D5C;"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${color};margin-right:7px;"></span>${escapeHtml(m.email)}${tag}</td>
-      <td style="padding:4px 0;text-align:right;font-size:12.5px;font-weight:700;color:${color};white-space:nowrap;">${scoreTxt}</td>
+  // One flagged row: name (left) + band label & colored score (right).
+  const line = (
+    name: string,
+    scoreTxt: string,
+    color: string,
+    label: string,
+  ): string =>
+    `<tr>
+      <td style="padding:5px 0;font-size:12px;color:#3D3D5C;"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${color};margin-right:7px;"></span>${escapeHtml(name)}</td>
+      <td style="padding:5px 0;text-align:right;white-space:nowrap;"><span style="font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:${color};margin-right:8px;">${label}</span><span style="font-size:12.5px;font-weight:700;color:${color};">${scoreTxt}</span></td>
     </tr>`;
-    })
-    .join("");
-  const more =
-    h.mailboxes.length > MAX
-      ? `<p style="margin:6px 0 0;font-size:11px;color:#9194AD;text-align:center;">+ ${h.mailboxes.length - MAX} more &#8212; see the dashboard.</p>`
-      : "";
+  const subhead = (t: string, mt: string): string =>
+    `<div style="font-size:10px;font-weight:600;color:#9194AD;text-transform:uppercase;letter-spacing:0.03em;margin:${mt} 0 2px;">${t}</div>`;
 
-  // Per-domain rollup (the reputational unit): band-colored score + a lifecycle
-  // tag when the domain is anything other than plain 'active'.
-  const domainRows =
-    h.domains.length > 0
-      ? `<div style="margin:2px 0 10px;">
-      <div style="font-size:10px;font-weight:600;color:#9194AD;text-transform:uppercase;letter-spacing:0.03em;margin-bottom:3px;">Sending domains</div>
-      <table width="100%" role="presentation">${h.domains
-        .map((d) => {
-          const color = bandColor(d.band);
-          const scoreTxt = d.score == null ? "&#8212;" : String(d.score);
-          const lc =
+  const domainRows = attn.domains.length
+    ? subhead("Sending domains", "2px") +
+      `<table width="100%" role="presentation">${attn.domains
+        .map((d) =>
+          line(
             d.lifecycle && d.lifecycle !== "active"
-              ? ` <span style="font-size:10px;color:#9194AD;">(${escapeHtml(d.lifecycle)})</span>`
-              : "";
-          return `<tr>
-        <td style="padding:3px 0;font-size:12px;color:#3D3D5C;"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${color};margin-right:7px;"></span>${escapeHtml(d.domain)}${lc}</td>
-        <td style="padding:3px 0;text-align:right;font-size:12.5px;font-weight:700;color:${color};white-space:nowrap;">${scoreTxt}</td>
-      </tr>`;
-        })
-        .join("")}</table>
-    </div>`
-      : "";
+              ? `${d.domain} (${d.lifecycle})`
+              : d.domain,
+            scoreOf(d.score),
+            bandColor(d.band),
+            d.band ?? "",
+          ),
+        )
+        .join("")}</table>`
+    : "";
+  const mailboxRows = attn.mailboxes.length
+    ? subhead("Mailboxes", attn.domains.length ? "10px" : "2px") +
+      `<table width="100%" role="presentation">${attn.mailboxes
+        .map((m) =>
+          line(
+            m.email,
+            scoreOf(m.score),
+            m.autoPaused ? "#b91c1c" : bandColor(m.band),
+            m.autoPaused ? "paused" : (m.band ?? ""),
+          ),
+        )
+        .join("")}</table>`
+    : "";
 
   return `
   <div style="background:${bg};border:1px solid ${bd};border-radius:12px;padding:16px;margin:0 0 12px;">
-    <table width="100%" role="presentation"><tr>
-      <td style="font-size:13px;font-weight:700;color:${titleColor};">Inbox health</td>
-      <td style="text-align:right;font-size:11px;color:#6B6E8A;">${freshNote}</td>
-    </tr></table>
-    <div style="margin:8px 0 10px;line-height:1.9;">${chips}</div>
+    <p style="margin:0 0 3px;font-size:13px;font-weight:700;color:${titleColor};">&#9888; Inboxes needing attention</p>
+    <p style="margin:0 0 8px;font-size:11px;color:#6B6E8A;">Flagged watch or critical by the health check &#8212; everything else is healthy.</p>
     ${domainRows}
-    <table width="100%" role="presentation">${rows}</table>
-    ${more}
+    ${mailboxRows}
   </div>`;
 }
 
@@ -1196,6 +1186,8 @@ function systemChecksHtml(s: HeartbeatSections, verdict: HealthVerdict): string 
     problems.push(`${s.stuck.stalledHotLeadRetries} hot-lead retr${s.stuck.stalledHotLeadRetries === 1 ? "y" : "ies"} stalled`);
   if (s.inboxHealth.critical > 0)
     problems.push(`${s.inboxHealth.critical} sending inbox${s.inboxHealth.critical === 1 ? "" : "es"} scored critical health`);
+  if (s.inboxHealth.watch > 0)
+    problems.push(`${s.inboxHealth.watch} sending inbox${s.inboxHealth.watch === 1 ? "" : "es"} flagged watch`);
   if (s.inboxHealth.autoPaused > 0)
     problems.push(`${s.inboxHealth.autoPaused} inbox${s.inboxHealth.autoPaused === 1 ? "" : "es"} auto-paused for health`);
   if (s.inboxHealth.stale)
@@ -1222,6 +1214,7 @@ function systemChecksHtml(s: HeartbeatSections, verdict: HealthVerdict): string 
         <tr>${cell("0 pending alerts")}${cell("Delivery confirmed (webhook live)")}</tr>
         <tr>${cell("0 bounces in 24h")}${cell("0 stuck rows")}</tr>
         <tr>${cell("Env &amp; keys OK")}${cell(`${s.config.ownerCount} owner profile${s.config.ownerCount === 1 ? "" : "s"}`)}</tr>
+        ${s.inboxHealth.total > 0 ? `<tr>${cell(`${s.inboxHealth.healthy} inbox${s.inboxHealth.healthy === 1 ? "" : "es"} healthy`)}<td></td></tr>` : ""}
       </table>
       <p style="margin:10px 0 0;font-size:11px;color:#059669;border-top:1px solid #a7f3d0;padding-top:8px;">${footNote}</p>
     </div>`;
@@ -1239,6 +1232,32 @@ function systemChecksHtml(s: HeartbeatSections, verdict: HealthVerdict): string 
     <ul style="margin:0;padding-left:18px;font-size:12.5px;color:${color};line-height:1.5;">${items}</ul>
     <p style="margin:10px 0 0;font-size:11px;color:#6B6E8A;border-top:1px solid ${bd};padding-top:8px;">${footNote}</p>
   </div>`;
+}
+
+// The three headline totals as color-coded stat cards — mirrors the admin
+// dashboard's KPI tiles. Two-line labels (metric + timeframe) so "scheduled
+// today" and "replies yesterday" read unambiguously. Table-based for email.
+function kpiRowHtml(t: CampaignTotals): string {
+  const cell = (
+    n: number,
+    label: string,
+    when: string,
+    color: string,
+    bg: string,
+    bd: string,
+  ): string =>
+    `<td width="33%" style="padding:0 4px;vertical-align:top;">
+      <div style="background:${bg};border:1px solid ${bd};border-radius:12px;padding:14px 6px 12px;text-align:center;">
+        <div style="font-size:26px;font-weight:800;line-height:1;color:${color};">${n.toLocaleString()}</div>
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:#475569;margin-top:8px;">${label}</div>
+        <div style="font-size:9px;color:#94a3b8;margin-top:1px;">${when}</div>
+      </div>
+    </td>`;
+  return `<table width="100%" role="presentation" style="margin:0 0 14px;"><tr>
+      ${cell(t.sentYesterday, "Sent", "yesterday", "#0f172a", "#f1f5f9", "#e2e8f0")}
+      ${cell(t.scheduledToday, "Scheduled", "today", "#2E37FE", "#EDEEFF", "#D1D3FF")}
+      ${cell(t.repliesYesterday, "Replies", "yesterday", "#059669", "#ecfdf5", "#a7f3d0")}
+    </tr></table>`;
 }
 
 function buildHtml(
@@ -1268,8 +1287,9 @@ function buildHtml(
     <p style="margin:0;color:rgba(255,255,255,0.7);font-size:12px;text-transform:uppercase;letter-spacing:1px;">${escapeHtml(eyebrow)}</p>
     <h1 style="margin:5px 0 0;color:#ffffff;font-size:23px;font-weight:700;letter-spacing:-0.4px;">Good morning</h1>
   </div>
-  <div style="padding:22px 26px 6px;">
-    <p style="margin:0;font-size:15.5px;line-height:1.65;color:#3D3D5C;">${summary}</p>
+  <div style="padding:20px 22px 4px;">
+    ${ca.totals.activeCampaigns > 0 ? kpiRowHtml(ca.totals) : ""}
+    <p style="margin:0;font-size:15px;line-height:1.6;color:#3D3D5C;">${summary}</p>
   </div>
   <div style="padding:12px 22px 4px;">
     ${campErr}
