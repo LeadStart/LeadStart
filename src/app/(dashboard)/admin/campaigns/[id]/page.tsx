@@ -442,7 +442,7 @@ export default async function AdminCampaignDetailPage({
               {/* Email verification (Million Verifier). Risky = catch-all +
                   unknown (sent, flagged); Undeliverable = invalid + disposable +
                   errored (never sent); Unverified = not yet checked. */}
-              <div className="grid grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
                 <QueueStat
                   label="Verified"
                   value={nativeStats.verification.verified}

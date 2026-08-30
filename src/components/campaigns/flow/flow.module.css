@@ -221,3 +221,14 @@
 .abBI { overflow: hidden; min-height: 0; }
 .abBody { padding: 11px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; opacity: 0; transform: translateY(-6px); transition: opacity .24s ease, transform .3s cubic-bezier(.34,1.56,.64,1); }
 .abOpen .abBody { opacity: 1; transform: none; }
+
+/* ── Mobile: fit the sequence spine + node tiles to the viewport so nodes
+   don't clip or force a horizontal pan on phones. Desktop (>640px) keeps the
+   fixed 340px centered spine. Placed last so it wins over the base rules. ── */
+@media (max-width: 640px) {
+  .canvas { padding: 20px 10px; cursor: auto; }
+  .spine { width: 100%; min-width: 0; }
+  .seq { width: 100%; }
+  .tile { width: 100%; }
+  .cond { width: 100%; }
+}
