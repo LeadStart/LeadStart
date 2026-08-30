@@ -45,7 +45,7 @@ supabase/.temp/
 leads*.json
 
 # Generated email-template previews (output of scripts/render-*.mjs)
-public/hot-lead-email-preview.html
+public/hot-lead-email-preview*.html
 
 # Local data-op backups (durable rollback files; never committed)
 /backups/

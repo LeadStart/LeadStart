@@ -15,10 +15,7 @@
 import type { LeadReply } from "@/types/app";
 import type { createAdminClient } from "@/lib/supabase/admin";
 import { signReplyUrl } from "@/lib/security/signed-urls";
-import {
-  buildClientNotificationEmail,
-  classLabelFor,
-} from "./client-email";
+import { buildClientNotificationEmail } from "./client-email";
 import {
   sendViaResend,
   MissingResendKeyError as ResendKeyMissingError,
@@ -109,26 +106,26 @@ export async function sendHotLeadNotification(
   // 1. Sign. Token + hash are bound to this reply.id for the next 4h.
   const { token, hash } = signReplyUrl(reply.id);
 
-  // 2. Build the URLs. NEXT_PUBLIC_APP_URL already includes the /app basePath
-  //    (see .env.example), so we append the client route directly.
-  //    - dossierUrl: short-lived signed URL, works without login (mobile tap)
-  //    - portalUrl:  same route minus the token — permanent, requires login.
-  //      Middleware redirects unauthenticated hits to /login?next=… so the
-  //      client lands on this reply after signing in.
+  // 2. Build the reply-thread URL. NEXT_PUBLIC_APP_URL already includes the
+  //    /app basePath (see .env.example), so we append the client route
+  //    directly. The signed token gives a frictionless no-login open on a
+  //    mobile tap; once it expires the middleware still lands the client on
+  //    this thread after they sign in, so the link stays good either way.
   const baseUrl = requireAppUrl();
   const replyPath = `/client/inbox/${reply.id}`;
   const dossierUrl = `${baseUrl}${replyPath}?token=${encodeURIComponent(token)}`;
-  const portalUrl = `${baseUrl}${replyPath}`;
 
   // 3. Build the email.
   const { subject, html } = buildClientNotificationEmail({
     leadName: reply.lead_name,
+    leadTitle: reply.lead_title,
     leadCompany: reply.lead_company,
+    leadEmail: reply.lead_email,
     leadPhone: reply.lead_phone_e164,
-    classLabel: classLabelFor(reply.final_class),
+    leadLinkedinUrl: reply.lead_linkedin_url,
+    replySubject: reply.subject,
     replyBodyPreview: truncateForPreview(reply.body_text),
-    dossierUrl,
-    portalUrl,
+    replyThreadUrl: dossierUrl,
     receivedAt: reply.received_at,
   });
 

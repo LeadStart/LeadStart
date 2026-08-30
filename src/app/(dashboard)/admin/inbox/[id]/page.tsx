@@ -6,6 +6,7 @@ import {
   ChevronLeft,
   Building2,
   ExternalLink,
+  Mail,
   MailOpen,
   Phone,
   Clock,
@@ -13,9 +14,10 @@ import {
   Eye,
 } from "lucide-react";
 import type { LeadReply } from "@/types/app";
-import { CLASS_META, OUTCOME_META, timeSince, formatBody } from "@/lib/replies/ui";
+import { CLASS_META, OUTCOME_META, timeSince, telHref, formatBody } from "@/lib/replies/ui";
 import { ReclassifyForm } from "./reclassify-form";
 import { ExcludeToggle } from "./exclude-toggle";
+import { LocalTime } from "./local-time";
 
 // Detail-page columns. Skips the heavy stuff a single-row read doesn't
 // need: raw_payload + body_html (we render body_text), final_body_*
@@ -143,30 +145,54 @@ export default async function AdminReplyDetailPage({
                   )}
                 </div>
               )}
-              <div className="flex items-center gap-3 mt-2 text-xs">
+              {/* Lead contact — the email is always shown so the lead is reachable */}
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-xs">
+                <a
+                  href={`mailto:${reply.lead_email}`}
+                  className="inline-flex items-center gap-1 text-[#2E37FE] hover:underline"
+                >
+                  <Mail size={11} /> {reply.lead_email}
+                </a>
+                {reply.lead_phone_e164 && (
+                  <a
+                    href={telHref(reply.lead_phone_e164) ?? "#"}
+                    className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground"
+                  >
+                    <Phone size={11} /> {reply.lead_phone_e164}
+                  </a>
+                )}
+                {reply.lead_linkedin_url && (
+                  <a
+                    href={reply.lead_linkedin_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 text-[#0077b5] hover:underline"
+                  >
+                    LinkedIn <ExternalLink size={11} />
+                  </a>
+                )}
+              </div>
+
+              {/* Client + when the reply arrived */}
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 pt-2 border-t border-border/40 text-xs">
                 <span className="text-muted-foreground">
                   Client:{" "}
                   <span className="text-foreground font-medium">
                     {reply.client?.name}
                   </span>
+                  {reply.client?.notification_email && (
+                    <span className="text-muted-foreground">
+                      {" "}
+                      · {reply.client.notification_email}
+                    </span>
+                  )}
                 </span>
-                {reply.lead_phone_e164 && (
-                  <span className="flex items-center gap-1 text-muted-foreground">
-                    <Phone size={11} /> {reply.lead_phone_e164}
-                  </span>
-                )}
+                <span className="inline-flex items-center gap-1 text-muted-foreground">
+                  <Clock size={11} /> Received{" "}
+                  <LocalTime iso={reply.received_at} className="text-foreground" />
+                </span>
               </div>
             </div>
-            {reply.lead_linkedin_url && (
-              <a
-                href={reply.lead_linkedin_url}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-[#0077b5] hover:bg-[#0077b5]/10 shrink-0"
-              >
-                LinkedIn <ExternalLink size={12} />
-              </a>
-            )}
           </div>
         </CardContent>
       </Card>
@@ -182,7 +208,8 @@ export default async function AdminReplyDetailPage({
               </p>
             </div>
             <p className="text-[10px] text-muted-foreground flex items-center gap-1">
-              <Clock size={10} /> {timeSince(reply.received_at)}
+              <Clock size={10} /> <LocalTime iso={reply.received_at} /> ·{" "}
+              {timeSince(reply.received_at)}
             </p>
           </div>
           {reply.subject && (
@@ -213,14 +240,6 @@ export default async function AdminReplyDetailPage({
                 {reply.claude_class || (
                   <span className="text-muted-foreground">—</span>
                 )}
-              </p>
-            </div>
-            <div>
-              <p className="text-muted-foreground">Confidence</p>
-              <p className="font-medium text-foreground">
-                {reply.claude_confidence != null
-                  ? `${Math.round(reply.claude_confidence * 100)}%`
-                  : "—"}
               </p>
             </div>
             <div>
@@ -287,7 +306,8 @@ export default async function AdminReplyDetailPage({
             </p>
             {reply.outcome_logged_at && (
               <p className="text-[10px] text-muted-foreground">
-                logged {timeSince(reply.outcome_logged_at)}
+                logged <LocalTime iso={reply.outcome_logged_at} /> ·{" "}
+                {timeSince(reply.outcome_logged_at)}
               </p>
             )}
           </div>

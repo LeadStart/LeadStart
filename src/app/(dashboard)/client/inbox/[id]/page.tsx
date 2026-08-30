@@ -1,28 +1,22 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { appUrl } from "@/lib/api-url";
 import { useClientData } from "../../client-data-context";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import {
-  Phone,
   ChevronLeft,
-  Building2,
   ExternalLink,
-  MailOpen,
   AlertCircle,
   Clock,
   CheckCircle2,
   Send,
-  Mail,
 } from "lucide-react";
 import type { LeadReply, ReplyClass, ReplyOutcome } from "@/types/app";
 import {
-  CLASS_META,
   OUTCOME_OPTIONS,
   isReplyActionable,
   timeSince,
@@ -43,11 +37,41 @@ const REPLYABLE_CLASSES: ReplyClass[] = [
   "referral_forward",
 ];
 
+// Brand gradients (inline — custom gradient classes don't reliably generate
+// under Tailwind v4, per project convention).
+const GRAD = "linear-gradient(135deg, #6B72FF 0%, #2E37FE 30%, #1C24B8 65%, #0F1880 100%)";
+const GREEN = "linear-gradient(135deg, #10b981 0%, #059669 100%)";
+const BLUE = "linear-gradient(135deg, #2AA4E4 0%, #0A66C2 60%, #044A82 100%)";
+const SLATE = "linear-gradient(135deg, #8b93b8 0%, #5b6486 100%)";
+
+// Monogram from a person's name ("Sarah Chen" → "SC").
+function initials(name: string): string {
+  const p = name.trim().split(/\s+/).filter(Boolean);
+  if (!p.length) return "•";
+  if (p.length === 1) return p[0].slice(0, 2).toUpperCase();
+  return (p[0][0] + p[p.length - 1][0]).toUpperCase();
+}
+
+// Absolute timestamp in the viewer's own timezone. Safe to format inline here
+// because this page loads its reply client-side, so the timestamp only ever
+// renders in the browser (no SSR → no hydration mismatch).
+function formatReceived(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
+  });
+}
+
 // ===== Page =====
 
 export default function ReplyDossierPage() {
   const { id } = useParams<{ id: string }>();
-  const router = useRouter();
   const { client, loading: contextLoading } = useClientData();
 
   const [reply, setReply] = useState<LeadReply | null>(null);
@@ -61,8 +85,8 @@ export default function ReplyDossierPage() {
   const [outcomeSaved, setOutcomeSaved] = useState(false);
   const [excludeSaving, setExcludeSaving] = useState(false);
 
-  // Portal-reply composer state
-  const [composerOpen, setComposerOpen] = useState(false);
+  // Portal-reply composer state (open by default — the hot-lead email's
+  // "Reply" button lands the client here to respond).
   const [composerSubject, setComposerSubject] = useState("");
   const [composerBody, setComposerBody] = useState("");
   const [sending, setSending] = useState(false);
@@ -203,7 +227,7 @@ export default function ReplyDossierPage() {
           href="/client/inbox"
           className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
         >
-          <ChevronLeft size={14} /> Back to Inbox
+          <ChevronLeft size={14} /> Back to inbox
         </Link>
         <Card className="border-border/50">
           <CardContent className="py-12 text-center">
@@ -214,121 +238,173 @@ export default function ReplyDossierPage() {
     );
   }
 
-  const meta = reply.final_class ? CLASS_META[reply.final_class] : null;
   const callLink = telHref(reply.lead_phone_e164);
   const urgency = urgencyColor(reply.received_at);
 
-  return (
-    <div className="space-y-5 max-w-2xl mx-auto">
-      {/* Back */}
-      <button
-        onClick={() => router.back()}
-        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground cursor-pointer"
-      >
-        <ChevronLeft size={14} /> Back
-      </button>
+  // Identity: a known person, or a generic company inbox (no lead_name — e.g.
+  // a Maps info@ lead) where the email itself is the identity.
+  const isGeneric = !reply.lead_name?.trim();
+  const emailDomain = reply.lead_email.includes("@") ? reply.lead_email.split("@")[1] : "";
+  const displayName =
+    reply.lead_name?.trim() || reply.lead_company?.trim() || emailDomain || reply.lead_email;
+  const subParts = [reply.lead_title, reply.lead_company].filter(Boolean).join(" · ");
+  const monogram = isGeneric ? "🏢" : initials(reply.lead_name || "");
+  const avatarBg = isGeneric ? SLATE : GRAD;
 
-      {/* Urgency banner */}
+  const isReplyable = reply.final_class ? REPLYABLE_CLASSES.includes(reply.final_class) : false;
+  const isSent = reply.status === "sent";
+
+  return (
+    <div className="space-y-4 max-w-2xl mx-auto">
+      {/* Back */}
+      <Link
+        href="/client/inbox"
+        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+      >
+        <ChevronLeft size={14} /> Back to inbox
+      </Link>
+
+      {/* Urgency */}
       {isReplyActionable(reply) && (
         <div
           className="flex items-center gap-3 rounded-xl px-4 py-3"
-          style={{
-            background: `${urgency}15`,
-            border: `1px solid ${urgency}40`,
-          }}
+          style={{ background: `${urgency}14`, border: `1px solid ${urgency}33` }}
         >
           <AlertCircle size={18} style={{ color: urgency }} />
           <div className="text-sm">
             <span className="font-semibold" style={{ color: urgency }}>
               Received {timeSince(reply.received_at)}.
             </span>{" "}
-            <span className="text-foreground/80">Every minute matters — call now.</span>
+            <span className="text-foreground/80">The faster you respond, the more likely you win.</span>
           </div>
         </div>
       )}
 
-      {/* Prospect card */}
+      {/* Contact / company card */}
       <Card className="border-border/50 shadow-sm">
-        <CardContent className="px-5 py-4 space-y-3">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-lg font-bold text-foreground truncate">
-                  {reply.lead_name || reply.lead_email}
-                </h2>
-                {meta && (
-                  <Badge variant="secondary" className={`${meta.badge} text-[10px] shrink-0`}>
-                    {meta.label}
-                  </Badge>
-                )}
-              </div>
-              {reply.lead_company && (
-                <div className="flex items-center gap-1.5 text-sm text-muted-foreground mt-1">
-                  <Building2 size={14} />
-                  <span>{reply.lead_company}</span>
-                  {reply.lead_title && <span className="text-muted-foreground/70"> · {reply.lead_title}</span>}
+        <CardContent className="px-5 py-4 space-y-4">
+          <div className="flex items-start gap-3">
+            <div
+              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-white font-bold text-lg leading-none"
+              style={{ background: avatarBg }}
+            >
+              {monogram}
+            </div>
+            <div className="min-w-0 flex-1">
+              <h2 className="text-lg font-bold text-foreground truncate">{displayName}</h2>
+              {isGeneric ? (
+                <>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-foreground/70 mt-1.5">
+                    Company email
+                  </p>
+                  <a
+                    href={`mailto:${reply.lead_email}`}
+                    className="text-sm font-semibold text-[#2E37FE] break-all"
+                  >
+                    {reply.lead_email}
+                  </a>
+                </>
+              ) : (
+                subParts && <p className="text-sm text-muted-foreground mt-0.5">{subParts}</p>
+              )}
+            </div>
+          </div>
+
+          {/* Detail rows */}
+          {(!isGeneric || reply.lead_phone_e164 || reply.lead_linkedin_url) && (
+            <div className="border-t border-border/40 text-sm">
+              {!isGeneric && (
+                <div className="flex items-center justify-between gap-3 py-2.5 border-b border-border/30">
+                  <span className="text-muted-foreground">Email</span>
+                  <a href={`mailto:${reply.lead_email}`} className="font-semibold text-[#2E37FE] truncate">
+                    {reply.lead_email}
+                  </a>
+                </div>
+              )}
+              {reply.lead_phone_e164 && (
+                <div className="flex items-center justify-between gap-3 py-2.5 border-b border-border/30">
+                  <span className="text-muted-foreground">Phone</span>
+                  <a href={callLink ?? "#"} className="font-semibold text-foreground">
+                    {reply.lead_phone_e164}
+                  </a>
+                </div>
+              )}
+              {reply.lead_linkedin_url && (
+                <div className="flex items-center justify-between gap-3 py-2.5 border-b border-border/30">
+                  <span className="text-muted-foreground">LinkedIn</span>
+                  <a
+                    href={reply.lead_linkedin_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 font-semibold text-[#2E37FE]"
+                  >
+                    View profile <ExternalLink size={11} />
+                  </a>
                 </div>
               )}
             </div>
-            {reply.lead_linkedin_url && (
-              <a
-                href={reply.lead_linkedin_url}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-[#0077b5] hover:bg-[#0077b5]/10 shrink-0"
-                title="View LinkedIn"
-              >
-                LinkedIn <ExternalLink size={12} />
-              </a>
-            )}
-          </div>
+          )}
+
+          {/* Actions: Call (green) + LinkedIn (blue) */}
+          {(callLink || reply.lead_linkedin_url) && (
+            <div className="flex gap-2.5">
+              {callLink && (
+                <a
+                  href={callLink}
+                  className="flex-1 text-center text-white font-bold text-sm rounded-[10px] py-3 no-underline"
+                  style={{ background: GREEN }}
+                >
+                  📞 Call
+                </a>
+              )}
+              {reply.lead_linkedin_url && (
+                <a
+                  href={reply.lead_linkedin_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex-1 text-center text-white font-bold text-sm rounded-[10px] py-3 no-underline"
+                  style={{ background: BLUE }}
+                >
+                  💼 LinkedIn
+                </a>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      {/* Primary CTA: Call */}
-      {callLink ? (
-        <a
-          href={callLink}
-          className="btn-blue flex items-center justify-center gap-3 w-full py-5 text-base font-bold no-underline"
-          style={{ fontSize: 18 }}
-        >
-          <Phone size={22} />
-          <span>Call {reply.lead_phone_e164}</span>
-        </a>
-      ) : (
-        <Card className="border-amber-200 bg-amber-50">
-          <CardContent className="py-4 text-center">
-            <p className="text-sm text-amber-800">
-              No phone number on this lead. Use the email-reply option below.
-            </p>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Reply body */}
+      {/* Their reply — chat bubble */}
       <Card className="border-border/50 shadow-sm">
         <CardContent className="px-5 py-4">
-          <div className="flex items-center gap-2 mb-3">
-            <MailOpen size={14} className="text-muted-foreground" />
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Their reply
-            </p>
-          </div>
-          {reply.subject && (
-            <p className="text-sm font-semibold text-foreground mb-2">{reply.subject}</p>
-          )}
-          <div
-            className="text-sm text-foreground leading-relaxed whitespace-pre-wrap"
-            dangerouslySetInnerHTML={{ __html: formatBody(reply.body_text) }}
-          />
-          {reply.claude_reason && (
-            <div className="mt-3 pt-3 border-t border-border/50">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">
-                Why we flagged this
-              </p>
-              <p className="text-xs text-muted-foreground italic">&ldquo;{reply.claude_reason}&rdquo;</p>
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-3">
+            Their reply
+          </p>
+          <div className="flex gap-3">
+            <div
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white font-bold text-xs leading-none"
+              style={{ background: avatarBg }}
+            >
+              {monogram}
             </div>
-          )}
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-bold text-foreground">
+                {displayName}
+                {isGeneric ? (
+                  <span className="text-xs font-normal text-muted-foreground"> · {reply.lead_email}</span>
+                ) : (
+                  <span className="text-xs font-normal text-muted-foreground"> replied</span>
+                )}
+              </p>
+              <p className="text-[11px] text-muted-foreground mb-2">
+                {formatReceived(reply.received_at)} · {timeSince(reply.received_at)}
+                {reply.subject ? ` · ${reply.subject}` : ""}
+              </p>
+              <div
+                className="rounded-[4px_14px_14px_14px] bg-[#F1F2F9] px-4 py-3 text-sm text-foreground leading-relaxed whitespace-pre-wrap"
+                dangerouslySetInnerHTML={{ __html: formatBody(reply.body_text) }}
+              />
+            </div>
+          </div>
         </CardContent>
       </Card>
 
@@ -350,6 +426,89 @@ export default function ReplyDossierPage() {
         </Card>
       )}
 
+      {/* Reply composer (open) OR sent confirmation */}
+      {isSent ? (
+        <Card className="border-emerald-200 bg-emerald-50/40 shadow-sm">
+          <CardContent className="px-5 py-4">
+            <div className="flex items-start gap-2">
+              <CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-emerald-900">
+                  Reply sent {reply.sent_at ? timeSince(reply.sent_at) : ""}
+                </p>
+                <p className="text-xs text-emerald-800 mt-0.5">
+                  CC&apos;d to your inbox so the thread continues there.
+                </p>
+                {reply.final_body_text && (
+                  <details className="mt-3">
+                    <summary className="text-xs text-emerald-800/80 cursor-pointer hover:text-emerald-900">
+                      View sent message
+                    </summary>
+                    <pre className="mt-2 text-xs text-foreground whitespace-pre-wrap font-sans bg-white/60 rounded-lg p-3 border border-emerald-200/60">
+                      {reply.final_body_text}
+                    </pre>
+                  </details>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      ) : isReplyable ? (
+        <Card className="shadow-sm" style={{ borderColor: "#C9CEEA" }}>
+          <CardContent className="px-5 py-4 space-y-3">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-[#2E37FE]">
+              ✍️ Your reply
+            </p>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Subject
+              </label>
+              <input
+                type="text"
+                value={composerSubject}
+                onChange={(e) => setComposerSubject(e.target.value)}
+                disabled={sending}
+                className="w-full rounded-lg border border-border/60 bg-card px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#2E37FE]/30 disabled:opacity-60"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Message
+              </label>
+              <textarea
+                value={composerBody}
+                onChange={(e) => setComposerBody(e.target.value)}
+                rows={9}
+                placeholder="Write your reply…"
+                disabled={sending}
+                className="w-full rounded-lg border border-border/60 bg-card px-3 py-2 text-sm resize-y focus:outline-none focus:ring-2 focus:ring-[#2E37FE]/30 disabled:opacity-60"
+              />
+            </div>
+
+            {sendError && (
+              <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-900">
+                {sendError}
+              </div>
+            )}
+
+            <div className="flex items-center justify-between gap-3 pt-1">
+              <p className="text-[11px] text-muted-foreground">
+                Sends from the mailbox they replied to and CC&apos;s your inbox, so the whole thread stays in one place.
+              </p>
+              <button
+                onClick={handleSend}
+                disabled={!composerBody.trim() || sending}
+                className="text-white rounded-[10px] px-5 py-2.5 text-sm font-bold inline-flex items-center gap-1.5 shrink-0 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{ background: GRAD }}
+              >
+                <Send size={14} />
+                {sending ? "Sending…" : "Send reply"}
+              </button>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
       {/* Outcome capture */}
       <Card className="border-border/50 shadow-sm">
         <CardContent className="px-5 py-4 space-y-3">
@@ -363,6 +522,9 @@ export default function ReplyDossierPage() {
               </p>
             )}
           </div>
+          <p className="text-xs text-muted-foreground -mt-1">
+            Tell us what happened — it keeps your dashboard and reports accurate.
+          </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {OUTCOME_OPTIONS.map((opt) => (
               <button
@@ -426,128 +588,6 @@ export default function ReplyDossierPage() {
           </button>
         </CardContent>
       </Card>
-
-      {/* Reply via portal — manual composer (no AI drafting) */}
-      {(() => {
-        const isReplyable = reply.final_class
-          ? REPLYABLE_CLASSES.includes(reply.final_class)
-          : false;
-        const isSent = reply.status === "sent";
-
-        if (isSent) {
-          return (
-            <Card className="border-emerald-200 bg-emerald-50/40 shadow-sm">
-              <CardContent className="px-5 py-4">
-                <div className="flex items-start gap-2">
-                  <CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-emerald-900">
-                      Reply sent {reply.sent_at ? timeSince(reply.sent_at) : ""}
-                    </p>
-                    <p className="text-xs text-emerald-800 mt-0.5">
-                      CC&apos;d to your inbox so the thread continues there.
-                    </p>
-                    {reply.final_body_text && (
-                      <details className="mt-3">
-                        <summary className="text-xs text-emerald-800/80 cursor-pointer hover:text-emerald-900">
-                          View sent body
-                        </summary>
-                        <pre className="mt-2 text-xs text-foreground whitespace-pre-wrap font-sans bg-white/60 rounded-lg p-3 border border-emerald-200/60">
-                          {reply.final_body_text}
-                        </pre>
-                      </details>
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        }
-
-        if (!isReplyable) return null;
-
-        if (!composerOpen) {
-          return (
-            <Card className="border-border/50 shadow-sm">
-              <CardContent className="px-5 py-4 text-center">
-                <p className="text-xs text-muted-foreground mb-2">Prefer to respond by email?</p>
-                <button
-                  onClick={() => setComposerOpen(true)}
-                  className="btn-secondary-white px-4 py-2 text-sm inline-flex items-center gap-2 cursor-pointer"
-                >
-                  <Mail size={14} /> Reply via portal
-                </button>
-              </CardContent>
-            </Card>
-          );
-        }
-
-        return (
-          <Card className="border-border/50 shadow-sm">
-            <CardContent className="px-5 py-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Reply via portal
-                </p>
-                <button
-                  onClick={() => setComposerOpen(false)}
-                  className="text-xs text-muted-foreground hover:text-foreground cursor-pointer"
-                >
-                  Collapse
-                </button>
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                    Subject
-                  </label>
-                  <input
-                    type="text"
-                    value={composerSubject}
-                    onChange={(e) => setComposerSubject(e.target.value)}
-                    disabled={sending}
-                    className="w-full rounded-lg border border-border/60 bg-card px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#2E37FE]/30 disabled:opacity-60"
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                    Body
-                  </label>
-                  <textarea
-                    value={composerBody}
-                    onChange={(e) => setComposerBody(e.target.value)}
-                    rows={10}
-                    placeholder="Write your reply…"
-                    disabled={sending}
-                    className="w-full rounded-lg border border-border/60 bg-card px-3 py-2 text-sm resize-y focus:outline-none focus:ring-2 focus:ring-[#2E37FE]/30 disabled:opacity-60 font-mono"
-                  />
-                </div>
-
-                {sendError && (
-                  <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-900">
-                    {sendError}
-                  </div>
-                )}
-
-                <div className="flex items-center justify-end pt-1">
-                  <button
-                    onClick={handleSend}
-                    disabled={!composerBody.trim() || sending}
-                    className="btn-blue px-5 py-2 text-sm inline-flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <Send size={14} />
-                    {sending ? "Sending…" : "Send reply"}
-                  </button>
-                </div>
-                <p className="text-[10px] text-muted-foreground pt-1">
-                  Sends from the same mailbox the prospect replied to, CC&apos;d to your inbox.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        );
-      })()}
     </div>
   );
 }
