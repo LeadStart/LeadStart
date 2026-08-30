@@ -372,7 +372,7 @@ export function CampaignDetailWorkspace({
   return (
     <div className="flex h-[calc(100vh-8.5rem)] min-h-0 flex-col">
       {/* header */}
-      <div className="flex items-center justify-between gap-4 pb-2">
+      <div className="flex flex-col gap-3 pb-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
         <div className="min-w-0">
           <Link
             href="/admin/campaigns"

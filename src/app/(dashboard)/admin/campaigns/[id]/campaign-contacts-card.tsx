@@ -172,6 +172,33 @@ export function CampaignContactsCard({
                 any steps until you enroll them.
               </p>
             )}
+            {/* Mobile: stacked cards — no sideways-scrolling table */}
+            <div className="space-y-2.5 lg:hidden">
+              {pageRows.map((c) => {
+                const name = [c.first_name, c.last_name].filter(Boolean).join(" ") || "—";
+                const vb = verificationBadge(c.email_verification_status);
+                const eb = enrollmentBadge(c.enrollment);
+                return (
+                  <div key={c.id} className="rounded-xl border border-border bg-card p-3.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="font-medium text-foreground truncate">{name}</p>
+                      <Badge variant="secondary" className={`${eb.className} text-[10px] shrink-0`}>{eb.label}</Badge>
+                    </div>
+                    <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground min-w-0">
+                      <span className="truncate">{c.email ?? "no email yet"}</span>
+                      {vb && <Badge variant="secondary" className={`${vb.className} text-[10px] shrink-0`}>{vb.label}</Badge>}
+                    </div>
+                    {(c.company_name || c.title) && (
+                      <p className="mt-1 text-xs text-muted-foreground truncate">
+                        {c.company_name || "—"}{c.title ? ` · ${c.title}` : ""}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            {/* Desktop: full table */}
+            <div className="hidden lg:block">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -227,6 +254,7 @@ export function CampaignContactsCard({
                 })}
               </TableBody>
             </Table>
+            </div>
             <PaginationControls
               currentPage={safePage}
               totalItems={contacts.length}
