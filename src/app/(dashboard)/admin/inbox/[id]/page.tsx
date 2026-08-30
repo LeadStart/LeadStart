@@ -218,7 +218,7 @@ export default async function AdminReplyDetailPage({
             </p>
           )}
           <div
-            className="text-sm text-foreground leading-relaxed whitespace-pre-wrap"
+            className="text-sm text-foreground leading-relaxed whitespace-pre-wrap break-words"
             dangerouslySetInnerHTML={{ __html: formatBody(reply.body_text) }}
           />
         </CardContent>

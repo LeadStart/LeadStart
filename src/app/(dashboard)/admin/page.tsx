@@ -172,6 +172,108 @@ function SegmentChip({
   );
 }
 
+// ---------- Mobile roster card ----------
+// The desktop "Book of business" table is 9 columns wide; on a phone it becomes
+// a sideways-scrolling mess. Below `lg` we render each client as a tap-through
+// card instead, surfacing the same numbers stacked. Delete-former lives on the
+// desktop table / the client page — kept off the card so the whole thing is one
+// clean tap target (no nested interactive elements inside the <Link>).
+function replyTone(r: number): string {
+  return r >= 5 ? "text-emerald-600" : r >= 2 ? "text-amber-600" : "text-red-600";
+}
+function bounceTone(r: number): string {
+  return r <= 2 ? "text-emerald-600" : r <= 5 ? "text-amber-600" : "text-red-600";
+}
+
+function MiniStat({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone: string;
+}) {
+  return (
+    <div className="min-w-0">
+      <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+        {label}
+      </p>
+      <p className={`text-sm font-semibold tabular-nums ${tone}`}>{value}</p>
+    </div>
+  );
+}
+
+function MobileClientCard({ row }: { row: OverviewRow }) {
+  const href = `/admin/clients/${row.id}`;
+  return (
+    <Link
+      href={href}
+      className="block rounded-xl border border-border bg-card p-4 transition-colors active:bg-muted/40"
+    >
+      <div className="flex items-center gap-3">
+        <div
+          className="flex h-9 w-9 items-center justify-center rounded-lg text-xs font-bold text-white shrink-0"
+          style={{ background: "#2E37FE" }}
+        >
+          {row.initial}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="font-medium text-foreground truncate">{row.name}</p>
+          <p className="text-xs text-muted-foreground">
+            {row.activeCount} active / {row.totalCount} total
+          </p>
+        </div>
+        <Badge variant="secondary" className={`${row.healthBadge} shrink-0`}>
+          {row.healthLabel}
+        </Badge>
+      </div>
+      {row.alertReason && (
+        <p className="mt-2 text-[11px] text-muted-foreground">{row.alertReason}</p>
+      )}
+      <div className="mt-3 grid grid-cols-3 gap-2 border-t border-border/60 pt-3">
+        <MiniStat
+          label="Reply"
+          value={row.hasData ? `${row.reply_rate}%` : "—"}
+          tone={row.hasData ? replyTone(row.reply_rate) : "text-muted-foreground"}
+        />
+        <MiniStat
+          label="Bounce"
+          value={row.hasData ? `${row.bounce_rate}%` : "—"}
+          tone={row.hasData ? bounceTone(row.bounce_rate) : "text-muted-foreground"}
+        />
+        <MiniStat
+          label="Positive"
+          value={row.hasData ? String(row.positive) : "—"}
+          tone="text-foreground"
+        />
+      </div>
+      <div className="mt-3 flex items-center justify-between text-xs">
+        <span className="text-muted-foreground">
+          MRR{" "}
+          <span className="font-semibold text-foreground">
+            {row.mrrCents != null ? formatCents(row.mrrCents) : "—"}
+          </span>
+        </span>
+        <span className="text-muted-foreground">
+          Renews{" "}
+          <span
+            className={`font-semibold ${
+              row.renewTone === "red"
+                ? "text-red-600"
+                : row.renewTone === "amber"
+                  ? "text-amber-600"
+                  : "text-foreground"
+            }`}
+          >
+            {row.renewLabel}
+          </span>
+        </span>
+      </div>
+    </Link>
+  );
+}
+
 // ---------- Page ----------
 export default function AdminOverviewPage() {
   const { data: overview, loading: ovLoading, refetch: refetchOverview } = useSupabaseQuery(
@@ -435,6 +537,14 @@ export default function AdminOverviewPage() {
             </div>
           ) : (
             <>
+              {/* Mobile: stacked tap-through cards (the 9-col table can't fit) */}
+              <div className="space-y-2.5 lg:hidden">
+                {pageRows.map((row) => (
+                  <MobileClientCard key={row.id} row={row} />
+                ))}
+              </div>
+              {/* Desktop: full sortable table */}
+              <div className="hidden lg:block">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -635,6 +745,7 @@ export default function AdminOverviewPage() {
                   })}
                 </TableBody>
               </Table>
+              </div>
               <PaginationControls
                 currentPage={safePage}
                 totalItems={sorted.length}
