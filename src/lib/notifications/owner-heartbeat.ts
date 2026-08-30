@@ -155,6 +155,7 @@ interface HeartbeatSections {
   };
   campaignActivity: CampaignSection;
   inboxHealth: InboxHealthSection;
+  sends14d: { days: number[]; total: number; error: string | null };
 }
 
 /**
@@ -174,6 +175,7 @@ export async function buildHeartbeat(
     config,
     campaignActivity,
     inboxHealth,
+    sends14d,
   ] = await Promise.all([
     queryPendingAlerts(admin),
     queryRecentActivity(admin, now),
@@ -183,6 +185,7 @@ export async function buildHeartbeat(
     queryConfig(admin),
     queryCampaignActivity(admin, now),
     queryInboxHealth(admin, now),
+    querySendSparkline(admin, now),
   ]);
 
   const sections: HeartbeatSections = {
@@ -194,6 +197,7 @@ export async function buildHeartbeat(
     config,
     campaignActivity,
     inboxHealth,
+    sends14d,
   };
   const verdict = computeVerdict(sections);
   const subject = buildSubject(sections, verdict, now);
@@ -432,6 +436,40 @@ async function queryConfig(
     ownerCount: count ?? 0,
     error: error?.message ?? null,
   };
+}
+
+// Daily native-send counts for the last 14 ET days (oldest → newest, today
+// last) — drives the morning brief's sparkline. Account-wide sending volume,
+// not per-campaign; 14 count-only queries (no rows transferred). Fail-soft to
+// an empty series so a hiccup here never blocks the heartbeat.
+async function querySendSparkline(
+  admin: AdminClient,
+  now: Date,
+): Promise<{ days: number[]; total: number; error: string | null }> {
+  try {
+    const starts: number[] = [];
+    for (let i = 13; i >= 0; i--) {
+      starts.push(startOfLocalDay(now.getTime() - i * 86_400_000));
+    }
+    const bounds = [...starts, startOfLocalDay(now.getTime()) + 86_400_000];
+    const days = await Promise.all(
+      starts.map(async (_, k) => {
+        const { count } = await admin
+          .from("native_sends")
+          .select("id", { count: "exact", head: true })
+          .gte("sent_at", new Date(bounds[k]).toISOString())
+          .lt("sent_at", new Date(bounds[k + 1]).toISOString());
+        return count ?? 0;
+      }),
+    );
+    return { days, total: days.reduce((a, b) => a + b, 0), error: null };
+  } catch (err) {
+    return {
+      days: [],
+      total: 0,
+      error: err instanceof Error ? err.message : "(unknown error)",
+    };
+  }
 }
 
 // Inbox health — reads the denormalized score the hourly check-inbox-health
@@ -1260,6 +1298,40 @@ function kpiRowHtml(t: CampaignTotals): string {
     </tr></table>`;
 }
 
+// Email-safe 14-day daily-sends sparkline — a row of table-cell bars (inline
+// SVG is dropped by most mail clients). Bars scale to the busiest day; zero
+// days show a faint baseline, today's bar is the deeper brand blue. Fail-soft:
+// an errored or empty series renders nothing.
+function sparklineHtml(sp: {
+  days: number[];
+  total: number;
+  error: string | null;
+}): string {
+  if (sp.error || sp.days.length === 0) return "";
+  const max = Math.max(...sp.days, 1);
+  const MAX_H = 38;
+  const bars = sp.days
+    .map((n, i) => {
+      const isToday = i === sp.days.length - 1;
+      const h = n > 0 ? Math.max(3, Math.round((n / max) * MAX_H)) : 2;
+      const color = n > 0 ? (isToday ? "#1C24B8" : "#2E37FE") : "#e2e8f0";
+      return `<td style="height:${MAX_H}px;vertical-align:bottom;padding:0 1.5px;"><div style="height:${h}px;background:${color};border-radius:2px 2px 0 0;font-size:0;line-height:0;">&#8203;</div></td>`;
+    })
+    .join("");
+  const rightLabel =
+    sp.total > 0
+      ? `${sp.total.toLocaleString()} sent`
+      : "no sends yet";
+  return `
+  <div style="border:1px solid #e2e8f0;border-radius:12px;padding:12px 14px 10px;margin:0 0 14px;">
+    <table width="100%" role="presentation"><tr>
+      <td style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:#64748b;">Daily sends &#183; 14d</td>
+      <td style="text-align:right;font-size:10px;font-weight:600;color:#94a3b8;">${rightLabel}</td>
+    </tr></table>
+    <table width="100%" role="presentation" style="table-layout:fixed;border-collapse:collapse;margin-top:9px;border-bottom:1px solid #eef2f7;"><tr>${bars}</tr></table>
+  </div>`;
+}
+
 function buildHtml(
   s: HeartbeatSections,
   verdict: HealthVerdict,
@@ -1289,6 +1361,7 @@ function buildHtml(
   </div>
   <div style="padding:20px 22px 4px;">
     ${ca.totals.activeCampaigns > 0 ? kpiRowHtml(ca.totals) : ""}
+    ${ca.totals.activeCampaigns > 0 ? sparklineHtml(s.sends14d) : ""}
     <p style="margin:0;font-size:15px;line-height:1.6;color:#3D3D5C;">${summary}</p>
   </div>
   <div style="padding:12px 22px 4px;">
