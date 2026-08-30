@@ -76,7 +76,9 @@ export function ClientDetailClient({
 }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
-  const [period, setPeriod] = useState<Period>("30d");
+  // Default to lifetime (All-Time) — a rolling 30-day reply rate understates it
+  // (fresh, unreplied leads dilute the denominator). 7d/30d stay one click away.
+  const [period, setPeriod] = useState<Period>("lifetime");
   const [statusUpdating, setStatusUpdating] = useState(false);
 
   function refresh() {

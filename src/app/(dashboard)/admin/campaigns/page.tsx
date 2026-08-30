@@ -10,6 +10,12 @@ import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/layout/page-header";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { calculateMetrics } from "@/lib/kpi/calculator";
+import {
+  filterSnapshotsByPeriod,
+  DEFAULT_METRICS_PERIOD,
+  type MetricsPeriod,
+} from "@/lib/kpi/period";
+import { PeriodToggle } from "@/components/kpi/period-toggle";
 import { Mail, ArrowRight, Plus, RefreshCw } from "lucide-react";
 import { useSort } from "@/hooks/use-sort";
 import { SortableHead } from "@/components/ui/sortable-head";
@@ -28,19 +34,30 @@ export default function AllCampaignsPage() {
 
   const { campaigns, clients, snapshots } = data || { campaigns: [], clients: [], snapshots: [] };
   const clientMap = new Map(clients.map((c) => [c.id, c]));
-  const active = campaigns.filter((c) => c.status === "active").length;
-  const paused = campaigns.filter((c) => c.status === "paused").length;
+
+  // KPI time-window lens. Defaults to All-Time — a rolling 30-day reply rate
+  // understated it (fresh, unreplied leads dilute the denominator). 7d/30d
+  // filter the all-time snapshot pull client-side (no refetch on switch).
+  const [period, setPeriod] = useState<MetricsPeriod>(DEFAULT_METRICS_PERIOD);
+  // Render-stable clock so the period filter stays pure (react-hooks/purity).
+  const [now] = useState(() => Date.now());
 
   const rows = campaigns.map((campaign) => {
     const client = campaign.client_id ? clientMap.get(campaign.client_id) : undefined;
-    const metrics = calculateMetrics(snapshots.filter((s) => s.campaign_id === campaign.id));
+    const metrics = calculateMetrics(
+      filterSnapshotsByPeriod(
+        snapshots.filter((s) => s.campaign_id === campaign.id),
+        period,
+        now,
+      ),
+    );
     return { ...campaign, clientName: client?.name || "", metrics };
   });
   const { sorted, sortConfig, requestSort } = useSort(rows, "name", "asc");
   const [page, setPage] = useState(1);
   useEffect(() => {
     setPage(1);
-  }, [sortConfig?.key, sortConfig?.direction]);
+  }, [sortConfig?.key, sortConfig?.direction, period]);
   const totalPages = Math.max(1, Math.ceil(sorted.length / CAMPAIGNS_PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
   const pageStart = (safePage - 1) * CAMPAIGNS_PAGE_SIZE;
@@ -111,8 +128,17 @@ export default function AllCampaignsPage() {
         <CardContent className="pt-6">
           {campaigns.length === 0 ? <p className="text-sm text-muted-foreground">No campaigns yet.</p> : (
             <>
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <p className="text-[11px] text-muted-foreground">
+                Reply &amp; bounce rates reflect{" "}
+                {period === "all"
+                  ? "all-time"
+                  : `the last ${period === "7d" ? "7" : "30"} days`}
+              </p>
+              <PeriodToggle period={period} onChange={setPeriod} />
+            </div>
             <Table>
-              <TableHeader><TableRow><SortableHead sortKey="name" sortConfig={sortConfig} onSort={requestSort}>Campaign</SortableHead><SortableHead sortKey="clientName" sortConfig={sortConfig} onSort={requestSort}>Client</SortableHead><SortableHead sortKey="status" sortConfig={sortConfig} onSort={requestSort}>Status</SortableHead><SortableHead sortKey="metrics.emails_sent" sortConfig={sortConfig} onSort={requestSort} className="text-right">Sent (30d)</SortableHead><SortableHead sortKey="metrics.reply_rate" sortConfig={sortConfig} onSort={requestSort} className="text-right">Reply Rate</SortableHead><SortableHead sortKey="metrics.bounce_rate" sortConfig={sortConfig} onSort={requestSort} className="text-right">Bounce Rate</SortableHead><SortableHead sortKey="metrics.meetings_booked" sortConfig={sortConfig} onSort={requestSort} className="text-right">Positive</SortableHead><TableHead></TableHead></TableRow></TableHeader>
+              <TableHeader><TableRow><SortableHead sortKey="name" sortConfig={sortConfig} onSort={requestSort}>Campaign</SortableHead><SortableHead sortKey="clientName" sortConfig={sortConfig} onSort={requestSort}>Client</SortableHead><SortableHead sortKey="status" sortConfig={sortConfig} onSort={requestSort}>Status</SortableHead><SortableHead sortKey="metrics.emails_sent" sortConfig={sortConfig} onSort={requestSort} className="text-right">Sent{period === "7d" ? " (7d)" : period === "30d" ? " (30d)" : ""}</SortableHead><SortableHead sortKey="metrics.reply_rate" sortConfig={sortConfig} onSort={requestSort} className="text-right">Reply Rate</SortableHead><SortableHead sortKey="metrics.bounce_rate" sortConfig={sortConfig} onSort={requestSort} className="text-right">Bounce Rate</SortableHead><SortableHead sortKey="metrics.meetings_booked" sortConfig={sortConfig} onSort={requestSort} className="text-right">Positive</SortableHead><TableHead></TableHead></TableRow></TableHeader>
               <TableBody>
                 {pageRows.map((row) => {
                   const isOrphan = row.client_id === null;

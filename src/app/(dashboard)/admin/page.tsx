@@ -7,8 +7,17 @@ import {
   ADMIN_OVERVIEW_KEY,
   API_BILLING_DATA_PATH,
   fetchAdminOverview,
+  deriveCardHealth,
   type AdminOverviewCard,
 } from "@/lib/admin-queries";
+import { calculateMetrics } from "@/lib/kpi/calculator";
+import {
+  filterSnapshotsByPeriod,
+  DEFAULT_METRICS_PERIOD,
+  PERIOD_BLURBS,
+  type MetricsPeriod,
+} from "@/lib/kpi/period";
+import { PeriodToggle } from "@/components/kpi/period-toggle";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/layout/page-header";
@@ -176,6 +185,10 @@ export default function AdminOverviewPage() {
   );
 
   const [clientFilter, setClientFilter] = useState<ClientStatus>("active");
+  // KPI time-window lens for the reply/bounce/positive columns. Defaults to
+  // All-Time — a rolling 30-day reply rate understated it (fresh, unreplied
+  // leads dilute the denominator). 7d/30d derive client-side from card.snapshots.
+  const [period, setPeriod] = useState<MetricsPeriod>(DEFAULT_METRICS_PERIOD);
   const [deleteTarget, setDeleteTarget] = useState<{
     id: string;
     name: string;
@@ -211,7 +224,15 @@ export default function AdminOverviewPage() {
   // ----- Build rows -----
   const allCards = overview?.cards ?? [];
   const rows: OverviewRow[] = allCards.map((card) => {
-    const { client, metrics, health, stepAlerts, activeCampaigns } = card;
+    const { client, stepAlerts, activeCampaigns } = card;
+    // All-Time is the baked default; recompute only when a narrower lens is
+    // picked. `now` is render-stable so the filter stays pure.
+    const metrics =
+      period === "all"
+        ? card.metrics
+        : calculateMetrics(filterSnapshotsByPeriod(card.snapshots, period, now));
+    const health =
+      period === "all" ? card.health : deriveCardHealth(metrics, stepAlerts);
     const meta = HEALTH_META[health];
     const hasData = metrics.emails_sent > 0;
 
@@ -287,7 +308,7 @@ export default function AdminOverviewPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [sortConfig?.key, sortConfig?.direction, clientFilter]);
+  }, [sortConfig?.key, sortConfig?.direction, clientFilter, period]);
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / OVERVIEW_PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
@@ -382,23 +403,26 @@ export default function AdminOverviewPage() {
                 {clientFilter === "active" ? "Book of business" : "Former clients"}
               </h2>
               <p className="text-[11px] text-muted-foreground">
-                Reply, bounce &amp; positive reflect the last 30 days · click a
-                column to sort
+                Reply, bounce &amp; positive reflect {PERIOD_BLURBS[period]} ·
+                click a column to sort
               </p>
             </div>
-            <Tabs
-              value={clientFilter}
-              onValueChange={(v) => setClientFilter(v as ClientStatus)}
-            >
-              <TabsList>
-                <TabsTrigger value="active">
-                  Current ({activeRows.length})
-                </TabsTrigger>
-                <TabsTrigger value="former">
-                  Former ({formerRows.length})
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
+            <div className="flex flex-wrap items-center gap-3">
+              <PeriodToggle period={period} onChange={setPeriod} />
+              <Tabs
+                value={clientFilter}
+                onValueChange={(v) => setClientFilter(v as ClientStatus)}
+              >
+                <TabsList>
+                  <TabsTrigger value="active">
+                    Current ({activeRows.length})
+                  </TabsTrigger>
+                  <TabsTrigger value="former">
+                    Former ({formerRows.length})
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
           </div>
 
           {displayRows.length === 0 ? (

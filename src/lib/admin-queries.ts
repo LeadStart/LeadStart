@@ -27,8 +27,10 @@ type SupabaseClient = ReturnType<typeof createClient>;
 
 // Snapshot columns minus `raw_data` — that JSONB blob is only ever
 // written by the analytics-sync cron and never read by any admin page.
-// Pulling 30 days × every campaign × full raw payload was the single
-// largest contributor to first-paint download size.
+// The Overview + All Campaigns pulls are all-time (their KPIs default to
+// All-Time and derive 7d/30d client-side), so excluding the raw payload —
+// the single largest contributor to first-paint download size — is what
+// keeps the all-time pull light.
 const SNAPSHOT_COLUMNS =
   "id, campaign_id, snapshot_date, total_leads, emails_sent, replies, " +
   "unique_replies, cohort_replies, positive_replies, bounces, unsubscribes, meetings_booked, " +
@@ -63,10 +65,16 @@ export type AdminOverviewCard = {
   metrics: KPIMetrics;
   health: "good" | "warning" | "bad" | "none";
   stepAlerts: StepHealthAlert[];
-  // 6-point send-volume sparkline (5-day buckets across the 30-day pull,
+  // 6-point send-volume sparkline (5-day buckets across the last 30 days,
   // oldest→newest). Derived from the snapshots we already fetch — no extra
-  // query. Powers the "Trend" column on the Overview portfolio table.
+  // query. Powers the "Trend" column on the Overview portfolio table and stays
+  // a 30-day view regardless of the selected KPI period.
   trend: number[];
+  // This client's all-time snapshots (campaign-partitioned, so no duplication
+  // across cards). The Overview page recomputes reply/bounce/positive for the
+  // selected 7d/30d/All-Time lens from these — client-side, no refetch. `metrics`
+  // and `health` above are the baked All-Time default.
+  snapshots: CampaignSnapshot[];
 };
 
 // Downsample a client's daily send volume into a compact 6-point series for
@@ -102,6 +110,19 @@ export type AdminOverviewData = {
   emailsSentLast7d: number;
 };
 
+// Portfolio-row health: no sends → "no data"; otherwise driven by step-health
+// alerts. emails_sent is window-dependent, so the Overview page recomputes this
+// per selected period — hence a shared pure helper rather than inline logic.
+export function deriveCardHealth(
+  metrics: KPIMetrics,
+  stepAlerts: StepHealthAlert[],
+): "good" | "warning" | "bad" | "none" {
+  if (metrics.emails_sent === 0) return "none";
+  if (stepAlerts.some((a) => a.severity === "critical")) return "bad";
+  if (stepAlerts.length > 0) return "warning";
+  return "good";
+}
+
 export async function fetchAdminOverview(
   supabase: SupabaseClient,
 ): Promise<AdminOverviewData> {
@@ -109,13 +130,13 @@ export async function fetchAdminOverview(
     await Promise.all([
       supabase.from("clients").select("*").order("name"),
       supabase.from("campaigns").select("*"),
+      // All-time pull: the Overview reply/bounce/positive KPIs default to
+      // All-Time (a rolling 30-day reply rate understates badly — fresh leads
+      // dilute the denominator). 7d/30d are derived client-side from this set;
+      // the 30-day trend sparkline and the 7-day rollups below filter by date.
       supabase
         .from("campaign_snapshots")
         .select(SNAPSHOT_COLUMNS)
-        .gte(
-          "snapshot_date",
-          new Date(Date.now() - 30 * 86400000).toISOString().split("T")[0],
-        )
         .order("snapshot_date", { ascending: false }),
       supabase
         .from("campaign_step_metrics")
@@ -149,31 +170,24 @@ export async function fetchAdminOverview(
     const clientSnapshots = snapshots.filter((s) =>
       campaignIds.includes(s.campaign_id),
     );
+    // Baked metrics are ALL-TIME (the default lens). The Overview page
+    // recomputes reply/bounce/positive per selected period client-side from
+    // `snapshots` when the operator switches to 7d/30d — no refetch.
     const metrics = calculateMetrics(clientSnapshots);
 
     const clientStepAlerts = allStepAlerts.filter((a) =>
       campaignIds.includes(a.campaign_id),
     );
 
-    let health: "good" | "warning" | "bad" | "none";
-    if (metrics.emails_sent === 0) {
-      health = "none";
-    } else if (clientStepAlerts.some((a) => a.severity === "critical")) {
-      health = "bad";
-    } else if (clientStepAlerts.length > 0) {
-      health = "warning";
-    } else {
-      health = "good";
-    }
-
     return {
       client,
       clientCampaigns,
       activeCampaigns,
       metrics,
-      health,
+      health: deriveCardHealth(metrics, clientStepAlerts),
       stepAlerts: clientStepAlerts,
       trend: buildSendTrend(clientSnapshots),
+      snapshots: clientSnapshots,
     };
   });
   const healthOrder = { bad: 0, warning: 1, good: 2, none: 3 };
@@ -228,13 +242,9 @@ export async function fetchAdminCampaigns(supabase: SupabaseClient) {
       .select("*")
       .order("created_at", { ascending: false }),
     supabase.from("clients").select("*"),
-    supabase
-      .from("campaign_snapshots")
-      .select(SNAPSHOT_COLUMNS)
-      .gte(
-        "snapshot_date",
-        new Date(Date.now() - 30 * 86400000).toISOString().split("T")[0],
-      ),
+    // All-time pull: the per-campaign Reply Rate defaults to All-Time; the
+    // page derives 7d/30d from this set client-side (no refetch on switch).
+    supabase.from("campaign_snapshots").select(SNAPSHOT_COLUMNS),
   ]);
   return {
     campaigns: (campaignsRes.data || []) as Campaign[],
