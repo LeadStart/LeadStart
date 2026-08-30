@@ -46,7 +46,6 @@ const usd = (n: number) => `$${n}`; // 0.01 → "$0.01", 0.004 → "$0.004", 0.0
 const MV_RANGE = `~$${MV_CREDIT_COST_USD.toFixed(3)}-${(MV_CREDIT_COST_USD * 3).toFixed(3)}`; // ~$0.004-0.011
 const DEFAULT_METHOD = CFG.small_method; // "pattern_mv" while the default bands agree
 const addonTag = (on: boolean) => (on ? "(add-on, on)" : "(add-on, off)");
-const CATCHALL_NOTE = CFG.accept_catch_all_guesses ? "kept · conf 40 by default" : "(conf 40 if toggle on)";
 
 // Declared estimates with no single exported constant (measured / per-unit
 // figures). Low-drift; provenance noted so the sync test / a reader can trace them.
@@ -70,8 +69,8 @@ export const LI_NODES: FlowNode[] = [
     lines: [{ t: "Phase 3 · Waterfall (fallback)", s: "title" }, { t: `${DEFAULT_METHOD} · first.last@domain + MV`, s: "actor" }, { t: `MV ${MV_RANGE} · ON HIT`, s: "mv" }] },
   { id: "d2", kind: "diamond", x: 120, y: 560, w: 160, h: 72, tone: "dia",
     lines: [{ t: "MV verdict?", s: "dia" }] },
-  { id: "ca", kind: "box", x: 380, y: 552, w: 240, h: 44, tone: "warn",
-    lines: [{ t: "catch-all → drop", s: "titleSm" }, { t: CATCHALL_NOTE, s: "muted" }] },
+  { id: "ca", kind: "box", x: 380, y: 552, w: 240, h: 44, tone: "addon",
+    lines: [{ t: "catch-all → Findymail", s: "titleSm" }, { t: `${ADDONS.validate_catch_all ? "(add-on, on)" : "(add-on)"} · hit conf 75 · miss ${CFG.accept_catch_all_guesses ? "conf 40" : "drop"}`, s: "muted" }] },
   { id: "none", kind: "box", x: 380, y: 606, w: 240, h: 44, tone: "grey",
     lines: [{ t: "none → no email", s: "titleSm" }, { t: "keep the LinkedIn URL", s: "muted" }] },
   { id: "ok", kind: "box", x: 50, y: 674, w: 300, h: 46, tone: "good",
