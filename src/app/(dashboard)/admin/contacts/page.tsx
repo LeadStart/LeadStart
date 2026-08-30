@@ -933,7 +933,7 @@ export default function ContactsPage() {
       </div>
 
       {/* Stat cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4">
         <StatCard label="Total Contacts" value={totalContacts} icon={<Users size={18} className="text-[#2E37FE]" />} iconBg="bg-[#2E37FE]/10" />
         <StatCard label="Enriched" value={enrichedCount} icon={<CheckCircle size={18} className="text-blue-500" />} iconBg="bg-blue-50" valueColor="text-blue-600" />
         <StatCard label="Uploaded" value={uploadedCount} icon={<Upload size={18} className="text-emerald-500" />} iconBg="bg-emerald-50" valueColor="text-emerald-600" />
@@ -1078,6 +1078,79 @@ export default function ContactsPage() {
             <p className="text-sm text-muted-foreground">No contacts found.</p>
           ) : (
             <>
+            {/* Mobile: contact cards — tap to edit; keep the select checkbox
+                for bulk actions; no sideways-scrolling table */}
+            <div className="space-y-2.5 lg:hidden">
+              {pageRows.map((row) => {
+                const isSelected = selectedIds.has(row.id);
+                const vb = verificationBadge(row.email_verification_status);
+                return (
+                  <div
+                    key={row.id}
+                    onClick={() => openForEdit(row)}
+                    data-state={isSelected ? "selected" : undefined}
+                    className="rounded-xl border border-border bg-card p-4 cursor-pointer data-[state=selected]:border-[#2E37FE]/40 data-[state=selected]:bg-[#2E37FE]/5"
+                  >
+                    <div className="flex items-start gap-3">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => toggleRowSelection(row.id)}
+                        onClick={(e) => e.stopPropagation()}
+                        aria-label={`Select ${row.fullName}`}
+                        className="mt-0.5 h-4 w-4 shrink-0 rounded border-border accent-[#2E37FE] cursor-pointer"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="font-medium text-foreground truncate">{row.fullName}</p>
+                          {row.pipeline_stage && (
+                            <Badge variant="outline" className="shrink-0 text-[11px] font-medium text-[#2E37FE] border-[#2E37FE]/30 bg-[#2E37FE]/5">
+                              <TrendingUp size={11} className="mr-1" />{row.pipeline_stage}
+                            </Badge>
+                          )}
+                        </div>
+                        {(row.company_name || row.title) && (
+                          <p className="mt-0.5 text-xs text-muted-foreground truncate">
+                            {row.company_name || "—"}{row.title ? ` · ${row.title}` : ""}
+                          </p>
+                        )}
+                        <div className="mt-1.5 flex items-center gap-1.5 text-xs min-w-0">
+                          {row.email ? (
+                            <>
+                              <span className="truncate text-muted-foreground">{row.email}</span>
+                              {vb && <Badge variant="secondary" className={`${vb.className} text-[10px] shrink-0`}>{vb.label}</Badge>}
+                            </>
+                          ) : (
+                            <span className="text-muted-foreground/70">No email</span>
+                          )}
+                        </div>
+                        {(row.phone || row.linkedin_url) && (
+                          <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
+                            {row.phone && (
+                              <a href={`tel:${row.phone}`} onClick={(e) => e.stopPropagation()} className="hover:text-[#2E37FE]">{row.phone}</a>
+                            )}
+                            {row.linkedin_url && (
+                              <a
+                                href={row.linkedin_url.startsWith("http") ? row.linkedin_url : `https://${row.linkedin_url}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                aria-label="Open LinkedIn profile"
+                                className="inline-flex items-center gap-1 text-[#0A66C2]"
+                              >
+                                <LinkedinIcon size={13} /> LinkedIn
+                              </a>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            {/* Desktop: full contacts table */}
+            <div className="hidden lg:block">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -1322,6 +1395,7 @@ export default function ContactsPage() {
                 })}
               </TableBody>
             </Table>
+            </div>
             <PaginationControls
               currentPage={safePage}
               totalItems={sorted.length}
