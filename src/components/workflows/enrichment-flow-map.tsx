@@ -162,11 +162,6 @@ export function EnrichmentFlowMap() {
     <div className={styles.page}>
       <div className={styles.head}>
         <h1 className={styles.title}>Enrichment Flow Map</h1>
-        <p className={styles.sub}>
-          How one contact branches through each prospecting vein under the current default config. Boxes are steps
-          (actor + cost); diamonds are decisions. Both veins share one enrichment engine — a phase self-skips when a
-          contact&apos;s data doesn&apos;t qualify. Drag the empty canvas to pan.
-        </p>
         <div className={styles.legend}>
           <span className={styles.k}><span className={styles.sw} style={{ background: "#eaf1ff", borderColor: "#2f5fe0" }} /> source</span>
           <span className={styles.k}><span className={styles.sw} style={{ background: "#ffffff", borderColor: "#cdd5e3" }} /> step</span>
