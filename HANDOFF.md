@@ -5,13 +5,23 @@
 
 ---
 
-## 2026-08-31: Token product Phases 2-3-5 BUILT + verified (local, unpushed). Phase 4 deferred. Deploy = owner's word.
+## 2026-08-31: Token product Phases 0-3 + 5 DEPLOYED. Phase 4 DESIGNED (decisions LOCKED). Next = build Phase 4 (new worktree).
+
+**UPDATE (end of session):** Phases 2/3/5 were PUSHED to prod — master `10311fe`
+(fast-forward from 5efff85), verified live (401 on `/api/buyer/prospecting/searches`
++ `/api/admin/tokens/config` = deployed + auth-gated). The token product is now
+LIVE but INERT until the owner sets pack + tier prices in Admin → Settings → Tokens.
+**Phase 4 is DESIGNED + owner-decided** (see the dedicated entry below + the
+kickoff chip): `docs/plans/token-phase4-master-pool.md`, decisions LOCKED
+(Option A = enrich-in-place → promote to a shared `master_contacts` pool → own via
+a ledger; buyers keep/download; NO resale discount; simple broad dedup; re-verify
+deferred). Next session builds it in a fresh worktree.
 
 Continued straight through the phases (owner directive: build all the way through).
 Plan `C:\Users\danie\.claude\plans\ok-we-need-a-gentle-peach.md`, memory
-[[project_token_contact_sourcing]]. **Phases 0-1 are DEPLOYED (master 5efff85);
-Phases 2/3/5 are committed LOCAL on master (`d49fd71`, `195203c`, `32cb827`),
-NOT pushed.** Migrations 00108/00109/00110 are APPLIED to prod (files committed).
+[[project_token_contact_sourcing]]. **Phases 0-1-2-3-5 are DEPLOYED (master `10311fe`).**
+Migrations 00104-00110 are APPLIED to prod. The 2 parallel-session commits stay on
+local branch `parallel-session-wip` (not mine to push).
 
 **Phase 2 — wallet + Stripe + admin config (`d49fd71`).** `token_ledger`
 (credit/hold/charge/release + `token_balances` view + idempotency) & config
