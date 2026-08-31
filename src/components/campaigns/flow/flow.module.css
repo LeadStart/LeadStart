@@ -26,7 +26,7 @@
 .seq { display: flex; flex-direction: column; align-items: center; width: auto; }
 .conn { width: 2px; height: 18px; background: #cbd5e1; align-self: center; flex-shrink: 0; }
 
-/* ---- envelope tile (content node summary) ---- */
+/* ---- content-node tile shell (dark navy header defined further below) ---- */
 .tile {
   background: var(--card);
   border: 1px solid var(--border);
@@ -39,30 +39,17 @@
 .tile:hover { border-color: #cbd5e1; box-shadow: 0 8px 20px rgba(15,23,42,.09); }
 .tile:hover .tExpand { color: var(--primary); }
 .tile:active { transform: scale(.99); }
-.flap { height: 5px; background: #EA4335; }
-.flapEmail { background: #EA4335; }
-.flapLi { background: #0A66C2; }
-.flapInt { background: #7c3aed; }
-.flapThread { background: linear-gradient(90deg, #EA4335 0 42%, #4f46e5 100%); }
 .tBody { padding: 11px 13px; display: flex; flex-direction: column; gap: 5px; }
-.tFrom { font-size: 10.5px; color: var(--muted-foreground); display: flex; align-items: center; gap: 6px; }
 .tChip { width: 16px; height: 16px; border-radius: 5px; display: flex; align-items: center; justify-content: center; color: #fff; flex-shrink: 0; }
 .tcEmail { background: #EA4335; }
 .tcLi { background: #0A66C2; }
 .tcInt { background: #7c3aed; }
-.tFromSep { color: #cbd5e1; }
-.tSubj { font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 5px; }
-.tSubj svg { flex-shrink: 0; }
-.tSubjGhost { color: #4f46e5; }
-.tSubjGhost em { font-style: italic; font-weight: 500; color: var(--muted-foreground); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tPrev { font-size: 11.5px; color: var(--muted-foreground); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tFoot { display: flex; align-items: center; justify-content: space-between; border-top: 1px solid var(--border); padding: 7px 13px; background: #fcfcfd; gap: 8px; }
 .tChips { display: flex; gap: 5px; flex-wrap: wrap; align-items: center; min-width: 0; }
 .tExpand { color: var(--muted-foreground); flex-shrink: 0; transition: color .15s; }
-.eyebrowStrong { font-weight: 700; }
 
 .mchip { display: inline-flex; align-items: center; gap: 4px; font-size: 10.5px; font-weight: 600; border-radius: 999px; padding: 2px 7px; background: var(--muted); color: var(--muted-foreground); white-space: nowrap; }
-.mchipAb { background: var(--brand-50, #EDEEFF); color: var(--brand-500, #1C24B8); }
 .mchipThread { background: #eef2ff; color: #4f46e5; }
 
 /* channel eyebrow colors (tile + modal header) */
@@ -175,7 +162,7 @@
 .modalWide { width: min(1040px, 96vw); max-height: 92vh; }
 .mHead {
   display: flex; align-items: center; gap: 11px; padding: 12px 16px; flex-shrink: 0;
-  background: var(--foreground); color: #fff;
+  background: var(--primary); color: #fff;
 }
 .mChip { width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #fff; flex-shrink: 0; }
 .mHeadText { flex: 1; min-width: 0; }
@@ -202,25 +189,33 @@
 .threadHelp { font-size: 11.5px; color: var(--muted-foreground); line-height: 1.5; }
 .threadHelp b { color: var(--secondary-foreground); }
 
-/* ---- A/B accordion (extra variants B, C…) ---- */
-.abHead { display: flex; align-items: center; gap: 8px; }
-.addDashedSm { display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px; border: 1.5px dashed var(--border); border-radius: 8px; background: #fff; color: var(--muted-foreground); font-size: 12px; font-weight: 600; cursor: pointer; }
-.addDashedSm:hover { border-color: var(--primary); color: var(--primary); background: var(--brand-50, #EDEEFF); }
-.abAcc { margin-top: 8px; display: flex; flex-direction: column; gap: 8px; }
-.abItem { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; transition: border-color .2s, box-shadow .2s; }
-.abOpen { border-color: var(--primary); box-shadow: 0 8px 20px rgba(15,23,42,.07); }
-.abIRow { display: flex; align-items: center; gap: 10px; padding: 9px 11px; cursor: pointer; }
-.abIRow:hover { background: #fcfcfd; }
-.abK { width: 22px; height: 22px; border-radius: 7px; background: var(--muted); color: var(--secondary-foreground); font-size: 11px; font-weight: 800; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: transform .3s cubic-bezier(.34,1.56,.64,1), background .2s, color .2s; }
-.abOpen .abK { background: var(--primary); color: #fff; transform: scale(1.08); }
-.abIS { flex: 1; min-width: 0; font-size: 12.5px; font-weight: 500; color: var(--foreground); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.abChev { color: var(--muted-foreground); transition: transform .3s cubic-bezier(.34,1.56,.64,1); flex-shrink: 0; }
-.abChevOpen { transform: rotate(180deg); }
-.abBW { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .3s cubic-bezier(.34,1.56,.64,1); }
-.abOpen .abBW { grid-template-rows: 1fr; }
-.abBI { overflow: hidden; min-height: 0; }
-.abBody { padding: 11px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; opacity: 0; transform: translateY(-6px); transition: opacity .24s ease, transform .3s cubic-bezier(.34,1.56,.64,1); }
-.abOpen .abBody { opacity: 1; transform: none; }
+/* ---- dark-header content tile (the chosen node style: navy subject bar,
+   channel-tinted icon chip, no top flap; body sits in the white area below) ---- */
+.tHead { background: var(--primary); padding: 10px 13px; display: flex; flex-direction: column; gap: 6px; }
+.tHeadTop { display: flex; align-items: center; gap: 7px; }
+.tEyebrow { font-size: 10.5px; font-weight: 600; letter-spacing: .01em; color: rgba(255,255,255,.62); white-space: nowrap; }
+.tHeadSubj { font-size: 14px; font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 5px; }
+.tHeadSubj svg { flex-shrink: 0; opacity: .85; }
+.tHeadSubjGhost { font-weight: 500; font-style: italic; color: rgba(255,255,255,.72); }
+.tHeadSubjGhost em { font-style: italic; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tLetter { margin-left: auto; height: 20px; min-width: 20px; padding: 0 6px; border-radius: 6px; background: rgba(255,255,255,.16); color: #fff; font-size: 11px; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.tLabel { font-size: 9px; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; color: #94a3b8; }
+.addVarBtn { display: inline-flex; align-items: center; gap: 5px; border: 0; background: transparent; color: var(--primary); font-family: inherit; font-size: 11px; font-weight: 700; cursor: pointer; padding: 0; }
+.addVarBtn:hover { text-decoration: underline; }
+
+/* ---- A/B variant row: variants are sibling nodes on ONE horizontal row ---- */
+.abStep { display: flex; flex-direction: column; align-items: center; gap: 9px; }
+.abStepHead { display: flex; align-items: center; gap: 12px; background: #fff; border: 1px solid var(--border); border-radius: 999px; padding: 4px 8px 4px 13px; }
+.abStepHead .lbl { display: inline-flex; align-items: center; gap: 7px; font-size: 11.5px; font-weight: 700; color: var(--secondary-foreground); white-space: nowrap; }
+.abStepHead .lbl svg { color: #475569; }
+.abStepHead .split { font-weight: 500; color: var(--muted-foreground); }
+.abWinnerWrap { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted-foreground); white-space: nowrap; }
+.abWinnerSel { border: 1px solid var(--input); border-radius: 7px; background: #fff; font-family: inherit; font-size: 11.5px; color: var(--foreground); padding: 3px 7px; cursor: pointer; }
+.abWinnerSel:focus { outline: none; border-color: var(--primary); }
+.vrow { display: flex; align-items: stretch; gap: 5px; }
+.vadd { width: 120px; border: 1.5px dashed var(--border); border-radius: 13px; background: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: var(--muted-foreground); font-size: 12px; font-weight: 600; cursor: pointer; padding: 10px; text-align: center; }
+.vadd:hover { border-color: var(--primary); color: var(--primary); background: var(--brand-50, #EDEEFF); }
+.vadd .pl { height: 28px; width: 28px; border-radius: 50%; border: 1.5px solid currentColor; display: flex; align-items: center; justify-content: center; }
 
 /* ── Mobile: fit the sequence spine + node tiles to the viewport so nodes
    don't clip or force a horizontal pan on phones. Desktop (>640px) keeps the
@@ -231,4 +226,9 @@
   .seq { width: 100%; }
   .tile { width: 100%; }
   .cond { width: 100%; }
+  /* A/B row: keep tiles legible + let the row scroll instead of collapsing. */
+  .abStep { width: 100%; }
+  .vrow { width: 100%; overflow-x: auto; padding-bottom: 4px; }
+  .vrow .tile { width: 264px; flex: 0 0 auto; }
+  .vadd { flex: 0 0 auto; }
 }

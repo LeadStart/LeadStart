@@ -18,7 +18,6 @@ import {
   Trash2,
   GitBranch,
   Bell,
-  ChevronDown,
   X,
   CornerDownRight,
   Maximize2,
@@ -30,17 +29,19 @@ import {
   type FlowNode,
   type FlowConditionTrigger,
   type EmailNode,
-  type EmailVariant,
   type EmailAbConfig,
   type LinkedInNode,
   type InternalNode,
+  type ResolvedVariant,
   emailNode,
   emailVariant,
+  emailVariants,
   waitNode,
   linkedinNode,
   internalNode,
   conditionNode,
   flattenPrimaryPath,
+  walkAll,
 } from "@/lib/flow/graph";
 import { updateNode, removeNode, insertAfter, appendToBranch } from "@/lib/flow/edit";
 import { isUntrackedTrigger } from "@/lib/flow/runtime";
@@ -155,6 +156,30 @@ function findNode(nodes: FlowNode[], id: string): FlowNode | null {
   return null;
 }
 
+// Resolve a clicked variant id to its owning email node. A variant id is the
+// node id for variant A, or an EmailVariant.id for B/C/…, so this covers both the
+// tile you click and the id stored in `openId` while its modal is open.
+function findEmailForVariant(
+  nodes: FlowNode[],
+  id: string,
+): { node: EmailNode; variantId: string } | null {
+  let found: { node: EmailNode; variantId: string } | null = null;
+  walkAll(nodes, (n) => {
+    if (found || n.kind !== "email") return;
+    if (n.id === id) {
+      found = { node: n, variantId: n.id };
+      return;
+    }
+    for (const v of n.variants ?? []) {
+      if (v.id === id) {
+        found = { node: n, variantId: v.id };
+        break;
+      }
+    }
+  });
+  return found;
+}
+
 // First non-empty line of a body — the tile's one-line preview.
 function firstLine(s: string): string {
   return (s || "")
@@ -170,139 +195,6 @@ const INTERNAL_ACTION_LABEL: Record<string, string> = {
 };
 
 const INSERT_TOKENS = ["{{first_name}}", "{{company}}", "{{title}}", "{{intro_line}}"];
-
-// A/B/C… variant editor for an email node, as a compact ACCORDION. Variant A is
-// the node's own subject/body (the fields above in the modal); this manages the
-// extra variants (B, C…) — each collapses to a one-line row and springs open to
-// edit. Leads split evenly across all variants and we measure reply/positive-
-// reply rate per one.
-function EmailVariants({
-  node,
-  onChange,
-  onAbConfigChange,
-  isFirst,
-  abAutoPauseDefault,
-}: {
-  node: EmailNode;
-  onChange: (variants: EmailVariant[]) => void;
-  onAbConfigChange: (cfg: EmailAbConfig | undefined) => void;
-  isFirst: boolean;
-  abAutoPauseDefault: boolean;
-}) {
-  const variants = node.variants ?? [];
-  const [openVar, setOpenVar] = useState<string | null>(null);
-
-  // Seed a new variant from A (same body; the common case is a subject-line test).
-  const add = () => {
-    const v = emailVariant(isFirst ? node.subject : "", node.body);
-    onChange([...variants, v]);
-    setOpenVar(v.id); // spring the new one open to fill it in
-  };
-  const update = (id: string, patch: Partial<EmailVariant>) =>
-    onChange(variants.map((v) => (v.id === id ? { ...v, ...patch } : v)));
-  const remove = (id: string) => {
-    onChange(variants.filter((v) => v.id !== id));
-    if (openVar === id) setOpenVar(null);
-  };
-
-  // Per-node auto-winner override: undefined = inherit the campaign default,
-  // true/false = force on/off for THIS A/B step.
-  const autoPause = node.ab_config?.autoPause;
-  const autoPauseValue = autoPause === undefined ? "inherit" : autoPause ? "on" : "off";
-  const setAutoPause = (v: string) => {
-    const next: EmailAbConfig = { ...(node.ab_config ?? {}) };
-    if (v === "inherit") delete next.autoPause;
-    else next.autoPause = v === "on";
-    onAbConfigChange(Object.keys(next).length > 0 ? next : undefined);
-  };
-
-  return (
-    <div className={styles.field}>
-      <div className={styles.abHead}>
-        <label className={styles.label} style={{ margin: 0 }}>
-          <GitBranch size={13} style={{ verticalAlign: "-2px", marginRight: 5 }} />
-          A/B test{variants.length > 0 ? ` · ${variants.length + 1} variants` : ""}
-        </label>
-        <button type="button" className={styles.addDashedSm} onClick={add}>
-          <Plus size={13} /> Add variant
-        </button>
-      </div>
-      {variants.length > 0 && (
-        <p className={styles.hint} style={{ marginTop: 2 }}>
-          Variant A is the email above. Leads split evenly across every variant; we
-          measure reply &amp; positive-reply rate per variant.{" "}
-          {isFirst ? "Each variant needs its own subject." : "A blank subject threads as “Re:”."}
-        </p>
-      )}
-      {variants.length > 0 && (
-        <div style={{ marginTop: 8 }}>
-          <label className={styles.label} style={{ margin: "0 0 3px" }}>
-            Auto-winner
-          </label>
-          <select className={styles.select} value={autoPauseValue} onChange={(e) => setAutoPause(e.target.value)}>
-            <option value="inherit">Use campaign default ({abAutoPauseDefault ? "auto-pause on" : "off"})</option>
-            <option value="on">Auto-pause losers on</option>
-            <option value="off">Off — decide manually</option>
-          </select>
-          <p className={styles.hint} style={{ marginTop: 2 }}>
-            When on, once this test has the volume it pauses the losing variants (95% significance
-            + a ≥1&nbsp;pt lead on positive-reply rate) so new leads route to the winner. Sticky:
-            a lead already in a variant’s thread stays there.
-          </p>
-        </div>
-      )}
-      {variants.length > 0 && (
-        <div className={styles.abAcc}>
-          {variants.map((v, i) => {
-            const label = String.fromCharCode(66 + i); // B, C, D…
-            const open = openVar === v.id;
-            const preview =
-              v.subject.trim() || (isFirst ? "(add a subject)" : "Re: (threads on the first subject)");
-            return (
-              <div key={v.id} className={`${styles.abItem} ${open ? styles.abOpen : ""}`}>
-                <div className={styles.abIRow} onClick={() => setOpenVar(open ? null : v.id)}>
-                  <span className={styles.abK}>{label}</span>
-                  <span className={styles.abIS}>{preview}</span>
-                  <button
-                    type="button"
-                    className={`${styles.iconbtn} ${styles.danger}`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      remove(v.id);
-                    }}
-                    aria-label="Remove variant"
-                  >
-                    <Trash2 size={13} />
-                  </button>
-                  <ChevronDown size={15} className={`${styles.abChev} ${open ? styles.abChevOpen : ""}`} />
-                </div>
-                <div className={styles.abBW}>
-                  <div className={styles.abBI}>
-                    <div className={styles.abBody}>
-                      <input
-                        className={styles.input}
-                        value={v.subject}
-                        placeholder={isFirst ? "Subject for this variant" : "Subject (optional — blank threads as “Re:”)"}
-                        onChange={(e) => update(v.id, { subject: e.target.value })}
-                      />
-                      <textarea
-                        className={styles.textarea}
-                        rows={5}
-                        value={v.body}
-                        placeholder="Body for this variant. {{first_name}} {{company}} …"
-                        onChange={(e) => update(v.id, { body: e.target.value })}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
 
 export function FlowEditor({
   value,
@@ -369,6 +261,10 @@ export function FlowEditor({
 
   function insertToken(token: string) {
     if (!openId) return;
+    // Subject/body fields live only in the email modal; resolve which variant
+    // (A = the node itself, B/C/… = node.variants) is open so the token lands on it.
+    const owner = findEmailForVariant(value.nodes, openId);
+    if (!owner) return;
     let field: "subject" | "body" = lastFocused.current;
     let el: HTMLInputElement | HTMLTextAreaElement | null =
       field === "subject" ? subjectRef.current : bodyRef.current;
@@ -380,7 +276,8 @@ export function FlowEditor({
     const cur = el.value;
     const start = el.selectionStart ?? cur.length;
     const end = el.selectionEnd ?? cur.length;
-    patch(openId, { [field]: cur.slice(0, start) + token + cur.slice(end) });
+    const next = cur.slice(0, start) + token + cur.slice(end);
+    patchVariant(owner.node, owner.variantId, field === "subject" ? { subject: next } : { body: next });
     const caret = start + token.length;
     const target = el;
     // Restore focus + caret after the controlled re-render commits.
@@ -444,6 +341,34 @@ export function FlowEditor({
   const del = (id: string) => {
     setNodes(removeNode(value.nodes, id));
     if (openId === id) setOpenId(null);
+  };
+
+  // Edit ONE variant of an email node. Variant A is the node's own subject/body
+  // (variantId === node.id); B/C/… live in node.variants. Both write back through
+  // patch(), so the persisted shape the sender reads (EmailNode.variants) never
+  // changes: this is a pure authoring-UI move off the old modal accordion.
+  const patchVariant = (node: EmailNode, variantId: string, p: { subject?: string; body?: string }) => {
+    if (variantId === node.id) {
+      patch(node.id, p);
+      return;
+    }
+    const variants = (node.variants ?? []).map((v) => (v.id === variantId ? { ...v, ...p } : v));
+    patch(node.id, { variants });
+  };
+
+  // Append a fresh variant (seeded from A, the common subject-line test) and open
+  // it. Turns a lone email into an A/B row; on the first email each variant keeps
+  // its own subject, on a follow-up a blank subject threads as "Re:".
+  const addVariant = (node: EmailNode, isFirst: boolean) => {
+    const v = emailVariant(isFirst ? node.subject : "", node.body);
+    patch(node.id, { variants: [...(node.variants ?? []), v] });
+    setOpenId(v.id);
+  };
+
+  // Remove one B/C/… variant (never A: deleting A deletes the whole step).
+  const removeVariant = (node: EmailNode, variantId: string) => {
+    patch(node.id, { variants: (node.variants ?? []).filter((v) => v.id !== variantId) });
+    if (openId === variantId) setOpenId(null);
   };
 
   function addAt(key: string, kind: ElementKind) {
@@ -540,80 +465,162 @@ export function FlowEditor({
     );
   }
 
-  // A compact "envelope" tile for a content node. Returns JSX inline (called,
-  // not mounted as a component) so nothing about it re-mounts on edits.
-  function renderTile(n: EmailNode | LinkedInNode | InternalNode) {
-    let flapCls = styles.flapEmail;
-    let chipCls = styles.tcEmail;
-    let eyebrowCls = styles.kEmail;
-    let eyebrow: string;
-    let from: string;
-    let title: string;
-    let icon: React.ReactNode;
-    let ghost = false;
-    let variantCount = 0;
-
-    if (n.kind === "email") {
-      const isFirst = n.id === firstEmailId;
-      const threaded = !isFirst && !n.subject.trim();
-      eyebrow = isFirst ? "Email · first touch" : "Email · follow-up";
-      from = "From the mailbox pool";
-      title = isFirst
-        ? n.subject.trim() || "(add a subject)"
-        : n.subject.trim() || `Re: ${firstEmailSubject || "the first email"}`;
-      ghost = threaded;
-      variantCount = (n.variants?.length ?? 0) > 0 ? (n.variants?.length ?? 0) + 1 : 0;
-      icon = <Mail size={12} />;
-    } else if (n.kind === "linkedin") {
-      flapCls = styles.flapLi;
-      chipCls = styles.tcLi;
-      eyebrowCls = styles.kLi;
-      eyebrow = "LinkedIn · manual";
-      from = "LinkedIn touch · manual";
-      title = n.li_kind === "connect_request" ? "Connection request" : "Direct message";
-      icon = <LinkedInGlyph size={12} />;
-    } else {
-      flapCls = styles.flapInt;
-      chipCls = styles.tcInt;
-      eyebrowCls = styles.kInt;
-      eyebrow = "Internal · automation";
-      from = "Runs inside the flow";
-      title = n.label || "Notify a teammate";
-      icon = <Bell size={12} />;
-    }
-
-    const preview =
-      n.kind === "internal"
-        ? INTERNAL_ACTION_LABEL[n.action] ?? n.action
-        : firstLine(n.body) || "Empty — click to write";
-
+  // The chosen node style: a dark navy header (channel-tinted icon chip + eyebrow +
+  // the subject in white) over a white body area, with no top flap. Shared by every
+  // content node so email / linkedin / internal read as one species. Returned
+  // inline (called, not mounted) so nothing re-mounts on edits.
+  function contentTile(opts: {
+    key?: string;
+    chipCls: string;
+    icon: React.ReactNode;
+    eyebrow: string;
+    title: string;
+    ghost?: boolean;
+    preview: string;
+    letter?: string;
+    onOpen: () => void;
+    footLeft?: React.ReactNode;
+  }) {
+    const { chipCls, icon, eyebrow, title, ghost, preview, letter, onOpen, footLeft } = opts;
     return (
-      <div className={styles.tile} data-tile onClick={() => setOpenId(n.id)}>
-        <div className={`${styles.flap} ${flapCls} ${ghost ? styles.flapThread : ""}`} />
-        <div className={styles.tBody}>
-          <div className={styles.tFrom}>
+      <div className={styles.tile} data-tile onClick={onOpen} key={opts.key}>
+        <div className={styles.tHead}>
+          <div className={styles.tHeadTop}>
             <span className={`${styles.tChip} ${chipCls}`}>{icon}</span>
-            <span className={eyebrowCls}>{eyebrow}</span>
-            <span className={styles.tFromSep}>·</span>
-            {from}
+            <span className={styles.tEyebrow}>{eyebrow}</span>
+            {letter && <span className={styles.tLetter}>{letter}</span>}
           </div>
-          <div className={`${styles.tSubj} ${ghost ? styles.tSubjGhost : ""}`}>
+          <div className={`${styles.tHeadSubj} ${ghost ? styles.tHeadSubjGhost : ""}`}>
             {ghost && <CornerDownRight size={13} />}
             {ghost ? <em>{title}</em> : title}
           </div>
+        </div>
+        <div className={styles.tBody}>
           <div className={styles.tPrev}>{preview}</div>
         </div>
         <div className={styles.tFoot}>
-          <div className={styles.tChips}>
-            {variantCount > 1 && <span className={`${styles.mchip} ${styles.mchipAb}`}>A/B · {variantCount}</span>}
-            {ghost && (
+          <div className={styles.tChips}>{footLeft}</div>
+          <Maximize2 size={14} className={styles.tExpand} />
+        </div>
+      </div>
+    );
+  }
+
+  // LinkedIn / internal tiles (single, no variants).
+  function renderTile(n: LinkedInNode | InternalNode) {
+    if (n.kind === "linkedin") {
+      return contentTile({
+        chipCls: styles.tcLi,
+        icon: <LinkedInGlyph size={12} />,
+        eyebrow: "LinkedIn · manual",
+        title: n.li_kind === "connect_request" ? "Connection request" : "Direct message",
+        preview: firstLine(n.body) || "Click to write",
+        onOpen: () => setOpenId(n.id),
+        footLeft: <span className={styles.mchip}>Manual</span>,
+      });
+    }
+    return contentTile({
+      chipCls: styles.tcInt,
+      icon: <Bell size={12} />,
+      eyebrow: "Internal · automation",
+      title: n.label || "Notify a teammate",
+      preview: INTERNAL_ACTION_LABEL[n.action] ?? n.action,
+      onOpen: () => setOpenId(n.id),
+    });
+  }
+
+  // An email step. Its A/B/C… variants render as SIBLING tiles on ONE horizontal
+  // row (A = the node's own subject/body; B/C… = node.variants). A lone email is a
+  // single tile with a "+ A/B variant" affordance. Variants are managed here on the
+  // canvas; the compose modal edits one variant at a time.
+  function renderEmailStep(n: EmailNode) {
+    const isFirst = n.id === firstEmailId;
+    const variants = emailVariants(n); // [{ id, label, subject, body, paused }] (A first)
+
+    const tileFor = (v: ResolvedVariant, showLetter: boolean, footExtra?: React.ReactNode) => {
+      const threaded = !isFirst && !v.subject.trim();
+      const title = isFirst
+        ? v.subject.trim() || "(add a subject)"
+        : v.subject.trim() || `Re: ${firstEmailSubject || "the first email"}`;
+      return contentTile({
+        key: v.id,
+        chipCls: styles.tcEmail,
+        icon: <Mail size={12} />,
+        eyebrow: isFirst ? "Email · first touch" : "Email · follow-up",
+        title,
+        ghost: threaded,
+        preview: firstLine(v.body) || "Click to write",
+        letter: showLetter ? v.label : undefined,
+        onOpen: () => setOpenId(v.id),
+        footLeft: (
+          <>
+            {threaded && (
               <span className={`${styles.mchip} ${styles.mchipThread}`}>
                 <CornerDownRight size={11} /> same thread
               </span>
             )}
-            {n.kind === "linkedin" && <span className={styles.mchip}>Manual</span>}
+            {footExtra}
+          </>
+        ),
+      });
+    };
+
+    // Lone email → a single tile with an inline "add A/B variant".
+    if (variants.length === 1) {
+      return tileFor(
+        variants[0],
+        false,
+        <button
+          type="button"
+          className={styles.addVarBtn}
+          onClick={(e) => {
+            e.stopPropagation();
+            addVariant(n, isFirst);
+          }}
+        >
+          <Plus size={12} /> A/B variant
+        </button>,
+      );
+    }
+
+    // A/B row → a group header (with this step's auto-winner) + one tile per variant.
+    const autoPause = n.ab_config?.autoPause;
+    const autoPauseValue = autoPause === undefined ? "inherit" : autoPause ? "on" : "off";
+    const setAutoPause = (val: string) => {
+      const next: EmailAbConfig = { ...(n.ab_config ?? {}) };
+      if (val === "inherit") delete next.autoPause;
+      else next.autoPause = val === "on";
+      patch(n.id, { ab_config: Object.keys(next).length > 0 ? next : undefined });
+    };
+
+    return (
+      <div className={styles.abStep}>
+        <div className={styles.abStepHead}>
+          <span className={styles.lbl}>
+            <GitBranch size={14} /> A/B test · {variants.length} variants
+            <span className={styles.split}>· splits evenly</span>
+          </span>
+          <span className={styles.abWinnerWrap}>
+            Auto-winner
+            <select
+              className={styles.abWinnerSel}
+              value={autoPauseValue}
+              onChange={(e) => setAutoPause(e.target.value)}
+            >
+              <option value="inherit">Campaign default ({abAutoPauseDefault ? "on" : "off"})</option>
+              <option value="on">Auto-pause losers on</option>
+              <option value="off">Off (decide manually)</option>
+            </select>
+          </span>
+        </div>
+        <div className={styles.vrow}>
+          {variants.map((v) => tileFor(v, true))}
+          <div className={styles.vadd} data-tile onClick={() => addVariant(n, isFirst)}>
+            <span className={styles.pl}>
+              <Plus size={16} />
+            </span>
+            Add variant
           </div>
-          <Maximize2 size={14} className={styles.tExpand} />
         </div>
       </div>
     );
@@ -622,6 +629,7 @@ export function FlowEditor({
   function renderNode(n: FlowNode) {
     switch (n.kind) {
       case "email":
+        return renderEmailStep(n);
       case "linkedin":
       case "internal":
         return renderTile(n);
@@ -728,23 +736,35 @@ export function FlowEditor({
   // ---- the compose MODAL for the open content node --------------------------
   // Returns a portal (rendered inline via a call, so its inputs keep focus while
   // typing). Instant open, viewport-centered, contained.
-  function renderModal(n: EmailNode | LinkedInNode | InternalNode) {
+  function renderModal(n: EmailNode | LinkedInNode | InternalNode, variantId?: string) {
     let head: React.ReactNode;
     let body: React.ReactNode;
 
     if (n.kind === "email") {
       const isFirst = n.id === firstEmailId;
-      const hasSubject = n.subject.trim().length > 0;
+      const vid = variantId ?? n.id;
+      const isA = vid === n.id;
+      // The variant being edited: A is the node's own subject/body; B/C/… come from
+      // node.variants. Both write back via patchVariant() so the stored shape holds.
+      const cur = isA
+        ? { subject: n.subject, body: n.body }
+        : (n.variants ?? []).find((v) => v.id === vid) ?? { subject: "", body: "" };
+      const hasExtras = (n.variants?.length ?? 0) > 0;
+      const vLabel = emailVariants(n).find((v) => v.id === vid)?.label ?? "A";
+      const hasSubject = cur.subject.trim().length > 0;
       const titleText = isFirst
-        ? n.subject.trim() || "Email · first touch"
-        : n.subject.trim() || `Re: ${firstEmailSubject || "the first email"}`;
+        ? cur.subject.trim() || "Email · first touch"
+        : cur.subject.trim() || `Re: ${firstEmailSubject || "the first email"}`;
       head = (
         <div className={styles.mHead}>
           <span className={`${styles.mChip} ${styles.tcEmail}`}>
             <Mail size={15} />
           </span>
           <div className={styles.mHeadText}>
-            <div className={`${styles.mEyebrow} ${styles.kEmail}`}>{isFirst ? "Email · first touch" : "Email · follow-up"}</div>
+            <div className={`${styles.mEyebrow} ${styles.kEmail}`}>
+              {isFirst ? "Email · first touch" : "Email · follow-up"}
+              {hasExtras ? ` · Variant ${vLabel}` : ""}
+            </div>
             <div className={styles.mTitle}>{titleText}</div>
           </div>
           <button
@@ -769,12 +789,12 @@ export function FlowEditor({
               <input
                 ref={subjectRef}
                 className={`${styles.input} ${!isFirst ? styles.ghostable : ""}`}
-                value={n.subject}
+                value={cur.subject}
                 placeholder={
                   isFirst ? "Quick question, {{first_name}}" : `Re: ${firstEmailSubject || "the first email’s subject"}`
                 }
                 onFocus={() => (lastFocused.current = "subject")}
-                onChange={(e) => patch(n.id, { subject: e.target.value })}
+                onChange={(e) => patchVariant(n, vid, { subject: e.target.value })}
               />
               {!isFirst && (
                 <span className={`${styles.threadTag} ${hasSubject ? styles.threadNew : styles.threadSame}`}>
@@ -786,12 +806,12 @@ export function FlowEditor({
               <p className={styles.threadHelp}>
                 {hasSubject ? (
                   <>
-                    Custom subject — this email starts a <b>new thread</b>. Clear it to fall back to the
+                    Custom subject, so this email starts a <b>new thread</b>. Clear it to fall back to the
                     first email’s thread.
                   </>
                 ) : (
                   <>
-                    Leave blank to stay on the <b>first email’s thread</b> — the recipient sees it as a
+                    Leave blank to stay on the <b>first email’s thread</b>; the recipient sees it as a
                     reply, no new subject line.
                   </>
                 )}
@@ -816,11 +836,11 @@ export function FlowEditor({
             ))}
           </div>
           {(() => {
-            // Flag copy tokens with no mapped contact column — under the
+            // Flag copy tokens with no mapped contact column: under the
             // columns-drive-variables model they never register a variable and
             // send blank. Mirrors the import panel's warning, at authoring time.
             const mapped = new Set(customChips.map((c) => normalizeVarKey(c.replace(/[{}]/g, ""))));
-            const unmapped = extractCampaignTokens([n.subject, n.body]).custom.filter((t) => !mapped.has(t.key));
+            const unmapped = extractCampaignTokens([cur.subject, cur.body]).custom.filter((t) => !mapped.has(t.key));
             if (unmapped.length === 0) return null;
             return (
               <p
@@ -831,7 +851,7 @@ export function FlowEditor({
                 }}
               >
                 Not mapped to a contact column:{" "}
-                <b>{unmapped.map((t) => `{{${t.token}}}`).join(", ")}</b> — map a column when you
+                <b>{unmapped.map((t) => `{{${t.token}}}`).join(", ")}</b>. Map a column when you
                 import contacts, or these send blank.
               </p>
             );
@@ -843,32 +863,26 @@ export function FlowEditor({
               className={styles.textarea}
               rows={9}
               style={expanded ? { minHeight: 360 } : undefined}
-              value={n.body}
+              value={cur.body}
               placeholder="Plain text. Placeholders: {{first_name}} {{company}} {{title}} {{intro_line}}"
               onFocus={() => (lastFocused.current = "body")}
-              onChange={(e) => patch(n.id, { body: e.target.value })}
+              onChange={(e) => patchVariant(n, vid, { body: e.target.value })}
             />
             <StepCopyCheck
-              subject={isFirst ? n.subject : ""}
-              body={n.body}
+              subject={isFirst ? cur.subject : ""}
+              body={cur.body}
               clientId={clientId}
               campaignId={campaignId}
               isFirstStep={isFirst}
               onApplySpintax={(nv) =>
-                patch(n.id, {
+                patchVariant(n, vid, {
                   ...(isFirst && nv.subject !== null ? { subject: nv.subject } : {}),
                   body: nv.body,
                 })
               }
             />
           </div>
-          <EmailVariants
-            node={n}
-            isFirst={isFirst}
-            abAutoPauseDefault={abAutoPauseDefault}
-            onChange={(variants) => patch(n.id, { variants })}
-            onAbConfigChange={(ab_config) => patch(n.id, { ab_config })}
-          />
+          {/* A/B variants live as sibling nodes on the canvas now; no accordion here. */}
         </div>
       );
     } else if (n.kind === "linkedin") {
@@ -958,8 +972,17 @@ export function FlowEditor({
           {head}
           {body}
           <div className={styles.mFoot}>
-            <button type="button" className={styles.mDelete} onClick={() => del(n.id)}>
-              <Trash2 size={14} /> Delete step
+            <button
+              type="button"
+              className={styles.mDelete}
+              onClick={() =>
+                n.kind === "email" && variantId && variantId !== n.id
+                  ? removeVariant(n, variantId)
+                  : del(n.id)
+              }
+            >
+              <Trash2 size={14} />{" "}
+              {n.kind === "email" && variantId && variantId !== n.id ? "Delete variant" : "Delete step"}
             </button>
             <div style={{ flex: 1 }} />
             <button type="button" className={styles.mDone} onClick={() => setOpenId(null)}>
@@ -972,11 +995,22 @@ export function FlowEditor({
     );
   }
 
-  const openNode = openId ? findNode(value.nodes, openId) : null;
-  const modalNode =
-    openNode && (openNode.kind === "email" || openNode.kind === "linkedin" || openNode.kind === "internal")
-      ? openNode
+  // Resolve the open modal target. openId is a node id (linkedin / internal, or
+  // email variant A) or a B/C/… variant id; findEmailForVariant maps the latter
+  // back to its owning email node so the modal edits the right variant.
+  const openDirect = openId ? findNode(value.nodes, openId) : null;
+  const openVariant = openId && !openDirect ? findEmailForVariant(value.nodes, openId) : null;
+  const modalNode: EmailNode | LinkedInNode | InternalNode | null = openVariant
+    ? openVariant.node
+    : openDirect &&
+        (openDirect.kind === "email" || openDirect.kind === "linkedin" || openDirect.kind === "internal")
+      ? openDirect
       : null;
+  const modalVariantId = openVariant
+    ? openVariant.variantId
+    : modalNode && modalNode.kind === "email"
+      ? modalNode.id
+      : undefined;
 
   return (
     <div className={styles.editor}>
@@ -987,7 +1021,7 @@ export function FlowEditor({
           {renderSequence(value.nodes, "top-end")}
         </div>
       </div>
-      {modalNode && renderModal(modalNode)}
+      {modalNode && renderModal(modalNode, modalVariantId)}
     </div>
   );
 }
