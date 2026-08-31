@@ -264,6 +264,16 @@ export function DomainProvisioningDetail({
                 Checked {activeStep.attempts}× · last {relTime(activeStep.updated_at)}
                 {activeStep.status !== "failed" && " · re-checks automatically"}
               </p>
+              {activeStepId === "site_verification" && activeStep.status !== "failed" && (
+                <a
+                  href="https://admin.google.com/ac/domains/manage"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-2 inline-flex items-center gap-1 rounded-md bg-amber-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-amber-700"
+                >
+                  Verify in Google Admin ↗
+                </a>
+              )}
             </div>
           )}
           <ul className="space-y-1">

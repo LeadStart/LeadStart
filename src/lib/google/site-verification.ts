@@ -60,6 +60,13 @@ export class SiteVerificationClient {
     try {
       await this.call("POST", "/webResource?verificationMethod=DNS_TXT", {
         site: { type: "INET_DOMAIN", identifier: domain },
+        // Record the Workspace super-admin as a verified owner. Per Google's
+        // domain-verification codelab, setting the admin as an owner makes the
+        // verification propagate to the Workspace tenant INSTANTLY — without it
+        // the Admin SDK Directory `verified` flag lags up to ~3 hours (or needs
+        // a manual Admin-console verify). This is what flips the domain from
+        // "Google confirmed the token" to actually-verified so users can be made.
+        owners: [this.adminSubject],
       });
       return { verified: true, detail: "Verified." };
     } catch (err) {
