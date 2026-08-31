@@ -37,9 +37,10 @@ const clientTabs: Tab[] = [
   { href: "/client/settings", label: "Settings", icon: <Settings size={22} /> },
 ];
 
-// Buyer portal (Phase 1: dashboard only).
+// Buyer portal.
 const buyerTabs: Tab[] = [
   { href: "/buyer", label: "Home", icon: <LayoutDashboard size={22} />, exact: true },
+  { href: "/buyer/search", label: "Search", icon: <Sparkles size={22} /> },
 ];
 
 function isActive(pathname: string, href: string, exact?: boolean) {

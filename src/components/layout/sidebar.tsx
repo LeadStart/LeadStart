@@ -68,6 +68,7 @@ const clientNav: NavItem[] = [
 // (Phase 2) and sourcing (Phase 3) nav entries land as those pages are built.
 const buyerNav: NavItem[] = [
   { href: "/buyer", label: "Dashboard", icon: <LayoutDashboard size={18} /> },
+  { href: "/buyer/search", label: "Run a search", icon: <Sparkles size={18} /> },
 ];
 
 function isNavActive(item: NavItem, pathname: string): boolean {
