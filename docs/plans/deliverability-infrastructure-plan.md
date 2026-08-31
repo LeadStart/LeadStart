@@ -242,6 +242,27 @@ their domains are `active` (the only behavioral change on day one is protection)
 >   provision insert now writes `expires_at`; the unused `providerFor` import is gone.
 > - Tests: `scripts/test-registrar.ts` 84/84 (+34: diff slots/exclusivity, price-parse ordering).
 >
+> **URL forwarding — SHIPPED to master 2026-08-31.** `RegistrarProvider` gains
+> `supportsUrlForwarding` + `get/setUrlForwards`; Porkbun implements it against its API
+> (`addUrlForward`/`getUrlForwarding`/`deleteUrlForward`, with an idempotent by-subdomain diff in
+> `src/lib/registrar/forwarding.ts` — apex + www, 301 permanent by default); Spaceship has NO
+> forwarding API so its client throws `ManualForwardingRequiredError` (dashboard-only). Surfaces:
+> `GET`/`POST /api/admin/registrar/forward` (read status / set), a per-domain **URL forwarding**
+> panel in the Mailboxes domain detail (set/change after the fact), and an optional forward field
+> in the onboarding wizard's Review step (best-effort on Create, Porkbun only). `test-registrar.ts`
+> now 120/120 (adds forward builder/diff/mapping + explicit fwd1/fwd2.porkbun.com MX-cleanup).
+>
+> **Provisioning reliability — SHIPPED to master 2026-08-31** (first live Porkbun provision run,
+> tubeforseo.com). A Porkbun/Spaceship domain with **no API key** now FAILS the DNS step loudly
+> ("add the key, then Retry DNS") instead of silently skipping — the silent skip left the
+> `google-site-verification` TXT unwritten and surfaced later as an opaque Google 400. The
+> site-verification wait shows an actionable hint (Site Verification vs Workspace Directory flag →
+> verify in Google Admin to force it); the wizard registrar picker reflects what's connected +
+> warns on an unconnected pick; the settings card flags a key saved **without its secret**; the
+> domain detail shows a current-step status banner (step + full message + "checked Nx / last ...").
+> NB: the apex-MX exclusivity rule already deletes Porkbun's default `fwd1/fwd2.porkbun.com` MX
+> whenever the Google MX is written — it only lingers when the DNS write itself was skipped.
+>
 > **Daniel to-do:** create Porkbun (+ Spaceship) API keys, enter them + the $25 cap in Settings,
 > Test each; Spaceship also needs one saved contact in its dashboard. Then run
 > `npx tsx scripts/probe-spaceship.ts` once to pin its response shapes before the first live buy.

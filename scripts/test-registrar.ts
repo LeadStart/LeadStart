@@ -213,6 +213,21 @@ const gmail = gmailTierRecords();
   );
 }
 {
+  // Porkbun's default email-forwarding MX (fwd1/fwd2.porkbun.com at prio 10/20)
+  // are strays at the apex → BOTH deleted when the Google MX is written. This is
+  // the "forgotten Porkbun MX" case: it's handled by the exclusive-group rule,
+  // and only ever lingers when the DNS write itself was skipped.
+  const current = [
+    { type: "MX", name: "", content: "fwd1.porkbun.com", priority: 10, providerId: "f1" },
+    { type: "MX", name: "", content: "fwd2.porkbun.com", priority: 20, providerId: "f2" },
+  ] as DnsCurrentRecord[];
+  const d = diffDnsRecords(current, gmail);
+  eq(d.del.length, 2, "both Porkbun fwd MX → 2 deletes");
+  eq(d.del.map((r) => r.providerId).sort().join(","), "f1,f2", "delete targets both fwd MX ids");
+  eq(d.create.some((r) => r.type === "MX" && r.content === "smtp.google.com"), true, "google MX created");
+  eq(d.keep.length, 0, "neither Porkbun fwd MX is kept");
+}
+{
   // Records in a group the desired set never mentions (an apex A record) are left alone.
   const current = [
     { type: "A", name: "", content: "203.0.113.5", providerId: "a" },

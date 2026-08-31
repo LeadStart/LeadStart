@@ -115,6 +115,9 @@ export function AddMailboxWizard({
   const [quote, setQuote] = useState<QuoteResult | null>(null);
   const [quoting, setQuoting] = useState(false);
   const [buyRegistrar, setBuyRegistrar] = useState<RegistrarId | null>(null);
+  // Optional URL forwarding (Porkbun only): 301-redirect the sending domain to
+  // the client's real site so the bare domain never shows a dead parked page.
+  const [forwardTo, setForwardTo] = useState("");
 
   // Step 2 — workspace
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
@@ -193,6 +196,7 @@ export function AddMailboxWizard({
     setBuyDomain("");
     setQuote(null);
     setBuyRegistrar(null);
+    setForwardTo("");
     setInboxes([{ first: "", last: "", local: "", touched: false }]);
     setResult(null);
     setCxEmail("");
@@ -236,6 +240,8 @@ export function AddMailboxWizard({
   // verification TXT unwritten and stalls setup at "Verify domain ownership".
   const autoDns = targetRegistrar !== "manual" && registrarConnected(targetRegistrar);
   const registrarMissingKey = targetRegistrar !== "manual" && !registrarConnected(targetRegistrar);
+  // URL forwarding is Porkbun-only (Spaceship has no forwarding API).
+  const forwardingSupported = targetRegistrar === "porkbun" && registrarConnected("porkbun");
   const namedInboxes = inboxes.filter((i) => slug(i.local));
 
   // ── step 1 gating ──
@@ -387,6 +393,21 @@ export function AddMailboxWizard({
         setErr(data2.error ?? "Setup could not start.");
         return;
       }
+
+      // Optional URL forwarding (Porkbun only). Best-effort: a forwarding hiccup
+      // must not fail the setup — it can always be set later from the domain row.
+      if (forwardingSupported && forwardTo.trim()) {
+        try {
+          await fetch(appUrl("/api/admin/registrar/forward"), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ domain: domainRow.domain, destinationUrl: forwardTo.trim() }),
+          });
+        } catch {
+          /* non-fatal */
+        }
+      }
+
       setResult({
         domain: { ...domainRow, provisioning: data2.provisioning, workspace_id: wsId ?? domainRow.workspace_id },
         passwords: Array.isArray(data2.revealed_passwords) ? data2.revealed_passwords : [],
@@ -590,6 +611,9 @@ export function AddMailboxWizard({
               registrar={targetRegistrar}
               autoDns={autoDns}
               registrarMissingKey={registrarMissingKey}
+              forwardingSupported={forwardingSupported}
+              forwardTo={forwardTo}
+              setForwardTo={setForwardTo}
               workspaceLabel={workspaces.find((w) => w.id === wsId)?.label ?? "default Workspace"}
               inboxes={namedInboxes}
               mode={domainMode}
@@ -1129,6 +1153,9 @@ function ReviewStep(props: {
   registrar: RegistrarId | "manual";
   autoDns: boolean;
   registrarMissingKey: boolean;
+  forwardingSupported: boolean;
+  forwardTo: string;
+  setForwardTo: (v: string) => void;
   workspaceLabel: string;
   inboxes: InboxSpec[];
   mode: DomainMode;
@@ -1192,6 +1219,31 @@ function ReviewStep(props: {
       <p className="mt-2 text-[11px] text-muted-foreground">
         One DMARC / SPF / DKIM record covers every inbox on the domain — email auth is per-domain, not per-inbox.
       </p>
+
+      {/* Optional URL forwarding (Porkbun only). */}
+      <div className="mt-3.5 border-t border-border/60 pt-3.5">
+        <Label className="text-xs">URL forwarding (optional)</Label>
+        {props.forwardingSupported ? (
+          <>
+            <p className="mb-1.5 mt-0.5 text-[11px] text-muted-foreground">
+              301-redirect this domain to the client&rsquo;s real site so the bare domain never shows a dead
+              parked page. Leave blank to skip; you can set or change it later from the domain&rsquo;s row.
+            </p>
+            <Input
+              className="font-mono text-sm"
+              placeholder="https://clientsite.com"
+              value={props.forwardTo}
+              onChange={(e) => props.setForwardTo(e.target.value)}
+            />
+          </>
+        ) : (
+          <p className="mt-0.5 text-[11px] text-muted-foreground">
+            {props.registrar === "spaceship"
+              ? "Spaceship has no forwarding API — set the redirect manually in the Spaceship dashboard."
+              : "Available on connected Porkbun domains. You can also set it later from the domain’s row under Mailboxes."}
+          </p>
+        )}
+      </div>
     </div>
   );
 }

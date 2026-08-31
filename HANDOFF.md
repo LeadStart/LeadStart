@@ -5,6 +5,58 @@
 
 ---
 
+## 2026-08-31: Porkbun URL forwarding + provisioning reliability — SHIPPED to master. First live Porkbun provision run.
+
+Session started as an eval ("can we push domain forwarding for Porkbun/Spaceship?")
+and turned into a build + a full live provisioning debug. All pushed to master
+(deployed): commits `1232ace`/`3670391` (feature + reliability), `cb4b1ff` (status
+banner), and the doc/test/wizard-forwarding batch.
+
+**URL forwarding (the ask).** Porkbun's API supports URL forwarding; Spaceship's does
+NOT (dashboard-only, verified against their API docs). Built it provider-agnostic:
+`RegistrarProvider.supportsUrlForwarding` + `get/setUrlForwards`; Porkbun implements
+`add/get/deleteUrlForward` with a pure idempotent by-subdomain diff in
+`src/lib/registrar/forwarding.ts` (apex + www, 301 permanent, includePath off);
+Spaceship throws `ManualForwardingRequiredError`. Surfaces: `GET`/`POST
+/api/admin/registrar/forward`; a per-domain **URL forwarding** panel in the Mailboxes
+domain detail (`domain-provisioning-detail.tsx` — set/change after the fact, works for
+active domains since every row is expandable); an optional forward field in the
+onboarding wizard's Review step (best-effort on Create, Porkbun only). Settings-card
+notation says Porkbun = API, Spaceship = manual.
+
+**Provisioning reliability (found live while provisioning tubeforseo.com).** Root cause
+of the first-run break: the "Set up inboxes" wizard let a domain be set to Porkbun while
+Porkbun wasn't connected → the DNS step **silently skipped** → the verification TXT was
+never written → opaque Google 400 three steps later. Fixes (all shipped):
+- `provisioning-runner.ts`: a non-manual registrar with no API client now FAILS the DNS
+  step with an actionable message (not a silent skip). Site-verification wait shows a
+  hint pointing to the Google Admin verify (Site Verification confirms, but the Workspace
+  Directory flag can lag / needs the Admin-console verify for API-added secondary domains).
+- `add-mailbox-wizard.tsx`: errors scroll into view (were off-screen → "nothing happens"
+  on Create); the registrar picker shows what's actually connected + warns on an
+  unconnected pick + defaults to a connected registrar.
+- `registrar/settings/route.ts` + card: per-field presence, so a key saved **without its
+  secret** shows a "secret missing" warning (Porkbun key is `pk1_…`, secret is `sk1_…`).
+- `domain-provisioning-detail.tsx`: a current-step status banner (step + full untruncated
+  message + "checked Nx / last checked / re-checks automatically").
+
+**Live outcome.** Porkbun connected (both key+secret), tubeforseo.com provisioned end to
+end (Google MX in, Porkbun `fwd1/fwd2` MX auto-deleted by the exclusive-group rule, Google
+SPF/DMARC, inbox created); the Directory-flag lag was cleared by verifying the domain in
+Google Admin. Only DKIM remained (owner pastes/starts it → domain flips to warming).
+
+**Tests:** `scripts/test-registrar.ts` 120/120 (forward builder/diff/mapping + explicit
+fwd1/fwd2.porkbun.com MX-cleanup), `scripts/test-provisioning.ts` 55/55 (missing-key fail
++ verify-wait hint). tsc clean on all touched files.
+
+**Not a bug (verified live via DoH):** gotubeseo.com still shows Porkbun defaults only
+because it isn't tracked in the app (never provisioned). tubeforseo's live DNS proves the
+write + MX-cleanup work. Per-domain provisioning is the model — connecting Porkbun does
+not retroactively rewrite existing domains. Possible future nicety: a one-click "sync DNS
+across tracked Porkbun domains."
+
+---
+
 ## 2026-08-31: Token product Phases 0-3 + 5 DEPLOYED. Phase 4 DESIGNED (decisions LOCKED). Next = build Phase 4 (new worktree).
 
 **UPDATE (end of session):** Phases 2/3/5 were PUSHED to prod — master `10311fe`
