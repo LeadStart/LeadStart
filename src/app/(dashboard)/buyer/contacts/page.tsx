@@ -8,7 +8,21 @@
 import { useEffect, useState, useCallback } from "react";
 import { PageHeader } from "@/components/layout/page-header";
 import { appUrl } from "@/lib/api-url";
-import { Loader2, Download, Search as SearchIcon, ChevronLeft, ChevronRight, CheckCircle2 } from "lucide-react";
+import { Loader2, Download, Search as SearchIcon, ChevronLeft, ChevronRight, CheckCircle2, RefreshCw } from "lucide-react";
+
+interface ReverifyJob {
+  status: string;
+  total: number;
+  processed: number;
+  reverified: number;
+}
+interface ReverifySummary {
+  available?: boolean;
+  stale_count: number;
+  price_per?: number;
+  cost?: number;
+  active_job: ReverifyJob | null;
+}
 
 interface ContactRow {
   id: string;
@@ -37,6 +51,16 @@ export default function BuyerContactsPage() {
   const [q, setQ] = useState("");
   const [queryInput, setQueryInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [rv, setRv] = useState<ReverifySummary | null>(null);
+  const [rvNotice, setRvNotice] = useState<string | null>(null);
+  const [rvBusy, setRvBusy] = useState(false);
+
+  const loadReverify = useCallback(() => {
+    fetch(appUrl("/api/buyer/contacts/reverify"))
+      .then((r) => r.json().catch(() => null))
+      .then((d: ReverifySummary | null) => setRv(d))
+      .catch(() => setRv(null));
+  }, []);
 
   const load = useCallback((p: number, search: string) => {
     const params = new URLSearchParams({ page: String(p) });
@@ -54,6 +78,38 @@ export default function BuyerContactsPage() {
   useEffect(() => {
     load(page, q);
   }, [load, page, q]);
+
+  useEffect(() => {
+    loadReverify();
+  }, [loadReverify]);
+
+  // While a re-verify job runs, poll its progress + refresh contacts as verdicts land.
+  useEffect(() => {
+    if (!rv?.active_job) return;
+    const t = setInterval(() => {
+      loadReverify();
+      load(page, q);
+    }, 5000);
+    return () => clearInterval(t);
+  }, [rv?.active_job, loadReverify, load, page, q]);
+
+  async function startReverify() {
+    setRvNotice(null);
+    setRvBusy(true);
+    try {
+      const res = await fetch(appUrl("/api/buyer/contacts/reverify"), { method: "POST" });
+      const d = (await res.json().catch(() => ({}))) as { error?: string; total?: number };
+      if (res.ok) {
+        setRvNotice(`Re-verifying ${d.total ?? 0} emails. This runs in the background.`);
+        loadReverify();
+      } else {
+        setRvNotice(d.error || "Could not start re-verify.");
+      }
+    } catch {
+      setRvNotice("Network error. Please try again.");
+    }
+    setRvBusy(false);
+  }
 
   function submitSearch(e: React.FormEvent) {
     e.preventDefault();
@@ -91,6 +147,35 @@ export default function BuyerContactsPage() {
           <Download size={15} /> Download CSV
         </a>
       </div>
+
+      {/* Re-verify stale emails (async job). Hidden unless the feature is priced
+          and there's something to do. */}
+      {rv?.available && (rv.active_job || rv.stale_count > 0 || rvNotice) && (
+        <div className="rounded-2xl border border-border bg-white p-4 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-sm">
+              <RefreshCw size={16} className={`text-primary ${rv.active_job ? "animate-spin" : ""}`} />
+              {rv.active_job ? (
+                <span>Re-verifying emails… <strong className="text-foreground">{rv.active_job.processed.toLocaleString()}</strong> of {rv.active_job.total.toLocaleString()}</span>
+              ) : rv.stale_count > 0 ? (
+                <span><strong className="text-foreground">{rv.stale_count.toLocaleString()}</strong> email{rv.stale_count === 1 ? "" : "s"} could use a fresh check.</span>
+              ) : (
+                <span className="text-muted-foreground">All your verified emails are fresh.</span>
+              )}
+            </div>
+            {!rv.active_job && rv.stale_count > 0 && (
+              <button
+                onClick={startReverify}
+                disabled={rvBusy}
+                className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+              >
+                {rvBusy ? "Starting…" : `Re-verify (${(rv.cost ?? 0).toLocaleString()} tokens)`}
+              </button>
+            )}
+          </div>
+          {rvNotice && <p className="mt-2 text-xs text-muted-foreground">{rvNotice}</p>}
+        </div>
+      )}
 
       <div className="rounded-2xl border border-border bg-white p-6 shadow-sm">
         <div className="flex items-center justify-between">

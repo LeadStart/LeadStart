@@ -22,7 +22,7 @@ export async function GET() {
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("token_ledger")
-    .select("id, entry_type, tokens, search_kind, search_id, created_at")
+    .select("id, entry_type, tokens, search_kind, search_id, notes, created_at")
     .eq("organization_id", organizationId)
     .in("entry_type", ["credit", "charge"])
     .order("created_at", { ascending: false })

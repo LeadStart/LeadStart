@@ -27,7 +27,14 @@ interface UsageEntry {
   tokens: number;
   search_kind: "maps" | "linkedin" | null;
   search_id: string | null;
+  notes: string | null;
   created_at: string;
+}
+
+function usageLabel(e: UsageEntry): string {
+  if (e.entry_type === "credit") return "Tokens purchased";
+  if (e.notes === "reverify") return "Emails re-verified";
+  return `Contacts sourced${e.search_kind ? ` · ${e.search_kind}` : ""}`;
 }
 
 export default function BuyerDashboardPage() {
@@ -181,9 +188,7 @@ export default function BuyerDashboardPage() {
             {usage.map((e) => (
               <div key={e.id} className="flex items-center justify-between py-2.5 text-sm">
                 <div>
-                  <p className="font-medium text-foreground">
-                    {e.entry_type === "credit" ? "Tokens purchased" : `Contacts sourced${e.search_kind ? ` · ${e.search_kind}` : ""}`}
-                  </p>
+                  <p className="font-medium text-foreground">{usageLabel(e)}</p>
                   <p className="text-xs text-muted-foreground">{new Date(e.created_at).toLocaleString()}</p>
                 </div>
                 <span className={`font-semibold ${e.entry_type === "credit" ? "text-green-600" : "text-foreground"}`}>

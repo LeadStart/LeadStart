@@ -76,6 +76,10 @@
     {
       "path": "/app/api/cron/reverify-master-pool",
       "schedule": "0 */6 * * *"
+    },
+    {
+      "path": "/app/api/cron/reverify-buyer-contacts",
+      "schedule": "* * * * *"
     }
   ]
 }
