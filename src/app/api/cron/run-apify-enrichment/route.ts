@@ -5,6 +5,7 @@ import { checkCronAuth } from "@/lib/security/cron-auth";
 import { ApifyClient } from "@/lib/apify/client";
 import { settleSearch, loadBuyerRunCeiling, capRunCharge } from "@/lib/tokens/billing";
 import { promoteSearchContacts, isPromotionEnabled } from "@/lib/tokens/promotion";
+import { maybeSendLowBalanceAlert } from "@/lib/tokens/low-balance-alert";
 import { isInProgress, isTerminalBad, isTerminalOk } from "@/lib/apify/types";
 import { loadApifyToken, normalizeAddons, normalizeEnrichmentSettings } from "@/lib/apify/auth";
 import { extractCompanyId, extractCompanySlug } from "@/lib/apify/domain";
@@ -2559,6 +2560,10 @@ async function finalizeOutcomes(admin: Admin, run: RunRow): Promise<void> {
         }
       }
     }
+
+    // Phase 5: nudge the buyer if this run's settle dropped them below their
+    // low-balance threshold. Buyer-only + gated + guarded (no-op for agency runs).
+    await maybeSendLowBalanceAlert(admin, run.organization_id);
   } catch (e) {
     console.error("[finalizeOutcomes] failed:", e);
     // never break completion

@@ -246,6 +246,10 @@ async function handleTokenTopup(session: Stripe.Checkout.Session) {
   if (error && !/duplicate key|unique/i.test(error.message)) {
     throw new Error(`token credit failed: ${error.message}`);
   }
+
+  // A top-up recovers the balance: clear any standing low-balance alert so the
+  // next crossing below the threshold re-alerts. Best-effort; never blocks credit.
+  await admin.from("organizations").update({ low_balance_alerted_at: null }).eq("id", organizationId);
 }
 
 async function handleSubscriptionUpdated(
