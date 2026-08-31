@@ -877,6 +877,17 @@ export interface NativeMailbox {
   updated_at: string;
 }
 
+// Mailbox tag registry (migration 00108) — the org's canonical tag vocabulary,
+// managed on Settings → Tags. Independent of which inboxes carry each tag;
+// rename/delete cascade to native_mailboxes.tags[] in the API route.
+export interface MailboxTag {
+  id: string;
+  organization_id: string;
+  name: string;
+  created_at: string;
+  updated_at: string;
+}
+
 // ---------- Sending domains + lifecycle (migration 00081) ----------
 
 // The two sending tiers. gmail = Google Workspace inbox on Google's IPs

@@ -110,6 +110,10 @@ export default function MailboxesPage() {
   const [bulkTagOpen, setBulkTagOpen] = useState(false);
   const [bulkTagDraft, setBulkTagDraft] = useState<string[]>([]);
   const [bulkBusy, setBulkBusy] = useState(false);
+  // Registry tags (Settings → Tags, migration 00108) feed the tag-input
+  // autocomplete so a tag added there is suggested here even before any inbox
+  // carries it. Best-effort — falls back to in-use tags if the fetch fails.
+  const [registryTags, setRegistryTags] = useState<string[]>([]);
 
   // Which mailbox's detail (health breakdown + placement) is expanded (one at a time).
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -142,13 +146,21 @@ export default function MailboxesPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(appUrl("/api/admin/mailboxes"));
+      const [res, tagRes] = await Promise.all([
+        fetch(appUrl("/api/admin/mailboxes")),
+        fetch(appUrl("/api/admin/mailbox-tags")),
+      ]);
       const data = await res.json();
       if (res.ok) {
         setMailboxes(data.mailboxes ?? []);
         setDomains(data.domains ?? []);
         setSeedCount(data.seed_count ?? 0);
       } else setBanner({ kind: "error", message: data.error ?? "Failed to load mailboxes" });
+      // Registry tags for autocomplete — best-effort, never blocks the page.
+      if (tagRes.ok) {
+        const tagData = await tagRes.json();
+        setRegistryTags(((tagData.tags ?? []) as { name: string }[]).map((t) => t.name));
+      }
     } catch (err) {
       setBanner({ kind: "error", message: err instanceof Error ? err.message : "Failed to load" });
     } finally {
@@ -570,15 +582,15 @@ export default function MailboxesPage() {
   const orgTags = (() => {
     const seen = new Set<string>();
     const out: string[] = [];
-    for (const m of mailboxes) {
-      for (const t of m.tags ?? []) {
-        const k = t.toLowerCase();
-        if (!seen.has(k)) {
-          seen.add(k);
-          out.push(t);
-        }
-      }
-    }
+    const push = (t: string) => {
+      const k = t.toLowerCase();
+      if (!k || seen.has(k)) return;
+      seen.add(k);
+      out.push(t);
+    };
+    // Registry names first (so unused ones still suggest), then tags in use.
+    for (const t of registryTags) push(t);
+    for (const m of mailboxes) for (const t of m.tags ?? []) push(t);
     return out.sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
   })();
   const allSelected = mailboxes.length > 0 && mailboxes.every((m) => selectedIds.has(m.id));

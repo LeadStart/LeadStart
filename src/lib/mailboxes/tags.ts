@@ -34,3 +34,26 @@ export function hasTag(tags: string[], tag: string): boolean {
   const key = tag.trim().toLowerCase();
   return tags.some((t) => t.toLowerCase() === key);
 }
+
+/**
+ * Clean a single raw tag into stored form: trim + clamp length. Returns "" for
+ * non-strings or blanks (callers reject empty). Used by the tag-registry route's
+ * add/rename where the value is one tag, not a list.
+ */
+export function normalizeTag(input: unknown): string {
+  if (typeof input !== "string") return "";
+  return input.trim().slice(0, MAX_TAG_LEN);
+}
+
+/**
+ * One row in the Settings → Tags manager: the UNION of the mailbox_tags registry
+ * (migration 00108) and the distinct tags actually present on native_mailboxes.
+ * `id` is the registry row id, or null when the tag only exists ad-hoc on inboxes
+ * (added via the Mailboxes chip input, never adopted into the registry).
+ */
+export interface MailboxTagSummary {
+  id: string | null;
+  name: string; // canonical display casing
+  mailbox_count: number; // how many inboxes currently carry it
+  registered: boolean; // present in the mailbox_tags registry
+}

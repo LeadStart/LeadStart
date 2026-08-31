@@ -1,9 +1,15 @@
 #!/usr/bin/env node
 /**
- * Unit tests for the mailbox tag helpers (normalizeTags / hasTag).
+ * Unit tests for the mailbox tag helpers (normalizeTags / normalizeTag / hasTag).
  * No network, no DB. Run: npx tsx scripts/test-mailbox-tags.ts
  */
-import { normalizeTags, hasTag, MAX_TAG_LEN, MAX_TAGS_PER_MAILBOX } from "../src/lib/mailboxes/tags.ts";
+import {
+  normalizeTags,
+  normalizeTag,
+  hasTag,
+  MAX_TAG_LEN,
+  MAX_TAGS_PER_MAILBOX,
+} from "../src/lib/mailboxes/tags.ts";
 
 let pass = 0;
 let fail = 0;
@@ -47,6 +53,16 @@ const many = Array.from({ length: MAX_TAGS_PER_MAILBOX + 5 }, (_, i) => `t${i}`)
 eq(normalizeTags(many).length, MAX_TAGS_PER_MAILBOX, `capped at ${MAX_TAGS_PER_MAILBOX} tags`);
 // Clamping happens before dedupe, so two tags that differ only past the cap collapse.
 eq(normalizeTags([long, long + "yy"]), [long.slice(0, MAX_TAG_LEN)], "clamp-then-dedupe");
+
+console.log("normalizeTag — single value: trim + clamp, blanks/non-strings → ''");
+eq(normalizeTag("Agency"), "Agency", "keeps casing");
+eq(normalizeTag("  Agency  "), "Agency", "trims whitespace");
+eq(normalizeTag("   "), "", "whitespace-only → empty");
+eq(normalizeTag(""), "", "empty string → empty");
+eq(normalizeTag(null), "", "null → empty");
+eq(normalizeTag(undefined), "", "undefined → empty");
+eq(normalizeTag(123), "", "number → empty");
+eq(normalizeTag("x".repeat(MAX_TAG_LEN + 10)).length, MAX_TAG_LEN, `clamped to ${MAX_TAG_LEN} chars`);
 
 console.log("hasTag — case-insensitive membership");
 eq(hasTag(["Agency", "Client A"], "agency"), true, "matches ignoring case");
