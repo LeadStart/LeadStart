@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { checkCronAuth } from "@/lib/security/cron-auth";
 import { ApifyClient } from "@/lib/apify/client";
+import { settleSearch } from "@/lib/tokens/billing";
 import { isInProgress, isTerminalBad, isTerminalOk } from "@/lib/apify/types";
 import { loadApifyToken, normalizeAddons, normalizeEnrichmentSettings } from "@/lib/apify/auth";
 import { extractCompanyId, extractCompanySlug } from "@/lib/apify/domain";
@@ -2513,6 +2514,21 @@ async function finalizeOutcomes(admin: Admin, run: RunRow): Promise<void> {
       const merged: Record<string, number> = { ...base };
       for (const k of ALL_COUNT_KEYS) if (g.counts[k]) merged[k] = (merged[k] ?? 0) + g.counts[k];
       await admin.from(g.table).update({ delivered_counts: merged }).eq("id", id);
+
+      // Token settlement (reserve -> cap -> settle). Recomputes charge + release
+      // from the CUMULATIVE delivered_counts and upserts a single pair, so it is
+      // idempotent-and-additive across the multiple enrichment runs a search can
+      // drain over. A no-op for agency searches (they carry no hold). Guarded so
+      // a billing hiccup can never break enrichment completion.
+      try {
+        await settleSearch(admin, {
+          searchId: id,
+          searchKind: g.table === "maps_searches" ? "maps" : "linkedin",
+          deliveredCounts: merged,
+        });
+      } catch (settleErr) {
+        console.error("[finalizeOutcomes] token settle failed for", key, settleErr);
+      }
     }
   } catch (e) {
     console.error("[finalizeOutcomes] failed:", e);
