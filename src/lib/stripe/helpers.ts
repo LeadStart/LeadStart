@@ -274,3 +274,74 @@ export async function createCheckoutSessionForQuote({
     demo_redirect_url: null,
   };
 }
+
+export interface TokenPackCheckoutResult {
+  /** Hosted Stripe Checkout URL to redirect the buyer to (or a demo URL). */
+  url: string | null;
+  demo: boolean;
+}
+
+/**
+ * Create a HOSTED Stripe Checkout session for a one-time token-pack purchase
+ * (the self-serve token product). Fully data-driven: the pack's price is ad-hoc
+ * `price_data` from token_packs.price_usd, so defining a pack is just entering a
+ * price — no pre-created Stripe products. Everything the webhook needs to credit
+ * the ledger rides in `metadata` (purpose + org + tokens), and the credit is
+ * idempotent per Checkout session (see the unique index in migration 00108), so
+ * no idempotency key on the session itself — each purchase is its own session.
+ *
+ * In demo mode (no STRIPE_SECRET_KEY) returns a demo URL so the flow stays
+ * clickable without keys.
+ */
+export async function createTokenPackCheckoutSession({
+  pack,
+  organizationId,
+  buyerEmail,
+  origin,
+}: {
+  pack: { id: string; name: string; tokens: number; price_usd: number };
+  organizationId: string;
+  buyerEmail: string | null;
+  origin: string;
+}): Promise<TokenPackCheckoutResult> {
+  const successUrl = `${origin}${appUrl("/buyer")}?purchase=success`;
+  const cancelUrl = `${origin}${appUrl("/buyer")}?purchase=cancelled`;
+
+  if (isStripeDemoMode()) {
+    return { url: `${origin}${appUrl("/buyer")}?purchase=demo`, demo: true };
+  }
+
+  const stripe = getStripe();
+  const tokenMeta = {
+    purpose: "token_topup",
+    organization_id: organizationId,
+    pack_id: pack.id,
+    tokens: String(pack.tokens),
+  };
+
+  const session = await stripe.checkout.sessions.create({
+    mode: "payment",
+    line_items: [
+      {
+        price_data: {
+          currency: "usd",
+          unit_amount: Math.round(pack.price_usd * 100),
+          product_data: {
+            name: `${pack.name} — ${pack.tokens.toLocaleString()} tokens`,
+            description: "LeadStart contact-sourcing tokens (one-time).",
+          },
+        },
+        quantity: 1,
+      },
+    ],
+    customer_email: buyerEmail ?? undefined,
+    client_reference_id: organizationId,
+    metadata: tokenMeta,
+    // Mirror onto the PaymentIntent so a payment_intent.* consumer sees it too.
+    payment_intent_data: { metadata: tokenMeta },
+    success_url: successUrl,
+    cancel_url: cancelUrl,
+  });
+
+  return { url: session.url, demo: false };
+}

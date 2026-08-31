@@ -14,8 +14,6 @@ import {
   MessageSquare,
   FileText,
   CreditCard,
-  Building2,
-  Key,
   LayoutDashboard,
   ContactRound,
   CheckSquare,
@@ -23,8 +21,6 @@ import {
   Inbox,
   Settings,
   Sparkles,
-  Workflow,
-  Rocket,
   X,
 } from "lucide-react";
 
@@ -32,6 +28,9 @@ interface NavItem {
   href: string;
   label: string;
   icon: React.ReactNode;
+  // When true, the item stays active on its sub-routes too (e.g. /admin/settings
+  // highlighted on /admin/settings/tokens). Default: exact-path match.
+  matchPrefix?: boolean;
 }
 
 const adminNav: NavItem[] = [
@@ -50,16 +49,13 @@ const adminSendingNav: NavItem[] = [
   { href: "/admin/mailboxes", label: "Mailboxes", icon: <Inbox size={18} /> },
 ];
 
+// Team + Integrations are folded into the Settings hub as sub-tabs, and
+// Workflows folded in as its own section — so Settings is a single tab, active
+// across all its sub-routes (matchPrefix). Tasks + Billing stay standalone.
 const adminSettingsNav: NavItem[] = [
   { href: "/admin/tasks", label: "Tasks", icon: <CheckSquare size={18} /> },
   { href: "/admin/billing", label: "Billing", icon: <CreditCard size={18} /> },
-  { href: "/admin/settings/team", label: "Team", icon: <Building2 size={18} /> },
-  { href: "/admin/settings/api", label: "Integrations", icon: <Key size={18} /> },
-];
-
-const adminWorkflowsNav: NavItem[] = [
-  { href: "/admin/workflows", label: "Outbound pipeline", icon: <Workflow size={18} /> },
-  { href: "/admin/workflows/onboarding", label: "Onboarding", icon: <Rocket size={18} /> },
+  { href: "/admin/settings", label: "Settings", icon: <Settings size={18} />, matchPrefix: true },
 ];
 
 const clientNav: NavItem[] = [
@@ -73,6 +69,13 @@ const clientNav: NavItem[] = [
 const buyerNav: NavItem[] = [
   { href: "/buyer", label: "Dashboard", icon: <LayoutDashboard size={18} /> },
 ];
+
+function isNavActive(item: NavItem, pathname: string): boolean {
+  if (item.matchPrefix) {
+    return pathname === item.href || pathname.startsWith(item.href + "/");
+  }
+  return pathname === item.href;
+}
 
 function NavLink({ item, active }: { item: NavItem; active: boolean }) {
   return (
@@ -101,7 +104,7 @@ function NavSection({ label, items, pathname }: { label: string; items: NavItem[
         </p>
       </div>
       {items.map((item) => (
-        <NavLink key={item.href} item={item} active={pathname === item.href} />
+        <NavLink key={item.href} item={item} active={isNavActive(item, pathname)} />
       ))}
     </>
   );
@@ -114,7 +117,6 @@ export function Sidebar({ role, open = false, onClose }: { role: AppRole; open?:
   const nav = isAdmin ? adminNav : isBuyer ? buyerNav : clientNav;
   const sendingNav = isAdmin ? adminSendingNav : [];
   const settingsNav = isAdmin ? adminSettingsNav : [];
-  const workflowsNav = isAdmin ? adminWorkflowsNav : [];
 
   return (
     <>
@@ -203,11 +205,10 @@ export function Sidebar({ role, open = false, onClose }: { role: AppRole; open?:
         {/* Navigation */}
         <nav className="flex-1 space-y-0.5 px-3 pt-3 pb-4 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {nav.map((item) => (
-            <NavLink key={item.href} item={item} active={pathname === item.href} />
+            <NavLink key={item.href} item={item} active={isNavActive(item, pathname)} />
           ))}
           <NavSection label="Sending" items={sendingNav} pathname={pathname} />
           <NavSection label="Settings" items={settingsNav} pathname={pathname} />
-          <NavSection label="Workflows" items={workflowsNav} pathname={pathname} />
         </nav>
 
         {/* Footer */}

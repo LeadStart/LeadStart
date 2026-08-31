@@ -6,6 +6,7 @@ import { buildPaymentFailedEmail } from "@/lib/email/payment-failed";
 import { buildInvoiceEmail } from "@/lib/email/invoice";
 import { buildQuoteSignedEmail } from "@/lib/email/quote-signed";
 import { computeLaunchDate, DEFAULT_WARMING_DAYS } from "@/lib/billing/schedule";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getAppUrl } from "./client";
 
 // Owner alert recipient for new signed clients.
@@ -87,6 +88,13 @@ async function handleCheckoutCompleted(
   supabase: SupabaseClient,
 ) {
   const md = session.metadata ?? {};
+
+  // Self-serve token-pack purchase — a different money path from the agency
+  // quote flow. Credits the buyer's token ledger and returns early.
+  if (md.purpose === "token_topup") {
+    return handleTokenTopup(session);
+  }
+
   const organizationId = md.organization_id;
   const clientId = md.client_id;
   const quoteId = md.quote_id || null;
@@ -199,6 +207,44 @@ async function handleCheckoutCompleted(
         sellsContacts,
       }),
     );
+  }
+}
+
+/**
+ * Credit a buyer's token wallet after a paid token-pack Checkout. Writes via the
+ * service-role client because token_ledger's RLS denies the webhook's anon role.
+ * Idempotent: the UNIQUE index on stripe_session_id (migration 00108) turns a
+ * retried event into a no-op, which we detect and swallow so Stripe gets a 200.
+ */
+async function handleTokenTopup(session: Stripe.Checkout.Session) {
+  const md = session.metadata ?? {};
+  const organizationId = md.organization_id;
+  const tokens = Number(md.tokens);
+  const packId = md.pack_id || null;
+
+  if (!organizationId || !Number.isFinite(tokens) || tokens <= 0) return;
+  // Only credit a genuinely paid session (guards against $0 / async-pending).
+  if (session.payment_status && session.payment_status !== "paid") return;
+
+  const paymentIntentId =
+    typeof session.payment_intent === "string"
+      ? session.payment_intent
+      : session.payment_intent?.id ?? null;
+
+  const admin = createAdminClient();
+  const { error } = await admin.from("token_ledger").insert({
+    organization_id: organizationId,
+    entry_type: "credit",
+    tokens,
+    stripe_session_id: session.id,
+    stripe_payment_intent_id: paymentIntentId,
+    usd_value: session.amount_total != null ? session.amount_total / 100 : null,
+    notes: packId ? `Token pack purchase (pack ${packId})` : "Token pack purchase",
+  } as Record<string, unknown>);
+
+  // A duplicate is the idempotency guard doing its job — not an error.
+  if (error && !/duplicate key|unique/i.test(error.message)) {
+    throw new Error(`token credit failed: ${error.message}`);
   }
 }
 

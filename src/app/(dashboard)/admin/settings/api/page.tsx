@@ -1,5 +1,4 @@
 "use client";
-import { PageHeader } from "@/components/layout/page-header";
 
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -902,10 +901,6 @@ export default function IntegrationsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Integrations"
-      />
-
       {/* Inbox health — Spamhaus blocklist key + auto-pause threshold (migration 00061) */}
       <Card className="border-border/50 shadow-sm">
         <CardHeader className="flex flex-row items-center gap-2 pb-3">

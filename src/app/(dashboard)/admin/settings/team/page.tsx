@@ -1,5 +1,4 @@
 "use client";
-import { PageHeader } from "@/components/layout/page-header";
 
 import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -170,10 +169,6 @@ export default function TeamPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Team Management"
-      />
-
       {/* Invite Form */}
       <Card className="border-border/50 shadow-sm">
         <CardHeader className="flex flex-row items-center gap-2 pb-3">
