@@ -189,6 +189,11 @@ export interface Campaign {
   // follow-ups (migration 00066). NULL = inherit DEFAULT_SENDING_STRATEGY
   // ('finish_first'). See SendingStrategy above.
   sending_strategy: SendingStrategy | null;
+  // Live mailbox-tag binding for the sending pool (migration 00119). NULL = the
+  // classic manual campaign_mailboxes snapshot. When set, a reconciler keeps the
+  // pool in sync with the inboxes carrying this tag (auto-join). The send path
+  // never reads this column.
+  mailbox_tag: string | null;
   // Campaign-level default for the A/B auto-winner (migration 00091). A flow
   // email node inherits this unless its ab_config.autoPause overrides. Off by default.
   ab_auto_pause_default: boolean;

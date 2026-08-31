@@ -6,7 +6,7 @@
 // Save persists the graph + the derived linear steps + the schedule via
 // /update-sequence. The other tabs reuse the existing stats / leads / probe cards.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -38,6 +38,7 @@ import {
 } from "@/components/ui/dialog";
 import { DeleteCampaignDialog } from "@/components/campaigns/delete-campaign-dialog";
 import { MailboxPoolPicker } from "@/components/campaigns/mailbox-pool-picker";
+import { CampaignTagFollow } from "@/components/campaigns/campaign-tag-follow";
 import { appUrl } from "@/lib/api-url";
 import { formatSendWindow, type SendWindowConfig, type CompletionProjection } from "@/lib/gmail/ramp";
 import type { SendingStrategy } from "@/types/app";
@@ -100,6 +101,7 @@ export function CampaignDetailWorkspace({
   clients,
   allMailboxes,
   attachedMailboxIds,
+  initialMailboxTag,
   contactsMissing,
   initialGraph,
   initialWindow,
@@ -126,6 +128,9 @@ export function CampaignDetailWorkspace({
   allMailboxes: SetupMailbox[];
   // Mailbox ids currently attached to this campaign.
   attachedMailboxIds: string[];
+  // Live mailbox-tag this campaign follows (migration 00119), or null for the
+  // classic manual pool. When set, the pool auto-syncs and the picker is locked.
+  initialMailboxTag: string | null;
   // Whether the campaign still has zero enrolled contacts (drives the Contacts
   // tab badge). Server-computed from launch readiness.
   contactsMissing: boolean;
@@ -160,6 +165,23 @@ export function CampaignDetailWorkspace({
   const [clientId, setClientId] = useState<string>(client?.id ?? "");
   const [mailboxIds, setMailboxIds] = useState<Set<string>>(new Set(attachedMailboxIds));
   const [deleteOpen, setDeleteOpen] = useState(false);
+
+  // Live mailbox-tag binding (migration 00119). When set, the pool auto-syncs to
+  // the tag and the manual picker is locked. Bind/unbind is an immediate action
+  // (CampaignTagFollow → its own PUT), so we key off the server prop and refresh.
+  const boundTag = initialMailboxTag && initialMailboxTag.trim() ? initialMailboxTag : null;
+  // Distinct tags present on the org's inboxes (case-insensitive, first casing
+  // wins) — the tags a campaign can follow.
+  const availableTags = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const mb of allMailboxes) {
+      for (const t of mb.tags ?? []) {
+        const key = t.toLowerCase();
+        if (!m.has(key)) m.set(key, t);
+      }
+    }
+    return [...m.values()].sort((a, b) => a.localeCompare(b));
+  }, [allMailboxes]);
 
   // Last-saved snapshot of every editable field. Nothing here auto-saves: the
   // Save button lights up only when the current state differs from this, and
@@ -651,11 +673,24 @@ export function CampaignDetailWorkspace({
               <p className="text-xs font-medium text-secondary-foreground">
                 Sending mailboxes
               </p>
+              <CampaignTagFollow
+                campaignId={campaignId}
+                boundTag={boundTag}
+                availableTags={availableTags}
+                onChanged={() => router.refresh()}
+              />
               <MailboxPoolPicker
                 mailboxes={allMailboxes}
                 selected={mailboxIds}
                 onChange={setMailboxIds}
+                disabled={boundTag != null}
               />
+              {boundTag != null && (
+                <p className="text-[11px] text-muted-foreground">
+                  This pool is managed by the tag above — inboxes sync
+                  automatically. Unfollow to edit it by hand.
+                </p>
+              )}
               {nativeStats.activeMailboxCount > 0 && (
                 <p className="mt-1 text-[11px] text-muted-foreground">
                   Combined capacity ~{nativeStats.dailyInboxCapacity}/day across{" "}

@@ -337,6 +337,7 @@ export default async function AdminCampaignDetailPage({
         clients={orgClients}
         allMailboxes={allMailboxes}
         attachedMailboxIds={attachedMailboxIds}
+        initialMailboxTag={campaign.mailbox_tag}
         contactsMissing={contactsMissing}
         initialGraph={initialGraph}
         initialWindow={sendWindow}

@@ -54,6 +54,10 @@
       "schedule": "*/5 * * * *"
     },
     {
+      "path": "/app/api/cron/reconcile-campaign-tags",
+      "schedule": "*/5 * * * *"
+    },
+    {
       "path": "/app/api/cron/poll-native-replies",
       "schedule": "* * * * *"
     },

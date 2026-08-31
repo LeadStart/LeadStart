@@ -13,6 +13,8 @@ import {
 } from "@/lib/native/tokens";
 import { allEmailTemplates, type FlowGraph } from "@/lib/flow/graph";
 import { mailboxUsageMap } from "@/lib/campaigns/mailbox-usage";
+import { normalizeTag } from "@/lib/mailboxes/tags";
+import { syncCampaignTagPool } from "@/lib/campaigns/tag-pool-sync";
 
 interface StepInput {
   step_index: number;
@@ -25,6 +27,10 @@ interface CreateBody {
   name?: string;
   client_id?: string;
   mailbox_ids?: string[];
+  // Optional LIVE mailbox-tag binding (migration 00119). When set, the campaign
+  // follows the tag and its pool is seeded from the tag's current members here,
+  // superseding any manual mailbox_ids.
+  mailbox_tag?: string | null;
   steps?: StepInput[];
   // The visual Flow builder graph. Persisted verbatim on the campaign; the
   // executed `steps` above are derived from it client-side. Optional so older
@@ -55,6 +61,7 @@ export async function POST(req: NextRequest) {
   const mailboxIds = Array.isArray(body.mailbox_ids)
     ? [...new Set(body.mailbox_ids.filter((v) => typeof v === "string" && v))]
     : [];
+  const mailboxTag = normalizeTag(body.mailbox_tag); // "" when unset/blank
   const steps = Array.isArray(body.steps) ? body.steps : [];
 
   // A campaign is created as a DRAFT from just a name. Client, mailboxes, and a
@@ -151,6 +158,7 @@ export async function POST(req: NextRequest) {
       source_channel: "native_email",
       flow_graph: flowGraph,
       variables,
+      mailbox_tag: mailboxTag || null,
     })
     .select("id")
     .single();
@@ -178,8 +186,18 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Mailbox pool is optional for a draft — attach only if any were selected.
-  if (validMailboxIds.length > 0) {
+  // Mailbox pool is optional for a draft. If the campaign follows a tag, seed the
+  // pool from that tag's current members (auto-join); otherwise attach the manual
+  // selection. Either failure rolls back the campaign.
+  if (mailboxTag) {
+    try {
+      await syncCampaignTagPool(admin, orgId, campaignId, mailboxTag);
+    } catch (e) {
+      console.error(`[admin/campaigns/native] tag pool seed failed; rolling back ${campaignId}:`, e);
+      await admin.from("campaigns").delete().eq("id", campaignId);
+      return NextResponse.json({ error: "Could not seed mailbox pool from tag" }, { status: 500 });
+    }
+  } else if (validMailboxIds.length > 0) {
     const poolRows = validMailboxIds.map((mailbox_id) => ({
       campaign_id: campaignId,
       mailbox_id,
