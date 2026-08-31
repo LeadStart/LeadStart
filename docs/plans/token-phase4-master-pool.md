@@ -148,19 +148,23 @@ window) and `master_reverify_cadence_days` (background re-verify).
 - **Coverage readout.** "You own N of ~M in this segment" = ownership count vs
   `master_contacts` count for the segment.
 
-## 8. Decisions needed (owner)
+## 8. Decisions — LOCKED (owner, 2026-08-31)
 
-1. **Duplication (A) vs single-store (B/C)?** Recommend A — protects the agency +
-   the enrichment engine. B/C avoid duplication at higher risk.
-2. **Do buyers download/keep contacts** (need a per-org working copy → A), or only
-   query the shared pool (leans B/C)?
-3. **Resale pricing:** is a cache-served (resold) contact charged the same token
-   price as a freshly-sourced one? (Same price = ~100% margin on resale; a
-   discount = a "seen before" incentive.)
-4. **Segment granularity:** key on (vein + terms + area) only, or richer ICP
-   facets (min stars, category words, website filter)?
-5. **Re-verify:** wire `master_reverify_cadence_days` (a background cron that
-   re-checks ageing pool emails) now, or defer?
+1. **Architecture = Option A.** Enrich in the buyer's org as today, promote
+   delivered contacts to the shared pool at settlement, own via a ledger. Agency
+   contacts + the shared enrichment engine stay untouched.
+2. **Buyers keep/download their contacts.** They get a per-org working copy (the
+   `contacts` row) AND ownership of the master row — confirms A's duplication.
+3. **No resale discount.** A cache-served (resold) contact is charged the SAME
+   token price as a freshly-sourced one. Max margin; no "seen before" incentive.
+4. **Simple segment key (vein + terms + area), NOT richer ICP facets.** Dedup is
+   BROAD — every matching hit counts for dedup purposes (a buyer is never charged
+   twice for a record they own, regardless of the finer ICP facets of the pull).
+5. **Re-verify (`master_reverify_cadence_days`) = DEFERRED.** It is defined by
+   email decay (verified emails go stale ~2-3%/month; a background Million
+   Verifier re-check of pool emails older than N days keeps resold contacts
+   deliverable). Nothing to re-verify at launch (empty pool), so wire it as a
+   later maintenance pass once the pool holds aged data.
 
 ## 9. Rollout (phased, low-risk → high-risk last)
 
