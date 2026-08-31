@@ -7,6 +7,8 @@
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { appUrl } from "@/lib/api-url";
+import { mergeBuyerExperience, DEFAULT_BUYER_EXPERIENCE, type BuyerExperience } from "@/lib/buyer-experience/content";
 
 interface BuyerOrg {
   id: string;
@@ -24,6 +26,7 @@ interface BuyerData {
   fullName: string | null;
   org: BuyerOrg | null;
   balance: TokenBalance;
+  experience: BuyerExperience;
   loading: boolean;
 }
 
@@ -33,6 +36,7 @@ const BuyerDataContext = createContext<BuyerData>({
   fullName: null,
   org: null,
   balance: { available: 0, held: 0 },
+  experience: DEFAULT_BUYER_EXPERIENCE,
   loading: true,
 });
 
@@ -47,6 +51,7 @@ export function BuyerDataProvider({ children }: { children: ReactNode }) {
     fullName: null,
     org: null,
     balance: { available: 0, held: 0 },
+    experience: DEFAULT_BUYER_EXPERIENCE,
     loading: true,
   });
 
@@ -61,10 +66,11 @@ export function BuyerDataProvider({ children }: { children: ReactNode }) {
 
       // profiles + organizations + token balance all come back RLS-scoped to
       // this buyer. The balances view has no row until the wallet has activity.
-      const [profileRes, orgRes, balanceRes] = await Promise.all([
+      const [profileRes, orgRes, balanceRes, expRes] = await Promise.all([
         supabase.from("profiles").select("full_name").eq("id", user.id).maybeSingle(),
         supabase.from("organizations").select("id, name").limit(1),
         supabase.from("token_balances").select("available, held").maybeSingle(),
+        fetch(appUrl("/api/buyer/experience")).then((r) => r.json()).catch(() => null),
       ]);
 
       const orgRow = (orgRes.data?.[0] as BuyerOrg | undefined) ?? null;
@@ -75,6 +81,7 @@ export function BuyerDataProvider({ children }: { children: ReactNode }) {
         fullName: (profileRes.data as { full_name: string | null } | null)?.full_name ?? null,
         org: orgRow,
         balance: { available: Number(bal?.available ?? 0), held: Number(bal?.held ?? 0) },
+        experience: mergeBuyerExperience((expRes as { experience?: unknown } | null)?.experience),
         loading: false,
       });
     });

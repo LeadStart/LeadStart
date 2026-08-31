@@ -8,6 +8,8 @@
 import { useEffect, useState, useCallback } from "react";
 import { PageHeader } from "@/components/layout/page-header";
 import { appUrl } from "@/lib/api-url";
+import { useBuyerData } from "../buyer-data-context";
+import { BuyerAnnouncement } from "@/components/buyer/buyer-dashboard-view";
 import { Loader2, Download, Search as SearchIcon, ChevronLeft, ChevronRight, CheckCircle2, RefreshCw } from "lucide-react";
 
 interface ReverifyJob {
@@ -45,6 +47,7 @@ function fullName(c: ContactRow): string {
 }
 
 export default function BuyerContactsPage() {
+  const { experience } = useBuyerData();
   const [rows, setRows] = useState<ContactRow[] | null>(null);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -123,6 +126,7 @@ export default function BuyerContactsPage() {
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <PageHeader title="My contacts" />
+      <BuyerAnnouncement announcement={experience.announcement} />
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <form onSubmit={submitSearch} className="flex items-center gap-2">
@@ -189,7 +193,7 @@ export default function BuyerContactsPage() {
           <p className="mt-4 text-sm text-muted-foreground">Loading…</p>
         ) : rows.length === 0 ? (
           <p className="mt-4 text-sm text-muted-foreground">
-            {q ? "No contacts match your search." : "No contacts yet. Run a search to start sourcing."}
+            {q ? "No contacts match your search." : experience.empty.contacts}
           </p>
         ) : (
           <>

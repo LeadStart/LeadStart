@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/layout/page-header";
-import { Coins, Workflow, Building2, Key, Tags, CreditCard, CheckSquare } from "lucide-react";
+import { Coins, Workflow, Building2, Key, Tags, CreditCard, CheckSquare, Store } from "lucide-react";
 
 // Settings hub — one tab in the sidebar, with sub-sections switched by this
 // sub-tab bar. Each tab is its own route under /admin/settings so deep links
@@ -14,6 +14,7 @@ import { Coins, Workflow, Building2, Key, Tags, CreditCard, CheckSquare } from "
 // the top-level nav so Settings is the single home for them.
 const SETTINGS_TABS = [
   { href: "/admin/settings/tokens", label: "Tokens", icon: Coins },
+  { href: "/admin/settings/buyer-experience", label: "Buyer experience", icon: Store },
   { href: "/admin/settings/workflows", label: "Workflows", icon: Workflow },
   { href: "/admin/settings/team", label: "Team", icon: Building2 },
   { href: "/admin/settings/api", label: "Integrations", icon: Key },

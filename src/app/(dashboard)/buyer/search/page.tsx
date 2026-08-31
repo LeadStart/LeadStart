@@ -8,6 +8,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { PageHeader } from "@/components/layout/page-header";
 import { useBuyerData } from "../buyer-data-context";
+import { BuyerAnnouncement } from "@/components/buyer/buyer-dashboard-view";
 import { appUrl } from "@/lib/api-url";
 import { Loader2, Search as SearchIcon, MapPin } from "lucide-react";
 
@@ -72,7 +73,7 @@ function CoverageCell({ row, onResale, busy }: { row: SearchRow; onResale: () =>
 }
 
 export default function BuyerSearchPage() {
-  const { balance } = useBuyerData();
+  const { balance, experience } = useBuyerData();
   const [terms, setTerms] = useState("");
   const [location, setLocation] = useState("");
   const [maxResults, setMaxResults] = useState(200);
@@ -159,11 +160,15 @@ export default function BuyerSearchPage() {
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       <PageHeader title="Run a search" />
+      <BuyerAnnouncement announcement={experience.announcement} />
 
       <form onSubmit={submit} className="rounded-2xl border border-border bg-white p-6 shadow-sm space-y-4">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <MapPin size={16} /> Google Maps sourcing. Available balance: <strong className="text-foreground">{balance.available.toLocaleString()}</strong> tokens.
         </div>
+        {experience.tips.search.trim() && (
+          <p className="text-xs text-muted-foreground">{experience.tips.search}</p>
+        )}
         <div>
           <label htmlFor="terms" className="mb-1 block text-sm font-medium text-foreground">What businesses? (comma-separated)</label>
           <input id="terms" value={terms} onChange={(e) => setTerms(e.target.value)} placeholder="dentist, orthodontist" required className="w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20" />
@@ -193,7 +198,7 @@ export default function BuyerSearchPage() {
         {rows === null ? (
           <p className="mt-3 text-sm text-muted-foreground">Loading…</p>
         ) : rows.length === 0 ? (
-          <p className="mt-3 text-sm text-muted-foreground">No searches yet.</p>
+          <p className="mt-3 text-sm text-muted-foreground">{experience.empty.searches}</p>
         ) : (
           <div className="mt-3 overflow-x-auto">
             <table className="w-full text-sm">
