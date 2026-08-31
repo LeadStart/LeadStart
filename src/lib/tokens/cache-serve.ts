@@ -201,6 +201,11 @@ export async function maybeServeFromCache(
     targetMaxResults: number;
     createdBy: string;
     actor: string;
+    // Explicit buyer resale ("get the remaining N in this segment"): skip the
+    // freshness/last-pulled gate (the buyer is deliberately buying the current
+    // pool remainder), still require the feature enabled + a segment + servable
+    // rows. The automatic serve-on-search-creation path leaves this false.
+    explicit?: boolean;
   },
 ): Promise<CacheServeResult> {
   // ---- eligibility (no mutation) ----
@@ -212,16 +217,19 @@ export async function maybeServeFromCache(
     const segment = segmentForQuery(opts.searchKind, opts.query);
     if (!segment) return { outcome: "skip" };
 
-    const { data: sp } = await admin
-      .from("segment_pulls")
-      .select("last_pulled_at")
-      .eq("segment_key", segment.key)
-      .maybeSingle();
-    const lastPulled = (sp as { last_pulled_at: string | null } | null)?.last_pulled_at;
-    if (!lastPulled) return { outcome: "skip" };
-    if (cfg.freshnessDays != null) {
-      const ageDays = (Date.parse(new Date().toISOString()) - Date.parse(lastPulled)) / 86_400_000;
-      if (ageDays > cfg.freshnessDays) return { outcome: "skip" };
+    if (!opts.explicit) {
+      // Automatic path: only serve a segment that was pulled recently enough.
+      const { data: sp } = await admin
+        .from("segment_pulls")
+        .select("last_pulled_at")
+        .eq("segment_key", segment.key)
+        .maybeSingle();
+      const lastPulled = (sp as { last_pulled_at: string | null } | null)?.last_pulled_at;
+      if (!lastPulled) return { outcome: "skip" };
+      if (cfg.freshnessDays != null) {
+        const ageDays = (Date.parse(new Date().toISOString()) - Date.parse(lastPulled)) / 86_400_000;
+        if (ageDays > cfg.freshnessDays) return { outcome: "skip" };
+      }
     }
 
     servable = await findServableMasterRows(admin, opts.organizationId, segment.key, opts.targetMaxResults);

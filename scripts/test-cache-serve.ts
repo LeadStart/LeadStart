@@ -66,9 +66,12 @@ async function main() {
 
   let orgA: string | null = null;
   let orgB: string | null = null;
+  let orgC: string | null = null;
   const searchAId = randomUUID();
   const searchBId = randomUUID();
   const searchBId2 = randomUUID();
+  const searchCId = randomUUID();
+  const searchCId2 = randomUUID();
 
   // config we toggle (captured for restore)
   let origCacheEnabled: boolean | null = null;
@@ -173,6 +176,29 @@ async function main() {
     ok("B re-running the segment skips (owns all -> normal flow)", r2.outcome === "skip", r2);
     const { count: bSearch2 } = await admin.from("maps_searches").select("id", { count: "exact", head: true }).eq("id", searchBId2);
     ok("no served search row created on skip", bSearch2 === 0, bSearch2);
+
+    // ---- explicit resale bypasses the freshness gate ----
+    // Make the segment un-fresh by dropping its pull record; the auto path then
+    // skips, but an explicit resale still serves the current pool remainder.
+    await admin.from("segment_pulls").delete().eq("segment_key", seg.key);
+    const { data: c } = await admin.from("organizations").insert({ name: `ZZZ_cache_C_${tag}`, kind: "buyer", is_self_serve: true }).select("id").single();
+    orgC = (c as { id: string }).id;
+    await admin.from("token_ledger").insert({ organization_id: orgC, entry_type: "credit", tokens: 10000 });
+
+    const rAuto = await maybeServeFromCache(admin, {
+      organizationId: orgC, searchId: searchCId, searchKind: "maps",
+      query: searchQuery, targetMaxResults: 100, createdBy: creator, actor: "compass~google-maps-extractor",
+    });
+    ok("auto serve skips an un-fresh segment", rAuto.outcome === "skip", rAuto);
+
+    const rExplicit = await maybeServeFromCache(admin, {
+      organizationId: orgC, searchId: searchCId2, searchKind: "maps",
+      query: searchQuery, targetMaxResults: 100, createdBy: creator, actor: "compass~google-maps-extractor",
+      explicit: true,
+    });
+    ok("explicit resale serves the un-fresh segment (3)", rExplicit.outcome === "served" && rExplicit.served === 3, rExplicit);
+    const { count: cOwn } = await admin.from("contact_ownership").select("id", { count: "exact", head: true }).eq("organization_id", orgC);
+    ok("resale granted C ownership of 3", cOwn === 3, cOwn);
   } finally {
     // ---- restore money config first (most important) ----
     if (configTouched) {
@@ -184,7 +210,7 @@ async function main() {
       ok("tier price restored", (backTier as { token_price: number | null }).token_price === origTierPrice, backTier);
     }
     // ---- teardown fixtures ----
-    for (const org of [orgA, orgB]) {
+    for (const org of [orgA, orgB, orgC]) {
       if (!org) continue;
       await admin.from("contact_ownership").delete().eq("organization_id", org);
       await admin.from("maps_searches").delete().eq("organization_id", org);
@@ -193,7 +219,7 @@ async function main() {
     }
     await admin.from("master_contacts").delete().in("natural_key", keysA);
     await admin.from("segment_pulls").delete().eq("segment_key", seg.key);
-    for (const org of [orgA, orgB]) {
+    for (const org of [orgA, orgB, orgC]) {
       if (org) await admin.from("organizations").delete().eq("id", org);
     }
     const { data: leftM } = await admin.from("master_contacts").select("id").in("natural_key", keysA);

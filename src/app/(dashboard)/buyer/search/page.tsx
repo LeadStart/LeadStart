@@ -46,16 +46,26 @@ function delivered(row: SearchRow): number {
 // Master-pool coverage: how many of this segment's contacts the buyer owns, and
 // how many more the shared pool holds (the resale hint). "—" until the segment
 // has any pooled data (an empty pool, or an unsegmentable search).
-function CoverageCell({ row }: { row: SearchRow }) {
+function CoverageCell({ row, onResale, busy }: { row: SearchRow; onResale: () => void; busy: boolean }) {
   const c = row.coverage;
   if (!c || c.available === 0) return <span className="text-muted-foreground">—</span>;
   const more = Math.max(0, c.available - c.owned);
   return (
-    <span title={`Segment: ${c.terms.join(", ")} · ${c.area}`}>
-      <strong className="text-foreground">{c.owned.toLocaleString()}</strong>
-      <span className="text-muted-foreground"> of ~{c.available.toLocaleString()}</span>
+    <span title={`Segment: ${c.terms.join(", ")} · ${c.area}`} className="inline-flex items-center gap-1.5">
+      <span>
+        <strong className="text-foreground">{c.owned.toLocaleString()}</strong>
+        <span className="text-muted-foreground"> of ~{c.available.toLocaleString()}</span>
+      </span>
       {more > 0 && (
-        <span className="ml-1 rounded-full bg-green-100 px-1.5 py-0.5 text-xs font-medium text-green-700">+{more.toLocaleString()} available</span>
+        <button
+          type="button"
+          onClick={onResale}
+          disabled={busy}
+          title="Add the remaining contacts in this segment from the shared pool"
+          className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 transition-colors hover:bg-green-200 disabled:opacity-60"
+        >
+          {busy ? "Adding…" : `Get ${more.toLocaleString()} more`}
+        </button>
       )}
     </span>
   );
@@ -71,6 +81,7 @@ export default function BuyerSearchPage() {
   const [submitting, setSubmitting] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [rows, setRows] = useState<SearchRow[] | null>(null);
+  const [resaleId, setResaleId] = useState<string | null>(null);
 
   const loadSearches = useCallback(() => {
     fetch(appUrl("/api/buyer/prospecting/searches"))
@@ -116,6 +127,33 @@ export default function BuyerSearchPage() {
       setNotice("Network error. Please try again.");
     }
     setSubmitting(false);
+  }
+
+  // Resale: buy the remaining pool contacts in a completed search's segment.
+  async function resale(row: SearchRow) {
+    setNotice(null);
+    setResaleId(row.id);
+    try {
+      const res = await fetch(appUrl("/api/buyer/prospecting/resale"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ search_id: row.id, kind: row.kind }),
+      });
+      const d = (await res.json().catch(() => ({}))) as { served?: number; charged?: number; message?: string; error?: string };
+      if (res.ok) {
+        setNotice(
+          d.served && d.served > 0
+            ? `Added ${d.served} contacts from the pool — charged ${d.charged ?? 0} tokens.`
+            : d.message || "Nothing new to add right now.",
+        );
+        loadSearches();
+      } else {
+        setNotice(d.error || "Could not add more contacts.");
+      }
+    } catch {
+      setNotice("Network error. Please try again.");
+    }
+    setResaleId(null);
   }
 
   return (
@@ -171,7 +209,7 @@ export default function BuyerSearchPage() {
                     <td className="py-2 pr-4"><span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_STYLE[r.status] ?? "bg-muted text-muted-foreground"}`}>{r.status}</span></td>
                     <td className="py-2 pr-4">{r.result_count}</td>
                     <td className="py-2 pr-4">{delivered(r)}</td>
-                    <td className="py-2 pr-4"><CoverageCell row={r} /></td>
+                    <td className="py-2 pr-4"><CoverageCell row={r} onResale={() => resale(r)} busy={resaleId === r.id} /></td>
                     <td className="py-2 text-muted-foreground">{new Date(r.created_at).toLocaleDateString()}</td>
                   </tr>
                 ))}
