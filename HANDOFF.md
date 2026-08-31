@@ -5,6 +5,64 @@
 
 ---
 
+## 2026-08-31: Token product Phases 2-3-5 BUILT + verified (local, unpushed). Phase 4 deferred. Deploy = owner's word.
+
+Continued straight through the phases (owner directive: build all the way through).
+Plan `C:\Users\danie\.claude\plans\ok-we-need-a-gentle-peach.md`, memory
+[[project_token_contact_sourcing]]. **Phases 0-1 are DEPLOYED (master 5efff85);
+Phases 2/3/5 are committed LOCAL on master (`d49fd71`, `195203c`, `32cb827`),
+NOT pushed.** Migrations 00108/00109/00110 are APPLIED to prod (files committed).
+
+**Phase 2 — wallet + Stripe + admin config (`d49fd71`).** `token_ledger`
+(credit/hold/charge/release + `token_balances` view + idempotency) & config
+tables (00108/00109/00110, applied). Stripe reuse: the app's Stripe is already
+wired and the quote flow uses ad-hoc `price_data` (no pre-made products), so
+token packs are data-driven from `token_packs.price_usd` — "define the 3 packs"
+= just entering prices (packs seeded, prices NULL by owner choice). Built:
+`createTokenPackCheckoutSession` + `POST /api/billing/tokens/checkout` +
+`token_topup` webhook credit (service-role, idempotent). Buyer portal shows real
+balance + a purchasable-pack grid. Admin Settings HUB (folded in from worktree
+`internal-automations-setup-9d84fc`, sidebar/topbar merged with Phase 1) + a
+controlled Tokens config page wired to `POST /api/admin/tokens/config` (owner-only).
+
+**Phase 3 — reserve/cap/settle (`195203c`), the cash core.** `src/lib/tokens/`
+`pricing-math.ts` (pure, unit-tested 12/12) + `billing.ts`: `placeHold` (gates on
+pricing + available balance) and `settleSearch` (recomputes charge+release from
+CUMULATIVE `delivered_counts` and UPSERTS — idempotent-and-additive across the
+multiple enrichment runs a search drains over, resolving the one-settlement-row-
+per-search vs many-runs tension). Guarded settle hook in `finalizeOutcomes`
+(run-apify-enrichment:~2515), a NO-OP for agency searches (no hold). Buyer
+reserve-wrapped Maps + LinkedIn routes (`/api/buyer/prospecting/*`) — reserve
+FIRST via a pre-generated id (race-free; token_ledger.search_id has no FK), roll
+the hold back if the insert loses the one-active-per-org race. Charge basis is
+attribute-based off OUTCOME_KEYS→tier_key mapping. Reserve→settle + re-settle
+balance math verified via rollback harness (`scripts/test-token-billing.ts` +
+the SQL harness). tsc/eslint 0 new.
+
+**Phase 5 — buyer UI (`32cb827`).** `/buyer/search` Maps form → the reserve route
+(shows reserved tokens / insufficient / not-priced-yet), recent-searches table
+with live status+delivered polling, "Run a search" in buyer nav. Balance + buy on
+`/buyer` (Phase 2).
+
+**DEFERRED (deliberate):**
+- **Phase 4 shared master-contacts pool + cross-buyer resale/segment-cache** — a
+  RISKY refactor of the agency's core org-scoped `contacts` model. Per-buyer dedup
+  (don't double-bill) ALREADY works via the existing org-scoped import dedup, so
+  the core loop is fine without it. The shared-pool/resale change needs its own
+  careful design pass; do NOT rush it into the live contacts table.
+- **Cap-config wiring** (`token_pricing_config.max_charge_per_run_usd` →
+  the crons' hardcoded `maxTotalChargeUsd`) — the hold is the primary cash gate;
+  this is a secondary vendor-spend ceiling. Small, self-contained.
+- **`catch_all_recovered` (Findymail) billing** — no engine OUTCOME_KEY; detect via
+  `enrichment_data.enrichment.email.provider === "findymail"` in finalizeOutcomes.
+- **Re-verify tier + low-balance alert email** (Phase 5 tail).
+
+**Activation (owner):** set pack + tier prices in Admin → Settings → Tokens (Stripe
+already live → priced packs = working buy flow); then push. Full E2E (buyer buys →
+runs a search → settle) needs a buyer account + priced packs + a real Stripe payment.
+
+---
+
 ## 2026-08-30: Token product Phase 1 (buyer accounts + signup + portal) DONE. Migrations live. Next = Phase 2.
 
 Buyer self-serve accounts on top of the Phase 0 hardening (plan
