@@ -300,6 +300,7 @@ export function DomainProvisioningDetail({
             <Button
               variant="outline"
               size="sm"
+              title="Re-check Google's side and move the setup forward one step now. Setup also re-checks on its own every ~25s while this is open."
               onClick={() => post(`/api/admin/domains/${domain.id}/provisioning/advance`, undefined, "check")}
               disabled={busy === "check"}
             >
@@ -391,10 +392,11 @@ export function DomainProvisioningDetail({
             <Button
               variant="ghost"
               size="sm"
+              title={`Re-write these records (Google MX, SPF, DMARC, verification) to your registrar (${domain.registrar}). Use this only if the DNS write failed or the records were changed — it is not needed while setup is just waiting on Google.`}
               onClick={() => post(`/api/admin/domains/${domain.id}/dns/apply`, undefined, "retrydns")}
               disabled={busy === "retrydns"}
             >
-              {busy === "retrydns" ? <Loader2 size={13} className="animate-spin" /> : "Retry DNS"}
+              {busy === "retrydns" ? <Loader2 size={13} className="animate-spin" /> : "Rewrite DNS"}
             </Button>
           )}
         </div>
