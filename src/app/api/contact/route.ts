@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { clientIp, checkRateLimits, tooManyRequests } from "@/lib/security/rate-limit";
+import { verifyTurnstile } from "@/lib/security/turnstile";
+import { isDisposableEmail } from "@/lib/security/disposable-email";
 
 interface ContactBody {
   firstName?: string;
@@ -11,6 +14,7 @@ interface ContactBody {
   industry?: string;
   volume?: string;
   message?: string;
+  turnstileToken?: string;
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -95,6 +99,37 @@ export async function POST(request: NextRequest) {
   if (!EMAIL_RE.test(email)) {
     return NextResponse.json({ error: "Please enter a valid email address." }, { status: 400 });
   }
+
+  // --- Abuse guards: run before we touch the DB or send any mail. ---
+  const ip = clientIp(request);
+  const rl = await checkRateLimits([
+    { bucket: `contact:ip:${ip}`, limit: 5, windowSeconds: 600 },
+    { bucket: `contact:email:${email.toLowerCase()}`, limit: 3, windowSeconds: 600 },
+  ]);
+  if (!rl.allowed) {
+    return tooManyRequests(
+      rl.retryAfterSeconds,
+      "Too many submissions. Please wait a few minutes and try again.",
+    );
+  }
+
+  // Turnstile (no-op until TURNSTILE_SECRET_KEY is set; fail-closed once it is).
+  const turnstile = await verifyTurnstile(body.turnstileToken, ip);
+  if (!turnstile.success) {
+    return NextResponse.json(
+      { error: "Verification failed. Please refresh the page and try again." },
+      { status: 400 },
+    );
+  }
+
+  // Block one-click throwaway inboxes on the quote form.
+  if (isDisposableEmail(email)) {
+    return NextResponse.json(
+      { error: "Please use a permanent work email address." },
+      { status: 400 },
+    );
+  }
+
   if (
     message.length > 5000 ||
     company.length > 200 ||

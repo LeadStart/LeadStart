@@ -3,6 +3,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { appUrl } from "@/lib/api-url";
+import { checkRateLimit, tooManyRequests } from "@/lib/security/rate-limit";
+
+// Roles an owner may hand out through this admin invite flow. Buyers are NOT
+// invited here — they self-register through the public signup flow — and no one
+// gets a role outside the app_role enum. Guards against an arbitrary role string
+// reaching the profile upsert.
+const INVITABLE_ROLES = new Set(["owner", "va", "client"]);
 
 function buildInviteHtml(inviteLink: string) {
   return `<!DOCTYPE html>
@@ -54,11 +61,22 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "No organization found" }, { status: 400 });
   }
 
+  // Throttle a single owner's invite sends (fat-finger loop / compromised session).
+  const rl = await checkRateLimit({
+    bucket: `invite:user:${user.id}`,
+    limit: 30,
+    windowSeconds: 600,
+  });
+  if (!rl.allowed) return tooManyRequests(rl.retryAfterSeconds);
+
   const body = await request.json();
   const { email, role: inviteRole, client_id, full_name } = body;
 
   if (!email || !inviteRole) {
     return NextResponse.json({ error: "Email and role required" }, { status: 400 });
+  }
+  if (!INVITABLE_ROLES.has(inviteRole)) {
+    return NextResponse.json({ error: "Invalid role" }, { status: 400 });
   }
 
   const admin = createAdminClient();

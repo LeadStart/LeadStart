@@ -2,15 +2,25 @@ import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { appUrl } from "@/lib/api-url";
+import { clientIp, checkRateLimit, checkRateLimits, tooManyRequests } from "@/lib/security/rate-limit";
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
   const { email, token, password } = body;
 
   const admin = createAdminClient();
+  const ip = clientIp(request);
 
   // Mode 1: Set new password (from update-password page)
   if (token && password) {
+    // Rate-limit token submissions per IP — this is the reset-token guessing surface.
+    const rl = await checkRateLimit({
+      bucket: `reset-password:confirm:ip:${ip}`,
+      limit: 10,
+      windowSeconds: 900,
+    });
+    if (!rl.allowed) return tooManyRequests(rl.retryAfterSeconds);
+
     if (password.length < 8) {
       return NextResponse.json({ error: "Password must be at least 8 characters" }, { status: 400 });
     }
@@ -51,6 +61,17 @@ export async function POST(request: NextRequest) {
   // Mode 2: Request reset link (from reset-password page)
   if (!email) {
     return NextResponse.json({ error: "Email required" }, { status: 400 });
+  }
+
+  // Rate-limit reset requests per IP and per target email. Blunts both the
+  // recovery-email bomb and the full admin.listUsers() scan this mode runs.
+  const requestRl = await checkRateLimits([
+    { bucket: `reset-password:request:ip:${ip}`, limit: 5, windowSeconds: 900 },
+    { bucket: `reset-password:request:email:${String(email).toLowerCase()}`, limit: 3, windowSeconds: 900 },
+  ]);
+  if (!requestRl.allowed) {
+    // Stay enumeration-safe: a generic 429, never "that email doesn't exist".
+    return tooManyRequests(requestRl.retryAfterSeconds);
   }
 
   // Find user by email

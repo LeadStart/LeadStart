@@ -1,7 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { clientIp, checkRateLimit, tooManyRequests } from "@/lib/security/rate-limit";
 
 export async function POST(request: NextRequest) {
+  // Rate-limit per IP — invite acceptance is gated by a guessable-in-theory
+  // invite_token, so throttle before the token lookup runs.
+  const rl = await checkRateLimit({
+    bucket: `accept-invite:ip:${clientIp(request)}`,
+    limit: 10,
+    windowSeconds: 600,
+  });
+  if (!rl.allowed) return tooManyRequests(rl.retryAfterSeconds);
+
   const { token, email, password, full_name } = await request.json();
 
   if (!token || !email || !password) {
