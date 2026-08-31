@@ -18,7 +18,7 @@ import type { MapsPlace } from "@/types/app";
 import { importMapsPlaces } from "@/lib/apify/import-maps-places";
 import { enqueueEnrichment } from "@/lib/apify/enqueue-enrichment";
 import { alertActorFailure } from "@/lib/notifications/actor-failure-alert";
-import { loadMaxChargeCeiling, capRunCharge } from "@/lib/tokens/billing";
+import { loadBuyerRunCeiling, capRunCharge } from "@/lib/tokens/billing";
 
 // GET /api/cron/run-maps-searches — every minute. The Google-Maps twin of
 // run-linkedin-searches: one tick advances one search under a 90s lease, either
@@ -323,7 +323,8 @@ async function advanceMultiAreaSearch(
   // Hard per-run charge cap (~2× place+filters, +leads add-on if on). Apify aborts
   // the area run at this $, bounding a per-place-cap surprise (the $14 incident). SPEND-01.
   const capPerPlace = 0.012 + (levers.linkedinLeads ? 0.05 : 0);
-  const chargeCeiling = await loadMaxChargeCeiling(admin);
+  // Buyer-run only: the owner's max_charge_per_run_usd ceiling (null for agency).
+  const chargeCeiling = await loadBuyerRunCeiling(admin, row.organization_id);
   const run = await client.startActorRun(row.actor, input, {
     timeoutSec: APIFY_TIMEOUT_SEC,
     maxTotalChargeUsd: capRunCharge(Math.max(1, perAreaMaxItems(clampedTarget, areaCount) * capPerPlace), chargeCeiling),
@@ -545,7 +546,8 @@ export async function GET(request: NextRequest) {
     // Hard per-run charge cap (~2× place+filters, +leads if on). Apify aborts at
     // this $, bounding a per-place-cap surprise. SPEND-01.
     const capPerPlace = 0.012 + (legacyLevers.linkedinLeads ? 0.05 : 0);
-    const chargeCeiling = await loadMaxChargeCeiling(admin);
+    // Buyer-run only: the owner's max_charge_per_run_usd ceiling (null for agency).
+    const chargeCeiling = await loadBuyerRunCeiling(admin, row.organization_id);
     const run = await client.startActorRun(row.actor, input, {
       timeoutSec: APIFY_TIMEOUT_SEC,
       maxTotalChargeUsd: capRunCharge(Math.max(1, clampedTarget * capPerPlace), chargeCeiling),

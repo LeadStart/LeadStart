@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { checkCronAuth } from "@/lib/security/cron-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { loadApifyToken, loadEnrichmentSettings } from "@/lib/apify/auth";
-import { loadMaxChargeCeiling, capRunCharge } from "@/lib/tokens/billing";
+import { loadBuyerRunCeiling, capRunCharge } from "@/lib/tokens/billing";
 import { ApifyClient } from "@/lib/apify/client";
 import { isInProgress, isTerminalOk } from "@/lib/apify/types";
 import {
@@ -303,7 +303,8 @@ export async function GET(request: NextRequest) {
     // Hard per-run charge cap (~$0.05/profile ceiling; real ~$0.014 + the $0.10/page
     // floor). Apify aborts at this $, bounding the deep-search page/segment
     // blow-up even beyond the per-segment page clamp. SPEND-01.
-    const chargeCeiling = await loadMaxChargeCeiling(admin);
+    // Buyer-run only: the owner's max_charge_per_run_usd ceiling (null for agency).
+    const chargeCeiling = await loadBuyerRunCeiling(admin, row.organization_id);
     const run = await client.startActorRun(row.actor, input, {
       timeoutSec: APIFY_TIMEOUT_SEC,
       maxTotalChargeUsd: capRunCharge(Math.max(2, row.target_max_results * 0.05), chargeCeiling),

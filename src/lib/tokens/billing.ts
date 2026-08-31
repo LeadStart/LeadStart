@@ -75,6 +75,23 @@ export async function loadMaxChargeCeiling(admin: Admin): Promise<number | null>
   }
 }
 
+/**
+ * The per-run vendor-cost ceiling that applies to a BUYER run only: the configured
+ * max_charge_per_run_usd when the run's org is a self-serve buyer org, else null.
+ * Agency runs keep their own hardcoded caps untouched; this ceiling is a
+ * secondary buyer-spend guard (on top of the buyer's token hold), not an agency
+ * throttle. Never throws.
+ */
+export async function loadBuyerRunCeiling(admin: Admin, organizationId: string): Promise<number | null> {
+  try {
+    const { data } = await admin.from("organizations").select("kind").eq("id", organizationId).maybeSingle();
+    if ((data as { kind?: string | null } | null)?.kind !== "buyer") return null;
+    return await loadMaxChargeCeiling(admin);
+  } catch {
+    return null;
+  }
+}
+
 export async function getBalance(admin: Admin, organizationId: string): Promise<TokenBalance> {
   const { data } = await admin
     .from("token_balances")

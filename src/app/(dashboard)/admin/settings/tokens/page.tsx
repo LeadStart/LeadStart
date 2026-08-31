@@ -229,7 +229,7 @@ export default function TokensSettingsPage() {
           <div className="space-y-1">
             <Label className="text-sm font-medium">Max charge per run (USD)</Label>
             <Input type="number" step="0.5" value={cfgNum("max_charge_per_run_usd")} onChange={(e) => setCfg("max_charge_per_run_usd", e.target.value)} placeholder="25" className="max-w-[220px]" />
-            <p className="text-[11px] text-muted-foreground">Passed to the actor as <span className="font-mono">maxTotalChargeUsd</span> — a hard ceiling.</p>
+            <p className="text-[11px] text-muted-foreground">Passed to the actor as <span className="font-mono">maxTotalChargeUsd</span> on buyer runs, a hard ceiling. Agency runs keep their own caps.</p>
           </div>
         </CardContent>
       </Card>
