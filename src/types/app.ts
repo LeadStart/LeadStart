@@ -2,7 +2,7 @@ import type { CampaignVariable } from "@/lib/native/tokens";
 
 export type { CampaignVariable };
 
-export type AppRole = "owner" | "va" | "client";
+export type AppRole = "owner" | "va" | "client" | "buyer";
 
 export type FeedbackStatus =
   | "good_lead"

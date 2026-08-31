@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { roleHomePath } from "@/lib/auth/roles";
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
@@ -101,7 +102,7 @@ export async function updateSession(request: NextRequest) {
   // it must load with no session. (The chat API it calls,
   // /api/site-chat, is already public via the `/api/` bypass below and
   // enforces its own origin allowlist + rate limit.)
-  const publicRoutes = ["/login", "/accept-invite", "/reset-password", "/update-password", "/auth/callback", "/quote", "/billing/welcome", "/site-chat.js"];
+  const publicRoutes = ["/login", "/signup", "/accept-invite", "/reset-password", "/update-password", "/auth/callback", "/quote", "/billing/welcome", "/site-chat.js"];
   const isPublicRoute = publicRoutes.some((route) =>
     pathname.startsWith(route)
   );
@@ -139,40 +140,57 @@ export async function updateSession(request: NextRequest) {
       const nextQuery = nextRaw.includes("?") ? nextRaw.slice(nextRaw.indexOf("?")) : "";
       const isClientDest = nextPath.startsWith("/client/") || nextPath === "/client";
       const isAdminDest = nextPath.startsWith("/admin/") || nextPath === "/admin";
+      const isBuyerDest = nextPath.startsWith("/buyer/") || nextPath === "/buyer";
       const roleAllowsClient = role === "client";
       const roleAllowsAdmin = role === "owner" || role === "va";
-      if ((isClientDest && roleAllowsClient) || (isAdminDest && roleAllowsAdmin)) {
+      const roleAllowsBuyer = role === "buyer";
+      if (
+        (isClientDest && roleAllowsClient) ||
+        (isAdminDest && roleAllowsAdmin) ||
+        (isBuyerDest && roleAllowsBuyer)
+      ) {
         url.pathname = nextPath;
         url.search = nextQuery;
         return NextResponse.redirect(url);
       }
     }
 
-    if (role === "client") {
-      url.pathname = "/client";
-    } else {
-      url.pathname = "/admin";
-    }
+    url.pathname = roleHomePath(role);
     url.searchParams.delete("next");
     return NextResponse.redirect(url);
   }
 
-  // Prevent clients from accessing admin routes
+  // Portal boundaries: each portal admits only its own role(s); anyone else is
+  // sent to their own home. We bounce only KNOWN foreign roles so an unexpected/
+  // missing role falls through leniently (its home is /client, which admits it)
+  // and can't ping-pong into a redirect loop.
+
+  // /admin — owner/va only. Bounce client + buyer.
   if (user && pathname.startsWith("/admin")) {
-    const role = user.app_metadata?.role;
-    if (role === "client") {
+    const role = user.app_metadata?.role as string | undefined;
+    if (role === "client" || role === "buyer") {
       const url = request.nextUrl.clone();
-      url.pathname = "/client";
+      url.pathname = roleHomePath(role);
       return NextResponse.redirect(url);
     }
   }
 
-  // Prevent admin/VA from accessing client routes
+  // /client — client only. Bounce owner/va + buyer.
   if (user && pathname.startsWith("/client")) {
-    const role = user.app_metadata?.role;
-    if (role === "owner" || role === "va") {
+    const role = user.app_metadata?.role as string | undefined;
+    if (role === "owner" || role === "va" || role === "buyer") {
       const url = request.nextUrl.clone();
-      url.pathname = "/admin";
+      url.pathname = roleHomePath(role);
+      return NextResponse.redirect(url);
+    }
+  }
+
+  // /buyer — buyer only. Bounce owner/va + client.
+  if (user && pathname.startsWith("/buyer")) {
+    const role = user.app_metadata?.role as string | undefined;
+    if (role === "owner" || role === "va" || role === "client") {
+      const url = request.nextUrl.clone();
+      url.pathname = roleHomePath(role);
       return NextResponse.redirect(url);
     }
   }

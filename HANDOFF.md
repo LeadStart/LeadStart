@@ -5,6 +5,56 @@
 
 ---
 
+## 2026-08-30: Token product Phase 1 (buyer accounts + signup + portal) DONE. Migrations live. Next = Phase 2.
+
+Buyer self-serve accounts on top of the Phase 0 hardening (plan
+`C:\Users\danie\.claude\plans\ok-we-need-a-gentle-peach.md`, memory
+[[project_token_contact_sourcing]]). D1's double-walled isolation: one org per
+buyer + a new `'buyer'` app_role that fails-closed on every agency RLS policy.
+
+**Migrations APPLIED to prod + verified (Management API):** `00106`
+(`ALTER TYPE app_role ADD VALUE 'buyer'` — its own migration per the enum
+same-txn rule, applied raw) and `00107` (`organizations.kind` default 'agency' /
+`is_self_serve` + kind CHECK + index; every existing org reads 'agency'). Verified
+`app_role = {owner,va,client,buyer}` and the columns/constraint/index live.
+
+**Public signup path:** `POST /api/signup` — the ONLY signup route (Supabase
+public signup stays `disable_signup:true`; this trusted service-role route uses
+`admin.createUser`, which is not gated by it). Flow: guards (Phase 0 rate-limit +
+Turnstile + disposable-email) → create unconfirmed user → create the buyer org →
+promote the trigger-made profile to `role='buyer'` + org (service-role, so the
+enforce trigger permits it) → magic-link confirmation email. Public form at
+`/app/(auth)/signup/page.tsx` (self-contained, TurnstileWidget inert until keys).
+
+**Routing + portal:** `src/lib/auth/roles.ts` (`roleHomePath`/`isAdminRole`)
+DRYs the role→home map. Middleware gains buyer post-login routing + THREE
+complete portal-boundary guards (a buyer can't reach /admin or /client, and
+non-buyers can't reach /buyer; guards bounce only KNOWN foreign roles to avoid
+redirect loops) + `/signup` in the public allowlist. `AppRole` += 'buyer';
+page.tsx, dashboard-shell, sidebar (`buyerNav`), mobile-tab-bar (`buyerTabs`),
+topbar get buyer arms. Portal shell at `/app/(dashboard)/buyer/`
+(layout + `buyer-data-context` + a dashboard page: welcome + token-balance-0 +
+coming-soon tiles for Phase 2/3).
+
+**Verified:** tsc + eslint add 0 new issues (2 lint hits in touched files are
+pre-existing); `/signup` renders in the dev preview (screenshot); the buyer guard
+bounces an admin off /buyer → /admin; no console/server errors. NOT yet done
+(needs a real inbox): the full signup E2E (confirm-email click → land on /buyer).
+
+**Git note:** this session's Phase 0 + Phase 1 landed on master via branch
+`claude/token-phase0-security` (rebased onto origin/master), deliberately
+EXCLUDING 2 parallel-session commits (`63dd28d` spam-word-list CI gate +
+`028aa2c` send-test-email) that add `.github/workflows/ci.yml` the LeadStart gh
+token can't push without `workflow` scope. Those 2 are preserved on local branch
+`parallel-session-wip`; that session re-pushes them (with the scope) when ready.
+
+**Next = Phase 2** (token wallet + Stripe purchase + price-card persistence):
+bring in the admin Tokens config shell from worktree
+`internal-automations-setup-9d84fc` (branch `claude/frosty-edison-b9e42c`) first;
+Stripe products/webhook config is a Daniel-dependency.
+
+---
+
 ## 2026-08-30: Token product Phase 0 (security HARD GATE) DONE + pushed. Signup disabled. Next = Phase 1.
 
 Phase 0 of the prepaid-token self-serve contact-sourcing product (plan

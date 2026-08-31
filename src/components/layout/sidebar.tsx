@@ -6,6 +6,7 @@ import leadstartMark from "../../../public/leadstart-mark-transparent.png";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import type { AppRole } from "@/types/app";
+import { roleHomePath } from "@/lib/auth/roles";
 import {
   BarChart3,
   Users,
@@ -67,6 +68,12 @@ const clientNav: NavItem[] = [
   { href: "/client/settings", label: "Settings", icon: <Settings size={18} /> },
 ];
 
+// Self-serve buyer portal. Only the dashboard exists in Phase 1; token wallet
+// (Phase 2) and sourcing (Phase 3) nav entries land as those pages are built.
+const buyerNav: NavItem[] = [
+  { href: "/buyer", label: "Dashboard", icon: <LayoutDashboard size={18} /> },
+];
+
 function NavLink({ item, active }: { item: NavItem; active: boolean }) {
   return (
     <Link
@@ -103,7 +110,8 @@ function NavSection({ label, items, pathname }: { label: string; items: NavItem[
 export function Sidebar({ role, open = false, onClose }: { role: AppRole; open?: boolean; onClose?: () => void }) {
   const pathname = usePathname();
   const isAdmin = role === "owner" || role === "va";
-  const nav = isAdmin ? adminNav : clientNav;
+  const isBuyer = role === "buyer";
+  const nav = isAdmin ? adminNav : isBuyer ? buyerNav : clientNav;
   const sendingNav = isAdmin ? adminSendingNav : [];
   const settingsNav = isAdmin ? adminSettingsNav : [];
   const workflowsNav = isAdmin ? adminWorkflowsNav : [];
@@ -138,7 +146,7 @@ export function Sidebar({ role, open = false, onClose }: { role: AppRole; open?:
       >
         {/* Brand header — transparent mark backlit by a soft bloom + live wordmark */}
         <div className="relative flex flex-col items-center gap-2.5 px-4 pt-4 pb-3">
-          <Link href={isAdmin ? "/admin" : "/client"} className="flex flex-col items-center gap-2.5">
+          <Link href={roleHomePath(role)} className="flex flex-col items-center gap-2.5">
             <span className="relative flex items-center justify-center">
               {/* Spotlight bloom (mockup direction D @ 0.91): a wide soft aura +
                   a crisp bright core behind the transparent mark, so the full
@@ -206,11 +214,11 @@ export function Sidebar({ role, open = false, onClose }: { role: AppRole; open?:
         <div className="border-t border-sidebar-border p-4">
           <div className="flex items-center gap-2">
             <div className="flex h-7 w-7 items-center justify-center rounded-full bg-sidebar-primary text-xs font-bold text-sidebar-primary-foreground">
-              {role === "owner" ? "A" : role === "va" ? "V" : "C"}
+              {role === "owner" ? "A" : role === "va" ? "V" : role === "buyer" ? "B" : "C"}
             </div>
             <div>
               <p className="text-xs font-medium text-sidebar-foreground">
-                {role === "owner" ? "Admin" : role === "va" ? "VA" : "Client"}
+                {role === "owner" ? "Admin" : role === "va" ? "VA" : role === "buyer" ? "Buyer" : "Client"}
               </p>
               <p className="text-[10px] text-sidebar-foreground/60">LeadStart</p>
             </div>

@@ -58,7 +58,8 @@ export function Topbar({ userEmail, role, actualRole, onRoleSwitch, onMenuClick 
 
   const isAdmin = role === "owner" || role === "va";
   const isActualAdmin = actualRole === "owner" || actualRole === "va";
-  const displayRole = isAdmin ? "Admin" : "Client";
+  const isBuyer = role === "buyer";
+  const displayRole = isAdmin ? "Admin" : isBuyer ? "Buyer" : "Client";
 
   const { data: notifications, refetch: refetchNotifications } = useSupabaseQuery<Notification[]>(
     "notifications",
@@ -191,11 +192,11 @@ export function Topbar({ userEmail, role, actualRole, onRoleSwitch, onMenuClick 
               </div>
             )}
             <DropdownMenuGroup>
-              <DropdownMenuItem onClick={() => router.push(isAdmin ? "/admin/settings/team" : "/client/settings")}>
+              <DropdownMenuItem onClick={() => router.push(isAdmin ? "/admin/settings/team" : isBuyer ? "/buyer" : "/client/settings")}>
                 <User size={14} className="mr-2" />
                 Profile
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => router.push(isActualAdmin ? "/admin/settings/api" : "/client/settings")}>
+              <DropdownMenuItem onClick={() => router.push(isActualAdmin ? "/admin/settings/api" : isBuyer ? "/buyer" : "/client/settings")}>
                 <Settings size={14} className="mr-2" />
                 Settings
               </DropdownMenuItem>

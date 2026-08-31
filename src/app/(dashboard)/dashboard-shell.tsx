@@ -7,6 +7,7 @@ import { Topbar } from "@/components/layout/topbar";
 import { MobileTabBar } from "@/components/layout/mobile-tab-bar";
 import { AdminPrefetcher } from "@/components/layout/admin-prefetcher";
 import type { AppRole } from "@/types/app";
+import { roleHomePath } from "@/lib/auth/roles";
 
 export function DashboardShell({
   role: initialRole,
@@ -30,11 +31,7 @@ export function DashboardShell({
 
   function handleRoleSwitch(newRole: AppRole) {
     setRole(newRole);
-    if (newRole === "client") {
-      router.push("/client");
-    } else {
-      router.push("/admin");
-    }
+    router.push(roleHomePath(newRole));
   }
 
   const isAdmin = role === "owner" || role === "va";

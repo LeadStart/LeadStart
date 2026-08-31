@@ -37,6 +37,11 @@ const clientTabs: Tab[] = [
   { href: "/client/settings", label: "Settings", icon: <Settings size={22} /> },
 ];
 
+// Buyer portal (Phase 1: dashboard only).
+const buyerTabs: Tab[] = [
+  { href: "/buyer", label: "Home", icon: <LayoutDashboard size={22} />, exact: true },
+];
+
 function isActive(pathname: string, href: string, exact?: boolean) {
   if (exact) return pathname === href;
   return pathname === href || pathname.startsWith(href + "/");
@@ -51,7 +56,7 @@ function isActive(pathname: string, href: string, exact?: boolean) {
 export function MobileTabBar({ role }: { role: AppRole }) {
   const pathname = usePathname();
   const isAdmin = role === "owner" || role === "va";
-  const tabs = isAdmin ? adminTabs : clientTabs;
+  const tabs = isAdmin ? adminTabs : role === "buyer" ? buyerTabs : clientTabs;
 
   return (
     <nav
