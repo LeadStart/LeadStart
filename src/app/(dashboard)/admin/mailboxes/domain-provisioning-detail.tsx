@@ -392,7 +392,7 @@ export function DomainProvisioningDetail({
             <Button
               variant="ghost"
               size="sm"
-              title={`Re-write these records (Google MX, SPF, DMARC, verification) to your registrar (${domain.registrar}). Use this only if the DNS write failed or the records were changed — it is not needed while setup is just waiting on Google.`}
+              title={`Reconciles this domain's DNS at your registrar (${domain.registrar}): writes the Google MX, SPF, DMARC and verification records AND removes conflicting strays like Porkbun's default fwd MX. Idempotent (writes nothing if already correct). This runs automatically during setup — use it only if a write failed or records were changed.`}
               onClick={() => post(`/api/admin/domains/${domain.id}/dns/apply`, undefined, "retrydns")}
               disabled={busy === "retrydns"}
             >
