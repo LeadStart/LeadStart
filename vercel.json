@@ -72,6 +72,10 @@
     {
       "path": "/app/api/cron/advance-domain-provisioning",
       "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/app/api/cron/reverify-master-pool",
+      "schedule": "0 */6 * * *"
     }
   ]
 }
