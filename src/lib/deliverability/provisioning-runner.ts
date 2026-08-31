@@ -324,8 +324,9 @@ async function siteVerificationStep(
           status: "in_progress",
           attempts,
           last_error:
-            `Google confirmed the DNS token; finishing verification with Workspace for ${domain.domain}. ` +
-            "This should clear on the next check. If it lingers, use the Verify in Google Admin button.",
+            `Google confirmed the DNS token; Workspace is finalizing verification for ${domain.domain}. ` +
+            "This completes automatically — usually within minutes, occasionally up to a couple hours on " +
+            "Google's side. No action needed.",
         },
         now,
       ),

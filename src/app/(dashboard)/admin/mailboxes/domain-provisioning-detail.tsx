@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -144,6 +144,52 @@ export function DomainProvisioningDetail({
     loadForwarding();
   }, [loadDns, loadForwarding]);
 
+  // Auto-advance while this domain is actively provisioning, so the panel shows
+  // live progress instead of waiting on the 10-min cron. Quiet (no spinner);
+  // stops when the domain leaves provisioning or the active step fails (which
+  // needs owner action). A latest-callback ref keeps the interval stable.
+  const pollCbRef = useRef<() => void>(() => {});
+  useEffect(() => {
+    pollCbRef.current = () => {
+      onChange();
+      loadDns();
+    };
+  }, [onChange, loadDns]);
+  const autoPolling =
+    domain.lifecycle_status === "provisioning" && !!activeStepId && activeStep?.status !== "failed";
+  useEffect(() => {
+    if (!autoPolling) return;
+    let cancelled = false;
+    let running = false;
+    const tick = async () => {
+      if (running || cancelled) return;
+      running = true;
+      try {
+        const res = await fetch(appUrl(`/api/admin/domains/${domain.id}/provisioning/advance`), {
+          method: "POST",
+        });
+        if (res.ok && !cancelled) {
+          const data = await res.json();
+          if (!cancelled) {
+            if (Array.isArray(data.revealed_passwords) && data.revealed_passwords.length) {
+              setPasswords((p) => [...p, ...data.revealed_passwords]);
+            }
+            pollCbRef.current();
+          }
+        }
+      } catch {
+        /* quiet — the cron and manual Check now are the fallback */
+      } finally {
+        running = false;
+      }
+    };
+    const iv = setInterval(tick, 25000);
+    return () => {
+      cancelled = true;
+      clearInterval(iv);
+    };
+  }, [autoPolling, domain.id]);
+
   async function setForwarding() {
     if (!dest.trim()) return;
     setBusy("forward");
@@ -264,16 +310,6 @@ export function DomainProvisioningDetail({
                 Checked {activeStep.attempts}× · last {relTime(activeStep.updated_at)}
                 {activeStep.status !== "failed" && " · re-checks automatically"}
               </p>
-              {activeStepId === "site_verification" && activeStep.status !== "failed" && (
-                <a
-                  href="https://admin.google.com/ac/domains/manage"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mt-2 inline-flex items-center gap-1 rounded-md bg-amber-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-amber-700"
-                >
-                  Verify in Google Admin ↗
-                </a>
-              )}
             </div>
           )}
           <ul className="space-y-1">
