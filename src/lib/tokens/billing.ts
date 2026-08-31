@@ -3,7 +3,7 @@ import type { createAdminClient } from "@/lib/supabase/admin";
 import { priceDelivered, worstCaseRetailPerRow, type PricingTier, type SearchKind } from "./pricing-math";
 
 // Re-export the pure pricing math so billing.ts stays the single import surface.
-export { tierPrice, priceDelivered, worstCaseRetailPerRow } from "./pricing-math";
+export { tierPrice, priceDelivered, worstCaseRetailPerRow, capRunCharge } from "./pricing-math";
 export type { PricingTier, SearchKind } from "./pricing-math";
 
 // Token billing: reserve -> cap -> settle (Phase 3 of the token product).
@@ -54,6 +54,25 @@ export async function loadPricingConfig(
     max_charge_per_run_usd: c?.max_charge_per_run_usd ?? null,
     max_rows_per_search: c?.max_rows_per_search ?? null,
   };
+}
+
+/**
+ * The owner's global per-run vendor-cost ceiling (max_charge_per_run_usd), or
+ * null when unset. Read by the sourcing/enrichment crons to clamp their computed
+ * per-run maxTotalChargeUsd via capRunCharge. Never throws.
+ */
+export async function loadMaxChargeCeiling(admin: Admin): Promise<number | null> {
+  try {
+    const { data } = await admin
+      .from("token_pricing_config")
+      .select("max_charge_per_run_usd")
+      .eq("singleton", true)
+      .maybeSingle();
+    const v = (data as { max_charge_per_run_usd?: number | null } | null)?.max_charge_per_run_usd;
+    return v == null ? null : Number(v);
+  } catch {
+    return null;
+  }
 }
 
 export async function getBalance(admin: Admin, organizationId: string): Promise<TokenBalance> {

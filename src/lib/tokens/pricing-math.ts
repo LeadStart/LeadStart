@@ -56,6 +56,17 @@ export function priceDelivered(
  * catch-all-recovered are cheaper alternatives. Max of those is a tight but safe
  * upper bound (over-holding is safe — it's released; under-holding is not).
  */
+/**
+ * Clamp a cron's computed per-run vendor-cost cap by the owner's global ceiling
+ * (token_pricing_config.max_charge_per_run_usd). Null/0/invalid ceiling = no
+ * clamp (today's behaviour); a set ceiling is a hard upper bound on any single
+ * actor run's spend, regardless of the run's size.
+ */
+export function capRunCharge(computed: number, ceilingUsd: number | null | undefined): number {
+  if (ceilingUsd == null || !Number.isFinite(ceilingUsd) || ceilingUsd <= 0) return computed;
+  return Math.min(computed, ceilingUsd);
+}
+
 export function worstCaseRetailPerRow(tiers: PricingTier[], vein: string): number {
   const personalLoad =
     tierPrice(tiers, vein, "owner_name") +

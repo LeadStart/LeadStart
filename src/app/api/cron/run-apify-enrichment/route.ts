@@ -3,7 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { checkCronAuth } from "@/lib/security/cron-auth";
 import { ApifyClient } from "@/lib/apify/client";
-import { settleSearch } from "@/lib/tokens/billing";
+import { settleSearch, loadMaxChargeCeiling, capRunCharge } from "@/lib/tokens/billing";
 import { promoteSearchContacts, isPromotionEnabled } from "@/lib/tokens/promotion";
 import { isInProgress, isTerminalBad, isTerminalOk } from "@/lib/apify/types";
 import { loadApifyToken, normalizeAddons, normalizeEnrichmentSettings } from "@/lib/apify/auth";
@@ -524,10 +524,11 @@ async function startNextBatch(
   // Hard per-run charge cap (~$0.06/item ceiling; the worst real per-phase
   // per-item is ~$0.022). Apify aborts the batch at this $, so a semantics
   // surprise can't run to the whole monthly credit. SPEND-01.
+  const chargeCeiling = await loadMaxChargeCeiling(admin);
   const apRun = await client.startActorRun(provider.actorId, input, {
     waitForFinishSec: waitSec,
     timeoutSec: APIFY_TIMEOUT_SEC,
-    maxTotalChargeUsd: Math.max(1, batch.length * 0.06),
+    maxTotalChargeUsd: capRunCharge(Math.max(1, batch.length * 0.06), chargeCeiling),
   });
 
   // Mark the batch in-flight with this run id.

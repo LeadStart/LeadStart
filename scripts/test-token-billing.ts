@@ -4,7 +4,7 @@
  *
  *   npx tsx scripts/test-token-billing.ts
  */
-import { tierPrice, priceDelivered, worstCaseRetailPerRow, type PricingTier } from "../src/lib/tokens/pricing-math";
+import { tierPrice, priceDelivered, worstCaseRetailPerRow, capRunCharge, type PricingTier } from "../src/lib/tokens/pricing-math";
 
 let passed = 0;
 let failed = 0;
@@ -61,6 +61,13 @@ eq("worstCase maps = 16", worstCaseRetailPerRow(tiers, "maps"), 16);
 eq("worstCase linkedin = 13", worstCaseRetailPerRow(tiers, "linkedin"), 13);
 // unpriced vein → 0 (gates the search)
 eq("worstCase empty vein = 0", worstCaseRetailPerRow([], "maps"), 0);
+
+// capRunCharge: the owner's global per-run vendor-cost ceiling clamps the cron cap.
+eq("capRunCharge no ceiling (null) = computed", capRunCharge(10, null), 10);
+eq("capRunCharge zero ceiling = computed (disabled)", capRunCharge(10, 0), 10);
+eq("capRunCharge negative ceiling = computed (invalid)", capRunCharge(10, -1), 10);
+eq("capRunCharge clamps above ceiling", capRunCharge(10, 5), 5);
+eq("capRunCharge leaves below-ceiling untouched", capRunCharge(3, 5), 3);
 
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);
