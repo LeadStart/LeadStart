@@ -270,6 +270,29 @@ export function WaterfallSettingsCard() {
               </span>
             </label>
 
+            {/* Findymail catch-all recovery — OFF by default. Needs a Findymail
+                API key, and the resale billing for recovered emails is still being
+                finalized, so it stays a deliberate opt-in toggle. */}
+            <label className="flex items-start gap-2 text-sm cursor-pointer">
+              <input
+                type="checkbox"
+                checked={settings.validate_catch_all}
+                onChange={(e) =>
+                  setSettings({ ...settings, validate_catch_all: e.target.checked })
+                }
+                className="mt-0.5 h-4 w-4 rounded border-border accent-[#2E37FE] cursor-pointer"
+              />
+              <span>
+                Findymail catch-all recovery
+                <span className="block text-[11px] text-muted-foreground">
+                  When on, a catch-all lead the pattern method can&apos;t verify is
+                  handed to Findymail to recover a deliverable address (pay-on-hit).
+                  Off by default: needs a Findymail API key, and the billing for
+                  recovered emails is still being finalized.
+                </span>
+              </span>
+            </label>
+
             <div className="flex gap-2 items-center">
               <Button onClick={handleSave} disabled={saving} style={{ background: "#2E37FE" }}>
                 {saving ? "Saving..." : "Save"}
