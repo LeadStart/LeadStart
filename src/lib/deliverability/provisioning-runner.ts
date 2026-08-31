@@ -75,6 +75,36 @@ function genPassword(): string {
   return randomBytes(18).toString("base64url"); // 24 url-safe chars
 }
 
+/** Display name for a registrar id, used in owner-facing step messages. */
+function registrarLabel(id: string): string {
+  if (id === "porkbun") return "Porkbun";
+  if (id === "spaceship") return "Spaceship";
+  return id;
+}
+
+/**
+ * Actionable message for the site-verification wait, instead of Google's raw
+ * "400: verification token could not be found". It names what's actually
+ * missing (the google-site-verification TXT in DNS) and what to do about it,
+ * tailored to whether a registrar can write DNS for this domain.
+ */
+function verificationWaitHint(domain: SendingDomain): string {
+  const base =
+    "Not verified yet: Google can't find this domain's google-site-verification TXT record in DNS.";
+  if (domain.registrar === "porkbun" || domain.registrar === "spaceship") {
+    const label = registrarLabel(domain.registrar);
+    return (
+      `${base} Open "DNS records" below and use "Retry DNS" to write it ` +
+      `(needs the ${label} API key saved in Settings, API). If it was just written, ` +
+      `allow a few minutes for DNS to propagate.`
+    );
+  }
+  return (
+    `${base} Add the verification TXT shown under "DNS records" below at your DNS host, ` +
+    `then "Check now". If it was just added, allow a few minutes for DNS to propagate.`
+  );
+}
+
 /**
  * Advance one provisioning domain as far as it can this tick. Mutates the DB
  * (sending_domains.provisioning via CAS, native_mailboxes on the mailboxes
@@ -184,6 +214,29 @@ async function dnsRecordsStep(
   attempts: number,
 ): Promise<StepOutcome> {
   if (!deps.registrar) {
+    if (domain.registrar === "porkbun" || domain.registrar === "spaceship") {
+      // A registrar IS chosen for this domain but no API client could be built,
+      // which means its API key isn't saved. Silently skipping here is exactly
+      // what leaves the google-site-verification TXT unwritten and makes the
+      // later site-verification step fail with an opaque Google 400. Stop at DNS
+      // with an actionable message instead of failing three steps downstream.
+      const label = registrarLabel(domain.registrar);
+      return {
+        state: markStep(
+          state,
+          "dns_records",
+          {
+            status: "failed",
+            attempts,
+            last_error:
+              `${label} is set as this domain's registrar, but no ${label} API key is saved, ` +
+              `so its DNS records (including Google's verification TXT) can't be written. Add the ` +
+              `${label} API key in Settings, API, then use "Retry DNS".`,
+          },
+          now,
+        ),
+      };
+    }
     // Manual registrar: the owner writes DNS by copy-paste (surfaced by the
     // GET dns route). Nothing for us to do here.
     return { state: markStep(state, "dns_records", { status: "skipped", attempts, last_error: null }, now) };
@@ -252,8 +305,9 @@ async function siteVerificationStep(
   try {
     const v = await deps.workspace.siteVerification.verifyDomain(domain.domain);
     if (!v.verified) {
-      // TXT not propagated yet — normal wait.
-      return { state: markStep(state, "site_verification", { status: "in_progress", attempts, last_error: v.detail }, now) };
+      // TXT not visible to Google yet. Surface an actionable hint (what's
+      // missing + what to do) rather than Google's raw "token not found" 400.
+      return { state: markStep(state, "site_verification", { status: "in_progress", attempts, last_error: verificationWaitHint(domain) }, now) };
     }
     const d = await deps.workspace.directory.getDomain(domain.domain);
     if (d.verified) {

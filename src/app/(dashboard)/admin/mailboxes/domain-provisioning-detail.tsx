@@ -58,6 +58,25 @@ interface DnsData {
   };
 }
 
+interface ForwardEntry {
+  subdomain: string;
+  location: string;
+  type: string;
+  includePath: boolean;
+  wildcard: boolean;
+  providerId?: string;
+}
+interface ForwardStatus {
+  registrar: string;
+  supported: boolean;
+  manual?: boolean;
+  configured?: boolean;
+  instructions?: string;
+  error?: string;
+  forwards?: ForwardEntry[];
+  destination?: string;
+}
+
 export function DomainProvisioningDetail({
   domain,
   onChange,
@@ -71,6 +90,8 @@ export function DomainProvisioningDetail({
   const [note, setNote] = useState<string | null>(null);
   const [dns, setDns] = useState<DnsData | null>(null);
   const [dkimValue, setDkimValue] = useState("");
+  const [fwd, setFwd] = useState<ForwardStatus | null>(null);
+  const [dest, setDest] = useState("");
 
   const loadDns = useCallback(async () => {
     try {
@@ -81,9 +102,45 @@ export function DomainProvisioningDetail({
     }
   }, [domain.id]);
 
+  const loadForwarding = useCallback(async () => {
+    try {
+      const res = await fetch(
+        appUrl(`/api/admin/registrar/forward?domain=${encodeURIComponent(domain.domain)}`),
+      );
+      setFwd(res.ok ? ((await res.json()) as ForwardStatus) : null);
+    } catch {
+      /* best-effort */
+    }
+  }, [domain.domain]);
+
   useEffect(() => {
     loadDns();
-  }, [loadDns]);
+    loadForwarding();
+  }, [loadDns, loadForwarding]);
+
+  async function setForwarding() {
+    if (!dest.trim()) return;
+    setBusy("forward");
+    setNote(null);
+    try {
+      const res = await fetch(appUrl(`/api/admin/registrar/forward`), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ domain: domain.domain, destinationUrl: dest.trim() }),
+      });
+      const data = (await res.json()) as ForwardStatus & { error?: string };
+      if (!res.ok) {
+        setNote(data.error ?? "Something went wrong.");
+        return;
+      }
+      setFwd({ ...data, forwards: data.forwards ?? [] });
+      if (data.supported) setDest("");
+    } catch (err) {
+      setNote(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(null);
+    }
+  }
 
   async function post(path: string, body?: unknown, label?: string) {
     setBusy(label ?? path);
@@ -250,6 +307,52 @@ export function DomainProvisioningDetail({
               </p>
             )}
           </div>
+        )}
+      </div>
+
+      {/* URL forwarding — redirect the bare domain to the client's real site.
+          Porkbun sets this over its API; Spaceship/manual show the manual step. */}
+      <div className="space-y-1 border-t border-border/50 pt-3">
+        <Label className="text-xs">URL forwarding</Label>
+        {!fwd ? (
+          <p className="text-[11px] text-muted-foreground">Checking…</p>
+        ) : fwd.supported ? (
+          <>
+            <p className="text-[11px] text-muted-foreground">
+              301-redirect this domain (apex + www) to the client&rsquo;s real site so it never shows a
+              dead parked page.
+            </p>
+            {(() => {
+              const apex = fwd.forwards?.find((f) => !f.subdomain);
+              return apex ? (
+                <p className="text-[11px]">
+                  Forwards to <b className="break-all">{apex.location}</b>
+                </p>
+              ) : (
+                <p className="text-[11px] text-muted-foreground">No forwarding set.</p>
+              );
+            })()}
+            <div className="flex items-end gap-2">
+              <Input
+                placeholder="https://acme.com"
+                value={dest}
+                onChange={(e) => setDest(e.target.value)}
+                className="flex-1 text-xs"
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={setForwarding}
+                disabled={busy === "forward" || !dest.trim()}
+              >
+                {busy === "forward" ? <Loader2 size={13} className="animate-spin" /> : "Set forwarding"}
+              </Button>
+            </div>
+          </>
+        ) : (
+          <p className="text-[11px] text-muted-foreground">
+            {fwd.instructions ?? fwd.error ?? "URL forwarding isn't available for this registrar via API."}
+          </p>
         )}
       </div>
     </div>

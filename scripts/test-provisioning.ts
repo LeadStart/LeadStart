@@ -183,6 +183,48 @@ console.log("advanceProvisioning — manual registrar skips DNS write steps");
   eq(res.state.steps.dkim.status, "done", "still completes end-to-end");
 }
 
+console.log("advanceProvisioning — non-manual registrar with no API key fails DNS with guidance");
+{
+  const state = initProvisioningState({
+    now: T0, domain: "tryacme.com",
+    users: [{ local_part: "jane", display_name: "Jane Doe" }],
+    licensing: null, dmarcRua: null,
+  });
+  // registrar column says porkbun, but no provider could be built (key missing).
+  const domain = { id: "dom-1", organization_id: "org-1", domain: "tryacme.com", registrar: "porkbun", provisioning: state };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const res = await advanceProvisioning(happyDeps({ registrar: null }) as any, domain as any);
+  eq(res.state.steps.dns_records.status, "failed", "porkbun + no key → dns_records FAILED (not silently skipped)");
+  eq(res.state.steps.workspace_domain.status, "pending", "flow halts at DNS; downstream steps untouched");
+  const e = res.state.steps.dns_records.last_error ?? "";
+  ok(e.includes("Porkbun API key"), "message names the missing Porkbun API key", e);
+  ok(e.includes("Retry DNS"), "message tells the owner to Retry DNS", e);
+}
+
+console.log("advanceProvisioning — unverified domain shows an actionable hint, not Google's raw 400");
+{
+  const state = initProvisioningState({
+    now: T0, domain: "tryacme.com",
+    users: [{ local_part: "jane", display_name: "Jane Doe" }],
+    licensing: null, dmarcRua: null,
+  });
+  const deps = happyDeps();
+  // On a connected registrar DNS/token succeed, but Google reports not-verified
+  // (TXT not visible yet) — the common wait state that used to surface a raw 400.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (deps.workspace.siteVerification as any).verifyDomain = async () => ({
+    verified: false,
+    detail: "Site Verification 400: The necessary verification token could not be found on your site.",
+  });
+  const domain = { id: "dom-1", organization_id: "org-1", domain: "tryacme.com", registrar: "porkbun", provisioning: state };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const res = await advanceProvisioning(deps as any, domain as any);
+  eq(res.state.steps.site_verification.status, "in_progress", "unverified → in_progress (retryable)");
+  const e = res.state.steps.site_verification.last_error ?? "";
+  ok(!e.includes("400"), "Google's raw 400 is no longer surfaced", e);
+  ok(e.includes("google-site-verification") || e.includes("DNS records"), "hint names what to check", e);
+}
+
 console.log("advanceProvisioning — licensing configured assigns then completes");
 {
   const state = initProvisioningState({

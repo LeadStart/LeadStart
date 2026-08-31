@@ -10,7 +10,7 @@
 //   • Connect an existing inbox — register an address on a Workspace we manage.
 // Everything here talks to the real routes; nothing is stubbed.
 
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -36,6 +36,7 @@ type DomainRow = SendingDomain & { mailbox_count: number };
 type Door = "chooser" | "inbox" | "domain" | "connect";
 type DomainMode = "track" | "existing" | "buy";
 type RegistrarId = "porkbun" | "spaceship";
+type RegistrarStatus = { has_porkbun: boolean; has_spaceship: boolean } | null;
 
 interface Workspace {
   id: string;
@@ -95,6 +96,15 @@ export function AddMailboxWizard({
   const [step, setStep] = useState(1);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Which registrars actually have API keys saved — so the picker can show
+  // connection state instead of silently offering an unconfigured registrar.
+  const [registrarStatus, setRegistrarStatus] = useState<{
+    has_porkbun: boolean;
+    has_spaceship: boolean;
+  } | null>(null);
+  // Scrollable body ref: when an action sets an error we scroll it into view
+  // (the error banner renders at the top, which is off-screen on long steps).
+  const bodyRef = useRef<HTMLDivElement>(null);
 
   // Step 1 — domain
   const [domainMode, setDomainMode] = useState<DomainMode>("track");
@@ -147,6 +157,28 @@ export function AddMailboxWizard({
     }
   }, []);
 
+  // Load registrar connection state and default the picker to a connected
+  // registrar (so a domain isn't silently tracked as Manual when Porkbun/
+  // Spaceship is available, and picking an unconnected one shows a warning).
+  const loadRegistrarStatus = useCallback(async () => {
+    try {
+      const res = await fetch(appUrl("/api/admin/registrar/settings"), { cache: "no-store" });
+      if (!res.ok) return;
+      const d = (await res.json()) as { has_porkbun?: boolean; has_spaceship?: boolean };
+      const status = { has_porkbun: !!d.has_porkbun, has_spaceship: !!d.has_spaceship };
+      setRegistrarStatus(status);
+      const preferred: RegistrarId | "manual" = status.has_porkbun
+        ? "porkbun"
+        : status.has_spaceship
+          ? "spaceship"
+          : "manual";
+      // Only steer the default; never override a manual choice the user made.
+      setTrackRegistrar((cur) => (cur === "manual" ? preferred : cur));
+    } catch {
+      /* best-effort — the picker just won't show connection state */
+    }
+  }, []);
+
   // Reset everything each time the modal opens.
   useEffect(() => {
     if (!open) return;
@@ -167,8 +199,15 @@ export function AddMailboxWizard({
     setCxName("");
     setCxCap("20");
     setDoDone(false);
+    setRegistrarStatus(null);
     void loadWorkspaces();
-  }, [open, loadWorkspaces]);
+    void loadRegistrarStatus();
+  }, [open, loadWorkspaces, loadRegistrarStatus]);
+
+  // Bring a freshly-set error into view (it renders at the top of the scroll).
+  useEffect(() => {
+    if (err) bodyRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+  }, [err]);
 
   if (!open) return null;
 
@@ -186,7 +225,17 @@ export function AddMailboxWizard({
       : domainMode === "track"
         ? trackRegistrar
         : buyRegistrar ?? "manual";
-  const autoDns = targetRegistrar !== "manual";
+  const registrarConnected = (id: RegistrarId | "manual"): boolean =>
+    id === "manual"
+      ? true
+      : id === "porkbun"
+        ? !!registrarStatus?.has_porkbun
+        : !!registrarStatus?.has_spaceship;
+  // A non-manual registrar only auto-writes DNS when its API key is actually
+  // saved. Picking Porkbun/Spaceship without a key is the trap that leaves the
+  // verification TXT unwritten and stalls setup at "Verify domain ownership".
+  const autoDns = targetRegistrar !== "manual" && registrarConnected(targetRegistrar);
+  const registrarMissingKey = targetRegistrar !== "manual" && !registrarConnected(targetRegistrar);
   const namedInboxes = inboxes.filter((i) => slug(i.local));
 
   // ── step 1 gating ──
@@ -478,7 +527,7 @@ export function AddMailboxWizard({
         )}
 
         {/* body */}
-        <div className="min-h-0 flex-1 overflow-auto p-4">
+        <div ref={bodyRef} className="min-h-0 flex-1 overflow-auto p-4">
           {err && (
             <div className="mb-3 rounded-lg border border-red-200 bg-red-50 p-2.5 text-xs text-red-800">
               {err}
@@ -495,6 +544,7 @@ export function AddMailboxWizard({
               setTrackDomain={setTrackDomain}
               trackRegistrar={trackRegistrar}
               setTrackRegistrar={setTrackRegistrar}
+              registrarStatus={registrarStatus}
               eligibleDomains={eligibleDomains}
               existingId={existingId}
               setExistingId={setExistingId}
@@ -539,6 +589,7 @@ export function AddMailboxWizard({
               domain={targetDomainName}
               registrar={targetRegistrar}
               autoDns={autoDns}
+              registrarMissingKey={registrarMissingKey}
               workspaceLabel={workspaces.find((w) => w.id === wsId)?.label ?? "default Workspace"}
               inboxes={namedInboxes}
               mode={domainMode}
@@ -555,6 +606,7 @@ export function AddMailboxWizard({
               setTrackDomain={setTrackDomain}
               trackRegistrar={trackRegistrar}
               setTrackRegistrar={setTrackRegistrar}
+              registrarStatus={registrarStatus}
             />
           )}
           {door === "domain" && doDone && (
@@ -715,6 +767,56 @@ function Segmented<T extends string>({
   );
 }
 
+// Shared "Where its DNS lives" picker. Shows whether each registrar is actually
+// connected and warns when the chosen one isn't (the trap that silently tracks a
+// domain the flow can't write DNS for).
+function RegistrarPicker({
+  value,
+  onChange,
+  status,
+}: {
+  value: RegistrarId | "manual";
+  onChange: (v: RegistrarId | "manual") => void;
+  status: RegistrarStatus;
+}) {
+  const pkOn = !!status?.has_porkbun;
+  const ssOn = !!status?.has_spaceship;
+  const missing = value !== "manual" && !(value === "porkbun" ? pkOn : ssOn);
+  const label = value === "porkbun" ? "Porkbun" : "Spaceship";
+  return (
+    <div className="space-y-3">
+      <div>
+        <Label className="text-xs">Where its DNS lives</Label>
+        <select
+          className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+          value={value}
+          onChange={(e) => onChange(e.target.value as RegistrarId | "manual")}
+        >
+          <option value="porkbun">
+            {pkOn ? "Porkbun — auto-writes DNS" : "Porkbun — not connected (add key in Settings)"}
+          </option>
+          <option value="spaceship">
+            {ssOn ? "Spaceship — auto-writes DNS" : "Spaceship — not connected (add key in Settings)"}
+          </option>
+          <option value="manual">Manual — you&rsquo;ll add the records by hand</option>
+        </select>
+      </div>
+      {missing ? (
+        <Callout kind="warn">
+          <b>{label} isn&rsquo;t connected.</b> Add its API key under Settings, API, or LeadStart can&rsquo;t
+          write this domain&rsquo;s DNS and setup stalls at &ldquo;Verify domain ownership.&rdquo; Or pick
+          Manual and paste the records yourself.
+        </Callout>
+      ) : (
+        <Callout kind="info">
+          Zero spend, and the proven path. On a connected registrar we lay down the DNS for you; on Manual we
+          hand you the records to paste.
+        </Callout>
+      )}
+    </div>
+  );
+}
+
 function DomainStep(props: {
   mode: DomainMode;
   setMode: (m: DomainMode) => void;
@@ -722,6 +824,7 @@ function DomainStep(props: {
   setTrackDomain: (v: string) => void;
   trackRegistrar: RegistrarId | "manual";
   setTrackRegistrar: (v: RegistrarId | "manual") => void;
+  registrarStatus: RegistrarStatus;
   eligibleDomains: DomainRow[];
   existingId: string | null;
   setExistingId: (v: string) => void;
@@ -764,22 +867,11 @@ function DomainStep(props: {
               onChange={(e) => props.setTrackDomain(e.target.value)}
             />
           </div>
-          <div>
-            <Label className="text-xs">Where its DNS lives</Label>
-            <select
-              className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
-              value={props.trackRegistrar}
-              onChange={(e) => props.setTrackRegistrar(e.target.value as RegistrarId | "manual")}
-            >
-              <option value="porkbun">Porkbun — LeadStart writes DNS automatically</option>
-              <option value="spaceship">Spaceship — LeadStart writes DNS automatically</option>
-              <option value="manual">Manual — you&rsquo;ll add the records by hand</option>
-            </select>
-          </div>
-          <Callout kind="info">
-            Zero spend, and the proven path. On a connected registrar we lay down the DNS for you; on Manual
-            we hand you the records to paste.
-          </Callout>
+          <RegistrarPicker
+            value={props.trackRegistrar}
+            onChange={props.setTrackRegistrar}
+            status={props.registrarStatus}
+          />
         </div>
       )}
 
@@ -1036,6 +1128,7 @@ function ReviewStep(props: {
   domain: string;
   registrar: RegistrarId | "manual";
   autoDns: boolean;
+  registrarMissingKey: boolean;
   workspaceLabel: string;
   inboxes: InboxSpec[];
   mode: DomainMode;
@@ -1082,9 +1175,16 @@ function ReviewStep(props: {
             <b>Written to {regLabel} automatically.</b> This domain is on a connected registrar, so LeadStart
             lays down the DNS for you.
           </>
+        ) : props.registrarMissingKey ? (
+          <>
+            <b>{regLabel} isn&rsquo;t connected.</b> This domain points at {regLabel}, but its API key isn&rsquo;t
+            saved, so these records can&rsquo;t be written and setup will stall at &ldquo;Verify domain
+            ownership.&rdquo; Add the key in Settings, API, then use &ldquo;Retry DNS,&rdquo; or switch the domain
+            to Manual and paste them yourself.
+          </>
         ) : (
           <>
-            <b>You&rsquo;ll add these by hand.</b> This domain is set to Manual — copy the records into your DNS
+            <b>You&rsquo;ll add these by hand.</b> This domain is set to Manual, so copy the records into your DNS
             host. Setup pauses until they resolve.
           </>
         )}
@@ -1134,6 +1234,7 @@ function DomainOnlyStep(props: {
   setTrackDomain: (v: string) => void;
   trackRegistrar: RegistrarId | "manual";
   setTrackRegistrar: (v: RegistrarId | "manual") => void;
+  registrarStatus: RegistrarStatus;
 }) {
   return (
     <div>
@@ -1151,18 +1252,11 @@ function DomainOnlyStep(props: {
             onChange={(e) => props.setTrackDomain(e.target.value)}
           />
         </div>
-        <div>
-          <Label className="text-xs">Where its DNS lives</Label>
-          <select
-            className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
-            value={props.trackRegistrar}
-            onChange={(e) => props.setTrackRegistrar(e.target.value as RegistrarId | "manual")}
-          >
-            <option value="porkbun">Porkbun — auto-write DNS</option>
-            <option value="spaceship">Spaceship — auto-write DNS</option>
-            <option value="manual">Manual — I&rsquo;ll add records by hand</option>
-          </select>
-        </div>
+        <RegistrarPicker
+          value={props.trackRegistrar}
+          onChange={props.setTrackRegistrar}
+          status={props.registrarStatus}
+        />
         <Callout kind="info">
           The domain lands as <b>provisioning</b> with zero inboxes. Its row gets a <b>Set up inboxes</b>{" "}
           button — the same wizard, resumed from the Workspace step.

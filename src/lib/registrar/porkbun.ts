@@ -10,8 +10,11 @@ import type {
   DomainAvailability,
   RegisterResult,
   RegistrarProvider,
+  UrlForward,
+  UrlForwardInput,
 } from "./types";
 import { diffDnsRecords, type DnsCurrentRecord } from "./dns";
+import { diffForwards } from "./forwarding";
 
 const BASE = "https://api.porkbun.com/api/json/v3";
 
@@ -63,6 +66,40 @@ function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+// ── URL-forward mapping (pure; exported for tests) ──────────────────────────
+// Porkbun's addUrlForward takes a subdomain-only "subdomain" (blank = apex), a
+// destination "location", a "type" of permanent/temporary (301/302), and
+// yes/no "includePath" + "wildcard". getUrlForwarding returns the same plus an
+// "id" used to delete a forward (there is no edit endpoint).
+
+export function toPorkbunForward(f: UrlForwardInput): Record<string, string> {
+  return {
+    subdomain: f.subdomain, // "" = apex
+    location: f.location,
+    type: f.type, // permanent | temporary
+    includePath: f.includePath ? "yes" : "no",
+    wildcard: f.wildcard ? "yes" : "no",
+  };
+}
+
+export function fromPorkbunForward(r: {
+  id?: string | number;
+  subdomain?: string;
+  location?: string;
+  type?: string;
+  includePath?: string;
+  wildcard?: string;
+}): UrlForward {
+  return {
+    subdomain: r.subdomain ?? "",
+    location: r.location ?? "",
+    type: r.type === "temporary" ? "temporary" : "permanent",
+    includePath: String(r.includePath ?? "").toLowerCase() === "yes",
+    wildcard: String(r.wildcard ?? "").toLowerCase() === "yes",
+    providerId: r.id != null ? String(r.id) : undefined,
+  };
+}
+
 // ── Provider ────────────────────────────────────────────────────────────────
 
 export function createPorkbunProvider(creds: { apiKey: string; secretApiKey: string }): RegistrarProvider {
@@ -88,6 +125,7 @@ export function createPorkbunProvider(creds: { apiKey: string; secretApiKey: str
 
   return {
     id: "porkbun",
+    supportsUrlForwarding: true,
 
     async checkAvailability(domain: string): Promise<DomainAvailability> {
       const json = await post(`/domain/checkDomain/${encodeURIComponent(domain)}`);
@@ -136,7 +174,34 @@ export function createPorkbunProvider(creds: { apiKey: string; secretApiKey: str
     async getDnsRecords(domain: string): Promise<DnsRecordInput[]> {
       return retrieveCurrent(domain);
     },
+
+    async getUrlForwards(domain: string): Promise<UrlForward[]> {
+      return retrieveForwards(domain);
+    },
+
+    async setUrlForwards(domain: string, forwards: UrlForwardInput[]): Promise<void> {
+      // Idempotent upsert by subdomain slot. Porkbun has no edit endpoint, so a
+      // changed forward is a delete + add; forwards on subdomains we don't manage
+      // are left untouched (diffForwards enforces both rules).
+      const current = await retrieveForwards(domain);
+      const diff = diffForwards(current, forwards);
+      for (const f of diff.del) {
+        if (f.providerId) {
+          await post(`/domain/deleteUrlForward/${encodeURIComponent(domain)}/${encodeURIComponent(f.providerId)}`);
+        }
+      }
+      for (const f of diff.add) {
+        await post(`/domain/addUrlForward/${encodeURIComponent(domain)}`, toPorkbunForward(f));
+      }
+    },
   };
+
+  /** Retrieve the live URL forwards, keeping each forward's Porkbun id. */
+  async function retrieveForwards(domain: string): Promise<UrlForward[]> {
+    const json = await post(`/domain/getUrlForwarding/${encodeURIComponent(domain)}`);
+    const forwards = (json.forwards ?? []) as Parameters<typeof fromPorkbunForward>[0][];
+    return forwards.map(fromPorkbunForward);
+  }
 
   /** Retrieve the live records, keeping each record's Porkbun id for edit/delete. */
   async function retrieveCurrent(domain: string): Promise<DnsCurrentRecord[]> {

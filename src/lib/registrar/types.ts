@@ -35,13 +35,51 @@ export interface RegisterResult {
   priceUsd: number;
 }
 
+// ── URL forwarding (redirects) ──────────────────────────────────────────────
+// A sending domain's bare hostname usually 301-redirects to the client's real
+// site (a dead parked page on a lookalike domain hurts legitimacy). Porkbun
+// exposes this over its API; Spaceship does NOT (dashboard-only), so its client
+// throws ManualForwardingRequiredError and callers gate on supportsUrlForwarding.
+
+/** permanent = 301, temporary = 302. We default to permanent. */
+export type UrlForwardType = "permanent" | "temporary";
+
+/** A desired forward — provider-agnostic; the client maps it to its own shape. */
+export interface UrlForwardInput {
+  /** Subdomain to forward, or "" for the apex/root. */
+  subdomain: string;
+  /** Absolute destination URL (scheme included, e.g. https://acme.com). */
+  location: string;
+  type: UrlForwardType;
+  /** Append the incoming path to the destination (yes) or always land on it (no). */
+  includePath: boolean;
+  /** Also forward every subdomain under `subdomain`. */
+  wildcard: boolean;
+}
+
+/** A forward read back from a registrar, carrying its provider-side id. */
+export interface UrlForward extends UrlForwardInput {
+  /** The registrar's own forward id, used to delete/replace it. */
+  providerId?: string;
+}
+
 /** The contract each registrar client implements. */
 export interface RegistrarProvider {
   id: RegistrarId;
+  /** True when this registrar can set URL forwarding via its API (Porkbun yes,
+   *  Spaceship no). Callers check this before touching the forward methods. */
+  readonly supportsUrlForwarding: boolean;
   checkAvailability(domain: string): Promise<DomainAvailability>;
   registerDomain(domain: string): Promise<RegisterResult>;
   upsertDnsRecords(domain: string, records: DnsRecordInput[]): Promise<void>;
   getDnsRecords(domain: string): Promise<DnsRecordInput[]>;
+  /** Read the domain's current URL forwards. Throws ManualForwardingRequiredError
+   *  on registrars without API forwarding. */
+  getUrlForwards(domain: string): Promise<UrlForward[]>;
+  /** Idempotently make the domain's forwards match `forwards` (create/replace the
+   *  managed subdomains, leave others alone). Throws ManualForwardingRequiredError
+   *  on registrars without API forwarding. */
+  setUrlForwards(domain: string, forwards: UrlForwardInput[]): Promise<void>;
 }
 
 /** Per-registrar credentials, read from the organizations row (migration 00084). */

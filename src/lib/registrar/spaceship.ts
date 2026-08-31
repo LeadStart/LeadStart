@@ -10,8 +10,15 @@ import type {
   DomainAvailability,
   RegisterResult,
   RegistrarProvider,
+  UrlForward,
+  UrlForwardInput,
 } from "./types";
 import { diffDnsRecords } from "./dns";
+import { ManualForwardingRequiredError, manualForwardingMessage } from "./forwarding";
+
+// Spaceship's public API has no URL-forwarding endpoint (its resource groups are
+// domains, DNS, contacts, nameservers, transfer, SellerHub — no redirects). The
+// feature exists only in the Spaceship dashboard, so forwarding is a manual step.
 
 const BASE = "https://spaceship.dev/api/v1";
 
@@ -230,6 +237,7 @@ export function createSpaceshipProvider(creds: { apiKey: string; apiSecret: stri
 
   return {
     id: "spaceship",
+    supportsUrlForwarding: false,
 
     async checkAvailability(domain: string): Promise<DomainAvailability> {
       const json = (await req("GET", `/domains/${encodeURIComponent(domain)}/available`)) as
@@ -295,6 +303,16 @@ export function createSpaceshipProvider(creds: { apiKey: string; apiSecret: stri
 
     async getDnsRecords(domain: string): Promise<DnsRecordInput[]> {
       return getRecords(domain);
+    },
+
+    // Forwarding isn't in Spaceship's API — callers gate on supportsUrlForwarding
+    // and route to the manual dashboard flow; these throw if invoked directly.
+    async getUrlForwards(_domain: string): Promise<UrlForward[]> {
+      throw new ManualForwardingRequiredError("spaceship", manualForwardingMessage("spaceship"));
+    },
+
+    async setUrlForwards(_domain: string, _forwards: UrlForwardInput[]): Promise<void> {
+      throw new ManualForwardingRequiredError("spaceship", manualForwardingMessage("spaceship"));
     },
   };
 }

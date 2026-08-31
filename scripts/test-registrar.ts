@@ -12,12 +12,22 @@ import {
   txtSlot,
   type DnsCurrentRecord,
 } from "../src/lib/registrar/dns.ts";
-import { toPorkbunRecord, fromPorkbunRecord } from "../src/lib/registrar/porkbun.ts";
+import {
+  toPorkbunRecord,
+  fromPorkbunRecord,
+  toPorkbunForward,
+  fromPorkbunForward,
+} from "../src/lib/registrar/porkbun.ts";
 import {
   toSpaceshipRecord,
   fromSpaceshipRecord,
   extractRegistrationPrice,
 } from "../src/lib/registrar/spaceship.ts";
+import {
+  normalizeDestinationUrl,
+  defaultForwards,
+  diffForwards,
+} from "../src/lib/registrar/forwarding.ts";
 
 let pass = 0;
 let fail = 0;
@@ -246,6 +256,69 @@ eq(
 );
 eq(extractRegistrationPrice({ price: 0, registrationPrice: 11 }), 11, "non-positive price skipped, next candidate wins");
 eq(extractRegistrationPrice({ foo: "bar" }), null, "no known field → null (keeps the refuse-to-buy-blind guard)");
+
+// ── URL forwarding (pure) ────────────────────────────────────────────────────
+console.log("normalizeDestinationUrl");
+eq(normalizeDestinationUrl("acme.com"), "https://acme.com", "bare domain gets https://");
+eq(normalizeDestinationUrl("https://acme.com/"), "https://acme.com", "lone trailing slash stripped");
+eq(normalizeDestinationUrl("http://acme.com/path"), "http://acme.com/path", "scheme + path preserved");
+eq(normalizeDestinationUrl("  acme.com  "), "https://acme.com", "trimmed");
+eq(normalizeDestinationUrl(""), null, "empty → null");
+eq(normalizeDestinationUrl("not a url"), null, "spaces → null");
+eq(normalizeDestinationUrl("localhost"), null, "no TLD → null");
+
+console.log("defaultForwards");
+{
+  const f = defaultForwards("acme.com");
+  eq(f.length, 2, "apex + www by default");
+  eq(f[0].subdomain, "", "first is the apex");
+  eq(f[1].subdomain, "www", "second is www");
+  eq(f[0].location, "https://acme.com", "location normalized");
+  eq(f[0].type, "permanent", "301 permanent by default");
+  eq(f[0].includePath, false, "includePath off by default");
+  eq(f[0].wildcard, false, "wildcard off");
+  eq(defaultForwards("acme.com", { www: false }).length, 1, "www:false → apex only");
+  eq(defaultForwards("nonsense url").length, 0, "invalid destination → no forwards");
+}
+
+console.log("diffForwards");
+{
+  const desired = defaultForwards("acme.com");
+  const fromEmpty = diffForwards([], desired);
+  eq(fromEmpty.add.length, 2, "empty current → add both");
+  eq(fromEmpty.del.length, 0, "nothing to delete");
+
+  const current = desired.map((d, i) => ({ ...d, providerId: String(i) }));
+  const same = diffForwards(current, desired);
+  eq(same.add.length + same.del.length, 0, "identical → no writes (idempotent)");
+  eq(same.keep.length, 2, "both kept");
+
+  const changed = diffForwards(current, defaultForwards("newsite.com"));
+  eq(changed.del.length, 2, "changed destination → both slots deleted");
+  eq(changed.add.length, 2, "changed destination → both re-added");
+
+  const withStray = [
+    ...current,
+    { subdomain: "blog", location: "https://blog.acme.com", type: "permanent" as const, includePath: false, wildcard: false, providerId: "z" },
+  ];
+  const d2 = diffForwards(withStray, desired);
+  eq(d2.del.length, 0, "forward on an unmanaged subdomain is never deleted");
+  eq(d2.keep.some((f) => f.subdomain === "blog"), true, "stray forward kept");
+}
+
+console.log("Porkbun forward mapping");
+{
+  const p = toPorkbunForward({ subdomain: "", location: "https://acme.com", type: "permanent", includePath: false, wildcard: false });
+  eq(p.subdomain, "", "apex subdomain blank");
+  eq(p.type, "permanent", "type passthrough");
+  eq(p.includePath, "no", "includePath false → 'no'");
+  eq(p.wildcard, "no", "wildcard false → 'no'");
+  const back = fromPorkbunForward({ id: 42, subdomain: "www", location: "https://acme.com", type: "temporary", includePath: "yes", wildcard: "no" });
+  eq(back.providerId, "42", "id → providerId string");
+  eq(back.type, "temporary", "temporary preserved");
+  eq(back.includePath, true, "includePath 'yes' → true");
+  eq(back.wildcard, false, "wildcard 'no' → false");
+}
 
 // ── summary ─────────────────────────────────────────────────────────────────
 console.log(`\n${pass} passed, ${fail} failed`);

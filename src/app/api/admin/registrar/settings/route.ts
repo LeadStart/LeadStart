@@ -12,6 +12,21 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+// Presence-only status (never echoes secret values). Includes per-field flags so
+// the UI can flag a half-saved provider (key without its secret, or vice versa).
+function statusPayload(o: Record<string, unknown>) {
+  return {
+    has_porkbun: !!(o.porkbun_api_key && o.porkbun_api_secret),
+    has_spaceship: !!(o.spaceship_api_key && o.spaceship_api_secret),
+    porkbun_key: !!o.porkbun_api_key,
+    porkbun_secret: !!o.porkbun_api_secret,
+    spaceship_key: !!o.spaceship_api_key,
+    spaceship_secret: !!o.spaceship_api_secret,
+    spend_cap_usd:
+      o.registrar_monthly_spend_cap_usd != null ? Number(o.registrar_monthly_spend_cap_usd) : null,
+  };
+}
+
 async function requireOwner() {
   const supabase = await createClient();
   const {
@@ -43,12 +58,7 @@ export async function GET() {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   const o = (data ?? {}) as Record<string, unknown>;
 
-  return NextResponse.json({
-    has_porkbun: !!(o.porkbun_api_key && o.porkbun_api_secret),
-    has_spaceship: !!(o.spaceship_api_key && o.spaceship_api_secret),
-    spend_cap_usd:
-      o.registrar_monthly_spend_cap_usd != null ? Number(o.registrar_monthly_spend_cap_usd) : null,
-  });
+  return NextResponse.json(statusPayload(o));
 }
 
 interface SettingsBody {
@@ -113,10 +123,5 @@ export async function POST(request: NextRequest) {
     .eq("id", auth.organizationId)
     .maybeSingle();
   const o = (data ?? {}) as Record<string, unknown>;
-  return NextResponse.json({
-    has_porkbun: !!(o.porkbun_api_key && o.porkbun_api_secret),
-    has_spaceship: !!(o.spaceship_api_key && o.spaceship_api_secret),
-    spend_cap_usd:
-      o.registrar_monthly_spend_cap_usd != null ? Number(o.registrar_monthly_spend_cap_usd) : null,
-  });
+  return NextResponse.json(statusPayload(o));
 }

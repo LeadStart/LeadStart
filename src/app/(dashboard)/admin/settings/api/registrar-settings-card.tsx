@@ -10,10 +10,19 @@ import { Card, CardHeader, CardContent, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Globe, Loader2, CheckCircle, XCircle } from "lucide-react";
+import { Globe, Loader2, CheckCircle, XCircle, AlertTriangle } from "lucide-react";
 import { appUrl } from "@/lib/api-url";
 
-type Status = { has_porkbun: boolean; has_spaceship: boolean; spend_cap_usd: number | null };
+type Status = {
+  has_porkbun: boolean;
+  has_spaceship: boolean;
+  // Per-field presence, so we can flag a half-saved provider (key without secret).
+  porkbun_key?: boolean;
+  porkbun_secret?: boolean;
+  spaceship_key?: boolean;
+  spaceship_secret?: boolean;
+  spend_cap_usd: number | null;
+};
 type TestState = { ok: boolean; msg: string } | null;
 
 export function RegistrarSettingsCard() {
@@ -120,6 +129,19 @@ export function RegistrarSettingsCard() {
       </p>
     );
 
+  // Both a key AND a secret are required. Flag a half-saved provider so a save
+  // that only took the key doesn't read as fully configured.
+  const partialHint = (keySet?: boolean, secretSet?: boolean) =>
+    keySet && !secretSet ? (
+      <p className="flex items-center gap-1.5 text-[11px] text-amber-600">
+        <AlertTriangle size={12} /> API key saved, but the <b>secret key</b> is missing — enter it and Save.
+      </p>
+    ) : !keySet && secretSet ? (
+      <p className="flex items-center gap-1.5 text-[11px] text-amber-600">
+        <AlertTriangle size={12} /> Secret key saved, but the <b>API key</b> is missing — enter it and Save.
+      </p>
+    ) : null;
+
   return (
     <Card className="border-border/50 shadow-sm">
       <CardHeader className="flex flex-row items-center gap-2 pb-3">
@@ -182,6 +204,11 @@ export function RegistrarSettingsCard() {
             </Button>
             {testLine(testPk)}
           </div>
+          {status && partialHint(status.porkbun_key, status.porkbun_secret)}
+          <p className="text-[11px] text-muted-foreground">
+            Supports API URL forwarding — a sending domain can 301-redirect to the client&rsquo;s site
+            automatically (set it per-domain under Mailboxes).
+          </p>
         </div>
 
         {/* Spaceship */}
@@ -217,6 +244,10 @@ export function RegistrarSettingsCard() {
             </Button>
             {testLine(testSs)}
           </div>
+          {status && partialHint(status.spaceship_key, status.spaceship_secret)}
+          <p className="text-[11px] text-muted-foreground">
+            No forwarding API — set domain redirects manually in the Spaceship dashboard when needed.
+          </p>
         </div>
 
         {/* Spend cap */}
