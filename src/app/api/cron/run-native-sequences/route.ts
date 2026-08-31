@@ -531,6 +531,14 @@ export async function GET(request: NextRequest) {
     Math.max(0, (totalSent[mb.id] ?? 0) - (mb.ramp_baseline_sent ?? 0));
   const remaining = (mb: NativeMailbox) =>
     effectiveDailyCap(mb, rampSent(mb)) - (sentToday[mb.id] ?? 0) - (inTick[mb.id] ?? 0);
+  // Rotation load: how many this inbox has already sent today (persisted + this
+  // tick). The step-0 pool pick orders by this ASC so first-touches spread
+  // EVENLY across a campaign's inboxes — a freshly-added or smaller-cap inbox
+  // actually receives traffic and warms up. (The prior "most-remaining-first"
+  // greedy let a warmed high-cap inbox absorb every send in a low-volume
+  // campaign, so a new inbox never sent and its ramp never advanced. Cap
+  // eligibility still stops any inbox exceeding its own daily cap.)
+  const load = (mb: NativeMailbox) => (sentToday[mb.id] ?? 0) + (inTick[mb.id] ?? 0);
   // Spacing gate: an inbox that already sent today must wait out its dynamic
   // interval (day's remaining allotment spread over the window's remaining time,
   // floored at 5 min) before sending again. Its first send of the day is ungated.
@@ -838,7 +846,7 @@ export async function GET(request: NextRequest) {
         .map((id) => mailboxMap.get(id))
         .filter((mb): mb is NativeMailbox => !!mb && eligible(mb, campaign) && domainOpenFor(mb));
       if (pool.length === 0) return { result: "flow_no_mailbox" };
-      pool.sort((a, b) => remaining(b) - remaining(a) || (inTick[a.id] ?? 0) - (inTick[b.id] ?? 0));
+      pool.sort((a, b) => load(a) - load(b) || remaining(b) - remaining(a) || a.id.localeCompare(b.id));
       mailbox = pool[0];
     }
 
@@ -1052,14 +1060,16 @@ export async function GET(request: NextRequest) {
       mailbox = mailboxMap.get(enrollment.native_mailbox_id);
       if (!mailbox || !eligible(mailbox, campaign)) continue;
     } else {
-      // Step 0: choose the least-loaded eligible mailbox in the pool whose
-      // domain is still open to new leads (drain mode excludes tired/resting
-      // domains from NEW first-touches; their in-flight threads continue above).
+      // Step 0: spread first-touches EVENLY — pick the eligible pool mailbox
+      // that has sent fewest today (see `load`), so a new/smaller-cap inbox
+      // warms instead of being starved by a warmed one. Filtered to inboxes
+      // whose domain is still open to new leads (drain mode excludes
+      // tired/resting domains; their in-flight threads continue above).
       const pool = (poolByCampaign.get(campaign.id) ?? [])
         .map((id) => mailboxMap.get(id))
         .filter((mb): mb is NativeMailbox => !!mb && eligible(mb, campaign) && domainOpenFor(mb));
       if (pool.length === 0) continue; // nothing available this tick
-      pool.sort((a, b) => remaining(b) - remaining(a) || (inTick[a.id] ?? 0) - (inTick[b.id] ?? 0));
+      pool.sort((a, b) => load(a) - load(b) || remaining(b) - remaining(a) || a.id.localeCompare(b.id));
       mailbox = pool[0];
     }
 
