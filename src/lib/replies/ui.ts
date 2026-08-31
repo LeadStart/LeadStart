@@ -14,7 +14,8 @@ export const CLASS_META: Record<ReplyClass, ReplyClassMeta> = {
   true_interest:            { label: "Interested",        badge: "badge-green",  urgent: true },
   meeting_booked:           { label: "Meeting Booked",    badge: "badge-green",  urgent: true },
   qualifying_question:      { label: "Has Question",      badge: "badge-blue",   urgent: true },
-  referral_forward:         { label: "Referral",          badge: "badge-purple", urgent: true },
+  // Referral is owner-facing, not a "call now" client signal → urgent:false.
+  referral_forward:         { label: "Referral",          badge: "badge-purple", urgent: false },
   objection_price:          { label: "Price Concern",     badge: "badge-amber",  urgent: false },
   objection_timing:         { label: "Timing Concern",    badge: "badge-amber",  urgent: false },
   wrong_person_no_referral: { label: "Wrong Person",      badge: "badge-slate",  urgent: false },
@@ -30,7 +31,7 @@ export const CLASS_META: Record<ReplyClass, ReplyClassMeta> = {
 // ReplyClass belongs to exactly one category; order is priority (hottest
 // first). Keep this the single source of truth for both inbox surfaces.
 
-export type ReplyCategoryKey = "hot" | "objection" | "review" | "silent";
+export type ReplyCategoryKey = "hot" | "referral" | "objection" | "review" | "silent";
 
 export interface ReplyCategoryMeta {
   key: ReplyCategoryKey;
@@ -42,14 +43,20 @@ export interface ReplyCategoryMeta {
 export const REPLY_CATEGORIES: ReplyCategoryMeta[] = [
   {
     key: "hot",
-    label: "Hot — call now",
-    blurb: "Interested, booked, asking, or referring",
-    classes: ["true_interest", "meeting_booked", "qualifying_question", "referral_forward"],
+    label: "Hot: call now",
+    blurb: "Interested, booked, or asking",
+    classes: ["true_interest", "meeting_booked", "qualifying_question"],
+  },
+  {
+    key: "referral",
+    label: "Referrals",
+    blurb: "Handed off to a new contact; a fresh lead to pursue, not a client call",
+    classes: ["referral_forward"],
   },
   {
     key: "objection",
     label: "Objections",
-    blurb: "Price or timing pushback — worth a reply",
+    blurb: "Price or timing concern, worth a reply",
     classes: ["objection_price", "objection_timing"],
   },
   {

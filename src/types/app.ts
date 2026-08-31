@@ -1226,11 +1226,27 @@ export interface NativeSend {
   email_verification_result: "ok" | "catch_all" | "unknown" | null;
 }
 
-// Classes that trigger client notification by default.
+// The genuinely HOT, "call the prospect now" classes. This single set is the
+// authority for three things at once: (1) it gates the client hot-lead email,
+// (2) it is the definition of a "positive reply" in analytics, and (3) it is the
+// "hot" tier for owner internal-automations. referral_forward is deliberately
+// NOT here: a handoff is a real lead but it is not the prospect themselves
+// buying, so it is tracked as its own owner-facing "Referral" category, never
+// counted positive, and never client-emailed (owner decision 2026-08-31).
 export const HOT_REPLY_CLASSES: ReplyClass[] = [
   "true_interest",
   "meeting_booked",
   "qualifying_question",
+];
+
+// Classes the OWNER's internal automations (Slack / webhook / teammate email)
+// fire on under the "hot only" setting. Superset of HOT_REPLY_CLASSES: it ALSO
+// includes referral_forward, because a handoff is a real lead the owner/VA
+// should chase, even though it is owner-facing and never client-emailed or
+// counted positive. The client hot-lead email uses HOT_REPLY_CLASSES (no
+// referral); this is the wider owner-only gate.
+export const OWNER_NOTIFY_HOT_CLASSES: ReplyClass[] = [
+  ...HOT_REPLY_CLASSES,
   "referral_forward",
 ];
 

@@ -25,16 +25,16 @@ import {
   urgencyColor,
 } from "@/lib/replies/ui";
 
-// Classes where the client might want to send a follow-up email via the
-// portal. Silent classes (ooo, unsubscribe, not_interested,
-// wrong_person_no_referral) don't need a composer.
+// Classes where the CLIENT may compose a follow-up email via the portal: only
+// the genuinely hot, call-now classes they are notified for. referral_forward
+// (a handoff, owner-facing) and the objection classes (owner-only, 2026-08-31)
+// are worked by the owner/VA, not the client, so they get no client composer.
+// Silent classes (ooo, unsubscribe, not_interested, wrong_person_no_referral)
+// never did.
 const REPLYABLE_CLASSES: ReplyClass[] = [
   "true_interest",
   "meeting_booked",
   "qualifying_question",
-  "objection_price",
-  "objection_timing",
-  "referral_forward",
 ];
 
 // Brand gradients (inline — custom gradient classes don't reliably generate

@@ -245,6 +245,10 @@ export default async function AdminCampaignDetailPage({
           .from("lead_replies")
           .select("lead_email, final_class, received_at")
           .eq("campaign_id", campaignId)
+          // Excluded leads don't count toward stats. Match sync-analytics, which
+          // already filters these, so the live flow-progress + A/B numbers agree
+          // with the snapshot rollup instead of counting excluded replies.
+          .eq("excluded_from_stats", false)
           .order("received_at", { ascending: false }),
       ]);
       const replyByEmail = new Map<string, ReplyClass | null>();
@@ -724,7 +728,7 @@ async function nativeStatsFor(
   // cheaper on this instance than a fan-out of count-only queries.
   const [campaignSendsRes, repliedRes, stepsRes, poolRes, enrRes] = await Promise.all([
     admin.from("native_sends").select("step_index, status").eq("campaign_id", campaignId),
-    admin.from("lead_replies").select("id", { count: "exact", head: true }).eq("campaign_id", campaignId).eq("source_channel", "native_email"),
+    admin.from("lead_replies").select("id", { count: "exact", head: true }).eq("campaign_id", campaignId).eq("source_channel", "native_email").eq("excluded_from_stats", false),
     admin.from("campaign_steps").select("step_index, subject_template, body_template, wait_days").eq("campaign_id", campaignId).order("step_index", { ascending: true }),
     admin.from("campaign_mailboxes").select("mailbox_id").eq("campaign_id", campaignId),
     admin

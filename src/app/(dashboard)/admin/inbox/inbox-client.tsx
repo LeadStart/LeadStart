@@ -72,6 +72,11 @@ const CATEGORY_UI: Record<
     dot: "bg-[#2E37FE]/10 text-[#2E37FE]",
     ring: "text-[#2E37FE]",
   },
+  referral: {
+    icon: <ArrowRight size={14} />,
+    dot: "bg-purple-100 text-purple-700",
+    ring: "text-purple-600",
+  },
   objection: {
     icon: <MessageSquare size={14} />,
     dot: "bg-amber-100 text-amber-700",
@@ -124,6 +129,7 @@ export function InboxClient({ replies }: { replies: InboxRowReply[] }) {
   const byCategory = useMemo(() => {
     const map: Record<ReplyCategoryKey, InboxRowReply[]> = {
       hot: [],
+      referral: [],
       objection: [],
       review: [],
       silent: [],

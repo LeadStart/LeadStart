@@ -28,7 +28,7 @@ import type {
   LeadReply,
   ReplyClass,
 } from "@/types/app";
-import { HOT_REPLY_CLASSES } from "@/types/app";
+import { HOT_REPLY_CLASSES, OWNER_NOTIFY_HOT_CLASSES } from "@/types/app";
 import type { FlowInternalAction } from "@/lib/flow/graph";
 import { loadAutomationSettings } from "@/lib/automations/settings";
 import {
@@ -97,10 +97,16 @@ export function snippet(text: string | null | undefined, max = 240): string | nu
 export function shouldNotifyForClass(
   settings: AutomationSettings,
   finalClass: ReplyClass | null,
+  opts?: { triage?: boolean },
 ): boolean {
+  // A hot-but-uncertain reply (classifier parked it in needs_review but there
+  // was a hot signal underneath) is owner-triage-worthy regardless of the
+  // notify_on gate, so surface it even when the org set "hot only".
+  if (opts?.triage) return true;
   if (settings.notify_on === "all_replies") return true;
-  // "hot": positive replies only.
-  return !!finalClass && HOT_REPLY_CLASSES.includes(finalClass);
+  // "hot": positive replies PLUS referrals. This is the owner channel, so a
+  // handoff (owner-facing, never client-emailed) is still worth an owner ping.
+  return !!finalClass && OWNER_NOTIFY_HOT_CLASSES.includes(finalClass);
 }
 
 /** HMAC-SHA256 of the raw body with the shared secret, hex-encoded. */
@@ -232,17 +238,29 @@ export function buildReplyEvent(args: {
   reply: LeadReply;
   client: Client | null;
   finalClass: ReplyClass | null;
+  triage?: boolean;
 }): AutomationEvent {
-  const { reply, client, finalClass } = args;
+  const { reply, client, finalClass, triage } = args;
   const isHot = !!finalClass && HOT_REPLY_CLASSES.includes(finalClass);
+  const isReferral = finalClass === "referral_forward";
   const who =
     reply.lead_name?.trim() || reply.from_address || reply.lead_email || "a lead";
-  const title = isHot
+  const title = triage
+    ? `Reply needs a look from ${who}`
+    : isReferral
+    ? `Referral from ${who}`
+    : isHot
     ? `Positive reply from ${who}`
     : `New reply from ${who}`;
   return {
     kind: "reply",
-    event_type: isHot ? "reply.hot" : "reply.received",
+    event_type: triage
+      ? "reply.needs_review"
+      : isReferral
+      ? "reply.referral"
+      : isHot
+      ? "reply.hot"
+      : "reply.received",
     title,
     occurred_at: new Date().toISOString(),
     organization_id: reply.organization_id,
@@ -396,14 +414,18 @@ export async function deliverReplyAutomations(args: {
   reply: LeadReply;
   client: Client | null;
   finalClass: ReplyClass | null;
+  // Set when the reply is hot-but-uncertain (parked in needs_review with a hot
+  // signal underneath): fires the owner ping even under a "hot only" notify_on,
+  // and flavors the event as a triage prompt rather than a positive reply.
+  triage?: boolean;
 }): Promise<AutomationDeliveryResult> {
-  const { admin, organizationId, reply, client, finalClass } = args;
+  const { admin, organizationId, reply, client, finalClass, triage } = args;
   try {
     const settings = await loadAutomationSettings(admin, organizationId);
     if (!settings.enabled) {
       return { delivered: false, results: [], skippedReason: "disabled" };
     }
-    if (!shouldNotifyForClass(settings, finalClass)) {
+    if (!shouldNotifyForClass(settings, finalClass, { triage })) {
       return { delivered: false, results: [], skippedReason: "class_not_in_notify_on" };
     }
     const hasTarget =
@@ -411,7 +433,7 @@ export async function deliverReplyAutomations(args: {
     if (!hasTarget) {
       return { delivered: false, results: [], skippedReason: "no_targets_configured" };
     }
-    const event = buildReplyEvent({ reply, client, finalClass });
+    const event = buildReplyEvent({ reply, client, finalClass, triage });
     return await fanOutAutomation(settings, event);
   } catch (err) {
     // Fully swallow — a broken automation path must never break the pipeline.

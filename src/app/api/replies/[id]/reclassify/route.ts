@@ -17,6 +17,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { LeadReply, ReplyClass } from "@/types/app";
+import { suppressUnsubscribe } from "@/lib/replies/suppression";
 
 // Full taxonomy — mirror of the ReplyClass union in src/types/app.ts.
 // Drift breaks admin reclassify validation.
@@ -86,7 +87,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   // --- Load the reply for org check + previous class capture ---
   const { data: row, error: loadErr } = await admin
     .from("lead_replies")
-    .select("id, organization_id, status, final_class")
+    .select("id, organization_id, status, final_class, lead_email, client_id, source_channel")
     .eq("id", id)
     .maybeSingle();
   if (loadErr) {
@@ -95,7 +96,10 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   if (!row) {
     return NextResponse.json({ error: "Reply not found" }, { status: 404 });
   }
-  const reply = row as Pick<LeadReply, "id" | "organization_id" | "status" | "final_class">;
+  const reply = row as Pick<
+    LeadReply,
+    "id" | "organization_id" | "status" | "final_class" | "lead_email" | "client_id" | "source_channel"
+  >;
 
   if (reply.organization_id !== userOrgId) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -131,6 +135,24 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   if (updateErr) {
     console.error("[replies/reclassify] update failed:", updateErr);
     return NextResponse.json({ error: "Failed to reclassify" }, { status: 500 });
+  }
+
+  // Honor a manually-corrected opt-out: if an owner/VA reclassifies a reply the
+  // classifier missed TO 'unsubscribe', run the SAME suppression the pipeline
+  // does (per-client DNC entry + legacy contact flip for non-native channels).
+  // Without this the person is tagged 'unsubscribe' but never suppressed, and
+  // keeps getting mail (the compliance gap this closes). Only on the transition
+  // INTO unsubscribe (the same-class no-op returned earlier); we deliberately do
+  // NOT un-suppress on a reclassify AWAY from unsubscribe (leaving someone
+  // suppressed is the safe default; an owner can clear it via the DNC admin).
+  if (finalClass === "unsubscribe") {
+    await suppressUnsubscribe(admin, {
+      organization_id: reply.organization_id,
+      client_id: reply.client_id,
+      lead_email: reply.lead_email,
+      source_channel: reply.source_channel,
+      reply_id: reply.id,
+    });
   }
 
   return NextResponse.json({

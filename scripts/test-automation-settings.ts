@@ -114,13 +114,21 @@ console.log("shouldNotifyForClass");
   const all: AutomationSettings = { ...DEFAULT_AUTOMATION_SETTINGS, notify_on: "all_replies" };
   eq(shouldNotifyForClass(hot, "true_interest"), true, "hot: true_interest fires");
   eq(shouldNotifyForClass(hot, "meeting_booked"), true, "hot: meeting_booked fires");
-  eq(shouldNotifyForClass(hot, "referral_forward"), true, "hot: referral_forward fires");
+  eq(shouldNotifyForClass(hot, "qualifying_question"), true, "hot: qualifying_question fires");
+  // referral is owner-facing (owner call 2026-08-31): the OWNER internal-automation
+  // pings on it under "hot" (a handoff is a lead to chase), but the CLIENT hot-lead
+  // email in the pipeline still excludes it (gated on HOT_REPLY_CLASSES, not this).
+  eq(shouldNotifyForClass(hot, "referral_forward"), true, "hot: referral_forward fires for owner");
   eq(shouldNotifyForClass(hot, "not_interested"), false, "hot: not_interested silent");
   eq(shouldNotifyForClass(hot, "ooo"), false, "hot: ooo silent");
   eq(shouldNotifyForClass(hot, null), false, "hot: null class silent");
   eq(shouldNotifyForClass(all, "not_interested"), true, "all: not_interested fires");
   eq(shouldNotifyForClass(all, "ooo"), true, "all: ooo fires");
   eq(shouldNotifyForClass(all, null), true, "all: even null fires");
+  // Triage override (R9): a hot-but-uncertain needs_review reply fires even under
+  // "hot only", so the owner/VA is pinged to triage it fast.
+  eq(shouldNotifyForClass(hot, "needs_review", { triage: true }), true, "hot+triage: needs_review fires");
+  eq(shouldNotifyForClass(hot, "needs_review"), false, "hot: needs_review silent without triage");
 }
 
 // ── snippet ──────────────────────────────────────────────────────────────────

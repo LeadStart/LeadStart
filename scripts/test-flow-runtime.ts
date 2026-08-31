@@ -103,6 +103,9 @@ eq(replyClassGroup("objection_timing"), "objection", "objection_timing → objec
 eq(replyClassGroup("unsubscribe"), "not_interested", "unsubscribe → not_interested");
 eq(replyClassGroup("ooo"), "ooo", "ooo → ooo");
 eq(replyClassGroup("needs_review"), null, "needs_review → no group");
+// referral is owner-facing, NOT interested: a handoff must not route down the
+// interested branch (owner call 2026-08-31). Locks it out of every group.
+eq(replyClassGroup("referral_forward"), null, "referral_forward → no group (not interested)");
 eq(replyClassGroup(null), null, "null class → no group");
 
 // ── Fresh start + wait accumulation ──────────────────────────────────────────

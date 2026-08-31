@@ -10,20 +10,13 @@ import { ChevronDown, ChevronRight, Radio, Save, CheckCircle2 } from "lucide-rea
 import { appUrl } from "@/lib/api-url";
 import { CLASS_META } from "@/lib/replies/ui";
 import type { Client, ReplyClass } from "@/types/app";
+import { HOT_REPLY_CLASSES } from "@/types/app";
 
-const ALL_CLASSES: ReplyClass[] = [
-  "true_interest",
-  "meeting_booked",
-  "qualifying_question",
-  "referral_forward",
-  "objection_price",
-  "objection_timing",
-  "wrong_person_no_referral",
-  "ooo",
-  "not_interested",
-  "unsubscribe",
-  "needs_review",
-];
+// Only the genuinely hot classes can ever trigger a CLIENT hot-lead email (the
+// pipeline gates on HOT_REPLY_CLASSES), so those are the only meaningful
+// auto-notify toggles. referral/objection/silent classes are owner-facing and
+// can't client-notify regardless of this setting, so we don't offer them here.
+const CLIENT_NOTIFY_CLASSES: ReplyClass[] = HOT_REPLY_CLASSES;
 
 type FormState = {
   notification_email: string;
@@ -262,11 +255,12 @@ export function ReplyRoutingSection({
           <div className="space-y-2">
             <Label>Auto-notify classes</Label>
             <p className="text-[11px] text-muted-foreground">
-              Classifier outputs that trigger a hot-lead email. Defaults to the four
-              hot classes; unchecking suppresses notifications silently.
+              Hot classes that trigger a client hot-lead email. Unchecking one
+              suppresses its notifications silently. Referral and objection replies
+              are owner-facing and never email the client.
             </p>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3">
-              {ALL_CLASSES.map((cls) => {
+              {CLIENT_NOTIFY_CLASSES.map((cls) => {
                 const checked = form.auto_notify_classes.includes(cls);
                 const meta = CLASS_META[cls];
                 return (

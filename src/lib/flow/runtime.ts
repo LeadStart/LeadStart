@@ -125,13 +125,14 @@ export function isReplyTrigger(t: FlowConditionTrigger): boolean {
 }
 
 // Sentiment groups over the classifier's ReplyClass. "interested" mirrors
-// HOT_REPLY_CLASSES. `needs_review` matches no group (only a plain `replied`
-// condition catches it) — deliberately, so ambiguous replies don't auto-route.
+// HOT_REPLY_CLASSES (the call-now classes). `referral_forward` and
+// `needs_review` match NO group, so only a plain `replied` condition catches
+// them: a handoff is not the prospect being interested, and an ambiguous reply
+// shouldn't auto-route, so neither steers the interested/objection branches.
 const INTERESTED_CLASSES: readonly ReplyClass[] = [
   "true_interest",
   "meeting_booked",
   "qualifying_question",
-  "referral_forward",
 ];
 const OBJECTION_CLASSES: readonly ReplyClass[] = ["objection_price", "objection_timing"];
 const NOT_INTERESTED_CLASSES: readonly ReplyClass[] = [

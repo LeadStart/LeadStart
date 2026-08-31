@@ -11,6 +11,7 @@
 
 import type { createAdminClient } from "@/lib/supabase/admin";
 import type { Client, LeadReply, ReplyClass } from "@/types/app";
+import { HOT_REPLY_CLASSES } from "@/types/app";
 import { runKeywordPrefilter } from "./keyword-prefilter";
 import { decideFinalClass } from "./decide";
 import { classifyReply, type ClassifierOutput } from "@/lib/ai/classifier";
@@ -18,12 +19,15 @@ import { sendHotLeadNotification } from "@/lib/notifications/send-hot-lead";
 import { sendHotLeadPush } from "@/lib/notifications/web-push";
 import { deliverReplyAutomations } from "@/lib/notifications/internal-automations";
 import { MissingAnthropicKeyError } from "@/lib/ai/client";
-import { escapeLikePattern } from "@/lib/utils";
+import { suppressUnsubscribe } from "./suppression";
 
-// Keyword-only classification (owner decision): the deterministic prefilter
-// is the classifier and the Claude Haiku second pass is off. Flip this back to
-// true to re-enable the model layer (decide.ts already merges both).
-const USE_CLAUDE_CLASSIFIER = false;
+// Two-layer classification (owner decision, 2026-08-31): the deterministic
+// prefilter is Layer 1 (still the sole authority on the compliance hard-
+// overrides unsubscribe/ooo, via decide.ts), and Claude Haiku is Layer 2, the
+// nuanced arbiter for everything else. decide.ts merges both. Flip this to
+// false to fall back to keyword-only (decide.ts degrades gracefully to the
+// prefilter suggestion, else needs_review).
+const USE_CLAUDE_CLASSIFIER = true;
 
 export interface RunReplyPipelineResult {
   skipped: boolean;              // true if row missing, already classified, or body missing
@@ -137,44 +141,31 @@ export async function runReplyPipeline(
   }
 
   // --- 4b. Suppression on opt-out ---
-  // Record a per-CLIENT DNC entry so the opt-out is scoped to the brand the
-  // person replied to: a "stop" to David Cabrera's outreach blocks David's
-  // campaigns only, not another client who happens to share the contact. The
-  // native sender enforces this list per campaign.client_id before each send.
-  //
-  // For non-native channels we ALSO keep the legacy global
-  // contacts.status='unsubscribed' flip, because the LinkedIn
-  // suppression path still reads it. The native channel relies solely on the
-  // per-client DNC list and does NOT set the global flag — that global flip
-  // was exactly the "everyone gets blocked" behavior we're moving away from.
-  if (decision.final_class === "unsubscribe" && reply.lead_email) {
-    const email = reply.lead_email.trim().toLowerCase();
-    const { error: dncError } = await admin.from("dnc_entries").upsert(
-      {
-        organization_id: reply.organization_id,
-        client_id: reply.client_id,
-        email,
-        reason: "unsubscribe",
-        source_channel: reply.source_channel,
-        source_reply_id: reply.id,
-      },
-      { onConflict: "organization_id,client_id,email", ignoreDuplicates: true },
-    );
-    if (dncError) {
-      console.error("[pipeline] Failed to write DNC entry:", dncError);
-    }
-
-    if (reply.source_channel !== "native_email") {
-      const { error: suppressError } = await admin
-        .from("contacts")
-        .update({ status: "unsubscribed" })
-        .eq("organization_id", reply.organization_id)
-        .ilike("email", escapeLikePattern(reply.lead_email));
-      if (suppressError) {
-        console.error("[pipeline] Failed to mark contact unsubscribed:", suppressError);
-      }
-    }
+  // Delegated to the shared helper (src/lib/replies/suppression.ts) so the admin
+  // reclassify route honors a manually-corrected opt-out identically: writes a
+  // per-client DNC entry, plus the legacy global contact flip for non-native
+  // channels. Best-effort + idempotent.
+  if (decision.final_class === "unsubscribe") {
+    await suppressUnsubscribe(admin, {
+      organization_id: reply.organization_id,
+      client_id: reply.client_id,
+      lead_email: reply.lead_email,
+      source_channel: reply.source_channel,
+      reply_id: reply.id,
+    });
   }
+
+  // Hot-but-uncertain: the classifier parked this in needs_review, but a hot
+  // signal sat underneath, either Claude's own class before the low-confidence
+  // demotion, or the deterministic prefilter's suggestion. Rather than let a
+  // possible hot lead rot silently in the inbox (needs_review is non-urgent and
+  // never re-runs), ping the owner/VA to triage it fast (owner call 2026-08-31).
+  const underlyingHot =
+    (decision.claude_class !== null &&
+      HOT_REPLY_CLASSES.includes(decision.claude_class)) ||
+    (prefilter.suggested_class !== null &&
+      HOT_REPLY_CLASSES.includes(prefilter.suggested_class as ReplyClass));
+  const hotUncertain = decision.final_class === "needs_review" && underlyingHot;
 
   // --- 4c. Internal automations (org-level Slack / webhook / teammate email) ---
   // Event-triggered delivery of the "internal automation" notify targets an org
@@ -190,7 +181,27 @@ export async function runReplyPipeline(
     reply,
     client,
     finalClass: decision.final_class,
+    triage: hotUncertain,
   });
+
+  // Owner/VA fast-triage push for a hot-but-uncertain reply. Owner-facing, fired
+  // here BEFORE the orphan/client gates so it reaches the owner even for an
+  // orphan reply or a client with no notification_email. Mutually exclusive with
+  // the real-hot push in the client-notify block below (hotUncertain requires
+  // needs_review; a real-hot class never is), so no double-ping. Self-guarded.
+  if (hotUncertain) {
+    await sendHotLeadPush({
+      admin,
+      organizationId: reply.organization_id,
+      replyId,
+      leadName: reply.lead_name,
+      leadCompany: reply.lead_company,
+      replySubject: reply.subject,
+      replyBodyText: reply.body_text,
+      finalClass: decision.final_class,
+      kind: "review",
+    });
+  }
 
   // --- 5. Notify if hot ---
   // Orphan replies can't be notified because we don't know which client
@@ -206,8 +217,18 @@ export async function runReplyPipeline(
     };
   }
 
+  // The client hot-lead email fires ONLY for genuinely hot, call-now classes
+  // (true_interest / meeting_booked / qualifying_question). referral_forward and
+  // the objection classes are owner-facing: a handoff or a price/timing concern
+  // is not a "pick up the phone now" signal, and emailing the client on one is
+  // exactly the false alarm we're removing. HOT_REPLY_CLASSES is the hard gate;
+  // the per-client auto_notify_classes array can only NARROW within it (it can't
+  // opt a client into referral/objection emails). Even if a stale row still
+  // lists referral_forward (migration 00111 strips those), this guard covers it.
   const autoNotify = client.auto_notify_classes || [];
-  const shouldNotify = autoNotify.includes(decision.final_class);
+  const shouldNotify =
+    autoNotify.includes(decision.final_class) &&
+    HOT_REPLY_CLASSES.includes(decision.final_class);
 
   if (!shouldNotify) {
     return {

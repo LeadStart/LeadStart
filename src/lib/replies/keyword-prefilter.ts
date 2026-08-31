@@ -106,6 +106,16 @@ const UNSUBSCRIBE_PATTERNS: RegExp[] = [
   // --- "no more" of us: with a communication noun, or standing alone ---
   /\bno\s+more\s+(e-?mail|message|text|contact|communication|correspondence|outreach|follow[\s-]?ups?|of\s+(these|this|them|those|your))/i,
   /(^|\n)[\s>*]*no\s+more[.!]*\s*(\r?\n|$)/i,
+
+  // --- Idioms + strong variants the canonical vocabulary above misses. Kept
+  // tight (mostly "my <contact-noun>") so a genuinely interested reply can't
+  // trip them: unsubscribe is a HARD override that permanently suppresses. ---
+  /\blose\s+my\s+(e-?mail|address|number|info|contact)\b/i,
+  /\bdelete\s+my\s+(e-?mail|address|account|info|information|data|details|number|contact|record)\b/i,
+  /\berase\s+my\s+(e-?mail|address|info|information|data|details|record|contact|number)\b/i,
+  /\btake\s+my\s+(name|e-?mail|number|details|info|contact)\s+off\b/i,
+  /\b(report(ed|ing)?|mark(ed|ing)?|flag(ged|ging)?)\s+(this|you|it|these|them|your\s+e-?mails?)?\s*(as\s+)?spam\b/i,
+  /\bthis\s+is\s+(clearly\s+|just\s+|pure\s+|literally\s+)?spam\b/i,
 ];
 
 // Out-of-office auto-reply markers. OOO replies tend to mention specific
@@ -114,9 +124,13 @@ const OOO_PATTERNS: RegExp[] = [
   /\bout\s+of\s+(the\s+)?office\b/i,
   /\bon\s+(vacation|holiday|leave|pto)\b/i,
   /\bauto[\s-]?(reply|response|responder)\b/i,
+  /\bautomat(ic|ed)\s+(reply|response|message|e-?mail|notification)\b/i, // "Automatic reply:"
+  /\bthis\s+is\s+an\s+automat(ic|ed)\b/i,
   /\bwill\s+(be\s+)?back\s+on\b/i,
   /\blimited\s+(access\s+to\s+)?email\b/i,
   /\breturn(ing)?\s+(to\s+the\s+office\s+)?on\b/i,
+  /\bcurrently\s+(out|away|travel(l)?ing|on\s+leave|unavailable|on\s+pto)\b/i,
+  /\baway\s+from\s+(my\s+)?(desk|office|e-?mail)\b/i,
 ];
 
 // Clear rejections (NOT opt-outs — the person is declining but not demanding
@@ -184,6 +198,24 @@ const QUESTION_PATTERNS: RegExp[] = [
   /\b(can|could|would)\s+you\s+(tell|explain|send|share|elaborate|provide|clarify)\b/i,
   /\bdo\s+you\s+(have|offer|work|support|handle|do)\b/i,
   /\?\s*$/, // the reply ends on a question
+];
+
+// Hostile / identity "questions" that are NOT buying signals. The bare "ends on
+// a question mark" rule above would otherwise fire qualifying_question (a HOT
+// class → rings the client's phone) on an annoyed "who is this?". When one of
+// these hits and there's no genuine interest phrase, we withhold the hot
+// question class and fall through to needs_review so a human (and Claude, when
+// on) judges it, instead of a false hot alarm on a non-prospect.
+const HOSTILE_QUESTION_PATTERNS: RegExp[] = [
+  /\bwho\s+(is|are|the\s+(hell|heck|f\S*)\s+is|r)\s+(this|you|u|ya)\b/i,
+  /\bwho['’]?s\s+this\b/i,
+  /\bdo\s+i\s+know\s+you\b/i,
+  /\bhave\s+we\s+(met|spoken|talked|connected)\b/i,
+  /\b(how|where)\s+did\s+you\s+(get|find)\s+my\b/i,
+  /\bhow\s+do\s+you\s+have\s+my\b/i,
+  /\bdid\s+i\s+(ever\s+)?sign\s*[\s-]?up\b/i,
+  /\bwhy\s+(are|r)\s+you\s+(e-?mailing|contacting|messaging|texting|reaching|spamming)\b/i,
+  /\bis\s+this\s+(spam|a\s+scam|legit|real|automated|a\s+bot)\b/i,
 ];
 
 // Cut the quoted thread off the bottom of a reply before we classify it. The
@@ -265,16 +297,37 @@ export function runKeywordPrefilter(
   const meetingHit = matchAny(text, MEETING_PATTERNS);
   const interestHit = matchAny(text, INTEREST_PATTERNS);
   const questionHit = matchAny(text, QUESTION_PATTERNS);
+  const hostileQuestionHit = matchAny(text, HOSTILE_QUESTION_PATTERNS);
+
+  // A NEGATED "stop" ("don't stop reaching out", "never stop emailing me",
+  // "please don't stop") is the opposite of an opt-out. Because unsubscribe is a
+  // permanent, cross-campaign HARD override (decide.ts) that Claude can't undo,
+  // a false positive here silences a genuinely interested lead. So if the only
+  // opt-out signal is a stop-phrase AND it's negated (no hard opt-out word like
+  // "unsubscribe"/"remove me"/"delete my" present), we void the match.
+  let unsubscribeActive = !!unsubscribeHit;
+  if (unsubscribeActive) {
+    const negatedStop =
+      /\b(do\s?n['']?t|do\s+not|never|please\s+do\s?n['']?t|wo\s?n['']?t|would\s+not)\s+stop\b/i.test(
+        text,
+      );
+    const hardOptOutWord =
+      /\b(unsubscri|remove\s+me|opt(?:ing)?\s*-?\s*out|take\s+(me|my)\b|delete\s+my|lose\s+my|erase\s+my|as\s+spam|is\s+spam)\b/i.test(
+        text,
+      );
+    if (negatedStop && !hardOptOutWord) unsubscribeActive = false;
+  }
 
   if (wrongPersonHit) flags.push("wrong_person_phrase");
   if (referralHit) flags.push("referral_phrase");
   if (embedded.length > 0) flags.push("referral_email_present");
-  if (unsubscribeHit) flags.push("unsubscribe_phrase");
+  if (unsubscribeActive) flags.push("unsubscribe_phrase");
   if (oooHit) flags.push("ooo_phrase");
   if (notInterestedHit) flags.push("not_interested_phrase");
   if (meetingHit) flags.push("meeting_phrase");
   if (interestHit) flags.push("interest_phrase");
   if (questionHit) flags.push("question_phrase");
+  if (hostileQuestionHit) flags.push("hostile_question");
 
   // Priority order, most-certain → least; first match wins. Anything that
   // doesn't clearly match stays null → needs_review in decide.ts, so a human
@@ -282,7 +335,7 @@ export function runKeywordPrefilter(
   let suggested_class: PrefilterSuggestedClass | null = null;
   let reason: string | null = null;
 
-  if (unsubscribeHit && !referralHit) {
+  if (unsubscribeActive && !referralHit) {
     suggested_class = "unsubscribe";
     reason = "Opt-out phrase matched";
   } else if (oooHit && !wrongPersonHit && !referralHit && !interestHit && !meetingHit) {
@@ -305,7 +358,10 @@ export function runKeywordPrefilter(
   } else if (interestHit) {
     suggested_class = "true_interest";
     reason = "Positive-intent phrase matched";
-  } else if (questionHit) {
+  } else if (questionHit && !hostileQuestionHit) {
+    // A genuine question is a hot signal; a hostile/identity "question"
+    // ("who is this?", "how did you get my email?") is not, so it falls
+    // through to needs_review instead of ringing the client's phone.
     suggested_class = "qualifying_question";
     reason = "Question detected";
   }

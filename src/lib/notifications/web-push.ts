@@ -62,6 +62,10 @@ export async function sendHotLeadPush(args: {
   replySubject: string | null;
   replyBodyText: string | null;
   finalClass: string;
+  // "hot" (default) = a confirmed call-now lead. "review" = a hot-but-uncertain
+  // reply the classifier parked in needs_review; the owner/VA should triage it
+  // fast rather than let it sit silent in the inbox (owner call 2026-08-31).
+  kind?: "hot" | "review";
 }): Promise<void> {
   try {
     if (!args.organizationId) return;
@@ -80,7 +84,10 @@ export async function sendHotLeadPush(args: {
     const name = args.leadName || "A lead";
     const where = args.leadCompany ? ` (${args.leadCompany})` : "";
     const payload: PushPayload = {
-      title: `🔥 ${name}${where} replied`,
+      title:
+        args.kind === "review"
+          ? `👀 Needs a look: ${name}${where} replied`
+          : `🔥 ${name}${where} replied`,
       body: buildSnippet(args.replySubject, args.replyBodyText),
       url: `/app/admin/inbox/${args.replyId}`,
       tag: `reply-${args.replyId}`,
