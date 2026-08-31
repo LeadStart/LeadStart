@@ -10,7 +10,8 @@ import { PageHeader } from "@/components/layout/page-header";
 import { useBuyerData } from "./buyer-data-context";
 import { createClient } from "@/lib/supabase/client";
 import { appUrl } from "@/lib/api-url";
-import { Coins, Search, Sparkles, Loader2 } from "lucide-react";
+import Link from "next/link";
+import { Coins, Sparkles, Loader2, Receipt, ArrowRight } from "lucide-react";
 
 interface Pack {
   id: string;
@@ -20,10 +21,20 @@ interface Pack {
   sort: number;
 }
 
+interface UsageEntry {
+  id: string;
+  entry_type: "credit" | "charge";
+  tokens: number;
+  search_kind: "maps" | "linkedin" | null;
+  search_id: string | null;
+  created_at: string;
+}
+
 export default function BuyerDashboardPage() {
   const { fullName, email, balance, loading } = useBuyerData();
   const greetingName = fullName?.trim() || email || "there";
   const [packs, setPacks] = useState<Pack[] | null>(null);
+  const [usage, setUsage] = useState<UsageEntry[] | null>(null);
   const [buyingId, setBuyingId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -40,6 +51,10 @@ export default function BuyerDashboardPage() {
         else if (purchase === "cancelled") setNotice("Checkout cancelled — no charge was made.");
         else if (purchase === "demo") setNotice("Checkout isn't live yet (demo mode).");
       });
+    fetch(appUrl("/api/buyer/usage"))
+      .then((r) => r.json().catch(() => ({})))
+      .then((d: { entries?: UsageEntry[] }) => setUsage(d.entries ?? []))
+      .catch(() => setUsage([]));
   }, []);
 
   async function buy(packId: string) {
@@ -147,16 +162,52 @@ export default function BuyerDashboardPage() {
         )}
       </div>
 
-      {/* Run a search — Phase 3. */}
-      <div className="rounded-2xl border border-dashed border-border bg-muted/20 p-6">
-        <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-          <Search size={18} />
-        </span>
-        <p className="mt-3 text-sm font-semibold text-foreground">Run a search</p>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Source businesses on Google Maps and LinkedIn, enriched and verified. Coming soon.
-        </p>
+      {/* Recent activity — token consumption history (purchases + spends). */}
+      <div className="rounded-2xl border border-border bg-white p-6 shadow-sm">
+        <div className="flex items-center gap-3 pb-1">
+          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <Receipt size={18} />
+          </span>
+          <p className="text-sm font-semibold text-foreground">Recent activity</p>
+        </div>
+        {usage === null ? (
+          <p className="mt-3 text-sm text-muted-foreground">Loading…</p>
+        ) : usage.length === 0 ? (
+          <p className="mt-3 text-sm text-muted-foreground">
+            No activity yet. Buy tokens and run a search to get started.
+          </p>
+        ) : (
+          <div className="mt-2 divide-y divide-border/60">
+            {usage.map((e) => (
+              <div key={e.id} className="flex items-center justify-between py-2.5 text-sm">
+                <div>
+                  <p className="font-medium text-foreground">
+                    {e.entry_type === "credit" ? "Tokens purchased" : `Contacts sourced${e.search_kind ? ` · ${e.search_kind}` : ""}`}
+                  </p>
+                  <p className="text-xs text-muted-foreground">{new Date(e.created_at).toLocaleString()}</p>
+                </div>
+                <span className={`font-semibold ${e.entry_type === "credit" ? "text-green-600" : "text-foreground"}`}>
+                  {e.entry_type === "credit" ? "+" : "-"}{e.tokens.toLocaleString()}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
+
+      {/* Run a search — live (Phase 5). */}
+      <Link href="/buyer/search" className="flex items-center gap-3 rounded-2xl border border-border bg-white p-6 shadow-sm transition-colors hover:bg-muted/30">
+        <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          <Sparkles size={18} />
+        </span>
+        <div className="flex-1">
+          <p className="text-sm font-semibold text-foreground">Run a search</p>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            Source businesses on Google Maps and LinkedIn, enriched and verified.
+          </p>
+        </div>
+        <ArrowRight size={18} className="text-muted-foreground" />
+      </Link>
     </div>
   );
 }
