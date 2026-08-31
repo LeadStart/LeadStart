@@ -41,6 +41,7 @@ const clientTabs: Tab[] = [
 const buyerTabs: Tab[] = [
   { href: "/buyer", label: "Home", icon: <LayoutDashboard size={22} />, exact: true },
   { href: "/buyer/search", label: "Search", icon: <Sparkles size={22} /> },
+  { href: "/buyer/contacts", label: "Contacts", icon: <Users size={22} /> },
 ];
 
 function isActive(pathname: string, href: string, exact?: boolean) {

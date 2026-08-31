@@ -61,6 +61,7 @@ const clientNav: NavItem[] = [
 const buyerNav: NavItem[] = [
   { href: "/buyer", label: "Dashboard", icon: <LayoutDashboard size={18} /> },
   { href: "/buyer/search", label: "Run a search", icon: <Sparkles size={18} /> },
+  { href: "/buyer/contacts", label: "My contacts", icon: <Users size={18} /> },
 ];
 
 function isNavActive(item: NavItem, pathname: string): boolean {
