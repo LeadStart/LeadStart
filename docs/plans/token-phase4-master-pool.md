@@ -1,8 +1,12 @@
 # Phase 4 — Master Contacts Pool: Design
 
-> Status: DESIGN (for owner review). Author: Claude, 2026-08-31. Feeds the token
-> product plan `C:\Users\danie\.claude\plans\ok-we-need-a-gentle-peach.md`
-> (Phase 4). Nothing here is built yet. Phases 0-3 + 5 are live/committed.
+> Status: BUILT (local, unpushed) 2026-08-31 — all four rollout items done and
+> harness-verified; migrations `00112`/`00113`/`00114` APPLIED to prod (additive +
+> dormant). Author: Claude. Feeds the token product plan
+> `C:\Users\danie\.claude\plans\ok-we-need-a-gentle-peach.md` (Phase 4). The design
+> below is as-built. Phases 0-3 + 5 are live/committed. Promotion runs silently
+> (flag on) but only for buyer searches (none yet); the segment cache + all pricing
+> stay INERT until the owner sets prices and flips `segment_cache_enabled`.
 
 ## 1. Goal (from D3)
 

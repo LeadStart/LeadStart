@@ -11,6 +11,13 @@ import { useBuyerData } from "../buyer-data-context";
 import { appUrl } from "@/lib/api-url";
 import { Loader2, Search as SearchIcon, MapPin } from "lucide-react";
 
+interface Coverage {
+  owned: number;
+  available: number;
+  terms: string[];
+  area: string;
+}
+
 interface SearchRow {
   id: string;
   kind: string;
@@ -18,6 +25,7 @@ interface SearchRow {
   target_max_results: number;
   result_count: number;
   delivered_counts: Record<string, number> | null;
+  coverage: Coverage | null;
   created_at: string;
   completed_at: string | null;
 }
@@ -33,6 +41,24 @@ function delivered(row: SearchRow): number {
   const d = row.delivered_counts;
   if (!d) return 0;
   return ["personal_email", "company_email", "verified_email"].reduce((s, k) => s + Number(d[k] ?? 0), 0);
+}
+
+// Master-pool coverage: how many of this segment's contacts the buyer owns, and
+// how many more the shared pool holds (the resale hint). "—" until the segment
+// has any pooled data (an empty pool, or an unsegmentable search).
+function CoverageCell({ row }: { row: SearchRow }) {
+  const c = row.coverage;
+  if (!c || c.available === 0) return <span className="text-muted-foreground">—</span>;
+  const more = Math.max(0, c.available - c.owned);
+  return (
+    <span title={`Segment: ${c.terms.join(", ")} · ${c.area}`}>
+      <strong className="text-foreground">{c.owned.toLocaleString()}</strong>
+      <span className="text-muted-foreground"> of ~{c.available.toLocaleString()}</span>
+      {more > 0 && (
+        <span className="ml-1 rounded-full bg-green-100 px-1.5 py-0.5 text-xs font-medium text-green-700">+{more.toLocaleString()} available</span>
+      )}
+    </span>
+  );
 }
 
 export default function BuyerSearchPage() {
@@ -135,7 +161,7 @@ export default function BuyerSearchPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-xs uppercase tracking-wide text-muted-foreground">
-                  <th className="py-2 pr-4">Vein</th><th className="py-2 pr-4">Status</th><th className="py-2 pr-4">Found</th><th className="py-2 pr-4">Emails delivered</th><th className="py-2">Started</th>
+                  <th className="py-2 pr-4">Vein</th><th className="py-2 pr-4">Status</th><th className="py-2 pr-4">Found</th><th className="py-2 pr-4">Emails delivered</th><th className="py-2 pr-4">You own</th><th className="py-2">Started</th>
                 </tr>
               </thead>
               <tbody>
@@ -145,6 +171,7 @@ export default function BuyerSearchPage() {
                     <td className="py-2 pr-4"><span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_STYLE[r.status] ?? "bg-muted text-muted-foreground"}`}>{r.status}</span></td>
                     <td className="py-2 pr-4">{r.result_count}</td>
                     <td className="py-2 pr-4">{delivered(r)}</td>
+                    <td className="py-2 pr-4"><CoverageCell row={r} /></td>
                     <td className="py-2 text-muted-foreground">{new Date(r.created_at).toLocaleDateString()}</td>
                   </tr>
                 ))}

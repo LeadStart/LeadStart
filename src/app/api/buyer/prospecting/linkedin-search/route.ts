@@ -13,6 +13,7 @@ import {
   type ProfileSearchLevers,
 } from "@/lib/apify/sourcing/profile-search";
 import { placeHold } from "@/lib/tokens/billing";
+import { maybeServeFromCache } from "@/lib/tokens/cache-serve";
 
 const DEFAULT_MAX = 100;
 const HARD_CAP = 1000;
@@ -51,8 +52,31 @@ export async function POST(req: NextRequest) {
   const name = typeof body.name === "string" ? body.name.trim().slice(0, 80) : "";
 
   const admin = createAdminClient();
-
   const searchId = randomUUID();
+  const searchQuery = { levers, depth, addons, ...(name ? { name } : {}) };
+
+  // Try the segment cache first (resale path; OFF by default). `skip` falls
+  // through to fresh sourcing with the same pre-generated searchId.
+  const cache = await maybeServeFromCache(admin, {
+    organizationId,
+    searchId,
+    searchKind: "linkedin",
+    query: searchQuery,
+    targetMaxResults: maxResults,
+    createdBy: user.id,
+    actor: PROFILE_SEARCH_ACTOR_ID,
+  });
+  if (cache.outcome === "served") {
+    return NextResponse.json({ success: true, search_id: searchId, served_from_cache: true, served: cache.served, charged: cache.charged });
+  }
+  if (cache.outcome === "rejected") {
+    const msg =
+      cache.reason === "insufficient_tokens"
+        ? `Not enough tokens. This search needs ${cache.held ?? 0}; your balance is ${cache.available ?? 0}.`
+        : "Sourcing isn't available yet — pricing hasn't been set.";
+    return NextResponse.json({ error: msg, reason: cache.reason, held: cache.held }, { status: 400 });
+  }
+
   const hold = await placeHold(admin, { organizationId, searchId, searchKind: "linkedin", targetMaxResults: maxResults });
   if (!hold.ok) {
     const msg =
@@ -68,7 +92,7 @@ export async function POST(req: NextRequest) {
     id: searchId,
     organization_id: organizationId,
     created_by: user.id,
-    query: { levers, depth, addons, ...(name ? { name } : {}) },
+    query: searchQuery,
     results: [],
     result_count: 0,
     target_max_results: maxResults,

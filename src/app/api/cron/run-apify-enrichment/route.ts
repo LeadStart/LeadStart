@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { checkCronAuth } from "@/lib/security/cron-auth";
 import { ApifyClient } from "@/lib/apify/client";
 import { settleSearch } from "@/lib/tokens/billing";
+import { promoteSearchContacts, isPromotionEnabled } from "@/lib/tokens/promotion";
 import { isInProgress, isTerminalBad, isTerminalOk } from "@/lib/apify/types";
 import { loadApifyToken, normalizeAddons, normalizeEnrichmentSettings } from "@/lib/apify/auth";
 import { extractCompanyId, extractCompanySlug } from "@/lib/apify/domain";
@@ -2466,7 +2467,10 @@ async function finalizeOutcomes(admin: Admin, run: RunRow): Promise<void> {
     if (uniqIds.length === 0) return;
 
     const runCounts: Record<string, number> = {};
-    const perSearch = new Map<string, { table: "maps_searches" | "linkedin_searches"; counts: Record<string, number> }>();
+    const perSearch = new Map<
+      string,
+      { table: "maps_searches" | "linkedin_searches"; counts: Record<string, number>; contactIds: string[] }
+    >();
 
     for (let i = 0; i < uniqIds.length; i += 300) {
       const part = uniqIds.slice(i, i + 300);
@@ -2494,18 +2498,25 @@ async function finalizeOutcomes(admin: Admin, run: RunRow): Promise<void> {
         const mapsId = typeof ed.maps_search_id === "string" ? ed.maps_search_id : null;
         const liId = typeof ed.linkedin_search_id === "string" ? ed.linkedin_search_id : null;
         if (mapsId) {
-          const g = perSearch.get(`maps_searches:${mapsId}`) ?? { table: "maps_searches" as const, counts: {} };
+          const g = perSearch.get(`maps_searches:${mapsId}`) ?? { table: "maps_searches" as const, counts: {}, contactIds: [] };
           addOutcome(g.counts, flags);
+          g.contactIds.push(c.id);
           perSearch.set(`maps_searches:${mapsId}`, g);
         } else if (liId) {
-          const g = perSearch.get(`linkedin_searches:${liId}`) ?? { table: "linkedin_searches" as const, counts: {} };
+          const g = perSearch.get(`linkedin_searches:${liId}`) ?? { table: "linkedin_searches" as const, counts: {}, contactIds: [] };
           addOutcome(g.counts, flags);
+          g.contactIds.push(c.id);
           perSearch.set(`linkedin_searches:${liId}`, g);
         }
       }
     }
 
     await admin.from("enrichment_runs").update({ outcome_counts: runCounts }).eq("id", run.id);
+
+    // Phase 4: promote delivered buyer contacts into the shared master pool at
+    // settlement. Read the gate once; the promotion call itself is a no-op for
+    // agency searches (they carry no hold) and is fully guarded below.
+    const promotionEnabled = await isPromotionEnabled(admin);
 
     for (const [key, g] of perSearch) {
       const id = key.slice(key.indexOf(":") + 1);
@@ -2528,6 +2539,22 @@ async function finalizeOutcomes(admin: Admin, run: RunRow): Promise<void> {
         });
       } catch (settleErr) {
         console.error("[finalizeOutcomes] token settle failed for", key, settleErr);
+      }
+
+      // Phase 4 master-pool promotion: populate the shared pool + grant the buyer
+      // ownership of each delivered contact. A no-op for agency searches (no hold).
+      // Guarded twice (promoteSearchContacts also swallows) so a promotion hiccup
+      // can never break enrichment completion.
+      if (promotionEnabled) {
+        try {
+          await promoteSearchContacts(admin, {
+            searchId: id,
+            searchKind: g.table === "maps_searches" ? "maps" : "linkedin",
+            contactIds: g.contactIds,
+          });
+        } catch (promoErr) {
+          console.error("[finalizeOutcomes] master-pool promotion failed for", key, promoErr);
+        }
       }
     }
   } catch (e) {

@@ -15,6 +15,7 @@ import {
   type MapsSearchLevers,
 } from "@/lib/apify/sourcing/maps-search";
 import { placeHold } from "@/lib/tokens/billing";
+import { maybeServeFromCache } from "@/lib/tokens/cache-serve";
 
 const DEFAULT_MAX = 200;
 const HARD_CAP = 2000;
@@ -62,9 +63,33 @@ export async function POST(req: NextRequest) {
   } as MapsSearchLevers;
 
   const admin = createAdminClient();
+  const searchId = randomUUID();
+  const searchQuery = { levers, addons, ...(name ? { name } : {}) };
+
+  // Try the segment cache first (the resale path; OFF by default). If a fresh
+  // pull of this segment holds contacts the buyer doesn't own, they're served +
+  // owned + charged here with no actor run. `skip` falls through to fresh sourcing.
+  const cache = await maybeServeFromCache(admin, {
+    organizationId,
+    searchId,
+    searchKind: "maps",
+    query: searchQuery,
+    targetMaxResults: maxResults,
+    createdBy: user.id,
+    actor: MAPS_SEARCH_ACTOR_ID,
+  });
+  if (cache.outcome === "served") {
+    return NextResponse.json({ success: true, search_id: searchId, served_from_cache: true, served: cache.served, charged: cache.charged });
+  }
+  if (cache.outcome === "rejected") {
+    const msg =
+      cache.reason === "insufficient_tokens"
+        ? `Not enough tokens. This search needs ${cache.held ?? 0}; your balance is ${cache.available ?? 0}.`
+        : "Sourcing isn't available yet — pricing hasn't been set.";
+    return NextResponse.json({ error: msg, reason: cache.reason, held: cache.held }, { status: 400 });
+  }
 
   // Reserve first (checks pricing + balance).
-  const searchId = randomUUID();
   const hold = await placeHold(admin, { organizationId, searchId, searchKind: "maps", targetMaxResults: maxResults });
   if (!hold.ok) {
     const msg =
@@ -80,7 +105,7 @@ export async function POST(req: NextRequest) {
     id: searchId,
     organization_id: organizationId,
     created_by: user.id,
-    query: { levers, addons, ...(name ? { name } : {}) },
+    query: searchQuery,
     results: [],
     result_count: 0,
     target_max_results: maxResults,
