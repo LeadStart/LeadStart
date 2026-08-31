@@ -286,7 +286,7 @@ export default function TokensSettingsPage() {
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600"><RefreshCw size={16} className="text-white" /></div>
           <div><CardTitle className="text-base">Self-serve buyers</CardTitle><p className="text-xs text-muted-foreground">Buyers create a quick account with their own token balance, separate from the client portal.</p></div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-2">
             {[
               { t: "Quick signup (separate from client portal)", live: true },
@@ -299,6 +299,11 @@ export default function TokensSettingsPage() {
                 <Badge className={item.live ? "badge-green ml-auto" : "badge-slate ml-auto"}>{item.live ? "Live" : "Planned"}</Badge>
               </div>
             ))}
+          </div>
+          <div className="space-y-1 border-t border-border/50 pt-4">
+            <Label className="text-sm font-medium">Low-balance alert threshold (tokens)</Label>
+            <Input type="number" value={cfgNum("low_balance_threshold_tokens")} onChange={(e) => setCfg("low_balance_threshold_tokens", e.target.value)} placeholder="200" className="max-w-[220px]" />
+            <p className="text-[11px] text-muted-foreground">Saved now so it&apos;s ready. The alert email itself is not wired yet (Planned above) — this only captures the threshold.</p>
           </div>
         </CardContent>
       </Card>

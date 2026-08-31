@@ -17,6 +17,7 @@ const NUMERIC_CONFIG_FIELDS = [
   "reverify_token_price",
   "auto_reverify_days",
   "master_reverify_cadence_days",
+  "low_balance_threshold_tokens",
 ] as const;
 
 interface ConfigPayload {
