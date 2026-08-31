@@ -4,19 +4,22 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/layout/page-header";
-import { Coins, Workflow, Building2, Key, Tags } from "lucide-react";
+import { Coins, Workflow, Building2, Key, Tags, CreditCard, CheckSquare } from "lucide-react";
 
 // Settings hub — one tab in the sidebar, with sub-sections switched by this
 // sub-tab bar. Each tab is its own route under /admin/settings so deep links
 // and the browser back button work. Team + Integrations are the existing
 // pages folded in; Workflows was folded out of the top-level nav; Tokens is
-// the new contact-sourcing product config.
+// the contact-sourcing product config; Billing + Tasks were folded in from
+// the top-level nav so Settings is the single home for them.
 const SETTINGS_TABS = [
   { href: "/admin/settings/tokens", label: "Tokens", icon: Coins },
   { href: "/admin/settings/workflows", label: "Workflows", icon: Workflow },
   { href: "/admin/settings/team", label: "Team", icon: Building2 },
   { href: "/admin/settings/api", label: "Integrations", icon: Key },
   { href: "/admin/settings/tags", label: "Tags", icon: Tags },
+  { href: "/admin/settings/billing", label: "Billing", icon: CreditCard },
+  { href: "/admin/settings/tasks", label: "Tasks", icon: CheckSquare },
 ];
 
 export default function SettingsLayout({ children }: { children: React.ReactNode }) {

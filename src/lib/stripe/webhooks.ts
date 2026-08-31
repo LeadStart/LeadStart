@@ -189,7 +189,7 @@ async function handleCheckoutCompleted(
       warmingDays,
       launchDate: launch.toISOString(),
       contactsCount,
-      adminUrl: `${getAppUrl()}/admin/billing`,
+      adminUrl: `${getAppUrl()}/admin/settings/billing`,
     }),
   );
 

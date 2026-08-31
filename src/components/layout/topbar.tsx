@@ -178,7 +178,7 @@ export function Topbar({ userEmail, role, actualRole, onRoleSwitch, onMenuClick 
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             {/* Overflow nav — mobile/tablet only. Opens the full sectioned drawer
-                (Contacts, Reports, Mailboxes, Billing, …) that the bottom bar's
+                (Contacts, Reports, Mailboxes, Settings, …) that the bottom bar's
                 five tabs don't cover. Hidden at lg where the rail shows it all. */}
             {onMenuClick && (
               <div className="lg:hidden">

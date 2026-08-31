@@ -1,5 +1,4 @@
 "use client";
-import { PageHeader } from "@/components/layout/page-header";
 
 import { useEffect, useState, type KeyboardEvent } from "react";
 import { useSupabaseQuery } from "@/hooks/use-supabase-query";
@@ -239,10 +238,6 @@ export default function TasksPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Tasks"
-      />
-
       {/* Stat cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
         <StatCard label="Total Tasks" value={total} icon={<CheckSquare size={18} className="text-purple-500" />} iconBg="bg-purple-50" />

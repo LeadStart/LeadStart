@@ -1,5 +1,4 @@
 "use client";
-import { PageHeader } from "@/components/layout/page-header";
 
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -1079,28 +1078,6 @@ export default function BillingPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Billing & Subscriptions"
-        actions={
-          <Badge
-            variant="secondary"
-            className={
-              stripeMode === "live"
-                ? "badge-green"
-                : stripeMode === "test"
-                  ? "badge-amber"
-                  : "badge-slate"
-            }
-          >
-            {stripeMode === "live"
-              ? "Stripe: Live"
-              : stripeMode === "test"
-                ? "Stripe: Test"
-                : "Stripe: Demo"}
-          </Badge>
-        }
-      />
-
       {loading && (
         <p className="text-sm text-muted-foreground">Loading billing data…</p>
       )}
@@ -1142,7 +1119,8 @@ export default function BillingPage() {
 
       {/* Tabs */}
       <Tabs value={selectedTab} onValueChange={setSelectedTab}>
-        <TabsList>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <TabsList>
           <TabsTrigger value="plans">
             <Layers size={14} />
             Plans
@@ -1173,7 +1151,24 @@ export default function BillingPage() {
               ({invoices.length})
             </span>
           </TabsTrigger>
-        </TabsList>
+          </TabsList>
+          <Badge
+            variant="secondary"
+            className={
+              stripeMode === "live"
+                ? "badge-green"
+                : stripeMode === "test"
+                  ? "badge-amber"
+                  : "badge-slate"
+            }
+          >
+            {stripeMode === "live"
+              ? "Stripe: Live"
+              : stripeMode === "test"
+                ? "Stripe: Test"
+                : "Stripe: Demo"}
+          </Badge>
+        </div>
 
         {/* Plans */}
         <TabsContent value="plans" className="space-y-4">

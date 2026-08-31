@@ -71,7 +71,7 @@ Also set the portal's return URL to `{your-domain}/app/admin/clients` so the adm
 With the dev server + `stripe listen` both running:
 
 ### 6a. Plan sync
-1. Open `/app/admin/billing` → **Plans** tab.
+1. Open `/app/admin/settings/billing` → **Plans** tab.
 2. Click any plan card → bump the price → **Save changes**.
 3. In Stripe dashboard → **Products**: verify the matching Product + Price exist with the new amount. The old Price should be **archived** (not deleted) if you changed the amount.
 

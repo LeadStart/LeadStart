@@ -49,7 +49,7 @@ const QUOTES_ROUTE = "src/app/api/billing/quotes/route.ts";
 const QUOTE_LAYOUT = "src/components/billing/quote-layout.tsx";
 const WELCOME_PAGE = "src/app/billing/welcome/page.tsx";
 const WELCOME_CONTENT = "src/components/billing/welcome-content.tsx";
-const BILLING_PAGE = "src/app/(dashboard)/admin/billing/page.tsx";
+const BILLING_PAGE = "src/app/(dashboard)/admin/settings/billing/page.tsx";
 const WEBHOOKS = "src/lib/stripe/webhooks.ts";
 
 const dataText = read(DATA);

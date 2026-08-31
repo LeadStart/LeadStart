@@ -13,10 +13,8 @@ import {
   Mail,
   MessageSquare,
   FileText,
-  CreditCard,
   LayoutDashboard,
   ContactRound,
-  CheckSquare,
   ListChecks,
   Inbox,
   Settings,
@@ -49,19 +47,13 @@ const adminSendingNav: NavItem[] = [
   { href: "/admin/mailboxes", label: "Mailboxes", icon: <Inbox size={18} /> },
 ];
 
-// Team + Integrations are folded into the Settings hub as sub-tabs, and
-// Workflows folded in as its own section — so Settings is a single tab, active
-// across all its sub-routes (matchPrefix). Tasks + Billing stay standalone.
-const adminSettingsNav: NavItem[] = [
-  { href: "/admin/tasks", label: "Tasks", icon: <CheckSquare size={18} /> },
-  { href: "/admin/billing", label: "Billing", icon: <CreditCard size={18} /> },
-  { href: "/admin/settings", label: "Settings", icon: <Settings size={18} />, matchPrefix: true },
-];
+// Settings is a single entry pinned to the sidebar footer (see below). Team,
+// Integrations, Workflows, Tokens, Billing, and Tasks all live inside the
+// Settings hub as sub-tabs — so there is exactly one reference to Settings.
 
 const clientNav: NavItem[] = [
   { href: "/client", label: "Dashboard", icon: <LayoutDashboard size={18} /> },
   { href: "/client/inbox", label: "Inbox", icon: <Mail size={18} /> },
-  { href: "/client/settings", label: "Settings", icon: <Settings size={18} /> },
 ];
 
 // Self-serve buyer portal. Only the dashboard exists in Phase 1; token wallet
@@ -117,7 +109,16 @@ export function Sidebar({ role, open = false, onClose }: { role: AppRole; open?:
   const isBuyer = role === "buyer";
   const nav = isAdmin ? adminNav : isBuyer ? buyerNav : clientNav;
   const sendingNav = isAdmin ? adminSendingNav : [];
-  const settingsNav = isAdmin ? adminSettingsNav : [];
+
+  // Settings is pinned to the very bottom as a single entry, replacing the old
+  // profile block — the top-right avatar menu already covers the profile. Admin
+  // deep-links to the Settings hub (Tasks + Billing are sub-tabs inside it);
+  // clients to their own settings. The buyer portal has no settings surface yet.
+  const settingsItem: NavItem | null = isAdmin
+    ? { href: "/admin/settings", label: "Settings", icon: <Settings size={18} />, matchPrefix: true }
+    : isBuyer
+      ? null
+      : { href: "/client/settings", label: "Settings", icon: <Settings size={18} />, matchPrefix: true };
 
   return (
     <>
@@ -209,23 +210,15 @@ export function Sidebar({ role, open = false, onClose }: { role: AppRole; open?:
             <NavLink key={item.href} item={item} active={isNavActive(item, pathname)} />
           ))}
           <NavSection label="Sending" items={sendingNav} pathname={pathname} />
-          <NavSection label="Settings" items={settingsNav} pathname={pathname} />
         </nav>
 
-        {/* Footer */}
-        <div className="border-t border-sidebar-border p-4">
-          <div className="flex items-center gap-2">
-            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-sidebar-primary text-xs font-bold text-sidebar-primary-foreground">
-              {role === "owner" ? "A" : role === "va" ? "V" : role === "buyer" ? "B" : "C"}
-            </div>
-            <div>
-              <p className="text-xs font-medium text-sidebar-foreground">
-                {role === "owner" ? "Admin" : role === "va" ? "VA" : role === "buyer" ? "Buyer" : "Client"}
-              </p>
-              <p className="text-[10px] text-sidebar-foreground/60">LeadStart</p>
-            </div>
+        {/* Footer — a single Settings entry pinned to the bottom. Replaces the
+            old profile block; the top-right avatar menu already shows profile. */}
+        {settingsItem && (
+          <div className="border-t border-sidebar-border p-3">
+            <NavLink item={settingsItem} active={isNavActive(settingsItem, pathname)} />
           </div>
-        </div>
+        )}
       </aside>
     </>
   );
