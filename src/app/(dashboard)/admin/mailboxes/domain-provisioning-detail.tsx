@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, KeyRound, RefreshCw } from "lucide-react";
+import { Loader2, KeyRound, RefreshCw, AlertTriangle } from "lucide-react";
 import { appUrl } from "@/lib/api-url";
 import type {
   ProvisioningState,
@@ -48,6 +48,26 @@ function dotClass(status: string): string {
   }
 }
 
+// Coarse "x min ago" for the current-step banner, so it's obvious the flow is
+// alive and re-checking (vs. genuinely frozen).
+function relTime(iso?: string): string {
+  if (!iso) return "just now";
+  const ms = Date.now() - Date.parse(iso);
+  if (!Number.isFinite(ms) || ms < 0) return "just now";
+  const min = Math.floor(ms / 60000);
+  if (min < 1) return "moments ago";
+  if (min === 1) return "1 min ago";
+  if (min < 60) return `${min} min ago`;
+  const hr = Math.floor(min / 60);
+  return hr === 1 ? "1 hr ago" : `${hr} hr ago`;
+}
+
+const ACTIVE_BADGE: Record<string, string> = {
+  in_progress: "Working",
+  failed: "Needs attention",
+  pending: "Queued",
+};
+
 interface DnsData {
   expected: { type: string; name: string; content: string }[];
   registrar_records: { type: string; name: string; content: string }[] | null;
@@ -85,6 +105,12 @@ export function DomainProvisioningDetail({
   onChange: () => void;
 }) {
   const prov = domain.provisioning as ProvisioningState | null;
+  // The step the flow is currently on (first not-done/skipped) — drives the
+  // prominent status banner so it's never a mystery what's happening.
+  const activeStepId = prov
+    ? STEP_ORDER.find((id) => prov.steps[id].status !== "done" && prov.steps[id].status !== "skipped")
+    : undefined;
+  const activeStep = prov && activeStepId ? prov.steps[activeStepId] : null;
   const [busy, setBusy] = useState<string | null>(null);
   const [passwords, setPasswords] = useState<{ email: string; password: string }[]>([]);
   const [note, setNote] = useState<string | null>(null);
@@ -214,6 +240,32 @@ export function DomainProvisioningDetail({
               {busy === "check" ? <Loader2 size={13} className="animate-spin" /> : <><RefreshCw size={12} /> Check now</>}
             </Button>
           </div>
+          {activeStep && activeStepId && (
+            <div
+              className={`rounded-lg border p-2.5 text-xs ${
+                activeStep.status === "failed"
+                  ? "border-red-200 bg-red-50 text-red-800"
+                  : "border-amber-200 bg-amber-50 text-amber-900"
+              }`}
+            >
+              <div className="flex items-center gap-1.5 font-semibold">
+                {activeStep.status === "failed" ? (
+                  <AlertTriangle size={13} className="flex-none" />
+                ) : (
+                  <Loader2 size={13} className="flex-none animate-spin" />
+                )}
+                <span>{STEP_LABEL[activeStepId]}</span>
+                <span className="rounded-full bg-white/60 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide">
+                  {ACTIVE_BADGE[activeStep.status] ?? activeStep.status}
+                </span>
+              </div>
+              {activeStep.last_error && <p className="mt-1 leading-snug">{activeStep.last_error}</p>}
+              <p className="mt-1 text-[10px] opacity-70">
+                Checked {activeStep.attempts}× · last {relTime(activeStep.updated_at)}
+                {activeStep.status !== "failed" && " · re-checks automatically"}
+              </p>
+            </div>
+          )}
           <ul className="space-y-1">
             {STEP_ORDER.map((id) => {
               const st = prov.steps[id];

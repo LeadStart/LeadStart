@@ -313,8 +313,24 @@ async function siteVerificationStep(
     if (d.verified) {
       return { state: markStep(state, "site_verification", { status: "done", attempts, last_error: null }, now) };
     }
-    // Verified at the API but the Directory flag hasn't propagated — retry.
-    return { state: markStep(state, "site_verification", { status: "in_progress", attempts, last_error: "Verified; waiting on the Directory flag." }, now) };
+    // Verified at the Site Verification API, but the Workspace Directory hasn't
+    // flipped its verified flag yet. Usually a short propagation lag; if it
+    // persists, verifying the domain in the Google Admin console forces it.
+    return {
+      state: markStep(
+        state,
+        "site_verification",
+        {
+          status: "in_progress",
+          attempts,
+          last_error:
+            `Google confirmed the DNS token; waiting for Workspace to mark ${domain.domain} verified ` +
+            "(usually a few minutes). If it stays here, verify it in Google Admin " +
+            "(Account, Domains, Manage domains) to force it.",
+        },
+        now,
+      ),
+    };
   } catch (err) {
     const status = isPermanent(err) ? "failed" : "in_progress";
     return { state: markStep(state, "site_verification", { status, attempts, last_error: msg(err) }, now) };
