@@ -48,6 +48,19 @@ export class DirectoryClient {
     }
   }
 
+  /** Remove a secondary domain from the tenant. 404 → already gone (idempotent).
+   *  Google rejects deletion of a domain that still has users on it, so callers
+   *  must ensure the domain has no mailboxes first. */
+  async deleteDomain(domain: string): Promise<{ deleted: boolean }> {
+    try {
+      await this.call("DELETE", `/customer/my_customer/domains/${encodeURIComponent(domain)}`);
+      return { deleted: true };
+    } catch (err) {
+      if (isGoogleStatus(err, 404)) return { deleted: false };
+      throw err;
+    }
+  }
+
   /** Read a domain's state — the post-verification gate reads `verified`. */
   async getDomain(domain: string): Promise<{ exists: boolean; verified: boolean }> {
     try {

@@ -118,6 +118,7 @@ export function DomainProvisioningDetail({
   const [dkimValue, setDkimValue] = useState("");
   const [fwd, setFwd] = useState<ForwardStatus | null>(null);
   const [dest, setDest] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const loadDns = useCallback(async () => {
     try {
@@ -189,6 +190,25 @@ export function DomainProvisioningDetail({
       clearInterval(iv);
     };
   }, [autoPolling, domain.id]);
+
+  async function deleteDomain() {
+    setBusy("delete");
+    setNote(null);
+    try {
+      const res = await fetch(appUrl(`/api/admin/domains/${domain.id}`), { method: "DELETE" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setNote(data.error ?? "Could not delete the domain.");
+        return;
+      }
+      onChange(); // refresh the list — this domain drops out
+    } catch (err) {
+      setNote(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(null);
+      setConfirmDelete(false);
+    }
+  }
 
   async function setForwarding() {
     if (!dest.trim()) return;
@@ -451,6 +471,41 @@ export function DomainProvisioningDetail({
           <p className="text-[11px] text-muted-foreground">
             {fwd.instructions ?? fwd.error ?? "URL forwarding isn't available for this registrar via API."}
           </p>
+        )}
+      </div>
+
+      {/* Delete / re-provision — removes the domain from Google Workspace + our
+          tracking (registration + DNS untouched). Blocked if it has inboxes. */}
+      <div className="border-t border-border/50 pt-3">
+        {!confirmDelete ? (
+          <button
+            className="text-[11px] font-medium text-red-600 hover:underline"
+            onClick={() => {
+              setNote(null);
+              setConfirmDelete(true);
+            }}
+          >
+            Delete this domain
+          </button>
+        ) : (
+          <div className="flex flex-wrap items-center gap-2 text-[11px]">
+            <span className="text-red-700">
+              Remove <b>{domain.domain}</b> from Google Workspace and stop tracking it? Its registration
+              and DNS records are left untouched, so you can set it up again from scratch.
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={deleteDomain}
+              disabled={busy === "delete"}
+              className="h-6 border-red-300 px-2 text-red-700 hover:bg-red-50"
+            >
+              {busy === "delete" ? <Loader2 size={12} className="animate-spin" /> : "Delete"}
+            </Button>
+            <button className="text-muted-foreground hover:underline" onClick={() => setConfirmDelete(false)}>
+              Cancel
+            </button>
+          </div>
         )}
       </div>
     </div>
