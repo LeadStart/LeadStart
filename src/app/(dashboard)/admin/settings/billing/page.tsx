@@ -581,6 +581,19 @@ function NewQuoteDialog({
                   ))}
                 </SelectContent>
               </Select>
+              {selectedContact &&
+                (selectedContact.contact_email ? (
+                  <p className="text-xs text-muted-foreground">
+                    Email on file:{" "}
+                    <span className="font-medium text-foreground">
+                      {selectedContact.contact_email}
+                    </span>
+                  </p>
+                ) : (
+                  <p className="text-xs text-amber-600">
+                    No email on file for this contact.
+                  </p>
+                ))}
             </div>
 
             <div className="rounded-lg border border-border/60 p-3 space-y-3">
