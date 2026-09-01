@@ -181,8 +181,12 @@ async function handleCheckoutCompleted(
     .select()
     .eq("id", clientId)
     .single();
-  const clientName =
-    (clientRow as unknown as { name?: string } | null)?.name || "";
+  const clientRecord = clientRow as unknown as {
+    name?: string;
+    contact_first_name?: string | null;
+  } | null;
+  const clientName = clientRecord?.name || "";
+  const contactFirstName = clientRecord?.contact_first_name || "";
 
   // Owner alert — always fire when a client signs and pays.
   await sendEmail(
@@ -206,7 +210,7 @@ async function handleCheckoutCompleted(
       toEmail,
       "You're all set — campaigns launching soon",
       buildSubscriptionStartedEmail({
-        clientName,
+        firstName: contactFirstName,
         monthlyCents,
         firstChargeDate: launch.toISOString(),
         warmingDays,

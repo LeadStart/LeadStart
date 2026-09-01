@@ -103,6 +103,9 @@ export interface Client {
   organization_id: string;
   name: string;
   contact_email: string | null;
+  /** Contact person on file: greets quotes + notifications by first name. */
+  contact_first_name: string | null;
+  contact_last_name: string | null;
   notes: string | null;
   // Fixed day/time schedule (migration 00040) — preferred
   report_frequency: ReportFrequency | null;

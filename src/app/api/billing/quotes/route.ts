@@ -198,7 +198,7 @@ export async function POST(req: NextRequest) {
         to: body.sent_to_email,
         subject: QUOTE_EMAIL_SUBJECT,
         html: buildQuoteProposalEmail({
-          contactName: client?.name || "",
+          firstName: client?.contact_first_name || "",
           monthlyCents: quote.monthly_price_cents,
           setupCents: quote.setup_fee_cents,
           contactSourcingCents: quote.contact_sourcing_cents,

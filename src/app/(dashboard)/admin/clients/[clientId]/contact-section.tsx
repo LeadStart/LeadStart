@@ -10,7 +10,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Pencil, Mail, Phone, Contact } from "lucide-react";
+import { Pencil, Mail, Phone, Contact, User } from "lucide-react";
 import { appUrl } from "@/lib/api-url";
 import type { Client } from "@/types/app";
 
@@ -28,6 +28,8 @@ export function ContactSection({
   onSaved: () => void;
 }) {
   const [editing, setEditing] = useState(false);
+  const [firstName, setFirstName] = useState(client.contact_first_name ?? "");
+  const [lastName, setLastName] = useState(client.contact_last_name ?? "");
   const [email, setEmail] = useState(client.contact_email ?? "");
   const [phone, setPhone] = useState(client.phone_number ?? "");
   const [saving, setSaving] = useState(false);
@@ -41,6 +43,8 @@ export function ContactSection({
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          contact_first_name: firstName.trim() || null,
+          contact_last_name: lastName.trim() || null,
           contact_email: email.trim() || null,
           phone_number: phone.trim() || null,
         }),
@@ -60,6 +64,8 @@ export function ContactSection({
 
   function cancel() {
     setEditing(false);
+    setFirstName(client.contact_first_name ?? "");
+    setLastName(client.contact_last_name ?? "");
     setEmail(client.contact_email ?? "");
     setPhone(client.phone_number ?? "");
     setError(null);
@@ -91,6 +97,27 @@ export function ContactSection({
           <div className="space-y-3">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
+                <Label htmlFor="contact-first">First name</Label>
+                <Input
+                  id="contact-first"
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                  placeholder="Jane"
+                  autoFocus
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="contact-last">Last name</Label>
+                <Input
+                  id="contact-last"
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                  placeholder="Doe"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
                 <Label htmlFor="contact-email">Contact email</Label>
                 <Input
                   id="contact-email"
@@ -98,7 +125,6 @@ export function ContactSection({
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="client@company.com"
-                  autoFocus
                 />
               </div>
               <div className="space-y-1.5">
@@ -134,6 +160,18 @@ export function ContactSection({
           </div>
         ) : (
           <div className="space-y-2 text-sm">
+            <div className="flex items-center gap-2">
+              <User size={14} className="text-muted-foreground shrink-0" />
+              {client.contact_first_name || client.contact_last_name ? (
+                <span className="font-medium">
+                  {[client.contact_first_name, client.contact_last_name]
+                    .filter(Boolean)
+                    .join(" ")}
+                </span>
+              ) : (
+                <span className="text-muted-foreground">No contact name</span>
+              )}
+            </div>
             <div className="flex items-center gap-2">
               <Mail size={14} className="text-muted-foreground shrink-0" />
               {client.contact_email ? (

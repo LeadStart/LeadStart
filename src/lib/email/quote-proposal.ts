@@ -8,7 +8,8 @@ export const QUOTE_EMAIL_SUBJECT = "Your LeadStart proposal is ready";
 export const QUOTE_EMAIL_FROM_FALLBACK = "LeadStart <info@no-reply.leadstart.io>";
 
 export interface QuoteEmailData {
-  contactName: string;
+  /** Recipient's first name — greets them personally ("Hi Jane,"). */
+  firstName: string;
   /** Lead management monthly subscription price. */
   monthlyCents: number;
   setupCents: number;
@@ -90,7 +91,7 @@ export function buildQuoteProposalEmail(data: QuoteEmailData): string {
           <tr>
             <td style="background: #ffffff; padding: 32px 32px 24px;">
               <p style="margin: 0 0 16px; font-size: 16px; color: #1A1A2E; line-height: 1.55;">
-                Hi ${data.contactName || "there"},
+                Hi ${data.firstName || "there"},
               </p>
               <p style="margin: 0 0 24px; font-size: 15px; color: #3D3D5C; line-height: 1.6;">
                 Here's the proposal we prepared for you. Review the scope and

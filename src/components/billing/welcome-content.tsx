@@ -5,6 +5,8 @@ import leadstartLogo from "../../../public/leadstart-logo.png";
 export interface WelcomeContentProps {
   /** Warm-up window in calendar days (drives the launch-day copy). */
   warmingDays: number;
+  /** Recipient's first name — personalizes the greeting when present. */
+  firstName?: string | null;
   /**
    * Frozen launch (first-charge) date, ISO string — the same value shown on the
    * quote and used for the Stripe trial_end. When omitted (admin preview), it's
@@ -32,6 +34,7 @@ export interface WelcomeContentProps {
 export function WelcomeContent({
   warmingDays,
   launchDate,
+  firstName,
   sellsContacts,
   isDemo,
   className,
@@ -109,7 +112,8 @@ export function WelcomeContent({
               You&apos;re all set.
             </h1>
             <p className="text-sm sm:text-base text-muted-foreground max-w-md mx-auto">
-              We greatly appreciate your business. We will get started on{" "}
+              {firstName ? `Thanks, ${firstName}! ` : ""}We greatly appreciate
+              your business. We will get started on{" "}
               {contactsClause}setting up your domains and inboxes right away.
               Your campaigns will launch after{" "}
               <strong className="text-[#0f172a]">

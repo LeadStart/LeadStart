@@ -1,5 +1,6 @@
 export interface SubscriptionStartedEmailData {
-  clientName: string;
+  /** Recipient's first name — greets them personally ("Hi Jane,"). */
+  firstName: string;
   monthlyCents: number;
   /** Launch day = first monthly charge (business-day adjusted). */
   firstChargeDate: string;
@@ -55,7 +56,7 @@ export function buildSubscriptionStartedEmail(
           <tr>
             <td style="background: #ffffff; padding: 32px;">
               <p style="margin: 0 0 16px; font-size: 16px; color: #1A1A2E; line-height: 1.55;">
-                Hi ${data.clientName || "there"},
+                Hi ${data.firstName || "there"},
               </p>
               <p style="margin: 0 0 20px; font-size: 15px; color: #3D3D5C; line-height: 1.65;">
                 We greatly appreciate your business. We will get started on ${contactsClause}setting up your domains and inboxes right away. Your campaigns will launch after ${data.warmingDays} calendar days, and your first monthly charge will be assessed on the day we launch.

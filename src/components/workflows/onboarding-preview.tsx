@@ -22,6 +22,8 @@ import {
   PREVIEW_EMAIL_FROM,
   SAMPLE_CONTACT_NAME,
   SAMPLE_CONTACT_EMAIL,
+  SAMPLE_CONTACT_FIRST_NAME,
+  SAMPLE_CONTACT_LAST_NAME,
   SAMPLE_MONTHLY_CENTS,
   SAMPLE_SETUP_CENTS,
   SAMPLE_CONTACT_SOURCING_CENTS,
@@ -156,7 +158,8 @@ export function OnboardingPreview() {
               <span className="font-semibold text-foreground">
                 {SAMPLE_CONTACT_NAME}
               </span>{" "}
-              — {formatCents(SAMPLE_MONTHLY_CENTS)}/mo,{" "}
+              ({SAMPLE_CONTACT_FIRST_NAME} {SAMPLE_CONTACT_LAST_NAME}) —{" "}
+              {formatCents(SAMPLE_MONTHLY_CENTS)}/mo,{" "}
               {formatCents(SAMPLE_SETUP_CENTS)} setup
               {sellsContacts
                 ? `, ${formatCents(SAMPLE_CONTACT_SOURCING_CENTS)} for ${SAMPLE_CONTACTS_COUNT.toLocaleString()} contacts`
@@ -210,7 +213,7 @@ function Surfaces({
   ).toISOString();
 
   const emailHtml = buildQuoteProposalEmail({
-    contactName: SAMPLE_CONTACT_NAME,
+    firstName: SAMPLE_CONTACT_FIRST_NAME,
     monthlyCents: SAMPLE_MONTHLY_CENTS,
     setupCents: SAMPLE_SETUP_CENTS,
     contactSourcingCents: sourcingCents,
@@ -340,6 +343,7 @@ function Surfaces({
         >
           <WelcomeContent
             warmingDays={PREVIEW_WARMING_DAYS}
+            firstName={SAMPLE_CONTACT_FIRST_NAME}
             sellsContacts={sellsContacts}
             className="min-h-full"
           />

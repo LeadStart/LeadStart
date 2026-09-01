@@ -41,6 +41,10 @@ export const PREVIEW_EMAIL_FROM = QUOTE_EMAIL_FROM_FALLBACK;
 // content: pricing lines, a contact-sourcing line, a multi-item scope.
 export const SAMPLE_CONTACT_NAME = "Summit Home Services";
 export const SAMPLE_CONTACT_EMAIL = "ops@summithomeservices.com";
+// The contact PERSON (distinct from the company name above) — quotes and
+// notifications greet them by first name.
+export const SAMPLE_CONTACT_FIRST_NAME = "Jordan";
+export const SAMPLE_CONTACT_LAST_NAME = "Rivera";
 
 export const SAMPLE_MONTHLY_CENTS = 150_000; // $1,500 / mo lead management
 export const SAMPLE_SETUP_CENTS = 50_000; // $500 one-time setup

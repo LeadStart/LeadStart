@@ -46,6 +46,8 @@ interface RouteParams {
 
 interface PatchBody {
   contact_email?: string | null;
+  contact_first_name?: string | null;
+  contact_last_name?: string | null;
   notification_email?: string | null;
   notification_cc_emails?: string[];
   phone_number?: string | null;
@@ -97,8 +99,12 @@ const OWNER_ONLY: (keyof PatchBody)[] = [
 ];
 
 // Owner + VA (admin-side) editable, but NOT the client themselves: the on-file
-// contact email is an operational field admins own.
-const ADMIN_EDITABLE: (keyof PatchBody)[] = ["contact_email"];
+// contact details are operational fields admins own.
+const ADMIN_EDITABLE: (keyof PatchBody)[] = [
+  "contact_email",
+  "contact_first_name",
+  "contact_last_name",
+];
 
 // Trim strings; map empty/whitespace-only to null so the DB keeps nullable
 // columns clean instead of storing "".
@@ -218,6 +224,8 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
 
   const textFields = new Set<keyof PatchBody>([
     "contact_email",
+    "contact_first_name",
+    "contact_last_name",
     "notification_email",
     "phone_number",
     "persona_name",
