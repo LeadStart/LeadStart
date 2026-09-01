@@ -421,12 +421,15 @@ function NewQuoteDialog({
   onCreate,
   clients,
   plans,
+  editQuote,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onCreate: (draft: QuoteDraft, sendNow: boolean) => Promise<void>;
   clients: Client[];
   plans: PricingPlan[];
+  /** When set, the dialog edits this draft instead of creating a new quote. */
+  editQuote: Quote | null;
 }) {
   const [contactId, setContactId] = useState<string>("");
   const [sellsContacts, setSellsContacts] = useState(true);
@@ -444,9 +447,40 @@ function NewQuoteDialog({
   const [submitting, setSubmitting] = useState(false);
   const [previewMode, setPreviewMode] = useState(false);
 
-  // Reset form when dialog opens
+  // Reset (create) or pre-fill (edit) the form when the dialog opens.
   useEffect(() => {
-    if (open) {
+    if (!open) return;
+    if (editQuote) {
+      const sellsC = (editQuote.contact_sourcing_cents ?? 0) > 0;
+      setContactId(editQuote.client_id);
+      setSellsContacts(sellsC);
+      setContactsCount(String(editQuote.contacts_count ?? 1000));
+      setContactSourcingDollars(
+        centsToDollarInput(editQuote.contact_sourcing_cents ?? 0),
+      );
+      setMonthlyDollars(centsToDollarInput(editQuote.monthly_price_cents));
+      setSetupDollars(centsToDollarInput(editQuote.setup_fee_cents));
+      setWarmingDays(String(editQuote.warming_days));
+      setLaunchMode(editQuote.launch_date_mode ?? "derived");
+      setFixedLaunchDate(
+        editQuote.launch_date_mode === "fixed" && editQuote.launch_date
+          ? editQuote.launch_date.split("T")[0]
+          : "",
+      );
+      setScope(editQuote.scope_of_work ?? "");
+      setTerms(editQuote.terms ?? DEFAULT_TERMS);
+      setRecipientEmail(
+        editQuote.sent_to_email ??
+          clients.find((c) => c.id === editQuote.client_id)?.contact_email ??
+          "",
+      );
+      setExpiresAt(
+        editQuote.expires_at
+          ? editQuote.expires_at.split("T")[0]
+          : defaultExpiry(),
+      );
+      setPreviewMode(false);
+    } else {
       setContactId("");
       setSellsContacts(true);
       setContactsCount("1000");
@@ -462,7 +496,10 @@ function NewQuoteDialog({
       setExpiresAt(defaultExpiry());
       setPreviewMode(false);
     }
-  }, [open]);
+    // clients is intentionally omitted: re-running on a background client refetch
+    // would wipe in-progress edits. It's only read for the initial email fallback.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, editQuote]);
 
   function handleContactChange(id: string | null) {
     if (!id) return;
@@ -524,7 +561,11 @@ function NewQuoteDialog({
       <DialogContent className="w-[95vw] sm:w-[92vw] max-w-2xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
         <DialogHeader>
           <DialogTitle>
-            {previewMode ? "Preview quote" : "New quote"}
+            {previewMode
+              ? "Preview quote"
+              : editQuote
+                ? "Edit quote"
+                : "New quote"}
           </DialogTitle>
           <DialogDescription>
             {previewMode
@@ -831,7 +872,7 @@ function NewQuoteDialog({
             disabled={submitting || !canSubmit}
             className="w-full sm:w-auto"
           >
-            Save as draft
+            {editQuote ? "Save changes" : "Save as draft"}
           </Button>
           <Button
             onClick={() => handleSubmit(true)}
@@ -864,6 +905,7 @@ export default function BillingPage() {
   const [creatingPlan, setCreatingPlan] = useState(false);
   const [newQuoteOpen, setNewQuoteOpen] = useState(false);
   const [viewingQuote, setViewingQuote] = useState<Quote | null>(null);
+  const [editingQuote, setEditingQuote] = useState<Quote | null>(null);
   const [cancelingSub, setCancelingSub] = useState<ClientSubscription | null>(
     null,
   );
@@ -1144,6 +1186,31 @@ export default function BillingPage() {
     setQuotes((prev) => [quote, ...prev]);
     setNewQuoteOpen(false);
     setSelectedTab("quotes");
+  }
+
+  async function updateQuote(id: string, draft: QuoteDraft, sendNow: boolean) {
+    const res = await fetch(appUrl(`/api/billing/quotes/${id}`), {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...draft, send_now: sendNow }),
+    });
+    if (!res.ok) {
+      const { error } = await res.json().catch(() => ({ error: "save failed" }));
+      throw new Error(error);
+    }
+    const { quote } = (await res.json()) as { quote: Quote };
+    setQuotes((prev) => prev.map((q) => (q.id === id ? quote : q)));
+    setEditingQuote(null);
+    setSelectedTab("quotes");
+  }
+
+  // Dialog save routes to create or update depending on edit mode.
+  async function saveQuote(draft: QuoteDraft, sendNow: boolean) {
+    if (editingQuote) {
+      await updateQuote(editingQuote.id, draft, sendNow);
+    } else {
+      await createQuote(draft, sendNow);
+    }
   }
 
   // KPIs
@@ -1448,14 +1515,25 @@ export default function BillingPage() {
                           : "—"}
                       </TableCell>
                       <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setViewingQuote(q)}
-                          className="text-xs"
-                        >
-                          View
-                        </Button>
+                        {q.status === "draft" ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setEditingQuote(q)}
+                            className="text-xs"
+                          >
+                            Edit
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setViewingQuote(q)}
+                            className="text-xs"
+                          >
+                            View
+                          </Button>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -1842,11 +1920,17 @@ export default function BillingPage() {
         onCreate={createPlan}
       />
       <NewQuoteDialog
-        open={newQuoteOpen}
-        onOpenChange={setNewQuoteOpen}
-        onCreate={createQuote}
+        open={newQuoteOpen || editingQuote !== null}
+        onOpenChange={(o) => {
+          if (!o) {
+            setNewQuoteOpen(false);
+            setEditingQuote(null);
+          }
+        }}
+        onCreate={saveQuote}
         clients={clients}
         plans={plans}
+        editQuote={editingQuote}
       />
       <Dialog
         open={viewingQuote !== null}
