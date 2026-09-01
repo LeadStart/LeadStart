@@ -25,6 +25,7 @@ import {
   Mail,
   X,
   Tag,
+  Filter,
 } from "lucide-react";
 import { TagChipInput } from "@/components/mailboxes/tag-chip-input";
 import { appUrl } from "@/lib/api-url";
@@ -114,6 +115,11 @@ export default function MailboxesPage() {
   // autocomplete so a tag added there is suggested here even before any inbox
   // carries it. Best-effort — falls back to in-use tags if the fetch fails.
   const [registryTags, setRegistryTags] = useState<string[]>([]);
+
+  // Tag filter — show only inboxes carrying any of the selected tags (OR match).
+  // Keyed by lowercased tag so it matches case-insensitively, like every other
+  // tag path. Empty = show all.
+  const [tagFilter, setTagFilter] = useState<Set<string>>(new Set());
 
   // Which mailbox's detail (health breakdown + placement) is expanded (one at a time).
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -357,6 +363,15 @@ export default function MailboxesPage() {
     });
   }
 
+  function toggleTagFilter(key: string) {
+    setTagFilter((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
   async function applyBulkTags() {
     if (selectedIds.size === 0 || bulkTagDraft.length === 0) return;
     setBulkBusy(true);
@@ -593,7 +608,23 @@ export default function MailboxesPage() {
     for (const m of mailboxes) for (const t of m.tags ?? []) push(t);
     return out.sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
   })();
-  const allSelected = mailboxes.length > 0 && mailboxes.every((m) => selectedIds.has(m.id));
+
+  // Rows actually shown, after the tag filter. Everything below (the table, the
+  // select-all header, the empty state) works off this list, not the raw set.
+  const visibleMailboxes =
+    tagFilter.size === 0
+      ? mailboxes
+      : mailboxes.filter((m) => (m.tags ?? []).some((t) => tagFilter.has(t.toLowerCase())));
+  const allVisibleSelected =
+    visibleMailboxes.length > 0 && visibleMailboxes.every((m) => selectedIds.has(m.id));
+  const someVisibleSelected = visibleMailboxes.some((m) => selectedIds.has(m.id));
+
+  // Filter pills offer only tags actually present on an inbox — a registered-
+  // but-unused tag (the registry lets you pre-create tags) would just yield an
+  // empty list. The tag-input combobox still suggests the full registry (orgTags).
+  const filterableTags = orgTags.filter((t) =>
+    mailboxes.some((m) => (m.tags ?? []).some((mt) => mt.toLowerCase() === t.toLowerCase())),
+  );
 
   return (
     <div className="space-y-6">
@@ -661,6 +692,47 @@ export default function MailboxesPage() {
             </p>
           ) : (
             <>
+            {/* Tag filter — toggle pills to narrow the list to named pools. */}
+            {filterableTags.length > 0 && (
+              <div className="mb-3 flex flex-wrap items-center gap-1.5">
+                <span className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground">
+                  <Filter size={12} /> Tags
+                </span>
+                {filterableTags.map((t) => {
+                  const key = t.toLowerCase();
+                  const on = tagFilter.has(key);
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => toggleTagFilter(key)}
+                      aria-pressed={on}
+                      className={`inline-flex cursor-pointer items-center rounded-full border px-2 py-0.5 text-xs font-medium transition-colors ${
+                        on
+                          ? "border-[#2E37FE] bg-[#2E37FE] text-white"
+                          : "border-border/70 text-muted-foreground hover:border-[#2E37FE]/50 hover:text-[#2E37FE]"
+                      }`}
+                    >
+                      {t}
+                    </button>
+                  );
+                })}
+                {tagFilter.size > 0 && (
+                  <>
+                    <span className="text-xs text-muted-foreground">
+                      {visibleMailboxes.length} of {mailboxes.length} shown
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setTagFilter(new Set())}
+                      className="inline-flex cursor-pointer items-center gap-0.5 rounded-full px-1.5 py-0.5 text-xs text-muted-foreground hover:text-[#2E37FE]"
+                    >
+                      <X size={11} /> Clear
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
             {/* Bulk "tag selected" toolbar — appears once any inbox is checked. */}
             {selectedIds.size > 0 && (
               <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-[#2E37FE]/30 bg-[#2E37FE]/5 px-3 py-2">
@@ -718,6 +790,18 @@ export default function MailboxesPage() {
                 )}
               </div>
             )}
+            {visibleMailboxes.length === 0 ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">
+                No inboxes carry {tagFilter.size === 1 ? "this tag" : "these tags"}.{" "}
+                <button
+                  type="button"
+                  onClick={() => setTagFilter(new Set())}
+                  className="cursor-pointer underline hover:text-[#2E37FE]"
+                >
+                  Clear filter
+                </button>
+              </p>
+            ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -725,14 +809,21 @@ export default function MailboxesPage() {
                     <th className="py-2 pr-2 font-medium">
                       <input
                         type="checkbox"
-                        checked={allSelected}
+                        checked={allVisibleSelected}
                         ref={(el) => {
-                          if (el) el.indeterminate = !allSelected && selectedIds.size > 0;
+                          if (el) el.indeterminate = !allVisibleSelected && someVisibleSelected;
                         }}
                         onChange={() =>
-                          setSelectedIds(
-                            allSelected ? new Set() : new Set(mailboxes.map((m) => m.id)),
-                          )
+                          setSelectedIds((prev) => {
+                            const next = new Set(prev);
+                            // Operate only on the visible (filtered) rows; any
+                            // hidden selection is left untouched.
+                            for (const m of visibleMailboxes) {
+                              if (allVisibleSelected) next.delete(m.id);
+                              else next.add(m.id);
+                            }
+                            return next;
+                          })
                         }
                         className="h-3.5 w-3.5 accent-[#2E37FE]"
                         aria-label="Select all mailboxes"
@@ -749,7 +840,7 @@ export default function MailboxesPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {mailboxes.map((mb) => (
+                  {visibleMailboxes.map((mb) => (
                     <Fragment key={mb.id}>
                     <tr className="border-b last:border-0 align-middle">
                       <td className="py-3 pr-2">
@@ -1043,6 +1134,7 @@ export default function MailboxesPage() {
                 </tbody>
               </table>
             </div>
+            )}
             </>
           )}
         </CardContent>
