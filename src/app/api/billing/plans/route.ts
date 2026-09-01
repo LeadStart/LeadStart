@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { syncPlanToStripe } from "@/lib/stripe/helpers";
 import type { PricingPlan } from "@/types/app";
 
@@ -124,11 +125,23 @@ export async function POST(req: NextRequest) {
     stripe_monthly_price_id: stripeIds.stripe_monthly_price_id,
   };
 
-  const { data: inserted } = await supabase
+  // Service-role write: pricing_plans is service-role-only under the hardened RLS
+  // (migration 00100), so a user-client insert is silently denied. The owner auth
+  // check above is the boundary; the error check surfaces a real failure.
+  const admin = createAdminClient();
+  const { data: inserted, error: insertErr } = await admin
     .from("pricing_plans")
-    .insert(insertRow as unknown as Record<string, unknown>);
-  const plan =
-    (inserted as unknown as PricingPlan[] | null)?.[0] ?? insertRow;
+    .insert(insertRow as unknown as Record<string, unknown>)
+    .select()
+    .single();
+  if (insertErr) {
+    console.error("Plan insert failed:", insertErr);
+    return NextResponse.json(
+      { error: `Could not save plan: ${insertErr.message}` },
+      { status: 500 },
+    );
+  }
+  const plan = (inserted as unknown as PricingPlan) ?? insertRow;
 
   return NextResponse.json({ plan, stripe: stripeIds });
 }

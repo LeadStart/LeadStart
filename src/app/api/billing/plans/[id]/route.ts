@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { syncPlanToStripe } from "@/lib/stripe/helpers";
 import type { PricingPlan } from "@/types/app";
 
@@ -63,16 +64,27 @@ export async function PATCH(
     );
   }
 
-  const { data: updated } = await supabase
+  // Service-role write: pricing_plans is service-role-only under the hardened RLS
+  // (migration 00100), so a user-client update is silently denied.
+  const admin = createAdminClient();
+  const { data: updated, error: updateErr } = await admin
     .from("pricing_plans")
     .update({
       ...updates,
       stripe_product_id: stripeIds.stripe_product_id,
       stripe_monthly_price_id: stripeIds.stripe_monthly_price_id,
     } as Record<string, unknown>)
-    .eq("id", id);
-
-  const plan = (updated as unknown as PricingPlan[] | null)?.[0] ?? {
+    .eq("id", id)
+    .select()
+    .single();
+  if (updateErr) {
+    console.error("Plan update failed:", updateErr);
+    return NextResponse.json(
+      { error: `Could not save plan: ${updateErr.message}` },
+      { status: 500 },
+    );
+  }
+  const plan = (updated as unknown as PricingPlan) ?? {
     ...current,
     ...updates,
     stripe_product_id: stripeIds.stripe_product_id,

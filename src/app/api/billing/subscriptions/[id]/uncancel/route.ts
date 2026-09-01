@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getStripe, isStripeDemoMode } from "@/lib/stripe/client";
 import type { ClientSubscription } from "@/types/app";
 
@@ -67,10 +68,15 @@ export async function POST(
     }
   }
 
-  await supabase
+  // Mirror via the service-role client: client_subscriptions is service-role-only
+  // under the hardened RLS (00100), so a user-client update is silently denied.
+  // Non-fatal — Stripe already applied the change and the webhook confirms it.
+  const admin = createAdminClient();
+  const { error: mirrorErr } = await admin
     .from("client_subscriptions")
     .update({ cancel_at_period_end: false } as Record<string, unknown>)
     .eq("id", id);
+  if (mirrorErr) console.error("Subscription mirror update failed:", mirrorErr);
 
   return NextResponse.json({ ok: true, cancel_at_period_end: false });
 }

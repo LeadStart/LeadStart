@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomBytes, randomUUID } from "node:crypto";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { appUrl } from "@/lib/api-url";
 import {
   buildQuoteProposalEmail,
@@ -153,11 +154,26 @@ export async function POST(req: NextRequest) {
     updated_at: now,
   };
 
-  const { data: inserted } = await supabase
+  // Writes to billing tables must use the service-role client: these tables are
+  // service-role-only under the hardened RLS (migration 00100), so an insert via
+  // the user's client is silently denied. The owner/va auth check above is the
+  // security boundary here. `.select().single()` + the error check surface a real
+  // failure instead of the previous silent fake-success (which returned the local
+  // object, so the UI showed a draft that never persisted and vanished on reload).
+  const admin = createAdminClient();
+  const { data: inserted, error: insertErr } = await admin
     .from("quotes")
-    .insert(newQuote as unknown as Record<string, unknown>);
-  const quote =
-    (inserted as unknown as Quote[] | null)?.[0] ?? newQuote;
+    .insert(newQuote as unknown as Record<string, unknown>)
+    .select()
+    .single();
+  if (insertErr) {
+    console.error("Quote insert failed:", insertErr);
+    return NextResponse.json(
+      { error: `Could not save quote: ${insertErr.message}` },
+      { status: 500 },
+    );
+  }
+  const quote = (inserted as unknown as Quote) ?? newQuote;
 
   // Send proposal email when status is "sent".
   const canSendEmail =

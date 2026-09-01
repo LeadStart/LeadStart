@@ -850,6 +850,7 @@ export default function BillingPage() {
   const [editingPlan, setEditingPlan] = useState<PricingPlan | null>(null);
   const [creatingPlan, setCreatingPlan] = useState(false);
   const [newQuoteOpen, setNewQuoteOpen] = useState(false);
+  const [viewingQuote, setViewingQuote] = useState<Quote | null>(null);
   const [cancelingSub, setCancelingSub] = useState<ClientSubscription | null>(
     null,
   );
@@ -1437,8 +1438,8 @@ export default function BillingPage() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          disabled
-                          className="text-xs opacity-60"
+                          onClick={() => setViewingQuote(q)}
+                          className="text-xs"
                         >
                           View
                         </Button>
@@ -1834,6 +1835,45 @@ export default function BillingPage() {
         clients={clients}
         plans={plans}
       />
+      <Dialog
+        open={viewingQuote !== null}
+        onOpenChange={(o) => !o && setViewingQuote(null)}
+      >
+        <DialogContent className="w-[95vw] sm:w-[92vw] max-w-2xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
+          <DialogHeader>
+            <DialogTitle>
+              {viewingQuote?.quote_number
+                ? `Quote ${viewingQuote.quote_number}`
+                : "Quote"}
+            </DialogTitle>
+            <DialogDescription>
+              Exactly what the recipient sees at their signed URL.
+            </DialogDescription>
+          </DialogHeader>
+          {viewingQuote && (
+            <QuoteLayout
+              isDraft={viewingQuote.status === "draft"}
+              contactName={clientName(viewingQuote.client_id, clients)}
+              contactEmail={viewingQuote.sent_to_email || ""}
+              monthlyCents={viewingQuote.monthly_price_cents}
+              setupCents={viewingQuote.setup_fee_cents}
+              contactSourcingCents={viewingQuote.contact_sourcing_cents}
+              contactsCount={viewingQuote.contacts_count}
+              warmingDays={viewingQuote.warming_days}
+              launchDate={viewingQuote.launch_date}
+              scope={viewingQuote.scope_of_work || ""}
+              terms={viewingQuote.terms || ""}
+              issuedAt={viewingQuote.sent_at || viewingQuote.created_at}
+              expiresAt={viewingQuote.expires_at}
+            />
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setViewingQuote(null)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <Dialog
         open={portalUrlDialog !== null}
         onOpenChange={(o) => !o && setPortalUrlDialog(null)}
