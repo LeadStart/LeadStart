@@ -45,6 +45,7 @@ interface RouteParams {
 }
 
 interface PatchBody {
+  contact_email?: string | null;
   notification_email?: string | null;
   notification_cc_emails?: string[];
   phone_number?: string | null;
@@ -94,6 +95,10 @@ const OWNER_ONLY: (keyof PatchBody)[] = [
   "persona_photo_url",
   "brand_voice",
 ];
+
+// Owner + VA (admin-side) editable, but NOT the client themselves: the on-file
+// contact email is an operational field admins own.
+const ADMIN_EDITABLE: (keyof PatchBody)[] = ["contact_email"];
 
 // Trim strings; map empty/whitespace-only to null so the DB keeps nullable
 // columns clean instead of storing "".
@@ -173,14 +178,14 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
     if ((clientRow as { organization_id: string }).organization_id !== userOrgId) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
-    allowedFields = [...CLIENT_EDITABLE, ...OWNER_ONLY];
+    allowedFields = [...CLIENT_EDITABLE, ...OWNER_ONLY, ...ADMIN_EDITABLE];
   } else if (isVA) {
-    // VAs can update the client-editable subset on behalf of clients but
-    // not persona/brand (owner-only).
+    // VAs can update the client-editable subset + admin-editable fields on behalf
+    // of clients, but not persona/brand (owner-only).
     if ((clientRow as { organization_id: string }).organization_id !== userOrgId) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
-    allowedFields = [...CLIENT_EDITABLE];
+    allowedFields = [...CLIENT_EDITABLE, ...ADMIN_EDITABLE];
   } else {
     // Client: must be linked via client_users.
     const { data: link } = await admin
@@ -212,6 +217,7 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
   const update: Record<string, unknown> = {};
 
   const textFields = new Set<keyof PatchBody>([
+    "contact_email",
     "notification_email",
     "phone_number",
     "persona_name",
@@ -225,6 +231,17 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
     if (!textFields.has(key)) continue;
     const normalized = normalizeNullableText(body[key]);
     if (normalized !== undefined) update[key] = normalized;
+  }
+
+  // Validate the on-file contact email shape when provided (null clears it).
+  if (
+    typeof update.contact_email === "string" &&
+    !EMAIL_SHAPE.test(update.contact_email)
+  ) {
+    return NextResponse.json(
+      { error: `"${update.contact_email}" is not a valid email address.` },
+      { status: 400 },
+    );
   }
 
   if (allowedFields.includes("notification_cc_emails") && body.notification_cc_emails !== undefined) {

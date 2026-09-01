@@ -35,6 +35,7 @@ import { appUrl } from "@/lib/api-url";
 import { useApiQuery } from "@/hooks/use-api-query";
 import { API_BILLING_DATA_PATH } from "@/lib/admin-queries";
 import { QuoteLayout } from "@/components/billing/quote-layout";
+import { ClientEmailInline } from "@/components/clients/client-email-inline";
 import {
   DEFAULT_WARMING_DAYS,
   DEFAULT_QUOTE_EXPIRY_DAYS,
@@ -422,6 +423,7 @@ function NewQuoteDialog({
   clients,
   plans,
   editQuote,
+  onClientEmailUpdated,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -430,6 +432,8 @@ function NewQuoteDialog({
   plans: PricingPlan[];
   /** When set, the dialog edits this draft instead of creating a new quote. */
   editQuote: Quote | null;
+  /** Called after the selected client's on-file email is saved inline. */
+  onClientEmailUpdated: (clientId: string, email: string) => void;
 }) {
   const [contactId, setContactId] = useState<string>("");
   const [sellsContacts, setSellsContacts] = useState(true);
@@ -622,19 +626,19 @@ function NewQuoteDialog({
                   ))}
                 </SelectContent>
               </Select>
-              {selectedContact &&
-                (selectedContact.contact_email ? (
-                  <p className="text-xs text-muted-foreground">
-                    Email on file:{" "}
-                    <span className="font-medium text-foreground">
-                      {selectedContact.contact_email}
-                    </span>
-                  </p>
-                ) : (
-                  <p className="text-xs text-amber-600">
-                    No email on file for this contact.
-                  </p>
-                ))}
+              {selectedContact && (
+                <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                  <span>Email on file:</span>
+                  <ClientEmailInline
+                    clientId={selectedContact.id}
+                    email={selectedContact.contact_email}
+                    onSaved={(email) => {
+                      onClientEmailUpdated(selectedContact.id, email);
+                      setRecipientEmail(email);
+                    }}
+                  />
+                </div>
+              )}
             </div>
 
             <div className="rounded-lg border border-border/60 p-3 space-y-3">
@@ -1931,6 +1935,13 @@ export default function BillingPage() {
         clients={clients}
         plans={plans}
         editQuote={editingQuote}
+        onClientEmailUpdated={(clientId, email) =>
+          setClients((prev) =>
+            prev.map((c) =>
+              c.id === clientId ? { ...c, contact_email: email } : c,
+            ),
+          )
+        }
       />
       <Dialog
         open={viewingQuote !== null}

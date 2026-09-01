@@ -21,6 +21,7 @@ import { useSort } from "@/hooks/use-sort";
 import { SortableHead } from "@/components/ui/sortable-head";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { CampaignRowActions } from "./campaign-row-actions";
+import { ClientEmailInline } from "@/components/clients/client-email-inline";
 import { appUrl } from "@/lib/api-url";
 import { toast } from "sonner";
 
@@ -51,7 +52,12 @@ export default function AllCampaignsPage() {
         now,
       ),
     );
-    return { ...campaign, clientName: client?.name || "", metrics };
+    return {
+      ...campaign,
+      clientName: client?.name || "",
+      clientEmail: client?.contact_email ?? null,
+      metrics,
+    };
   });
   const { sorted, sortConfig, requestSort } = useSort(rows, "name", "asc");
   const [page, setPage] = useState(1);
@@ -185,7 +191,12 @@ export default function AllCampaignsPage() {
                   return (
                     <TableRow key={row.id} href={campaignHref} className="group">
                       <TableCell><div className="flex items-center gap-3"><div className="flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold text-white shrink-0" style={{ background: '#2E37FE' }}><Mail size={14} /></div><Link href={campaignHref} className="font-medium text-foreground hover:text-[#2E37FE] transition-colors">{row.name}</Link></div></TableCell>
-                      <TableCell>{clientHref ? <Link href={clientHref} className="text-muted-foreground hover:text-foreground transition-colors">{row.clientName || "—"}</Link> : <Badge variant="secondary" className="badge-amber">Unlinked</Badge>}</TableCell>
+                      <TableCell>{clientHref ? (
+                        <div className="space-y-1">
+                          <Link href={clientHref} className="text-muted-foreground hover:text-foreground transition-colors">{row.clientName || "—"}</Link>
+                          <div><ClientEmailInline clientId={row.client_id as string} email={row.clientEmail} onSaved={() => refetch()} /></div>
+                        </div>
+                      ) : <Badge variant="secondary" className="badge-amber">Unlinked</Badge>}</TableCell>
                       <TableCell><Badge variant="secondary" className={row.status === "active" ? "badge-green" : row.status === "paused" ? "badge-amber" : "badge-slate"}>{row.status}</Badge></TableCell>
                       <TableCell className="text-right font-medium">{row.metrics.emails_sent.toLocaleString()}</TableCell>
                       <TableCell className="text-right"><span className={row.metrics.reply_rate >= 5 ? "text-emerald-600 font-medium" : row.metrics.reply_rate >= 2 ? "text-amber-600" : "text-red-600"}>{row.metrics.reply_rate}%</span></TableCell>
