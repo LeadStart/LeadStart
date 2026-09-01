@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ContactSection } from "./contact-section";
 import { ClientUsersSection } from "./client-users-section";
 import { ReplyRoutingSection } from "./reply-routing-section";
 import { LinkedinSection } from "./linkedin-section";
@@ -162,6 +163,8 @@ export function ClientDetailClient({
           }
         />
       </div>
+
+      <ContactSection client={client} onSaved={refresh} />
 
       <ClientUsersSection
         clientId={clientId}
