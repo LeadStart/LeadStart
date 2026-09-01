@@ -26,6 +26,12 @@ export interface QuoteLayoutProps {
   expiresAt?: string | null;
   /** Warm-up window in calendar days. Defaults to DEFAULT_WARMING_DAYS. */
   warmingDays?: number;
+  /**
+   * Frozen launch (first-charge) date, ISO string. When set, it's shown verbatim
+   * so the client sees exactly the date they'll be billed. When omitted (e.g. the
+   * live admin draft preview), it's estimated from the warming window off today.
+   */
+  launchDate?: string | null;
   /** Slot rendered after the terms — admin preview shows a hint, hosted page shows Accept button. */
   trailingSlot?: ReactNode;
 }
@@ -43,11 +49,15 @@ export function QuoteLayout({
   issuedAt,
   expiresAt,
   warmingDays = DEFAULT_WARMING_DAYS,
+  launchDate,
   trailingSlot,
 }: QuoteLayoutProps) {
   const issueDate = issuedAt ? new Date(issuedAt) : new Date();
-  // Estimated launch (and first-charge) day for someone reading the quote now.
-  const launch = computeLaunchDate(new Date(), warmingDays);
+  // The frozen launch (first-charge) day when stored on the quote; otherwise
+  // estimate it for the draft preview from the warming window off today.
+  const launch = launchDate
+    ? new Date(launchDate)
+    : computeLaunchDate(new Date(), warmingDays);
   const scopeLines = scope.split("\n").filter((s) => s.trim());
   const dueToday = setupCents + (contactSourcingCents > 0 ? contactSourcingCents : 0);
 

@@ -97,6 +97,7 @@ export default async function HostedQuotePage({ params, searchParams }: Props) {
           contactSourcingCents={quote.contact_sourcing_cents}
           contactsCount={quote.contacts_count}
           warmingDays={quote.warming_days}
+          launchDate={quote.launch_date}
           scope={quote.scope_of_work || ""}
           terms={quote.terms || ""}
           issuedAt={quote.sent_at || quote.created_at}

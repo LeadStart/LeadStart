@@ -5,6 +5,12 @@ import leadstartLogo from "../../../public/leadstart-logo.png";
 export interface WelcomeContentProps {
   /** Warm-up window in calendar days (drives the launch-day copy). */
   warmingDays: number;
+  /**
+   * Frozen launch (first-charge) date, ISO string — the same value shown on the
+   * quote and used for the Stripe trial_end. When omitted (admin preview), it's
+   * estimated from the warming window off today.
+   */
+  launchDate?: string | null;
   /** When true, the copy adds the "sourcing your contacts and" clause. */
   sellsContacts: boolean;
   /** Renders the "Demo mode — no real payment" note under the card. */
@@ -25,11 +31,14 @@ export interface WelcomeContentProps {
  */
 export function WelcomeContent({
   warmingDays,
+  launchDate,
   sellsContacts,
   isDemo,
   className,
 }: WelcomeContentProps) {
-  const launch = computeLaunchDate(new Date(), warmingDays);
+  const launch = launchDate
+    ? new Date(launchDate)
+    : computeLaunchDate(new Date(), warmingDays);
   const launchStr = launch.toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",

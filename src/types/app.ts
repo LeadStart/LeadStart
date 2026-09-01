@@ -589,6 +589,15 @@ export interface Quote {
   currency: string;
   /** Per-quote inbox-warming window (calendar days). Set at send time. */
   warming_days: number;
+  /**
+   * Frozen launch + first-charge date, resolved once at send (migration 00111).
+   * Every surface (hosted quote page, Stripe trial_end, welcome page, admin)
+   * reads this instead of recomputing from "now", so the date can't drift.
+   * Null on legacy rows, which fall back to on-the-fly computation.
+   */
+  launch_date: string | null;
+  /** How launch_date was set: 'derived' from warming days, or a 'fixed' date. */
+  launch_date_mode: "derived" | "fixed";
   /** Optional contact-sourcing line item (null / 0 when contacts aren't sold). */
   contacts_count: number | null;
   contact_sourcing_cents: number;

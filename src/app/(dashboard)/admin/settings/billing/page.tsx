@@ -38,6 +38,8 @@ import { QuoteLayout } from "@/components/billing/quote-layout";
 import {
   DEFAULT_WARMING_DAYS,
   DEFAULT_QUOTE_EXPIRY_DAYS,
+  computeLaunchDate,
+  nextBusinessDay,
 } from "@/lib/billing/schedule";
 import type {
   PricingPlan,
@@ -394,6 +396,8 @@ type QuoteDraft = {
   contact_sourcing_cents: number;
   contacts_count: number | null;
   warming_days: number;
+  launch_date_mode: "derived" | "fixed";
+  launch_date: string | null;
   currency: string;
   scope_of_work: string;
   terms: string;
@@ -431,6 +435,8 @@ function NewQuoteDialog({
   const [monthlyDollars, setMonthlyDollars] = useState("0");
   const [setupDollars, setSetupDollars] = useState("0");
   const [warmingDays, setWarmingDays] = useState("21");
+  const [launchMode, setLaunchMode] = useState<"derived" | "fixed">("derived");
+  const [fixedLaunchDate, setFixedLaunchDate] = useState("");
   const [scope, setScope] = useState("");
   const [terms, setTerms] = useState(DEFAULT_TERMS);
   const [recipientEmail, setRecipientEmail] = useState("");
@@ -448,6 +454,8 @@ function NewQuoteDialog({
       setMonthlyDollars("0");
       setSetupDollars("0");
       setWarmingDays("21");
+      setLaunchMode("derived");
+      setFixedLaunchDate("");
       setScope("");
       setTerms(DEFAULT_TERMS);
       setRecipientEmail("");
@@ -479,6 +487,8 @@ function NewQuoteDialog({
             : 0,
           contacts_count: sellsContacts ? parseInt(contactsCount, 10) || 0 : null,
           warming_days: parseInt(warmingDays, 10) || DEFAULT_WARMING_DAYS,
+          launch_date_mode: launchMode,
+          launch_date: launchMode === "fixed" ? fixedLaunchDate || null : null,
           currency: "usd",
           scope_of_work: scope,
           terms: terms,
@@ -492,7 +502,20 @@ function NewQuoteDialog({
     }
   }
 
-  const canSubmit = contactId.length > 0;
+  // Frozen launch (first-charge) date the client will see and be billed on.
+  // 'fixed' rolls the admin's pinned date to the next sending day; the default
+  // derives it from the warming window off today. Mirrors the create route.
+  const warmingNum = parseInt(warmingDays, 10) || DEFAULT_WARMING_DAYS;
+  const effectiveLaunch =
+    launchMode === "fixed" && fixedLaunchDate
+      ? nextBusinessDay(new Date(fixedLaunchDate))
+      : computeLaunchDate(new Date(), warmingNum);
+  const effectiveLaunchIso = effectiveLaunch.toISOString();
+  const expiryAfterLaunch =
+    !!expiresAt && new Date(expiresAt).getTime() >= effectiveLaunch.getTime();
+
+  const launchReady = launchMode !== "fixed" || fixedLaunchDate.length > 0;
+  const canSubmit = contactId.length > 0 && launchReady;
   const canSend = canSubmit && recipientEmail.trim().length > 0;
   const selectedContact = clients.find((c) => c.id === contactId);
 
@@ -524,6 +547,7 @@ function NewQuoteDialog({
               sellsContacts ? parseInt(contactsCount, 10) || 0 : null
             }
             warmingDays={parseInt(warmingDays, 10) || DEFAULT_WARMING_DAYS}
+            launchDate={effectiveLaunchIso}
             scope={scope}
             terms={terms}
             expiresAt={expiresAt}
@@ -659,6 +683,58 @@ function NewQuoteDialog({
                 Days of inbox warming before campaigns launch. Launch (and the
                 first monthly charge) rolls to the next Mon–Fri.
               </p>
+            </div>
+
+            <div className="space-y-1.5 rounded-lg border border-border/60 p-3">
+              <Label>Billing starts (first monthly charge)</Label>
+              <Select
+                value={launchMode}
+                onValueChange={(v) =>
+                  setLaunchMode((v as "derived" | "fixed") || "derived")
+                }
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue>
+                    {(value) =>
+                      value === "fixed"
+                        ? "On a specific date"
+                        : "After the warming period"
+                    }
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="derived">
+                    After the warming period
+                  </SelectItem>
+                  <SelectItem value="fixed">On a specific date</SelectItem>
+                </SelectContent>
+              </Select>
+              {launchMode === "fixed" && (
+                <Input
+                  type="date"
+                  value={fixedLaunchDate}
+                  onChange={(e) => setFixedLaunchDate(e.target.value)}
+                  aria-label="Launch date"
+                />
+              )}
+              <p className="text-xs text-muted-foreground">
+                Frozen when the quote is created — the client sees, and is billed
+                on, this exact day:{" "}
+                <strong className="text-foreground">
+                  {launchMode === "fixed" && !fixedLaunchDate
+                    ? "pick a date"
+                    : effectiveLaunch.toLocaleDateString()}
+                </strong>
+                {launchMode === "fixed" && fixedLaunchDate
+                  ? " (rolled to the next Mon–Fri)."
+                  : "."}
+              </p>
+              {expiryAfterLaunch && (
+                <p className="text-xs text-amber-600">
+                  The quote expiry is on or after this date, so it&apos;ll be
+                  trimmed to the day before launch to preserve warm-up runway.
+                </p>
+              )}
             </div>
 
             <div className="space-y-1.5">
@@ -1291,6 +1367,9 @@ export default function BillingPage() {
                     </TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="hidden lg:table-cell">Sent</TableHead>
+                    <TableHead className="hidden lg:table-cell">
+                      First bill
+                    </TableHead>
                     <TableHead></TableHead>
                   </TableRow>
                 </TableHeader>
@@ -1298,7 +1377,7 @@ export default function BillingPage() {
                   {quotes.length === 0 && (
                     <TableRow>
                       <TableCell
-                        colSpan={8}
+                        colSpan={9}
                         className="text-center text-sm text-muted-foreground py-8"
                       >
                         {loading ? (
@@ -1347,6 +1426,11 @@ export default function BillingPage() {
                       <TableCell className="text-sm text-muted-foreground hidden lg:table-cell">
                         {q.sent_at
                           ? new Date(q.sent_at).toLocaleDateString()
+                          : "—"}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground hidden lg:table-cell">
+                        {q.launch_date
+                          ? new Date(q.launch_date).toLocaleDateString()
                           : "—"}
                       </TableCell>
                       <TableCell>

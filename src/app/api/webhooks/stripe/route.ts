@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import type Stripe from "stripe";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getStripe, isStripeDemoMode } from "@/lib/stripe/client";
 import { handleStripeEvent } from "@/lib/stripe/webhooks";
 
@@ -58,7 +58,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Malformed event" }, { status: 400 });
   }
 
-  const supabase = await createClient();
+  // Service-role client: the webhook is a trusted server-to-server caller (the
+  // Stripe signature is already verified above) with no user session, so it must
+  // bypass RLS to write the billing-mirror tables (stripe_events,
+  // client_subscriptions, billing_invoices, payment_links, quotes) — all of which
+  // are service-role-only. Using the anon client here silently no-ops every write.
+  const supabase = createAdminClient();
 
   // Idempotency: if we've already processed this event, return 200 silently
   // so Stripe stops retrying.

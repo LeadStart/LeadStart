@@ -1,6 +1,5 @@
 import "server-only";
 import type Stripe from "stripe";
-import type { createClient } from "@/lib/supabase/server";
 import { buildSubscriptionStartedEmail } from "@/lib/email/subscription-started";
 import { buildPaymentFailedEmail } from "@/lib/email/payment-failed";
 import { buildInvoiceEmail } from "@/lib/email/invoice";
@@ -12,7 +11,9 @@ import { getAppUrl } from "./client";
 // Owner alert recipient for new signed clients.
 const OWNER_ALERT_EMAIL = "daniel.tuccillo92@gmail.com";
 
-type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
+// The webhook always runs with the service-role admin client (see the route) so
+// its cross-org, RLS-bypassing writes to the billing-mirror tables succeed.
+type SupabaseClient = ReturnType<typeof createAdminClient>;
 
 function canSendEmail(): boolean {
   return (
@@ -119,7 +120,12 @@ async function handleCheckoutCompleted(
   const warmingDays = Number(md.warming_days) || DEFAULT_WARMING_DAYS;
   const sellsContacts = contactSourcingCents > 0;
   const dueTodayCents = setupCents + contactSourcingCents;
-  const launch = computeLaunchDate(new Date(), warmingDays);
+  // Prefer the frozen launch date carried in metadata (set at accept time) so the
+  // owner alert + client confirmation show exactly the date on the quote and the
+  // Stripe trial_end. Legacy sessions without it fall back to on-the-fly compute.
+  const launch = md.launch_date
+    ? new Date(md.launch_date)
+    : computeLaunchDate(new Date(), warmingDays);
 
   // Upsert subscription with the pricing snapshot (tiers retired — no plan
   // row to read). The customer.subscription.updated event fills in period

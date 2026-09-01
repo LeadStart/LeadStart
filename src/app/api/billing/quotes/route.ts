@@ -7,7 +7,11 @@ import {
   QUOTE_EMAIL_SUBJECT,
   QUOTE_EMAIL_FROM_FALLBACK,
 } from "@/lib/email/quote-proposal";
-import { DEFAULT_WARMING_DAYS } from "@/lib/billing/schedule";
+import {
+  DEFAULT_WARMING_DAYS,
+  computeLaunchDate,
+  nextBusinessDay,
+} from "@/lib/billing/schedule";
 import type { Quote, Client } from "@/types/app";
 
 interface CreateQuoteBody {
@@ -19,6 +23,10 @@ interface CreateQuoteBody {
   contact_sourcing_cents: number;
   contacts_count: number | null;
   warming_days: number;
+  /** 'derived' (from warming days) or 'fixed' (admin-pinned calendar date). */
+  launch_date_mode: "derived" | "fixed";
+  /** Only used when launch_date_mode === 'fixed': the pinned date (YYYY-MM-DD). */
+  launch_date: string | null;
   currency: string;
   scope_of_work: string | null;
   terms: string | null;
@@ -90,6 +98,27 @@ export async function POST(req: NextRequest) {
   const quoteNumber = await nextQuoteNumber(supabase, organizationId);
   const signedUrlHash = randomBytes(24).toString("hex");
 
+  const warmingDays = body.warming_days ?? DEFAULT_WARMING_DAYS;
+  const launchMode: "derived" | "fixed" =
+    body.launch_date_mode === "fixed" ? "fixed" : "derived";
+  // Freeze the launch (first-charge) date now so every surface reads one stable
+  // value instead of recomputing from "now". 'fixed' rolls the admin's pinned
+  // date to the next sending day; the default derives it from the warming
+  // window off today. (No send-later flow exists yet, so "now" == send.)
+  const launch =
+    launchMode === "fixed" && body.launch_date
+      ? nextBusinessDay(new Date(body.launch_date))
+      : computeLaunchDate(new Date(), warmingDays);
+  const launchIso = launch.toISOString();
+
+  // Keep the quote's validity window safely before launch: a client accepting
+  // after the frozen launch day would have no warm-up runway (and Stripe rejects
+  // a trial_end in the past). Clamp an over-long expiry to the day before launch.
+  let expiresAt = body.expires_at;
+  if (expiresAt && new Date(expiresAt).getTime() >= launch.getTime()) {
+    expiresAt = new Date(launch.getTime() - 24 * 60 * 60 * 1000).toISOString();
+  }
+
   const newQuote: Quote = {
     id: randomUUID(),
     organization_id: organizationId,
@@ -101,13 +130,15 @@ export async function POST(req: NextRequest) {
     setup_fee_cents: body.setup_fee_cents,
     contact_sourcing_cents: body.contact_sourcing_cents ?? 0,
     contacts_count: body.contacts_count ?? null,
-    warming_days: body.warming_days ?? DEFAULT_WARMING_DAYS,
+    warming_days: warmingDays,
+    launch_date: launchIso,
+    launch_date_mode: launchMode,
     currency: body.currency || "usd",
     scope_of_work: body.scope_of_work || null,
     terms: body.terms || null,
     signed_url_hash: signedUrlHash,
     status: sendNow ? "sent" : "draft",
-    expires_at: body.expires_at,
+    expires_at: expiresAt,
     sent_at: sendNow ? now : null,
     viewed_at: null,
     accepted_at: null,

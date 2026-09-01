@@ -17,21 +17,24 @@ export default async function WelcomePage({ searchParams }: Props) {
   // Look up the just-signed quote by its Checkout session id (set at accept
   // time) so the copy reflects the real warm-up window + whether contacts sold.
   let warmingDays = DEFAULT_WARMING_DAYS;
+  let launchDate: string | null = null;
   let sellsContacts = false;
   if (session_id && !isDemo) {
     try {
       const supabase = createAdminClient();
       const { data } = await supabase
         .from("quotes")
-        .select("warming_days, contact_sourcing_cents")
+        .select("warming_days, launch_date, contact_sourcing_cents")
         .eq("stripe_checkout_session_id", session_id)
         .maybeSingle();
       const q = data as {
         warming_days?: number;
+        launch_date?: string | null;
         contact_sourcing_cents?: number;
       } | null;
       if (q) {
         warmingDays = q.warming_days ?? DEFAULT_WARMING_DAYS;
+        launchDate = q.launch_date ?? null;
         sellsContacts = (q.contact_sourcing_cents ?? 0) > 0;
       }
     } catch {
@@ -42,6 +45,7 @@ export default async function WelcomePage({ searchParams }: Props) {
   return (
     <WelcomeContent
       warmingDays={warmingDays}
+      launchDate={launchDate}
       sellsContacts={sellsContacts}
       isDemo={isDemo}
       className="min-h-screen"

@@ -240,12 +240,19 @@ export async function createCheckoutSessionForQuote({
     contacts_count:
       quote.contacts_count != null ? String(quote.contacts_count) : "",
     warming_days: String(quote.warming_days),
+    launch_date: quote.launch_date ?? "",
   };
 
-  // Warm-up → trial that ends on the Mon–Fri launch day; first charge lands then.
-  const launch = computeLaunchDate(new Date(), quote.warming_days);
-  const useTrial =
-    quote.warming_days >= 1 && launch.getTime() > Date.now() + 3600 * 1000;
+  // Warm-up → trial that ends on the FROZEN launch day stored on the quote, so
+  // the first charge lands on exactly the date the client was shown. Legacy
+  // quotes with no stored date fall back to the old on-the-fly computation. If
+  // the frozen day has already passed (client accepted late, e.g. an open-ended
+  // quote with no expiry), skip the trial and bill now — Stripe rejects a
+  // trial_end in the past.
+  const launch = quote.launch_date
+    ? new Date(quote.launch_date)
+    : computeLaunchDate(new Date(), quote.warming_days);
+  const useTrial = launch.getTime() > Date.now() + 3600 * 1000;
   const trialEndUnix = Math.floor(launch.getTime() / 1000);
 
   const session = await stripe.checkout.sessions.create(
