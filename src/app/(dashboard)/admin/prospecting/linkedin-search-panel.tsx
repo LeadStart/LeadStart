@@ -154,8 +154,64 @@ type Preset = {
 
 // Quick-start ICP templates. Codes reference the verified facet taxonomy:
 // seniority 220=Director 300=VP 310=CXO 320=Owner, function 18=Operations
-// 25=Sales, industry 4=Software Development.
+// 25=Sales, industry 4=Software Development, 9=Law Practice, 10=Legal Services.
 const PRESETS: Preset[] = [
+  {
+    // Law-firm decision-makers, cast wide for max recall on the SEO/marketing
+    // pitch. Three buyer paths, all OR'd into one search: (1) owners / partners /
+    // founders — who pick the vendor at small firms; (2) firm executives /
+    // administrators — who own the budget at mid/large firms; (3) marketing / BD
+    // leaders — where a marketing function exists. Industry scopes to law firms
+    // (9 Law Practice + 10 Legal Services), so NO seniority/function AND-filter
+    // (either would drop one of the three paths). Titles are OR'd + fuzzy-matched,
+    // so a long list only widens the net (no extra cost — segmentation splits by
+    // geo/seniority, not title). Left headcount-agnostic; set A/B/C per run for
+    // the small-firm motion. NOTE: a title net can't catch solo practitioners
+    // whose title is just "Attorney"/"Lawyer" (no leadership word) — adding bare
+    // "Attorney" here would flood associates at big firms. Catch those in a
+    // separate pass: headcount A (Self-employed) + "Attorney"/"Lawyer" + this
+    // industry (at a solo firm the attorney IS the owner).
+    name: "Law firm SEO decision-makers",
+    titles: [
+      // Owners / partners / founders
+      "Owner",
+      "Co-Owner",
+      "Founder",
+      "Co-Founder",
+      "Founding Partner",
+      "Managing Partner",
+      "Senior Partner",
+      "Equity Partner",
+      "Name Partner",
+      "Partner",
+      "Managing Member",
+      "Managing Attorney",
+      "Shareholder",
+      "Principal",
+      "President",
+      "Chief Executive Officer",
+      "CEO",
+      // Firm executives / administrators
+      "Chief Operating Officer",
+      "COO",
+      "Executive Director",
+      "Firm Administrator",
+      "Legal Administrator",
+      "Director of Operations",
+      // Marketing / business development leaders
+      "Chief Marketing Officer",
+      "CMO",
+      "VP Marketing",
+      "Marketing Director",
+      "Director of Marketing",
+      "Head of Marketing",
+      "Marketing Manager",
+      "Digital Marketing Manager",
+      "Director of Business Development",
+      "Chief Business Development Officer",
+    ],
+    industries: ["9", "10"],
+  },
   {
     name: "Facilities decision-makers",
     titles: ["Facilities Manager", "Director of Facilities", "VP Operations"],
