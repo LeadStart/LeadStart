@@ -298,6 +298,37 @@ const LOCATION_TRAPS: Record<string, { fix?: string; hint: string }> = {
   portland: { hint: "Oregon and Maine collide — use “Portland, Oregon” or “Portland, Maine”" },
 };
 
+// US state (+ DC) abbreviation -> full name. LinkedIn's location autocomplete
+// mishandles abbreviations, so a "City, ST" chip is auto-expanded to the full
+// state name on entry (normalizeLocation), and a bare state code is flagged.
+const US_STATES: Record<string, string> = {
+  al: "Alabama", ak: "Alaska", az: "Arizona", ar: "Arkansas", ca: "California",
+  co: "Colorado", ct: "Connecticut", de: "Delaware", fl: "Florida", ga: "Georgia",
+  hi: "Hawaii", id: "Idaho", il: "Illinois", in: "Indiana", ia: "Iowa",
+  ks: "Kansas", ky: "Kentucky", la: "Louisiana", me: "Maine", md: "Maryland",
+  ma: "Massachusetts", mi: "Michigan", mn: "Minnesota", ms: "Mississippi", mo: "Missouri",
+  mt: "Montana", ne: "Nebraska", nv: "Nevada", nh: "New Hampshire", nj: "New Jersey",
+  nm: "New Mexico", ny: "New York", nc: "North Carolina", nd: "North Dakota", oh: "Ohio",
+  ok: "Oklahoma", or: "Oregon", pa: "Pennsylvania", ri: "Rhode Island", sc: "South Carolina",
+  sd: "South Dakota", tn: "Tennessee", tx: "Texas", ut: "Utah", vt: "Vermont",
+  va: "Virginia", wa: "Washington", wv: "West Virginia", wi: "Wisconsin", wy: "Wyoming",
+  dc: "District of Columbia",
+};
+
+// Auto-expand a "City, ST" chip to "City, <full state>" before it reaches the
+// actor. A 2-letter US state code after a comma is unambiguous, so fixing it
+// silently avoids LinkedIn's autocomplete mis-resolving the abbreviation. Bare
+// cities and bare/ambiguous codes are left for the trap warnings to surface.
+function normalizeLocation(value: string): string {
+  const v = value.trim().replace(/\s+/g, " ");
+  const m = v.match(/^(.+?),\s*([A-Za-z]{2})\.?$/);
+  if (m) {
+    const full = US_STATES[m[2].toLowerCase()];
+    if (full) return `${m[1].trim()}, ${full}`;
+  }
+  return v;
+}
+
 type SearchDetail = {
   id: string;
   // `query.name` is the user's custom label (falls back to the ICP summary).
@@ -409,6 +440,9 @@ function ChipInput({
   placeholder,
   values,
   onChange,
+  // Comma commits a chip by default. Locations pass false because the value
+  // itself contains a comma ("Sacramento, California"); there, Enter or blur adds.
+  commitOnComma = true,
   // Multi-value fields all add on Enter/comma — say so. Override for a field-
   // specific note; pass null to hide entirely.
   hint = "Press Enter or comma to add several — each is searched as its own term.",
@@ -416,6 +450,7 @@ function ChipInput({
   placeholder: string;
   values: string[];
   onChange: (v: string[]) => void;
+  commitOnComma?: boolean;
   hint?: string | null;
 }) {
   const [draft, setDraft] = useState("");
@@ -450,7 +485,7 @@ function ChipInput({
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === ",") {
+          if (e.key === "Enter" || (commitOnComma && e.key === ",")) {
             e.preventDefault();
             add();
           } else if (e.key === "Backspace" && !draft && values.length) {
@@ -1274,8 +1309,14 @@ export function LinkedInSearchPanel() {
   const locationFlags = useMemo(
     () =>
       locations.flatMap((v) => {
-        const trap = LOCATION_TRAPS[v.trim().toLowerCase()];
-        return trap ? [{ value: v, ...trap }] : [];
+        const key = v.trim().toLowerCase();
+        const trap = LOCATION_TRAPS[key];
+        if (trap) return [{ value: v, ...trap }];
+        // A bare 2-letter US state code (e.g. "CA") is ambiguous on its own; a
+        // "City, ST" chip is already auto-expanded, so this only hits lone codes.
+        const state = US_STATES[key];
+        if (state) return [{ value: v, fix: state, hint: "a bare state code is ambiguous, use the full state name" }];
+        return [];
       }),
     [locations],
   );
@@ -1284,7 +1325,7 @@ export function LinkedInSearchPanel() {
     setLocations((prev) => Array.from(new Set(prev.map((v) => (v === from ? to : v)))));
 
   const addLocations = (values: string[]) =>
-    setLocations((prev) => Array.from(new Set([...prev, ...values])));
+    setLocations((prev) => Array.from(new Set([...prev, ...values.map(normalizeLocation)])));
 
   const addTitles = (values: string[]) =>
     setJobTitles((prev) => Array.from(new Set([...prev, ...values])));
@@ -1625,15 +1666,18 @@ export function LinkedInSearchPanel() {
                 <InfoButton label="About Locations" onClick={() => setInfoOpen("locations")} />
               </div>
               <ChipInput
-                placeholder="e.g. United States, California, Chicago"
+                placeholder="e.g. Sacramento, California"
                 values={locations}
-                onChange={setLocations}
+                onChange={(vals) => setLocations(vals.map(normalizeLocation))}
+                commitOnComma={false}
+                hint={null}
               />
               <p className="text-[11px] text-muted-foreground">
                 Filters on the <span className="font-medium text-foreground">person&apos;s</span> profile
                 location (where they live/work), not the company&apos;s address. Country, state/region, or
-                city — LinkedIn has no zip or county. Use full names (&ldquo;United Kingdom&rdquo;, not
-                &ldquo;UK&rdquo;).
+                city (LinkedIn has no zip or county). Press Enter to add each one, the comma stays in the
+                name. Spell it out in full: &ldquo;Sacramento, California&rdquo; not &ldquo;Sacramento,
+                CA&rdquo; (a &ldquo;City, ST&rdquo; entry is auto-corrected to the full state).
               </p>
               {locationFlags.length > 0 && (
                 <div className="space-y-1 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-2">
