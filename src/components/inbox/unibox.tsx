@@ -26,7 +26,7 @@ export function Unibox({
   hasSelection: boolean;
 }) {
   return (
-    <div className="flex h-[calc(100dvh-9.5rem)] min-h-[500px] overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm">
+    <div className="flex h-[calc(100dvh-12.5rem)] min-h-[460px] overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm lg:h-[calc(100dvh-9.5rem)] lg:min-h-[500px]">
       {/* List — full width on mobile, fixed rail on sm+. Hidden on mobile once
           a reply is open. */}
       <div
