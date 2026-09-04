@@ -677,13 +677,7 @@ export default function ContactsPage() {
       const data = (await res.json()) as {
         error?: string;
         assigned?: number;
-        queued?: number;
-        already_queued?: number;
-        skipped_no_email?: number;
         skipped_invalid?: number;
-        queued_to_dispatcher?: boolean;
-        daily_cap?: number;
-        estimated_drain_days?: number | null;
         campaign_name?: string;
         reason?: string;
       };
@@ -696,27 +690,9 @@ export default function ContactsPage() {
         data.campaign_name ?? campaignMap.get(selectedCampaignId) ?? "campaign";
       const assigned = data.assigned ?? 0;
 
-      if (data.queued_to_dispatcher) {
-        const queued = data.queued ?? 0;
-        const cap = data.daily_cap ?? 66;
-        const days = data.estimated_drain_days ?? null;
-        const parts: string[] = [`queued ${queued}`];
-        if ((data.already_queued ?? 0) > 0)
-          parts.push(`${data.already_queued} already pending`);
-        if ((data.skipped_no_email ?? 0) > 0)
-          parts.push(`${data.skipped_no_email} no email`);
-        const drainHint =
-          days && days > 0
-            ? ` — will enroll at ${cap}/day over ~${days} day${days === 1 ? "" : "s"}`
-            : "";
-        toast.success(
-          `Added ${assigned} contact${assigned === 1 ? "" : "s"} to ${name} — ${parts.join(", ")}${drainHint}`,
-        );
-      } else {
-        toast.success(
-          `Assigned ${assigned} contact${assigned === 1 ? "" : "s"} to ${name}${data.reason ? ` (${data.reason})` : ""}`,
-        );
-      }
+      toast.success(
+        `Assigned ${assigned} contact${assigned === 1 ? "" : "s"} to ${name}${data.reason ? ` (${data.reason})` : ""}`,
+      );
 
       setSelectedIds(new Set());
       setCampaignDialogOpen(false);

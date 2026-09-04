@@ -628,8 +628,8 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
 
   // ── Persist column mapping + reconcile the variable registry ────────────
   // Both land in one campaigns update. The mapping pre-fills next upload; the
-  // registry (migration 00092) folds in any custom columns this import mapped —
-  // the LIST drives the campaign's variables, Instantly-style — plus the copy's
+  // registry (migration 00092) folds in any custom columns this import mapped:
+  // the LIST drives the campaign's variables, plus the copy's
   // own tokens, so a legacy campaign's registry backfills on first import too.
   const campaignPatch: Record<string, unknown> = {};
   const mappedCustom: { token: string; key: string }[] = [];

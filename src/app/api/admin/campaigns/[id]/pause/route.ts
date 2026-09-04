@@ -6,7 +6,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { SourceChannel } from "@/types/app";
-import { controlInstantlyCampaign } from "@/lib/instantly/campaign-lifecycle";
 
 export async function POST(
   _req: NextRequest,
@@ -32,7 +31,7 @@ export async function POST(
   const admin = createAdminClient();
   const { data: campaign } = await admin
     .from("campaigns")
-    .select("id, organization_id, source_channel, instantly_campaign_id, name, status")
+    .select("id, organization_id, source_channel, name, status")
     .eq("id", campaignId)
     .maybeSingle();
   const c = campaign as
@@ -40,7 +39,6 @@ export async function POST(
         id: string;
         organization_id: string;
         source_channel: SourceChannel;
-        instantly_campaign_id: string | null;
         name: string;
         status: string | null;
       }
@@ -52,21 +50,9 @@ export async function POST(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  // Instantly campaigns send on Instantly's side — pause upstream first, then
-  // mirror the status locally. Native/LinkedIn have no upstream sequencer, so
-  // the local status flip alone is enough (the cron workers only dispatch
-  // status='active' campaigns).
-  if (c.source_channel === "instantly") {
-    const result = await controlInstantlyCampaign(
-      admin,
-      c.organization_id,
-      c.instantly_campaign_id,
-      "pause",
-    );
-    if (!result.ok) {
-      return NextResponse.json({ error: result.error }, { status: result.status });
-    }
-  } else if (
+  // Native/LinkedIn have no upstream sequencer, so the local status flip alone
+  // is enough (the cron workers only dispatch status='active' campaigns).
+  if (
     c.source_channel !== "native_email" &&
     c.source_channel !== "linkedin"
   ) {

@@ -34,8 +34,7 @@ interface ResolvedClient {
 
 export async function POST(request: NextRequest) {
   // Optional secret verification. If UNIPILE_WEBHOOK_SECRET isn't set, no
-  // check happens. Kept separate from the Salesforge WEBHOOK_SECRET so
-  // the two channels can rotate independently.
+  // check happens.
   const secret = request.nextUrl.searchParams.get("secret");
   const expectedSecret = process.env.UNIPILE_WEBHOOK_SECRET;
   if (expectedSecret && secret !== expectedSecret) {

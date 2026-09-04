@@ -47,7 +47,7 @@ console.log("computeTagPoolDiff");
   sameSet(d.toRemove, [], "new bind removes nothing");
 }
 
-// The Instantly convenience: a new inbox joined the tag → only it is added.
+// The tag-follow convenience: a new inbox joined the tag → only it is added.
 {
   const d = diff(["a", "b"], ["a"]);
   sameSet(d.toAdd, ["b"], "newly-tagged inbox auto-joins");

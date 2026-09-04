@@ -8,7 +8,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { SourceChannel } from "@/types/app";
-import { controlInstantlyCampaign } from "@/lib/instantly/campaign-lifecycle";
 import { runActivationPreflight } from "@/lib/deliverability/preflight";
 import { gatherLaunchReadiness } from "@/lib/campaigns/launch-readiness";
 
@@ -44,7 +43,7 @@ export async function POST(
   const admin = createAdminClient();
   const { data: campaign } = await admin
     .from("campaigns")
-    .select("id, organization_id, client_id, source_channel, instantly_campaign_id, status")
+    .select("id, organization_id, client_id, source_channel, status")
     .eq("id", campaignId)
     .maybeSingle();
   const c = campaign as
@@ -53,7 +52,6 @@ export async function POST(
         organization_id: string;
         client_id: string | null;
         source_channel: SourceChannel;
-        instantly_campaign_id: string | null;
         status: string | null;
       }
     | null;
@@ -64,11 +62,10 @@ export async function POST(
 
   if (
     c.source_channel !== "native_email" &&
-    c.source_channel !== "linkedin" &&
-    c.source_channel !== "instantly"
+    c.source_channel !== "linkedin"
   ) {
     return NextResponse.json(
-      { error: "Activate is only for native email, LinkedIn, and Instantly campaigns." },
+      { error: "Activate is only for native email and LinkedIn campaigns." },
       { status: 400 },
     );
   }
@@ -115,20 +112,6 @@ export async function POST(
       if (preflightWarnings.length > 0) {
         return NextResponse.json({ warnings: preflightWarnings }, { status: 409 });
       }
-    }
-  }
-
-  // Instantly campaigns start on Instantly's side — activate upstream before
-  // mirroring the status locally.
-  if (c.source_channel === "instantly") {
-    const result = await controlInstantlyCampaign(
-      admin,
-      c.organization_id,
-      c.instantly_campaign_id,
-      "activate",
-    );
-    if (!result.ok) {
-      return NextResponse.json({ error: result.error }, { status: result.status });
     }
   }
 

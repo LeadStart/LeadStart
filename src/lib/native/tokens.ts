@@ -298,7 +298,7 @@ export interface CampaignVariable {
 // from mapped list columns (`mappedCustom`) or ones already registered from an
 // earlier mapping (carried forward via `existing`). A {{token}} typed in the copy
 // NEVER registers a variable on its own (owner call 2026-08-29: columns drive the
-// variable set, Instantly-style — this reverses the earlier 00092 "copy ∪ columns"
+// variable set; this reverses the earlier 00092 "copy ∪ columns"
 // behavior). An unmapped copy token is flagged at import + in the editor and sends
 // blank; it never becomes a phantom Insert chip. STANDARD tokens (first_name,
 // company, …) map to built-in contact columns, so they always stay. Returns the

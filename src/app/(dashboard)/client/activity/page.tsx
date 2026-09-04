@@ -44,8 +44,8 @@ export default function ClientActivityPage() {
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
 
-  // Activity feed temporarily empty — the old query joined webhook_events
-  // to campaigns via campaign_instantly_id (dropped in migration 00051).
+  // Activity feed temporarily empty. The old query joined webhook_events
+  // to campaigns via a legacy column that was dropped in migration 00051.
   // Rebuild against the native email event stream once we wire a
   // campaign_id FK into webhook_events.
   useEffect(() => {
@@ -105,7 +105,7 @@ export default function ClientActivityPage() {
                 <CardContent className="py-2">
                   {dayEvents.map((event, i) => {
                     const config = getEventConfig(event.event_type);
-                    // campaign_instantly_id dropped in migration 00051;
+                    // a legacy campaign column was dropped in migration 00051;
                     // wire a proper campaign_id FK when events get rebuilt.
                     const campaignName = campaignNameMap.get(event.id);
                     return (

@@ -47,8 +47,8 @@ export default function ClientDashboardPage() {
   const [endDate, setEndDate] = useState(() => getDateRange("30d").end);
   const [campaignsExpanded, setCampaignsExpanded] = useState(true);
 
-  // Excluded-meetings counter temporarily wired to 0 — the old query
-  // joined webhook_events on campaign_instantly_id which was dropped in
+  // Excluded-meetings counter temporarily wired to 0. The old query
+  // joined webhook_events on a legacy campaign column that was dropped in
   // migration 00051. Rebuild once webhook_events has a proper
   // campaign_id FK.
   useEffect(() => {

@@ -15,7 +15,7 @@
 // the deferred hot-lead notifications — already-classified rows call
 // sendHotLeadNotification directly (runReplyPipeline early-returns on
 // classified rows), unclassified rows run the full pipeline. This is the path
-// the Instantly webhook's lazy-created orphans depend on. Changing between two
+// lazy-created orphan campaigns depend on. Changing between two
 // clients, or unlinking, does not re-fire notifications.
 
 import { NextRequest, NextResponse } from "next/server";

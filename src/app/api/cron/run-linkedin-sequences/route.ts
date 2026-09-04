@@ -33,7 +33,7 @@ export const maxDuration = 60;
 // (which hits the same URL with no query params) can receive an edge-cached
 // response from a prior tick, skipping the function body entirely — the DB
 // is never touched but the route returns the old payload. Caught on
-// 2026-05-27 in /api/cron/dispatch-salesforge-enrollments (commit 59b8745);
+// 2026-05-27 in an earlier cron route;
 // applying the same guard to every cron route preemptively.
 export const dynamic = "force-dynamic";
 
@@ -88,10 +88,10 @@ export async function GET(request: NextRequest) {
     .select("*, campaigns!inner(source_channel)")
     .eq("status", "active")
     // Filter to LinkedIn campaigns in SQL so this worker never overfetches
-    // native_email / salesforge enrollments — otherwise, once channels run
-    // concurrently, each worker's overfetch fills with the other channel's
-    // rows and throughput collapses. (The JS check below is now redundant
-    // but kept as a cheap guard.)
+    // native_email enrollments. Otherwise, once channels run concurrently,
+    // each worker's overfetch fills with the other channel's rows and
+    // throughput collapses. (The JS check below is now redundant but kept
+    // as a cheap guard.)
     .eq("campaigns.source_channel", "linkedin")
     .order("last_action_at", { ascending: true, nullsFirst: true })
     .order("created_at", { ascending: true })

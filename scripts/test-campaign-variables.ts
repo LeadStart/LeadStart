@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Unit tests for the campaign variable registry + fail-safe token engine
- * (Instantly-style contact-list ↔ campaign alignment, migration 00092).
+ * (contact-list ↔ campaign alignment, migration 00092).
  * No network, no DB. Run: npx tsx scripts/test-campaign-variables.ts
  *
  * Covers:

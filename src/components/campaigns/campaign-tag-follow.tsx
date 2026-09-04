@@ -3,7 +3,7 @@
 // Live mailbox-tag binding control for a campaign's Setup tab (migration 00119).
 // When a campaign "follows" a tag, its sending pool auto-syncs to the inboxes
 // carrying that tag — add an inbox to the tag and it joins the campaign on the
-// next reconcile (Instantly-style). This component owns the bind/unbind action
+// next reconcile. This component owns the bind/unbind action
 // (a dedicated PUT that reconciles server-side) and refreshes the page so the
 // pool + banner reflect the new state. While bound, the parent disables the
 // manual mailbox picker.

@@ -3,7 +3,7 @@
 // A campaign with campaigns.mailbox_tag set "follows" that tag: its
 // campaign_mailboxes rotation pool is kept in sync with the inboxes currently
 // carrying the tag, so adding an inbox to the tag automatically adds it to the
-// campaign (Instantly-style), and removing it drops it from NEW first-touches.
+// campaign, and removing it drops it from NEW first-touches.
 // This is the piece the browser-only picker never did — there the tag was
 // expanded to fixed IDs at pick time.
 //

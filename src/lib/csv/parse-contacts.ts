@@ -335,7 +335,7 @@ const VALID_TARGET_SET = new Set(MAPPING_TARGETS.map((f) => f.value));
 // auto-detect → header folding to a campaign token key → NEW custom variable
 // named after the column. One CSV column per target, same as buildInitialMapping.
 //
-// Instantly-style: an unmatched column is never silently dropped — it defaults
+// An unmatched column is never silently dropped; it defaults
 // to `custom:<Header>` (surfaced in the panel, editable, skippable), so the
 // LIST's columns drive the campaign's variables. `customTokens` are the campaign
 // variables already known (copy tokens + registry) for re-matching a saved or

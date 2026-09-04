@@ -3,7 +3,7 @@
 // INERT UNTIL CONFIGURED: with no TURNSTILE_SECRET_KEY in the env, verifyTurnstile()
 // returns { success: true, skipped: true } so nothing breaks before the widget is
 // provisioned (a site key on the form + the secret here). This mirrors the repo's
-// other "no-op until the secret exists" guards (Unipile/Instantly webhooks).
+// other "no-op until the secret exists" guards (the Unipile webhook).
 //
 // Once the secret IS set the gate is enforced fail-CLOSED: a missing or invalid
 // token fails, and a transient error verifying with Cloudflare also fails

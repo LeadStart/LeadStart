@@ -1,7 +1,7 @@
 "use client";
 
-// /admin/campaigns/new/native — native email campaign workspace. Instantly-style
-// tabbed layout: the sequence is a full-height Flow canvas on its own tab; client
+// /admin/campaigns/new/native: native email campaign workspace. A tabbed
+// layout: the sequence is a full-height Flow canvas on its own tab; client
 // + mailboxes live under Options; the probe under Deliverability. On save we derive
 // the linear campaign_steps the sender executes (graphToSteps) AND persist the full
 // authored graph in campaigns.flow_graph. Saved as status='draft'.
