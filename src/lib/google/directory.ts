@@ -110,4 +110,17 @@ export class DirectoryClient {
       throw err;
     }
   }
+
+  /** Delete a user, which frees its Workspace license/seat. 404 → already gone
+   *  (idempotent, mirrors deleteDomain). Google keeps a deleted user restorable
+   *  for ~20 days; after that the mailbox and its data are unrecoverable. */
+  async deleteUser(email: string): Promise<{ deleted: boolean }> {
+    try {
+      await this.call("DELETE", `/users/${encodeURIComponent(email)}`);
+      return { deleted: true };
+    } catch (err) {
+      if (isGoogleStatus(err, 404)) return { deleted: false };
+      throw err;
+    }
+  }
 }

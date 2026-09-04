@@ -1,7 +1,8 @@
 // PATCH  /api/admin/mailboxes/[id] — pause/resume, adjust caps, edit
 //                                    display name / client / ramp start.
-// DELETE /api/admin/mailboxes/[id] — remove a mailbox (refused if it has
-//                                    any send history, to preserve metrics).
+// DELETE /api/admin/mailboxes/[id] — delete the mailbox's Google Workspace user
+//                                    (frees the paid seat) and remove our row,
+//                                    cascading its send history / metrics away.
 // Owner only.
 
 import { NextRequest, NextResponse } from "next/server";
@@ -9,7 +10,12 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ABSOLUTE_MAX_DAILY_CAP } from "@/lib/gmail/ramp";
 import { normalizeTags } from "@/lib/mailboxes/tags";
+import { loadWorkspaceAdminForOrg } from "@/lib/google/org";
+import { GoogleConfigError } from "@/lib/google/auth";
 import type { NativeMailbox } from "@/types/app";
+
+// The DELETE path makes a Google Directory round-trip, so give it headroom.
+export const maxDuration = 30;
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -115,27 +121,67 @@ export async function DELETE(_req: NextRequest, { params }: RouteParams) {
 
   const admin = createAdminClient();
 
-  // Refuse to delete a mailbox that has sent — deleting would cascade away
-  // its native_sends history (metrics). Pause it instead. Never-used
-  // mailboxes delete cleanly (campaign_mailboxes rows cascade off).
-  const { count } = await admin
-    .from("native_sends")
-    .select("id", { count: "exact", head: true })
-    .eq("mailbox_id", id)
-    .eq("organization_id", organizationId);
-  if ((count ?? 0) > 0) {
+  // Load the mailbox — we need its address (the Google user key) and its domain
+  // (to pick the right Workspace tenant).
+  const { data: mbRow } = await admin
+    .from("native_mailboxes")
+    .select("id, email_address, domain_id")
+    .eq("id", id)
+    .eq("organization_id", organizationId)
+    .maybeSingle();
+  if (!mbRow) {
+    return NextResponse.json({ error: "Mailbox not found" }, { status: 404 });
+  }
+  const mailbox = mbRow as { id: string; email_address: string; domain_id: string | null };
+
+  // Which Workspace owns this mailbox? Its domain carries the workspace_id; a
+  // mailbox not linked to a domain falls back to the org's default Workspace.
+  let workspaceId: string | null = null;
+  if (mailbox.domain_id) {
+    const { data: dom } = await admin
+      .from("sending_domains")
+      .select("workspace_id")
+      .eq("id", mailbox.domain_id)
+      .maybeSingle();
+    workspaceId = (dom?.workspace_id as string | null) ?? null;
+  }
+
+  // Delete the Google Workspace user (frees the paid seat). Mirrors the domain-
+  // delete route: a missing Google config is a no-op (nothing to delete there),
+  // an already-gone user (404) is fine, and any other Google error we surface
+  // while leaving our row in place — so a mailbox never loses its mapping while
+  // its Google user still exists.
+  let googleDeleted: boolean | null = null;
+  let googleError: string | null = null;
+  try {
+    const workspace = await loadWorkspaceAdminForOrg(admin, organizationId, { workspaceId });
+    const res = await workspace.directory.deleteUser(mailbox.email_address);
+    googleDeleted = res.deleted;
+  } catch (err) {
+    if (err instanceof GoogleConfigError) {
+      googleDeleted = null; // Google not configured for this org — nothing there.
+    } else {
+      googleError = err instanceof Error ? err.message : String(err);
+    }
+  }
+  if (googleError) {
     return NextResponse.json(
-      { error: "This mailbox has send history — pause it instead of deleting." },
-      { status: 409 },
+      {
+        error: `Could not delete ${mailbox.email_address} from Google Workspace: ${googleError}. Nothing was removed — try again, or delete the user in Google Admin first.`,
+      },
+      { status: 502 },
     );
   }
 
-  const { error } = await admin
+  // The Google user is gone (or was never ours to delete). Delete our row — its
+  // native_sends history and campaign_mailboxes links cascade off with it
+  // (campaign_enrollments keep, their mailbox pointer nulled).
+  const { error: delError } = await admin
     .from("native_mailboxes")
     .delete()
     .eq("id", id)
     .eq("organization_id", organizationId);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (delError) return NextResponse.json({ error: delError.message }, { status: 500 });
 
-  return NextResponse.json({ deleted: true });
+  return NextResponse.json({ deleted: true, google_deleted: googleDeleted });
 }

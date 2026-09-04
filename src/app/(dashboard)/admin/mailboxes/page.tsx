@@ -318,12 +318,30 @@ export default function MailboxesPage() {
   }
 
   async function handleDelete(mb: MailboxRow) {
-    if (!confirm(`Remove ${mb.email_address}? This can't be undone.`)) return;
+    if (
+      !confirm(
+        `Delete ${mb.email_address}?\n\nThis permanently deletes the Google Workspace user and frees its paid seat (Google keeps it recoverable for about 20 days). Its LeadStart send history and metrics are removed too.`,
+      )
+    )
+      return;
     await withBusy(mb.id, async () => {
       const res = await fetch(appUrl(`/api/admin/mailboxes/${mb.id}`), { method: "DELETE" });
       const data = await res.json();
-      if (res.ok) await load();
-      else setBanner({ kind: "error", message: data.error ?? "Delete failed" });
+      if (res.ok) {
+        // "freed its seat" only when we actually deleted a Google user; null =
+        // Google not configured, false = the user was already gone.
+        const freed =
+          data.google_deleted === true
+            ? " and freed its Google Workspace seat"
+            : data.google_deleted === false
+              ? " (its Google Workspace user was already gone)"
+              : "";
+        setBanner({
+          kind: "success",
+          message: `Deleted ${mb.email_address}${freed}.`,
+        });
+        await load();
+      } else setBanner({ kind: "error", message: data.error ?? "Delete failed" });
     });
   }
 
@@ -994,7 +1012,7 @@ export default function MailboxesPage() {
                             size="sm"
                             disabled={busy[mb.id]}
                             onClick={() => handleDelete(mb)}
-                            title="Remove mailbox"
+                            title="Delete mailbox and its Google Workspace user (frees the seat)"
                           >
                             <Trash2 size={14} className="text-red-500" />
                           </Button>
