@@ -1,12 +1,8 @@
 "use client";
 import { PageHeader } from "@/components/layout/page-header";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
-import Link from "next/link";
-import { Card, CardContent } from "@/components/ui/card";
+import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
-import { StatCard } from "@/components/charts/stat-card";
-import { PaginationControls } from "@/components/ui/pagination-controls";
 import {
   Select,
   SelectContent,
@@ -15,29 +11,45 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  Search,
   Inbox as InboxIcon,
+  Building2,
+  Mail,
   Phone,
+  ExternalLink,
   Clock,
-  ArrowRight,
-  AlertTriangle,
-  CheckCircle2,
-  MessageSquare,
-  Archive,
+  Bot,
+  Eye,
+  ChevronDown,
 } from "lucide-react";
-import type { ReplyClass, ReplyOutcome, ReplyStatus } from "@/types/app";
+import type { ReplyClass, ReplyOutcome, ReplyStatus, ReplyReferralContact } from "@/types/app";
 import {
   CLASS_META,
+  OUTCOME_META,
   REPLY_CATEGORIES,
   categoryForClass,
   replySnippet,
-  isReplyActionable,
   timeSinceShort,
+  timeSince,
+  telHref,
   type ReplyCategoryKey,
 } from "@/lib/replies/ui";
+import { appUrl } from "@/lib/api-url";
+import {
+  Unibox,
+  UniboxListHeader,
+  UniboxListScroll,
+  ReplyListRow,
+  ThreadEmpty,
+  MobileBack,
+  initials,
+} from "@/components/inbox/unibox";
+import { Conversation } from "@/components/inbox/conversation";
+import { QuickActionBar } from "@/components/inbox/quick-action-bar";
+import { useReclassifyGroup, classAccent } from "@/components/inbox/reclassify-control";
 
-// Narrowed row shape for the inbox list. Columns must match the server
-// component's select() — adding a field here without adding it to the
-// query would silently render `undefined`.
+// Narrowed row shape for the inbox. Columns must match the server component's
+// select() — adding a field here without adding it to the query renders undefined.
 export interface InboxRowReply {
   id: string;
   client_id: string | null;
@@ -47,438 +59,433 @@ export interface InboxRowReply {
   lead_name: string | null;
   lead_company: string | null;
   lead_title: string | null;
+  lead_phone_e164: string | null;
+  lead_linkedin_url: string | null;
   subject: string | null;
   body_text: string | null;
   outcome: ReplyOutcome | null;
   outcome_logged_at: string | null;
   status: ReplyStatus;
+  claude_class: ReplyClass | null;
+  claude_confidence: number | null;
+  claude_reason: string | null;
+  keyword_flags: string[] | null;
+  referral_contact: ReplyReferralContact | null;
+  excluded_from_stats: boolean;
   client: { name: string } | null;
 }
 
 type FilterClient = "all" | string;
 type FocusCategory = "all" | ReplyCategoryKey;
 
-const INBOX_PAGE_SIZE = 25;
-// How many rows to preview per category when showing every section at once.
-const SECTION_PREVIEW = 6;
-
-// Per-category icon + accent for section headers and row dots.
-const CATEGORY_UI: Record<
-  ReplyCategoryKey,
-  { icon: ReactNode; dot: string; ring: string }
-> = {
-  hot: {
-    icon: <Phone size={14} />,
-    dot: "bg-[#2E37FE]/10 text-[#2E37FE]",
-    ring: "text-[#2E37FE]",
-  },
-  referral: {
-    icon: <ArrowRight size={14} />,
-    dot: "bg-purple-100 text-purple-700",
-    ring: "text-purple-600",
-  },
-  objection: {
-    icon: <MessageSquare size={14} />,
-    dot: "bg-amber-100 text-amber-700",
-    ring: "text-amber-600",
-  },
-  review: {
-    icon: <AlertTriangle size={14} />,
-    dot: "bg-amber-100 text-amber-700",
-    ring: "text-amber-600",
-  },
-  silent: {
-    icon: <Archive size={14} />,
-    dot: "bg-muted text-muted-foreground",
-    ring: "text-muted-foreground",
-  },
-};
+function rowAccent(cls: ReplyClass | null): string {
+  return cls ? classAccent(cls) : "#475569";
+}
 
 export function InboxClient({ replies }: { replies: InboxRowReply[] }) {
+  // Local mutable copy so a retag / exclude updates the row in place without a refetch.
+  const [rows, setRows] = useState<InboxRowReply[]>(replies);
+  useEffect(() => setRows(replies), [replies]);
+
   const [filterClient, setFilterClient] = useState<FilterClient>("all");
   const [focus, setFocus] = useState<FocusCategory>("all");
-  const [page, setPage] = useState(1);
-  useEffect(() => {
-    setPage(1);
-  }, [filterClient, focus]);
+  const [query, setQuery] = useState("");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const clientOptions = useMemo(() => {
     const seen = new Map<string, string>();
-    for (const r of replies) {
-      if (!r.client_id) continue;
-      if (!seen.has(r.client_id) && r.client?.name) {
-        seen.set(r.client_id, r.client.name);
-      }
+    for (const r of rows) {
+      if (r.client_id && !seen.has(r.client_id) && r.client?.name) seen.set(r.client_id, r.client.name);
     }
     return Array.from(seen.entries())
       .map(([id, name]) => ({ id, name }))
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [replies]);
+  }, [rows]);
 
-  // Everything downstream (stats, sections, counts) reflects the client filter.
-  const scoped = useMemo(
-    () =>
-      filterClient === "all"
-        ? replies
-        : replies.filter((r) => r.client_id === filterClient),
-    [replies, filterClient],
+  const clientScoped = useMemo(
+    () => (filterClient === "all" ? rows : rows.filter((r) => r.client_id === filterClient)),
+    [rows, filterClient],
   );
 
-  // Group the scoped replies by category, preserving the server's
-  // newest-first order within each bucket.
-  const byCategory = useMemo(() => {
-    const map: Record<ReplyCategoryKey, InboxRowReply[]> = {
-      hot: [],
-      referral: [],
-      objection: [],
-      review: [],
-      silent: [],
-    };
-    for (const r of scoped) map[categoryForClass(r.final_class)].push(r);
-    return map;
-  }, [scoped]);
+  const counts = useMemo(() => {
+    const m: Record<string, number> = { all: clientScoped.length };
+    for (const c of REPLY_CATEGORIES) m[c.key] = 0;
+    for (const r of clientScoped) m[categoryForClass(r.final_class)]++;
+    return m;
+  }, [clientScoped]);
 
-  const totalHot = byCategory.hot.length;
-  const needsReview = byCategory.review.length;
-  const unresolved1h = scoped.filter(
-    (r) =>
-      isReplyActionable(r) &&
-      Date.now() - new Date(r.received_at).getTime() > 60 * 60 * 1000,
-  ).length;
-  const resolvedToday = scoped.filter(
-    (r) =>
-      r.outcome_logged_at &&
-      Date.now() - new Date(r.outcome_logged_at).getTime() < 24 * 60 * 60 * 1000,
-  ).length;
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return clientScoped.filter((r) => {
+      if (focus !== "all" && categoryForClass(r.final_class) !== focus) return false;
+      if (q) {
+        const hay = `${r.lead_name ?? ""} ${r.lead_company ?? ""} ${r.lead_email} ${r.body_text ?? ""}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [clientScoped, focus, query]);
+
+  // Track desktop vs mobile with a live listener (a one-shot matchMedia at
+  // mount races the first paint). Auto-open the first reply on desktop so the
+  // pane isn't empty; never on mobile (that would hide the list on load).
+  const [isDesktop, setIsDesktop] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 640px)");
+    const sync = () => setIsDesktop(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+  useEffect(() => {
+    if (isDesktop && !selectedId && filtered.length > 0) setSelectedId(filtered[0].id);
+  }, [isDesktop, filtered, selectedId]);
+
+  const selected = rows.find((r) => r.id === selectedId) ?? null;
+
+  function handleRetag(cls: ReplyClass) {
+    setRows((prev) =>
+      prev.map((r) =>
+        r.id === selectedId
+          ? { ...r, final_class: cls, status: r.status === "new" ? "classified" : r.status }
+          : r,
+      ),
+    );
+  }
+  function handleExclude(excluded: boolean) {
+    setRows((prev) => prev.map((r) => (r.id === selectedId ? { ...r, excluded_from_stats: excluded } : r)));
+  }
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Inbox Oversight"
-      />
+    <div className="space-y-4">
+      <PageHeader title="Inbox Oversight" />
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <StatCard
-          label="Total hot"
-          value={totalHot}
-          icon={<Phone size={16} className="text-[#2E37FE]" />}
-          iconBg="bg-[#2E37FE]/10"
-        />
-        <StatCard
-          label="Resolved today"
-          value={resolvedToday}
-          icon={<CheckCircle2 size={16} className="text-emerald-500" />}
-          iconBg="bg-emerald-50"
-        />
-        <StatCard
-          label="Unresolved > 1h"
-          value={unresolved1h}
-          icon={<AlertTriangle size={16} className="text-red-500" />}
-          iconBg="bg-red-50"
-        />
-        <StatCard
-          label="Needs review"
-          value={needsReview}
-          icon={<InboxIcon size={16} className="text-amber-500" />}
-          iconBg="bg-amber-50"
-        />
-      </div>
-
-      {/* Filters: client + category pills */}
-      <div className="flex flex-wrap gap-2 items-center">
-        <Select
-          value={filterClient}
-          onValueChange={(v) => setFilterClient((v as FilterClient) || "all")}
-        >
-          <SelectTrigger className="h-9 w-[200px] text-xs font-medium">
-            <SelectValue>
-              {(value) => {
-                if (typeof value !== "string" || !value || value === "all")
-                  return "All clients";
-                return clientOptions.find((c) => c.id === value)?.name ?? value;
-              }}
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All clients</SelectItem>
-            {clientOptions.map((c) => (
-              <SelectItem key={c.id} value={c.id}>
-                {c.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <div className="flex flex-wrap gap-1.5">
-          <CategoryPill
-            active={focus === "all"}
-            onClick={() => setFocus("all")}
-            label="All"
-            count={scoped.length}
-          />
-          {REPLY_CATEGORIES.map((cat) => (
-            <CategoryPill
-              key={cat.key}
-              active={focus === cat.key}
-              onClick={() => setFocus(cat.key)}
-              label={cat.label}
-              count={byCategory[cat.key].length}
-            />
-          ))}
-        </div>
-      </div>
-
-      {/* List */}
-      {scoped.length === 0 ? (
-        <EmptyState />
-      ) : focus === "all" ? (
-        // Segmented overview: every non-empty category as its own section.
-        <div className="space-y-7">
-          {REPLY_CATEGORIES.filter((c) => byCategory[c.key].length > 0).map(
-            (cat) => {
-              const rows = byCategory[cat.key];
-              const preview = rows.slice(0, SECTION_PREVIEW);
-              return (
-                <section key={cat.key} className="space-y-2">
-                  <SectionHeader
-                    categoryKey={cat.key}
-                    label={cat.label}
-                    blurb={cat.blurb}
-                    count={rows.length}
-                    onViewAll={
-                      rows.length > SECTION_PREVIEW
-                        ? () => setFocus(cat.key)
-                        : undefined
-                    }
+      <Unibox
+        hasSelection={!!selectedId}
+        list={
+          <>
+            <UniboxListHeader>
+              <div className="flex items-center gap-2">
+                <Select value={filterClient} onValueChange={(v) => setFilterClient((v as FilterClient) || "all")}>
+                  <SelectTrigger className="h-8 flex-1 text-xs font-medium">
+                    <SelectValue>
+                      {(value) =>
+                        typeof value !== "string" || !value || value === "all"
+                          ? "All clients"
+                          : clientOptions.find((c) => c.id === value)?.name ?? value
+                      }
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All clients</SelectItem>
+                    {clientOptions.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-1.5 rounded-lg border border-border px-2.5 h-8">
+                <Search size={13} className="text-muted-foreground" />
+                <input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search replies…"
+                  className="w-full bg-transparent text-[12.5px] outline-none"
+                />
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                <CategoryPill active={focus === "all"} onClick={() => setFocus("all")} label="All" count={counts.all} />
+                {REPLY_CATEGORIES.map((cat) => (
+                  <CategoryPill
+                    key={cat.key}
+                    active={focus === cat.key}
+                    onClick={() => setFocus(cat.key)}
+                    label={cat.label.split(":")[0]}
+                    count={counts[cat.key]}
+                    dot={CAT_COLOR[cat.key]}
                   />
-                  {preview.map((reply) => (
-                    <ReplyRow key={reply.id} reply={reply} />
-                  ))}
-                  {rows.length > SECTION_PREVIEW && (
-                    <button
-                      onClick={() => setFocus(cat.key)}
-                      className="text-xs font-medium text-[#2E37FE] hover:underline cursor-pointer pl-1"
-                    >
-                      View all {rows.length} →
-                    </button>
-                  )}
-                </section>
-              );
-            },
-          )}
-        </div>
-      ) : (
-        // Focused category: flat, paginated.
-        <FocusedList
-          rows={byCategory[focus]}
-          categoryKey={focus}
-          page={page}
-          onPageChange={setPage}
-        />
-      )}
+                ))}
+              </div>
+            </UniboxListHeader>
+
+            <UniboxListScroll>
+              {filtered.length === 0 ? (
+                <div className="flex flex-col items-center gap-2 px-4 py-12 text-center text-sm text-muted-foreground">
+                  <InboxIcon size={26} className="opacity-40" />
+                  No replies match these filters
+                </div>
+              ) : (
+                filtered.map((r) => {
+                  const meta = r.final_class ? CLASS_META[r.final_class] : null;
+                  return (
+                    <ReplyListRow
+                      key={r.id}
+                      id={r.id}
+                      selected={selectedId === r.id}
+                      onClick={() => setSelectedId(r.id)}
+                      accent={rowAccent(r.final_class)}
+                      monogram={initials(r.lead_name || r.lead_email)}
+                      name={r.lead_name || r.lead_email}
+                      sub={`${r.client?.name || "—"}${r.lead_company ? ` · ${r.lead_company}` : ""}`}
+                      snippet={replySnippet(r.body_text, r.subject)}
+                      time={timeSinceShort(r.received_at)}
+                      badges={
+                        <>
+                          {meta && (
+                            <Badge variant="secondary" className={`${meta.badge} text-[10px]`}>
+                              {meta.label}
+                            </Badge>
+                          )}
+                          {r.outcome && (
+                            <Badge variant="secondary" className="badge-slate text-[9px]">
+                              {r.outcome.replace(/_/g, " ")}
+                            </Badge>
+                          )}
+                        </>
+                      }
+                    />
+                  );
+                })
+              )}
+            </UniboxListScroll>
+          </>
+        }
+        detail={
+          selected ? (
+            <AdminThread
+              key={selected.id}
+              reply={selected}
+              onBack={() => setSelectedId(null)}
+              onRetag={handleRetag}
+              onExclude={handleExclude}
+            />
+          ) : (
+            <ThreadEmpty />
+          )
+        }
+      />
     </div>
   );
 }
+
+const CAT_COLOR: Record<ReplyCategoryKey, string> = {
+  hot: "#2E37FE",
+  referral: "#7c3aed",
+  objection: "#d97706",
+  review: "#d97706",
+  silent: "#475569",
+};
 
 function CategoryPill({
   active,
   onClick,
   label,
   count,
+  dot,
 }: {
   active: boolean;
   onClick: () => void;
   label: string;
   count: number;
+  dot?: string;
 }) {
   return (
     <button
       onClick={onClick}
-      className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer border ${
+      className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[11.5px] font-semibold transition-colors cursor-pointer ${
         active
-          ? "bg-[#2E37FE]/15 text-[#2E37FE] border-[#2E37FE]/25"
-          : "bg-muted/50 text-muted-foreground border-transparent hover:bg-muted"
+          ? "border-[#2E37FE]/25 bg-[#2E37FE]/[0.13] text-[#2E37FE]"
+          : "border-transparent bg-muted/60 text-muted-foreground hover:bg-muted"
       }`}
     >
+      {dot && <span className="h-1.5 w-1.5 rounded-full" style={{ background: dot }} />}
       {label}
-      <span
-        className={`tabular-nums ${active ? "text-[#2E37FE]" : "text-muted-foreground/70"}`}
-      >
-        {count}
-      </span>
+      <span className="tabular-nums opacity-70">{count}</span>
     </button>
   );
 }
 
-function SectionHeader({
-  categoryKey,
-  label,
-  blurb,
-  count,
-  onViewAll,
+function AdminThread({
+  reply,
+  onBack,
+  onRetag,
+  onExclude,
 }: {
-  categoryKey: ReplyCategoryKey;
-  label: string;
-  blurb: string;
-  count: number;
-  onViewAll?: () => void;
+  reply: InboxRowReply;
+  onBack: () => void;
+  onRetag: (cls: ReplyClass) => void;
+  onExclude: (excluded: boolean) => void;
 }) {
-  const ui = CATEGORY_UI[categoryKey];
-  return (
-    <div className="flex items-end justify-between gap-3">
-      <div className="flex items-center gap-2 min-w-0">
-        <span className={`shrink-0 ${ui.ring}`}>{ui.icon}</span>
-        <h2 className="text-sm font-bold text-foreground">{label}</h2>
-        <Badge variant="secondary" className="badge-slate text-[10px] shrink-0">
-          {count}
-        </Badge>
-        <span className="text-xs text-muted-foreground truncate hidden sm:inline">
-          · {blurb}
-        </span>
-      </div>
-      {onViewAll && (
-        <button
-          onClick={onViewAll}
-          className="text-xs font-medium text-[#2E37FE] hover:underline cursor-pointer shrink-0"
-        >
-          View all →
-        </button>
-      )}
-    </div>
-  );
-}
-
-function FocusedList({
-  rows,
-  categoryKey,
-  page,
-  onPageChange,
-}: {
-  rows: InboxRowReply[];
-  categoryKey: ReplyCategoryKey;
-  page: number;
-  onPageChange: (p: number) => void;
-}) {
-  const cat = REPLY_CATEGORIES.find((c) => c.key === categoryKey)!;
-  const totalPages = Math.max(1, Math.ceil(rows.length / INBOX_PAGE_SIZE));
-  const safePage = Math.min(page, totalPages);
-  const start = (safePage - 1) * INBOX_PAGE_SIZE;
-  const pageRows = rows.slice(start, start + INBOX_PAGE_SIZE);
-
-  return (
-    <div className="space-y-2">
-      <SectionHeader
-        categoryKey={categoryKey}
-        label={cat.label}
-        blurb={cat.blurb}
-        count={rows.length}
-      />
-      {pageRows.map((reply) => (
-        <ReplyRow key={reply.id} reply={reply} />
-      ))}
-      <PaginationControls
-        currentPage={safePage}
-        totalItems={rows.length}
-        pageSize={INBOX_PAGE_SIZE}
-        onPageChange={onPageChange}
-      />
-    </div>
-  );
-}
-
-function ReplyRow({ reply }: { reply: InboxRowReply }) {
+  const { group } = useReclassifyGroup({
+    replyId: reply.id,
+    currentClass: reply.final_class,
+    onChanged: onRetag,
+  });
   const meta = reply.final_class ? CLASS_META[reply.final_class] : null;
-  const catUi = CATEGORY_UI[categoryForClass(reply.final_class)];
-  const minutesOld = Math.floor(
-    (Date.now() - new Date(reply.received_at).getTime()) / 60000,
-  );
-  const isStale = isReplyActionable(reply) && minutesOld > 60;
-  const snippet = replySnippet(reply.body_text, reply.subject);
+  const outcomeMeta = reply.outcome ? OUTCOME_META[reply.outcome] : null;
+  const phone = telHref(reply.lead_phone_e164);
 
   return (
-    <Link href={`/admin/inbox/${reply.id}`} className="block group">
-      <Card className="border-border/50 shadow-sm transition-all group-hover:border-[#2E37FE]/30">
-        <CardContent className="flex items-start gap-4 px-4 py-3">
-          <div
-            className={`flex h-8 w-8 items-center justify-center rounded-full shrink-0 mt-0.5 ${catUi.dot}`}
-          >
-            {catUi.icon}
-          </div>
-
-          <div className="flex-1 min-w-0">
+    <div className="flex min-h-0 flex-1 flex-col">
+      {/* Header */}
+      <div className="flex-none border-b border-border/60 px-4 py-3 sm:px-5">
+        <MobileBack onBack={onBack} />
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <p className="font-medium text-sm truncate">
+              <h2 className="truncate text-[17px] font-bold text-foreground">
                 {reply.lead_name || reply.lead_email}
-              </p>
-              {isStale && (
-                <Badge
-                  variant="secondary"
-                  className="badge-red text-[9px] shrink-0"
-                >
-                  stale
-                </Badge>
-              )}
+              </h2>
               {meta && (
-                <Badge
-                  variant="secondary"
-                  className={`${meta.badge} text-[10px] shrink-0 hidden sm:inline-flex`}
-                >
+                <Badge variant="secondary" className={`${meta.badge} text-[10px] shrink-0`}>
                   {meta.label}
                 </Badge>
               )}
+              {outcomeMeta && (
+                <Badge variant="secondary" className="badge-slate text-[9px] shrink-0">
+                  ✓ {outcomeMeta.label}
+                </Badge>
+              )}
             </div>
-            <p className="text-xs text-muted-foreground truncate">
-              {reply.client?.name || "—"}
-              {reply.lead_company && <span> · {reply.lead_company}</span>}
-              {reply.lead_title && <span> · {reply.lead_title}</span>}
-            </p>
-            {snippet && (
-              <p className="text-sm text-muted-foreground/90 truncate mt-1">
-                {snippet}
-              </p>
-            )}
+            <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[12.5px] text-muted-foreground">
+              {reply.lead_company && (
+                <span className="inline-flex items-center gap-1">
+                  <Building2 size={12} /> {reply.lead_company}
+                  {reply.lead_title ? ` · ${reply.lead_title}` : ""}
+                </span>
+              )}
+              <span>
+                Client: <span className="font-medium text-foreground/80">{reply.client?.name ?? "—"}</span>
+              </span>
+            </div>
+            <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px]">
+              <a href={`mailto:${reply.lead_email}`} className="inline-flex items-center gap-1 text-[#2E37FE] hover:underline">
+                <Mail size={11} /> {reply.lead_email}
+              </a>
+              {phone && (
+                <a href={phone} className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground">
+                  <Phone size={11} /> {reply.lead_phone_e164}
+                </a>
+              )}
+              {reply.lead_linkedin_url && (
+                <a
+                  href={reply.lead_linkedin_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 text-[#0077b5] hover:underline"
+                >
+                  LinkedIn <ExternalLink size={11} />
+                </a>
+              )}
+              <span className="inline-flex items-center gap-1 text-muted-foreground">
+                <Clock size={11} /> {timeSince(reply.received_at)}
+              </span>
+            </div>
           </div>
+        </div>
+      </div>
 
-          <div className="shrink-0 w-16 text-right hidden lg:block">
-            {reply.outcome ? (
-              <Badge variant="secondary" className="badge-slate text-[9px]">
-                {reply.outcome.replace(/_/g, " ")}
-              </Badge>
-            ) : (
-              <span className="text-xs text-muted-foreground">—</span>
-            )}
-          </div>
+      {/* Quick reclassify bar */}
+      <QuickActionBar groups={[group]} />
 
-          <div className="shrink-0 flex items-center gap-1 text-xs text-muted-foreground w-12 justify-end mt-0.5">
-            <Clock size={10} />
-            <span>{timeSinceShort(reply.received_at)}</span>
-          </div>
+      {/* Admin view banner */}
+      <div className="flex flex-none items-center gap-2 bg-slate-100 px-4 py-1.5 text-[11px] text-slate-600 sm:px-5">
+        <Eye size={12} /> Admin view — retagging here corrects the classifier and does not re-notify the client.
+      </div>
 
-          <ArrowRight
-            size={14}
-            className="text-muted-foreground opacity-0 group-hover:opacity-100 shrink-0 mt-1"
-          />
-        </CardContent>
-      </Card>
-    </Link>
+      {/* Conversation */}
+      <Conversation reply={reply} />
+
+      {/* Classification trail + exclude (collapsible footer) */}
+      <TrailFooter reply={reply} onExclude={onExclude} />
+    </div>
   );
 }
 
-function EmptyState() {
+function TrailFooter({ reply, onExclude }: { reply: InboxRowReply; onExclude: (v: boolean) => void }) {
+  const [open, setOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  async function toggleExclude() {
+    const next = !reply.excluded_from_stats;
+    setSaving(true);
+    try {
+      const res = await fetch(appUrl(`/api/replies/${reply.id}/exclude`), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ excluded: next }),
+      });
+      if (res.ok) onExclude(next);
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
-    <Card className="border-border/50 shadow-sm">
-      <CardContent className="py-12 text-center">
-        <div className="flex justify-center mb-3">
-          <div className="h-12 w-12 rounded-full bg-[#2E37FE] flex items-center justify-center">
-            <InboxIcon size={24} className="text-white" />
+    <div className="flex-none border-t border-border/60 bg-card">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center gap-2 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground hover:bg-muted/40 cursor-pointer sm:px-5"
+      >
+        <Bot size={13} className="text-[#2E37FE]" /> Classification trail
+        <ChevronDown size={13} className={`ml-auto transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+        <div className="space-y-2.5 px-4 pb-3 text-xs sm:px-5">
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+            <div>
+              <p className="text-muted-foreground">Claude class</p>
+              <p className="font-medium text-foreground">
+                {reply.claude_class ? CLASS_META[reply.claude_class].label : "—"}
+                {reply.claude_confidence != null && (
+                  <span className="text-muted-foreground"> · {Math.round(reply.claude_confidence * 100)}%</span>
+                )}
+              </p>
+            </div>
+            <div>
+              <p className="text-muted-foreground">Keyword flags</p>
+              <p className="font-medium text-foreground">
+                {reply.keyword_flags && reply.keyword_flags.length > 0 ? reply.keyword_flags.join(", ") : "—"}
+              </p>
+            </div>
+          </div>
+          {reply.claude_reason && (
+            <p className="border-t border-border/50 pt-2 italic text-muted-foreground">
+              &ldquo;{reply.claude_reason}&rdquo;
+            </p>
+          )}
+          {reply.referral_contact && (
+            <div className="border-t border-border/50 pt-2">
+              <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Extracted referral
+              </p>
+              <p className="font-medium text-foreground">
+                {reply.referral_contact.name || reply.referral_contact.email}
+                {reply.referral_contact.title && (
+                  <span className="font-normal text-muted-foreground"> — {reply.referral_contact.title}</span>
+                )}
+              </p>
+              {reply.referral_contact.email && (
+                <p className="text-muted-foreground">{reply.referral_contact.email}</p>
+              )}
+            </div>
+          )}
+          <div className="flex items-center justify-between gap-3 border-t border-border/50 pt-2">
+            <span className="text-muted-foreground">
+              {reply.excluded_from_stats ? "Excluded from client stats" : "Counted in client stats"}
+            </span>
+            <button
+              onClick={toggleExclude}
+              disabled={saving}
+              className="rounded-lg border border-border bg-white px-2.5 py-1 text-[11px] font-semibold hover:bg-muted cursor-pointer disabled:opacity-50"
+            >
+              {saving ? "…" : reply.excluded_from_stats ? "Include" : "Exclude"}
+            </button>
           </div>
         </div>
-        <p className="text-muted-foreground font-medium">No replies yet</p>
-        <p className="text-sm text-muted-foreground">
-          Inbound replies to your campaigns will show up here as they land.
-        </p>
-      </CardContent>
-    </Card>
+      )}
+    </div>
   );
 }

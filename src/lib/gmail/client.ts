@@ -239,6 +239,26 @@ export class GmailClient {
   }
 
   /**
+   * Fetch a whole thread (all messages, oldest→newest as Gmail returns them).
+   * format 'full' returns each message's parsed payload so the caller can read
+   * the bodies — used by the inbox conversation view to show the outbound
+   * send(s) alongside the lead's reply (native_sends stores no body, so the
+   * sent copy only lives in Gmail).
+   */
+  async getThread(
+    mailbox: string,
+    threadId: string,
+    format: "full" | "metadata" = "full",
+  ): Promise<{ id: string; messages: GmailMessage[] }> {
+    const params = new URLSearchParams({ format });
+    const data = (await this.gmailFetch(
+      mailbox,
+      `/threads/${threadId}?${params.toString()}`,
+    )) as { id: string; messages?: GmailMessage[] };
+    return { id: data.id, messages: data.messages ?? [] };
+  }
+
+  /**
    * Read the mailbox profile. Cheap call used to verify domain-wide
    * delegation is authorized for a mailbox before we let campaigns use it.
    */
