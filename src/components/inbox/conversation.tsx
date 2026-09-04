@@ -11,7 +11,7 @@
 import { useEffect, useState } from "react";
 import { Mail, Loader2, CornerUpLeft } from "lucide-react";
 import { appUrl } from "@/lib/api-url";
-import { formatBody, timeSince } from "@/lib/replies/ui";
+import { formatBody, cleanThreadBody, timeSince } from "@/lib/replies/ui";
 import type { ThreadMessage } from "@/app/api/replies/[id]/thread/route";
 
 type ThreadState = "loading" | "ready" | "unavailable" | "error";
@@ -75,7 +75,7 @@ function Bubble({
   return (
     <div className={`flex ${outbound ? "justify-end" : "justify-start"}`}>
       <div
-        className={`max-w-[85%] rounded-xl border px-4 py-3 text-sm leading-relaxed ${
+        className={`w-fit max-w-[92%] rounded-xl border px-4 py-2.5 text-sm leading-normal ${
           outbound
             ? "bg-muted/70 border-border/60"
             : "bg-card border-border/60 border-l-[3px] border-l-[#2E37FE]"
@@ -103,8 +103,8 @@ export function Conversation({ reply }: { reply: ConversationReply }) {
   const leadName = reply.lead_name || reply.lead_email;
 
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto bg-[#fbfcfe] px-4 py-4 sm:px-5">
-      <div className="mx-auto flex max-w-2xl flex-col gap-3">
+    <div className="flex-1 min-h-0 overflow-y-auto bg-[#fbfcfe] px-4 py-4 sm:px-6">
+      <div className="flex flex-col gap-2.5">
         {thread.state === "ready" ? (
           thread.messages.map((m) => (
             <Bubble
@@ -113,7 +113,7 @@ export function Conversation({ reply }: { reply: ConversationReply }) {
               who={m.direction === "outbound" ? "You (sent)" : leadName}
               when={m.at}
               subject={m.subject}
-              bodyHtml={formatBody(m.bodyText)}
+              bodyHtml={formatBody(cleanThreadBody(m.bodyText))}
             />
           ))
         ) : (
@@ -130,7 +130,7 @@ export function Conversation({ reply }: { reply: ConversationReply }) {
               who={leadName}
               when={reply.received_at}
               subject={reply.subject}
-              bodyHtml={formatBody(reply.body_text)}
+              bodyHtml={formatBody(cleanThreadBody(reply.body_text))}
             />
             {(thread.state === "unavailable" || thread.state === "error") && (
               <p className="flex items-center justify-center gap-1.5 py-1 text-center text-[11px] text-muted-foreground/70">

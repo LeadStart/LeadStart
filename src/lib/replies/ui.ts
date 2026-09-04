@@ -182,6 +182,41 @@ export function replySnippet(
   return t.slice(0, max).replace(/\s+\S*$/, "") + "…";
 }
 
+// Clean a full message body for the threaded conversation view. Strips the
+// quoted-original tail (so each bubble shows what that person actually wrote,
+// not the whole re-quoted history) and collapses runs of blank lines, which is
+// what makes native threads read as unnecessarily long. Unlike replySnippet it
+// preserves line breaks and paragraph structure.
+export function cleanThreadBody(text: string | null): string {
+  // Normalize CRLF (native bodies are CRLF) so line-based cleanup + reflow work.
+  let t = (text ?? "").replace(/\r\n?/g, "\n");
+  const markers = [
+    /\nOn .+ wrote:/i,
+    /\n-{2,}\s*Original Message\s*-{2,}/i,
+    /\n_{5,}/, // Outlook reply divider
+    /\nFrom:\s.+\nSent:\s/i, // Outlook quoted-header block
+  ];
+  for (const re of markers) {
+    const idx = t.search(re);
+    if (idx > 0) t = t.slice(0, idx);
+  }
+  // Drop any remaining quoted ">" lines.
+  t = t
+    .split("\n")
+    .filter((line) => !line.trim().startsWith(">"))
+    .join("\n");
+  // Reflow soft (RFC 3676 format=flowed) wraps: a line ending in a space is a
+  // soft break to rejoin with the next non-blank line. This un-chops our own
+  // outbound sends, which we hard-wrap at ~72 chars. Hard breaks (lines not
+  // ending in a space, e.g. signatures / lists) and blank lines are preserved.
+  t = t.replace(/ +\n(?=[^\n])/g, " ");
+  // Tidy trailing whitespace, then collapse 2+ blank lines to one.
+  return t
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 /**
  * "Needs action" / urgency check. True when the reply is in a hot class,
  * hasn't been outcome-logged, AND hasn't been resolved by sending a portal

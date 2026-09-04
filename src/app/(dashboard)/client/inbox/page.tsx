@@ -1,5 +1,4 @@
 "use client";
-import { PageHeader } from "@/components/layout/page-header";
 
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -114,12 +113,7 @@ export default function ClientInboxPage() {
   }
 
   if (contextLoading || loading) {
-    return (
-      <div className="space-y-4">
-        <PageHeader title="Inbox" />
-        <div className="h-[60vh] animate-pulse rounded-2xl bg-muted/50" />
-      </div>
-    );
+    return <div className="h-full min-h-[460px] animate-pulse rounded-2xl bg-muted/50" />;
   }
   if (noClient || !client) {
     return (
@@ -139,8 +133,7 @@ export default function ClientInboxPage() {
   ];
 
   return (
-    <div className="space-y-4">
-      <PageHeader title="Inbox" />
+    <div className="h-full">
       <Unibox
         hasSelection={!!selectedId}
         list={

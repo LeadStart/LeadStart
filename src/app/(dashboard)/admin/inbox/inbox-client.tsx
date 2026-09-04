@@ -1,5 +1,4 @@
 "use client";
-import { PageHeader } from "@/components/layout/page-header";
 
 import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
@@ -157,9 +156,7 @@ export function InboxClient({ replies }: { replies: InboxRowReply[] }) {
   }
 
   return (
-    <div className="space-y-4">
-      <PageHeader title="Inbox Oversight" />
-
+    <div className="h-full">
       <Unibox
         hasSelection={!!selectedId}
         list={
