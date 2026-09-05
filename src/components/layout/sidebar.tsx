@@ -48,8 +48,8 @@ const adminSendingNav: NavItem[] = [
 ];
 
 // Settings is a single entry pinned to the sidebar footer (see below). Team,
-// Integrations, Workflows, Tokens, Billing, and Tasks all live inside the
-// Settings hub as sub-tabs — so there is exactly one reference to Settings.
+// Integrations, Workflows, Tokens, Billing, and Tasks are all cards on the
+// Settings hub, so there is exactly one reference to Settings.
 
 const clientNav: NavItem[] = [
   { href: "/client", label: "Dashboard", icon: <LayoutDashboard size={18} /> },
