@@ -26,15 +26,15 @@ import { ArrowLeft, ArrowDown, ArrowUp, Plus, Trash2, Save } from "lucide-react"
 import Link from "next/link";
 import { appUrl } from "@/lib/api-url";
 import { useUser } from "@/hooks/use-user";
-import type { Client, SequenceStepKind } from "@/types/app";
+import type { Client, LinkedInSequenceStepKind } from "@/types/app";
 
 type StepDraft = {
-  kind: SequenceStepKind;
+  kind: LinkedInSequenceStepKind;
   wait_days: number;
   body_template: string;
 };
 
-const KIND_LABELS: Record<SequenceStepKind, string> = {
+const KIND_LABELS: Record<LinkedInSequenceStepKind, string> = {
   connect_request: "Connection request",
   message: "Direct message",
   inmail: "InMail (Sales Nav)",
@@ -42,7 +42,7 @@ const KIND_LABELS: Record<SequenceStepKind, string> = {
   profile_visit: "Profile visit",
 };
 
-const KIND_HINTS: Record<SequenceStepKind, string> = {
+const KIND_HINTS: Record<LinkedInSequenceStepKind, string> = {
   connect_request:
     "Sends a connection request, optionally with a 1-line note.",
   message:
@@ -310,13 +310,13 @@ export default function NewLinkedinCampaignPage() {
                 </span>
                 <Select
                   value={step.kind}
-                  onValueChange={(v) => v && updateStep(i, "kind", v as SequenceStepKind)}
+                  onValueChange={(v) => v && updateStep(i, "kind", v as LinkedInSequenceStepKind)}
                 >
                   <SelectTrigger className="w-[220px]">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {(Object.keys(KIND_LABELS) as SequenceStepKind[]).map((k) => (
+                    {(Object.keys(KIND_LABELS) as LinkedInSequenceStepKind[]).map((k) => (
                       <SelectItem key={k} value={k}>
                         {KIND_LABELS[k]}
                       </SelectItem>

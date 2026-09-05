@@ -41,6 +41,7 @@ const KIND_LABELS: Record<SequenceStepKind, string> = {
   inmail: "InMail",
   like_post: "Like post",
   profile_visit: "Profile visit",
+  email: "Email",
 };
 
 const STATUS_BADGE: Record<EnrollmentStatus, string> = {

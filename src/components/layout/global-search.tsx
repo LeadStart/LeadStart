@@ -100,14 +100,22 @@ export function GlobalSearch() {
       .slice(0, MAX_PER_GROUP)
       .map((c) => {
         const fullName = [c.first_name, c.last_name].filter(Boolean).join(" ");
+        // contacts.email is nullable (migration 00042): a Maps-sourced contact
+        // can carry a name or company with no address yet. Fall through to the
+        // best identifier we have so the label, sublabel, and ?q= search never
+        // render or search the literal text "null".
+        const email = c.email || "";
+        const company = c.company_name || "";
+        const label = fullName || email || company || "Unnamed contact";
+        const sublabel = fullName
+          ? [email, company].filter(Boolean).join(" · ") || undefined
+          : company || undefined;
         return {
           kind: "contact",
           id: c.id,
-          label: fullName || c.email,
-          sublabel: fullName
-            ? `${c.email}${c.company_name ? ` · ${c.company_name}` : ""}`
-            : c.company_name || undefined,
-          href: `/admin/contacts?q=${encodeURIComponent(c.email)}`,
+          label,
+          sublabel,
+          href: `/admin/contacts?q=${encodeURIComponent(email || fullName || company)}`,
         };
       });
 

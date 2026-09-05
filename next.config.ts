@@ -18,9 +18,10 @@ const nextConfig: NextConfig = {
     staleTimes: { dynamic: 30 },
   },
   typescript: {
-    // Demo-mode mock client causes deep type inference issues.
-    // Will be resolved once real Supabase client is wired up.
-    ignoreBuildErrors: true,
+    // Type errors fail the build. `npx tsc --noEmit` is kept at zero across
+    // src/ and scripts/ (scripts import with .ts extensions, allowed by
+    // allowImportingTsExtensions in tsconfig.json since noEmit is on).
+    ignoreBuildErrors: false,
   },
   // Quality-of-life: redirect the bare common URLs to their /app
   // counterparts so visitors who forget the prefix don't see a 404.

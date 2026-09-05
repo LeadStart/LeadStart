@@ -9,11 +9,22 @@ import { Pencil, X, Send, KeyRound, Mail } from "lucide-react";
 import type { Client } from "@/types/app";
 import { appUrl } from "@/lib/api-url";
 
+// NOTE: currently unreferenced. The client detail page renders
+// client-users-section.tsx + invite-client-button.tsx instead, which read
+// portal access from the client_users join table. Kept compiling so a future
+// caller gets the right contract; a deletion candidate.
 export function ClientActions({
   client,
+  hasPortal,
   onEmailUpdated,
 }: {
   client: Client;
+  /**
+   * True when a client_users row links a portal user to this client. This
+   * used to read clients.user_id, a column dropped in migration 00015, so the
+   * "Portal Active" branch below could never render.
+   */
+  hasPortal: boolean;
   onEmailUpdated: (email: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
@@ -139,8 +150,6 @@ export function ClientActions({
       setResetting(false);
     }
   }
-
-  const hasPortal = !!client.user_id;
 
   // Client already has portal access
   if (hasPortal && !editing) {

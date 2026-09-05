@@ -82,7 +82,8 @@ function stageDef(stage: ProspectStage): StageDef {
 
 function displayName(c: Contact): string {
   const n = [c.first_name, c.last_name].filter(Boolean).join(" ");
-  return n || c.email;
+  // contacts.email is nullable (migration 00042); never hand callers null.
+  return n || c.email || "Unnamed contact";
 }
 
 function industryOf(c: Contact): string | null {
@@ -544,7 +545,7 @@ export default function ProspectsPage() {
                   className="flex h-10 w-10 items-center justify-center rounded-lg text-sm font-bold text-white"
                   style={{ background: "#2E37FE" }}
                 >
-                  {(selected.company_name || selected.email).charAt(0).toUpperCase()}
+                  {(selected.company_name || selected.email || "?").charAt(0).toUpperCase()}
                 </div>
                 <div className="min-w-0">
                   <div className="truncate">{selected.company_name || displayName(selected)}</div>
@@ -734,7 +735,7 @@ export default function ProspectsPage() {
                           className="flex h-9 w-9 items-center justify-center rounded-lg text-xs font-bold text-white shrink-0"
                           style={{ background: "#2E37FE" }}
                         >
-                          {(c.company_name || c.email).charAt(0).toUpperCase()}
+                          {(c.company_name || c.email || "?").charAt(0).toUpperCase()}
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className="text-sm font-medium truncate">

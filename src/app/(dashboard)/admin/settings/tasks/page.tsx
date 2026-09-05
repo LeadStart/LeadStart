@@ -248,7 +248,7 @@ export default function TasksPage() {
 
       {/* Filter bar */}
       <div className="flex flex-wrap items-center gap-3">
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
+        <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v ?? "all")}>
           <SelectTrigger className="w-[150px]" style={{ height: '36px' }}>
             <SelectValue placeholder="Status" />
           </SelectTrigger>
@@ -260,7 +260,7 @@ export default function TasksPage() {
           </SelectContent>
         </Select>
 
-        <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+        <Select value={priorityFilter} onValueChange={(v) => setPriorityFilter(v ?? "all")}>
           <SelectTrigger className="w-[150px]" style={{ height: '36px' }}>
             <SelectValue placeholder="Priority" />
           </SelectTrigger>
@@ -272,7 +272,7 @@ export default function TasksPage() {
           </SelectContent>
         </Select>
 
-        <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+        <Select value={categoryFilter} onValueChange={(v) => setCategoryFilter(v ?? "all")}>
           <SelectTrigger className="w-[150px]" style={{ height: '36px' }}>
             <SelectValue placeholder="Category" />
           </SelectTrigger>

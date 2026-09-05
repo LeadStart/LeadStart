@@ -211,6 +211,11 @@ export type SequenceStepKind =
   // subject_template on step 0; body_template holds the email body.
   | "email";
 
+// The LinkedIn sequence builder only authors LinkedIn actions; email steps are
+// written by the native campaign routes. This keeps the builder's label/hint
+// maps total without offering an "Email" step in a LinkedIn-only picker.
+export type LinkedInSequenceStepKind = Exclude<SequenceStepKind, "email">;
+
 export type EnrollmentStatus =
   | "active"
   | "paused"

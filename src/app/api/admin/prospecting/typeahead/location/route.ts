@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ScrapioClient } from "@/lib/scrapio/client";
 import { requireProspectingContext } from "@/lib/scrapio/auth";
-import type { ScrapioLocation, ScrapioLocationType } from "@/lib/scrapio/types";
+import type { ScrapioLocationType } from "@/lib/scrapio/types";
 
 // POST /api/admin/prospecting/typeahead/location
 // Body: { search_term: string, admin1_code?: string }
@@ -53,11 +53,12 @@ export async function POST(request: NextRequest) {
     }),
   );
 
-  const results = settled
-    .filter((r): r is PromiseFulfilledResult<Array<ScrapioLocation & { search_type: ScrapioLocationType }>> =>
-      r.status === "fulfilled",
-    )
-    .flatMap((r) => r.value);
+  // Only fulfilled results carry a value; a rejected location type (one of
+  // the parallel Scrap.io calls failing) is dropped rather than failing the
+  // whole typeahead.
+  const results = settled.flatMap((r) =>
+    r.status === "fulfilled" ? r.value : [],
+  );
 
   return NextResponse.json({ results });
 }

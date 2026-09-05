@@ -30,7 +30,9 @@ export function pushSupported(): boolean {
 }
 
 // VAPID application server key: base64url → Uint8Array, as the Push API wants.
-function urlBase64ToUint8Array(base64String: string): Uint8Array {
+// Typed over ArrayBuffer (TS 5.7+ tracks the backing buffer) so the result
+// satisfies the BufferSource that pushManager.subscribe() expects.
+function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
   const raw = atob(base64);
