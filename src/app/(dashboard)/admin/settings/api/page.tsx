@@ -15,6 +15,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useUser } from "@/hooks/use-user";
 import { ApifySpendCard } from "./apify-spend-card";
 import { WaterfallSettingsCard } from "./waterfall-settings-card";
@@ -22,14 +28,12 @@ import { RegistrarSettingsCard } from "./registrar-settings-card";
 import { AutomationsSettingsCard } from "./automations-settings-card";
 import { MsOauthSettingsCard } from "./ms-oauth-settings-card";
 import {
-  Key,
   RefreshCw,
   CheckCircle,
   XCircle,
   Clock,
   Mail,
   CreditCard,
-  Settings2,
   Search,
   Sparkles,
   Compass,
@@ -37,6 +41,12 @@ import {
   Activity,
   MailCheck,
   Bot,
+  Receipt,
+  SlidersHorizontal,
+  Globe,
+  KeyRound,
+  Zap,
+  ChevronRight,
 } from "lucide-react";
 import type { Organization } from "@/types/app";
 import { appUrl } from "@/lib/api-url";
@@ -85,8 +95,62 @@ function to24h(hour12: string, ampm: string): string {
   return String(h);
 }
 
+// The provider grid. Grouped by what each integration affects, mirroring the
+// Settings hub, and rendered 3-across. Clicking a card opens that provider's
+// settings in a dialog; the bodies live in panelFor() inside the component
+// because they read its state.
+type Provider = {
+  title: string;
+  blurb: string;
+  icon: React.ComponentType<{ size?: number; className?: string }>;
+  tile: string;
+  iconClass: string;
+};
+
+const PROVIDERS: Record<string, Provider> = {
+  nativeEmail: { title: "Native Email (Google)", blurb: "Send from client-owned Google Workspace inboxes.", icon: AtSign, tile: "bg-[#EA4335]", iconClass: "text-white" },
+  msOauth:     { title: "Microsoft OAuth app", blurb: "Outlook and Microsoft 365 inboxes as placement seeds.", icon: KeyRound, tile: "bg-sky-600", iconClass: "text-white" },
+  registrars:  { title: "Domain registrars", blurb: "Buy sending domains and write their DNS.", icon: Globe, tile: "bg-indigo-600", iconClass: "text-white" },
+  resend:      { title: "Resend", blurb: "Delivery for KPI reports and notifications.", icon: Mail, tile: "bg-emerald-50", iconClass: "text-emerald-500" },
+  inboxHealth: { title: "Inbox health", blurb: "Hourly deliverability scoring and auto-pause.", icon: Activity, tile: "bg-emerald-600", iconClass: "text-white" },
+
+  apify:       { title: "Apify", blurb: "Runs the enrichment and prospecting actors.", icon: Bot, tile: "bg-emerald-600", iconClass: "text-white" },
+  apifySpend:  { title: "Apify spend", blurb: "Actual Apify charges this billing cycle.", icon: Receipt, tile: "bg-slate-700", iconClass: "text-white" },
+  waterfall:   { title: "Enrichment waterfall", blurb: "Which method runs, and the per-company cost cap.", icon: SlidersHorizontal, tile: "bg-indigo-600", iconClass: "text-white" },
+  scrapio:     { title: "Scrap.io", blurb: "Lead enrichment for the Prospecting tab.", icon: Search, tile: "bg-violet-500", iconClass: "text-white" },
+  emailVerify: { title: "Email verification", blurb: "Pre-send check on every recipient.", icon: MailCheck, tile: "bg-teal-600", iconClass: "text-white" },
+  findymail:   { title: "Catch-all validation", blurb: "Recovers emails on catch-all domains.", icon: MailCheck, tile: "bg-indigo-600", iconClass: "text-white" },
+  unipile:     { title: "Unipile (LinkedIn)", blurb: "LinkedIn sequences and reply ingestion.", icon: LinkedinIcon, tile: "bg-[#0A66C2]", iconClass: "text-white" },
+
+  anthropic:   { title: "Anthropic", blurb: "Decision-maker extraction in Prospecting.", icon: Sparkles, tile: "bg-amber-500", iconClass: "text-white" },
+  perplexity:  { title: "Perplexity", blurb: "Web-search fallback for finding an owner.", icon: Compass, tile: "bg-sky-500", iconClass: "text-white" },
+
+  stripe:      { title: "Stripe", blurb: "Billing and subscriptions.", icon: CreditCard, tile: "bg-violet-50", iconClass: "text-violet-500" },
+
+  automations: { title: "Internal automations", blurb: "Alert the team when a lead replies.", icon: Zap, tile: "bg-violet-600", iconClass: "text-white" },
+  dataSync:    { title: "Data Sync Schedule", blurb: "When campaign analytics refresh.", icon: Clock, tile: "bg-amber-50", iconClass: "text-amber-500" },
+};
+
+const PROVIDER_GROUPS: { label: string; ids: string[] }[] = [
+  { label: "Sending", ids: ["nativeEmail", "msOauth", "registrars", "resend", "inboxHealth"] },
+  { label: "Finding contacts", ids: ["apify", "apifySpend", "waterfall", "scrapio", "emailVerify", "findymail", "unipile"] },
+  { label: "AI", ids: ["anthropic", "perplexity"] },
+  { label: "Money", ids: ["stripe"] },
+  { label: "System", ids: ["automations", "dataSync"] },
+];
+
+const STATUS = {
+  connected: { label: "Connected", cls: "badge-green" },
+  notset: { label: "Not set", cls: "badge-slate" },
+  optional: { label: "Optional", cls: "badge-slate" },
+  soon: { label: "Coming soon", cls: "badge-slate" },
+} as const;
+type StatusKey = keyof typeof STATUS;
+
 export default function IntegrationsPage() {
   const { organizationId } = useUser();
+  // Which provider's dialog is open. null = the grid.
+  const [openId, setOpenId] = useState<string | null>(null);
   const [org, setOrg] = useState<Organization | null>(null);
   const [resendKey, setResendKey] = useState("");
   const [emailFrom, setEmailFrom] = useState("");
@@ -760,929 +824,1036 @@ export default function IntegrationsPage() {
     if (findymailKey.trim()) void handleTestFindymail();
   }
 
-  return (
-    <div className="space-y-6">
-      {/* Inbox health — Spamhaus blocklist key + auto-pause threshold (migration 00061) */}
-      <Card className="border-border/50 shadow-sm">
-        <CardHeader className="flex flex-row items-center gap-2 pb-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-600">
-            <Activity size={16} className="text-white" />
-          </div>
-          <div>
-            <CardTitle className="text-base">Inbox health</CardTitle>
-            <p className="text-xs text-muted-foreground">
-              Scores every sending mailbox each hour from DNS, blacklist, bounce,
-              reply, and seed-placement signals. Can take a mailbox offline
-              automatically when it degrades.
-            </p>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-1">
-            <Label htmlFor="spamhausKey" className="text-sm font-medium">
-              Spamhaus DQS key
-            </Label>
-            <Input
-              id="spamhausKey"
-              type="password"
-              value={spamhausKey}
-              onChange={(e) => setSpamhausKey(e.target.value)}
-              placeholder="Spamhaus Data Query Service key"
-            />
-            <p className="text-[11px] text-muted-foreground">
-              Free key from <span className="font-mono">spamhaus.com</span> → Data
-              Query Service. Used to check sending domains against the domain
-              blocklist. Leave blank to skip the blacklist check.
-            </p>
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="offlineThreshold" className="text-sm font-medium">
-              Auto-pause threshold
-            </Label>
-            <Input
-              id="offlineThreshold"
-              type="number"
-              min={1}
-              max={100}
-              value={offlineThreshold}
-              onChange={(e) => setOfflineThreshold(e.target.value)}
-              placeholder="Leave blank to only alert"
-              className="max-w-[220px]"
-            />
-            <p className="text-[11px] text-muted-foreground">
-              Pause a mailbox automatically when its score stays below this number
-              for two checks in a row. Leave blank to only alert — mailboxes are
-              never paused automatically. 50 is a sensible starting point.
-            </p>
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="placementInterval" className="text-sm font-medium">
-              Automatic placement tests (days)
-            </Label>
-            <Input
-              id="placementInterval"
-              type="number"
-              min={1}
-              max={90}
-              value={placementInterval}
-              onChange={(e) => setPlacementInterval(e.target.value)}
-              placeholder="Leave blank for manual only"
-              className="max-w-[220px]"
-            />
-            <p className="text-[11px] text-muted-foreground">
-              Every this-many days, send a neutral probe from each active mailbox to
-              your seed inboxes (Mailboxes → Seed inboxes) and read back whether it
-              landed in Inbox, Promotions, or Spam. Feeds the Seed placement health
-              signal. 7 is the default; leave blank to run tests only by hand.
-            </p>
-          </div>
-          <div className="flex gap-2 items-center">
-            <Button
-              onClick={handleSaveInboxHealth}
-              disabled={savingInboxHealth}
-              style={{ background: "#2E37FE" }}
-            >
-              {savingInboxHealth ? "Saving..." : "Save"}
-            </Button>
-            <Button
-              variant="outline"
-              onClick={handleTestSpamhaus}
-              disabled={testingSpamhaus || !spamhausKey}
-            >
-              {testingSpamhaus ? "Testing..." : "Test key"}
-            </Button>
-            {inboxHealthSaved && (
-              <span className="text-sm text-emerald-600 flex items-center gap-1">
-                <CheckCircle size={14} /> Saved
-              </span>
-            )}
-          </div>
-          {inboxHealthError && (
-            <div className="flex items-center gap-2 rounded-lg bg-red-50 border border-red-200 p-3">
-              <XCircle size={16} className="text-red-500" />
-              <span className="text-sm font-medium text-red-700">
-                Save failed: {inboxHealthError}
-              </span>
-            </div>
-          )}
-          {spamhausTestResult?.kind === "success" && (
-            <div className="flex items-center gap-2 rounded-lg bg-emerald-50 border border-emerald-200 p-3">
-              <CheckCircle size={16} className="text-emerald-500" />
-              <span className="text-sm font-medium text-emerald-700">
-                Key works — the test domain came back listed as expected.
-              </span>
-            </div>
-          )}
-          {spamhausTestResult?.kind === "fail" && (
-            <div className="flex items-center gap-2 rounded-lg bg-red-50 border border-red-200 p-3">
-              <XCircle size={16} className="text-red-500" />
-              <span className="text-sm font-medium text-red-700">
-                {spamhausTestResult.message}
-              </span>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Native email — Google service account w/ domain-wide delegation (migration 00056) */}
-      <Card className="border-border/50 shadow-sm">
-        <CardHeader className="flex flex-row items-center gap-2 pb-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#EA4335]">
-            <AtSign size={16} className="text-white" />
-          </div>
-          <div>
-            <CardTitle className="text-base">Native Email (Google)</CardTitle>
-            <p className="text-xs text-muted-foreground">
-              Send directly from client-owned Google Workspace inboxes via a
-              service account with domain-wide delegation. Manage inboxes under
-              Sending → Mailboxes.
-            </p>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-1">
-            <Label htmlFor="gmailSaEmail" className="text-sm font-medium">
-              Service account email
-            </Label>
-            <Input
-              id="gmailSaEmail"
-              value={gmailSaEmail}
-              onChange={(e) => setGmailSaEmail(e.target.value)}
-              placeholder="native-sender@your-project.iam.gserviceaccount.com"
-            />
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="gmailSaKey" className="text-sm font-medium">
-              Service account private key
-            </Label>
-            <Textarea
-              id="gmailSaKey"
-              value={gmailSaKey}
-              onChange={(e) => setGmailSaKey(e.target.value)}
-              placeholder={"-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"}
-              rows={4}
-              className="font-mono text-xs"
-            />
-            <p className="text-[11px] text-muted-foreground">
-              The <span className="font-mono">private_key</span> field from the
-              service account&apos;s JSON key file. Each sending domain must
-              authorize this account&apos;s client ID for the{" "}
-              <span className="font-mono">gmail.send</span> and{" "}
-              <span className="font-mono">gmail.readonly</span> scopes in Google
-              Admin — see the setup runbook.
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            <Button
-              onClick={handleSaveGmail}
-              disabled={savingGmail}
-              style={{ background: "#2E37FE" }}
-            >
-              {savingGmail ? "Saving..." : "Save Service Account"}
-            </Button>
-            {gmailSaved && (
-              <span className="text-sm text-emerald-600 flex items-center gap-1">
-                <CheckCircle size={14} /> Saved
-              </span>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Email verification — Million Verifier (migration 00069) */}
-      <Card className="border-border/50 shadow-sm">
-        <CardHeader className="flex flex-row items-center gap-2 pb-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-600">
-            <MailCheck size={16} className="text-white" />
-          </div>
-          <div>
-            <CardTitle className="text-base">Email verification</CardTitle>
-            <p className="text-xs text-muted-foreground">
-              Verifies every recipient just before its first send (Million
-              Verifier). Invalid and disposable addresses are never sent;
-              catch-all and unknown are free. Leave blank to send unverified.
-            </p>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-1">
-            <Label htmlFor="millionVerifierKey" className="text-sm font-medium">
-              Million Verifier API key
-            </Label>
-            <Input
-              id="millionVerifierKey"
-              type="password"
-              value={millionVerifierKey}
-              onChange={(e) => setMillionVerifierKey(e.target.value)}
-              placeholder="Enter your Million Verifier API key"
-            />
-            <p className="text-[11px] text-muted-foreground">
-              Find your key at{" "}
-              <span className="font-mono">app.millionverifier.com/api</span>. ~1
-              credit per newly-verified address; results are cached for 30 days so
-              follow-ups are free.
-            </p>
-          </div>
-          {(millionVerifierMeta.credits !== null || millionVerifierMeta.checkedAt) && (
-            <p className="text-[11px] text-muted-foreground">
-              {millionVerifierMeta.credits !== null
-                ? `${millionVerifierMeta.credits.toLocaleString()} credits remaining`
-                : "Credits unknown"}
-              {millionVerifierMeta.checkedAt
-                ? ` · checked ${new Date(millionVerifierMeta.checkedAt).toLocaleString()}`
-                : ""}
-            </p>
-          )}
-          {millionVerifierMeta.lastError && (
-            <p className="text-[11px] text-red-600">
-              Last error: {millionVerifierMeta.lastError}
-              {millionVerifierMeta.lastErrorAt
-                ? ` (${new Date(millionVerifierMeta.lastErrorAt).toLocaleString()})`
-                : ""}
-            </p>
-          )}
-          <div className="flex gap-2 items-center">
-            <Button
-              onClick={handleSaveMillionVerifier}
-              disabled={savingMillionVerifier}
-              style={{ background: "#2E37FE" }}
-            >
-              {savingMillionVerifier ? "Saving..." : "Save"}
-            </Button>
-            <Button
-              variant="outline"
-              onClick={handleTestMillionVerifier}
-              disabled={testingMillionVerifier || !millionVerifierKey}
-            >
-              {testingMillionVerifier ? "Testing..." : "Test connection"}
-            </Button>
-            {millionVerifierSaved && (
-              <span className="text-sm text-emerald-600 flex items-center gap-1">
-                <CheckCircle size={14} /> Saved
-              </span>
-            )}
-          </div>
-          {millionVerifierError && (
-            <div className="flex items-center gap-2 rounded-lg bg-red-50 border border-red-200 p-3">
-              <XCircle size={16} className="text-red-500" />
-              <span className="text-sm font-medium text-red-700">
-                Save failed: {millionVerifierError}
-              </span>
-            </div>
-          )}
-          {millionVerifierTestResult?.kind === "success" && (
-            <div className="flex items-center gap-2 rounded-lg bg-emerald-50 border border-emerald-200 p-3">
-              <CheckCircle size={16} className="text-emerald-500" />
-              <span className="text-sm font-medium text-emerald-700">
-                Connected — {millionVerifierTestResult.credits.toLocaleString()} credits
-                remaining.
-              </span>
-            </div>
-          )}
-          {millionVerifierTestResult?.kind === "fail" && (
-            <div className="flex items-center gap-2 rounded-lg bg-red-50 border border-red-200 p-3">
-              <XCircle size={16} className="text-red-500" />
-              <span className="text-sm font-medium text-red-700">
-                {millionVerifierTestResult.message}
-              </span>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Findymail — catch-all email validation (migration 00099) */}
-      <Card className="border-border/50 shadow-sm">
-        <CardHeader className="flex flex-row items-center gap-2 pb-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600">
-            <MailCheck size={16} className="text-white" />
-          </div>
-          <div>
-            <CardTitle className="text-base">Catch-all email validation (Findymail)</CardTitle>
-            <p className="text-xs text-muted-foreground">
-              Recovers deliverable emails on catch-all domains that pattern-matching
-              can&apos;t verify. Turn it on per search with the &quot;Validate catch-all
-              emails&quot; toggle. Pay-on-hit (~$0.049/email); with no key the step is skipped.
-            </p>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-1">
-            <Label htmlFor="findymailKey" className="text-sm font-medium">
-              Findymail API key
-            </Label>
-            <Input
-              id="findymailKey"
-              type="password"
-              value={findymailKey}
-              onChange={(e) => setFindymailKey(e.target.value)}
-              placeholder="Enter your Findymail API key"
-            />
-            <p className="text-[11px] text-muted-foreground">
-              Find your key at <span className="font-mono">app.findymail.com</span>. Charged 1
-              credit only when a deliverable email is found — misses and risky catch-alls are free.
-            </p>
-          </div>
-          {(findymailMeta.credits !== null || findymailMeta.checkedAt) && (
-            <p className="text-[11px] text-muted-foreground">
-              {findymailMeta.credits !== null
-                ? `${findymailMeta.credits.toLocaleString()} credits remaining`
-                : "Credits unknown"}
-              {findymailMeta.checkedAt
-                ? ` · checked ${new Date(findymailMeta.checkedAt).toLocaleString()}`
-                : ""}
-            </p>
-          )}
-          <div className="flex gap-2 items-center">
-            <Button onClick={handleSaveFindymail} disabled={savingFindymail} style={{ background: "#2E37FE" }}>
-              {savingFindymail ? "Saving..." : "Save"}
-            </Button>
-            <Button variant="outline" onClick={handleTestFindymail} disabled={testingFindymail || !findymailKey}>
-              {testingFindymail ? "Testing..." : "Test connection"}
-            </Button>
-            {findymailSaved && (
-              <span className="text-sm text-emerald-600 flex items-center gap-1">
-                <CheckCircle size={14} /> Saved
-              </span>
-            )}
-          </div>
-          {findymailError && (
-            <div className="flex items-center gap-2 rounded-lg bg-red-50 border border-red-200 p-3">
-              <XCircle size={16} className="text-red-500" />
-              <span className="text-sm font-medium text-red-700">Save failed: {findymailError}</span>
-            </div>
-          )}
-          {findymailTestResult?.kind === "success" && (
-            <div className="flex items-center gap-2 rounded-lg bg-emerald-50 border border-emerald-200 p-3">
-              <CheckCircle size={16} className="text-emerald-500" />
-              <span className="text-sm font-medium text-emerald-700">
-                Connected — {findymailTestResult.credits.toLocaleString()} credits remaining.
-              </span>
-            </div>
-          )}
-          {findymailTestResult?.kind === "fail" && (
-            <div className="flex items-center gap-2 rounded-lg bg-red-50 border border-red-200 p-3">
-              <XCircle size={16} className="text-red-500" />
-              <span className="text-sm font-medium text-red-700">{findymailTestResult.message}</span>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Scrap.io API Key (Prospecting tab) */}
-      <Card className="border-border/50 shadow-sm">
-        <CardHeader className="flex flex-row items-center gap-2 pb-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-500">
-            <Search size={16} className="text-white" />
-          </div>
-          <div>
-            <CardTitle className="text-base">Scrap.io</CardTitle>
-            <p className="text-xs text-muted-foreground">Lead enrichment for the Prospecting tab</p>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-1">
-            <Label htmlFor="scrapioKey" className="text-sm font-medium">API Key</Label>
-            <Input
-              id="scrapioKey"
-              type="password"
-              value={scrapioKey}
-              onChange={(e) => setScrapioKey(e.target.value)}
-              placeholder="Enter your Scrap.io API key"
-            />
-            <p className="text-[11px] text-muted-foreground">
-              Find your key at <span className="font-mono">scrap.io/account/api</span>. Searches consume credits from your Scrap.io plan.
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <Button onClick={handleSaveScrapioKey} disabled={savingScrapio} style={{ background: '#2E37FE' }}>
-              {savingScrapio ? "Saving..." : "Save Key"}
-            </Button>
-            <Button variant="outline" onClick={handleTestScrapio} disabled={testingScrapio || !scrapioKey}>
-              {testingScrapio ? "Testing..." : "Test Connection"}
-            </Button>
-            {scrapioSaved && (
-              <span className="text-sm text-emerald-600 flex items-center gap-1">
-                <CheckCircle size={14} /> Saved
-              </span>
-            )}
-          </div>
-          {scrapioTestResult?.kind === "success" && (
-            <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-3 space-y-1">
-              <div className="flex items-center gap-2">
-                <CheckCircle size={16} className="text-emerald-500" />
-                <span className="text-sm font-medium text-emerald-700">Connection successful</span>
+  // One provider's settings body, unchanged from when these were a flat
+  // stack of cards. Only the open provider is built, so a provider that
+  // fetches its own config does it on open, not on every page load. The
+  // card frame is dropped here because the dialog is the frame.
+  // Connection state for a grid card. Only reported where this component
+  // actually holds the key: the five extracted cards fetch their own config,
+  // so they show no pill rather than a guessed one.
+  function statusOf(id: string): StatusKey | null {
+    const set = (v: string) => v.trim().length > 0;
+    switch (id) {
+      case "inboxHealth": return set(spamhausKey) ? "connected" : "notset";
+      case "nativeEmail": return set(gmailSaEmail) && set(gmailSaKey) ? "connected" : "notset";
+      case "resend": return set(resendKey) ? "connected" : "notset";
+      case "apify": return set(apifyKey) ? "connected" : "notset";
+      case "scrapio": return set(scrapioKey) ? "connected" : "notset";
+      case "emailVerify": return set(millionVerifierKey) ? "connected" : "notset";
+      case "findymail": return set(findymailKey) ? "connected" : "notset";
+      case "unipile": return set(unipileKey) ? "connected" : "notset";
+      case "anthropic": return set(anthropicKey) ? "connected" : "notset";
+      case "perplexity": return set(perplexityKey) ? "connected" : "optional";
+      case "stripe": return "soon";
+      default: return null;
+    }
+  }
+  function panelFor(id: string) {
+    switch (id) {
+      // Inbox health: Spamhaus blocklist key + auto-pause threshold (migration 00061)
+      case "inboxHealth":
+        return (
+          <Card className="border-0 py-0 shadow-none">
+            <CardHeader className="flex flex-row items-center gap-2 pb-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-600">
+                <Activity size={16} className="text-white" />
               </div>
-              <ScrapioSubscriptionSummary subscription={scrapioTestResult.subscription} />
-            </div>
-          )}
-          {scrapioTestResult?.kind === "fail" && (
-            <div className="flex items-center gap-2 rounded-lg bg-red-50 border border-red-200 p-3">
-              <XCircle size={16} className="text-red-500" />
-              <span className="text-sm font-medium text-red-700">{scrapioTestResult.message}</span>
-            </div>
-          )}
+              <div>
+                <CardTitle className="text-base">Inbox health</CardTitle>
+                <p className="text-xs text-muted-foreground">
+                  Scores every sending mailbox each hour from DNS, blacklist, bounce,
+                  reply, and seed-placement signals. Can take a mailbox offline
+                  automatically when it degrades.
+                </p>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-1">
+                <Label htmlFor="spamhausKey" className="text-sm font-medium">
+                  Spamhaus DQS key
+                </Label>
+                <Input
+                  id="spamhausKey"
+                  type="password"
+                  value={spamhausKey}
+                  onChange={(e) => setSpamhausKey(e.target.value)}
+                  placeholder="Spamhaus Data Query Service key"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Free key from <span className="font-mono">spamhaus.com</span> → Data
+                  Query Service. Used to check sending domains against the domain
+                  blocklist. Leave blank to skip the blacklist check.
+                </p>
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="offlineThreshold" className="text-sm font-medium">
+                  Auto-pause threshold
+                </Label>
+                <Input
+                  id="offlineThreshold"
+                  type="number"
+                  min={1}
+                  max={100}
+                  value={offlineThreshold}
+                  onChange={(e) => setOfflineThreshold(e.target.value)}
+                  placeholder="Leave blank to only alert"
+                  className="max-w-[220px]"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Pause a mailbox automatically when its score stays below this number
+                  for two checks in a row. Leave blank to only alert, and mailboxes are
+                  never paused automatically. 50 is a sensible starting point.
+                </p>
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="placementInterval" className="text-sm font-medium">
+                  Automatic placement tests (days)
+                </Label>
+                <Input
+                  id="placementInterval"
+                  type="number"
+                  min={1}
+                  max={90}
+                  value={placementInterval}
+                  onChange={(e) => setPlacementInterval(e.target.value)}
+                  placeholder="Leave blank for manual only"
+                  className="max-w-[220px]"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Every this-many days, send a neutral probe from each active mailbox to
+                  your seed inboxes (Mailboxes → Seed inboxes) and read back whether it
+                  landed in Inbox, Promotions, or Spam. Feeds the Seed placement health
+                  signal. 7 is the default; leave blank to run tests only by hand.
+                </p>
+              </div>
+              <div className="flex gap-2 items-center">
+                <Button
+                  onClick={handleSaveInboxHealth}
+                  disabled={savingInboxHealth}
+                  style={{ background: "#2E37FE" }}
+                >
+                  {savingInboxHealth ? "Saving..." : "Save"}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleTestSpamhaus}
+                  disabled={testingSpamhaus || !spamhausKey}
+                >
+                  {testingSpamhaus ? "Testing..." : "Test key"}
+                </Button>
+                {inboxHealthSaved && (
+                  <span className="text-sm text-emerald-600 flex items-center gap-1">
+                    <CheckCircle size={14} /> Saved
+                  </span>
+                )}
+              </div>
+              {inboxHealthError && (
+                <div className="flex items-center gap-2 rounded-lg bg-red-50 border border-red-200 p-3">
+                  <XCircle size={16} className="text-red-500" />
+                  <span className="text-sm font-medium text-red-700">
+                    Save failed: {inboxHealthError}
+                  </span>
+                </div>
+              )}
+              {spamhausTestResult?.kind === "success" && (
+                <div className="flex items-center gap-2 rounded-lg bg-emerald-50 border border-emerald-200 p-3">
+                  <CheckCircle size={16} className="text-emerald-500" />
+                  <span className="text-sm font-medium text-emerald-700">
+                    Key works. The test domain came back listed as expected.
+                  </span>
+                </div>
+              )}
+              {spamhausTestResult?.kind === "fail" && (
+                <div className="flex items-center gap-2 rounded-lg bg-red-50 border border-red-200 p-3">
+                  <XCircle size={16} className="text-red-500" />
+                  <span className="text-sm font-medium text-red-700">
+                    {spamhausTestResult.message}
+                  </span>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        );
+      // Native email: Google service account w/ domain-wide delegation (migration 00056)
+      case "nativeEmail":
+        return (
+          <Card className="border-0 py-0 shadow-none">
+            <CardHeader className="flex flex-row items-center gap-2 pb-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#EA4335]">
+                <AtSign size={16} className="text-white" />
+              </div>
+              <div>
+                <CardTitle className="text-base">Native Email (Google)</CardTitle>
+                <p className="text-xs text-muted-foreground">
+                  Send directly from client-owned Google Workspace inboxes via a
+                  service account with domain-wide delegation. Manage inboxes under
+                  Sending → Mailboxes.
+                </p>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-1">
+                <Label htmlFor="gmailSaEmail" className="text-sm font-medium">
+                  Service account email
+                </Label>
+                <Input
+                  id="gmailSaEmail"
+                  value={gmailSaEmail}
+                  onChange={(e) => setGmailSaEmail(e.target.value)}
+                  placeholder="native-sender@your-project.iam.gserviceaccount.com"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="gmailSaKey" className="text-sm font-medium">
+                  Service account private key
+                </Label>
+                <Textarea
+                  id="gmailSaKey"
+                  value={gmailSaKey}
+                  onChange={(e) => setGmailSaKey(e.target.value)}
+                  placeholder={"-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"}
+                  rows={4}
+                  className="font-mono text-xs"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  The <span className="font-mono">private_key</span> field from the
+                  service account&apos;s JSON key file. Each sending domain must
+                  authorize this account&apos;s client ID for the{" "}
+                  <span className="font-mono">gmail.send</span> and{" "}
+                  <span className="font-mono">gmail.readonly</span> scopes in Google
+                  Admin. See the setup runbook.
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <Button
+                  onClick={handleSaveGmail}
+                  disabled={savingGmail}
+                  style={{ background: "#2E37FE" }}
+                >
+                  {savingGmail ? "Saving..." : "Save Service Account"}
+                </Button>
+                {gmailSaved && (
+                  <span className="text-sm text-emerald-600 flex items-center gap-1">
+                    <CheckCircle size={14} /> Saved
+                  </span>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        );
+      // Email verification: Million Verifier (migration 00069)
+      case "emailVerify":
+        return (
+          <Card className="border-0 py-0 shadow-none">
+            <CardHeader className="flex flex-row items-center gap-2 pb-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-600">
+                <MailCheck size={16} className="text-white" />
+              </div>
+              <div>
+                <CardTitle className="text-base">Email verification</CardTitle>
+                <p className="text-xs text-muted-foreground">
+                  Verifies every recipient just before its first send (Million
+                  Verifier). Invalid and disposable addresses are never sent;
+                  catch-all and unknown are free. Leave blank to send unverified.
+                </p>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-1">
+                <Label htmlFor="millionVerifierKey" className="text-sm font-medium">
+                  Million Verifier API key
+                </Label>
+                <Input
+                  id="millionVerifierKey"
+                  type="password"
+                  value={millionVerifierKey}
+                  onChange={(e) => setMillionVerifierKey(e.target.value)}
+                  placeholder="Enter your Million Verifier API key"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Find your key at{" "}
+                  <span className="font-mono">app.millionverifier.com/api</span>. ~1
+                  credit per newly-verified address; results are cached for 30 days so
+                  follow-ups are free.
+                </p>
+              </div>
+              {(millionVerifierMeta.credits !== null || millionVerifierMeta.checkedAt) && (
+                <p className="text-[11px] text-muted-foreground">
+                  {millionVerifierMeta.credits !== null
+                    ? `${millionVerifierMeta.credits.toLocaleString()} credits remaining`
+                    : "Credits unknown"}
+                  {millionVerifierMeta.checkedAt
+                    ? ` · checked ${new Date(millionVerifierMeta.checkedAt).toLocaleString()}`
+                    : ""}
+                </p>
+              )}
+              {millionVerifierMeta.lastError && (
+                <p className="text-[11px] text-red-600">
+                  Last error: {millionVerifierMeta.lastError}
+                  {millionVerifierMeta.lastErrorAt
+                    ? ` (${new Date(millionVerifierMeta.lastErrorAt).toLocaleString()})`
+                    : ""}
+                </p>
+              )}
+              <div className="flex gap-2 items-center">
+                <Button
+                  onClick={handleSaveMillionVerifier}
+                  disabled={savingMillionVerifier}
+                  style={{ background: "#2E37FE" }}
+                >
+                  {savingMillionVerifier ? "Saving..." : "Save"}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleTestMillionVerifier}
+                  disabled={testingMillionVerifier || !millionVerifierKey}
+                >
+                  {testingMillionVerifier ? "Testing..." : "Test connection"}
+                </Button>
+                {millionVerifierSaved && (
+                  <span className="text-sm text-emerald-600 flex items-center gap-1">
+                    <CheckCircle size={14} /> Saved
+                  </span>
+                )}
+              </div>
+              {millionVerifierError && (
+                <div className="flex items-center gap-2 rounded-lg bg-red-50 border border-red-200 p-3">
+                  <XCircle size={16} className="text-red-500" />
+                  <span className="text-sm font-medium text-red-700">
+                    Save failed: {millionVerifierError}
+                  </span>
+                </div>
+              )}
+              {millionVerifierTestResult?.kind === "success" && (
+                <div className="flex items-center gap-2 rounded-lg bg-emerald-50 border border-emerald-200 p-3">
+                  <CheckCircle size={16} className="text-emerald-500" />
+                  <span className="text-sm font-medium text-emerald-700">
+                    Connected · {millionVerifierTestResult.credits.toLocaleString()} credits
+                    remaining.
+                  </span>
+                </div>
+              )}
+              {millionVerifierTestResult?.kind === "fail" && (
+                <div className="flex items-center gap-2 rounded-lg bg-red-50 border border-red-200 p-3">
+                  <XCircle size={16} className="text-red-500" />
+                  <span className="text-sm font-medium text-red-700">
+                    {millionVerifierTestResult.message}
+                  </span>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        );
+      // Findymail: catch-all email validation (migration 00099)
+      case "findymail":
+        return (
+          <Card className="border-0 py-0 shadow-none">
+            <CardHeader className="flex flex-row items-center gap-2 pb-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600">
+                <MailCheck size={16} className="text-white" />
+              </div>
+              <div>
+                <CardTitle className="text-base">Catch-all email validation (Findymail)</CardTitle>
+                <p className="text-xs text-muted-foreground">
+                  Recovers deliverable emails on catch-all domains that pattern-matching
+                  can&apos;t verify. Turn it on per search with the &quot;Validate catch-all
+                  emails&quot; toggle. Pay-on-hit (~$0.049/email); with no key the step is skipped.
+                </p>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-1">
+                <Label htmlFor="findymailKey" className="text-sm font-medium">
+                  Findymail API key
+                </Label>
+                <Input
+                  id="findymailKey"
+                  type="password"
+                  value={findymailKey}
+                  onChange={(e) => setFindymailKey(e.target.value)}
+                  placeholder="Enter your Findymail API key"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Find your key at <span className="font-mono">app.findymail.com</span>. Charged 1
+                  credit only when a deliverable email is found. Misses and risky catch-alls are free.
+                </p>
+              </div>
+              {(findymailMeta.credits !== null || findymailMeta.checkedAt) && (
+                <p className="text-[11px] text-muted-foreground">
+                  {findymailMeta.credits !== null
+                    ? `${findymailMeta.credits.toLocaleString()} credits remaining`
+                    : "Credits unknown"}
+                  {findymailMeta.checkedAt
+                    ? ` · checked ${new Date(findymailMeta.checkedAt).toLocaleString()}`
+                    : ""}
+                </p>
+              )}
+              <div className="flex gap-2 items-center">
+                <Button onClick={handleSaveFindymail} disabled={savingFindymail} style={{ background: "#2E37FE" }}>
+                  {savingFindymail ? "Saving..." : "Save"}
+                </Button>
+                <Button variant="outline" onClick={handleTestFindymail} disabled={testingFindymail || !findymailKey}>
+                  {testingFindymail ? "Testing..." : "Test connection"}
+                </Button>
+                {findymailSaved && (
+                  <span className="text-sm text-emerald-600 flex items-center gap-1">
+                    <CheckCircle size={14} /> Saved
+                  </span>
+                )}
+              </div>
+              {findymailError && (
+                <div className="flex items-center gap-2 rounded-lg bg-red-50 border border-red-200 p-3">
+                  <XCircle size={16} className="text-red-500" />
+                  <span className="text-sm font-medium text-red-700">Save failed: {findymailError}</span>
+                </div>
+              )}
+              {findymailTestResult?.kind === "success" && (
+                <div className="flex items-center gap-2 rounded-lg bg-emerald-50 border border-emerald-200 p-3">
+                  <CheckCircle size={16} className="text-emerald-500" />
+                  <span className="text-sm font-medium text-emerald-700">
+                    Connected · {findymailTestResult.credits.toLocaleString()} credits remaining.
+                  </span>
+                </div>
+              )}
+              {findymailTestResult?.kind === "fail" && (
+                <div className="flex items-center gap-2 rounded-lg bg-red-50 border border-red-200 p-3">
+                  <XCircle size={16} className="text-red-500" />
+                  <span className="text-sm font-medium text-red-700">{findymailTestResult.message}</span>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        );
+      // Scrap.io API Key (Prospecting tab)
+      case "scrapio":
+        return (
+          <Card className="border-0 py-0 shadow-none">
+            <CardHeader className="flex flex-row items-center gap-2 pb-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-500">
+                <Search size={16} className="text-white" />
+              </div>
+              <div>
+                <CardTitle className="text-base">Scrap.io</CardTitle>
+                <p className="text-xs text-muted-foreground">Lead enrichment for the Prospecting tab</p>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-1">
+                <Label htmlFor="scrapioKey" className="text-sm font-medium">API Key</Label>
+                <Input
+                  id="scrapioKey"
+                  type="password"
+                  value={scrapioKey}
+                  onChange={(e) => setScrapioKey(e.target.value)}
+                  placeholder="Enter your Scrap.io API key"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Find your key at <span className="font-mono">scrap.io/account/api</span>. Searches consume credits from your Scrap.io plan.
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <Button onClick={handleSaveScrapioKey} disabled={savingScrapio} style={{ background: '#2E37FE' }}>
+                  {savingScrapio ? "Saving..." : "Save Key"}
+                </Button>
+                <Button variant="outline" onClick={handleTestScrapio} disabled={testingScrapio || !scrapioKey}>
+                  {testingScrapio ? "Testing..." : "Test Connection"}
+                </Button>
+                {scrapioSaved && (
+                  <span className="text-sm text-emerald-600 flex items-center gap-1">
+                    <CheckCircle size={14} /> Saved
+                  </span>
+                )}
+              </div>
+              {scrapioTestResult?.kind === "success" && (
+                <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-3 space-y-1">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle size={16} className="text-emerald-500" />
+                    <span className="text-sm font-medium text-emerald-700">Connection successful</span>
+                  </div>
+                  <ScrapioSubscriptionSummary subscription={scrapioTestResult.subscription} />
+                </div>
+              )}
+              {scrapioTestResult?.kind === "fail" && (
+                <div className="flex items-center gap-2 rounded-lg bg-red-50 border border-red-200 p-3">
+                  <XCircle size={16} className="text-red-500" />
+                  <span className="text-sm font-medium text-red-700">{scrapioTestResult.message}</span>
+                </div>
+              )}
 
-          <div className="border-t border-border/60 pt-4 mt-4 space-y-2">
-            <p className="text-sm font-medium">Prospecting blacklist</p>
-            <p className="text-[11px] text-muted-foreground">
-              Every business pulled by the Prospecting tab is added to a Scrap.io
-              blacklist for this org. Future searches automatically skip those
-              businesses (no credits charged). Reset wipes the list — only do
-              this when you want to re-pull a region you scraped a long time ago.
-            </p>
-            <div className="flex items-center gap-3">
-              <Button
-                onClick={handleResetBlacklist}
-                disabled={resettingBlacklist || !scrapioKey}
-                variant="outline"
-                size="sm"
-              >
-                {resettingBlacklist ? "Resetting…" : "Reset blacklist"}
-              </Button>
-              {blacklistResetResult?.kind === "success" && (
-                <span className="text-sm text-emerald-600 flex items-center gap-1">
-                  <CheckCircle size={14} />
-                  Blacklist reset
-                  {blacklistResetResult.note && (
-                    <span className="text-muted-foreground ml-1">
-                      ({blacklistResetResult.note})
+              <div className="border-t border-border/60 pt-4 mt-4 space-y-2">
+                <p className="text-sm font-medium">Prospecting blacklist</p>
+                <p className="text-[11px] text-muted-foreground">
+                  Every business pulled by the Prospecting tab is added to a Scrap.io
+                  blacklist for this org. Future searches automatically skip those
+                  businesses (no credits charged). Reset wipes the list, so only do
+                  this when you want to re-pull a region you scraped a long time ago.
+                </p>
+                <div className="flex items-center gap-3">
+                  <Button
+                    onClick={handleResetBlacklist}
+                    disabled={resettingBlacklist || !scrapioKey}
+                    variant="outline"
+                    size="sm"
+                  >
+                    {resettingBlacklist ? "Resetting…" : "Reset blacklist"}
+                  </Button>
+                  {blacklistResetResult?.kind === "success" && (
+                    <span className="text-sm text-emerald-600 flex items-center gap-1">
+                      <CheckCircle size={14} />
+                      Blacklist reset
+                      {blacklistResetResult.note && (
+                        <span className="text-muted-foreground ml-1">
+                          ({blacklistResetResult.note})
+                        </span>
+                      )}
                     </span>
                   )}
-                </span>
-              )}
-              {blacklistResetResult?.kind === "fail" && (
-                <span className="text-sm text-red-600">
-                  {blacklistResetResult.message}
-                </span>
-              )}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Apify — Contacts enrichment (migration 00070) */}
-      <Card className="border-border/50 shadow-sm">
-        <CardHeader className="flex flex-row items-center gap-2 pb-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-600">
-            <Bot size={16} className="text-white" />
-          </div>
-          <div>
-            <CardTitle className="text-base">Apify</CardTitle>
-            <p className="text-xs text-muted-foreground">
-              Powers Contacts &rarr; Enrich (LinkedIn profile &rarr; email, company &rarr; domain, second-pass waterfall)
-            </p>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-1">
-            <Label htmlFor="apifyKey" className="text-sm font-medium">API Token</Label>
-            <Input
-              id="apifyKey"
-              type="password"
-              value={apifyKey}
-              onChange={(e) => setApifyKey(e.target.value)}
-              placeholder="apify_api_..."
-            />
-            <p className="text-[11px] text-muted-foreground">
-              Find your token at <span className="font-mono">console.apify.com</span> &rarr; Settings &rarr;
-              Integrations. One token powers every Contacts &rarr; Enrich step; you&apos;re billed per Apify actor run.
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <Button onClick={handleSaveApifyKey} disabled={savingApify} style={{ background: "#2E37FE" }}>
-              {savingApify ? "Saving..." : "Save Token"}
-            </Button>
-            <Button variant="outline" onClick={handleTestApify} disabled={testingApify || !apifyKey}>
-              {testingApify ? "Testing..." : "Test Connection"}
-            </Button>
-            {apifySaved && (
-              <span className="text-sm text-emerald-600 flex items-center gap-1">
-                <CheckCircle size={14} /> Saved
-              </span>
-            )}
-          </div>
-          {apifyTestResult?.kind === "success" && (
-            <div className="flex items-center gap-2 rounded-lg bg-emerald-50 border border-emerald-200 p-3">
-              <CheckCircle size={16} className="text-emerald-500" />
-              <span className="text-sm font-medium text-emerald-700">
-                Connection successful
-                {apifyTestResult.username && (
-                  <span className="text-emerald-700/70 font-normal"> — {apifyTestResult.username}</span>
-                )}
-                {apifyTestResult.plan && (
-                  <span className="text-emerald-700/70 font-normal"> · {apifyTestResult.plan}</span>
-                )}
-              </span>
-            </div>
-          )}
-          {apifyTestResult?.kind === "fail" && (
-            <div className="flex items-center gap-2 rounded-lg bg-red-50 border border-red-200 p-3">
-              <XCircle size={16} className="text-red-500" />
-              <span className="text-sm font-medium text-red-700">{apifyTestResult.message}</span>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Apify spend — authoritative cost breakdown read live from Apify */}
-      <ApifySpendCard />
-
-      {/* Enrichment waterfall — second-pass method routing + caps (migration 00075) */}
-      <WaterfallSettingsCard />
-
-      {/* Domain registrars — Porkbun/Spaceship keys + spend cap (Phase 2, migration 00084) */}
-      <RegistrarSettingsCard />
-
-      {/* Microsoft OAuth app — connect Outlook/M365 seed inboxes (migration 00085) */}
-      <MsOauthSettingsCard />
-
-      {/* Internal automations — reply-triggered Slack/webhook/email pings (migration 00087) */}
-      <AutomationsSettingsCard />
-
-      {/* Anthropic — decision-maker enrichment Layer 1 */}
-      <Card className="border-border/50 shadow-sm">
-        <CardHeader className="flex flex-row items-center gap-2 pb-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500">
-            <Sparkles size={16} className="text-white" />
-          </div>
-          <div>
-            <CardTitle className="text-base">Anthropic</CardTitle>
-            <p className="text-xs text-muted-foreground">
-              Powers decision-maker extraction in the Prospecting tab
-            </p>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-1">
-            <Label htmlFor="anthropicKey" className="text-sm font-medium">
-              API Key
-            </Label>
-            <Input
-              id="anthropicKey"
-              type="password"
-              value={anthropicKey}
-              onChange={(e) => setAnthropicKey(e.target.value)}
-              placeholder="sk-ant-..."
-            />
-            <p className="text-[11px] text-muted-foreground">
-              Find your key at{" "}
-              <span className="font-mono">console.anthropic.com</span>. Roughly
-              $0.003 per business enriched (Claude Haiku 4.5).
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <Button
-              onClick={handleSaveAnthropic}
-              disabled={savingAnthropic}
-              style={{ background: "#2E37FE" }}
-            >
-              {savingAnthropic ? "Saving..." : "Save Key"}
-            </Button>
-            <Button
-              variant="outline"
-              onClick={handleTestAnthropic}
-              disabled={testingAnthropic || !anthropicKey}
-            >
-              {testingAnthropic ? "Testing..." : "Test Connection"}
-            </Button>
-            {anthropicSaved && (
-              <span className="text-sm text-emerald-600 flex items-center gap-1">
-                <CheckCircle size={14} /> Saved
-              </span>
-            )}
-          </div>
-          {anthropicTestResult?.kind === "success" && (
-            <div className="flex items-center gap-2 rounded-lg bg-emerald-50 border border-emerald-200 p-3">
-              <CheckCircle size={16} className="text-emerald-500" />
-              <span className="text-sm font-medium text-emerald-700">
-                Connection successful{" "}
-                {anthropicTestResult.model && (
-                  <span className="text-emerald-700/70 font-normal">
-                    — {anthropicTestResult.model}
+                  {blacklistResetResult?.kind === "fail" && (
+                    <span className="text-sm text-red-600">
+                      {blacklistResetResult.message}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        );
+      // Apify: Contacts enrichment (migration 00070)
+      case "apify":
+        return (
+          <Card className="border-0 py-0 shadow-none">
+            <CardHeader className="flex flex-row items-center gap-2 pb-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-600">
+                <Bot size={16} className="text-white" />
+              </div>
+              <div>
+                <CardTitle className="text-base">Apify</CardTitle>
+                <p className="text-xs text-muted-foreground">
+                  Powers Contacts &rarr; Enrich (LinkedIn profile &rarr; email, company &rarr; domain, second-pass waterfall)
+                </p>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-1">
+                <Label htmlFor="apifyKey" className="text-sm font-medium">API Token</Label>
+                <Input
+                  id="apifyKey"
+                  type="password"
+                  value={apifyKey}
+                  onChange={(e) => setApifyKey(e.target.value)}
+                  placeholder="apify_api_..."
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Find your token at <span className="font-mono">console.apify.com</span> &rarr; Settings &rarr;
+                  Integrations. One token powers every Contacts &rarr; Enrich step; you&apos;re billed per Apify actor run.
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <Button onClick={handleSaveApifyKey} disabled={savingApify} style={{ background: "#2E37FE" }}>
+                  {savingApify ? "Saving..." : "Save Token"}
+                </Button>
+                <Button variant="outline" onClick={handleTestApify} disabled={testingApify || !apifyKey}>
+                  {testingApify ? "Testing..." : "Test Connection"}
+                </Button>
+                {apifySaved && (
+                  <span className="text-sm text-emerald-600 flex items-center gap-1">
+                    <CheckCircle size={14} /> Saved
                   </span>
                 )}
-              </span>
-            </div>
-          )}
-          {anthropicTestResult?.kind === "fail" && (
-            <div className="flex items-center gap-2 rounded-lg bg-red-50 border border-red-200 p-3">
-              <XCircle size={16} className="text-red-500" />
-              <span className="text-sm font-medium text-red-700">
-                {anthropicTestResult.message}
-              </span>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Perplexity — decision-maker enrichment Layer 2 (optional) */}
-      <Card className="border-border/50 shadow-sm">
-        <CardHeader className="flex flex-row items-center gap-2 pb-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-500">
-            <Compass size={16} className="text-white" />
-          </div>
-          <div>
-            <CardTitle className="text-base flex items-center gap-2">
-              Perplexity
-              <Badge
-                variant="secondary"
-                className="bg-slate-100 text-slate-600 border border-slate-200 text-[10px]"
-              >
-                Optional
-              </Badge>
-            </CardTitle>
-            <p className="text-xs text-muted-foreground">
-              Web-search fallback when a business website doesn&apos;t surface a
-              decision maker
-            </p>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-1">
-            <Label htmlFor="perplexityKey" className="text-sm font-medium">
-              API Key
-            </Label>
-            <Input
-              id="perplexityKey"
-              type="password"
-              value={perplexityKey}
-              onChange={(e) => setPerplexityKey(e.target.value)}
-              placeholder="pplx-..."
-            />
-            <p className="text-[11px] text-muted-foreground">
-              Find your key at{" "}
-              <span className="font-mono">perplexity.ai/settings/api</span>. If
-              unset, Layer 2 falls back to Claude&apos;s built-in web search
-              (slightly less accurate).
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <Button
-              onClick={handleSavePerplexity}
-              disabled={savingPerplexity}
-              style={{ background: "#2E37FE" }}
-            >
-              {savingPerplexity ? "Saving..." : "Save Key"}
-            </Button>
-            <Button
-              variant="outline"
-              onClick={handleTestPerplexity}
-              disabled={testingPerplexity || !perplexityKey}
-            >
-              {testingPerplexity ? "Testing..." : "Test Connection"}
-            </Button>
-            {perplexitySaved && (
-              <span className="text-sm text-emerald-600 flex items-center gap-1">
-                <CheckCircle size={14} /> Saved
-              </span>
-            )}
-          </div>
-          {perplexityTestResult?.kind === "success" && (
-            <div className="flex items-center gap-2 rounded-lg bg-emerald-50 border border-emerald-200 p-3">
-              <CheckCircle size={16} className="text-emerald-500" />
-              <span className="text-sm font-medium text-emerald-700">
-                Connection successful{" "}
-                {perplexityTestResult.model && (
-                  <span className="text-emerald-700/70 font-normal">
-                    — {perplexityTestResult.model}
+              </div>
+              {apifyTestResult?.kind === "success" && (
+                <div className="flex items-center gap-2 rounded-lg bg-emerald-50 border border-emerald-200 p-3">
+                  <CheckCircle size={16} className="text-emerald-500" />
+                  <span className="text-sm font-medium text-emerald-700">
+                    Connection successful
+                    {apifyTestResult.username && (
+                      <span className="text-emerald-700/70 font-normal"> · {apifyTestResult.username}</span>
+                    )}
+                    {apifyTestResult.plan && (
+                      <span className="text-emerald-700/70 font-normal"> · {apifyTestResult.plan}</span>
+                    )}
+                  </span>
+                </div>
+              )}
+              {apifyTestResult?.kind === "fail" && (
+                <div className="flex items-center gap-2 rounded-lg bg-red-50 border border-red-200 p-3">
+                  <XCircle size={16} className="text-red-500" />
+                  <span className="text-sm font-medium text-red-700">{apifyTestResult.message}</span>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        );
+      // Anthropic: decision-maker enrichment Layer 1
+      case "anthropic":
+        return (
+          <Card className="border-0 py-0 shadow-none">
+            <CardHeader className="flex flex-row items-center gap-2 pb-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500">
+                <Sparkles size={16} className="text-white" />
+              </div>
+              <div>
+                <CardTitle className="text-base">Anthropic</CardTitle>
+                <p className="text-xs text-muted-foreground">
+                  Powers decision-maker extraction in the Prospecting tab
+                </p>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-1">
+                <Label htmlFor="anthropicKey" className="text-sm font-medium">
+                  API Key
+                </Label>
+                <Input
+                  id="anthropicKey"
+                  type="password"
+                  value={anthropicKey}
+                  onChange={(e) => setAnthropicKey(e.target.value)}
+                  placeholder="sk-ant-..."
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Find your key at{" "}
+                  <span className="font-mono">console.anthropic.com</span>. Roughly
+                  $0.003 per business enriched (Claude Haiku 4.5).
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  onClick={handleSaveAnthropic}
+                  disabled={savingAnthropic}
+                  style={{ background: "#2E37FE" }}
+                >
+                  {savingAnthropic ? "Saving..." : "Save Key"}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleTestAnthropic}
+                  disabled={testingAnthropic || !anthropicKey}
+                >
+                  {testingAnthropic ? "Testing..." : "Test Connection"}
+                </Button>
+                {anthropicSaved && (
+                  <span className="text-sm text-emerald-600 flex items-center gap-1">
+                    <CheckCircle size={14} /> Saved
                   </span>
                 )}
-              </span>
-            </div>
-          )}
-          {perplexityTestResult?.kind === "fail" && (
-            <div className="flex items-center gap-2 rounded-lg bg-red-50 border border-red-200 p-3">
-              <XCircle size={16} className="text-red-500" />
-              <span className="text-sm font-medium text-red-700">
-                {perplexityTestResult.message}
-              </span>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+              </div>
+              {anthropicTestResult?.kind === "success" && (
+                <div className="flex items-center gap-2 rounded-lg bg-emerald-50 border border-emerald-200 p-3">
+                  <CheckCircle size={16} className="text-emerald-500" />
+                  <span className="text-sm font-medium text-emerald-700">
+                    Connection successful{" "}
+                    {anthropicTestResult.model && (
+                      <span className="text-emerald-700/70 font-normal">
+                        · {anthropicTestResult.model}
+                      </span>
+                    )}
+                  </span>
+                </div>
+              )}
+              {anthropicTestResult?.kind === "fail" && (
+                <div className="flex items-center gap-2 rounded-lg bg-red-50 border border-red-200 p-3">
+                  <XCircle size={16} className="text-red-500" />
+                  <span className="text-sm font-medium text-red-700">
+                    {anthropicTestResult.message}
+                  </span>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        );
+      // Perplexity: decision-maker enrichment Layer 2 (optional)
+      case "perplexity":
+        return (
+          <Card className="border-0 py-0 shadow-none">
+            <CardHeader className="flex flex-row items-center gap-2 pb-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-500">
+                <Compass size={16} className="text-white" />
+              </div>
+              <div>
+                <CardTitle className="text-base flex items-center gap-2">
+                  Perplexity
+                  <Badge
+                    variant="secondary"
+                    className="bg-slate-100 text-slate-600 border border-slate-200 text-[10px]"
+                  >
+                    Optional
+                  </Badge>
+                </CardTitle>
+                <p className="text-xs text-muted-foreground">
+                  Web-search fallback when a business website doesn&apos;t surface a
+                  decision maker
+                </p>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-1">
+                <Label htmlFor="perplexityKey" className="text-sm font-medium">
+                  API Key
+                </Label>
+                <Input
+                  id="perplexityKey"
+                  type="password"
+                  value={perplexityKey}
+                  onChange={(e) => setPerplexityKey(e.target.value)}
+                  placeholder="pplx-..."
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Find your key at{" "}
+                  <span className="font-mono">perplexity.ai/settings/api</span>. If
+                  unset, Layer 2 falls back to Claude&apos;s built-in web search
+                  (slightly less accurate).
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  onClick={handleSavePerplexity}
+                  disabled={savingPerplexity}
+                  style={{ background: "#2E37FE" }}
+                >
+                  {savingPerplexity ? "Saving..." : "Save Key"}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleTestPerplexity}
+                  disabled={testingPerplexity || !perplexityKey}
+                >
+                  {testingPerplexity ? "Testing..." : "Test Connection"}
+                </Button>
+                {perplexitySaved && (
+                  <span className="text-sm text-emerald-600 flex items-center gap-1">
+                    <CheckCircle size={14} /> Saved
+                  </span>
+                )}
+              </div>
+              {perplexityTestResult?.kind === "success" && (
+                <div className="flex items-center gap-2 rounded-lg bg-emerald-50 border border-emerald-200 p-3">
+                  <CheckCircle size={16} className="text-emerald-500" />
+                  <span className="text-sm font-medium text-emerald-700">
+                    Connection successful{" "}
+                    {perplexityTestResult.model && (
+                      <span className="text-emerald-700/70 font-normal">
+                        · {perplexityTestResult.model}
+                      </span>
+                    )}
+                  </span>
+                </div>
+              )}
+              {perplexityTestResult?.kind === "fail" && (
+                <div className="flex items-center gap-2 rounded-lg bg-red-50 border border-red-200 p-3">
+                  <XCircle size={16} className="text-red-500" />
+                  <span className="text-sm font-medium text-red-700">
+                    {perplexityTestResult.message}
+                  </span>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        );
+      // Unipile: LinkedIn channel (migration 00046)
+      case "unipile":
+        return (
+          <Card className="border-0 py-0 shadow-none">
+            <CardHeader className="flex flex-row items-center gap-2 pb-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#0A66C2]">
+                <LinkedinIcon size={16} className="text-white" />
+              </div>
+              <div>
+                <CardTitle className="text-base">Unipile (LinkedIn)</CardTitle>
+                <p className="text-xs text-muted-foreground">
+                  Connects LinkedIn / Sales Navigator accounts for outbound sequences and reply ingestion
+                </p>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="space-y-1">
+                  <Label htmlFor="unipileKey" className="text-sm font-medium">
+                    API Key
+                  </Label>
+                  <Input
+                    id="unipileKey"
+                    type="password"
+                    value={unipileKey}
+                    onChange={(e) => setUnipileKey(e.target.value)}
+                    placeholder="Unipile workspace API key"
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    Find at{" "}
+                    <span className="font-mono">dashboard.unipile.com</span> →
+                    Access Tokens.
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="unipileDsn" className="text-sm font-medium">
+                    DSN
+                  </Label>
+                  <Input
+                    id="unipileDsn"
+                    value={unipileDsn}
+                    onChange={(e) => setUnipileDsn(e.target.value)}
+                    placeholder="api7.unipile.com:13779"
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    Workspace host shown next to your API key on the Unipile
+                    dashboard.
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  onClick={handleSaveUnipile}
+                  disabled={savingUnipile}
+                  style={{ background: "#2E37FE" }}
+                >
+                  {savingUnipile ? "Saving..." : "Save Credentials"}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleTestUnipile}
+                  disabled={testingUnipile || !unipileKey || !unipileDsn}
+                >
+                  {testingUnipile ? "Testing..." : "Test Connection"}
+                </Button>
+                {unipileSaved && (
+                  <span className="text-sm text-emerald-600 flex items-center gap-1">
+                    <CheckCircle size={14} /> Saved
+                  </span>
+                )}
+              </div>
+              {unipileTestResult === "success" && (
+                <div className="flex items-center gap-2 rounded-lg bg-emerald-50 border border-emerald-200 p-3">
+                  <CheckCircle size={16} className="text-emerald-500" />
+                  <span className="text-sm font-medium text-emerald-700">
+                    Connection successful
+                  </span>
+                </div>
+              )}
+              {unipileTestResult === "fail" && (
+                <div className="flex items-center gap-2 rounded-lg bg-red-50 border border-red-200 p-3">
+                  <XCircle size={16} className="text-red-500" />
+                  <span className="text-sm font-medium text-red-700">
+                    Connection failed. Check the API key and DSN
+                  </span>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        );
+      // Resend (Email)
+      case "resend":
+        return (
+          <Card className="border-0 py-0 shadow-none">
+            <CardHeader className="flex flex-row items-center gap-2 pb-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50">
+                <Mail size={16} className="text-emerald-500" />
+              </div>
+              <div>
+                <CardTitle className="text-base">Resend</CardTitle>
+                <p className="text-xs text-muted-foreground">Email delivery for KPI reports &amp; notifications</p>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="space-y-1">
+                  <Label htmlFor="resendKey" className="text-sm font-medium">API Key</Label>
+                  <Input
+                    id="resendKey"
+                    type="password"
+                    value={resendKey}
+                    onChange={(e) => setResendKey(e.target.value)}
+                    placeholder="re_xxxxxxxxxx"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="emailFrom" className="text-sm font-medium">From Address</Label>
+                  <Input
+                    id="emailFrom"
+                    value={emailFrom}
+                    onChange={(e) => setEmailFrom(e.target.value)}
+                    placeholder="LeadStart <reports@yourdomain.com>"
+                  />
+                  <p className="text-[11px] text-muted-foreground">Use onboarding@resend.dev for testing</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <Button onClick={handleSaveResend} disabled={savingResend} style={{ background: '#2E37FE' }}>
+                  {savingResend ? "Saving..." : "Save Email Settings"}
+                </Button>
+                {resendSaved && (
+                  <span className="text-sm text-emerald-600 flex items-center gap-1">
+                    <CheckCircle size={14} /> Saved
+                  </span>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        );
+      // Sync Schedule
+      case "dataSync":
+        return (
+          <Card className="border-0 py-0 shadow-none">
+            <CardHeader className="flex flex-row items-center gap-2 pb-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-50">
+                <Clock size={16} className="text-amber-500" />
+              </div>
+              <div>
+                <CardTitle className="text-base">Data Sync Schedule</CardTitle>
+                <p className="text-xs text-muted-foreground">Control when campaign analytics are refreshed</p>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center gap-2 mb-2">
+                <RefreshCw size={14} className="text-muted-foreground" />
+                <p className="text-sm font-medium">Daily Analytics Sync</p>
+                <Badge variant="secondary" className="badge-green text-[10px]">Active</Badge>
+              </div>
 
-      {/* Unipile — LinkedIn channel (migration 00046) */}
-      <Card className="border-border/50 shadow-sm">
-        <CardHeader className="flex flex-row items-center gap-2 pb-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#0A66C2]">
-            <LinkedinIcon size={16} className="text-white" />
-          </div>
-          <div>
-            <CardTitle className="text-base">Unipile (LinkedIn)</CardTitle>
-            <p className="text-xs text-muted-foreground">
-              Connects LinkedIn / Sales Navigator accounts for outbound sequences and reply ingestion
-            </p>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div className="space-y-1">
-              <Label htmlFor="unipileKey" className="text-sm font-medium">
-                API Key
-              </Label>
-              <Input
-                id="unipileKey"
-                type="password"
-                value={unipileKey}
-                onChange={(e) => setUnipileKey(e.target.value)}
-                placeholder="Unipile workspace API key"
-              />
-              <p className="text-[11px] text-muted-foreground">
-                Find at{" "}
-                <span className="font-mono">dashboard.unipile.com</span> →
-                Access Tokens.
-              </p>
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="unipileDsn" className="text-sm font-medium">
-                DSN
-              </Label>
-              <Input
-                id="unipileDsn"
-                value={unipileDsn}
-                onChange={(e) => setUnipileDsn(e.target.value)}
-                placeholder="api7.unipile.com:13779"
-              />
-              <p className="text-[11px] text-muted-foreground">
-                Workspace host shown next to your API key on the Unipile
-                dashboard.
-              </p>
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <Button
-              onClick={handleSaveUnipile}
-              disabled={savingUnipile}
-              style={{ background: "#2E37FE" }}
-            >
-              {savingUnipile ? "Saving..." : "Save Credentials"}
-            </Button>
-            <Button
-              variant="outline"
-              onClick={handleTestUnipile}
-              disabled={testingUnipile || !unipileKey || !unipileDsn}
-            >
-              {testingUnipile ? "Testing..." : "Test Connection"}
-            </Button>
-            {unipileSaved && (
-              <span className="text-sm text-emerald-600 flex items-center gap-1">
-                <CheckCircle size={14} /> Saved
-              </span>
-            )}
-          </div>
-          {unipileTestResult === "success" && (
-            <div className="flex items-center gap-2 rounded-lg bg-emerald-50 border border-emerald-200 p-3">
-              <CheckCircle size={16} className="text-emerald-500" />
-              <span className="text-sm font-medium text-emerald-700">
-                Connection successful
-              </span>
-            </div>
-          )}
-          {unipileTestResult === "fail" && (
-            <div className="flex items-center gap-2 rounded-lg bg-red-50 border border-red-200 p-3">
-              <XCircle size={16} className="text-red-500" />
-              <span className="text-sm font-medium text-red-700">
-                Connection failed — check the API key and DSN
-              </span>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+              <div className="space-y-1">
+                <Label className="text-sm font-medium">Sync Time</Label>
+                <div className="flex items-center gap-2">
+                  <Select value={syncHour12} onValueChange={(v) => v && setSyncHour12(v)}>
+                    <SelectTrigger className="w-20">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {HOUR_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <span className="text-muted-foreground text-sm">:</span>
+                  <span className="text-sm font-medium w-8">00</span>
+                  <Select value={syncAmPm} onValueChange={(v) => v && setSyncAmPm(v)}>
+                    <SelectTrigger className="w-20">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {AMPM_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Badge variant="secondary" className="badge-blue text-[10px] ml-2">
+                    Eastern Time (ET)
+                  </Badge>
+                </div>
+                <p className="text-[11px] text-muted-foreground">Refreshes analytics for all active campaigns</p>
+              </div>
 
-      {/* Resend (Email) */}
-      <Card className="border-border/50 shadow-sm">
-        <CardHeader className="flex flex-row items-center gap-2 pb-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50">
-            <Mail size={16} className="text-emerald-500" />
-          </div>
-          <div>
-            <CardTitle className="text-base">Resend</CardTitle>
-            <p className="text-xs text-muted-foreground">Email delivery for KPI reports &amp; notifications</p>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div className="space-y-1">
-              <Label htmlFor="resendKey" className="text-sm font-medium">API Key</Label>
-              <Input
-                id="resendKey"
-                type="password"
-                value={resendKey}
-                onChange={(e) => setResendKey(e.target.value)}
-                placeholder="re_xxxxxxxxxx"
-              />
+              <div className="flex items-center gap-3 pt-2">
+                <Button onClick={handleSaveSchedule} disabled={savingSchedule} style={{ background: '#2E37FE' }}>
+                  {savingSchedule ? "Saving..." : "Save Schedule"}
+                </Button>
+                {scheduleSaved && (
+                  <span className="text-sm text-emerald-600 flex items-center gap-1">
+                    <CheckCircle size={14} /> Saved
+                  </span>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        );
+      // Stripe (Placeholder)
+      case "stripe":
+        return (
+          <Card className="border-0 py-0 shadow-none">
+            <CardHeader className="flex flex-row items-center gap-2 pb-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-50">
+                <CreditCard size={16} className="text-violet-500" />
+              </div>
+              <div>
+                <CardTitle className="text-base">Stripe</CardTitle>
+                <p className="text-xs text-muted-foreground">Billing &amp; subscriptions</p>
+              </div>
+              <Badge variant="secondary" className="ml-auto bg-gray-100 text-gray-500 border border-gray-200 text-[10px]">Coming Soon</Badge>
+            </CardHeader>
+            <CardContent>
+              <div className="rounded-xl border border-dashed border-gray-200 bg-background/50 p-6 text-center space-y-2">
+                <p className="text-sm text-muted-foreground">
+                  Stripe integration for automated billing, invoicing, and payment tracking will be available soon.
+                </p>
+                <Button disabled variant="outline" className="text-xs">
+                  Connect Stripe Account
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        );
+      case "apifySpend":
+        return <ApifySpendCard />;
+      case "waterfall":
+        return <WaterfallSettingsCard />;
+      case "registrars":
+        return <RegistrarSettingsCard />;
+      case "msOauth":
+        return <MsOauthSettingsCard />;
+      case "automations":
+        return <AutomationsSettingsCard />;
+      default:
+        return null;
+    }
+  }
+
+  const open = openId ? PROVIDERS[openId] : null;
+
+  return (
+    <>
+      <div className="space-y-8">
+        {PROVIDER_GROUPS.map((group) => (
+          <section key={group.label} className="space-y-3">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              {group.label}
+            </h2>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {group.ids.map((id) => {
+                const p = PROVIDERS[id];
+                const Icon = p.icon;
+                const state = statusOf(id);
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setOpenId(id)}
+                    className="group flex w-full flex-col gap-2 rounded-xl border bg-card p-4 text-left transition-colors hover:border-primary/40 hover:bg-muted/40"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${p.tile}`}>
+                        <Icon size={15} className={p.iconClass} />
+                      </div>
+                      <span className="flex-1 text-sm font-semibold leading-tight">{p.title}</span>
+                      <ChevronRight
+                        size={15}
+                        className="shrink-0 text-muted-foreground/40 transition-colors group-hover:text-primary"
+                      />
+                    </div>
+                    <p className="text-xs leading-relaxed text-muted-foreground">{p.blurb}</p>
+                    {state && (
+                      <span className="mt-auto pt-0.5">
+                        <Badge variant="secondary" className={STATUS[state].cls}>
+                          {STATUS[state].label}
+                        </Badge>
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
-            <div className="space-y-1">
-              <Label htmlFor="emailFrom" className="text-sm font-medium">From Address</Label>
-              <Input
-                id="emailFrom"
-                value={emailFrom}
-                onChange={(e) => setEmailFrom(e.target.value)}
-                placeholder="LeadStart <reports@yourdomain.com>"
-              />
-              <p className="text-[11px] text-muted-foreground">Use onboarding@resend.dev for testing</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <Button onClick={handleSaveResend} disabled={savingResend} style={{ background: '#2E37FE' }}>
-              {savingResend ? "Saving..." : "Save Email Settings"}
-            </Button>
-            {resendSaved && (
-              <span className="text-sm text-emerald-600 flex items-center gap-1">
-                <CheckCircle size={14} /> Saved
-              </span>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+          </section>
+        ))}
+      </div>
 
-      {/* Sync Schedule */}
-      <Card className="border-border/50 shadow-sm">
-        <CardHeader className="flex flex-row items-center gap-2 pb-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-50">
-            <Clock size={16} className="text-amber-500" />
-          </div>
-          <div>
-            <CardTitle className="text-base">Data Sync Schedule</CardTitle>
-            <p className="text-xs text-muted-foreground">Control when campaign analytics are refreshed</p>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center gap-2 mb-2">
-            <RefreshCw size={14} className="text-muted-foreground" />
-            <p className="text-sm font-medium">Daily Analytics Sync</p>
-            <Badge variant="secondary" className="badge-green text-[10px]">Active</Badge>
-          </div>
-
-          <div className="space-y-1">
-            <Label className="text-sm font-medium">Sync Time</Label>
-            <div className="flex items-center gap-2">
-              <Select value={syncHour12} onValueChange={(v) => v && setSyncHour12(v)}>
-                <SelectTrigger className="w-20">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {HOUR_OPTIONS.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <span className="text-muted-foreground text-sm">:</span>
-              <span className="text-sm font-medium w-8">00</span>
-              <Select value={syncAmPm} onValueChange={(v) => v && setSyncAmPm(v)}>
-                <SelectTrigger className="w-20">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {AMPM_OPTIONS.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Badge variant="secondary" className="badge-blue text-[10px] ml-2">
-                Eastern Time (ET)
-              </Badge>
-            </div>
-            <p className="text-[11px] text-muted-foreground">Refreshes analytics for all active campaigns</p>
-          </div>
-
-          <div className="flex items-center gap-3 pt-2">
-            <Button onClick={handleSaveSchedule} disabled={savingSchedule} style={{ background: '#2E37FE' }}>
-              {savingSchedule ? "Saving..." : "Save Schedule"}
-            </Button>
-            {scheduleSaved && (
-              <span className="text-sm text-emerald-600 flex items-center gap-1">
-                <CheckCircle size={14} /> Saved
-              </span>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Stripe (Placeholder) */}
-      <Card className="border-border/50 shadow-sm">
-        <CardHeader className="flex flex-row items-center gap-2 pb-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-50">
-            <CreditCard size={16} className="text-violet-500" />
-          </div>
-          <div>
-            <CardTitle className="text-base">Stripe</CardTitle>
-            <p className="text-xs text-muted-foreground">Billing &amp; subscriptions</p>
-          </div>
-          <Badge variant="secondary" className="ml-auto bg-gray-100 text-gray-500 border border-gray-200 text-[10px]">Coming Soon</Badge>
-        </CardHeader>
-        <CardContent>
-          <div className="rounded-xl border border-dashed border-gray-200 bg-background/50 p-6 text-center space-y-2">
-            <p className="text-sm text-muted-foreground">
-              Stripe integration for automated billing, invoicing, and payment tracking will be available soon.
-            </p>
-            <Button disabled variant="outline" className="text-xs">
-              Connect Stripe Account
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+      <Dialog open={openId !== null} onOpenChange={(o) => { if (!o) setOpenId(null); }}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
+          {/* The panel renders its own heading, so the accessible title is
+              visually hidden rather than duplicated. */}
+          <DialogHeader className="sr-only">
+            <DialogTitle>{open ? open.title : "Integration"}</DialogTitle>
+          </DialogHeader>
+          {openId && panelFor(openId)}
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
