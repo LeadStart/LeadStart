@@ -67,7 +67,14 @@ export function buildTokenMap(
   if (cf && typeof cf === "object") {
     for (const [k, v] of Object.entries(cf)) {
       if (v == null) continue;
-      map[normalizeVarKey(k)] = typeof v === "string" ? v : String(v);
+      const key = normalizeVarKey(k);
+      // Custom fields never override the standard contact columns or the
+      // sender-identity tokens above: a CSV column named "Your Name" used to
+      // sign every email from every rotating inbox with that value
+      // (SEND_RUNTIME_AUDIT.md SEND-29). The CSV importer already refuses
+      // those keys; this guards every other ingest path.
+      if (Object.prototype.hasOwnProperty.call(map, key)) continue;
+      map[key] = typeof v === "string" ? v : String(v);
     }
   }
 

@@ -214,8 +214,24 @@ async function applyTransition(
     drain_until: timers.drain_until ?? null,
     rest_until: timers.rest_until ?? null,
   };
-  const { error } = await admin.from("sending_domains").update(update).eq("id", domain.id);
+  // Compare-and-set on the from-state: the reply poller's bounce circuit
+  // breaker can tire this domain between our read and this write (both run
+  // at :45), and an unguarded update would overwrite the trip and null its
+  // drain timer (SEND_RUNTIME_AUDIT.md CRON-08). Zero rows = raced; skip the
+  // mailbox side effects, the next hourly pass sees the real state.
+  const { data: updated, error } = await admin
+    .from("sending_domains")
+    .update(update)
+    .eq("id", domain.id)
+    .eq("lifecycle_status", domain.lifecycle_status)
+    .select("id");
   if (error) throw new Error(`sending_domains update failed: ${error.message}`);
+  if (!updated || updated.length === 0) {
+    console.warn(
+      `[cron/mailbox-lifecycle] ${domain.domain}: transition ${domain.lifecycle_status} -> ${next} skipped, state changed concurrently`,
+    );
+    return;
+  }
 
   // Side effects on the domain's mailboxes.
   if (next === "resting" || next === "burned") {

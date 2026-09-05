@@ -203,7 +203,10 @@ If catch-all rows bounce materially more than `ok` rows, revisit the policy.
   Treat it like any other production credential; it lives in the same
   org-settings trust boundary as the Salesforge/Unipile keys.
 - **Ramp & caps** are per-mailbox data (see `src/lib/gmail/ramp.ts`): new
-  inboxes start at 5/day and step up weekly to the mailbox's cap (default 20).
+  inboxes start at 5/day and gain +1/day as they actually send (5, 6, 7 ...)
+  up to the mailbox's cap (default 20, the hard ceiling). The ramp is keyed to
+  the cumulative send count, so a paused inbox holds its place rather than
+  fast-forwarding.
   Send window is Mon–Fri, 8am–5pm Eastern. Adjust caps per mailbox on the
   Mailboxes page.
 - **No warmup product and no tracking.** New inboxes just ramp slowly; metrics

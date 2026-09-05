@@ -47,7 +47,16 @@ function encodeHeaderWord(value: string): string {
 
 function formatFrom(email: string, name?: string | null): string {
   if (!name) return email;
-  return `${encodeHeaderWord(name)} <${email}>`;
+  const encoded = encodeHeaderWord(name);
+  // An ASCII display name is emitted as a bare phrase, which RFC 5322 only
+  // allows for atext + dots. "Smith, John", "Bob (LeadStart)" or a name with a
+  // colon/semicolon/angle bracket must be a quoted-string or the header parses
+  // as a group / second address (SEND_RUNTIME_AUDIT.md SEND-22). Encoded
+  // words (non-ASCII) are already safe as a phrase and are never quoted.
+  if (encoded === name && /[^A-Za-z0-9!#$%&'*+\-/=?^_`{|}~. ]/.test(name)) {
+    return `"${name.replace(/[\\"]/g, (c) => `\\${c}`)}" <${email}>`;
+  }
+  return `${encoded} <${email}>`;
 }
 
 // Header values that are NOT RFC 2047-encoded (To/Cc/In-Reply-To/References)
@@ -133,7 +142,9 @@ export function buildRawEmail(params: BuildEmailParams): string {
       : []),
     `Subject: ${encodeHeaderWord(params.subject)}`,
     `Message-ID: ${params.messageId}`,
-    `Date: ${new Date().toUTCString()}`,
+    // RFC 5322 date-time with a numeric zone; toUTCString()'s "GMT" is the
+    // obsolete obs-zone form (SEND-27).
+    `Date: ${new Date().toUTCString().replace(/ GMT$/, " +0000")}`,
     `MIME-Version: 1.0`,
     `Content-Type: multipart/alternative; boundary="${boundary}"`,
   ];

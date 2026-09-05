@@ -44,7 +44,12 @@ export function isClientDueNow(
 
   const parts = wallClockInZone(now, client.report_timezone);
   if (!parts) return { isDue: false, reason: "bad_timezone" };
-  if (parts.hour !== schedHour) return { isDue: false, reason: "wrong_hour" };
+  // Due from the scheduled hour ONWARD on the scheduled day (not only in the
+  // exact hour): the 23h guard above already prevents a double send, and an
+  // exact-hour match meant a report whose Resend call failed at 09:00 was
+  // never retried until the next weekly/biweekly/monthly slot, despite the
+  // cron's "next-hour retry" comments (SEND_RUNTIME_AUDIT.md CRON-07).
+  if (parts.hour < schedHour) return { isDue: false, reason: "wrong_hour" };
 
   if (client.report_frequency === "weekly") {
     if (client.report_day_of_week == null) {

@@ -2,6 +2,9 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { LinkedInProspect } from "@/types/app";
 import { normalizeAddons } from "./auth";
 
+// One bare address, same shape the CSV importer enforces (client-import/route.ts).
+const IMPORT_EMAIL_RE = /^[A-Za-z0-9._%+\-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$/;
+
 // Shared LinkedIn-prospect → contacts import. Used by BOTH the manual "Import to
 // Contacts" click (linkedin-save) and the automatic post-search import
 // (run-linkedin-searches, when auto_run_after_search is on). Dedupes by
@@ -128,7 +131,11 @@ export async function importLinkedInProspects(
       campaign_id: campaignId,
       first_name: p.first_name,
       last_name: p.last_name,
-      email: p.email,
+      // Actor-supplied emails are validated at the sink like CSV emails are:
+      // an unanchored value such as "a@x.com, b@x.com" reached the To: header
+      // verbatim and became a two-recipient send (SEND_RUNTIME_AUDIT.md
+      // SEND-33). Anything that is not one bare address is stored as no email.
+      email: p.email && IMPORT_EMAIL_RE.test(p.email.trim()) ? p.email.trim().toLowerCase() : null,
       company_name: p.company_name,
       title: p.headline,
       // The PERSON's LinkedIn profile location (migration 00078) — where they
