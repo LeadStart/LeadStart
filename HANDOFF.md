@@ -5,7 +5,7 @@
 
 ---
 
-## 2026-09-05: Native send + cron runtime audit (Tier 1 + Tier 2) — 7 LOCAL commits, NOT pushed
+## 2026-09-05: Native send + cron runtime audit (Tier 1 + Tier 2) — 9 commits PUSHED to master 09:43Z (deployed)
 
 `/cto-audit` run over the native email send runtime (run-native-sequences,
 poll-native-replies, src/lib/gmail, src/lib/native, the Million Verifier gate,
@@ -41,7 +41,7 @@ open / declined sections). Registry row + pathway ticks in `AUDITS.md`.
   re-read DSNs inflated bounces into the circuit breaker, and re-upserts reset
   handled replies to "new" (duplicate portal send possible).
 
-**Commits (local master, unpushed):** `9dbae48` cron fleet, `96c448d` send
+**Commits (pushed to master 2026-09-05 09:43Z, auto-deployed):** `9dbae48` cron fleet, `96c448d` send
 runtime + Gmail client, `7bed81c` reply poller + MIME, `75a6bef` small items,
 `43e5031` error boundaries, `f9d9536` tsc to zero + `ignoreBuildErrors=false`
 (build passes twice), `d7081f1` migration 00126 RLS delta (NOT applied), plus the
@@ -49,8 +49,7 @@ docs commit. Verified: tsc 0 errors, six test suites green (23/39/42/27/11/46),
 MIME probe re-run, `npm run build` green.
 
 **For Daniel:**
-1. The push decision. Everything is local. `git push origin master` deploys to
-   prod (switch `gh` to LeadStart first). After the first tick, check the cron
+1. Pushed on Daniel's "push it". After the first production tick, check the cron
    JSON for `claimed_elsewhere`, `deadline_hit`, `truncated`, and any 500 with
    "prefetch failed" (a 500 now means "wait 5 min", never lost leads).
 2. Apply `supabase/migrations/00126_rls_delta_hardening.sql` via the dashboard

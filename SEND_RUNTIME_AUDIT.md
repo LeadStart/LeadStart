@@ -1,7 +1,7 @@
 # Native Send + Cron Runtime Audit
 
 **Started:** 2026-09-05T08:37:47Z (hard stop 11:22Z, 2h45m wall clock)
-**Status:** COMPLETE (fixes shipped locally, nothing pushed). See Reconciliation + Shipped + Open at the end.
+**Status:** COMPLETE. Fixes pushed to master 2026-09-05 09:43Z (deployed); migration 00126 not applied. See Reconciliation + Shipped + Open at the end.
 **Pathways ticked:** Native send pipeline (Tier 1) + Cron worker fleet (Tier 2)
 **Fix gate:** PRE-AUTHORIZED for this run (every CONFIRMED critical/high; medium/low when small + safe). Commits LOCAL only, never pushed.
 
@@ -230,7 +230,7 @@ Lane E reconciliation: 18 candidates = 17 confirmed + 0 refuted + 1 superseded (
 - Verified clean by lane: A 21, B 14, C 14, D 15, E 18, F 11 = 93.
 - Verification methods: lead verifier re-read of every cited line for the critical/high items and every fix target; Finder B's hostile-input MIME probe re-run by the lead verifier; Finder D's 46-case harness against the real gate; three simulations and 13 read-only prod queries by Finder A; 15 read-only prod queries by Finder D; live RLS catalog reads by the RLS lane; Vercel and Google docs read this run for every platform claim. Low-severity lane F cascade items (SEND-46..49) were accepted on the finder's exhaustive writer matrix without a second read.
 
-## Shipped this session (all LOCAL commits on master, NOT pushed)
+## Shipped this session (pushed to master 2026-09-05 09:43Z)
 
 | Commit | Cluster | Findings closed |
 |---|---|---|
@@ -291,4 +291,4 @@ Parked out of scope (enrichment pathway): SEND-54 (pattern-finder verdict never 
 Cross-check: confirmed 13+17+15+11+17+13 = 86; superseded 1+0+0+1+1+2+5 = 10; refuted 2; total 98.
 
 **Finished:** 2026-09-05 (see the commit timestamps; hard stop was 11:22Z, work completed before 09:40Z).
-**Status:** COMPLETE. Fixes shipped locally on master (7 commits), nothing pushed, migration 00126 written and not applied.
+**Status:** COMPLETE. 9 commits pushed to master 2026-09-05 09:43Z (auto-deployed to prod); migration 00126 written and not applied.

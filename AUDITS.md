@@ -9,7 +9,7 @@ rainier-app's audit registry.
 | Date | Scope | Confirmed | Refuted | Clean areas | Status | Doc |
 |---|---|---|---|---|---|---|
 | 2026-08-30 | Apify actor + spend subsystem | 53 (+1 partial, +13 verifier-found) | 4 | ~69 | **FIXES ON MASTER** (landed in 7f4493b) | [APIFY_SPEND_AUDIT.md](APIFY_SPEND_AUDIT.md) |
-| 2026-09-05 | Native send runtime + cron worker fleet (23 routes) + 3 bolt-ons (tsc-to-zero, live RLS delta, error boundaries) | 86 (of 98 candidates; 10 superseded) | 2 | 93 | **FIXES SHIPPED LOCAL** (7 commits, unpushed; migration 00126 written, not applied) | [SEND_RUNTIME_AUDIT.md](SEND_RUNTIME_AUDIT.md) |
+| 2026-09-05 | Native send runtime + cron worker fleet (23 routes) + 3 bolt-ons (tsc-to-zero, live RLS delta, error boundaries) | 86 (of 98 candidates; 10 superseded) | 2 | 93 | **FIXES ON MASTER** (pushed 2026-09-05; migration 00126 written, not applied) | [SEND_RUNTIME_AUDIT.md](SEND_RUNTIME_AUDIT.md) |
 
 ## Pathway checklist (candidate audits, Tier 1 = money · security · corruption first)
 
