@@ -1243,6 +1243,12 @@ export const OWNER_NOTIFY_HOT_CLASSES: ReplyClass[] = [
   "referral_forward",
 ];
 
+// Classes where the client portal offers NO reply composer, because a reply is
+// pointless or unwelcome: "ooo" is an auto-responder, and "unsubscribe" is
+// someone who explicitly opted out. Every other class is repliable from the
+// portal (the send API itself gates on status, not class).
+export const PORTAL_NO_REPLY_CLASSES: ReplyClass[] = ["ooo", "unsubscribe"];
+
 // Prospecting (Scrap.io lead enrichment)
 
 // Flattened business row stored in prospect_searches.results and shown in

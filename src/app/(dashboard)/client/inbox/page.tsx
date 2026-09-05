@@ -18,6 +18,7 @@ import {
   Mail,
 } from "lucide-react";
 import type { LeadReply, ReplyClass, ReplyOutcome } from "@/types/app";
+import { PORTAL_NO_REPLY_CLASSES } from "@/types/app";
 import {
   CLASS_META,
   OUTCOME_OPTIONS,
@@ -40,9 +41,10 @@ import { Conversation } from "@/components/inbox/conversation";
 import { QuickActionBar, type QuickActionGroup } from "@/components/inbox/quick-action-bar";
 import { classAccent } from "@/components/inbox/reclassify-control";
 
-// Classes where the CLIENT may compose a portal follow-up: the genuinely hot,
-// call-now classes only (mirrors the old dossier). Referrals/objections/silent
-// are worked by the owner, so no composer.
+// The genuinely hot, call-now classes. The client can reply to ANY not-yet-sent
+// reply from the portal (the send API gates on status, not class — see
+// /api/replies/[id]/send); this list only decides which classes auto-open the
+// composer vs. surface a "Reply" button first.
 const REPLYABLE_CLASSES: ReplyClass[] = ["true_interest", "meeting_booked", "qualifying_question"];
 
 type Filter = "urgent" | "all" | "resolved";
@@ -242,6 +244,12 @@ function ClientThread({
   const { previewing } = useClientData();
   const isReplyable = reply.final_class ? REPLYABLE_CLASSES.includes(reply.final_class) : false;
   const isSent = reply.status === "sent";
+  // Every not-yet-sent reply can be answered from the portal EXCEPT the
+  // no-reply classes (ooo / unsubscribe). Sendability mirrors the send API,
+  // which claims the row only while status is new/classified.
+  const isSendable = reply.status === "new" || reply.status === "classified";
+  const noReply = reply.final_class ? PORTAL_NO_REPLY_CLASSES.includes(reply.final_class) : false;
+  const canReply = isSendable && !noReply;
   const phone = telHref(reply.lead_phone_e164);
   const leadName = reply.lead_name || reply.lead_email;
 
@@ -254,7 +262,6 @@ function ClientThread({
   const [sendError, setSendError] = useState<string | null>(null);
 
   const [savingOutcome, setSavingOutcome] = useState<ReplyOutcome | null>(null);
-  const [excludeSaving, setExcludeSaving] = useState(false);
 
   async function send() {
     if (!bodyText.trim() || previewing) return;
@@ -289,22 +296,6 @@ function ClientThread({
       if (res.ok) onPatch({ outcome, outcome_logged_at: data.outcome_logged_at, status: data.status ?? reply.status });
     } finally {
       setSavingOutcome(null);
-    }
-  }
-
-  async function toggleExclude() {
-    if (previewing) return;
-    const next = !reply.excluded_from_stats;
-    setExcludeSaving(true);
-    try {
-      const res = await fetch(appUrl(`/api/replies/${reply.id}/exclude`), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ excluded: next }),
-      });
-      if (res.ok) onPatch({ excluded_from_stats: next });
-    } finally {
-      setExcludeSaving(false);
     }
   }
 
@@ -408,7 +399,7 @@ function ClientThread({
           <div className="flex items-center gap-2 text-[13px] font-medium text-emerald-700">
             <CheckCircle2 size={15} /> Reply sent {reply.sent_at ? timeSince(reply.sent_at) : ""} · CC&apos;d to your inbox.
           </div>
-        ) : isReplyable && showComposer ? (
+        ) : canReply && showComposer ? (
           <div className="space-y-2">
             <input
               value={subject}
@@ -439,22 +430,20 @@ function ClientThread({
               </button>
             </div>
           </div>
-        ) : isReplyable ? (
+        ) : canReply ? (
           <button
             onClick={() => setShowComposer(true)}
             className="inline-flex items-center gap-1.5 rounded-lg bg-[#2E37FE] px-4 py-2 text-sm font-bold text-white cursor-pointer"
           >
             <Send size={14} /> Reply
           </button>
-        ) : (
-          <button
-            onClick={toggleExclude}
-            disabled={excludeSaving || previewing}
-            className="text-xs font-medium text-muted-foreground hover:text-foreground cursor-pointer disabled:opacity-50"
-          >
-            {excludeSaving ? "…" : reply.excluded_from_stats ? "Include in your stats" : "Not a real lead? Exclude from stats"}
-          </button>
-        )}
+        ) : noReply ? (
+          <p className="text-xs text-muted-foreground">
+            {reply.final_class === "unsubscribe"
+              ? "This person opted out, so there's no reply to send from here."
+              : "Out-of-office auto-reply. No action needed."}
+          </p>
+        ) : null}
       </div>
     </div>
   );

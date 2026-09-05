@@ -15,7 +15,8 @@ import {
   CheckCircle2,
   Send,
 } from "lucide-react";
-import type { LeadReply, ReplyClass, ReplyOutcome } from "@/types/app";
+import type { LeadReply, ReplyOutcome } from "@/types/app";
+import { PORTAL_NO_REPLY_CLASSES } from "@/types/app";
 import {
   OUTCOME_OPTIONS,
   isReplyActionable,
@@ -24,18 +25,6 @@ import {
   formatBody,
   urgencyColor,
 } from "@/lib/replies/ui";
-
-// Classes where the CLIENT may compose a follow-up email via the portal: only
-// the genuinely hot, call-now classes they are notified for. referral_forward
-// (a handoff, owner-facing) and the objection classes (owner-only, 2026-08-31)
-// are worked by the owner/VA, not the client, so they get no client composer.
-// Silent classes (ooo, unsubscribe, not_interested, wrong_person_no_referral)
-// never did.
-const REPLYABLE_CLASSES: ReplyClass[] = [
-  "true_interest",
-  "meeting_booked",
-  "qualifying_question",
-];
 
 // Brand gradients (inline, because custom gradient classes don't reliably generate
 // under Tailwind v4, per project convention).
@@ -86,7 +75,6 @@ export default function ReplyDossierPage() {
   const [outcomeNotes, setOutcomeNotes] = useState("");
   const [savingOutcome, setSavingOutcome] = useState(false);
   const [outcomeSaved, setOutcomeSaved] = useState(false);
-  const [excludeSaving, setExcludeSaving] = useState(false);
 
   // Portal-reply composer state (open by default, because the hot-lead email's
   // "Reply" button lands the client here to respond).
@@ -194,24 +182,6 @@ export default function ReplyDossierPage() {
     }
   }
 
-  async function handleToggleExclude() {
-    if (!reply || previewing) return;
-    const next = !reply.excluded_from_stats;
-    setExcludeSaving(true);
-    try {
-      const res = await fetch(appUrl(`/api/replies/${reply.id}/exclude`), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ excluded: next }),
-      });
-      if (res.ok) {
-        setReply((prev) => prev && { ...prev, excluded_from_stats: next });
-      }
-    } finally {
-      setExcludeSaving(false);
-    }
-  }
-
   if (contextLoading || loading) {
     return (
       <div className="space-y-4 animate-pulse">
@@ -249,7 +219,12 @@ export default function ReplyDossierPage() {
   const monogram = isGeneric ? "🏢" : initials(reply.lead_name || "");
   const avatarBg = isGeneric ? SLATE : GRAD;
 
-  const isReplyable = reply.final_class ? REPLYABLE_CLASSES.includes(reply.final_class) : false;
+  // Every not-yet-sent reply can be answered from the portal EXCEPT the
+  // no-reply classes (ooo / unsubscribe). Sendability mirrors the send API,
+  // which claims the row only while status is new/classified.
+  const isSendable = reply.status === "new" || reply.status === "classified";
+  const noReply = reply.final_class ? PORTAL_NO_REPLY_CLASSES.includes(reply.final_class) : false;
+  const canReply = isSendable && !noReply;
   const isSent = reply.status === "sent";
 
   return (
@@ -446,7 +421,7 @@ export default function ReplyDossierPage() {
             </div>
           </CardContent>
         </Card>
-      ) : isReplyable ? (
+      ) : canReply ? (
         <Card className="shadow-sm" style={{ borderColor: "#C9CEEA" }}>
           <CardContent className="px-5 py-4 space-y-3">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-[#2E37FE]">
@@ -498,6 +473,16 @@ export default function ReplyDossierPage() {
                 {sending ? "Sending…" : "Send reply"}
               </button>
             </div>
+          </CardContent>
+        </Card>
+      ) : noReply ? (
+        <Card className="border-border/50 shadow-sm">
+          <CardContent className="px-5 py-4">
+            <p className="text-sm text-muted-foreground">
+              {reply.final_class === "unsubscribe"
+                ? "This person opted out, so there's no reply to send from here."
+                : "Out-of-office auto-reply. No action needed."}
+            </p>
           </CardContent>
         </Card>
       ) : null}
@@ -559,28 +544,6 @@ export default function ReplyDossierPage() {
         </CardContent>
       </Card>
 
-      {/* Exclude from stats */}
-      <Card className={reply.excluded_from_stats ? "border-amber-200 bg-amber-50/40" : "border-border/50 shadow-sm"}>
-        <CardContent className="px-5 py-3 flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-sm font-medium text-foreground">
-              {reply.excluded_from_stats ? "Excluded from your stats" : "Counted in your stats"}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {reply.excluded_from_stats
-                ? "This lead isn't counted in your dashboard or reports."
-                : "Not a real lead? Exclude it so it doesn't count toward your metrics."}
-            </p>
-          </div>
-          <button
-            onClick={handleToggleExclude}
-            disabled={excludeSaving || previewing}
-            className="btn-secondary-white px-3 py-1.5 text-xs shrink-0 cursor-pointer disabled:opacity-50"
-          >
-            {excludeSaving ? "…" : reply.excluded_from_stats ? "Include" : "Exclude"}
-          </button>
-        </CardContent>
-      </Card>
     </div>
   );
 }
