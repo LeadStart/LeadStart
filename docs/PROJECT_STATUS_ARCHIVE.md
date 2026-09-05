@@ -297,8 +297,8 @@ The Claude classifier + Resend hot-lead notification flow now runs against nativ
 | `/api/cron/sync-analytics` | hourly | Rolls up native campaign analytics |
 | `/api/cron/send-reports` | hourly | Emails KPI reports per client schedule |
 | `/api/cron/run-linkedin-sequences` | every 15 min | LinkedIn sequence dispatcher (gated on activation) |
-| `/api/cron/run-prospect-searches` | every minute | Scrap.io background search worker |
-| `/api/cron/run-decision-maker-enrichment` | every minute | Two-layer decision-maker enrichment worker |
+| `/api/cron/run-prospect-searches` | NOT SCHEDULED (dropped from vercel.json in 6818bc0; dead code, no UI caller; audit CRON-15) | Scrap.io background search worker (retired) |
+| `/api/cron/run-decision-maker-enrichment` | NOT SCHEDULED (dropped in 6818bc0; dead code; the decision-maker lib itself still runs inside run-apify-enrichment's naming phase) | Two-layer decision-maker enrichment worker (retired) |
 | `/api/cron/expire-replies` | 6am UTC | Marks old replies as expired |
 | `/api/cron/retry-notifications` | every 2 min | Resend retry queue |
 | `/api/cron/prune-webhook-events` | 4am UTC | Webhook audit log cleanup |
