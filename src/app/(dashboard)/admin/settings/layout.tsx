@@ -1,14 +1,13 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
 import { settingsEntryForPath } from "./settings-nav";
 
 // Settings shell. /admin/settings is the hub (grouped cards, see page.tsx);
-// every sub-section is its own route that opens with a back-link to the hub
-// and its own title. This replaced the horizontal sub-tab bar, which had
+// every sub-section is its own route, titled here and opening with the
+// circular back arrow (PageHeader backHref) that returns to the hub.
+// This replaced the horizontal sub-tab bar, which had
 // outgrown the row (it h-scrolled) and gave no hint what a section held.
 // Titling here means each section is named once, in settings-nav.ts.
 export default function SettingsLayout({ children }: { children: React.ReactNode }) {
@@ -26,16 +25,11 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
 
   return (
     <div className="space-y-6">
-      <div>
-        <Link
-          href="/admin/settings"
-          className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <ArrowLeft size={14} />
-          Back to settings
-        </Link>
-        <PageHeader className="mt-3" title={entry.title} />
-      </div>
+      <PageHeader
+        backHref="/admin/settings"
+        backLabel="Back to settings"
+        title={entry.title}
+      />
       {children}
     </div>
   );

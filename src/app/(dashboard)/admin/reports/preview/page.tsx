@@ -60,6 +60,8 @@ export default function ReportPreviewPage() {
   return (
     <div className="space-y-6">
       <PageHeader
+        backHref="/admin/reports"
+        backLabel="Back to reports"
         title="Weekly KPI Report Preview"
       />
 

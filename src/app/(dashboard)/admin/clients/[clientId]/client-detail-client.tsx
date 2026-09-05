@@ -22,7 +22,6 @@ import { ReplyRoutingSection } from "./reply-routing-section";
 import { LinkedinSection } from "./linkedin-section";
 import { DncSection } from "./dnc-section";
 import {
-  ArrowLeft,
   ArrowRight,
   Mail,
   MessageSquare,
@@ -115,54 +114,46 @@ export function ClientDetailClient({
 
   return (
     <div className="space-y-6">
-      <div>
-        <Link
-          href="/admin"
-          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <ArrowLeft size={14} />
-          Back to Overview
-        </Link>
-        <PageHeader
-          className="mt-3"
-          title={
-            <span className="inline-flex items-center gap-2">
-              {client.name}
-              <Badge
-                variant="secondary"
-                className={
-                  (client.status ?? "active") === "active"
-                    ? "badge-green"
-                    : "badge-amber"
-                }
-              >
-                {(client.status ?? "active") === "active" ? "Active" : "Former"}
-              </Badge>
-            </span>
-          }
-          actions={
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={statusUpdating}
-              onClick={() =>
-                toggleClientStatus((client.status ?? "active") as ClientStatus)
+      <PageHeader
+        backHref="/admin/clients"
+        backLabel="Back to clients"
+        title={
+          <span className="inline-flex items-center gap-2">
+            {client.name}
+            <Badge
+              variant="secondary"
+              className={
+                (client.status ?? "active") === "active"
+                  ? "badge-green"
+                  : "badge-amber"
               }
-              className="gap-1.5"
             >
-              {(client.status ?? "active") === "active" ? (
-                <>
-                  <Archive size={14} /> Archive Client
-                </>
-              ) : (
-                <>
-                  <ArchiveRestore size={14} /> Restore to Active
-                </>
-              )}
-            </Button>
-          }
-        />
-      </div>
+              {(client.status ?? "active") === "active" ? "Active" : "Former"}
+            </Badge>
+          </span>
+        }
+        actions={
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={statusUpdating}
+            onClick={() =>
+              toggleClientStatus((client.status ?? "active") as ClientStatus)
+            }
+            className="gap-1.5"
+          >
+            {(client.status ?? "active") === "active" ? (
+              <>
+                <Archive size={14} /> Archive Client
+              </>
+            ) : (
+              <>
+                <ArchiveRestore size={14} /> Restore to Active
+              </>
+            )}
+          </Button>
+        }
+      />
 
       <ContactSection client={client} onSaved={refresh} />
 

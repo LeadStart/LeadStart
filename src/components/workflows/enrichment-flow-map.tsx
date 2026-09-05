@@ -9,6 +9,7 @@
 
 import { useRef } from "react";
 import styles from "./enrichment-flow-map.module.css";
+import { BackButton } from "@/components/layout/back-button";
 import {
   type FlowNode,
   type FlowEdge,
@@ -161,7 +162,10 @@ export function EnrichmentFlowMap() {
   return (
     <div className={styles.page}>
       <div className={styles.head}>
-        <h1 className={styles.title}>Enrichment Flow Map</h1>
+        <div className={styles.titleRow}>
+          <BackButton href="/admin/settings/workflows" label="Back to workflows" />
+          <h1 className={styles.title}>Enrichment Flow Map</h1>
+        </div>
         <div className={styles.legend}>
           <span className={styles.k}><span className={styles.sw} style={{ background: "#eaf1ff", borderColor: "#2f5fe0" }} /> source</span>
           <span className={styles.k}><span className={styles.sw} style={{ background: "#ffffff", borderColor: "#cdd5e3" }} /> step</span>
