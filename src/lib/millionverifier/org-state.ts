@@ -39,10 +39,24 @@ interface OrgVerifierRow {
   millionverifier_error_streak: number | null;
 }
 
-// Read each org's verifier state for this tick. On any error (most importantly a
-// "column does not exist" error before migration 00069 is applied) we log and
-// return an empty map — the gate then treats every org as disarmed and sends
-// proceed unverified, rather than the whole cron throwing.
+// Thrown when the per-org verifier state cannot be read. The send worker treats
+// it as "abort this tick" (fail closed): sends wait five minutes rather than go
+// out unverified.
+export class VerifierStateLoadError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "VerifierStateLoadError";
+  }
+}
+
+// Read each org's verifier state for this tick. FAIL CLOSED: any error reading
+// the organizations row throws, and the worker aborts the tick, because the
+// old "log and return an empty map" stance disarmed the gate on ANY error (a
+// transient PostgREST 5xx included) and let every uncached address go out
+// unverified with nothing but a console line (SEND_RUNTIME_AUDIT.md SEND-51).
+// The one deliberate exception is the pre-migration-00069 "column does not
+// exist" case (Postgres 42703), which still disarms so a schema lag cannot
+// stop all sending; 00069 is live in production, so that branch is dormant.
 export async function loadVerifierStates(
   admin: AdminClient,
   orgIds: string[],
@@ -59,11 +73,16 @@ export async function loadVerifierStates(
     .in("id", orgIds);
 
   if (error) {
-    console.error(
-      "[millionverifier] loadVerifierStates failed; verification gate disarmed this tick:",
-      error.message ?? error,
+    if (error.code === "42703") {
+      console.error(
+        "[millionverifier] verifier columns missing (migration 00069 not applied); gate disarmed this tick:",
+        error.message ?? error,
+      );
+      return states;
+    }
+    throw new VerifierStateLoadError(
+      `loadVerifierStates failed: ${error.message ?? String(error)}`,
     );
-    return states;
   }
 
   const envKey = process.env.MILLIONVERIFIER_API_KEY?.trim() || null;

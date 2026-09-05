@@ -98,7 +98,10 @@ export async function gateContactVerification(args: {
     state.held++;
     return { action: "hold", reason: "verifier_unavailable" };
   }
-  if (now.getTime() >= state.deadlineMs) {
+  // Wall-clock budget. `now` is the FROZEN tick timestamp the worker passes
+  // for cache-freshness math, so comparing it against tickNow + 30s could never
+  // trip (SEND_RUNTIME_AUDIT.md SEND-52); the budget must read the live clock.
+  if (Date.now() >= state.deadlineMs) {
     state.held++;
     return { action: "hold", reason: "verify_budget" };
   }

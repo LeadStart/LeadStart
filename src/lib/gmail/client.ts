@@ -18,11 +18,18 @@
 // rather than retrying.
 //
 // No token-bucket throttle here (unlike the Resend client): the send worker
-// awaits sends sequentially inside a 15-min cron, so there is no burst to
-// smooth. Gmail's per-user quota (250 units/sec; a send costs 100) is far
-// above one-at-a-time sending. Add a bucket only if we ever parallelize.
+// awaits sends sequentially inside a 5-min cron (one send per inbox per tick),
+// so there is no burst to smooth. Gmail's per-user quota (250 units/sec; a
+// send costs 100) is far above one-at-a-time sending. Add a bucket only if we
+// ever parallelize.
 
 import { randomUUID } from "node:crypto";
+
+// Per-call ceiling on any Gmail HTTP round trip. The send worker's function
+// budget is 60s and a send is two calls (send + Message-ID read-back), so this
+// keeps a single stalled call from taking the tick down with sends already
+// made but not yet logged.
+export const GMAIL_FETCH_TIMEOUT_MS = 10_000;
 
 import {
   GoogleServiceAccount,
@@ -52,30 +59,33 @@ export class GmailConfigError extends GoogleConfigError {
 
 // Delegation not authorized / revoked for this mailbox, or the SA key is
 // bad. Permanent for this mailbox until an admin fixes the Google side.
+// Every class threads the HTTP `status` through to the Google* base so call
+// sites can branch on it (a 404 on a send that carried a threadId means the
+// thread is gone, not that the lead is bad).
 export class GmailAuthError extends GoogleAuthError {
-  constructor(message: string) {
-    super(message);
+  constructor(message: string, status?: number) {
+    super(message, status);
     this.name = "GmailAuthError";
   }
 }
 
 export class GmailRateLimitError extends GoogleRateLimitError {
-  constructor(message = "Gmail rate-limited") {
-    super(message);
+  constructor(message = "Gmail rate-limited", status?: number) {
+    super(message, status);
     this.name = "GmailRateLimitError";
   }
 }
 
 export class GmailTransientError extends GoogleTransientError {
-  constructor(message: string) {
-    super(message);
+  constructor(message: string, status?: number) {
+    super(message, status);
     this.name = "GmailTransientError";
   }
 }
 
 export class GmailPermanentError extends GooglePermanentError {
-  constructor(message: string) {
-    super(message);
+  constructor(message: string, status?: number) {
+    super(message, status);
     this.name = "GmailPermanentError";
   }
 }
@@ -153,15 +163,29 @@ export class GmailClient {
     init?: RequestInit,
   ): Promise<unknown> {
     const token = await this.getAccessToken(subject);
-    const res = await fetch(`${GMAIL_BASE}${path}`, {
-      ...init,
-      headers: {
-        Authorization: `Bearer ${token}`,
-        ...(init?.body ? { "Content-Type": "application/json" } : {}),
-        ...(init?.headers ?? {}),
-      },
-    });
-    const text = await res.text();
+    // Network-level failures (undici "fetch failed", ECONNRESET, a body read
+    // that dies mid-stream) used to escape as a bare TypeError, which the send
+    // worker's catch could only read as a permanent failure and so failed the
+    // lead for good (SEND_RUNTIME_AUDIT.md SEND-18). They are transient: classify
+    // them so the enrollment is retried next tick. The timeout keeps one hung
+    // Google call from eating the whole 60s function budget (SEND-34).
+    let res: Response;
+    let text: string;
+    try {
+      res = await fetch(`${GMAIL_BASE}${path}`, {
+        ...init,
+        headers: {
+          Authorization: `Bearer ${token}`,
+          ...(init?.body ? { "Content-Type": "application/json" } : {}),
+          ...(init?.headers ?? {}),
+        },
+        signal: AbortSignal.timeout(GMAIL_FETCH_TIMEOUT_MS),
+      });
+      text = await res.text();
+    } catch (err) {
+      const msg = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+      throw new GmailTransientError(`Gmail request failed before a response: ${msg}`);
+    }
     if (!res.ok) {
       throw classifyApiError(res.status, text);
     }
@@ -289,32 +313,58 @@ function asGmailError(err: unknown): unknown {
   }
   if (err instanceof GoogleConfigError) return new GmailConfigError(err.message);
   if (err instanceof GoogleRateLimitError) {
-    return new GmailRateLimitError(err.message);
+    return new GmailRateLimitError(err.message, err.status);
   }
   if (err instanceof GoogleTransientError) {
-    return new GmailTransientError(err.message);
+    return new GmailTransientError(err.message, err.status);
   }
   if (err instanceof GooglePermanentError) {
-    return new GmailPermanentError(err.message);
+    return new GmailPermanentError(err.message, err.status);
   }
-  if (err instanceof GoogleAuthError) return new GmailAuthError(err.message);
-  return err;
+  if (err instanceof GoogleAuthError) return new GmailAuthError(err.message, err.status);
+  // Anything else escaping the token minter (a bare TypeError from fetch, an
+  // abort) is a transient condition, never a reason to fail a lead.
+  return new GmailTransientError(
+    `Token mint failed: ${err instanceof Error ? `${err.name}: ${err.message}` : String(err)}`,
+  );
 }
 
-function classifyApiError(status: number, bodyText: string): Error {
+// Gmail's 403 carries two very different families under one status (Google's
+// error guide, read 2026-09-05): quota reasons (`rateLimitExceeded`,
+// `userRateLimitExceeded`, `dailyLimitExceeded`: "implement exponential
+// backoff") and permission reasons (`domainPolicy`, `forbidden`, ...). Treating
+// them all as revoked delegation benched a healthy inbox until a human flipped
+// it back (SEND_RUNTIME_AUDIT.md SEND-19). Quota reasons are rate limits.
+const GMAIL_QUOTA_REASONS = new Set([
+  "rateLimitExceeded",
+  "userRateLimitExceeded",
+  "dailyLimitExceeded",
+  "quotaExceeded",
+]);
+
+export function classifyApiError(status: number, bodyText: string): Error {
   let message = bodyText;
+  let reason: string | null = null;
   try {
-    const parsed = JSON.parse(bodyText) as { error?: { message?: string } };
+    const parsed = JSON.parse(bodyText) as {
+      error?: { message?: string; status?: string; errors?: { reason?: string }[] };
+    };
     message = parsed.error?.message ?? bodyText;
+    reason = parsed.error?.errors?.[0]?.reason ?? null;
+    // Newer error bodies carry a bare status string instead of `errors[]`.
+    if (!reason && parsed.error?.status === "RESOURCE_EXHAUSTED") reason = "rateLimitExceeded";
   } catch {
     /* keep raw body */
   }
-  if (status === 401 || status === 403) {
-    return new GmailAuthError(`Gmail ${status}: ${message}`);
+  if (status === 429) return new GmailRateLimitError(`Gmail 429: ${message}`, status);
+  if (status === 403 && reason && GMAIL_QUOTA_REASONS.has(reason)) {
+    return new GmailRateLimitError(`Gmail 403 ${reason}: ${message}`, status);
   }
-  if (status === 429) return new GmailRateLimitError(message);
-  if (status >= 500) return new GmailTransientError(`Gmail ${status}: ${message}`);
-  return new GmailPermanentError(`Gmail ${status}: ${message}`);
+  if (status === 401 || status === 403) {
+    return new GmailAuthError(`Gmail ${status}${reason ? ` ${reason}` : ""}: ${message}`, status);
+  }
+  if (status >= 500) return new GmailTransientError(`Gmail ${status}: ${message}`, status);
+  return new GmailPermanentError(`Gmail ${status}: ${message}`, status);
 }
 
 // Re-export for callers that build their own Message-ID before send.

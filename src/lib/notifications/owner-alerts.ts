@@ -39,6 +39,7 @@ export type OwnerAlertKind =
   | "hot_lead_persistent_failure"
   | "inbox_health_degraded"
   | "inbox_health_auto_paused"
+  | "mailbox_benched"
   | "client_csv_upload"
   | "email_verifier_unavailable"
   | "email_verifier_credits_low"
@@ -257,6 +258,7 @@ const KIND_LABEL: Record<OwnerAlertKind, string> = {
   hot_lead_persistent_failure: "Hot-lead notification permanently failed",
   inbox_health_degraded: "Mailbox health critical",
   inbox_health_auto_paused: "Mailbox auto-paused (health)",
+  mailbox_benched: "Mailbox benched by the sender",
   client_csv_upload: "Client CSV upload",
   email_verifier_unavailable: "Email verifier unavailable — new sends on hold",
   email_verifier_credits_low: "Email verifier credits low",
@@ -272,6 +274,7 @@ const KIND_COLOR: Record<OwnerAlertKind, string> = {
   hot_lead_persistent_failure: "#b91c1c",
   inbox_health_degraded: "#c2410c",
   inbox_health_auto_paused: "#b91c1c",
+  mailbox_benched: "#b91c1c",
   // Informational (not a failure): client self-service activity.
   client_csv_upload: "#2563eb",
   // Verifier down halts new sends (fail-closed) → hard failure red; a low

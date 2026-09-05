@@ -15,14 +15,19 @@
 //      continuity; else the least-loaded mailbox in the campaign's pool),
 //      render the step, then verify the recipient just-in-time (Million
 //      Verifier): fresh cached results send with no API call, invalid/
-//      disposable are skipped, and unknown/errors or a verifier outage HOLD
-//      (fail-closed). Then send the step, log it to native_sends, advance the
-//      enrollment.
+//      disposable are skipped, errors and a verifier outage HOLD (fail-closed),
+//      and an address that stays "unknown" after three hourly retries sends
+//      flagged risky (owner-confirmed policy, src/lib/millionverifier/policy.ts).
+//      Then send the step, log it to native_sends, advance the enrollment.
 //
-// Pacing is at-most-once with no locking, same accepted stance as the
-// existing dispatch crons: a send either happens and is logged, or it
-// doesn't and the next tick retries. Transient/rate-limit failures leave
-// the enrollment active for retry; permanent failures mark it failed.
+// Pacing is at-most-once. There is no lock table or lease, but each step is
+// CLAIMED with a compare-and-set on the enrollment's current_step_index right
+// before the Gmail call (see claimStep below): Vercel documents that a second
+// cron instance can start while one is running and that a scheduled run can
+// occasionally be delivered twice, and the local cron-drive loop overlaps
+// prod, so "one tick at a time" is not something the platform guarantees.
+// Transient/rate-limit failures release the claim and leave the enrollment
+// active for retry; permanent failures mark it failed.
 
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -43,8 +48,9 @@ import {
 } from "@/lib/gmail/ramp";
 import { renderSpintax } from "@/lib/spintax";
 import { buildTokenMap, applyTokens } from "@/lib/native/tokens";
-import { loadVerifierStates, finalizeVerifierStates } from "@/lib/millionverifier/org-state";
+import { loadVerifierStates, finalizeVerifierStates, VerifierStateLoadError } from "@/lib/millionverifier/org-state";
 import { gateContactVerification } from "@/lib/millionverifier/verify-contact";
+import { enqueueOwnerAlert } from "@/lib/notifications/owner-alerts";
 import { domainOpenForNewLeads } from "@/lib/deliverability/lifecycle";
 import {
   resolveFlowAction,
@@ -122,64 +128,74 @@ export async function GET(request: NextRequest) {
   const tickNow = new Date();
   const admin = createAdminClient();
 
-  // Active enrollments on native_email campaigns only (filtered in SQL via an
-  // inner join so this worker never overfetches other channels' rows).
-  //
-  // Follow-ups and never-sent leads are fetched in SEPARATE capped queries and
-  // combined, rather than one ordered fetch with a single row cap. The old
-  // single-fetch ordered already-sent rows (last_action_at NOT NULL) ahead of
-  // new step-0 rows, so once a campaign's active in-flight population exceeded
-  // the row cap, brand-new leads never entered the batch and first-touches
-  // stopped sending altogether. Two capped fetches guarantee BOTH classes are
-  // present every tick; the per-campaign strategy sort below (after we know each
-  // campaign's sending_strategy) decides which class wins the day's send slots.
-  const FETCH_LIMIT = SENDS_PER_TICK * 3;
-  const [followupRes, newLeadRes] = await Promise.all([
-    admin
-      .from("campaign_enrollments")
-      .select("*, campaigns!inner(source_channel)")
-      .eq("status", "active")
-      .eq("campaigns.source_channel", "native_email")
-      .not("last_action_at", "is", null)
-      .order("last_action_at", { ascending: true })
-      .limit(FETCH_LIMIT),
-    admin
-      .from("campaign_enrollments")
-      .select("*, campaigns!inner(source_channel)")
-      .eq("status", "active")
-      .eq("campaigns.source_channel", "native_email")
-      .is("last_action_at", null)
-      .order("started_at", { ascending: true })
-      .limit(FETCH_LIMIT),
-  ]);
+  // EVERY prefetch below checks its error and aborts the tick on failure. A
+  // supabase-js call never throws; it returns { data: null, error }, and the
+  // old `const { data } = ...` reads turned one transient DB error into an
+  // empty map that the loop then read as "no step" (enrollment completed) or
+  // "contact no longer exists" (enrollment failed, terminal) for up to 120
+  // rows, or as "no DNC entries" (opted-out addresses mailed). Aborting with
+  // a 500 costs one 5-minute tick; the old behaviour cost real leads
+  // (SEND_RUNTIME_AUDIT.md SEND-50, SEND-53).
+  const prefetchFailed = (what: string, err: { message?: string } | null) => {
+    console.error(`[cron/native-sequences] ${what} prefetch failed; tick aborted:`, err);
+    return NextResponse.json({ error: `${what} prefetch failed: ${err?.message ?? "unknown"}` }, { status: 500 });
+  };
 
-  const enrError = followupRes.error ?? newLeadRes.error;
-  if (enrError) {
-    console.error("[cron/native-sequences] enrollment fetch failed:", enrError);
-    return NextResponse.json({ error: enrError.message }, { status: 500 });
-  }
-  const enrollments = [
-    ...((followupRes.data ?? []) as unknown as EnrollmentRow[]),
-    ...((newLeadRes.data ?? []) as unknown as EnrollmentRow[]),
-  ];
-  if (enrollments.length === 0) {
-    return NextResponse.json({ status: "idle" });
-  }
-
-  // ---- Bulk prefetch everything the loop needs ----
-  const campaignIds = [...new Set(enrollments.map((e) => e.campaign_id))];
-  const contactIds = [...new Set(enrollments.map((e) => e.contact_id))];
-
-  const { data: campaignsData } = await admin
+  // ---- 1. Eligible campaigns FIRST ----
+  // Active native campaigns that are inside their own send window right now.
+  // The old design fetched enrollments fleet-wide (two global 60-row windows
+  // ordered oldest-first) and only THEN looked at the campaign, so rows from a
+  // paused or draft campaign, or from a campaign outside its window, filled the
+  // windows and were skipped in JS every tick while every other campaign
+  // starved with `sent: 0` and no alert (SEND-35). Filtering campaigns first
+  // and fetching per campaign removes that whole class.
+  const { data: campaignsData, error: campaignsErr } = await admin
     .from("campaigns")
     .select("id, organization_id, client_id, status, source_channel, name, send_timezone, send_start_hour, send_end_hour, send_weekdays_only, daily_new_leads_cap, sending_strategy, flow_graph")
-    .in("id", campaignIds);
+    .eq("source_channel", "native_email")
+    .eq("status", "active");
+  if (campaignsErr) return prefetchFailed("campaigns", campaignsErr);
   const campaignMap = new Map<string, CampaignRow>();
-  for (const c of (campaignsData ?? []) as CampaignRow[]) campaignMap.set(c.id, c);
+  const windowByCampaign = new Map<string, SendWindowConfig>();
+  const inWindowByCampaign = new Map<string, boolean>();
+  const windowFor = (c: CampaignRow): SendWindowConfig => {
+    let w = windowByCampaign.get(c.id);
+    if (!w) {
+      w = resolveSendWindow(c);
+      windowByCampaign.set(c.id, w);
+    }
+    return w;
+  };
+  for (const c of (campaignsData ?? []) as CampaignRow[]) {
+    const inWindow = isInSendWindow(tickNow, windowFor(c));
+    inWindowByCampaign.set(c.id, inWindow);
+    if (inWindow) campaignMap.set(c.id, c);
+  }
+  if (campaignMap.size === 0) {
+    return NextResponse.json({ status: "idle", reason: "no active campaign in its send window" });
+  }
+  const campaignIds = [...campaignMap.keys()];
+
+  // ---- 2. Steps (needed to compute due-ness in SQL below) ----
+  const { data: stepsData, error: stepsErr } = await admin
+    .from("campaign_steps")
+    .select("*")
+    .in("campaign_id", campaignIds)
+    .order("step_index", { ascending: true });
+  if (stepsErr) return prefetchFailed("campaign_steps", stepsErr);
+  const stepsByCampaign = new Map<string, Map<number, CampaignStep>>();
+  for (const s of (stepsData ?? []) as CampaignStep[]) {
+    let m = stepsByCampaign.get(s.campaign_id);
+    if (!m) {
+      m = new Map();
+      stepsByCampaign.set(s.campaign_id, m);
+    }
+    m.set(s.step_index, s);
+  }
 
   // A campaign runs the GRAPH runtime only when its flow_graph is a well-formed,
   // non-empty tree. A NULL / malformed / empty graph falls back to the LINEAR
-  // path (campaign_steps by current_step_index) — zero regression for every
+  // path (campaign_steps by current_step_index), zero regression for every
   // legacy campaign, and a safety net if a stored graph is ever corrupt (the
   // derived campaign_steps still send). Parsed once per tick per campaign.
   const flowGraphByCampaign = new Map<string, FlowGraph>();
@@ -189,6 +205,102 @@ export async function GET(request: NextRequest) {
       flowGraphByCampaign.set(c.id, g);
     }
   }
+
+  // ---- 3. Mailboxes that cannot send (paused / error / rested) ----
+  // A sticky follow-up parked on one of these is skipped every tick with its
+  // sort key untouched, so it would sit at the head of the follow-up window
+  // forever and crowd out live rows (SEND-35). Excluded in SQL instead.
+  const { data: benchedRows, error: benchedErr } = await admin
+    .from("native_mailboxes")
+    .select("id")
+    .neq("status", "active");
+  if (benchedErr) return prefetchFailed("native_mailboxes (benched)", benchedErr);
+  const benchedMailboxIds = ((benchedRows ?? []) as { id: string }[]).map((r) => r.id);
+
+  // ---- 4. Enrollments, per eligible campaign, DUE rows only ----
+  // Follow-ups and never-sent leads are fetched in SEPARATE capped queries per
+  // campaign and combined (the per-campaign strategy sort below decides which
+  // class wins the day's send slots). Due-ness is filtered in SQL: the old
+  // fetch took the 60 oldest-actioned rows whether or not their wait had
+  // elapsed, so long-wait rows occupied the window and due short-wait
+  // follow-ups were never fetched (prod on 2026-09-05: 35 of 60 slots spent on
+  // not-yet-due rows, 30 due follow-ups unfetched; SEND-62). Linear campaigns
+  // get an exact per-step threshold; flow campaigns use the smallest wait in
+  // the graph (conservative: never excludes a due row).
+  const PER_CAMPAIGN_FETCH = SENDS_PER_TICK * 2;
+  const isoNoMs = (ms: number) => new Date(ms).toISOString().replace(/\.\d{3}Z$/, "Z");
+  const nowMs = tickNow.getTime();
+  const DAY = 86_400_000;
+  const perCampaign = await Promise.all(
+    campaignIds.map(async (cid) => {
+      const graph = flowGraphByCampaign.get(cid);
+      const steps = stepsByCampaign.get(cid);
+      let followups = admin
+        .from("campaign_enrollments")
+        .select("*")
+        .eq("status", "active")
+        .eq("campaign_id", cid)
+        .not("last_action_at", "is", null)
+        .order("last_action_at", { ascending: true })
+        .limit(PER_CAMPAIGN_FETCH);
+      let newLeads = admin
+        .from("campaign_enrollments")
+        .select("*")
+        .eq("status", "active")
+        .eq("campaign_id", cid)
+        .is("last_action_at", null)
+        .order("started_at", { ascending: true })
+        .limit(PER_CAMPAIGN_FETCH);
+      if (benchedMailboxIds.length > 0) {
+        followups = followups.or(
+          `native_mailbox_id.is.null,native_mailbox_id.not.in.(${benchedMailboxIds.join(",")})`,
+        );
+      }
+      if (graph) {
+        let minWait = Infinity;
+        for (const n of graph.nodes) {
+          const w = (n as { wait_days?: unknown }).wait_days;
+          if (typeof w === "number" && w >= 0) minWait = Math.min(minWait, w);
+        }
+        if (Number.isFinite(minWait) && minWait > 0) {
+          followups = followups.lte("last_action_at", isoNoMs(nowMs - minWait * DAY));
+        }
+      } else if (steps && steps.size > 0) {
+        const clauses: string[] = [];
+        let maxIndex = -1;
+        for (const [idx, step] of steps) {
+          maxIndex = Math.max(maxIndex, idx);
+          if (idx === 0) continue; // step 0 is a new lead (last_action_at null)
+          const wait = Math.max(0, Number(step.wait_days) || 0);
+          clauses.push(
+            `and(current_step_index.eq.${idx},last_action_at.lte.${isoNoMs(nowMs - wait * DAY)})`,
+          );
+        }
+        // Rows past the last step are fetched so the loop can complete them.
+        clauses.push(`current_step_index.gt.${maxIndex}`);
+        followups = followups.or(clauses.join(","));
+        const step0Wait = Math.max(0, Number(steps.get(0)?.wait_days) || 0);
+        if (step0Wait > 0) newLeads = newLeads.lte("started_at", isoNoMs(nowMs - step0Wait * DAY));
+      }
+      const [f, n] = await Promise.all([followups, newLeads]);
+      return { cid, f, n };
+    }),
+  );
+  const enrollments: EnrollmentRow[] = [];
+  for (const { cid, f, n } of perCampaign) {
+    if (f.error) return prefetchFailed(`enrollments (follow-ups, campaign ${cid})`, f.error);
+    if (n.error) return prefetchFailed(`enrollments (new leads, campaign ${cid})`, n.error);
+    enrollments.push(
+      ...((f.data ?? []) as unknown as EnrollmentRow[]),
+      ...((n.data ?? []) as unknown as EnrollmentRow[]),
+    );
+  }
+  if (enrollments.length === 0) {
+    return NextResponse.json({ status: "idle" });
+  }
+
+  // ---- Bulk prefetch everything the loop needs ----
+  const contactIds = [...new Set(enrollments.map((e) => e.contact_id))];
 
   // Per-campaign strategy ordering. Within a campaign, reach_first processes new
   // first-touches (last_action_at NULL) before follow-ups; finish_first (the
@@ -213,26 +325,11 @@ export async function GET(request: NextRequest) {
     return sa - sb;
   });
 
-  // Steps, grouped by campaign then step_index.
-  const { data: stepsData } = await admin
-    .from("campaign_steps")
-    .select("*")
-    .in("campaign_id", campaignIds)
-    .order("step_index", { ascending: true });
-  const stepsByCampaign = new Map<string, Map<number, CampaignStep>>();
-  for (const s of (stepsData ?? []) as CampaignStep[]) {
-    let m = stepsByCampaign.get(s.campaign_id);
-    if (!m) {
-      m = new Map();
-      stepsByCampaign.set(s.campaign_id, m);
-    }
-    m.set(s.step_index, s);
-  }
-
-  const { data: contactsData } = await admin
+  const { data: contactsData, error: contactsErr } = await admin
     .from("contacts")
     .select("*")
     .in("id", contactIds);
+  if (contactsErr) return prefetchFailed("contacts", contactsErr);
   const contactMap = new Map<string, Contact>();
   for (const c of (contactsData ?? []) as Contact[]) contactMap.set(c.id, c);
 
@@ -251,11 +348,13 @@ export async function GET(request: NextRequest) {
   // email -> set of blocked client_ids ("*" = org-wide, i.e. client_id NULL).
   const dncByEmail = new Map<string, Set<string>>();
   if (dncEmails.length > 0 && orgIds.length > 0) {
-    const { data: dncRows } = await admin
+    const { data: dncRows, error: dncErr } = await admin
       .from("dnc_entries")
       .select("client_id, email")
       .in("organization_id", orgIds)
       .in("email", dncEmails);
+    // A failed DNC read must never read as "nobody opted out" (SEND-53).
+    if (dncErr) return prefetchFailed("dnc_entries", dncErr);
     for (const row of (dncRows ?? []) as { client_id: string | null; email: string }[]) {
       const key = row.email.trim().toLowerCase();
       let s = dncByEmail.get(key);
@@ -266,6 +365,17 @@ export async function GET(request: NextRequest) {
       s.add(row.client_id ?? "*");
     }
   }
+
+  // Per-client DNC test. A campaign with NO client (unlinked while live, or an
+  // org-internal one) used to check only the org-wide "*" entries, so a
+  // client-scoped opt-out recorded while it was linked stopped suppressing it
+  // (SEND-55). With no client to scope to, ANY entry for the address suppresses.
+  const isDncSuppressed = (emailKey: string, campaign: CampaignRow): boolean => {
+    const dncClients = dncByEmail.get(emailKey);
+    if (!dncClients || dncClients.size === 0) return false;
+    if (campaign.client_id == null) return true;
+    return dncClients.has(campaign.client_id) || dncClients.has("*");
+  };
 
   // ---- Flow-runtime reply signal ----
   // A flow `condition` node can branch on the reply — its existence (`replied`)
@@ -341,13 +451,24 @@ export async function GET(request: NextRequest) {
   // from a definitive account error, and the per-tick breaker + tallies the
   // gate mutates as it runs. A missing-column error (migration 00069 not yet
   // applied) disarms the gate rather than throwing — sends proceed unverified.
-  const verifierByOrg = await loadVerifierStates(admin, orgIds, tickNow);
+  // Fail closed: if the verifier state cannot be read, nothing sends this tick
+  // (SEND-51). The only surviving disarm is the pre-00069 missing-column case.
+  let verifierByOrg: Awaited<ReturnType<typeof loadVerifierStates>>;
+  try {
+    verifierByOrg = await loadVerifierStates(admin, orgIds, tickNow);
+  } catch (err) {
+    if (err instanceof VerifierStateLoadError) {
+      return prefetchFailed("verifier state", { message: err.message });
+    }
+    throw err;
+  }
 
   // Campaign → mailbox pool.
-  const { data: poolData } = await admin
+  const { data: poolData, error: poolErr } = await admin
     .from("campaign_mailboxes")
     .select("campaign_id, mailbox_id")
     .in("campaign_id", campaignIds);
+  if (poolErr) return prefetchFailed("campaign_mailboxes", poolErr);
   const poolByCampaign = new Map<string, string[]>();
   for (const row of (poolData ?? []) as { campaign_id: string; mailbox_id: string }[]) {
     const arr = poolByCampaign.get(row.campaign_id) ?? [];
@@ -362,10 +483,11 @@ export async function GET(request: NextRequest) {
 
   const mailboxMap = new Map<string, NativeMailbox>();
   if (referencedMailboxIds.size > 0) {
-    const { data: mbData } = await admin
+    const { data: mbData, error: mbErr } = await admin
       .from("native_mailboxes")
       .select("*")
       .in("id", [...referencedMailboxIds]);
+    if (mbErr) return prefetchFailed("native_mailboxes", mbErr);
     for (const mb of (mbData ?? []) as NativeMailbox[]) mailboxMap.set(mb.id, mb);
   }
 
@@ -419,12 +541,26 @@ export async function GET(request: NextRequest) {
   const sentToday: Record<string, number> = {};
   const lastSentTodayMs: Record<string, number> = {};
   if (referencedMailboxIds.size > 0) {
-    const { data: sendRows } = await admin
-      .from("native_sends")
-      .select("mailbox_id, sent_at")
-      .in("mailbox_id", [...referencedMailboxIds])
-      .gte("sent_at", dayStart);
-    for (const s of (sendRows ?? []) as { mailbox_id: string; sent_at: string | null }[]) {
+    // Paged: PostgREST silently truncates an un-ranged select at max_rows
+    // (1,000 on this project, verified live), and past ~50 inboxes a day's
+    // sends exceed that, so the tail mailboxes would read as 0 sent today and
+    // blow through their caps (SEND-68). Page until a short page comes back.
+    const PAGE = 1000;
+    const sendRows: { mailbox_id: string; sent_at: string | null }[] = [];
+    for (let from = 0; ; from += PAGE) {
+      const { data: page, error: sendsErr } = await admin
+        .from("native_sends")
+        .select("mailbox_id, sent_at")
+        .in("mailbox_id", [...referencedMailboxIds])
+        .gte("sent_at", dayStart)
+        .order("id", { ascending: true })
+        .range(from, from + PAGE - 1);
+      if (sendsErr) return prefetchFailed("native_sends (today)", sendsErr);
+      const rows = (page ?? []) as { mailbox_id: string; sent_at: string | null }[];
+      sendRows.push(...rows);
+      if (rows.length < PAGE) break;
+    }
+    for (const s of sendRows) {
       sentToday[s.mailbox_id] = (sentToday[s.mailbox_id] ?? 0) + 1;
       if (s.sent_at) {
         const t = Date.parse(s.sent_at);
@@ -435,16 +571,22 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  // Frozen copy of the day's counts at tick start: the ramp cap must be derived
+  // from the START-of-day cumulative count, not the live one, or a mailbox
+  // that graduates mid-day sends cap+1 that day (SEND-66).
+  const sentTodayStart: Record<string, number> = { ...sentToday };
+
   // New leads (step-0 first-touches) already sent today, per campaign — drives
   // the per-campaign daily new-leads cap. Follow-ups are not counted here.
   const newLeadsToday: Record<string, number> = {};
   {
-    const { data: newLeadRows } = await admin
+    const { data: newLeadRows, error: newLeadErr } = await admin
       .from("native_sends")
       .select("campaign_id")
       .in("campaign_id", campaignIds)
       .eq("step_index", 0)
       .gte("sent_at", dayStart);
+    if (newLeadErr) return prefetchFailed("native_sends (new leads today)", newLeadErr);
     for (const r of (newLeadRows ?? []) as { campaign_id: string }[]) {
       newLeadsToday[r.campaign_id] = (newLeadsToday[r.campaign_id] ?? 0) + 1;
     }
@@ -469,18 +611,9 @@ export async function GET(request: NextRequest) {
   // Per-tick per-campaign new-lead counter (added to newLeadsToday).
   const newLeadsInTick: Record<string, number> = {};
   const gmailByOrg = new Map<string, GmailClient | null>();
-  // Cache each campaign's resolved send window + "in window right now" so the
-  // Intl/timezone math runs once per campaign per tick, not per enrollment.
-  const windowByCampaign = new Map<string, SendWindowConfig>();
-  const inWindowByCampaign = new Map<string, boolean>();
-  const windowFor = (c: CampaignRow): SendWindowConfig => {
-    let w = windowByCampaign.get(c.id);
-    if (!w) {
-      w = resolveSendWindow(c);
-      windowByCampaign.set(c.id, w);
-    }
-    return w;
-  };
+  // (windowFor / inWindowByCampaign are resolved once per campaign in step 1
+  // above, before the enrollment fetch, so out-of-window campaigns are never
+  // fetched at all.)
 
   // Optional per-domain daily send cap (migration 00083). Inert unless some
   // domain has max_daily_sends set — then count the domain's TRUE sends today
@@ -529,8 +662,14 @@ export async function GET(request: NextRequest) {
   // of resuming at full cap. 0 for every existing mailbox → identical behavior.
   const rampSent = (mb: NativeMailbox) =>
     Math.max(0, (totalSent[mb.id] ?? 0) - (mb.ramp_baseline_sent ?? 0));
+  // The day's cap is fixed at the start of the day: graduation thresholds equal
+  // the cumulative caps, so reading the LIVE count let an inbox graduate after
+  // its 5th send and fire a 6th the same afternoon (SEND-66). Subtracting the
+  // start-of-day count pins the cap to the stage the inbox woke up in.
+  const rampSentAtDayStart = (mb: NativeMailbox) =>
+    Math.max(0, rampSent(mb) - (sentTodayStart[mb.id] ?? 0));
   const remaining = (mb: NativeMailbox) =>
-    effectiveDailyCap(mb, rampSent(mb)) - (sentToday[mb.id] ?? 0) - (inTick[mb.id] ?? 0);
+    effectiveDailyCap(mb, rampSentAtDayStart(mb)) - (sentToday[mb.id] ?? 0) - (inTick[mb.id] ?? 0);
   // Rotation load: how many this inbox has already sent today (persisted + this
   // tick). The step-0 pool pick orders by this ASC so first-touches spread
   // EVENLY across a campaign's inboxes — a freshly-added or smaller-cap inbox
@@ -555,6 +694,115 @@ export async function GET(request: NextRequest) {
     (inTick[mb.id] ?? 0) < PER_MAILBOX_PER_TICK &&
     paced(mb, campaign) &&
     domainUnderCap(mb);
+
+  // ── Step claim (at-most-once under overlapping ticks) ──────────────────────
+  // The header's "at-most-once with no locking" stance was tested against
+  // Vercel's own docs (read 2026-09-05): a second instance CAN run while the
+  // first is still running, and "the same scheduled run" can occasionally be
+  // invoked twice. The documented local cron-drive loop adds a third overlap
+  // source. Two overlapping ticks fetched the same rows, passed every gate off
+  // the same snapshot, and both called gmail.sendMessage before either wrote,
+  // so a lead got the same step twice (SEND-64). The claim is a compare-and-
+  // set on current_step_index right before the send: the loser of the race
+  // sees 0 rows updated and skips. No lock table, no lease column, no
+  // migration; a claim that then fails to send is released (rolled back) on
+  // hold / retry / auth / config outcomes. If the function dies between claim
+  // and send, that ONE step is skipped for that lead (never sent twice), which
+  // is the documented trade-off: a missed email beats a duplicate.
+  async function claimStep(enr: EnrollmentRow, stepIndex: number): Promise<boolean> {
+    const { data, error } = await admin
+      .from("campaign_enrollments")
+      .update({ current_step_index: stepIndex + 1, last_action_at: new Date().toISOString() })
+      .eq("id", enr.id)
+      .eq("status", "active")
+      .eq("current_step_index", stepIndex)
+      .select("id");
+    if (error) {
+      console.error("[cron/native-sequences] step claim failed for", enr.id, error.message);
+      return false;
+    }
+    return (data ?? []).length > 0;
+  }
+  async function releaseStep(enr: EnrollmentRow, stepIndex: number): Promise<void> {
+    const { error } = await admin
+      .from("campaign_enrollments")
+      .update({ current_step_index: stepIndex, last_action_at: enr.last_action_at })
+      .eq("id", enr.id)
+      .eq("current_step_index", stepIndex + 1);
+    if (error) console.error("[cron/native-sequences] step release failed for", enr.id, error.message);
+  }
+  // Post-send advance. The claim already moved current_step_index; this writes
+  // the thread ids + mailbox binding. Guarded on status=active so a poller
+  // `replied` that landed mid-tick is never clobbered back to active
+  // (SEND-43), and CHECKED: an unchecked failure here used to leave the row
+  // pointing at the previous step and re-send it next slot (SEND-65). One
+  // retry, then a loud log; the claim guarantees no re-send either way.
+  async function writeAdvance(
+    enrollmentId: string,
+    patch: Record<string, unknown>,
+  ): Promise<void> {
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      const { error } = await admin
+        .from("campaign_enrollments")
+        .update(patch)
+        .eq("id", enrollmentId)
+        .eq("status", "active");
+      if (!error) return;
+      console.error(
+        `[cron/native-sequences] post-send advance failed (attempt ${attempt}) for ${enrollmentId}:`,
+        error.message,
+      );
+    }
+  }
+
+  // Permanent (4xx) send failures per mailbox this tick. Three benches the
+  // inbox: that many distinct recipients rejected by the same inbox in one
+  // tick is a mailbox problem, not a lead problem (SEND-20).
+  const permanentFailuresInTick: Record<string, number> = {};
+  const MAILBOX_BENCH_AFTER_PERMANENT_FAILURES = 3;
+
+  // Bench a mailbox: status=error + reason, mirrored in memory so eligible()
+  // skips it for the rest of the tick, plus an owner alert. The bench used to
+  // be silent; the poller also stops polling an `error` inbox, so nobody knew
+  // replies to its threads were no longer being read (SEND-38).
+  async function benchMailbox(mb: NativeMailbox, organizationId: string, reason: string): Promise<void> {
+    const { error } = await admin
+      .from("native_mailboxes")
+      .update({ status: "error", last_error: reason, last_error_at: new Date().toISOString() })
+      .eq("id", mb.id);
+    if (error) console.error("[cron/native-sequences] bench write failed for", mb.email_address, error.message);
+    mb.status = "error";
+    await enqueueOwnerAlert({
+      admin,
+      kind: "mailbox_benched",
+      subject: `Mailbox ${mb.email_address} benched by the sender`,
+      summary:
+        `${mb.email_address} was set to "error" and stopped sending: ${reason}. ` +
+        `Its in-flight follow-ups wait until it is re-activated on the Mailboxes page.`,
+      context: { organization_id: organizationId, mailbox: mb.email_address, reason },
+    });
+  }
+
+  // Send, and if Gmail says the stored thread no longer exists (404 on a send
+  // that carried a threadId: the user emptied Trash mid-sequence), retry once
+  // as a fresh thread instead of permanently failing the lead (SEND-23). The
+  // In-Reply-To/References headers still thread it on the recipient's side.
+  async function sendWithThreadFallback(
+    client: GmailClient,
+    from: string,
+    raw: string,
+    threadId: string | undefined,
+  ): Promise<{ id: string; threadId: string }> {
+    try {
+      return await client.sendMessage(from, raw, threadId);
+    } catch (err) {
+      if (threadId && err instanceof GmailPermanentError && err.status === 404) {
+        console.warn(`[cron/native-sequences] thread ${threadId} gone for ${from}; sending as a new thread`);
+        return await client.sendMessage(from, raw, undefined);
+      }
+      throw err;
+    }
+  }
 
   // ── Shared email dispatch ───────────────────────────────────────────────────
   // verify → build → send → read back Message-ID → log to native_sends → bump
@@ -611,27 +859,47 @@ export async function GET(request: NextRequest) {
 
     let sendResult: { id: string; threadId: string };
     try {
-      sendResult = await gmail.sendMessage(mailbox.email_address, raw, enrollment.gmail_thread_id ?? undefined);
+      sendResult = await sendWithThreadFallback(
+        gmail,
+        mailbox.email_address,
+        raw,
+        enrollment.gmail_thread_id ?? undefined,
+      );
     } catch (err) {
       if (err instanceof GmailAuthError) {
-        // Delegation broke for this mailbox — bench it (skips its enrollments the
+        // Delegation broke for this mailbox: bench it (skips its enrollments the
         // rest of the tick via eligible()) and leave the enrollment active.
-        await admin
-          .from("native_mailboxes")
-          .update({ status: "error", last_error: err.message, last_error_at: new Date().toISOString() })
-          .eq("id", mailbox.id);
-        mailbox.status = "error";
+        // Quota 403s are classified as rate limits by the client now, so this
+        // is a real permission failure (SEND-19).
+        await benchMailbox(mailbox, campaign.organization_id, `Delegation error: ${err.message}`);
         return { status: "mailbox_auth", resultTag: "mailbox_auth_error" };
       }
       if (err instanceof GmailRateLimitError || err instanceof GmailTransientError) {
         return { status: "retry", resultTag: "retry_later" };
       }
-      const msg =
-        err instanceof GmailPermanentError || err instanceof GmailConfigError
-          ? err.message
-          : err instanceof Error
-            ? err.message
-            : String(err);
+      if (err instanceof GmailConfigError) {
+        // Org-level service-account problem, nothing to do with this lead or
+        // this mailbox: stop using the org's client for the rest of the tick and
+        // leave the enrollment active (SEND-21).
+        console.error("[cron/native-sequences] Gmail config error for org", campaign.organization_id, err.message);
+        gmailByOrg.set(campaign.organization_id, null);
+        return { status: "retry", resultTag: "gmail_config_error" };
+      }
+      // Permanent 4xx. Fail the enrollment as before, but COUNT it against the
+      // mailbox: a mailbox-level 400 (mail service disabled, suspended user)
+      // used to fail every lead routed to that inbox one after another inside
+      // a single tick, while the inbox stayed "active" and least-loaded so the
+      // pool kept picking it (SEND-20). Three in one tick benches it.
+      const msg = err instanceof Error ? err.message : String(err);
+      const n = (permanentFailuresInTick[mailbox.id] ?? 0) + 1;
+      permanentFailuresInTick[mailbox.id] = n;
+      if (n >= MAILBOX_BENCH_AFTER_PERMANENT_FAILURES && mailbox.status === "active") {
+        await benchMailbox(
+          mailbox,
+          campaign.organization_id,
+          `${n} permanent Gmail send failures in one tick; last: ${msg}`,
+        );
+      }
       return { status: "send_failed", resultTag: "failed_send", failReason: `Send failed: ${msg}` };
     }
 
@@ -645,7 +913,11 @@ export async function GET(request: NextRequest) {
       // Fall back to the generated Message-ID; threadId still threads.
     }
 
-    await admin.from("native_sends").insert({
+    // The send log is load-bearing: the daily cap, the ramp, the new-leads cap
+    // and the reply poller's thread match all read native_sends. A silently
+    // failed insert hid a real send from every one of them (SEND-65), so the
+    // insert is checked and retried once, then logged loudly.
+    const sendRow = {
       organization_id: campaign.organization_id,
       campaign_id: campaign.id,
       contact_id: contact.id,
@@ -659,7 +931,15 @@ export async function GET(request: NextRequest) {
       gmail_message_id: sendResult.id,
       gmail_thread_id: sendResult.threadId,
       status: "sent",
-    });
+    };
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      const { error: logErr } = await admin.from("native_sends").insert(sendRow);
+      if (!logErr) break;
+      console.error(
+        `[cron/native-sequences] native_sends insert failed (attempt ${attempt}) for enrollment ${enrollment.id} gmail ${sendResult.id}:`,
+        logErr.message,
+      );
+    }
 
     // First send flips a queued/new contact to 'active' (it's now sending).
     if (stepIndex === 0) {
@@ -816,8 +1096,7 @@ export async function GET(request: NextRequest) {
       await markEnrollmentFailed(admin, enrollment.id, "Contact is bounced.");
       return { result: "suppressed_bounced" };
     }
-    const dncClients = dncByEmail.get(emailKey);
-    if (dncClients && (dncClients.has(campaign.client_id ?? "*") || dncClients.has("*"))) {
+    if (isDncSuppressed(emailKey, campaign)) {
       await markEnrollmentFailed(admin, enrollment.id, "Contact is on the client's DNC list.");
       return { result: "suppressed_dnc" };
     }
@@ -836,7 +1115,12 @@ export async function GET(request: NextRequest) {
     }
 
     // Mailbox pick — sticky after the first send, else least-loaded open mailbox
-    // in the pool (identical policy to the linear path).
+    // in the pool (identical policy to the linear path). A mid-thread orphan
+    // (sticky inbox deleted, thread ids kept) is failed, never re-homed (SEND-36).
+    if (!enrollment.native_mailbox_id && enrollment.gmail_thread_id) {
+      await markEnrollmentFailed(admin, enrollment.id, "Sending mailbox was deleted mid-sequence.");
+      return { result: "failed_mailbox_deleted" };
+    }
     let mailbox: NativeMailbox | undefined;
     if (enrollment.native_mailbox_id) {
       mailbox = mailboxMap.get(enrollment.native_mailbox_id);
@@ -903,6 +1187,8 @@ export async function GET(request: NextRequest) {
     const gmail = gmailByOrg.get(campaign.organization_id);
     if (!gmail) return { result: "flow_no_gmail" }; // org not configured; leave active
 
+    // Claim the step (same CAS as the linear path) before the send.
+    if (!(await claimStep(enrollment, stepIndex))) return { result: "claimed_elsewhere" };
     const d = await dispatchEmail({
       campaign,
       enrollment,
@@ -917,28 +1203,26 @@ export async function GET(request: NextRequest) {
       variantId,
     });
     if (d.status === "hold" || d.status === "retry" || d.status === "mailbox_auth") {
+      await releaseStep(enrollment, stepIndex);
       return { result: d.resultTag };
     }
     if (d.status === "skip" || d.status === "send_failed") {
       await markEnrollmentFailed(admin, enrollment.id, d.failReason);
       return { result: d.resultTag };
     }
-    // Sent — advance PAST this email node (current_node_id = node.id) and bump the
+    // Sent: advance PAST this email node (current_node_id = node.id) and bump the
     // email counter. Stay 'active'; completion is detected on the next tick (when
     // the walk runs off the end), so a late reply can still re-route until then.
-    await admin
-      .from("campaign_enrollments")
-      .update({
-        current_node_id: action.node.id,
-        current_step_index: stepIndex + 1,
-        last_action_at: new Date().toISOString(),
-        native_mailbox_id: mailbox.id,
-        gmail_thread_id: d.threadId,
-        last_rfc_message_id: d.rfcMessageId,
-        last_error: null,
-        status: "active",
-      })
-      .eq("id", enrollment.id);
+    await writeAdvance(enrollment.id, {
+      current_node_id: action.node.id,
+      current_step_index: stepIndex + 1,
+      last_action_at: new Date().toISOString(),
+      native_mailbox_id: mailbox.id,
+      gmail_thread_id: d.threadId,
+      last_rfc_message_id: d.rfcMessageId,
+      last_error: null,
+      status: "active",
+    });
     return { result: "flow_email_sent", emailSent: true };
   }
 
@@ -949,8 +1233,19 @@ export async function GET(request: NextRequest) {
   let sideActions = 0;
   const results: Array<{ enrollment_id: string; result: string }> = [];
 
+  // Wall-clock guard: every Google call now has a 10s ceiling, but twenty
+  // sends of two calls each can still outrun the 60s function. Stop
+  // dispatching at 40s so the tick returns cleanly with everything it did
+  // logged, instead of being killed mid-send (SEND-34 / SEND-64).
+  const loopDeadlineMs = tickNow.getTime() + 40_000;
+  let deadlineHit = false;
+
   for (const enrollment of enrollments) {
     if (sent + sideActions >= SENDS_PER_TICK) break;
+    if (Date.now() > loopDeadlineMs) {
+      deadlineHit = true;
+      break;
+    }
 
     const campaign = campaignMap.get(enrollment.campaign_id);
     if (!campaign || campaign.status !== "active" || campaign.source_channel !== "native_email") {
@@ -978,12 +1273,21 @@ export async function GET(request: NextRequest) {
     }
 
     const steps = stepsByCampaign.get(campaign.id);
-    const step = steps?.get(enrollment.current_step_index);
+    // A campaign with NO steps at all is never "finished": the step editor
+    // replaces steps with a delete-all then insert (no transaction), so a tick
+    // landing in that gap, or a failed insert, used to mark every due
+    // enrollment completed for good (SEND-39). Skip and retry next tick.
+    if (!steps || steps.size === 0) {
+      results.push({ enrollment_id: enrollment.id, result: "no_steps_wait" });
+      continue;
+    }
+    const step = steps.get(enrollment.current_step_index);
     if (!step) {
       await admin
         .from("campaign_enrollments")
         .update({ status: "completed" })
-        .eq("id", enrollment.id);
+        .eq("id", enrollment.id)
+        .eq("status", "active");
       results.push({ enrollment_id: enrollment.id, result: "completed" });
       continue;
     }
@@ -1009,7 +1313,20 @@ export async function GET(request: NextRequest) {
     // Suppression: never send to a contact who bounced, unsubscribed, or
     // already replied. 'replied' halts the sequence; the others fail it.
     if (contact.status === "replied") {
-      await admin.from("campaign_enrollments").update({ status: "replied" }).eq("id", enrollment.id);
+      // A contact who replied to an EARLIER campaign and was then enrolled here
+      // never got an email from this campaign, so "replied" would inflate this
+      // campaign's reply metrics (SEND-40). Fail it with the reason instead;
+      // an enrollment that already sent at least once really did get a reply.
+      if (enrollment.current_step_index === 0 && !enrollment.last_action_at) {
+        await markEnrollmentFailed(admin, enrollment.id, "Contact had already replied before this campaign sent anything.");
+        results.push({ enrollment_id: enrollment.id, result: "suppressed_prior_reply" });
+        continue;
+      }
+      await admin
+        .from("campaign_enrollments")
+        .update({ status: "replied" })
+        .eq("id", enrollment.id)
+        .eq("status", "active");
       results.push({ enrollment_id: enrollment.id, result: "already_replied" });
       continue;
     }
@@ -1022,8 +1339,7 @@ export async function GET(request: NextRequest) {
     // (or an org-wide entry). Scoped so another client sharing the contact is
     // unaffected — that's the whole point of the per-client list.
     const emailKey = contact.email.trim().toLowerCase();
-    const dncClients = dncByEmail.get(emailKey);
-    if (dncClients && (dncClients.has(campaign.client_id ?? "*") || dncClients.has("*"))) {
+    if (isDncSuppressed(emailKey, campaign)) {
       await markEnrollmentFailed(admin, enrollment.id, "Contact is on the client's DNC list.");
       results.push({ enrollment_id: enrollment.id, result: "suppressed_dnc" });
       continue;
@@ -1052,6 +1368,15 @@ export async function GET(request: NextRequest) {
     }
 
     // ---- Pick the mailbox ----
+    // A mid-thread enrollment whose sticky mailbox is gone (the inbox was
+    // deleted: the FK SET-NULLs the pointer but the thread ids stay) must not
+    // be re-homed onto another inbox with a foreign Gmail threadId and a
+    // stranger's address on a "Re:" (SEND-36). Fail it visibly instead.
+    if (!enrollment.native_mailbox_id && enrollment.gmail_thread_id) {
+      await markEnrollmentFailed(admin, enrollment.id, "Sending mailbox was deleted mid-sequence.");
+      results.push({ enrollment_id: enrollment.id, result: "failed_mailbox_deleted" });
+      continue;
+    }
     let mailbox: NativeMailbox | undefined;
     if (enrollment.native_mailbox_id) {
       // Sticky: this enrollment already threads through one mailbox. If it's
@@ -1135,8 +1460,14 @@ export async function GET(request: NextRequest) {
     const gmail = gmailByOrg.get(campaign.organization_id);
     if (!gmail) continue; // org not configured; leave enrollment active
 
-    // ---- Gmail creds ready + every free gate passed → hand off to the shared
-    // dispatch (verify → send → log → count). Then advance the LINEAR position.
+    // ---- Gmail creds ready + every free gate passed → claim the step, then
+    // hand off to the shared dispatch (verify → send → log → count). Then
+    // advance the LINEAR position.
+    const linearStep = enrollment.current_step_index;
+    if (!(await claimStep(enrollment, linearStep))) {
+      results.push({ enrollment_id: enrollment.id, result: "claimed_elsewhere" });
+      continue;
+    }
     const d = await dispatchEmail({
       campaign,
       enrollment,
@@ -1145,11 +1476,12 @@ export async function GET(request: NextRequest) {
       gmail,
       subject,
       bodyText,
-      stepIndex: enrollment.current_step_index,
-      inReplyTo: enrollment.current_step_index === 0 ? null : enrollment.last_rfc_message_id,
-      references: enrollment.current_step_index === 0 ? null : enrollment.last_rfc_message_id,
+      stepIndex: linearStep,
+      inReplyTo: linearStep === 0 ? null : enrollment.last_rfc_message_id,
+      references: linearStep === 0 ? null : enrollment.last_rfc_message_id,
     });
     if (d.status === "hold" || d.status === "retry" || d.status === "mailbox_auth") {
+      await releaseStep(enrollment, linearStep);
       results.push({ enrollment_id: enrollment.id, result: d.resultTag });
       continue;
     }
@@ -1159,20 +1491,17 @@ export async function GET(request: NextRequest) {
       continue;
     }
 
-    const nextIndex = enrollment.current_step_index + 1;
+    const nextIndex = linearStep + 1;
     const hasNext = steps?.has(nextIndex) ?? false;
-    await admin
-      .from("campaign_enrollments")
-      .update({
-        current_step_index: nextIndex,
-        last_action_at: new Date().toISOString(),
-        native_mailbox_id: mailbox.id,
-        gmail_thread_id: d.threadId,
-        last_rfc_message_id: d.rfcMessageId,
-        last_error: null,
-        status: hasNext ? "active" : "completed",
-      })
-      .eq("id", enrollment.id);
+    await writeAdvance(enrollment.id, {
+      current_step_index: nextIndex,
+      last_action_at: new Date().toISOString(),
+      native_mailbox_id: mailbox.id,
+      gmail_thread_id: d.threadId,
+      last_rfc_message_id: d.rfcMessageId,
+      last_error: null,
+      status: hasNext ? "active" : "completed",
+    });
 
     sent++;
     results.push({ enrollment_id: enrollment.id, result: hasNext ? "advanced" : "completed" });
@@ -1184,7 +1513,7 @@ export async function GET(request: NextRequest) {
   // (armed/suppressed/tripped, calls, cached, held, skipped) is greppable.
   const verification = await finalizeVerifierStates(admin, verifierByOrg);
 
-  return NextResponse.json({ status: "ok", sent, sideActions, verification, results });
+  return NextResponse.json({ status: "ok", sent, sideActions, deadline_hit: deadlineHit, verification, results });
 }
 
 // Render sequence copy against a contact + the sending mailbox. Resolves

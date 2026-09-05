@@ -16,6 +16,8 @@
 import { createSign } from "node:crypto";
 
 const TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
+// Ceiling on one token-mint round trip; the callers run inside 60s functions.
+const TOKEN_FETCH_TIMEOUT_MS = 10_000;
 
 // ---------- Typed errors (generic Google forms) ----------
 // Gmail's error classes (src/lib/gmail/client.ts) subclass these so existing
@@ -156,7 +158,11 @@ export class GoogleServiceAccount {
       signer.end();
       signature = base64url(signer.sign(this.privateKeyPem));
     } catch (err) {
-      throw new GoogleAuthError(
+      // A key that will not sign is an ORG-level configuration problem, not a
+      // per-subject delegation failure: as an auth error it benched every
+      // mailbox in the org in one tick (SEND_RUNTIME_AUDIT.md SEND-21). As a
+      // config error the send worker skips the org for the tick instead.
+      throw new GoogleConfigError(
         `Failed to sign JWT (bad service-account key?): ${
           err instanceof Error ? err.message : String(err)
         }`,
@@ -164,16 +170,25 @@ export class GoogleServiceAccount {
     }
     const assertion = `${signingInput}.${signature}`;
 
-    const res = await fetch(TOKEN_ENDPOINT, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
-        assertion,
-      }),
-    });
-
-    const bodyText = await res.text();
+    // Network failures and stalls are transient (retry next tick), never a
+    // reason to bench a mailbox or fail a lead (SEND-18 / SEND-34).
+    let res: Response;
+    let bodyText: string;
+    try {
+      res = await fetch(TOKEN_ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+          assertion,
+        }),
+        signal: AbortSignal.timeout(TOKEN_FETCH_TIMEOUT_MS),
+      });
+      bodyText = await res.text();
+    } catch (err) {
+      const msg = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+      throw new GoogleTransientError(`Token endpoint unreachable: ${msg}`);
+    }
     if (!res.ok) {
       // Google returns { error, error_description }. unauthorized_client /
       // invalid_grant here almost always means the domain admin hasn't
