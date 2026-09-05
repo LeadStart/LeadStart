@@ -5,6 +5,83 @@
 
 ---
 
+## 2026-09-05: Native send + cron runtime audit (Tier 1 + Tier 2) — 7 LOCAL commits, NOT pushed
+
+`/cto-audit` run over the native email send runtime (run-native-sequences,
+poll-native-replies, src/lib/gmail, src/lib/native, the Million Verifier gate,
+suppression) plus the mechanics of all 23 cron routes, with three bolt-on lanes
+(tsc-to-zero, live RLS delta, error boundaries). Six finder agents + three
+bolt-on agents in parallel; every candidate adversarially verified.
+
+**Reconciliation: 98 candidates = 86 confirmed + 2 refuted + 10 superseded; 93
+areas verified clean.** Full record: `SEND_RUNTIME_AUDIT.md` (living doc,
+findings SEND-01..71 and CRON-01..18 with file:line evidence, the known-vs-assumed
+ledger with the Vercel + Google doc quotes, refuted list, clean list, shipped /
+open / declined sections). Registry row + pathway ticks in `AUDITS.md`.
+
+**Headline findings (all fixed locally):**
+- CRON-01 critical: `POST /api/cron/send-reports` had NO auth and the middleware
+  forwards every /api/ request unauthenticated, so anyone on the internet could
+  mail any client's KPI report to arbitrary addresses or bulk-send reports.
+- SEND-35/62/63 (prod-confirmed): the sender's two global 60-row enrollment
+  fetches ignored campaign status, send window, due-ness and benched mailboxes;
+  prod showed 35 of 60 fetched rows not due and 30 due follow-ups unfetched, and
+  a paused/draft campaign could silently starve every other campaign.
+- SEND-64: the "at-most-once, no locking" stance was TESTED against Vercel's
+  docs, which say a second cron instance can run while the first is running and
+  the same scheduled run can be delivered twice; a compare-and-set claim on
+  current_step_index now runs right before every Gmail send (no lease, no
+  migration). 0 duplicates in 1,802 prod sends so far, so this was latent.
+- SEND-50/53: prefetch errors were read as empty sets (one transient DB error
+  permanently failed or completed up to 120 enrollments, or mailed DNC'd leads).
+- SEND-19/18/20: every Gmail 403 benched the mailbox although Google uses 403
+  for quota reasons; network errors and mailbox-level 400s permanently failed
+  leads.
+- SEND-01/02/04: the reply poller advanced its watermark past unread mail,
+  re-read DSNs inflated bounces into the circuit breaker, and re-upserts reset
+  handled replies to "new" (duplicate portal send possible).
+
+**Commits (local master, unpushed):** `9dbae48` cron fleet, `96c448d` send
+runtime + Gmail client, `7bed81c` reply poller + MIME, `75a6bef` small items,
+`43e5031` error boundaries, `f9d9536` tsc to zero + `ignoreBuildErrors=false`
+(build passes twice), `d7081f1` migration 00126 RLS delta (NOT applied), plus the
+docs commit. Verified: tsc 0 errors, six test suites green (23/39/42/27/11/46),
+MIME probe re-run, `npm run build` green.
+
+**For Daniel:**
+1. The push decision. Everything is local. `git push origin master` deploys to
+   prod (switch `gh` to LeadStart first). After the first tick, check the cron
+   JSON for `claimed_elsewhere`, `deadline_hit`, `truncated`, and any 500 with
+   "prefetch failed" (a 500 now means "wait 5 min", never lost leads).
+2. Apply `supabase/migrations/00126_rls_delta_hardening.sql` via the dashboard
+   SQL editor as ONE call (push_subscriptions policy scope + REVOKE on three
+   service-role-only tables). Not applied by the audit.
+3. Vercel dashboard: confirm Fluid compute is on (Settings > Functions); every
+   cron route now carries an explicit maxDuration either way.
+4. Policy calls listed under "Open" in SEND_RUNTIME_AUDIT.md: max-staleness for
+   follow-ups after a long pause (SEND-37), MV error-x5 policy (SEND-59), DNC
+   cross-channel (SEND-71), 3-inboxes-per-domain enforcement (SEND-69),
+   cron-created Workspace passwords (CRON-14).
+5. Delete `src/app/(dashboard)/admin/clients/[clientId]/client-actions.tsx`
+   (dead since migration 00015; the permission gate would not let the tsc lane
+   remove it) and, when convenient, the two dead Scrap.io cron routes + their
+   seven producer routes (CRON-15).
+6. One live test only you can run: a follow-up with its own subject sent with
+   the original threadId (SEND-24), comparing the returned threadId.
+
+**Parked to the enrichment pathway (out of scope here):** SEND-54 (pattern-finder
+verdict never cached, so the send gate re-bills MV) and CRON-09 (run-apify-
+enrichment releases its lease before the same-tick ingest).
+
+**Method notes for the next audit:** the Management API runs as
+`supabase_read_only_user`, so `information_schema.role_table_grants` returns 0
+rows (false negative); use `pg_class.relacl` / `has_table_privilege()`. The
+clone's highest migration is 00122 (no 00123-00125 exist locally); two files
+share number 00111.
+
+---
+
+
 ## 2026-08-31: Porkbun URL forwarding + provisioning reliability — SHIPPED to master. First live Porkbun provision run.
 
 Session started as an eval ("can we push domain forwarding for Porkbun/Spaceship?")
