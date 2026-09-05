@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import Link from "next/link";
-import { Poppins } from "next/font/google";
+import { Poppins, JetBrains_Mono } from "next/font/google";
 import { AlertTriangle } from "lucide-react";
 import "./globals.css";
 
@@ -10,10 +10,22 @@ import "./globals.css";
 // owns <html>/<body> and declares the font + global styles itself (mirroring
 // src/app/layout.tsx). Metadata exports are not supported here; React hoists
 // the <title> below into <head>.
+//
+// Both font declarations must stay in lockstep with src/app/layout.tsx. The
+// mono one is not decorative: the digest below renders with `font-mono`, which
+// resolves to var(--font-geist-mono). Without this declaration that variable is
+// undefined here, the font-family declaration is invalid at computed-value
+// time, and the digest silently inherits Poppins instead.
 const poppins = Poppins({
   variable: "--font-sans",
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+  weight: ["400", "500", "600", "700", "800"],
+  display: "swap",
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  variable: "--font-geist-mono",
+  subsets: ["latin"],
   display: "swap",
 });
 
@@ -30,8 +42,11 @@ export default function GlobalError({ error, reset, unstable_retry }: Props) {
   const retry = unstable_retry ?? reset;
 
   return (
-    <html lang="en" className={`${poppins.variable} h-full antialiased`}>
-      <body className="flex min-h-screen items-center justify-center p-6">
+    <html
+      lang="en"
+      className={`${poppins.variable} ${jetbrainsMono.variable} h-full antialiased`}
+    >
+      <body className="flex min-h-screen items-center justify-center p-6 font-sans">
         <title>Something went wrong | LeadStart</title>
         <main className="w-full max-w-md rounded-xl border bg-card p-6 text-sm">
           <div className="mb-3 inline-flex size-9 items-center justify-center rounded-full bg-destructive/10 text-destructive">

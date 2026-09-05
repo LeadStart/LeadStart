@@ -1,10 +1,10 @@
 "use client";
 
-// Enrichment Flow Map — the two prospecting veins (LinkedIn + Maps) drawn as
+// Enrichment Flow Map: the two prospecting veins (LinkedIn + Maps) drawn as
 // branching decision graphs on the SAME dotted, grab-to-pan canvas as the
 // campaign flow editor. The diagram CONTENT + costs live in ./enrichment-flow-
 // map.data.ts (wired to the live pricing/config constants + guarded by
-// scripts/test-flow-map-sync.ts); this file is presentation only — colours,
+// scripts/test-flow-map-sync.ts); this file is presentation only: colours,
 // fonts, SVG rendering, and the drag-to-pan behaviour.
 
 import { useRef } from "react";
@@ -34,7 +34,10 @@ const TONE: Record<Tone, { fill: string; stroke: string; dash?: string }> = {
   done: { fill: "#111827", stroke: "#111827" },
 };
 
-const MONO = "ui-monospace, SFMono-Regular, Menlo, monospace";
+// Use the app's mono token (JetBrains Mono) rather than the OS mono face, so
+// these SVG labels match the 100+ font-mono usages elsewhere in the app. Same
+// pattern as flow.module.css. The fallback only fires outside the app shell.
+const MONO = "var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace)";
 const LS: Record<LineStyle, React.CSSProperties> = {
   title: { fontSize: 12.5, fontWeight: 700, fill: "#1c2333" },
   titleSm: { fontSize: 12, fontWeight: 700, fill: "#1c2333" },
@@ -131,7 +134,7 @@ function Diagram({ id, w, h, nodes, edges }: { id: string; w: number; h: number;
 }
 
 export function EnrichmentFlowMap() {
-  // Click-drag panning of the canvas — same behavior as the campaign flow editor.
+  // Click-drag panning of the canvas: same behavior as the campaign flow editor.
   const canvasRef = useRef<HTMLDivElement>(null);
   function onCanvasMouseDown(e: React.MouseEvent) {
     const el = canvasRef.current;
@@ -176,11 +179,11 @@ export function EnrichmentFlowMap() {
       <div className={styles.canvas} ref={canvasRef} onMouseDown={onCanvasMouseDown}>
         <div className={styles.inner}>
           <div className={styles.col}>
-            <p className={`${styles.cap} ${styles.li}`}>LinkedIn vein — people-first</p>
+            <p className={`${styles.cap} ${styles.li}`}>LinkedIn vein: people-first</p>
             <Diagram id="li" w={640} h={1032} nodes={LI_NODES} edges={LI_EDGES} />
           </div>
           <div className={styles.col}>
-            <p className={`${styles.cap} ${styles.maps}`}>Maps vein — business-first</p>
+            <p className={`${styles.cap} ${styles.maps}`}>Maps vein: business-first</p>
             <Diagram id="maps" w={580} h={968} nodes={MAPS_NODES} edges={MAPS_EDGES} />
           </div>
         </div>

@@ -4,10 +4,15 @@ import "./globals.css";
 import { PostLoginOverlay } from "@/components/layout/post-login-overlay";
 import { Toaster } from "@/components/ui/sonner";
 
+// 800 is loaded because the app actually asks for it: the sidebar wordmark
+// (font-extrabold) plus the flow-map and onboarding-preview titles. Without it
+// the CSS font-matching algorithm silently descends to 700, so font-extrabold
+// rendered pixel-identical to font-bold and the design intent was dropped.
+// Keep this array in lockstep with src/app/global-error.tsx, the other root.
 const poppins = Poppins({
   variable: "--font-sans",
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+  weight: ["400", "500", "600", "700", "800"],
   display: "swap",
 });
 
@@ -19,7 +24,7 @@ const jetbrainsMono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   applicationName: "LeadStart",
-  title: "LeadStart — Cold Email Dashboard",
+  title: "LeadStart, Cold Email Dashboard",
   description: "Campaign management and client portal for cold email outreach",
   // Home-screen / PWA icon for iOS. The `apple-icon.png` file-convention in
   // this dir auto-emits <link rel="apple-touch-icon">; these tags make iOS
