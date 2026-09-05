@@ -6,6 +6,7 @@ import { Bell, Settings, LogOut, ChevronDown, User, MessageSquare, Mail, FileTex
 import { useSupabaseQuery } from "@/hooks/use-supabase-query";
 import { GlobalSearch } from "@/components/layout/global-search";
 import { NotificationsToggle } from "@/components/layout/notifications-toggle";
+import { ViewAsToggle } from "@/components/layout/view-as-toggle";
 import type { Notification } from "@/types/app";
 import {
   DropdownMenu,
@@ -41,12 +42,24 @@ function notificationIcon(type: string) {
 interface TopbarProps {
   userEmail: string;
   role: AppRole;
+  /**
+   * The viewer's real role, used to gate admin-only chrome (global search, the
+   * notification bell). During a client-portal preview the shell passes
+   * "client" here on purpose so that chrome disappears. See
+   * src/lib/auth/view-as.ts.
+   */
   actualRole?: AppRole;
-  onRoleSwitch: (role: AppRole) => void;
+  /**
+   * True while an admin previews a client portal. Needed as its own flag
+   * because `actualRole` reads "client" during a preview (that is what hides
+   * the admin chrome), so the dropdown would otherwise have no way to know it
+   * should offer the way back.
+   */
+  viewingAsClient?: boolean;
   onMenuClick?: () => void;
 }
 
-export function Topbar({ userEmail, role, actualRole, onRoleSwitch, onMenuClick }: TopbarProps) {
+export function Topbar({ userEmail, role, actualRole, viewingAsClient = false, onMenuClick }: TopbarProps) {
   const router = useRouter();
 
   async function handleSignOut() {
@@ -92,17 +105,17 @@ export function Topbar({ userEmail, role, actualRole, onRoleSwitch, onMenuClick 
     // (globals.css) floats it as an inset, rounded, hairline card matching the rail.
     <header className="app-topbar flex h-16 shrink-0 items-center justify-between border-b border-border/50 bg-white px-4 sm:px-6 gap-3">
       <div className="flex items-center gap-3 min-w-0 flex-1">
-        {/* Brand wordmark — mobile/tablet only. Primary nav is the bottom tab
+        {/* Brand wordmark: mobile/tablet only. Primary nav is the bottom tab
             bar now; the sidebar rail carries the brand at lg+. */}
         <span className="lg:hidden text-[15px] font-semibold tracking-tight text-foreground">
           LeadStart
         </span>
-        {/* Search bar — admin only, desktop only */}
+        {/* Search bar: admin only, desktop only */}
         {isActualAdmin && <GlobalSearch />}
       </div>
 
       <div className="flex items-center gap-3">
-        {/* Notification bell — admin only */}
+        {/* Notification bell: admin only */}
         {isActualAdmin && (
           <DropdownMenu>
             <DropdownMenuTrigger className="relative flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors outline-none cursor-pointer">
@@ -177,7 +190,7 @@ export function Topbar({ userEmail, role, actualRole, onRoleSwitch, onMenuClick 
               </DropdownMenuLabel>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            {/* Overflow nav — mobile/tablet only. Opens the full sectioned drawer
+            {/* Overflow nav: mobile/tablet only. Opens the full sectioned drawer
                 (Contacts, Reports, Mailboxes, Settings, …) that the bottom bar's
                 five tabs don't cover. Hidden at lg where the rail shows it all. */}
             {onMenuClick && (
@@ -200,8 +213,13 @@ export function Topbar({ userEmail, role, actualRole, onRoleSwitch, onMenuClick 
                 <Settings size={14} className="mr-2" />
                 Settings
               </DropdownMenuItem>
-              {/* Web-push opt-in — renders nothing where push isn't supported */}
+              {/* Web-push opt-in: renders nothing where push isn't supported */}
               <NotificationsToggle />
+              {/* Two-way portal switch. Shown to real admins, and to anyone
+                  already inside a preview so they can always get back out. */}
+              {(isActualAdmin || viewingAsClient) && (
+                <ViewAsToggle viewingAsClient={viewingAsClient} />
+              )}
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>

@@ -6,6 +6,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { appUrl } from "@/lib/api-url";
 import { useClientData } from "../../client-data-context";
+import { PREVIEW_READONLY_MESSAGE } from "@/lib/auth/view-as";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   ChevronLeft,
@@ -37,7 +38,7 @@ const REPLYABLE_CLASSES: ReplyClass[] = [
   "qualifying_question",
 ];
 
-// Brand gradients (inline — custom gradient classes don't reliably generate
+// Brand gradients (inline, because custom gradient classes don't reliably generate
 // under Tailwind v4, per project convention).
 const GRAD = "linear-gradient(135deg, #6B72FF 0%, #2E37FE 30%, #1C24B8 65%, #0F1880 100%)";
 const GREEN = "linear-gradient(135deg, #10b981 0%, #059669 100%)";
@@ -72,7 +73,10 @@ function formatReceived(iso: string): string {
 
 export default function ReplyDossierPage() {
   const { id } = useParams<{ id: string }>();
-  const { client, loading: contextLoading } = useClientData();
+  // Read-only while an admin previews this portal. handleSend hits
+  // /api/replies/[id]/send, which SENDS A REAL EMAIL to the lead.
+  // See src/lib/auth/view-as.ts.
+  const { client, loading: contextLoading, previewing } = useClientData();
 
   const [reply, setReply] = useState<LeadReply | null>(null);
   const [loading, setLoading] = useState(true);
@@ -85,7 +89,7 @@ export default function ReplyDossierPage() {
   const [outcomeSaved, setOutcomeSaved] = useState(false);
   const [excludeSaving, setExcludeSaving] = useState(false);
 
-  // Portal-reply composer state (open by default — the hot-lead email's
+  // Portal-reply composer state (open by default, because the hot-lead email's
   // "Reply" button lands the client here to respond).
   const [composerSubject, setComposerSubject] = useState("");
   const [composerBody, setComposerBody] = useState("");
@@ -124,7 +128,7 @@ export default function ReplyDossierPage() {
   }, [contextLoading, client, id]);
 
   async function handleSend() {
-    if (!reply || !composerBody.trim()) return;
+    if (!reply || !composerBody.trim() || previewing) return;
     setSending(true);
     setSendError(null);
     try {
@@ -158,7 +162,7 @@ export default function ReplyDossierPage() {
   }
 
   async function handleSaveOutcome() {
-    if (!reply || !outcomeValue) return;
+    if (!reply || !outcomeValue || previewing) return;
     setSavingOutcome(true);
     setOutcomeSaved(false);
     try {
@@ -192,7 +196,7 @@ export default function ReplyDossierPage() {
   }
 
   async function handleToggleExclude() {
-    if (!reply) return;
+    if (!reply || previewing) return;
     const next = !reply.excluded_from_stats;
     setExcludeSaving(true);
     try {
@@ -241,7 +245,7 @@ export default function ReplyDossierPage() {
   const callLink = telHref(reply.lead_phone_e164);
   const urgency = urgencyColor(reply.received_at);
 
-  // Identity: a known person, or a generic company inbox (no lead_name — e.g.
+  // Identity: a known person, or a generic company inbox (no lead_name, e.g.
   // a Maps info@ lead) where the email itself is the identity.
   const isGeneric = !reply.lead_name?.trim();
   const emailDomain = reply.lead_email.includes("@") ? reply.lead_email.split("@")[1] : "";
@@ -373,7 +377,7 @@ export default function ReplyDossierPage() {
         </CardContent>
       </Card>
 
-      {/* Their reply — chat bubble */}
+      {/* Their reply: chat bubble */}
       <Card className="border-border/50 shadow-sm">
         <CardContent className="px-5 py-4">
           <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-3">
@@ -497,7 +501,7 @@ export default function ReplyDossierPage() {
               </p>
               <button
                 onClick={handleSend}
-                disabled={!composerBody.trim() || sending}
+                disabled={!composerBody.trim() || sending || previewing}
                 className="text-white rounded-[10px] px-5 py-2.5 text-sm font-bold inline-flex items-center gap-1.5 shrink-0 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{ background: GRAD }}
               >
@@ -523,7 +527,7 @@ export default function ReplyDossierPage() {
             )}
           </div>
           <p className="text-xs text-muted-foreground -mt-1">
-            Tell us what happened — it keeps your dashboard and reports accurate.
+            Tell us what happened. It keeps your dashboard and reports accurate.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {OUTCOME_OPTIONS.map((opt) => (
@@ -557,7 +561,7 @@ export default function ReplyDossierPage() {
             </div>
             <button
               onClick={handleSaveOutcome}
-              disabled={!outcomeValue || savingOutcome}
+              disabled={!outcomeValue || savingOutcome || previewing}
               className="btn-blue px-5 py-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {savingOutcome ? "Saving..." : reply.outcome ? "Update" : "Log outcome"}
@@ -581,7 +585,7 @@ export default function ReplyDossierPage() {
           </div>
           <button
             onClick={handleToggleExclude}
-            disabled={excludeSaving}
+            disabled={excludeSaving || previewing}
             className="btn-secondary-white px-3 py-1.5 text-xs shrink-0 cursor-pointer disabled:opacity-50"
           >
             {excludeSaving ? "…" : reply.excluded_from_stats ? "Include" : "Exclude"}

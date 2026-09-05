@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { appUrl } from "@/lib/api-url";
 import { useClientData } from "../client-data-context";
+import { PREVIEW_READONLY_MESSAGE } from "@/lib/auth/view-as";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -175,7 +176,7 @@ function EmailTagInput({
 }
 
 export default function ClientSettingsPage() {
-  const { client: contextClient, userId, loading: contextLoading, noClient } = useClientData();
+  const { client: contextClient, userId, loading: contextLoading, noClient, previewing } = useClientData();
 
   // Local copy of the client row so saves can update instantly without
   // round-tripping the shared context. We re-fetch on mount to get any
@@ -260,6 +261,9 @@ export default function ClientSettingsPage() {
   // --- Save handlers ---
   async function patchClient(body: Record<string, unknown>): Promise<{ ok: boolean; error?: string }> {
     if (!clientId) return { ok: false, error: "Client not loaded yet." };
+    // Covers the notification / report / signature saves. An admin previewing
+    // this portal must not silently edit the client's settings.
+    if (previewing) return { ok: false, error: PREVIEW_READONLY_MESSAGE };
     try {
       const res = await fetch(appUrl(`/api/clients/${clientId}`), {
         method: "PATCH",
@@ -277,6 +281,14 @@ export default function ClientSettingsPage() {
   }
 
   async function handleSaveAccount() {
+    // DANGEROUS without this guard: writes profiles for the signed-in user and
+    // calls auth.updateUser({ email }). While previewing that is the ADMIN, so
+    // an unguarded save would rename their profile and start an email-change
+    // confirmation on their own login. See src/lib/auth/view-as.ts.
+    if (previewing) {
+      setAccountStatus({ state: "error", message: PREVIEW_READONLY_MESSAGE });
+      return;
+    }
     setAccountStatus({ state: "saving" });
     const supabase = createClient();
     const trimmedName = accountForm.full_name.trim();
@@ -309,7 +321,7 @@ export default function ClientSettingsPage() {
       }
       setAccountStatus({
         state: "saved",
-        message: "Confirmation email sent — check your inbox to apply the change.",
+        message: "Confirmation email sent. Check your inbox to apply the change.",
       });
       setTimeout(() => setAccountStatus({ state: "idle" }), 6000);
       return;
@@ -320,6 +332,12 @@ export default function ClientSettingsPage() {
   }
 
   async function handleSavePassword() {
+    // Same hazard as handleSaveAccount, worse: auth.updateUser({ password })
+    // would change the ADMIN's own password from inside a client preview.
+    if (previewing) {
+      setPasswordStatus({ state: "error", message: PREVIEW_READONLY_MESSAGE });
+      return;
+    }
     setPasswordStatus({ state: "saving" });
     if (passwordForm.next.length < 8) {
       setPasswordStatus({ state: "error", message: "Password must be at least 8 characters." });
@@ -368,7 +386,7 @@ export default function ClientSettingsPage() {
     const isWeeklyish = freq === "weekly" || freq === "biweekly";
 
     // Only stamp a fresh biweekly anchor when the client is NEWLY switching to
-    // biweekly — so saving other changes later doesn't re-anchor and shift the
+    // biweekly, so saving other changes later doesn't re-anchor and shift the
     // cadence out from under them.
     const newlyBiweekly = freq === "biweekly" && client?.report_frequency !== "biweekly";
 
@@ -505,7 +523,7 @@ export default function ClientSettingsPage() {
           <div className="flex items-center gap-3 pt-1 border-t border-border/30 pt-3">
             <Button
               onClick={handleSaveAccount}
-              disabled={accountStatus.state === "saving"}
+              disabled={accountStatus.state === "saving" || previewing}
               className="gap-1.5"
               style={{ background: "#2E37FE" }}
             >
@@ -556,6 +574,7 @@ export default function ClientSettingsPage() {
             <Button
               onClick={handleSavePassword}
               disabled={
+                previewing ||
                 passwordStatus.state === "saving" ||
                 !passwordForm.next ||
                 !passwordForm.confirm
@@ -640,7 +659,7 @@ export default function ClientSettingsPage() {
           <div className="flex items-center gap-3 pt-3 border-t border-border/30">
             <Button
               onClick={handleSaveNotifications}
-              disabled={notifyStatus.state === "saving"}
+              disabled={notifyStatus.state === "saving" || previewing}
               className="gap-1.5"
               style={{ background: "#2E37FE" }}
             >
@@ -806,7 +825,7 @@ export default function ClientSettingsPage() {
           <div className="flex items-center gap-3 pt-3 border-t border-border/30">
             <Button
               onClick={handleSaveReports}
-              disabled={reportsStatus.state === "saving"}
+              disabled={reportsStatus.state === "saving" || previewing}
               className="gap-1.5"
               style={{ background: "#2E37FE" }}
             >
@@ -847,7 +866,7 @@ export default function ClientSettingsPage() {
           <div className="flex items-center gap-3 pt-3 border-t border-border/30">
             <Button
               onClick={handleSaveSignature}
-              disabled={signatureStatus.state === "saving"}
+              disabled={signatureStatus.state === "saving" || previewing}
               className="gap-1.5"
               style={{ background: "#2E37FE" }}
             >
