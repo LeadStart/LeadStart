@@ -1,62 +1,35 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/layout/page-header";
-import { Coins, Workflow, Building2, Key, Tags, CreditCard, CheckSquare, Store } from "lucide-react";
+import { settingsEntryForPath } from "./settings-nav";
 
-// Settings hub: one tab in the sidebar, with sub-sections switched by this
-// sub-tab bar. Each tab is its own route under /admin/settings so deep links
-// and the browser back button work. Team + Integrations are the existing
-// pages folded in; Workflows was folded out of the top-level nav; Tokens is
-// the contact-sourcing product config; Billing + Tasks were folded in from
-// the top-level nav so Settings is the single home for them.
-const SETTINGS_TABS = [
-  { href: "/admin/settings/tokens", label: "Tokens", icon: Coins },
-  { href: "/admin/settings/buyer-experience", label: "Buyer experience", icon: Store },
-  { href: "/admin/settings/workflows", label: "Workflows", icon: Workflow },
-  { href: "/admin/settings/team", label: "Team", icon: Building2 },
-  { href: "/admin/settings/api", label: "Integrations", icon: Key },
-  { href: "/admin/settings/tags", label: "Tags", icon: Tags },
-  { href: "/admin/settings/billing", label: "Billing", icon: CreditCard },
-  { href: "/admin/settings/tasks", label: "Tasks", icon: CheckSquare },
-];
-
+// Settings shell. /admin/settings is the hub (grouped cards, see page.tsx);
+// every sub-section is its own route, titled here and opening with the
+// circular back arrow (PageHeader backHref) that returns to the hub.
+// This replaced the horizontal sub-tab bar, which had
+// outgrown the row (it h-scrolled) and gave no hint what a section held.
+// Titling here means each section is named once, in settings-nav.ts.
 export default function SettingsLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const entry = settingsEntryForPath(pathname);
+
+  if (!entry) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Settings" />
+        {children}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Settings" />
-
-      {/* Sub-tab bar: flat underline tabs. Active tab carries the brand
-          underline; the row scrolls horizontally on narrow screens. */}
-      <div className="overflow-x-auto border-b border-border/60">
-        <nav className="-mb-px flex min-w-max gap-1">
-          {SETTINGS_TABS.map((tab) => {
-            const active =
-              pathname === tab.href || pathname.startsWith(tab.href + "/");
-            const Icon = tab.icon;
-            return (
-              <Link
-                key={tab.href}
-                href={tab.href}
-                className={cn(
-                  "flex items-center gap-2 whitespace-nowrap border-b-2 px-4 py-2.5 text-sm font-medium transition-colors",
-                  active
-                    ? "border-[#2E37FE] text-[#2E37FE]"
-                    : "border-transparent text-muted-foreground hover:border-border hover:text-foreground"
-                )}
-              >
-                <Icon size={16} />
-                {tab.label}
-              </Link>
-            );
-          })}
-        </nav>
-      </div>
-
+      <PageHeader
+        backHref="/admin/settings"
+        backLabel="Back to settings"
+        title={entry.title}
+      />
       {children}
     </div>
   );

@@ -14,7 +14,7 @@ import {
 // A single dropdown item that lets a user turn hot-lead push notifications on
 // or off for this device. Renders nothing on browsers that don't support push
 // (older iOS Safari, non-installed iOS, etc.). Buzzes the phone when a hot lead
-// replies: the "on the move" hook.
+// replies, the "on the move" hook.
 export function NotificationsToggle() {
   const [state, setState] = useState<PushState | "loading">("loading");
   const [busy, setBusy] = useState(false);
@@ -81,12 +81,13 @@ export function NotificationsToggle() {
     state === "subscribed" ? BellRing : state === "denied" ? BellOff : Bell;
 
   return (
+    // onClick + closeOnClick={false} is the Base UI (@base-ui/react) way to
+    // handle a click and keep the menu open so the label reflects the new
+    // state. This previously used Radix's `onSelect` + preventDefault, which
+    // Base UI's MenuItem does not implement, so the toggle never fired at all.
     <DropdownMenuItem
-      onSelect={(e) => {
-        // Keep the menu open so the label reflects the new state.
-        e.preventDefault();
-        void toggle();
-      }}
+      onClick={() => void toggle()}
+      closeOnClick={false}
       disabled={busy}
     >
       <Icon size={14} className="mr-2" />

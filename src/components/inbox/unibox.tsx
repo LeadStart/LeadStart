@@ -1,5 +1,7 @@
 "use client";
 
+import { BackButton } from "@/components/layout/back-button";
+
 // Shared two-pane "unibox" shell for the admin + client inboxes (direction #5).
 // Desktop: sender list left, conversation + action bar right. Mobile: it's
 // master-detail: the list is full-width until a reply is opened, then the
@@ -7,7 +9,6 @@
 // so each pane scrolls internally instead of the whole page.
 
 import type { ReactNode } from "react";
-import { ChevronLeft } from "lucide-react";
 
 export function initials(name: string): string {
   const p = name.trim().split(/\s+/).filter(Boolean);
@@ -127,11 +128,10 @@ export function ThreadEmpty({ children }: { children?: ReactNode }) {
 // Mobile-only "back to list" affordance rendered inside a thread header.
 export function MobileBack({ onBack }: { onBack: () => void }) {
   return (
-    <button
+    <BackButton
       onClick={onBack}
-      className="mb-1 inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground sm:hidden cursor-pointer"
-    >
-      <ChevronLeft size={14} /> Back to inbox
-    </button>
+      label="Back to inbox"
+      className="mb-1 h-8 w-8 sm:hidden"
+    />
   );
 }

@@ -14,6 +14,7 @@ import Image from "next/image";
 import { Mail, FileText, PartyPopper, Info } from "lucide-react";
 import { QuoteLayout } from "@/components/billing/quote-layout";
 import { WelcomeContent } from "@/components/billing/welcome-content";
+import { BackButton } from "@/components/layout/back-button";
 import { buildQuoteProposalEmail } from "@/lib/email/quote-proposal";
 import {
   PREVIEW_WARMING_DAYS,
@@ -127,9 +128,12 @@ export function OnboardingPreview() {
       {/* Header */}
       <div className="space-y-3">
         <div>
-          <h1 className="text-xl font-extrabold tracking-tight text-foreground">
-            Onboarding preview
-          </h1>
+          <div className="flex items-center gap-3">
+            <BackButton href="/admin/settings/workflows" label="Back to workflows" />
+            <h1 className="text-xl font-extrabold tracking-tight text-foreground">
+              Onboarding preview
+            </h1>
+          </div>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
             Exactly what a client sees as they come aboard: the proposal email,
             the hosted quote they accept, and the welcome page after payment.

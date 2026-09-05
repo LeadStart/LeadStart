@@ -16,6 +16,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { FeedbackStatus } from "@/types/app";
+import { useClientData } from "../../client-data-context";
+import { PREVIEW_READONLY_MESSAGE } from "@/lib/auth/view-as";
 
 const FEEDBACK_OPTIONS: { value: FeedbackStatus; label: string }[] = [
   { value: "good_lead", label: "Good Lead" },
@@ -36,10 +38,14 @@ export function FeedbackForm({ campaignId }: { campaignId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const router = useRouter();
+  // An admin previewing this portal is still signed in as themselves, so an
+  // unguarded submit would file feedback under the agency account against the
+  // client's campaign. See src/lib/auth/view-as.ts.
+  const { previewing } = useClientData();
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!status) return;
+    if (!status || previewing) return;
 
     setLoading(true);
     setError(null);
@@ -131,9 +137,12 @@ export function FeedbackForm({ campaignId }: { campaignId: string }) {
               rows={2}
             />
           </div>
-          <Button type="submit" disabled={loading || !status}>
+          <Button type="submit" disabled={loading || !status || previewing}>
             {loading ? "Submitting..." : "Submit Feedback"}
           </Button>
+          {previewing && (
+            <p className="text-sm text-muted-foreground">{PREVIEW_READONLY_MESSAGE}</p>
+          )}
           {error && <p className="text-sm text-red-600">{error}</p>}
           {success && <p className="text-sm text-green-600">Feedback submitted!</p>}
         </form>

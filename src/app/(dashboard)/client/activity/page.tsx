@@ -79,6 +79,8 @@ export default function ClientActivityPage() {
   return (
     <div className="space-y-6">
       <PageHeader
+        backHref="/client"
+        backLabel="Back to dashboard"
         title="Activity Feed"
       />
 

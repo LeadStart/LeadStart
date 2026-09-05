@@ -1,5 +1,6 @@
 "use client";
 import { PageHeader } from "@/components/layout/page-header";
+import { ViewAsClientButton } from "./view-as-client-button";
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -22,7 +23,6 @@ import { ReplyRoutingSection } from "./reply-routing-section";
 import { LinkedinSection } from "./linkedin-section";
 import { DncSection } from "./dnc-section";
 import {
-  ArrowLeft,
   ArrowRight,
   Mail,
   MessageSquare,
@@ -77,7 +77,7 @@ export function ClientDetailClient({
 }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
-  // Default to lifetime (All-Time): a rolling 30-day reply rate understates it
+  // Default to lifetime (All-Time), because a rolling 30-day reply rate understates it
   // (fresh, unreplied leads dilute the denominator). 7d/30d stay one click away.
   const [period, setPeriod] = useState<Period>("lifetime");
   const [statusUpdating, setStatusUpdating] = useState(false);
@@ -115,32 +115,29 @@ export function ClientDetailClient({
 
   return (
     <div className="space-y-6">
-      <div>
-        <Link
-          href="/admin"
-          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <ArrowLeft size={14} />
-          Back to Overview
-        </Link>
-        <PageHeader
-          className="mt-3"
-          title={
-            <span className="inline-flex items-center gap-2">
-              {client.name}
-              <Badge
-                variant="secondary"
-                className={
-                  (client.status ?? "active") === "active"
-                    ? "badge-green"
-                    : "badge-amber"
-                }
-              >
-                {(client.status ?? "active") === "active" ? "Active" : "Former"}
-              </Badge>
-            </span>
-          }
-          actions={
+      {/* Master's circular back arrow (the single back affordance app-wide)
+          keeps the header; the portal-preview action joins Archive in actions. */}
+      <PageHeader
+        backHref="/admin/clients"
+        backLabel="Back to clients"
+        title={
+          <span className="inline-flex items-center gap-2">
+            {client.name}
+            <Badge
+              variant="secondary"
+              className={
+                (client.status ?? "active") === "active"
+                  ? "badge-green"
+                  : "badge-amber"
+              }
+            >
+              {(client.status ?? "active") === "active" ? "Active" : "Former"}
+            </Badge>
+          </span>
+        }
+        actions={
+          <>
+            <ViewAsClientButton clientId={client.id} clientName={client.name} />
             <Button
               variant="outline"
               size="sm"
@@ -160,9 +157,9 @@ export function ClientDetailClient({
                 </>
               )}
             </Button>
-          }
-        />
-      </div>
+          </>
+        }
+      />
 
       <ContactSection client={client} onSaved={refresh} />
 
@@ -245,7 +242,7 @@ export function ClientDetailClient({
       {periodSnapshots.length > 0 && (
         <DailyChart
           snapshots={periodSnapshots}
-          title={`${client.name}: ${periodLabel}`}
+          title={`${client.name} · ${periodLabel}`}
         />
       )}
 

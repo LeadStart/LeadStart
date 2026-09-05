@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/table";
 import { RefreshButton } from "./refresh-button";
 import { LinkedinCampaignDetail } from "./linkedin-campaign-detail";
-import { ArrowLeft, MessageSquare } from "lucide-react";
+import { MessageSquare } from "lucide-react";
 import type {
   Campaign,
   CampaignSnapshot,
@@ -113,36 +113,28 @@ export default async function CampaignDetailPage({
 
   return (
     <div className="space-y-6">
-      <div>
-        <Link
-          href={`/admin/clients/${clientId}`}
-          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <ArrowLeft size={14} />
-          Back to Client
-        </Link>
-        <PageHeader
-          className="mt-3"
-          title={campaign.name}
-          actions={
-            <>
-              <Badge
-                variant="secondary"
-                className={
-                  campaign.status === "active"
-                    ? "badge-green"
-                    : campaign.status === "paused"
-                      ? "badge-amber"
-                      : "badge-slate"
-                }
-              >
-                {campaign.status}
-              </Badge>
-              <RefreshButton campaignId={campaignId} />
-            </>
-          }
-        />
-      </div>
+      <PageHeader
+        backHref={`/admin/clients/${clientId}`}
+        backLabel="Back to client"
+        title={campaign.name}
+        actions={
+          <>
+            <Badge
+              variant="secondary"
+              className={
+                campaign.status === "active"
+                  ? "badge-green"
+                  : campaign.status === "paused"
+                    ? "badge-amber"
+                    : "badge-slate"
+              }
+            >
+              {campaign.status}
+            </Badge>
+            <RefreshButton campaignId={campaignId} />
+          </>
+        }
+      />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <KPICard label="Emails Sent" value={metrics.emails_sent} unit="count" />

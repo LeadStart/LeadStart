@@ -6,6 +6,7 @@ import { Bell, Settings, LogOut, ChevronDown, User, MessageSquare, Mail, FileTex
 import { useSupabaseQuery } from "@/hooks/use-supabase-query";
 import { GlobalSearch } from "@/components/layout/global-search";
 import { NotificationsToggle } from "@/components/layout/notifications-toggle";
+import { ViewAsToggle } from "@/components/layout/view-as-toggle";
 import type { Notification } from "@/types/app";
 import {
   DropdownMenu,
@@ -41,12 +42,24 @@ function notificationIcon(type: string) {
 interface TopbarProps {
   userEmail: string;
   role: AppRole;
+  /**
+   * The viewer's real role, used to gate admin-only chrome (global search, the
+   * notification bell). During a client-portal preview the shell passes
+   * "client" here on purpose so that chrome disappears. See
+   * src/lib/auth/view-as.ts.
+   */
   actualRole?: AppRole;
-  onRoleSwitch: (role: AppRole) => void;
+  /**
+   * True while an admin previews a client portal. Needed as its own flag
+   * because `actualRole` reads "client" during a preview (that is what hides
+   * the admin chrome), so the dropdown would otherwise have no way to know it
+   * should offer the way back.
+   */
+  viewingAsClient?: boolean;
   onMenuClick?: () => void;
 }
 
-export function Topbar({ userEmail, role, actualRole, onRoleSwitch, onMenuClick }: TopbarProps) {
+export function Topbar({ userEmail, role, actualRole, viewingAsClient = false, onMenuClick }: TopbarProps) {
   const router = useRouter();
 
   async function handleSignOut() {
@@ -202,6 +215,11 @@ export function Topbar({ userEmail, role, actualRole, onRoleSwitch, onMenuClick 
               </DropdownMenuItem>
               {/* Web-push opt-in: renders nothing where push isn't supported */}
               <NotificationsToggle />
+              {/* Two-way portal switch. Shown to real admins, and to anyone
+                  already inside a preview so they can always get back out. */}
+              {(isActualAdmin || viewingAsClient) && (
+                <ViewAsToggle viewingAsClient={viewingAsClient} />
+              )}
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>

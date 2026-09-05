@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { roleHomePath } from "@/lib/auth/roles";
+import { VIEW_AS_COOKIE, VIEW_AS_HEADER, isValidClientId } from "@/lib/auth/view-as";
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
@@ -26,7 +27,7 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
-  // If the URL has a `code` param (Supabase PKCE flow, password reset, magic link, etc.)
+  // If the URL has a `code` param (Supabase PKCE flow: password reset, magic link, etc.)
   // exchange it for a session right here in the middleware
   const code = request.nextUrl.searchParams.get("code");
   if (code) {
@@ -57,17 +58,28 @@ export async function updateSession(request: NextRequest) {
     const expiresAt = session.expires_at * 1000; // convert to ms
     const REFRESH_THRESHOLD = 5 * 60 * 1000; // 5 minutes before expiry
     if (Date.now() > expiresAt - REFRESH_THRESHOLD) {
-      // Token expired or expiring soon: refresh via network call
+      // Token expired or expiring soon, refresh via network call
       const { data } = await supabase.auth.getUser();
       user = data.user;
     }
   } else if (!session) {
-    // No session at all: try getUser() to recover from refresh token
+    // No session at all, try getUser() to recover from refresh token
     const { data } = await supabase.auth.getUser();
     user = data.user;
   }
 
   const pathname = request.nextUrl.pathname;
+
+  // "View as client" preview (src/lib/auth/view-as.ts). Honored ONLY for an
+  // owner/VA. The cookie is inert for anyone else, so a stray or copied value
+  // can never widen a client's or buyer's access. The client_id itself is
+  // re-checked by RLS on every query, so this is a display hint, not a grant.
+  const viewAsRaw = request.cookies.get(VIEW_AS_COOKIE)?.value ?? null;
+  const viewerRole = (user?.app_metadata?.role as string | undefined) ?? null;
+  const viewAsClientId =
+    (viewerRole === "owner" || viewerRole === "va") && isValidClientId(viewAsRaw)
+      ? viewAsRaw
+      : null;
 
   // Build a response that forwards the resolved user to downstream handlers
   // (layout, API routes) via request headers. Reading headers is free; creating
@@ -87,6 +99,16 @@ export async function updateSession(request: NextRequest) {
     const orgId = (user.app_metadata as { organization_id?: string } | undefined)
       ?.organization_id;
     if (orgId) requestHeaders.set("x-user-org", orgId);
+    // Same trust model as the x-user-* headers above: strip whatever arrived,
+    // then set the value we resolved ourselves.
+    requestHeaders.delete(VIEW_AS_HEADER);
+    // Scoped to the client portal ONLY. The cookie outlives a single visit, so
+    // forwarding it everywhere would flip /admin into client mode too. The
+    // admin portal must always render as itself, which is also what lets the
+    // header toggle read "View as client" the moment you are back on /admin.
+    if (viewAsClientId && pathname.startsWith("/client")) {
+      requestHeaders.set(VIEW_AS_HEADER, viewAsClientId);
+    }
 
     const response = NextResponse.next({
       request: { headers: requestHeaders },
@@ -98,7 +120,7 @@ export async function updateSession(request: NextRequest) {
   };
 
   // Public routes that don't require auth. `/site-chat.js` is the
-  // embeddable widget served to the public LeadStart.io marketing site,
+  // embeddable widget served to the public LeadStart.io marketing site.
   // it must load with no session. (The chat API it calls,
   // /api/site-chat, is already public via the `/api/` bypass below and
   // enforces its own origin allowlist + rate limit.)
@@ -175,10 +197,13 @@ export async function updateSession(request: NextRequest) {
     }
   }
 
-  // /client: client only. Bounce owner/va + buyer.
+  // /client: client only, EXCEPT an owner/va running a portal preview. Buyers
+  // are always bounced. Without this exception the preview is impossible: the
+  // redirect would fire before the portal ever rendered.
   if (user && pathname.startsWith("/client")) {
     const role = user.app_metadata?.role as string | undefined;
-    if (role === "owner" || role === "va" || role === "buyer") {
+    const previewing = viewAsClientId !== null && (role === "owner" || role === "va");
+    if (!previewing && (role === "owner" || role === "va" || role === "buyer")) {
       const url = request.nextUrl.clone();
       url.pathname = roleHomePath(role);
       return NextResponse.redirect(url);

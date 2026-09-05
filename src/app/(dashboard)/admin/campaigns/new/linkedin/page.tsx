@@ -22,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, ArrowDown, ArrowUp, Plus, Trash2, Save } from "lucide-react";
+import { ArrowDown, ArrowUp, Plus, Trash2, Save } from "lucide-react";
 import Link from "next/link";
 import { appUrl } from "@/lib/api-url";
 import { useUser } from "@/hooks/use-user";
@@ -211,18 +211,11 @@ export default function NewLinkedinCampaignPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <Link
-          href="/admin/campaigns"
-          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft size={14} /> Back to Campaigns
-        </Link>
-        <PageHeader
-          className="mt-3"
-          title="LinkedIn sequence"
-        />
-      </div>
+      <PageHeader
+        backHref="/admin/campaigns"
+        backLabel="Back to campaigns"
+        title="LinkedIn sequence"
+      />
 
       <Card className="border-border/50 shadow-sm">
         <CardHeader className="pb-3">

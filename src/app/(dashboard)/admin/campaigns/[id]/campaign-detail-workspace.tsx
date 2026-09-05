@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { BackButton } from "@/components/layout/back-button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Dialog,
@@ -205,7 +206,7 @@ export function CampaignDetailWorkspace({
 
   // Unsaved-changes exit guard. `beforeunload` covers reload / close / typing a
   // URL; a document-level capture click handler covers every in-app link (the
-  // "← Campaigns" back link, the sidebar, the client "Open" link) so a click
+  // back arrow, the sidebar, the client "Open" link) so a click
   // that would navigate away opens the confirm dialog instead.
   const [leaveOpen, setLeaveOpen] = useState(false);
   const [pendingHref, setPendingHref] = useState<string | null>(null);
@@ -396,13 +397,10 @@ export function CampaignDetailWorkspace({
       {/* header */}
       <div className="flex flex-col gap-3 pb-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
         <div className="min-w-0">
-          <Link
-            href="/admin/campaigns"
-            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-          >
-            ← Campaigns
-          </Link>
-          <div className="mt-0.5 flex items-center gap-2.5">
+          <div className="flex items-center gap-2.5">
+            {/* Renders an <a>, so the unsaved-changes click guard below still
+                intercepts it (the guard matches closest("a")). */}
+            <BackButton href="/admin/campaigns" label="Back to campaigns" />
             <h1 className="truncate text-xl font-bold tracking-tight text-foreground">{campaignName}</h1>
             <Badge
               variant="secondary"

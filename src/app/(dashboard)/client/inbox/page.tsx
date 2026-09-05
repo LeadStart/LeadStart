@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useClientData } from "../client-data-context";
+import { PREVIEW_READONLY_MESSAGE } from "@/lib/auth/view-as";
 import { appUrl } from "@/lib/api-url";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -235,6 +236,10 @@ function ClientThread({
   onBack: () => void;
   onPatch: (patch: Partial<LeadReply>) => void;
 }) {
+  // Read-only while an admin previews this portal. Without this the preview
+  // could SEND A REAL EMAIL to the lead from the client's mailbox, or log an
+  // outcome against their pipeline. See src/lib/auth/view-as.ts.
+  const { previewing } = useClientData();
   const isReplyable = reply.final_class ? REPLYABLE_CLASSES.includes(reply.final_class) : false;
   const isSent = reply.status === "sent";
   const phone = telHref(reply.lead_phone_e164);
@@ -252,7 +257,7 @@ function ClientThread({
   const [excludeSaving, setExcludeSaving] = useState(false);
 
   async function send() {
-    if (!bodyText.trim()) return;
+    if (!bodyText.trim() || previewing) return;
     setSending(true);
     setSendError(null);
     try {
@@ -272,6 +277,7 @@ function ClientThread({
   }
 
   async function logOutcome(outcome: ReplyOutcome) {
+    if (previewing) return;
     setSavingOutcome(outcome);
     try {
       const res = await fetch(appUrl(`/api/replies/${reply.id}/outcome`), {
@@ -287,6 +293,7 @@ function ClientThread({
   }
 
   async function toggleExclude() {
+    if (previewing) return;
     const next = !reply.excluded_from_stats;
     setExcludeSaving(true);
     try {
@@ -309,7 +316,7 @@ function ClientThread({
         label: opt.label,
         color: opt.value === "called" ? "#059669" : opt.value === "emailed" ? "#2E37FE" : "#475569",
         active: reply.outcome === opt.value,
-        disabled: savingOutcome !== null,
+        disabled: savingOutcome !== null || previewing,
         onClick: () => logOutcome(opt.value),
       })),
     },
@@ -422,10 +429,10 @@ function ClientThread({
               <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-900">{sendError}</div>
             )}
             <div className="flex items-center justify-between gap-3">
-              <p className="text-[11px] text-muted-foreground">Sends from the mailbox they replied to and CCs your inbox.</p>
+              <p className="text-[11px] text-muted-foreground">{previewing ? PREVIEW_READONLY_MESSAGE : "Sends from the mailbox they replied to and CCs your inbox."}</p>
               <button
                 onClick={send}
-                disabled={!bodyText.trim() || sending}
+                disabled={!bodyText.trim() || sending || previewing}
                 className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-[#2E37FE] px-4 py-2 text-sm font-bold text-white cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Send size={14} /> {sending ? "Sending…" : "Send reply"}
@@ -442,7 +449,7 @@ function ClientThread({
         ) : (
           <button
             onClick={toggleExclude}
-            disabled={excludeSaving}
+            disabled={excludeSaving || previewing}
             className="text-xs font-medium text-muted-foreground hover:text-foreground cursor-pointer disabled:opacity-50"
           >
             {excludeSaving ? "…" : reply.excluded_from_stats ? "Include in your stats" : "Not a real lead? Exclude from stats"}

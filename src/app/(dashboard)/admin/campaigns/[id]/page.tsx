@@ -4,7 +4,6 @@
 // detail at /admin/clients/[clientId]/campaigns/[campaignId] is the older view
 // this one is what list rows link to from /admin/campaigns.
 
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { KPICard } from "@/components/charts/kpi-card";
@@ -27,7 +26,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ArrowLeft, Inbox, Upload, CheckCircle2 } from "lucide-react";
+import { Inbox, Upload, CheckCircle2 } from "lucide-react";
 import { NativeImportPanel } from "@/components/campaigns/native-import-panel";
 import { CampaignContactsCard, type CampaignContactRow } from "./campaign-contacts-card";
 import { NativeSequenceSection } from "./native-sequence-section";
@@ -372,15 +371,9 @@ export default async function AdminCampaignDetailPage({
   return (
     <div className="space-y-6">
       <div>
-        <Link
-          href="/admin/campaigns"
-          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <ArrowLeft size={14} />
-          Back to campaigns
-        </Link>
         <PageHeader
-          className="mt-3"
+          backHref="/admin/campaigns"
+          backLabel="Back to campaigns"
           title={campaign.name}
           actions={
             <>

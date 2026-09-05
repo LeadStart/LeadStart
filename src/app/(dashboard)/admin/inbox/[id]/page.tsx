@@ -1,9 +1,8 @@
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent } from "@/components/ui/card";
+import { BackButton } from "@/components/layout/back-button";
 import { Badge } from "@/components/ui/badge";
 import {
-  ChevronLeft,
   Building2,
   ExternalLink,
   Mail,
@@ -79,12 +78,7 @@ export default async function AdminReplyDetailPage({
   if (error || !data) {
     return (
       <div className="space-y-4">
-        <Link
-          href="/admin/inbox"
-          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-        >
-          <ChevronLeft size={14} /> Back to Inbox
-        </Link>
+        <BackButton href="/admin/inbox" label="Back to inbox" />
         <Card className="border-border/50">
           <CardContent className="py-12 text-center">
             <p className="text-muted-foreground">Reply not found.</p>
@@ -100,12 +94,7 @@ export default async function AdminReplyDetailPage({
 
   return (
     <div className="space-y-5 max-w-3xl mx-auto">
-      <Link
-        href="/admin/inbox"
-        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground cursor-pointer"
-      >
-        <ChevronLeft size={14} /> Back
-      </Link>
+      <BackButton href="/admin/inbox" label="Back to inbox" />
 
       <div className="flex items-center gap-2 rounded-xl px-4 py-2 bg-slate-100 text-slate-700 text-xs">
         <Eye size={14} />
