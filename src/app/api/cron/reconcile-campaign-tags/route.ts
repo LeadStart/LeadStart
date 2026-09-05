@@ -5,6 +5,9 @@ import { syncCampaignTagPool } from "@/lib/campaigns/tag-pool-sync";
 
 // Force dynamic so a Vercel cron never gets an edge-cached body.
 export const dynamic = "force-dynamic";
+// Explicit function budget (SEND_RUNTIME_AUDIT.md CRON-05): never rely on the
+// project's Fluid-compute default (300s per Vercel's docs, read 2026-09-05).
+export const maxDuration = 60;
 
 // Live mailbox-tag reconcile (migration 00119).
 //

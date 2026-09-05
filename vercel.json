@@ -7,7 +7,7 @@
     },
     {
       "path": "/app/api/cron/send-reports",
-      "schedule": "0 * * * *"
+      "schedule": "5 * * * *"
     },
     {
       "path": "/app/api/cron/expire-replies",

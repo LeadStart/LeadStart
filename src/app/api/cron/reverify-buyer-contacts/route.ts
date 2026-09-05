@@ -4,6 +4,9 @@ import { checkCronAuth } from "@/lib/security/cron-auth";
 import { MillionVerifierClient, MillionVerifierError } from "@/lib/millionverifier/client";
 
 export const dynamic = "force-dynamic";
+// Explicit function budget (SEND_RUNTIME_AUDIT.md CRON-05): never rely on the
+// project's Fluid-compute default (300s per Vercel's docs, read 2026-09-05).
+export const maxDuration = 60;
 
 // Drains buyer RE-VERIFY jobs (buyer_reverify_jobs). A buyer enqueues a job with a
 // snapshot of their stale verified-email contact ids + a token hold; this cron

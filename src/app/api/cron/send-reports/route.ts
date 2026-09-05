@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { checkCronAuth } from "@/lib/security/cron-auth";
 import { calculateMetrics } from "@/lib/kpi/calculator";
@@ -15,6 +16,9 @@ import type { CampaignSnapshot, Client, Campaign, KPIReportData, KPIReport } fro
 // 2026-05-27 in an earlier cron route;
 // applying the same guard to every cron route preemptively.
 export const dynamic = "force-dynamic";
+// Explicit function budget (SEND_RUNTIME_AUDIT.md CRON-05): never rely on the
+// project's Fluid-compute default (300s per Vercel's docs, read 2026-09-05).
+export const maxDuration = 300;
 
 // Map frequency → period covered by the emailed report
 function reportPeriodDays(frequency: Client["report_frequency"]): number {
@@ -218,7 +222,25 @@ export async function GET(request: NextRequest) {
 }
 
 // ── POST: Manual send from admin UI ─────────────────────────────────────
+// Session-gated (owner or VA). This handler previously had NO auth check at
+// all: the middleware forwards every /api/ request unauthenticated (API routes
+// own their authorization), so anyone on the internet could mail any client's
+// KPI report to arbitrary recipients or bulk-generate + send reports for every
+// client (SEND_RUNTIME_AUDIT.md CRON-01). The scheduled path stays on the
+// CRON_SECRET bearer in GET above.
 export async function POST(request: NextRequest) {
+  const supabase = await createServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  const role = user.app_metadata?.role;
+  if (role !== "owner" && role !== "va") {
+    return NextResponse.json({ error: "Owner or VA role required" }, { status: 403 });
+  }
+
   const admin = createAdminClient();
 
   let body: Record<string, unknown> = {};

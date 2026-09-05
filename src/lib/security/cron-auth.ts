@@ -22,13 +22,25 @@
 // automatically using the env var, so once the secret is set in production
 // scheduled crons keep working without code changes.
 
+import { timingSafeEqual } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
+
+// Constant-time bearer comparison. A plain `!==` short-circuits on the first
+// differing byte; this helper is the single gate for every cron route, so the
+// comparison cost must not depend on how much of the secret matched.
+function bearerMatches(header: string | null, secret: string): boolean {
+  if (!header) return false;
+  const expected = Buffer.from(`Bearer ${secret}`, "utf8");
+  const actual = Buffer.from(header, "utf8");
+  if (expected.length !== actual.length) return false;
+  return timingSafeEqual(expected, actual);
+}
 
 export function checkCronAuth(request: NextRequest): NextResponse | null {
   const secret = process.env.CRON_SECRET;
   if (!secret) {
     console.error(
-      "[cron-auth] CRON_SECRET env var is not set — refusing all cron requests. " +
+      "[cron-auth] CRON_SECRET env var is not set, refusing all cron requests. " +
         "Set CRON_SECRET in the deployment environment and redeploy.",
     );
     return NextResponse.json(
@@ -36,8 +48,7 @@ export function checkCronAuth(request: NextRequest): NextResponse | null {
       { status: 500 },
     );
   }
-  const header = request.headers.get("authorization");
-  if (header !== `Bearer ${secret}`) {
+  if (!bearerMatches(request.headers.get("authorization"), secret)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   return null;

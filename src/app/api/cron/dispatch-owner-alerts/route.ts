@@ -21,6 +21,9 @@ import { dispatchPendingOwnerAlerts } from "@/lib/notifications/owner-alerts";
 // 2026-05-27 in an earlier cron route;
 // applying the same guard to every cron route preemptively.
 export const dynamic = "force-dynamic";
+// Explicit function budget (SEND_RUNTIME_AUDIT.md CRON-05): never rely on the
+// project's Fluid-compute default (300s per Vercel's docs, read 2026-09-05).
+export const maxDuration = 60;
 
 export async function GET(request: NextRequest) {
   const authError = checkCronAuth(request);

@@ -6,6 +6,9 @@ import { MillionVerifierClient, MillionVerifierError } from "@/lib/millionverifi
 // Force dynamic so a Vercel cron never gets an edge-cached body (see the note in
 // prune-webhook-events).
 export const dynamic = "force-dynamic";
+// Explicit function budget (SEND_RUNTIME_AUDIT.md CRON-05): never rely on the
+// project's Fluid-compute default (300s per Vercel's docs, read 2026-09-05).
+export const maxDuration = 300;
 
 // Phase 4 maintenance — MASTER-POOL RE-VERIFY.
 //

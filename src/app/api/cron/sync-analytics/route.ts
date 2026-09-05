@@ -7,8 +7,14 @@
 // a native campaign just starts showing real numbers.
 
 import { NextRequest, NextResponse } from "next/server";
+import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { checkCronAuth } from "@/lib/security/cron-auth";
+
+// Explicit so the budget never depends on the project's Fluid-compute default
+// (300s under Fluid per Vercel's docs, read 2026-09-05). Pages every active
+// native campaign's sends/replies in 1000-row chunks.
+export const maxDuration = 300;
 import { HOT_REPLY_CLASSES, type ReplyClass } from "@/types/app";
 import { evaluateAbWinners } from "@/lib/flow/ab-winner-eval";
 import { computeCohortReplies } from "@/lib/kpi/cohort";
@@ -21,14 +27,39 @@ import type { FlowGraph } from "@/lib/flow/graph";
 // route preemptively after the 2026-05-27 edge-cache incident.
 export const dynamic = "force-dynamic";
 
+// Scheduled path: CRON_SECRET bearer (Vercel injects it).
 export async function GET(request: NextRequest) {
   const authError = checkCronAuth(request);
   if (authError) return authError;
-
-  const admin = createAdminClient();
-
   // Optional: refresh a single campaign regardless of status.
+  return runAnalyticsSync(request.nextUrl.searchParams.get("campaign_id"));
+}
+
+// Manual path: the campaign page's "Refresh Now" button POSTs here with
+// ?campaign_id=. It used to hit a GET-only route and get a 405 on every click
+// (SEND_RUNTIME_AUDIT.md CRON-02). Session-gated to owner/VA; a browser can
+// never hold the cron secret, so the bearer check is the wrong gate here.
+export async function POST(request: NextRequest) {
+  const supabase = await createServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  const role = user.app_metadata?.role;
+  if (role !== "owner" && role !== "va") {
+    return NextResponse.json({ error: "Owner or VA role required" }, { status: 403 });
+  }
   const campaignId = request.nextUrl.searchParams.get("campaign_id");
+  if (!campaignId) {
+    return NextResponse.json({ error: "campaign_id is required" }, { status: 400 });
+  }
+  return runAnalyticsSync(campaignId);
+}
+
+async function runAnalyticsSync(campaignId: string | null) {
+  const admin = createAdminClient();
 
   let totalNativeSynced = 0;
   let totalVariantsPaused = 0;

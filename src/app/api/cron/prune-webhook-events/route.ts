@@ -9,6 +9,9 @@ import { checkCronAuth } from "@/lib/security/cron-auth";
 // 2026-05-27 in an earlier cron route;
 // applying the same guard to every cron route preemptively.
 export const dynamic = "force-dynamic";
+// Explicit function budget (SEND_RUNTIME_AUDIT.md CRON-05): never rely on the
+// project's Fluid-compute default (300s per Vercel's docs, read 2026-09-05).
+export const maxDuration = 60;
 
 // D3 — webhook_events retention cron. Daily at 4am UTC (see vercel.json).
 //
