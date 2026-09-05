@@ -1,15 +1,24 @@
 // Plain-text RFC 5322 builder + inbound Gmail message parser for the
-// native email channel. Pure functions, no network — same style as
+// native email channel. Pure functions, no network, same style as
 // src/lib/replies/keyword-prefilter.ts.
 //
-// Deliverability-first: still NO tracking pixel, NO rewritten links, and we
-// append NOTHING to the body — any opt-out language lives in the sequence copy.
-// We send multipart/alternative (a plain-text part + a minimal HTML part)
-// rather than plain-text-only, because Gmail hard-wraps plain text at ~78
-// chars AND ignores format=flowed, so a plain-text-only body renders as an
-// ugly narrow wrapped column. The HTML part is just paragraphs — no images,
-// no CSS beyond a system font — so it reflows naturally on every client while
-// keeping the plain part as a fallback.
+// Deliverability-first: NO tracking pixel, NO rewritten links, NO HTML part,
+// and we append NOTHING to the body. Any opt-out language lives in the
+// sequence copy.
+//
+// We send a SINGLE text/plain part. A cold email should be byte-for-byte the
+// shape of something a human typed in Gmail, and a multipart/alternative
+// carrying an HTML twin is a machine-generated tell that a hand-written note
+// never has.
+//
+// The catch this replaces: a naive plain-text send hard-wraps. Gmail honours
+// the literal newlines in a text/plain body and ignores RFC 3676
+// format=flowed, so pre-wrapped lines render as a narrow column on wide
+// screens and double-wrap on phones. The fix is the transfer encoding, not an
+// HTML part: quoted-printable (RFC 2045) lets one long logical paragraph be
+// split across physical lines with soft breaks that the client removes on
+// decode, handing Gmail a single long line that reflows to the reader's
+// viewport. See toQuotedPrintable below.
 
 import { randomUUID } from "node:crypto";
 import type { GmailMessage, GmailPayloadPart, GmailHeader } from "./client";
@@ -60,7 +69,7 @@ function formatFrom(email: string, name?: string | null): string {
 }
 
 // Header values that are NOT RFC 2047-encoded (To/Cc/In-Reply-To/References)
-// must never contain CR/LF or other control chars — a smuggled CRLF would
+// must never contain CR/LF or other control chars: a smuggled CRLF would
 // inject arbitrary headers (e.g. Bcc:) into the raw message. Contact emails
 // are validated at import, but recipients also arrive from other paths
 // (portal reply CC lists, historical rows), so strip at the sink too.
@@ -68,13 +77,6 @@ function formatFrom(email: string, name?: string | null): string {
 // encodes any value containing chars outside \x20-\x7E, which includes CRLF.
 function sanitizeAddrHeader(value: string): string {
   return value.replace(/[\x00-\x1F\x7F]/g, "").trim();
-}
-
-// Base64-encode the body wrapped at 76 chars/CRLF. Guarantees RFC 5322
-// line-length compliance and clean UTF-8 regardless of paragraph length.
-function base64Body(text: string): string {
-  const b64 = Buffer.from(text, "utf8").toString("base64");
-  return b64.replace(/.{1,76}/g, "$&\r\n").trimEnd();
 }
 
 function base64url(input: string): string {
@@ -85,55 +87,73 @@ function base64url(input: string): string {
     .replace(/=+$/, "");
 }
 
-// text/plain part, RFC 3676 format=flowed: wrap long paragraphs into <=72-char
-// lines where each continued line ends in a trailing SPACE, so flowed-aware
-// clients reflow to any width. (Gmail ignores this, which is why we also send
-// HTML — but it's the correct plain-text fallback for clients that honor it.)
-function toFlowed(text: string, width = 72): string {
+/**
+ * RFC 2045 quoted-printable, tuned for reflowable cold-email bodies.
+ *
+ * Every LOGICAL line of the body stays one logical line on the wire. When it
+ * exceeds the physical-line limit it is split with a SOFT break (a trailing
+ * "=" before the CRLF) which the receiving client removes on decode. Gmail
+ * therefore reassembles each paragraph into one long line and wraps it to the
+ * reader's viewport, instead of rendering our pre-wrapped narrow column.
+ *
+ * Blank lines pass through untouched, so paragraph breaks survive.
+ *
+ * Exported for scripts/test-mime-quoted-printable.ts.
+ */
+export function toQuotedPrintable(text: string): string {
+  // 72, not 75: protectTrailing() can turn a trailing space into "=20" (+2)
+  // and a soft break appends "=" (+1), so even the worst case lands at 75,
+  // inside the RFC 2045 ceiling of 76 chars per physical line.
+  const MAX = 72;
+
+  const hex = (b: number) => `=${b.toString(16).toUpperCase().padStart(2, "0")}`;
+
+  // Space and tab pass through; a trailing one is fixed up by protectTrailing.
+  const encodeChar = (ch: string): string => {
+    if (ch === " " || ch === "\t") return ch;
+    const code = ch.codePointAt(0) ?? 0;
+    if (code >= 33 && code <= 126 && ch !== "=") return ch;
+    return Array.from(Buffer.from(ch, "utf8"), hex).join("");
+  };
+
+  // RFC 2045 rule 3: whitespace may not be the last thing on an encoded line,
+  // because a decoder is allowed to strip it. Encode it instead of dropping it.
+  const protectTrailing = (line: string): string => {
+    if (line.endsWith(" ")) return `${line.slice(0, -1)}=20`;
+    if (line.endsWith("\t")) return `${line.slice(0, -1)}=09`;
+    return line;
+  };
+
   const out: string[] = [];
-  for (const src of text.split(/\r?\n/)) {
-    if (src.length === 0) {
-      out.push(""); // blank line = hard paragraph break
-      continue;
-    }
-    const line = /^(>| |From )/.test(src) ? ` ${src}` : src; // space-stuffing
-    const chunks: string[] = [];
-    let cur = "";
-    for (const w of line.split(" ")) {
-      if (cur === "") cur = w;
-      else if (`${cur} ${w}`.length <= width) cur += ` ${w}`;
-      else {
-        chunks.push(cur);
-        cur = w;
+  for (const logical of text.replace(/\r\n/g, "\n").split("\n")) {
+    // Array.from walks the string by code point, so surrogate pairs (emoji)
+    // reach encodeChar whole and encode to their real UTF-8 bytes.
+    const tokens = Array.from(logical, encodeChar);
+    // "From " opening a line gets rewritten by mbox-style stores; the standard
+    // dodge is to encode the F so the raw text never matches.
+    if (logical.startsWith("From ")) tokens[0] = "=46";
+
+    let line = "";
+    for (const tok of tokens) {
+      if (line.length + tok.length > MAX) {
+        out.push(`${protectTrailing(line)}=`);
+        line = "";
       }
+      line += tok;
     }
-    if (cur !== "") chunks.push(cur);
-    chunks.forEach((c, i) => out.push(i < chunks.length - 1 ? `${c} ` : c));
+    out.push(protectTrailing(line));
   }
   return out.join("\r\n");
 }
 
-// Minimal text/html part: HTML-escape, map blank lines to paragraph spacing
-// and single newlines to <br>. No images, no tracking, no links added — just
-// reflowable text in a system font.
-function textToHtml(text: string): string {
-  const esc = (s: string) =>
-    s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  const paras = text
-    .split(/\r?\n\r?\n/)
-    .map((p) => `<p style="margin:0 0 14px;">${esc(p).replace(/\r?\n/g, "<br>")}</p>`)
-    .join("");
-  return `<div style="font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif;font-size:14px;line-height:1.5;color:#1f2937;">${paras}</div>`;
-}
-
 /**
- * Build a multipart/alternative (plain-text + HTML) email, base64url-encoded
- * and ready for GmailClient.sendMessage(). Adds In-Reply-To/References only
- * when threading a follow-up. Callers pass just plain `bodyText`; the HTML
- * part is derived from it.
+ * Build a SINGLE-PART text/plain email, quoted-printable encoded and
+ * base64url-wrapped, ready for GmailClient.sendMessage(). Adds
+ * In-Reply-To/References only when threading a follow-up.
+ *
+ * There is deliberately no HTML alternative: see the header comment.
  */
 export function buildRawEmail(params: BuildEmailParams): string {
-  const boundary = `b_${randomUUID().replace(/-/g, "")}`;
   const headers: string[] = [
     `From: ${formatFrom(sanitizeAddrHeader(params.fromEmail), params.fromName)}`,
     `To: ${sanitizeAddrHeader(params.to)}`,
@@ -146,26 +166,15 @@ export function buildRawEmail(params: BuildEmailParams): string {
     // obsolete obs-zone form (SEND-27).
     `Date: ${new Date().toUTCString().replace(/ GMT$/, " +0000")}`,
     `MIME-Version: 1.0`,
-    `Content-Type: multipart/alternative; boundary="${boundary}"`,
+    `Content-Type: text/plain; charset="UTF-8"`,
+    `Content-Transfer-Encoding: quoted-printable`,
   ];
   if (params.inReplyTo) headers.push(`In-Reply-To: ${sanitizeAddrHeader(params.inReplyTo)}`);
   if (params.references) headers.push(`References: ${sanitizeAddrHeader(params.references)}`);
 
-  const body = [
-    `--${boundary}`,
-    `Content-Type: text/plain; charset="UTF-8"; format=flowed`,
-    `Content-Transfer-Encoding: base64`,
-    ``,
-    base64Body(toFlowed(params.bodyText)),
-    `--${boundary}`,
-    `Content-Type: text/html; charset="UTF-8"`,
-    `Content-Transfer-Encoding: base64`,
-    ``,
-    base64Body(textToHtml(params.bodyText)),
-    `--${boundary}--`,
-  ].join("\r\n");
-
-  return base64url(`${headers.join("\r\n")}\r\n\r\n${body}`);
+  return base64url(
+    `${headers.join("\r\n")}\r\n\r\n${toQuotedPrintable(params.bodyText)}`,
+  );
 }
 
 // ---------- Inbound parsing ----------
@@ -311,7 +320,7 @@ export function isBounce(parsed: ParsedGmailMessage): boolean {
  * Bounce severity from the DSN status code in the body. 5.x.x = permanent
  * (hard), 4.x.x = transient (soft). Gmail retries soft failures itself and
  * only surfaces a persistent one as a later hard DSN, so an unparseable
- * in-thread DSN is treated as hard (conservative — it's usually final).
+ * in-thread DSN is treated as hard (conservative, it's usually final).
  * Only hard bounces should suppress a contact; soft bounces are ignored.
  */
 export function bounceSeverity(parsed: ParsedGmailMessage): "hard" | "soft" {
@@ -344,7 +353,7 @@ export function isAutoSubmitted(parsed: ParsedGmailMessage): boolean {
   // there). Any value means "this is automated mail".
   if (parsed.headers["x-auto-response-suppress"]) return true;
   // Precedence is non-standard; different servers write "auto_reply" or
-  // "auto-reply" — normalize the separator so both match. bulk / junk / list
+  // "auto-reply": normalize the separator so both match. bulk / junk / list
   // are the values legacy responders and help-desk auto-acks set; a THREAD-
   // MATCHED message with them is never a human reply (SEND-03).
   const precedence = (parsed.headers["precedence"] ?? "").toLowerCase().replace(/-/g, "_");
