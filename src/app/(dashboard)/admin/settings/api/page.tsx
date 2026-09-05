@@ -51,7 +51,7 @@ import {
 import type { Organization } from "@/types/app";
 import { appUrl } from "@/lib/api-url";
 
-// Brand icon — Lucide's brand-icon set was removed upstream, so inline.
+// Brand icon: Lucide's brand-icon set was removed upstream, so inline.
 function LinkedinIcon({ size = 16, className = "" }: { size?: number; className?: string }) {
   return (
     <svg
@@ -192,7 +192,7 @@ export default function IntegrationsPage() {
     { kind: "success"; model: string } | { kind: "fail"; message: string } | null
   >(null);
 
-  // Unipile (LinkedIn channel — migration 00046)
+  // Unipile (LinkedIn channel, migration 00046)
   const [unipileKey, setUnipileKey] = useState("");
   const [unipileDsn, setUnipileDsn] = useState("");
   const [savingUnipile, setSavingUnipile] = useState(false);
@@ -202,7 +202,7 @@ export default function IntegrationsPage() {
     "success" | "fail" | null
   >(null);
 
-  // Native email — Google service account w/ domain-wide delegation (migration 00056)
+  // Native email: Google service account w/ domain-wide delegation (migration 00056)
   const [gmailSaEmail, setGmailSaEmail] = useState("");
   const [gmailSaKey, setGmailSaKey] = useState("");
   const [savingGmail, setSavingGmail] = useState(false);
@@ -223,7 +223,7 @@ export default function IntegrationsPage() {
     { kind: "success" } | { kind: "fail"; message: string } | null
   >(null);
 
-  // Email verification — Million Verifier (migration 00069): API key + the
+  // Email verification: Million Verifier (migration 00069): API key + the
   // last-seen credit balance / error surfaced on the card.
   const [millionVerifierKey, setMillionVerifierKey] = useState("");
   const [millionVerifierMeta, setMillionVerifierMeta] = useState<{
@@ -240,7 +240,7 @@ export default function IntegrationsPage() {
     { kind: "success"; credits: number } | { kind: "fail"; message: string } | null
   >(null);
 
-  // Findymail (catch-all email validation — migration 00099)
+  // Findymail (catch-all email validation, migration 00099)
   const [findymailKey, setFindymailKey] = useState("");
   const [findymailMeta, setFindymailMeta] = useState<{ credits: number | null; checkedAt: string | null }>({
     credits: null,
@@ -254,7 +254,7 @@ export default function IntegrationsPage() {
     { kind: "success"; credits: number } | { kind: "fail"; message: string } | null
   >(null);
 
-  // Apify (Contacts → Enrich: profile→email, company→domain, waterfall — migration 00070)
+  // Apify (Contacts → Enrich: profile→email, company→domain, waterfall, migration 00070)
   const [apifyKey, setApifyKey] = useState("");
   const [savingApify, setSavingApify] = useState(false);
   const [apifySaved, setApifySaved] = useState(false);
@@ -302,7 +302,7 @@ export default function IntegrationsPage() {
           if (dmOrg.perplexity_api_key) setPerplexityKey(dmOrg.perplexity_api_key);
           if (dmOrg.unipile_api_key) setUnipileKey(dmOrg.unipile_api_key);
           if (dmOrg.unipile_dsn) setUnipileDsn(dmOrg.unipile_dsn);
-          // Inbox health (migration 00061). Separate cast — same reason as above.
+          // Inbox health (migration 00061). Separate cast: same reason as above.
           const ihOrg = data as {
             spamhaus_dqs_key?: string | null;
             inbox_health_offline_threshold?: number | null;
@@ -333,7 +333,7 @@ export default function IntegrationsPage() {
             setGmailSaEmail(gmOrg.gmail_service_account_email);
           if (gmOrg.gmail_service_account_key)
             setGmailSaKey(gmOrg.gmail_service_account_key);
-          // Email verification — Million Verifier (migration 00069). Same
+          // Email verification: Million Verifier (migration 00069). Same
           // stale-type cast as above until 00069 is applied everywhere.
           const mvOrg = data as {
             millionverifier_api_key?: string | null;
@@ -383,7 +383,7 @@ export default function IntegrationsPage() {
   async function handleResetBlacklist() {
     if (
       !confirm(
-        "Reset the Scrap.io blacklist for this org? Future searches will be allowed to re-pull every business they've ever fetched — credits WILL be charged again. This is intended for starting fresh on a region you scraped a long time ago.",
+        "Reset the Scrap.io blacklist for this org? Future searches will be allowed to re-pull every business they've ever fetched: credits WILL be charged again. This is intended for starting fresh on a region you scraped a long time ago.",
       )
     ) {
       return;
@@ -672,7 +672,7 @@ export default function IntegrationsPage() {
       .eq("id", organizationId);
     setSavingInboxHealth(false);
     if (error) {
-      // Surface it rather than claiming "Saved" — e.g. migration 00068 not
+      // Surface it rather than claiming "Saved": e.g. migration 00068 not
       // applied yet (unknown column) fails the whole update, key included.
       setInboxHealthError(error.message);
       return;
@@ -763,7 +763,7 @@ export default function IntegrationsPage() {
       .eq("id", organizationId);
     setSavingMillionVerifier(false);
     if (error) {
-      // Surface it rather than claiming "Saved" — e.g. migration 00069 not
+      // Surface it rather than claiming "Saved": e.g. migration 00069 not
       // applied yet (unknown column) fails the whole update.
       setMillionVerifierError(error.message);
       return;
@@ -813,7 +813,7 @@ export default function IntegrationsPage() {
       .eq("id", organizationId);
     setSavingFindymail(false);
     if (error) {
-      // Surface it rather than claiming "Saved" — e.g. migration 00099 not
+      // Surface it rather than claiming "Saved": e.g. migration 00099 not
       // applied yet (unknown column) fails the whole update.
       setFindymailError(error.message);
       return;

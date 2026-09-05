@@ -6,13 +6,13 @@ import { PageHeader } from "@/components/layout/page-header";
 import { LinkedInSearchPanel } from "./linkedin-search-panel";
 import { MapsDiyPanel } from "./maps-diy-panel";
 
-// Prospecting — the entry is a framed "decision list": the operator picks WHO
+// Prospecting: the entry is a framed "decision list": the operator picks WHO
 // they're chasing before a panel loads, rather than flipping a filter-style tab.
 // Two live sourcing veins behind the choice:
-//   • Local businesses — Google Maps, by niche + location (MapsDiyPanel)
-//   • People by role   — harvestapi profile search, by ICP (LinkedInSearchPanel)
+//   • Local businesses: Google Maps, by niche + location (MapsDiyPanel)
+//   • People by role  : harvestapi profile search, by ICP (LinkedInSearchPanel)
 // A third door, "Enrich a list" (bring-your-own-list, no sourcing), is shown as
-// a not-yet-active option — the enrich-only lane isn't built. Once a vein is
+// a not-yet-active option: the enrich-only lane isn't built. Once a vein is
 // chosen the page title becomes that vein and a circular back arrow (left of
 // the title) returns to this decision list.
 type SourceMode = "linkedin" | "business";
@@ -93,7 +93,7 @@ function DecisionList({ onSelect }: { onSelect: (mode: SourceMode) => void }) {
           <span className="h-px flex-1 bg-border" />
         </div>
 
-        {/* Enrich-only lane — not built yet, so this door is present but inert. */}
+        {/* Enrich-only lane: not built yet, so this door is present but inert. */}
         <div
           aria-disabled="true"
           className="flex cursor-not-allowed items-center gap-4 rounded-xl border border-dashed border-border bg-muted/20 p-4"

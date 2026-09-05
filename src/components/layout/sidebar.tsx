@@ -112,7 +112,7 @@ export function Sidebar({ role, open = false, onClose }: { role: AppRole; open?:
   const sendingNav = isAdmin ? adminSendingNav : [];
 
   // Settings is pinned to the very bottom as a single entry, replacing the old
-  // profile block — the top-right avatar menu already covers the profile. Admin
+  // profile block: the top-right avatar menu already covers the profile. Admin
   // deep-links to the Settings hub (Tasks + Billing are sub-tabs inside it);
   // clients to their own settings. The buyer portal has no settings surface yet.
   const settingsItem: NavItem | null = isAdmin
@@ -135,7 +135,7 @@ export function Sidebar({ role, open = false, onClose }: { role: AppRole; open?:
         style={{
           // Solid brand-blue → navy. The floating rail carries a real
           // elevation shadow (globals.css `.app-rail`) and the logo a soft
-          // bloom — deliberate exceptions to the flat contract, approved
+          // bloom: deliberate exceptions to the flat contract, approved
           // 2026-08-23 (see UI_RULES.md). Gradient stays inline (Tailwind v4
           // @layer utilities don't reliably emit it).
           background:
@@ -149,7 +149,7 @@ export function Sidebar({ role, open = false, onClose }: { role: AppRole; open?:
           open ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         )}
       >
-        {/* Brand header — transparent mark backlit by a soft bloom + live wordmark */}
+        {/* Brand header: transparent mark backlit by a soft bloom + live wordmark */}
         <div className="relative flex flex-col items-center gap-2.5 px-4 pt-4 pb-3">
           <Link href={roleHomePath(role)} className="flex flex-col items-center gap-2.5">
             <span className="relative flex items-center justify-center">
@@ -213,7 +213,7 @@ export function Sidebar({ role, open = false, onClose }: { role: AppRole; open?:
           <NavSection label="Sending" items={sendingNav} pathname={pathname} />
         </nav>
 
-        {/* Footer — a single Settings entry pinned to the bottom. Replaces the
+        {/* Footer: a single Settings entry pinned to the bottom. Replaces the
             old profile block; the top-right avatar menu already shows profile. */}
         {settingsItem && (
           <div className="border-t border-sidebar-border p-3">
