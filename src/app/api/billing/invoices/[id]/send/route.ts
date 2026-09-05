@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getStripe, isStripeDemoMode } from "@/lib/stripe/client";
 import { buildInvoiceEmail } from "@/lib/email/invoice";
 import type { BillingInvoice, Client } from "@/types/app";
+import { htmlToPlainText } from "@/lib/email/html-to-text";
 
 interface Body {
   to_email?: string | null;
@@ -40,7 +41,7 @@ export async function POST(
   }
   if (!invoice.hosted_invoice_url) {
     return NextResponse.json(
-      { error: "Invoice has no hosted URL yet — try again once Stripe finalizes it." },
+      { error: "Invoice has no hosted URL yet. Try again once Stripe finalizes it." },
       { status: 409 },
     );
   }
@@ -61,7 +62,7 @@ export async function POST(
     null;
   if (!toEmail) {
     return NextResponse.json(
-      { error: "No destination email — set the client's contact email or pass to_email." },
+      { error: "No destination email. Set the client's contact email or pass to_email." },
       { status: 400 },
     );
   }
@@ -130,28 +131,30 @@ export async function POST(
   try {
     const { Resend } = await import("resend");
     const resend = new Resend(process.env.RESEND_API_KEY);
+    const html = buildInvoiceEmail({
+      clientName: client.name,
+      invoiceNumber: invoice.stripe_invoice_number ?? invoice.id,
+      amountDueCents: invoice.amount_due_cents,
+      currency: invoice.currency,
+      issuedAt: invoice.issued_at ?? invoice.created_at,
+      dueAt,
+      periodStart: invoice.period_start,
+      periodEnd: invoice.period_end,
+      lineItems,
+      subtotalCents,
+      taxCents,
+      totalCents: invoice.amount_cents,
+      hostedInvoiceUrl: invoice.hosted_invoice_url,
+      invoicePdfUrl: invoice.invoice_pdf_url,
+    });
     await resend.emails.send({
       from:
         process.env.EMAIL_FROM ||
         "LeadStart <info@no-reply.leadstart.io>",
       to: toEmail,
-      subject: `Invoice ${invoice.stripe_invoice_number ?? invoice.id} — $${(invoice.amount_due_cents / 100).toFixed(2)} due`,
-      html: buildInvoiceEmail({
-        clientName: client.name,
-        invoiceNumber: invoice.stripe_invoice_number ?? invoice.id,
-        amountDueCents: invoice.amount_due_cents,
-        currency: invoice.currency,
-        issuedAt: invoice.issued_at ?? invoice.created_at,
-        dueAt,
-        periodStart: invoice.period_start,
-        periodEnd: invoice.period_end,
-        lineItems,
-        subtotalCents,
-        taxCents,
-        totalCents: invoice.amount_cents,
-        hostedInvoiceUrl: invoice.hosted_invoice_url,
-        invoicePdfUrl: invoice.invoice_pdf_url,
-      }),
+      subject: `Invoice ${invoice.stripe_invoice_number ?? invoice.id}: $${(invoice.amount_due_cents / 100).toFixed(2)} due`,
+      html,
+      text: htmlToPlainText(html),
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Email send failed";

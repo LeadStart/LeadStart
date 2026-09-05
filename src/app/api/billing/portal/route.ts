@@ -4,6 +4,7 @@ import { getStripe, isStripeDemoMode } from "@/lib/stripe/client";
 import { appUrl } from "@/lib/api-url";
 import { buildPortalLinkEmail } from "@/lib/email/portal-link";
 import type { Client } from "@/types/app";
+import { htmlToPlainText } from "@/lib/email/html-to-text";
 
 interface Body {
   client_id: string;
@@ -18,7 +19,7 @@ interface Body {
  * returns the URL so the admin can copy/send it manually.
  *
  * The Stripe Portal is configured (in dashboard / Settings → Billing → Customer
- * Portal) to hide the cancel button per decision #3 — admin-only cancel.
+ * Portal) to hide the cancel button per decision #3: admin-only cancel.
  */
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
@@ -55,7 +56,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         error:
-          "Client has no Stripe customer — they need to accept a quote first.",
+          "Client has no Stripe customer. They need to accept a quote first.",
       },
       { status: 409 },
     );
@@ -91,16 +92,18 @@ export async function POST(req: NextRequest) {
     try {
       const { Resend } = await import("resend");
       const resend = new Resend(process.env.RESEND_API_KEY);
+      const html = buildPortalLinkEmail({
+        clientName: client.name,
+        portalUrl,
+      });
       await resend.emails.send({
         from:
           process.env.EMAIL_FROM ||
           "LeadStart <info@no-reply.leadstart.io>",
         to: client.contact_email,
         subject: "Manage your LeadStart billing",
-        html: buildPortalLinkEmail({
-          clientName: client.name,
-          portalUrl,
-        }),
+        html,
+        text: htmlToPlainText(html),
       });
       emailed = true;
     } catch (emailErr) {

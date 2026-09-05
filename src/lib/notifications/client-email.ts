@@ -1,24 +1,25 @@
 // Hot-lead notification email to clients.notification_email.
 //
-// Shape matches src/lib/email/* — plain HTML string template, inline styles,
+// Shape matches src/lib/email/*: plain HTML string template, inline styles,
 // table-based layout for broad mail-client compatibility. Returns both subject
 // and html so the orchestrator doesn't have to reconstruct the subject.
 //
 // Two identities, chosen by whether we know a person:
 //  - Known contact (lead_name present): monogram initials + name + title ·
 //    company, then Email / Phone / LinkedIn rows.
-//  - Generic company inbox (no lead_name — e.g. a Google-Maps info@ lead): a
+//  - Generic company inbox (no lead_name, e.g. a Google-Maps info@ lead): a
 //    company identity with a "Company email" block, no monogram initials, no
 //    LinkedIn.
 //
 // The reply is shown as a chat bubble. Actions are conditional and equal-width:
-//  - Call   (green) — only when we have a phone number
-//  - Reply  (violet, always) — a direct link to the lead's thread in the
+//  - Call   (green): only when we have a phone number
+//  - Reply  (violet, always): a direct link to the lead's thread in the
 //    client's own inbox, where they respond
-//  - LinkedIn (blue) — only when we have a LinkedIn URL
+//  - LinkedIn (blue): only when we have a LinkedIn URL
 // No classification label or confidence score is shown to the client.
 
 import type { ReplyClass } from "@/types/app";
+import { EMAIL_FONT_STACK, EMAIL_FONT_HEAD } from "@/lib/email/brand";
 
 export interface ClientNotificationEmailData {
   leadName: string | null;
@@ -40,7 +41,7 @@ export interface BuiltClientNotificationEmail {
 
 // Short, human-readable labels for the reply taxonomy. Kept exported because
 // other surfaces (admin badges) reuse it; the client email itself no longer
-// renders a class label — the email stays uniform per owner request.
+// renders a class label: the email stays uniform per owner request.
 const CLASS_LABELS: Partial<Record<ReplyClass, string>> = {
   true_interest: "Interested",
   meeting_booked: "Meeting booked",
@@ -112,7 +113,7 @@ function linkedinLabel(url: string): string {
   return m ? m[1].replace(/\/$/, "") : "View profile";
 }
 
-// tel: URI — strip everything except + and digits so the phone app gets a clean
+// tel: URI, strip everything except + and digits so the phone app gets a clean
 // target even if the display format has parens, dashes, spaces.
 function telUri(phone: string): string {
   return `tel:${phone.replace(/[^+\d]/g, "")}`;
@@ -148,7 +149,7 @@ export function buildClientNotificationEmail(
   const subjectWho = name
     ? `${name}${company ? ` @ ${company}` : ""}`
     : companyLabel;
-  const subject = `🔔 New hot lead reply — ${subjectWho}`;
+  const subject = `🔔 New hot lead reply: ${subjectWho}`;
 
   // ---- Identity block (contact card) ----
   let identityCard: string;
@@ -273,7 +274,7 @@ export function buildClientNotificationEmail(
   if (linkedin) buttons.push(actionButton(escapeHtml(linkedin), "💼 LinkedIn", BLUE));
 
   const note = isGeneric
-    ? "Reply opens this thread in your inbox — it's the company's general inbox, so whoever monitors it will see it."
+    ? "Reply opens this thread in your inbox: it's the company's general inbox, so whoever monitors it will see it."
     : "Reply opens this lead's thread right in your inbox.";
 
   const actionsSection = `
@@ -291,8 +292,9 @@ export function buildClientNotificationEmail(
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${escapeHtml(subject)}</title>
+  ${EMAIL_FONT_HEAD}
 </head>
-<body style="margin: 0; padding: 0; background-color: #F4F5F9; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; -webkit-font-smoothing: antialiased;">
+<body style="margin: 0; padding: 0; background-color: #F4F5F9; font-family: ${EMAIL_FONT_STACK}; -webkit-font-smoothing: antialiased;">
   <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color: #F4F5F9;">
     <tr>
       <td align="center" style="padding: 32px 16px;">

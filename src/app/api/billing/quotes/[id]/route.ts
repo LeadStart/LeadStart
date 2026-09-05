@@ -13,6 +13,7 @@ import {
   nextBusinessDay,
 } from "@/lib/billing/schedule";
 import type { Quote, Client } from "@/types/app";
+import { htmlToPlainText } from "@/lib/email/html-to-text";
 
 interface UpdateQuoteBody {
   client_id: string;
@@ -148,19 +149,21 @@ export async function PATCH(
 
       const { Resend } = await import("resend");
       const resend = new Resend(process.env.RESEND_API_KEY);
+      const html = buildQuoteProposalEmail({
+        firstName: client?.contact_first_name || "",
+        monthlyCents: quote.monthly_price_cents,
+        setupCents: quote.setup_fee_cents,
+        contactSourcingCents: quote.contact_sourcing_cents,
+        contactsCount: quote.contacts_count,
+        quoteUrl,
+        expiresAt: quote.expires_at,
+      });
       await resend.emails.send({
         from: process.env.EMAIL_FROM || QUOTE_EMAIL_FROM_FALLBACK,
         to: body.sent_to_email,
         subject: QUOTE_EMAIL_SUBJECT,
-        html: buildQuoteProposalEmail({
-          firstName: client?.contact_first_name || "",
-          monthlyCents: quote.monthly_price_cents,
-          setupCents: quote.setup_fee_cents,
-          contactSourcingCents: quote.contact_sourcing_cents,
-          contactsCount: quote.contacts_count,
-          quoteUrl,
-          expiresAt: quote.expires_at,
-        }),
+        html,
+        text: htmlToPlainText(html),
       });
     } catch (emailErr) {
       console.error("Failed to send quote email:", emailErr);

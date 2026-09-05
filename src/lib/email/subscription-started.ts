@@ -1,5 +1,6 @@
+import { EMAIL_FONT_STACK, EMAIL_FONT_HEAD } from "./brand";
 export interface SubscriptionStartedEmailData {
-  /** Recipient's first name — greets them personally ("Hi Jane,"). */
+  /** Recipient's first name: greets them personally ("Hi Jane,"). */
   firstName: string;
   monthlyCents: number;
   /** Launch day = first monthly charge (business-day adjusted). */
@@ -36,9 +37,10 @@ export function buildSubscriptionStartedEmail(
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>You're all set — LeadStart</title>
+  <title>You're all set: LeadStart</title>
+  ${EMAIL_FONT_HEAD}
 </head>
-<body style="margin: 0; padding: 0; background-color: #F4F5F9; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; -webkit-font-smoothing: antialiased;">
+<body style="margin: 0; padding: 0; background-color: #F4F5F9; font-family: ${EMAIL_FONT_STACK}; -webkit-font-smoothing: antialiased;">
   <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color: #F4F5F9;">
     <tr>
       <td align="center" style="padding: 40px 16px;">

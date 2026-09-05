@@ -3,12 +3,12 @@
 //
 // Throttle: per-process token bucket, 2 req/s default (overridable via
 // RESEND_RATE_LIMIT_PER_SEC). Vercel serverless spins up many processes,
-// so effective throughput can exceed this — the bucket caps bursts from a
+// so effective throughput can exceed this: the bucket caps bursts from a
 // single function instance, which is the realistic flooding vector for
 // our size. When we outgrow that, upgrade to a Supabase-backed bucket.
 //
 // Error shape: Resend's SDK returns { error: { name, message } } rather than
-// raw HTTP status codes. We classify by error.name — known transient names
+// raw HTTP status codes. We classify by error.name: known transient names
 // become RateLimitedError / TransientResendError (retryable), known 4xx-ish
 // names become PermanentResendError (not retryable), and anything unrecognised
 // falls into TransientResendError under the principle "retry is safer than
@@ -78,7 +78,7 @@ export class PermanentResendError extends Error {
   }
 }
 
-// Resend SDK error names — inventory from https://resend.com/docs/api-reference/errors.
+// Resend SDK error names: inventory from https://resend.com/docs/api-reference/errors.
 // Keep this list updated when Resend adds new error types; anything
 // unrecognised falls through to TransientResendError.
 const PERMANENT_ERROR_NAMES = new Set([
@@ -124,6 +124,8 @@ function classifyResendError(err: {
   return new TransientResendError(`Resend ${name || "unknown"}: ${msg}`);
 }
 
+import { htmlToPlainText } from "@/lib/email/html-to-text";
+
 type ResendSdk = typeof import("resend");
 let cachedResendInstance: InstanceType<ResendSdk["Resend"]> | null = null;
 
@@ -142,6 +144,13 @@ export interface ResendSendParams {
   cc?: string[];
   subject: string;
   html: string;
+  /**
+   * Plain-text alternative. Optional because sendViaResend derives one from
+   * `html` when it is omitted; pass it only to override that rendering. Every
+   * message goes out multipart so no transactional mail is single-part
+   * text/html, which is a spam-filter signal and unreadable with HTML off.
+   */
+  text?: string;
 }
 
 export interface ResendSendResult {
@@ -161,7 +170,10 @@ export async function sendViaResend(
 ): Promise<ResendSendResult> {
   await consumeToken();
   const resend = await getResend();
-  const { data, error } = await resend.emails.send(params);
+  const { data, error } = await resend.emails.send({
+    ...params,
+    text: params.text ?? htmlToPlainText(params.html),
+  });
   if (error) {
     throw classifyResendError(error as { name?: string; message?: string });
   }

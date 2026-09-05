@@ -1,3 +1,4 @@
+import { EMAIL_FONT_STACK, EMAIL_FONT_HEAD } from "./brand";
 /** Subject line for the proposal email. Shared by the send path + the preview. */
 export const QUOTE_EMAIL_SUBJECT = "Your LeadStart proposal is ready";
 
@@ -8,7 +9,7 @@ export const QUOTE_EMAIL_SUBJECT = "Your LeadStart proposal is ready";
 export const QUOTE_EMAIL_FROM_FALLBACK = "LeadStart <info@no-reply.leadstart.io>";
 
 export interface QuoteEmailData {
-  /** Recipient's first name — greets them personally ("Hi Jane,"). */
+  /** Recipient's first name: greets them personally ("Hi Jane,"). */
   firstName: string;
   /** Lead management monthly subscription price. */
   monthlyCents: number;
@@ -67,8 +68,9 @@ export function buildQuoteProposalEmail(data: QuoteEmailData): string {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Your proposal is ready</title>
+  ${EMAIL_FONT_HEAD}
 </head>
-<body style="margin: 0; padding: 0; background-color: #F4F5F9; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; -webkit-font-smoothing: antialiased;">
+<body style="margin: 0; padding: 0; background-color: #F4F5F9; font-family: ${EMAIL_FONT_STACK}; -webkit-font-smoothing: antialiased;">
 
   <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color: #F4F5F9;">
     <tr>
@@ -132,7 +134,7 @@ export function buildQuoteProposalEmail(data: QuoteEmailData): string {
                 ${expiryLine}
               </p>
               <p style="margin: 0; font-size: 12px; color: #9194AD; text-align: center;">
-                Secure link — do not forward.
+                Secure link: do not forward.
               </p>
             </td>
           </tr>

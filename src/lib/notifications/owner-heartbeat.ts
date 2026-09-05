@@ -1,4 +1,4 @@
-// Daily heartbeat — proves the alert pipeline is alive.
+// Daily heartbeat: proves the alert pipeline is alive.
 //
 // Sent every morning to every profile where role = 'owner'. The whole
 // point is: if you stop seeing it, something is broken. The body is a
@@ -6,17 +6,17 @@
 //
 // What it monitors (in priority order):
 //   1. Pending owner_alerts queue (should be ~0).
-//   2. 24h send activity — reports + hot-leads.
-//   3. Delivery confirmation gap — sends with sent_at stamped but
+//   2. 24h send activity: reports + hot-leads.
+//   3. Delivery confirmation gap: sends with sent_at stamped but
 //      delivered_at still NULL after 30+ min. Strong proxy for
 //      "RESEND_WEBHOOK_SECRET is wrong / webhook unregistered."
-//   4. Stuck rows — orphan kpi_reports + lead_replies the retry cron
+//   4. Stuck rows: orphan kpi_reports + lead_replies the retry cron
 //      isn't picking up.
-//   5. Schedule preview — what's due in the next 24h.
-//   6. Config check — env presence + owner profile count.
+//   5. Schedule preview: what's due in the next 24h.
+//   6. Config check: env presence + owner profile count.
 //
 // Robustness: each query is independent. A failure in one section
-// shouldn't suppress the email — that would make the heartbeat itself
+// shouldn't suppress the email: that would make the heartbeat itself
 // unreliable, which is the failure mode we're trying to fix. Errors
 // surface inline as "(query failed)" rather than throwing.
 
@@ -35,6 +35,9 @@ import {
 } from "@/lib/gmail/ramp";
 import type { Client, ReplyClass, HealthBand } from "@/types/app";
 import { domainOf } from "@/lib/deliverability/check";
+// Fragment, not a full document: there is no <head> to hang EMAIL_FONT_HEAD on,
+// so this one gets the stack only and relies on the recipient's system font.
+import { EMAIL_FONT_STACK } from "@/lib/email/brand";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
@@ -46,7 +49,7 @@ export interface HeartbeatPayload {
   verdict: HealthVerdict;
 }
 
-// Positive/"hot" reply classes — the unambiguous good-news outcomes, used for
+// Positive/"hot" reply classes: the unambiguous good-news outcomes, used for
 // the morning summary's reply breakdown. (Which classes actually ping a client
 // is governed per-client by clients.auto_notify_classes; this fixed set just
 // keeps the headline "positive" count stable and channel-agnostic.)
@@ -104,7 +107,7 @@ interface InboxHealthRow {
 }
 
 // One sending domain's rollup (sending_domains, populated by the same hourly
-// check-inbox-health cron — worst-member score + lifecycle state).
+// check-inbox-health cron: worst-member score + lifecycle state).
 interface DomainHealthLine {
   domain: string;
   score: number | null;
@@ -287,7 +290,7 @@ async function queryDeliveryGap(
   now: Date,
 ): Promise<HeartbeatSections["deliveryGap"]> {
   const since24h = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
-  // Resend usually fires email.delivered within seconds. 30 min is generous —
+  // Resend usually fires email.delivered within seconds. 30 min is generous,
   // if the field is still NULL after that, the webhook is silent.
   const sentBefore = new Date(now.getTime() - 30 * 60 * 1000).toISOString();
 
@@ -439,7 +442,7 @@ async function queryConfig(
 }
 
 // Daily native-send counts for the last 14 ET days (oldest → newest, today
-// last) — drives the morning brief's sparkline. Account-wide sending volume,
+// last): drives the morning brief's sparkline. Account-wide sending volume,
 // not per-campaign; 14 count-only queries (no rows transferred). Fail-soft to
 // an empty series so a hiccup here never blocks the heartbeat.
 async function querySendSparkline(
@@ -472,11 +475,11 @@ async function querySendSparkline(
   }
 }
 
-// Inbox health — reads the denormalized score the hourly check-inbox-health
+// Inbox health: reads the denormalized score the hourly check-inbox-health
 // cron writes onto native_mailboxes (SPF/DKIM/DMARC/MX + Spamhaus DBL + 7-day
 // bounce rate). Summarizes the pool by band, floats any non-healthy / paused /
 // unscored inbox to the top, and flags staleness (a freshest check older than
-// 3h means that cron has likely stopped — the whole point of surfacing this).
+// 3h means that cron has likely stopped: the whole point of surfacing this).
 async function queryInboxHealth(
   admin: AdminClient,
   now: Date,
@@ -544,7 +547,7 @@ async function queryInboxHealth(
     rows.length > 0 && (freshest === 0 || now.getTime() - freshest > 3 * 60 * 60 * 1000);
 
   // Domain-level rollup (sending_domains, populated by the same cron). Read-only,
-  // fail-soft: a read error just leaves domains empty — never fails the section.
+  // fail-soft: a read error just leaves domains empty, never fails the section.
   try {
     const liveDomains = new Set(rows.map((r) => domainOf(r.email_address)));
     const { data: dData, error: dErr } = await admin
@@ -571,13 +574,13 @@ async function queryInboxHealth(
         .sort((a, b) => dRank(a.band) - dRank(b.band) || (a.score ?? 101) - (b.score ?? 101));
     }
   } catch {
-    // sending_domains may not exist yet in some environments — leave domains empty.
+    // sending_domains may not exist yet in some environments: leave domains empty.
   }
 
   return section;
 }
 
-// Morning outreach snapshot — the operational half of the heartbeat: every
+// Morning outreach snapshot: the operational half of the heartbeat: every
 // active native-email campaign with yesterday's sends, today's scheduled
 // capacity, reply outcomes, and its sequence/warmup position. Mirrors the
 // admin campaign detail page's math (nativeStatsFor + projectSequenceCompletion)
@@ -769,7 +772,7 @@ async function queryCampaignActivity(
 
     // Mailbox pools → capacity. Fetch each distinct mailbox once, then its
     // all-time send count (drives the warmup ramp cap) and today's count
-    // (already-spent). Count-only queries — no rows transferred.
+    // (already-spent). Count-only queries: no rows transferred.
     const poolByCampaign = new Map<string, string[]>();
     const distinctMb = new Set<string>();
     for (const p of (poolRes.data ?? []) as {
@@ -842,10 +845,10 @@ async function queryCampaignActivity(
 
       const window = resolveSendWindow(c);
       // Will this campaign send at all today? 0 on weekends (weekdaysOnly) or
-      // once the window has closed — so a Saturday heartbeat honestly shows 0.
+      // once the window has closed, so a Saturday heartbeat honestly shows 0.
       const sendableToday = minutesUntilWindowClose(now, window) > 0;
       let capacity = 0; // remaining capacity today (drives scheduledToday)
-      let fullCapacity = 0; // full daily cap sum — the reach_first first-touch rate
+      let fullCapacity = 0; // full daily cap sum: the reach_first first-touch rate
       let activeMbCount = 0;
       let warmingCount = 0;
       for (const mbId of poolByCampaign.get(c.id) ?? []) {
@@ -862,7 +865,7 @@ async function queryCampaignActivity(
         capacity += Math.max(0, cap - (sentToday.get(mbId) ?? 0));
       }
       // Can't send more than we have active contacts, nor more than inbox
-      // capacity — the honest ceiling for the day.
+      // capacity: the honest ceiling for the day.
       const scheduledToday = sendableToday
         ? Math.min(capacity, e.active)
         : 0;
@@ -966,13 +969,13 @@ function buildSubject(
   const t = s.campaignActivity.totals;
   const date = etShortDate(now);
   if (verdict === "green") {
-    return `Good morning — ${t.sentYesterday} sent yesterday, ${t.scheduledToday} scheduled today (${date})`;
+    return `Good morning: ${t.sentYesterday} sent yesterday, ${t.scheduledToday} scheduled today (${date})`;
   }
   if (verdict === "yellow") {
     const n = countSignals(s);
-    return `Good morning — ${t.sentYesterday} sent, ${t.scheduledToday} today · ${n} signal${n === 1 ? "" : "s"} to check (${date})`;
+    return `Good morning: ${t.sentYesterday} sent, ${t.scheduledToday} today · ${n} signal${n === 1 ? "" : "s"} to check (${date})`;
   }
-  return `⚠ Action required — ${t.sentYesterday} sent, ${t.scheduledToday} scheduled today (${date})`;
+  return `⚠ Action required: ${t.sentYesterday} sent, ${t.scheduledToday} scheduled today (${date})`;
 }
 
 function countSignals(s: HeartbeatSections): number {
@@ -1038,7 +1041,7 @@ function narrativeSummary(s: HeartbeatSections, verdict: HealthVerdict): string 
       : `, and nothing is scheduled to send today`;
   const replyPhrase =
     t.repliesYesterday > 0
-      ? ` You got <b style="color:#10b981;">${t.repliesYesterday} repl${t.repliesYesterday === 1 ? "y" : "ies"}</b>${t.positiveRepliesYesterday > 0 ? ` — <b style="color:#10b981;">${t.positiveRepliesYesterday} positive</b>` : ""}.`
+      ? ` You got <b style="color:#10b981;">${t.repliesYesterday} repl${t.repliesYesterday === 1 ? "y" : "ies"}</b>${t.positiveRepliesYesterday > 0 ? `, <b style="color:#10b981;">${t.positiveRepliesYesterday} positive</b>` : ""}.`
       : ` No replies came in.`;
   return `${sentPhrase}${schedPhrase}.${replyPhrase} ${health}`;
 }
@@ -1049,7 +1052,7 @@ function healthPhrase(s: HeartbeatSections, verdict: HealthVerdict): string {
     const n = countSignals(s);
     return `<b style="color:#b45309;">${n} signal${n === 1 ? "" : "s"}</b> need${n === 1 ? "s" : ""} a glance below.`;
   }
-  return `<b style="color:#b91c1c;">Action required</b> — see system checks below.`;
+  return `<b style="color:#b91c1c;">Action required</b>, see system checks below.`;
 }
 
 // One campaign card: progress bar, three stats (sent yesterday / scheduled
@@ -1097,7 +1100,7 @@ function campaignCardHtml(c: CampaignActivity): string {
   </div>`;
 }
 
-// Which inboxes/domains the health cron has flagged — a mailbox or domain on
+// Which inboxes/domains the health cron has flagged: a mailbox or domain on
 // the watch or critical band, or an auto-benched mailbox. Everything else is
 // healthy and stays hidden; the morning brief only surfaces what needs a look.
 // Shared by the inbox card (renders the list) and the system-checks card
@@ -1125,7 +1128,7 @@ function inboxAttention(h: InboxHealthSection): {
   };
 }
 
-// Inbox health card — surfaced ONLY when the cron has flagged something (a
+// Inbox health card: surfaced ONLY when the cron has flagged something (a
 // mailbox/domain on watch or critical, or an auto-paused inbox). When every
 // inbox is healthy this renders nothing and the all-clear count rides along in
 // the system-checks card instead, keeping the quiet-morning brief short. Card
@@ -1208,7 +1211,7 @@ function systemChecksHtml(s: HeartbeatSections, verdict: HealthVerdict): string 
   const problems: string[] = [];
   if (!s.config.resendKeySet) problems.push("RESEND_API_KEY is missing");
   if (!s.config.resendWebhookSecretSet)
-    problems.push("RESEND_WEBHOOK_SECRET is missing — delivery can't be confirmed");
+    problems.push("RESEND_WEBHOOK_SECRET is missing, delivery can't be confirmed");
   if (s.config.ownerCount === 0) problems.push("no owner profiles configured");
   if (s.pendingAlerts.count > 0)
     problems.push(`${s.pendingAlerts.count} alert${s.pendingAlerts.count === 1 ? "" : "s"} pending in the queue`);
@@ -1229,7 +1232,7 @@ function systemChecksHtml(s: HeartbeatSections, verdict: HealthVerdict): string 
   if (s.inboxHealth.autoPaused > 0)
     problems.push(`${s.inboxHealth.autoPaused} inbox${s.inboxHealth.autoPaused === 1 ? "" : "es"} auto-paused for health`);
   if (s.inboxHealth.stale)
-    problems.push(`inbox health checks are stale — the check-inbox-health cron may be down`);
+    problems.push(`inbox health checks are stale, the check-inbox-health cron may be down`);
   const queryErr =
     s.pendingAlerts.error ||
     s.recentActivity.error ||
@@ -1247,7 +1250,7 @@ function systemChecksHtml(s: HeartbeatSections, verdict: HealthVerdict): string 
       `<td style="padding:3px 0;font-size:11.5px;color:#047857;">&#10003; ${ok}</td>`;
     return `
     <div style="background:#ecfdf5;border:1px solid #a7f3d0;border-radius:12px;padding:16px;">
-      <p style="margin:0 0 10px;font-size:13px;font-weight:700;color:#065f46;">&#10003; System checks — all clear</p>
+      <p style="margin:0 0 10px;font-size:13px;font-weight:700;color:#065f46;">&#10003; System checks, all clear</p>
       <table width="100%" role="presentation">
         <tr>${cell("0 pending alerts")}${cell("Delivery confirmed (webhook live)")}</tr>
         <tr>${cell("0 bounces in 24h")}${cell("0 stuck rows")}</tr>
@@ -1266,13 +1269,13 @@ function systemChecksHtml(s: HeartbeatSections, verdict: HealthVerdict): string 
     .join("");
   return `
   <div style="background:${bg};border:1px solid ${bd};border-radius:12px;padding:16px;">
-    <p style="margin:0 0 8px;font-size:13px;font-weight:700;color:${color};">&#9888; ${escapeHtml(VERDICT_LABEL[verdict])} — ${problems.length} thing${problems.length === 1 ? "" : "s"} to look at</p>
+    <p style="margin:0 0 8px;font-size:13px;font-weight:700;color:${color};">&#9888; ${escapeHtml(VERDICT_LABEL[verdict])}: ${problems.length} thing${problems.length === 1 ? "" : "s"} to look at</p>
     <ul style="margin:0;padding-left:18px;font-size:12.5px;color:${color};line-height:1.5;">${items}</ul>
     <p style="margin:10px 0 0;font-size:11px;color:#6B6E8A;border-top:1px solid ${bd};padding-top:8px;">${footNote}</p>
   </div>`;
 }
 
-// The three headline totals as color-coded stat cards — mirrors the admin
+// The three headline totals as color-coded stat cards: mirrors the admin
 // dashboard's KPI tiles. Two-line labels (metric + timeframe) so "scheduled
 // today" and "replies yesterday" read unambiguously. Table-based for email.
 function kpiRowHtml(t: CampaignTotals): string {
@@ -1298,7 +1301,7 @@ function kpiRowHtml(t: CampaignTotals): string {
     </tr></table>`;
 }
 
-// Email-safe 14-day daily-sends sparkline — a row of table-cell bars (inline
+// Email-safe 14-day daily-sends sparkline: a row of table-cell bars (inline
 // SVG is dropped by most mail clients). Bars scale to the busiest day; zero
 // days show a faint baseline, today's bar is the deeper brand blue. Fail-soft:
 // an errored or empty series renders nothing.
@@ -1349,12 +1352,12 @@ function buildHtml(
   const cardsHtml = ca.campaigns.length
     ? ca.campaigns.slice(0, MAX_CARDS).map(campaignCardHtml).join("") +
       (ca.campaigns.length > MAX_CARDS
-        ? `<p style="margin:0 0 12px;font-size:11.5px;color:#9194AD;text-align:center;">+ ${ca.campaigns.length - MAX_CARDS} more active campaign${ca.campaigns.length - MAX_CARDS === 1 ? "" : "s"} — see the dashboard.</p>`
+        ? `<p style="margin:0 0 12px;font-size:11.5px;color:#9194AD;text-align:center;">+ ${ca.campaigns.length - MAX_CARDS} more active campaign${ca.campaigns.length - MAX_CARDS === 1 ? "" : "s"}, see the dashboard.</p>`
         : "")
     : `<div style="border:1px dashed #E2E3ED;border-radius:12px;padding:20px;text-align:center;color:#6B6E8A;font-size:13px;margin:0 0 12px;">No active native email campaigns right now.</div>`;
 
   return `
-<div style="font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #E2E3ED;max-width:600px;color:#1A1A2E;">
+<div style="font-family:${EMAIL_FONT_STACK};background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #E2E3ED;max-width:600px;color:#1A1A2E;">
   <div style="background:linear-gradient(135deg,#6B72FF 0%,#2E37FE 30%,#1C24B8 65%,#0F1880 100%);padding:26px 28px;">
     <p style="margin:0;color:rgba(255,255,255,0.7);font-size:12px;text-transform:uppercase;letter-spacing:1px;">${escapeHtml(eyebrow)}</p>
     <h1 style="margin:5px 0 0;color:#ffffff;font-size:23px;font-weight:700;letter-spacing:-0.4px;">Good morning</h1>
@@ -1376,7 +1379,7 @@ function buildHtml(
   </div>
   <div style="padding:8px 22px 26px;text-align:center;">
     <a href="${dashboardUrl()}" style="display:inline-block;background:linear-gradient(135deg,#6B72FF,#2E37FE);color:#ffffff;text-decoration:none;padding:13px 30px;border-radius:10px;font-size:14px;font-weight:600;">Open your dashboard &#8594;</a>
-    <p style="margin:14px 0 0;font-size:11px;color:#9194AD;">Sent every morning by LeadStart. If this email stops arriving, the alert pipeline itself is down — check the <code>owner-heartbeat</code> cron logs.</p>
+    <p style="margin:14px 0 0;font-size:11px;color:#9194AD;">Sent every morning by LeadStart. If this email stops arriving, the alert pipeline itself is down, check the <code>owner-heartbeat</code> cron logs.</p>
   </div>
 </div>`.trim();
 }

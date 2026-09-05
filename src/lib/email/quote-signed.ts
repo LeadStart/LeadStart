@@ -1,3 +1,4 @@
+import { EMAIL_FONT_STACK, EMAIL_FONT_HEAD } from "./brand";
 export interface QuoteSignedEmailData {
   clientName: string;
   monthlyCents: number;
@@ -26,7 +27,7 @@ function formatDate(iso: string): string {
 }
 
 /**
- * Internal admin alert — fires to the owner when a client signs and pays a
+ * Internal admin alert: fires to the owner when a client signs and pays a
  * quote. Plain, dense, scannable; not client-facing.
  */
 export function buildQuoteSignedEmail(data: QuoteSignedEmailData): string {
@@ -48,9 +49,10 @@ export function buildQuoteSignedEmail(data: QuoteSignedEmailData): string {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Quote signed — ${data.clientName}</title>
+  <title>Quote signed: ${data.clientName}</title>
+  ${EMAIL_FONT_HEAD}
 </head>
-<body style="margin: 0; padding: 0; background-color: #EEF1F6; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; -webkit-font-smoothing: antialiased;">
+<body style="margin: 0; padding: 0; background-color: #EEF1F6; font-family: ${EMAIL_FONT_STACK}; -webkit-font-smoothing: antialiased;">
   <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color: #EEF1F6;">
     <tr>
       <td align="center" style="padding: 32px 16px;">

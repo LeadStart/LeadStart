@@ -1,4 +1,5 @@
 import type { KPIReportData } from "@/types/app";
+import { EMAIL_FONT_STACK, EMAIL_FONT_HEAD } from "./brand";
 
 function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
@@ -28,9 +29,10 @@ export function buildWeeklyReportEmail(data: KPIReportData, portalUrl?: string):
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Weekly Campaign Report — ${data.client_name}</title>
+  <title>Weekly Campaign Report: ${data.client_name}</title>
+  ${EMAIL_FONT_HEAD}
 </head>
-<body style="margin: 0; padding: 0; background-color: #F4F5F9; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; -webkit-font-smoothing: antialiased;">
+<body style="margin: 0; padding: 0; background-color: #F4F5F9; font-family: ${EMAIL_FONT_STACK}; -webkit-font-smoothing: antialiased;">
 
   <!-- Wrapper -->
   <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color: #F4F5F9;">
@@ -65,7 +67,7 @@ export function buildWeeklyReportEmail(data: KPIReportData, portalUrl?: string):
                       ${data.client_name}
                     </h1>
                     <p style="margin: 8px 0 0; color: rgba(255,255,255,0.6); font-size: 14px;">
-                      ${formatDate(data.period.start)} — ${formatDate(data.period.end)}
+                      ${formatDate(data.period.start)} to ${formatDate(data.period.end)}
                     </p>
                   </td>
                 </tr>

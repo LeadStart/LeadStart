@@ -4,9 +4,11 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { appUrl } from "@/lib/api-url";
 import { checkRateLimit, tooManyRequests } from "@/lib/security/rate-limit";
+import { htmlToPlainText } from "@/lib/email/html-to-text";
+import { EMAIL_FONT_STACK, EMAIL_FONT_HEAD } from "@/lib/email/brand";
 
 // Roles an owner may hand out through this admin invite flow. Buyers are NOT
-// invited here — they self-register through the public signup flow — and no one
+// invited here (they self-register through the public signup flow) and no one
 // gets a role outside the app_role enum. Guards against an arbitrary role string
 // reaching the profile upsert.
 const INVITABLE_ROLES = new Set(["owner", "va", "client"]);
@@ -14,8 +16,10 @@ const INVITABLE_ROLES = new Set(["owner", "va", "client"]);
 function buildInviteHtml(inviteLink: string) {
   return `<!DOCTYPE html>
 <html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
-<body style="margin:0;padding:0;background-color:#F4F5F9;font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+${EMAIL_FONT_HEAD}
+</head>
+<body style="margin:0;padding:0;background-color:#F4F5F9;font-family:${EMAIL_FONT_STACK};">
 <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color:#F4F5F9;">
 <tr><td align="center" style="padding:40px 16px;">
 <table role="presentation" cellpadding="0" cellspacing="0" width="600" style="max-width:600px;width:100%;">
@@ -30,7 +34,7 @@ function buildInviteHtml(inviteLink: string) {
 <p style="margin:8px 0 0;color:rgba(255,255,255,0.7);font-size:14px;">Your client portal is ready to go.</p>
 </td></tr></table></td></tr>
 <tr><td style="background:#fff;padding:32px;">
-<p style="margin:0 0 16px;font-size:15px;color:#1A1A2E;line-height:1.6;">You've been invited to join <strong>LeadStart</strong> — your campaign management portal where you can track performance, review reports, and submit feedback.</p>
+<p style="margin:0 0 16px;font-size:15px;color:#1A1A2E;line-height:1.6;">You've been invited to join <strong>LeadStart</strong>, your campaign management portal where you can track performance, review reports, and submit feedback.</p>
 <p style="margin:0 0 28px;font-size:15px;color:#3D3D5C;line-height:1.6;">Click the button below to set your password and access your dashboard.</p>
 <table role="presentation" cellpadding="0" cellspacing="0" width="100%"><tr><td align="center">
 <a href="${inviteLink}" style="display:inline-block;background:linear-gradient(135deg,#6B72FF,#2E37FE);color:#fff;text-decoration:none;padding:14px 36px;border-radius:10px;font-size:15px;font-weight:600;letter-spacing:-0.2px;">Accept Invite &amp; Set Password &#8594;</a>
@@ -125,7 +129,7 @@ export async function POST(request: NextRequest) {
     organization_id: organizationId,
   }, { onConflict: "id" });
 
-  // Generate our own invite token (not a Supabase OTP — never expires prematurely)
+  // Generate our own invite token (not a Supabase OTP, never expires prematurely)
   const inviteToken = randomUUID();
 
   // Ensure client_users link exists with pending status + token
@@ -147,11 +151,13 @@ export async function POST(request: NextRequest) {
     try {
       const { Resend } = await import("resend");
       const resend = new Resend(process.env.RESEND_API_KEY);
+      const html = buildInviteHtml(inviteLink);
       await resend.emails.send({
         from: process.env.EMAIL_FROM || "LeadStart <info@no-reply.leadstart.io>",
         to: email,
         subject: "You're Invited to LeadStart",
-        html: buildInviteHtml(inviteLink),
+        html,
+        text: htmlToPlainText(html),
       });
     } catch (emailErr) {
       console.error("Failed to send invite email:", emailErr);

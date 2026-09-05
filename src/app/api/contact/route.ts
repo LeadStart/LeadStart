@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { clientIp, checkRateLimits, tooManyRequests } from "@/lib/security/rate-limit";
 import { verifyTurnstile } from "@/lib/security/turnstile";
 import { isDisposableEmail } from "@/lib/security/disposable-email";
+import { htmlToPlainText } from "@/lib/email/html-to-text";
 
 interface ContactBody {
   firstName?: string;
@@ -59,7 +60,7 @@ function buildHtml(data: {
       <table role="presentation" cellpadding="0" cellspacing="0" width="640" style="max-width:640px;width:100%;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,0.04);">
         <tr><td style="background:linear-gradient(135deg,#2E37FE 0%,#0F1880 100%);padding:24px 28px;color:#fff;">
           <div style="font-size:13px;letter-spacing:0.08em;text-transform:uppercase;opacity:0.85;">LeadStart · new quote request</div>
-          <div style="font-size:20px;font-weight:700;margin-top:6px;">${escapeHtml(data.fullName)} — ${escapeHtml(data.company)}</div>
+          <div style="font-size:20px;font-weight:700;margin-top:6px;">${escapeHtml(data.fullName)} &middot; ${escapeHtml(data.company)}</div>
         </td></tr>
         <tr><td style="padding:8px 0;">
           <table role="presentation" cellpadding="0" cellspacing="0" width="100%">${rows}</table>
@@ -193,12 +194,14 @@ export async function POST(request: NextRequest) {
     const { Resend } = await import("resend");
     const resend = new Resend(process.env.RESEND_API_KEY);
 
+    const html = buildHtml({ fullName, company, email, phone, metro, industry, volume, message });
     await resend.emails.send({
       from: process.env.EMAIL_FROM || "LeadStart <info@no-reply.leadstart.io>",
       to: toAddresses,
       replyTo: email,
-      subject: `New quote request — ${fullName} (${company})`,
-      html: buildHtml({ fullName, company, email, phone, metro, industry, volume, message }),
+      subject: `New quote request: ${fullName} (${company})`,
+      html,
+      text: htmlToPlainText(html),
     });
   } catch (err) {
     console.error("[contact] Failed to send email:", err);

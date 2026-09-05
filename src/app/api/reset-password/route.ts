@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { appUrl } from "@/lib/api-url";
 import { clientIp, checkRateLimit, checkRateLimits, tooManyRequests } from "@/lib/security/rate-limit";
+import { htmlToPlainText } from "@/lib/email/html-to-text";
+import { EMAIL_FONT_STACK, EMAIL_FONT_HEAD } from "@/lib/email/brand";
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
@@ -13,7 +15,7 @@ export async function POST(request: NextRequest) {
 
   // Mode 1: Set new password (from update-password page)
   if (token && password) {
-    // Rate-limit token submissions per IP — this is the reset-token guessing surface.
+    // Rate-limit token submissions per IP: this is the reset-token guessing surface.
     const rl = await checkRateLimit({
       bucket: `reset-password:confirm:ip:${ip}`,
       limit: 10,
@@ -102,8 +104,10 @@ export async function POST(request: NextRequest) {
 
       const recoveryHtml = `<!DOCTYPE html>
 <html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
-<body style="margin:0;padding:0;background-color:#F4F5F9;font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+${EMAIL_FONT_HEAD}
+</head>
+<body style="margin:0;padding:0;background-color:#F4F5F9;font-family:${EMAIL_FONT_STACK};">
 <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color:#F4F5F9;">
 <tr><td align="center" style="padding:40px 16px;">
 <table role="presentation" cellpadding="0" cellspacing="0" width="600" style="max-width:600px;width:100%;">
@@ -119,7 +123,7 @@ export async function POST(request: NextRequest) {
 </td></tr></table></td></tr>
 <tr><td style="background:#fff;padding:32px;">
 <p style="margin:0 0 16px;font-size:15px;color:#1A1A2E;line-height:1.6;">Click the button below to choose a new password for your <strong>LeadStart</strong> account.</p>
-<p style="margin:0 0 28px;font-size:15px;color:#3D3D5C;line-height:1.6;">If you didn't request this, you can safely ignore this email — your password won't change.</p>
+<p style="margin:0 0 28px;font-size:15px;color:#3D3D5C;line-height:1.6;">If you didn't request this, you can safely ignore this email. Your password won't change.</p>
 <table role="presentation" cellpadding="0" cellspacing="0" width="100%"><tr><td align="center">
 <a href="${resetLink}" style="display:inline-block;background:linear-gradient(135deg,#6B72FF,#2E37FE);color:#fff;text-decoration:none;padding:14px 36px;border-radius:10px;font-size:15px;font-weight:600;letter-spacing:-0.2px;">Reset Password &#8594;</a>
 </td></tr></table>
@@ -133,8 +137,9 @@ export async function POST(request: NextRequest) {
       await resend.emails.send({
         from: process.env.EMAIL_FROM || "LeadStart <info@no-reply.leadstart.io>",
         to: email,
-        subject: "Reset Your Password — LeadStart",
+        subject: "Reset Your Password | LeadStart",
         html: recoveryHtml,
+        text: htmlToPlainText(recoveryHtml),
       });
     } catch (emailErr) {
       console.error("Failed to send recovery email:", emailErr);

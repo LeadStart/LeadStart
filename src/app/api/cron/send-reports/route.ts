@@ -11,7 +11,7 @@ import type { CampaignSnapshot, Client, Campaign, KPIReportData, KPIReport } fro
 
 // Force dynamic rendering on every invocation. Without this, a Vercel cron
 // (which hits the same URL with no query params) can receive an edge-cached
-// response from a prior tick, skipping the function body entirely — the DB
+// response from a prior tick, skipping the function body entirely: the DB
 // is never touched but the route returns the old payload. Caught on
 // 2026-05-27 in an earlier cron route;
 // applying the same guard to every cron route preemptively.
@@ -74,7 +74,7 @@ async function generateReportData(
  *  Throws on missing API key so the caller's catch block records a real error
  *  (prevents the "ghost sent" case where sent_at was stamped but nothing shipped).
  *  Returns the Resend message id so the caller can store it on the kpi_reports
- *  row — the Resend webhook needs that id to correlate delivery/bounce events. */
+ *  row: the Resend webhook needs that id to correlate delivery/bounce events. */
 async function sendReportEmail(
   reportData: KPIReportData,
   toEmails: string[],
@@ -85,17 +85,17 @@ async function sendReportEmail(
     throw new Error("No recipients provided");
   }
   if (!process.env.RESEND_API_KEY) {
-    throw new Error("RESEND_API_KEY is not set — cannot send report email");
+    throw new Error("RESEND_API_KEY is not set, cannot send report email");
   }
 
-  // Weekly KPI reports don't use the hot-lead retry queue — a failed report
+  // Weekly KPI reports don't use the hot-lead retry queue: a failed report
   // is low-urgency and the next-hour cron rerun catches most transient drops.
   // The throttle is still valuable to avoid bursts when a scheduled run
   // sends to many clients at once.
   const result = await sendViaResend({
     from: process.env.EMAIL_FROM || "LeadStart <info@no-reply.leadstart.io>",
     to: toEmails,
-    subject: `Your Campaign Report — ${startDate} to ${endDate}`,
+    subject: `Your Campaign Report: ${startDate} to ${endDate}`,
     html: buildReportHtml(reportData),
   });
   return { resendId: result.id };
@@ -194,7 +194,7 @@ export async function GET(request: NextRequest) {
       console.error(`Failed to send report for ${client.name}:`, err);
       // Persistent failure: every cron throw bypasses the silent next-hour
       // retry by surfacing in the owner digest. Soft Resend errors classify
-      // as TransientResendError and don't reach here — they throw before
+      // as TransientResendError and don't reach here: they throw before
       // sendReportEmail returns and we don't have a separate transient
       // bucket for reports today.
       await enqueueOwnerAlert({

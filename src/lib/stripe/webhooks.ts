@@ -6,6 +6,7 @@ import { buildInvoiceEmail } from "@/lib/email/invoice";
 import { buildQuoteSignedEmail } from "@/lib/email/quote-signed";
 import { computeLaunchDate, DEFAULT_WARMING_DAYS } from "@/lib/billing/schedule";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { htmlToPlainText } from "@/lib/email/html-to-text";
 import { getAppUrl } from "./client";
 
 // Owner alert recipient for new signed clients.
@@ -34,6 +35,7 @@ async function sendEmail(to: string, subject: string, html: string) {
       to,
       subject,
       html,
+      text: htmlToPlainText(html),
     });
   } catch (err) {
     console.error("Webhook email send failed:", err);
@@ -43,7 +45,7 @@ async function sendEmail(to: string, subject: string, html: string) {
 /**
  * Route a Stripe event to the right handler. Caller is responsible for
  * signature verification, idempotency dedupe, and persisting the event row
- * — this function only mutates business state.
+ * this function only mutates business state.
  *
  * Unknown event types are silently ignored (Stripe sends many we don't care
  * about; rejecting them would cause retry loops).
@@ -90,7 +92,7 @@ async function handleCheckoutCompleted(
 ) {
   const md = session.metadata ?? {};
 
-  // Self-serve token-pack purchase — a different money path from the agency
+  // Self-serve token-pack purchase: a different money path from the agency
   // quote flow. Credits the buyer's token ledger and returns early.
   if (md.purpose === "token_topup") {
     return handleTokenTopup(session);
@@ -127,7 +129,7 @@ async function handleCheckoutCompleted(
     ? new Date(md.launch_date)
     : computeLaunchDate(new Date(), warmingDays);
 
-  // Upsert subscription with the pricing snapshot (tiers retired — no plan
+  // Upsert subscription with the pricing snapshot (tiers retired, no plan
   // row to read). The customer.subscription.updated event fills in period
   // bounds + trial_end right after.
   if (subscriptionId) {
@@ -188,10 +190,10 @@ async function handleCheckoutCompleted(
   const clientName = clientRecord?.name || "";
   const contactFirstName = clientRecord?.contact_first_name || "";
 
-  // Owner alert — always fire when a client signs and pays.
+  // Owner alert: always fire when a client signs and pays.
   await sendEmail(
     OWNER_ALERT_EMAIL,
-    `${clientName || "A client"} — Quote signed`,
+    `${clientName || "A client"}: Quote signed`,
     buildQuoteSignedEmail({
       clientName,
       monthlyCents,
@@ -203,12 +205,12 @@ async function handleCheckoutCompleted(
     }),
   );
 
-  // Client confirmation — "You're all set".
+  // Client confirmation: "You're all set".
   const toEmail = session.customer_email || session.customer_details?.email;
   if (toEmail) {
     await sendEmail(
       toEmail,
-      "You're all set — campaigns launching soon",
+      "You're all set, campaigns launching soon",
       buildSubscriptionStartedEmail({
         firstName: contactFirstName,
         monthlyCents,
@@ -252,7 +254,7 @@ async function handleTokenTopup(session: Stripe.Checkout.Session) {
     notes: packId ? `Token pack purchase (pack ${packId})` : "Token pack purchase",
   } as Record<string, unknown>);
 
-  // A duplicate is the idempotency guard doing its job — not an error.
+  // A duplicate is the idempotency guard doing its job: not an error.
   if (error && !/duplicate key|unique/i.test(error.message)) {
     throw new Error(`token credit failed: ${error.message}`);
   }
@@ -411,7 +413,7 @@ async function handleInvoiceEvent(
       });
       await sendEmail(
         toEmail,
-        `Invoice ${invoice.number ?? invoice.id} — $${(invoice.amount_due / 100).toFixed(2)} due`,
+        `Invoice ${invoice.number ?? invoice.id}: $${(invoice.amount_due / 100).toFixed(2)} due`,
         buildInvoiceEmail({
           clientName:
             (client as unknown as { name?: string }).name || "",

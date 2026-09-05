@@ -1,4 +1,4 @@
-// POST /api/signup — public, self-serve buyer registration.
+// POST /api/signup: public, self-serve buyer registration.
 //
 // This is the ONLY signup path: Supabase's public signup endpoint is disabled
 // (disable_signup=true), and this trusted service-role route provisions a buyer
@@ -19,6 +19,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { clientIp, checkRateLimits, tooManyRequests } from "@/lib/security/rate-limit";
 import { verifyTurnstile } from "@/lib/security/turnstile";
 import { isDisposableEmail } from "@/lib/security/disposable-email";
+import { htmlToPlainText } from "@/lib/email/html-to-text";
+import { EMAIL_FONT_STACK, EMAIL_FONT_HEAD } from "@/lib/email/brand";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -33,8 +35,10 @@ interface SignupBody {
 function buildConfirmHtml(confirmLink: string) {
   return `<!DOCTYPE html>
 <html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
-<body style="margin:0;padding:0;background-color:#F4F5F9;font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+${EMAIL_FONT_HEAD}
+</head>
+<body style="margin:0;padding:0;background-color:#F4F5F9;font-family:${EMAIL_FONT_STACK};">
 <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color:#F4F5F9;">
 <tr><td align="center" style="padding:40px 16px;">
 <table role="presentation" cellpadding="0" cellspacing="0" width="600" style="max-width:600px;width:100%;">
@@ -123,7 +127,7 @@ export async function POST(request: NextRequest) {
   });
 
   if (createErr) {
-    // Most common: the email is already registered. Stay enumeration-safe — a
+    // Most common: the email is already registered. Stay enumeration-safe, a
     // generic success so signup can't be used to probe which emails exist.
     if (/already|registered|exists/i.test(createErr.message)) {
       return NextResponse.json({ success: true });
@@ -137,7 +141,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Could not create your account. Please try again." }, { status: 500 });
   }
 
-  // One organization per buyer (double-walled isolation — see migration 00106).
+  // One organization per buyer (double-walled isolation, see migration 00106).
   const { data: org, error: orgErr } = await admin
     .from("organizations")
     .insert({ name: company || email, kind: "buyer", is_self_serve: true })
@@ -181,11 +185,13 @@ export async function POST(request: NextRequest) {
     try {
       const { Resend } = await import("resend");
       const resend = new Resend(process.env.RESEND_API_KEY);
+      const html = buildConfirmHtml(confirmLink);
       await resend.emails.send({
         from: process.env.EMAIL_FROM || "LeadStart <info@no-reply.leadstart.io>",
         to: email,
         subject: "Confirm your LeadStart account",
-        html: buildConfirmHtml(confirmLink),
+        html,
+        text: htmlToPlainText(html),
       });
     } catch (emailErr) {
       console.error("[signup] confirmation email send failed:", emailErr);
