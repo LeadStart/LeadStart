@@ -92,17 +92,17 @@ export function Topbar({ userEmail, role, actualRole, onRoleSwitch, onMenuClick 
     // (globals.css) floats it as an inset, rounded, hairline card matching the rail.
     <header className="app-topbar flex h-16 shrink-0 items-center justify-between border-b border-border/50 bg-white px-4 sm:px-6 gap-3">
       <div className="flex items-center gap-3 min-w-0 flex-1">
-        {/* Brand wordmark — mobile/tablet only. Primary nav is the bottom tab
+        {/* Brand wordmark: mobile/tablet only. Primary nav is the bottom tab
             bar now; the sidebar rail carries the brand at lg+. */}
         <span className="lg:hidden text-[15px] font-semibold tracking-tight text-foreground">
           LeadStart
         </span>
-        {/* Search bar — admin only, desktop only */}
+        {/* Search bar: admin only, desktop only */}
         {isActualAdmin && <GlobalSearch />}
       </div>
 
       <div className="flex items-center gap-3">
-        {/* Notification bell — admin only */}
+        {/* Notification bell: admin only */}
         {isActualAdmin && (
           <DropdownMenu>
             <DropdownMenuTrigger className="relative flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors outline-none cursor-pointer">
@@ -177,7 +177,7 @@ export function Topbar({ userEmail, role, actualRole, onRoleSwitch, onMenuClick 
               </DropdownMenuLabel>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            {/* Overflow nav — mobile/tablet only. Opens the full sectioned drawer
+            {/* Overflow nav: mobile/tablet only. Opens the full sectioned drawer
                 (Contacts, Reports, Mailboxes, Settings, …) that the bottom bar's
                 five tabs don't cover. Hidden at lg where the rail shows it all. */}
             {onMenuClick && (
@@ -200,7 +200,7 @@ export function Topbar({ userEmail, role, actualRole, onRoleSwitch, onMenuClick 
                 <Settings size={14} className="mr-2" />
                 Settings
               </DropdownMenuItem>
-              {/* Web-push opt-in — renders nothing where push isn't supported */}
+              {/* Web-push opt-in: renders nothing where push isn't supported */}
               <NotificationsToggle />
             </DropdownMenuGroup>
             <DropdownMenuSeparator />

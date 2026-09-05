@@ -1,5 +1,5 @@
 // HTML fetching + plain-text extraction utilities ported from
-// server/enricher.ts:183-258. Used only by Layer 1 (website scrape) — the
+// server/enricher.ts:183-258. Used only by Layer 1 (website scrape), the
 // Layer 2 path (Perplexity / Claude web search) does not need these.
 
 export async function fetchPage(url: string, timeoutMs = 10_000): Promise<string> {
@@ -25,7 +25,7 @@ export async function fetchPage(url: string, timeoutMs = 10_000): Promise<string
   }
 }
 
-// Manual tag-block stripper — drops <script>...</script> and
+// Manual tag-block stripper: drops <script>...</script> and
 // <style>...</style> entirely, including any code/CSS inside them.
 // Used before regex tag-stripping so we don't leak JS/CSS into the prompt.
 export function stripTagBlocks(html: string, tagName: string): string {

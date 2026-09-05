@@ -110,7 +110,7 @@ export function DeliverabilityCard({
           <div>
             <CardTitle className="text-base">Deliverability check</CardTitle>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Domain authentication + copy spam-signals. Advisory — run before activating.
+              Domain authentication + copy spam-signals. Advisory: run before activating.
             </p>
           </div>
         </div>

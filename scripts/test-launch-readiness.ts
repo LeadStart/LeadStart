@@ -89,7 +89,7 @@ eq(
 eq(
   computeLaunchReadiness({ ...ready, contactCount: 0 }).canLaunch,
   true,
-  "no contacts is a WARNING, not a blocker — can still launch",
+  "no contacts is a WARNING, not a blocker: can still launch",
 );
 
 console.log(`\n${pass}/${pass + fail} passed`);

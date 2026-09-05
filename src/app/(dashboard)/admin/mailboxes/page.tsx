@@ -90,7 +90,7 @@ export default function MailboxesPage() {
   const [loading, setLoading] = useState(true);
   const [banner, setBanner] = useState<Banner>(null);
 
-  // Add wizard — the single entry point for inbox / domain / connect.
+  // Add wizard: the single entry point for inbox / domain / connect.
   const [wizardOpen, setWizardOpen] = useState(false);
 
   // Per-row in-flight action guard (mailbox id → true)
@@ -113,10 +113,10 @@ export default function MailboxesPage() {
   const [bulkBusy, setBulkBusy] = useState(false);
   // Registry tags (Settings → Tags, migration 00108) feed the tag-input
   // autocomplete so a tag added there is suggested here even before any inbox
-  // carries it. Best-effort — falls back to in-use tags if the fetch fails.
+  // carries it. Best-effort: falls back to in-use tags if the fetch fails.
   const [registryTags, setRegistryTags] = useState<string[]>([]);
 
-  // Tag filter — show only inboxes carrying any of the selected tags (OR match).
+  // Tag filter: show only inboxes carrying any of the selected tags (OR match).
   // Keyed by lowercased tag so it matches case-insensitively, like every other
   // tag path. Empty = show all.
   const [tagFilter, setTagFilter] = useState<Set<string>>(new Set());
@@ -124,7 +124,7 @@ export default function MailboxesPage() {
   // Which mailbox's detail (health breakdown + placement) is expanded (one at a time).
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  // Inline test-send form (one at a time) — recipient defaults to the login email.
+  // Inline test-send form (one at a time): recipient defaults to the login email.
   const [testOpenId, setTestOpenId] = useState<string | null>(null);
   const [testTo, setTestTo] = useState("");
 
@@ -162,7 +162,7 @@ export default function MailboxesPage() {
         setDomains(data.domains ?? []);
         setSeedCount(data.seed_count ?? 0);
       } else setBanner({ kind: "error", message: data.error ?? "Failed to load mailboxes" });
-      // Registry tags for autocomplete — best-effort, never blocks the page.
+      // Registry tags for autocomplete: best-effort, never blocks the page.
       if (tagRes.ok) {
         const tagData = await tagRes.json();
         setRegistryTags(((tagData.tags ?? []) as { name: string }[]).map((t) => t.name));
@@ -302,7 +302,7 @@ export default function MailboxesPage() {
             ? { kind: "error", message: test.error ?? "Placement test failed to send." }
             : {
                 kind: "success",
-                message: `Placement test started — ${probe === "campaign" ? "campaign copy" : "a neutral probe"} sent from ${mb.email_address} to ${sent} seed inbox${sent === 1 ? "" : "es"}. Results land below in about a minute.`,
+                message: `Placement test started, ${probe === "campaign" ? "campaign copy" : "a neutral probe"} sent from ${mb.email_address} to ${sent} seed inbox${sent === 1 ? "" : "es"}. Results land below in about a minute.`,
               },
         );
       } else {
@@ -436,7 +436,7 @@ export default function MailboxesPage() {
       });
       const data = await res.json();
       if (res.ok) {
-        setBanner({ kind: "success", message: `Added seed inbox ${seedEmail.trim()} — delegation verified.` });
+        setBanner({ kind: "success", message: `Added seed inbox ${seedEmail.trim()}, delegation verified.` });
         setSeedEmail("");
         setSeedLabel("");
         await loadSeeds();
@@ -550,7 +550,7 @@ export default function MailboxesPage() {
       });
       const data = await res.json();
       if (res.ok) {
-        setBanner({ kind: "success", message: `Added IMAP seed ${email} — sign-in verified.` });
+        setBanner({ kind: "success", message: `Added IMAP seed ${email}, sign-in verified.` });
         setImapEmail("");
         setImapHost("");
         setImapPort("993");
@@ -637,7 +637,7 @@ export default function MailboxesPage() {
     visibleMailboxes.length > 0 && visibleMailboxes.every((m) => selectedIds.has(m.id));
   const someVisibleSelected = visibleMailboxes.some((m) => selectedIds.has(m.id));
 
-  // Filter pills offer only tags actually present on an inbox — a registered-
+  // Filter pills offer only tags actually present on an inbox: a registered-
   // but-unused tag (the registry lets you pre-create tags) would just yield an
   // empty list. The tag-input combobox still suggests the full registry (orgTags).
   const filterableTags = orgTags.filter((t) =>
@@ -710,7 +710,7 @@ export default function MailboxesPage() {
             </p>
           ) : (
             <>
-            {/* Tag filter — toggle pills to narrow the list to named pools. */}
+            {/* Tag filter: toggle pills to narrow the list to named pools. */}
             {filterableTags.length > 0 && (
               <div className="mb-3 flex flex-wrap items-center gap-1.5">
                 <span className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground">
@@ -751,7 +751,7 @@ export default function MailboxesPage() {
                 )}
               </div>
             )}
-            {/* Bulk "tag selected" toolbar — appears once any inbox is checked. */}
+            {/* Bulk "tag selected" toolbar: appears once any inbox is checked. */}
             {selectedIds.size > 0 && (
               <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-[#2E37FE]/30 bg-[#2E37FE]/5 px-3 py-2">
                 <span className="text-xs font-medium text-[#2E37FE]">
@@ -882,7 +882,7 @@ export default function MailboxesPage() {
                         )}
                         {mb.status === "paused" && mb.health_paused_at && (
                           <div className="text-xs text-amber-600 flex items-center gap-1 mt-0.5">
-                            <AlertTriangle size={12} /> Paused automatically by the health check — resume when it recovers.
+                            <AlertTriangle size={12} /> Paused automatically by the health check: resume when it recovers.
                           </div>
                         )}
                         <div className="mt-1 flex flex-wrap items-center gap-1">
@@ -914,7 +914,7 @@ export default function MailboxesPage() {
                             className="text-muted-foreground"
                             title="First health check runs within the hour."
                           >
-                            —
+                           ,
                           </span>
                         ) : (
                           <button
@@ -1099,7 +1099,7 @@ export default function MailboxesPage() {
                           <p className="text-[11px] text-muted-foreground mt-2">
                             Defaults to your login address. The message is the same short, link-free
                             note the placement test uses, so what you see in that inbox reflects the
-                            mailbox — not a “TEST” subject line. Sending to this mailbox itself is
+                            mailbox: not a “TEST” subject line. Sending to this mailbox itself is
                             refused: a self-send never leaves the tenant and always lands in the inbox.
                           </p>
                         </td>
@@ -1183,7 +1183,7 @@ export default function MailboxesPage() {
         <CardContent>
           {domains.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No sending domains yet — add a mailbox and its domain appears here.
+              No sending domains yet: add a mailbox and its domain appears here.
             </p>
           ) : (
             <div className="divide-y divide-border/50">
@@ -1268,10 +1268,10 @@ export default function MailboxesPage() {
               Seed inboxes {seeds.length > 0 && <span className="text-muted-foreground font-normal">({seeds.length})</span>}
             </CardTitle>
             <p className="text-xs text-muted-foreground">
-              Inboxes you control that we read to see where your mail lands — Workspace inboxes, or
+              Inboxes you control that we read to see where your mail lands: Workspace inboxes, or
               external Yahoo / consumer Gmail accounts by IMAP. A placement test sends a probe from a
               mailbox to every seed on a different domain, then reads each seed to see where it
-              landed — Inbox, Promotions, or Spam — and what the receiver said about SPF, DKIM, and
+              landed (Inbox, Promotions, or Spam) and what the receiver said about SPF, DKIM, and
               DMARC. Nothing in a seed is ever modified.
             </p>
           </div>
@@ -1279,8 +1279,8 @@ export default function MailboxesPage() {
         <CardContent className="space-y-4">
           {seeds.length === 0 ? (
             <p className="text-sm text-muted-foreground py-2">
-              No seed inboxes yet. The quickest panel is your own sending mailboxes — any two on
-              different domains can probe each other — then add an external Yahoo or consumer Gmail
+              No seed inboxes yet. The quickest panel is your own sending mailboxes: any two on
+              different domains can probe each other: then add an external Yahoo or consumer Gmail
               seed below to see how those providers really treat your mail.
             </p>
           ) : (
@@ -1320,7 +1320,7 @@ export default function MailboxesPage() {
                         handleSetSeedRole(seed, e.target.value === "" ? null : (e.target.value as SeedRole))
                       }
                       className="shrink-0 cursor-pointer rounded-md border border-border bg-white px-1.5 py-1 text-xs text-slate-600"
-                      title="Rotation role — a 'fresh' seed is one you rotate quarterly for a true first-contact read"
+                      title="Rotation role: a 'fresh' seed is one you rotate quarterly for a true first-contact read"
                     >
                       <option value="">Role…</option>
                       <option value="veteran">Veteran</option>
@@ -1395,7 +1395,7 @@ export default function MailboxesPage() {
               variant="outline"
               onClick={handleImportSeeds}
               disabled={importingSeeds || mailboxes.length === 0}
-              title="Register every sending mailbox as a seed — they're already delegation-verified"
+              title="Register every sending mailbox as a seed: they're already delegation-verified"
             >
               {importingSeeds ? "Adding…" : "Use sending mailboxes as seeds"}
             </Button>
@@ -1418,14 +1418,14 @@ export default function MailboxesPage() {
           {imapOpen && (
             <div className="rounded-lg border border-violet-200 bg-violet-50/40 p-3 space-y-3">
               <p className="text-xs text-muted-foreground">
-                Add an inbox on a provider your prospects actually use — a consumer Gmail, Outlook,
-                or Yahoo account you control — read over IMAP with an app password. This measures
+                Add an inbox on a provider your prospects actually use: a consumer Gmail, Outlook,
+                or Yahoo account you control: read over IMAP with an app password. This measures
                 real cold placement to that provider, which your own sending domains can&apos;t.
                 <br />
                 <span className="text-slate-500">
-                  Yahoo: host <code className="text-slate-700">imap.mail.yahoo.com</code>, port 993 —
+                  Yahoo: host <code className="text-slate-700">imap.mail.yahoo.com</code>, port 993,
                   create an app password under Account Security. Consumer Gmail: host{" "}
-                  <code className="text-slate-700">imap.gmail.com</code>, port 993 — turn on
+                  <code className="text-slate-700">imap.gmail.com</code>, port 993: turn on
                   2-Step Verification, then create an app password.
                 </span>
               </p>
@@ -1447,7 +1447,7 @@ export default function MailboxesPage() {
                   <Input value={imapPort} onChange={(e) => setImapPort(e.target.value)} placeholder="993" inputMode="numeric" />
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs font-medium">Username (optional — defaults to the email)</Label>
+                  <Label className="text-xs font-medium">Username (optional, defaults to the email)</Label>
                   <Input value={imapUsername} onChange={(e) => setImapUsername(e.target.value)} placeholder="seed@gmail.com" />
                 </div>
                 <div className="space-y-1">
@@ -1472,9 +1472,9 @@ export default function MailboxesPage() {
           <p className="text-[11px] text-muted-foreground">
             A seed is any inbox you control that we can read. A <strong>Workspace</strong> seed is on
             a domain that authorized the service account (same setup as a sending mailbox); an{" "}
-            <strong>IMAP</strong> seed (Yahoo, consumer Gmail, other) is read with an app password —
+            <strong>IMAP</strong> seed (Yahoo, consumer Gmail, other) is read with an app password,
             the way to measure placement on the providers your prospects use. Seeds on a
-            mailbox&apos;s own domain are skipped for that mailbox — same-tenant delivery is never
+            mailbox&apos;s own domain are skipped for that mailbox: same-tenant delivery is never
             filtered, so it can&apos;t measure anything. Nothing in a seed is ever modified.
           </p>
         </CardContent>
@@ -1603,7 +1603,7 @@ function PlacementPanel({
           <p className="text-xs text-muted-foreground">
             {running ? (
               <span className="inline-flex items-center gap-1.5 text-amber-600 font-medium">
-                <Loader2 size={12} className="animate-spin" /> Checking seed inboxes — results update
+                <Loader2 size={12} className="animate-spin" /> Checking seed inboxes: results update
                 automatically.
               </span>
             ) : test.status === "failed" ? (

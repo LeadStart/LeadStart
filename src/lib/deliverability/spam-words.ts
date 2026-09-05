@@ -1,6 +1,6 @@
 // Curated spam-trigger phrase list for cold B2B email deliverability checks.
 //
-// DATA ONLY — no logic, no imports. The matching engine lives in ./copy.ts.
+// DATA ONLY: no logic, no imports. The matching engine lives in ./copy.ts.
 //
 // Sourced from the well-known published 2026 lists (Mailmeteor, Snov.io,
 // Overloop, ActiveCampaign, Smartlead) and filtered to phrases that plausibly
@@ -9,16 +9,16 @@
 // filters still weight heavily.
 //
 // Severity guide:
-//   high — clear filter-bait ("100% free", "this isn't spam", "$$$",
+//   high: clear filter-bait ("100% free", "this isn't spam", "$$$",
 //          "make money fast", "risk-free", "double your")
-//   med  — pushy sales language ("act now", "limited time", "buy now",
+//   med : pushy sales language ("act now", "limited time", "buy now",
 //          "order now", "click here", "special promotion")
-//   low  — mild flavor, only weakly spammy ("cheap", "winner",
+//   low : mild flavor, only weakly spammy ("cheap", "winner",
 //          "touching base", "just following up")
 //
 // All phrases are lowercased. Multi-word phrases and punctuation classics
 // ("$$$", "!!!") are allowed. `alternatives` (1–3 plain, non-spammy rewrites)
-// are provided for the top cold-email offenders — the phrases most likely to
+// are provided for the top cold-email offenders: the phrases most likely to
 // actually be typed into a cold email.
 
 export type SpamCategory =
@@ -211,7 +211,7 @@ export const SPAM_PHRASES: SpamPhrase[] = [
   { phrase: "special deal", category: "urgency", severity: "med" },
   { phrase: "exclusive offer", category: "urgency", severity: "med", alternatives: ["an offer for you"] },
   { phrase: "exclusive deal", category: "urgency", severity: "med" },
-  // NOTE: runs of "!"/"?" are intentionally NOT listed here — the structural
+  // NOTE: runs of "!"/"?" are intentionally NOT listed here, the structural
   // [!?]{2,} check in copy.ts already scores repeated punctuation. Listing "!!"
   // as a phrase too would double-count the same signal.
 

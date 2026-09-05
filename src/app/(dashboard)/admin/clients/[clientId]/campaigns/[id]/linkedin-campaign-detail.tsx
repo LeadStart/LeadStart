@@ -6,7 +6,7 @@ import { PageHeader } from "@/components/layout/page-header";
 // chart + step funnel (campaign_snapshots data); LinkedIn campaigns
 // don't sync to those tables yet, so this component shows
 // enrollment-derived KPIs plus the sequence template and an enrollment
-// table — the things an operator actually wants to see for a sequence in
+// table: the things an operator actually wants to see for a sequence in
 // flight.
 
 import useSWR from "swr";

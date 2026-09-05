@@ -4,7 +4,7 @@ import { PageHeader } from "@/components/layout/page-header";
 // Client-portal flavor of the LinkedIn campaign view. Strips the
 // enrollment-level details (admins see those, clients don't) and shows a
 // summary: status, the sequence template, and high-level enrollment
-// counts. campaign_snapshots-driven analytics will land later — for now
+// counts. campaign_snapshots-driven analytics will land later: for now
 // a small "Detailed analytics coming soon" note keeps the page honest.
 
 import { use } from "react";

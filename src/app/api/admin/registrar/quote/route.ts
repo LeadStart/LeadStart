@@ -1,4 +1,4 @@
-// POST /api/admin/registrar/quote — price a domain WITHOUT buying it. Runs the
+// POST /api/admin/registrar/quote: price a domain WITHOUT buying it. Runs the
 // same availability sweep the provision route does, plus the month-to-date
 // spend headroom, so the provision card can show per-registrar prices and the
 // remaining budget before the owner commits. Owner only.

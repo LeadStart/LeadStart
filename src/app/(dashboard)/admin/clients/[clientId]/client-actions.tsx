@@ -193,7 +193,7 @@ export function ClientActions({
     );
   }
 
-  // Editing mode — type email, then save or save+invite
+  // Editing mode: type email, then save or save+invite
   if (editing) {
     return (
       <div className="space-y-2">
@@ -269,7 +269,7 @@ export function ClientActions({
     );
   }
 
-  // No email set — prompt to add one
+  // No email set: prompt to add one
   return (
     <div className="space-y-2">
       <button

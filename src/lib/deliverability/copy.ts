@@ -1,14 +1,14 @@
 // Copy spam-signal scorer for cold email deliverability.
 //
-// CLIENT-SAFE — this module has NO node: imports and no npm deps beyond the two
+// CLIENT-SAFE: this module has NO node: imports and no npm deps beyond the two
 // local modules below. It is deliberately split out of ./check.ts (which imports
 // node:dns/promises) so the builder UI can import the scorer without dragging a
 // node builtin into the client bundle.
 //
 // Two public functions:
-//   findSpamMatches(text, field) — word-boundary-aware scan of one field,
+//   findSpamMatches(text, field): word-boundary-aware scan of one field,
 //     spintax-aware (each spin branch is scanned individually).
-//   scoreCopy(steps) — backward-compatible aggregate score + issues, now also
+//   scoreCopy(steps): backward-compatible aggregate score + issues, now also
 //     carrying a per-step breakdown with categorized matches + suggestions.
 
 import { SPAM_PHRASES, type SpamCategory, type SpamSeverity } from "./spam-words";
@@ -166,13 +166,13 @@ function bodyCapsWordCount(body: string): number {
   }).length;
 }
 
-// Emoji matcher. Built with `new RegExp` — a `\p{...}` regex LITERAL fails the
+// Emoji matcher. Built with `new RegExp`: a `\p{...}` regex LITERAL fails the
 // TS 5.5+ syntax check at the project's ES2017 target; the runtime (Node 20 +
 // evergreen browsers) supports the constructed form. The negative lookahead
 // excludes ™ / ® / © (Extended_Pictographic, but "Acme™" is not an emoji).
 const EMOJI_RE = new RegExp("(?![\\u00A9\\u00AE\\u2122])\\p{Extended_Pictographic}", "gu");
 
-/** Count emoji in a chunk of text (ignores lastIndex — safe to reuse). */
+/** Count emoji in a chunk of text (ignores lastIndex, safe to reuse). */
 function emojiCount(text: string): number {
   return (text.match(EMOJI_RE) ?? []).length;
 }
@@ -188,7 +188,7 @@ function spintaxIssues(text: string): CopyIssue[] {
   const { warnings } = parseSpintax(text);
   for (const w of warnings) {
     if (w.code === "unbalanced_brace") {
-      issues.push({ severity: "warn", message: "Unbalanced { } — check the spintax braces." });
+      issues.push({ severity: "warn", message: "Unbalanced { }, check the spintax braces." });
     } else if (w.code === "empty_option") {
       issues.push({ severity: "info", message: w.message });
     }
@@ -200,7 +200,7 @@ function spintaxIssues(text: string): CopyIssue[] {
  * Structural per-step advisories, shared by the builder card, the deliverability
  * card, and the activation pre-flight so all three agree by construction. Covers
  * the four original per-step structural checks plus the four W4 additions, but
- * DELIBERATELY excludes spam-phrase matches and spintax-validation issues —
+ * DELIBERATELY excludes spam-phrase matches and spintax-validation issues,
  * StepCopyCheck surfaces those separately (chips + a warnings list), and the
  * pre-flight reads them off the scoreCopy result. `isFirstStep` gates the
  * fake-reply check: later steps legitimately thread as "Re:".
@@ -212,10 +212,10 @@ export function quickStepAdvisories(
   const issues: CopyIssue[] = [];
   const { subject, body } = step;
 
-  // — the four original structural checks (wording unchanged) —
+  // The four original structural checks (wording unchanged).
   const links = linkCount(`${subject}\n${body}`);
   if (links > 2) {
-    issues.push({ severity: "warn", message: `${links} links in this step — cold email lands best with 0–1.` });
+    issues.push({ severity: "warn", message: `${links} links in this step, cold email lands best with 0–1.` });
   }
   if (capsWordCount(subject) >= 2) {
     issues.push({ severity: "warn", message: "Subject uses ALL-CAPS words." });
@@ -227,25 +227,25 @@ export function quickStepAdvisories(
     issues.push({ severity: "info", message: "Body is very short." });
   }
 
-  // — the four W4 additions —
+  // The four W4 additions.
   if (bodyCapsWordCount(body) >= 3) {
-    issues.push({ severity: "warn", message: "Body uses several ALL-CAPS words — reads as shouting." });
+    issues.push({ severity: "warn", message: "Body uses several ALL-CAPS words, reads as shouting." });
   }
   if (opts.isFirstStep && isFakeReplySubject(subject)) {
     issues.push({
       severity: "warn",
-      message: 'Subject starts with "Re:" or "Fwd:" — faking a reply on a first email is a spam trigger.',
+      message: 'Subject starts with "Re:" or "Fwd:", faking a reply on a first email is a spam trigger.',
     });
   }
   if (subject.trim().length > 60) {
-    issues.push({ severity: "info", message: "Subject is over 60 characters — shorter subjects land better." });
+    issues.push({ severity: "info", message: "Subject is over 60 characters, shorter subjects land better." });
   }
   if (emojiCount(subject) > 0) {
-    issues.push({ severity: "info", message: "Subject contains an emoji — cold outreach lands better without them." });
+    issues.push({ severity: "info", message: "Subject contains an emoji, cold outreach lands better without them." });
   }
   const bodyEmoji = emojiCount(body);
   if (bodyEmoji >= 3) {
-    issues.push({ severity: "info", message: `Body has ${bodyEmoji} emoji — heavy emoji use reads as promotional.` });
+    issues.push({ severity: "info", message: `Body has ${bodyEmoji} emoji, heavy emoji use reads as promotional.` });
   }
 
   return issues;
@@ -271,7 +271,7 @@ export function scoreCopy(steps: { subject: string; body: string }[]): CopyScore
   if (aggLinks > 2) {
     issues.push({
       severity: "warn",
-      message: `${aggLinks} links across the sequence — cold email lands best with 0–1.`,
+      message: `${aggLinks} links across the sequence, cold email lands best with 0–1.`,
     });
   }
 
@@ -314,21 +314,21 @@ export function scoreCopy(steps: { subject: string; body: string }[]): CopyScore
     if (bodyCapsWordCount(s.body) >= 3) {
       issues.push({
         severity: "warn",
-        message: `Step ${i + 1} body uses several ALL-CAPS words — reads as shouting.`,
+        message: `Step ${i + 1} body uses several ALL-CAPS words, reads as shouting.`,
       });
     }
   });
   if (steps[0] && isFakeReplySubject(steps[0].subject)) {
     issues.push({
       severity: "warn",
-      message: `First email's subject starts with "Re:" or "Fwd:" — faking a reply is a spam trigger and breaks trust.`,
+      message: `First email's subject starts with "Re:" or "Fwd:", faking a reply is a spam trigger and breaks trust.`,
     });
   }
   steps.forEach((s, i) => {
     if (s.subject.trim().length > 60) {
       issues.push({
         severity: "info",
-        message: `Step ${i + 1} subject is over 60 characters — long subjects get cut off and read as marketing.`,
+        message: `Step ${i + 1} subject is over 60 characters, long subjects get cut off and read as marketing.`,
       });
     }
   });
@@ -336,20 +336,20 @@ export function scoreCopy(steps: { subject: string; body: string }[]): CopyScore
     if (emojiCount(s.subject) > 0) {
       issues.push({
         severity: "info",
-        message: `Step ${i + 1} subject contains an emoji — cold outreach lands better without them.`,
+        message: `Step ${i + 1} subject contains an emoji, cold outreach lands better without them.`,
       });
     }
     const be = emojiCount(s.body);
     if (be >= 3) {
       issues.push({
         severity: "info",
-        message: `Step ${i + 1} body has ${be} emoji — heavy emoji use reads as promotional.`,
+        message: `Step ${i + 1} body has ${be} emoji, heavy emoji use reads as promotional.`,
       });
     }
   });
 
   // Zero-personalization: one aggregate warn when the WHOLE sequence has no
-  // merge tags and no spintax anywhere — every recipient gets a byte-identical
+  // merge tags and no spintax anywhere: every recipient gets a byte-identical
   // email. extractCampaignTokens excludes sender tokens, so {{your_name}}-only
   // copy still counts as unpersonalized. Skips the degenerate all-empty case.
   const allTemplates = steps.flatMap((s) => [s.subject, s.body]);

@@ -1,4 +1,4 @@
-// POST /api/buyer/prospecting/maps-search — buyer-initiated, reserve-wrapped
+// POST /api/buyer/prospecting/maps-search: buyer-initiated, reserve-wrapped
 // Google-Maps sourcing. Reserves worst-case retail tokens (gating on pricing +
 // balance) BEFORE the search becomes grabbable, then inserts the pending row the
 // existing run-maps-searches cron picks up. The reserve-first ordering is
@@ -85,7 +85,7 @@ export async function POST(req: NextRequest) {
     const msg =
       cache.reason === "insufficient_tokens"
         ? `Not enough tokens. This search needs ${cache.held ?? 0}; your balance is ${cache.available ?? 0}.`
-        : "Sourcing isn't available yet — pricing hasn't been set.";
+        : "Sourcing isn't available yet, pricing hasn't been set.";
     return NextResponse.json({ error: msg, reason: cache.reason, held: cache.held }, { status: 400 });
   }
 
@@ -96,7 +96,7 @@ export async function POST(req: NextRequest) {
       hold.reason === "insufficient_tokens"
         ? `Not enough tokens. This search reserves ${hold.held}; your balance is ${hold.available ?? 0}.`
         : hold.reason === "pricing_not_configured"
-          ? "Sourcing isn't available yet — pricing hasn't been set."
+          ? "Sourcing isn't available yet: pricing hasn't been set."
           : "Could not reserve tokens for this search.";
     return NextResponse.json({ error: msg, reason: hold.reason, held: hold.held }, { status: 400 });
   }
@@ -114,11 +114,11 @@ export async function POST(req: NextRequest) {
   } as Record<string, unknown>);
 
   if (error) {
-    // Roll the hold back — the search won't run.
+    // Roll the hold back: the search won't run.
     await admin.from("token_ledger").delete().eq("search_id", searchId).eq("entry_type", "hold");
     const conflict = /duplicate|unique|23505/i.test(error.message);
     return NextResponse.json(
-      { error: conflict ? "You already have a search running — wait for it to finish." : "Could not start the search." },
+      { error: conflict ? "You already have a search running, wait for it to finish." : "Could not start the search." },
       { status: conflict ? 409 : 500 },
     );
   }

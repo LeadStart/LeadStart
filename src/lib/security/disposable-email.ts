@@ -1,6 +1,6 @@
 // Disposable / throwaway email-domain blocking for signup + public forms.
 //
-// A bundled static blocklist of the common throwaway providers — no runtime
+// A bundled static blocklist of the common throwaway providers: no runtime
 // fetch (privacy + reliability). It doesn't need to be exhaustive to be useful:
 // it stops the well-known one-click temp-mail services that abuse public signup
 // and contact forms, and it's trivial to extend (add a domain to DISPOSABLE_DOMAINS).
@@ -62,7 +62,7 @@ export function emailDomain(email: string): string | null {
 
 /**
  * True when the address belongs to a known disposable provider (exact domain or
- * a subdomain of one). A malformed address returns false — leave shape checks to
+ * a subdomain of one). A malformed address returns false: leave shape checks to
  * the caller's regex; this only judges disposability.
  */
 export function isDisposableEmail(email: string): boolean {

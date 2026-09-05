@@ -1,9 +1,9 @@
 // Porkbun registrar client (Phase 2). Base https://api.porkbun.com/api/json/v3.
 // Every call is POST with {apikey, secretapikey} in the JSON body (Porkbun's
-// convention — including "retrieve"). DNS + availability are well-established;
+// convention: including "retrieve"). DNS + availability are well-established;
 // registerDomain is implemented to the documented shape but is PENDING LIVE
 // VERIFICATION with a real key (Porkbun registration-via-API params/contacts
-// need confirming) — it throws clearly if the endpoint rejects it.
+// need confirming): it throws clearly if the endpoint rejects it.
 
 import type {
   DnsRecordInput,
@@ -146,7 +146,7 @@ export function createPorkbunProvider(creds: { apiKey: string; secretApiKey: str
     async upsertDnsRecords(domain: string, records: DnsRecordInput[]): Promise<void> {
       // True upsert: read the live records (with Porkbun's ids), diff under the
       // TXT-slot / exclusive-group rules, then create/edit/delete only what
-      // changed. Idempotent — re-running writes nothing when already in sync —
+      // changed. Idempotent: re-running writes nothing when already in sync,
       // and it never duplicates or clobbers unrelated records.
       const current = await retrieveCurrent(domain);
       const diff = diffDnsRecords(current, records);
@@ -155,7 +155,7 @@ export function createPorkbunProvider(creds: { apiKey: string; secretApiKey: str
       }
       for (const { current: cur, desired } of diff.edit) {
         if (!cur.providerId) {
-          // No id to target (shouldn't happen via retrieveCurrent) — create it.
+          // No id to target (shouldn't happen via retrieveCurrent): create it.
           await post(`/dns/create/${encodeURIComponent(domain)}`, toPorkbunRecord(desired));
           continue;
         }

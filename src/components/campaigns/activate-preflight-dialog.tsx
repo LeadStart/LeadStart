@@ -3,7 +3,7 @@
 // Shared warn-with-override dialog shown when activating a native campaign that
 // has advisory pre-flight warnings (copy / domain auth / placement). Both
 // activate entry points (the detail-page button and the list ⋯ menu) route
-// through it. "Activate anyway" always works — this never blocks.
+// through it. "Activate anyway" always works: this never blocks.
 
 import { Button } from "@/components/ui/button";
 import {

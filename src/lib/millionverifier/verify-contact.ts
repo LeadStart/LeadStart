@@ -3,9 +3,9 @@
 // address, persists the result on the contact, and mutates the in-memory
 // contact row so a second enrollment sharing it this tick hits the cache.
 //
-// Called from run-native-sequences as the LAST gate before the Gmail send —
+// Called from run-native-sequences as the LAST gate before the Gmail send,
 // after window / suppression / DNC / caps / mailbox / render / Gmail-creds have
-// all passed — so a credit is only ever spent on an address that would send
+// all passed, so a credit is only ever spent on an address that would send
 // right now. hold/skip never touch the loop's send counters, so a hold leaves
 // the mailbox slot free for the next enrollment in the batch.
 
@@ -29,7 +29,7 @@ import {
 type AdminClient = ReturnType<typeof createAdminClient>;
 
 // Per-org, per-tick state. `client === null` means the gate is disarmed (no key
-// configured) — the contact passes through unverified. suppressedUntilMs is a
+// configured): the contact passes through unverified. suppressedUntilMs is a
 // cross-tick 1h window after a definitive account error; tripped is the
 // per-tick breaker set the first time an account error is seen this tick.
 export interface VerifierTickState {
@@ -70,7 +70,7 @@ export async function gateContactVerification(args: {
 }): Promise<GateResult> {
   const { admin, state, contact, now } = args;
 
-  // Disarmed (no per-org state or no key) — pass through, result null.
+  // Disarmed (no per-org state or no key): pass through, result null.
   if (!state || !state.client) return { action: "send", result: null };
   // Defensive: the loop already guarantees a non-null email before this gate.
   if (!contact.email) return { action: "send", result: null };
@@ -92,7 +92,7 @@ export async function gateContactVerification(args: {
     return { action: "hold", reason: cached.reason };
   }
 
-  // cached.action === "verify" — a live call is required. Respect the breakers
+  // cached.action === "verify": a live call is required. Respect the breakers
   // before spending a call or the tick budget.
   if (state.tripped || (state.suppressedUntilMs != null && now.getTime() < state.suppressedUntilMs)) {
     state.held++;

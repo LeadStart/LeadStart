@@ -4,7 +4,7 @@ export type { ServiceType };
 
 // Flat input fed to the enrichment pipeline. Built from a row of
 // prospect_searches.results plus a runtime profile selection. No Drizzle
-// types — the original LeadEnrich tool's Lead/Job shapes are gone.
+// types: the original LeadEnrich tool's Lead/Job shapes are gone.
 export interface EnrichmentInput {
   business_name: string;
   website: string | null;

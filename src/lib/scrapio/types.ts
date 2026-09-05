@@ -1,10 +1,10 @@
-// Raw Scrap.io API response shapes. Kept thin — only fields LeadStart
+// Raw Scrap.io API response shapes. Kept thin: only fields LeadStart
 // reads. Anything else is left as `unknown` so an upstream change doesn't
 // silently drift from our types.
 
 export interface ScrapioSubscription {
   // Field shape isn't formally documented by Scrap.io. Treat the response
-  // as opaque-ish — surface plan/credit info to the UI when present, but
+  // as opaque-ish: surface plan/credit info to the UI when present, but
   // don't depend on a particular shape inside business logic.
   plan?: string;
   credits?: number;

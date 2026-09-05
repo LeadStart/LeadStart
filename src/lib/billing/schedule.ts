@@ -2,7 +2,7 @@
 // launch day (and the first monthly charge, which lands on launch day) is the
 // warm-up window in calendar days rolled forward to the next sending day.
 
-// Onboarding defaults — the single source of truth. Both the client-facing
+// Onboarding defaults: the single source of truth. Both the client-facing
 // surfaces (quote email + hosted quote page + welcome page + the quotes API)
 // and the admin Onboarding preview import these, so a change here propagates
 // everywhere at once. scripts/test-onboarding-preview-sync.ts enforces that the

@@ -1,21 +1,21 @@
-// Internal automations — delivery.
+// Internal automations: delivery.
 //
 // The "internal automation" surface behind the Flow builder's kind:'internal'
 // nodes has two delivery paths:
 //
-//   1. EVENT-TRIGGERED (live today) — deliverReplyAutomations() runs from the
+//   1. EVENT-TRIGGERED (live today): deliverReplyAutomations() runs from the
 //      reply pipeline when an inbound reply is classified. It fans an org's
 //      configured targets (Slack incoming webhook / generic outbound webhook /
 //      teammate email) out with a compact event. No graph runtime needed, so it
 //      ships in parallel with the branch-execution work.
 //
-//   2. INLINE NODES (future) — runInternalNode() is the exported hook the graph
+//   2. INLINE NODES (future): runInternalNode() is the exported hook the graph
 //      runtime will call when the sender reaches a kind:'internal' node mid-
 //      sequence. It reuses the same org targets + fan-out. It is NOT wired into
 //      run-native-sequences yet (that's the separate graph-runtime session); see
 //      the TODO at the bottom of this file.
 //
-// Delivery is best-effort by design (owner call — "simpler over defensive"): a
+// Delivery is best-effort by design (owner call, "simpler over defensive"): a
 // lost Slack ping on a rare Slack/webhook outage is cheap, and the reliable
 // hot-lead *email* still fires via the client notification path. Every channel
 // is wrapped + logged; a failure in one never blocks the others or the caller.
@@ -45,7 +45,7 @@ const OUTBOUND_TIMEOUT_MS = 6000;
 // ── Event shape ───────────────────────────────────────────────────────────
 
 /**
- * A normalized automation event — the single payload every channel renders
+ * A normalized automation event: the single payload every channel renders
  * from. Represents either a classified reply (kind: "reply", live path) or an
  * inline graph node the sender reached (kind: "internal_node", future path).
  */
@@ -121,8 +121,8 @@ const CLASS_LABEL: Partial<Record<ReplyClass, string>> = {
   meeting_booked: "Meeting booked",
   qualifying_question: "Qualifying question",
   referral_forward: "Referral / forward",
-  objection_price: "Objection — price",
-  objection_timing: "Objection — timing",
+  objection_price: "Objection, price",
+  objection_timing: "Objection, timing",
   not_interested: "Not interested",
   wrong_person_no_referral: "Wrong person",
   ooo: "Out of office",
@@ -322,7 +322,7 @@ async function postJson(
 
 /**
  * Fan an event out to every configured channel, best-effort. Each channel is
- * independent — one failing never blocks another. Never throws.
+ * independent: one failing never blocks another. Never throws.
  */
 export async function fanOutAutomation(
   settings: AutomationSettings,
@@ -403,7 +403,7 @@ export async function fanOutAutomation(
  * Event-triggered delivery for a classified inbound reply. Called (best-effort)
  * from runReplyPipeline after the classification is written. Loads the org's
  * automation settings, gates on enabled + notify_on, and fans out. Never throws
- * — returns a structured result the pipeline logs.
+ * returns a structured result the pipeline logs.
  *
  * Independent of the per-client hot-lead email path: an org's Slack/webhook ping
  * fires even when the client has no notification_email configured.
@@ -436,7 +436,7 @@ export async function deliverReplyAutomations(args: {
     const event = buildReplyEvent({ reply, client, finalClass, triage });
     return await fanOutAutomation(settings, event);
   } catch (err) {
-    // Fully swallow — a broken automation path must never break the pipeline.
+    // Fully swallow: a broken automation path must never break the pipeline.
     console.error("[internal-automations] deliverReplyAutomations failed:", err);
     return {
       delivered: false,
@@ -452,7 +452,7 @@ export async function deliverReplyAutomations(args: {
 // graph runtime should call when the native sender reaches a kind:'internal'
 // node mid-sequence (src/lib/flow/graph.ts → InternalNode). It is intentionally
 // NOT wired into run-native-sequences/route.ts or the campaign_enrollments model
-// yet — that belongs to the separate graph-runtime session. When that lands:
+// yet: that belongs to the separate graph-runtime session. When that lands:
 //
 //   1. In the sender's per-enrollment step loop, when the next node is
 //      kind:'internal', call runInternalNode(node, { admin, organizationId,
@@ -464,7 +464,7 @@ export async function deliverReplyAutomations(args: {
 // The 'notify' and 'webhook' actions are implemented here already (they reuse
 // the org's automation targets), so wiring is just the call site above. The
 // 'task' action is a stub: creating a VA task belongs to the LinkedIn VA-task
-// inbox work (migration 00088) — delegate to that once it exists.
+// inbox work (migration 00088): delegate to that once it exists.
 
 export interface InternalNodeContext {
   admin: Admin;
@@ -492,7 +492,7 @@ export async function runInternalNode(
     if (node.action === "task") {
       console.warn(
         `[internal-automations] runInternalNode: 'task' action not implemented yet ` +
-          `(node ${node.id} "${node.label}") — pending the VA-task inbox (migration 00088).`,
+          `(node ${node.id} "${node.label}"): pending the VA-task inbox (migration 00088).`,
       );
       return { delivered: false, results: [], skippedReason: "task_not_implemented" };
     }

@@ -127,7 +127,7 @@ export function ReplyRoutingSection({
       {open && (
         <CardContent className="space-y-6">
           <p className="text-xs text-muted-foreground">
-            These fields drive the AI reply-routing pipeline — persona used for hot-lead
+            These fields drive the AI reply-routing pipeline: persona used for hot-lead
             dossiers, where hot-lead notifications land, and which classifier outputs
             trigger a notification. Owner-only.
           </p>
@@ -165,7 +165,7 @@ export function ReplyRoutingSection({
             <Label>Teammate CC emails</Label>
             {form.notification_cc_emails.length === 0 ? (
               <p className="text-xs text-muted-foreground italic">
-                None — client has not added any teammate CCs yet.
+                None: client has not added any teammate CCs yet.
               </p>
             ) : (
               <div className="flex flex-wrap gap-1.5">
@@ -186,7 +186,7 @@ export function ReplyRoutingSection({
 
           <div className="space-y-3">
             <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Persona (Path 1 — real person on alias domain)
+              Persona (Path 1, real person on alias domain)
             </div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">

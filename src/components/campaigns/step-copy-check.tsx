@@ -1,7 +1,7 @@
 "use client";
 
 // Shared per-step copy feedback that sits directly under a step's body textarea
-// in the campaign builders. Purely advisory — it never blocks saving or sending.
+// in the campaign builders. Purely advisory: it never blocks saving or sending.
 //
 // Shows, when there's anything to say:
 //   1. Spintax variant counts.
@@ -158,7 +158,7 @@ export function StepCopyCheck({
   // ── Live preview ──────────────────────────────────────────────────────────
   // A toggle-open panel that renders the outgoing email with spintax resolved to
   // one variant and {{tokens}} filled from a REAL contact (fetched once, cached)
-  // — or from sample values when no real contact exists. Regenerate re-rolls the
+  // or from sample values when no real contact exists. Regenerate re-rolls the
   // spintax variant against the same token map. Preview only; never the send path.
   const [previewOpen, setPreviewOpen] = useState(false);
   const [ctx, setCtx] = useState<PreviewContext | null>(null);
@@ -180,7 +180,7 @@ export function StepCopyCheck({
         setCtx((await res.json()) as PreviewContext);
       }
     } catch {
-      // Silent — fall back to sample mode below.
+      // Silent: fall back to sample mode below.
     } finally {
       setCtxLoading(false);
       setCtxFetched(true);
@@ -232,7 +232,7 @@ export function StepCopyCheck({
       for (let m = n + 1; m <= n + 64; m++) {
         if (at(m) !== current) return m;
       }
-      return n + 1; // only one distinct variant — nothing more to show
+      return n + 1; // only one distinct variant: nothing more to show
     });
   }
 
@@ -289,7 +289,7 @@ export function StepCopyCheck({
     if (!gen.result || !onApplySpintax) return;
     onApplySpintax({ subject: gen.result.subject, body: gen.result.body });
     setGenOpen(false);
-    toast.success("Spintax applied — remember to save");
+    toast.success("Spintax applied, remember to save");
   }
 
   const canPreview = dBody.trim().length > 0;
@@ -387,8 +387,8 @@ export function StepCopyCheck({
               <div className="mb-1.5 flex items-center justify-between gap-2">
                 <span className="text-[10px] font-medium text-muted-foreground">
                   {isSample
-                    ? "Preview — sample data (no contacts loaded yet)"
-                    : `Preview — as ${ctx?.contactLabel ?? "your contact"} will receive it`}
+                    ? "Preview: sample data (no contacts loaded yet)"
+                    : `Preview, as ${ctx?.contactLabel ?? "your contact"} will receive it`}
                 </span>
                 {analysis.anySpin && (
                   <Button
@@ -423,7 +423,7 @@ export function StepCopyCheck({
                       </strong>
                     </span>
                   ))}{" "}
-                  — map a column with a value, or add a default like{" "}
+                 : map a column with a value, or add a default like{" "}
                   <code>{"{{" + preview.unresolved[0].token + "|…}}"}</code>.
                 </p>
               )}

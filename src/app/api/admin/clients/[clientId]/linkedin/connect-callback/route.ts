@@ -1,11 +1,11 @@
-// GET /api/admin/clients/[clientId]/linkedin/connect-callback —
+// GET /api/admin/clients/[clientId]/linkedin/connect-callback,
 // browser-facing landing page Unipile redirects to after the operator
 // finishes hosted auth. Reads ?account_id=, persists it to the client
 // row, and redirects back to the client detail page.
 //
 // Security: server-side session check + the user's organization_id
 // must match the client's. The clientId is encoded in the URL path,
-// so no HMAC is needed for this v0 — re-verifying ownership is enough.
+// so no HMAC is needed for this v0: re-verifying ownership is enough.
 //
 // Errors redirect (don't return JSON) since this is a browser-facing
 // GET; surfacing a JSON blob would just show {} to the operator.

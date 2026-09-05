@@ -10,8 +10,8 @@ import { importLinkedInProspects, type ImportSearchRow } from "@/lib/apify/impor
 //
 // The manual Prospecting → Contacts handoff. Saves the chosen sourced people
 // into contacts (deduped by lower(linkedin_url)/lower(email)) via the shared
-// importLinkedInProspects helper — the same helper the auto-import path
-// (run-linkedin-searches) uses — then auto-enqueues enrichment. When campaign_id
+// importLinkedInProspects helper: the same helper the auto-import path
+// (run-linkedin-searches) uses: then auto-enqueues enrichment. When campaign_id
 // is given, newly-inserted contacts are assigned to that campaign.
 
 export const maxDuration = 30;
@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
   }
 
   // If a campaign is targeted, confirm it belongs to the org and resolve its
-  // client — a campaign-attributed import is that client's recipient list row,
+  // client: a campaign-attributed import is that client's recipient list row,
   // so it must carry the client's id to show under Contacts → Client.
   let campaignClientId: string | null = null;
   if (campaignId) {

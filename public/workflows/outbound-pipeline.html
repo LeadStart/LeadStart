@@ -369,7 +369,7 @@
   <div class="header-inner">
     <div class="brand"><span class="brand-dot">LS</span> LeadStart · Prospecting &amp; Enrichment</div>
     <h1>Enrichment Flow Map</h1>
-    <p class="sub">Every step from a prospecting search to a verified, sendable email — who runs it (human, cron, or paid service), what triggers the next step, and what each piece costs. Numbers are pulled from the live pricing code and measured runs as of Aug 25, 2026.</p>
+    <p class="sub">Every step from a prospecting search to a verified, sendable email: who runs it (human, cron, or paid service), what triggers the next step, and what each piece costs. Numbers are pulled from the live pricing code and measured runs as of Aug 25, 2026.</p>
     <div class="header-meta">
       <span>master @ 1580bbd</span>
       <span>waterfall default: pattern_mv</span>
@@ -460,7 +460,7 @@
         <rect class="obox" x="1020" y="76" width="52" height="44" rx="10" style="stroke:var(--good)"></rect>
         <text class="otext" x="1046" y="102" text-anchor="middle">Send</text>
       </svg>
-      <figcaption>Both prospecting doors converge on Contacts. Only contacts with LinkedIn URLs enter the Apify run; Google&nbsp;Maps leads get their emails from the decision-maker AI layers instead. The waterfall phase (violet) is the routed second-pass email finder detailed below. After the send, contacts without a usable email park LinkedIn-ready (Unipile, gated), and inbound replies from any channel run the shared classifier — both drawn out at the end of the pipeline section.</figcaption>
+      <figcaption>Both prospecting doors converge on Contacts. Only contacts with LinkedIn URLs enter the Apify run; Google&nbsp;Maps leads get their emails from the decision-maker AI layers instead. The waterfall phase (violet) is the routed second-pass email finder detailed below. After the send, contacts without a usable email park LinkedIn-ready (Unipile, gated), and inbound replies from any channel run the shared classifier: both drawn out at the end of the pipeline section.</figcaption>
     </figure>
   </section>
 
@@ -546,8 +546,8 @@
         <span class="who cron">SYSTEM · importLinkedInProspects</span>
         <span class="who admin">or manual “Import to Contacts”</span>
       </div>
-      <h3>Contacts (CRM) — the convergence point</h3>
-      <p>LinkedIn results auto-import when the search completes (kill-switch <span class="mono" style="font-size:.78rem">auto_run_after_search</span>, default <b>ON</b>). Import dedupes by <span class="mono" style="font-size:.78rem">lower(linkedin_url)</span> and <span class="mono" style="font-size:.78rem">lower(email)</span> against the whole org, and stamps each new contact with the search’s add-on choices (<span class="mono" style="font-size:.78rem">activity / verify</span>) plus a <span class="mono" style="font-size:.78rem">skip_activity</span> flag when the search already filtered on “recently posted.” Free — no external calls.</p>
+      <h3>Contacts (CRM): the convergence point</h3>
+      <p>LinkedIn results auto-import when the search completes (kill-switch <span class="mono" style="font-size:.78rem">auto_run_after_search</span>, default <b>ON</b>). Import dedupes by <span class="mono" style="font-size:.78rem">lower(linkedin_url)</span> and <span class="mono" style="font-size:.78rem">lower(email)</span> against the whole org, and stamps each new contact with the search’s add-on choices (<span class="mono" style="font-size:.78rem">activity / verify</span>) plus a <span class="mono" style="font-size:.78rem">skip_activity</span> flag when the search already filtered on “recently posted.” Free, no external calls.</p>
       <div class="chips"><span class="chip free">$0 · dedupe + stamp only</span></div>
     </div>
   </section>
@@ -561,7 +561,7 @@
     <div class="flow">
       <div class="node by-cron">
         <div class="node-head"><span class="who cron">SYSTEM · enqueueEnrichment</span></div>
-        <h3>Enqueue — three ways in</h3>
+        <h3>Enqueue: three ways in</h3>
         <p><b>1.</b> A finished LinkedIn search auto-imports and enqueues (default). <b>2.</b> An admin clicks Import/Enrich manually. <b>3.</b> The drain cron re-enqueues queued contacts. Eligibility per contact: <b>profiles</b> if it has no email but a parseable LinkedIn profile URL · <b>domains</b> if it has no company domain but a company URL · <b>activity</b> if it has a profile URL and opted in.</p>
       </div>
       <div class="conn"><span class="stem"></span><span class="lbl hot">is another run active for this org?</span><span class="stem"></span><span class="arrow"></span></div>
@@ -569,7 +569,7 @@
         <div class="node by-cron">
           <div class="node-head"><span class="who cron">org is free</span></div>
           <h3>Run starts now</h3>
-          <p>Creates the <span class="mono" style="font-size:.78rem">enrichment_runs</span> row and snapshots the org’s waterfall settings onto it — an in-flight run <b>never re-reads live settings</b>. Add-on phases switch on if any imported contact asked for them.</p>
+          <p>Creates the <span class="mono" style="font-size:.78rem">enrichment_runs</span> row and snapshots the org’s waterfall settings onto it, an in-flight run <b>never re-reads live settings</b>. Add-on phases switch on if any imported contact asked for them.</p>
           <div class="chips"><span class="chip free">$0 to enqueue</span></div>
         </div>
         <div class="node by-cron">
@@ -607,7 +607,7 @@
           <span class="sched">phase 2 · domains</span>
         </div>
         <h3><span class="stepno">P2</span>Company domain + size</h3>
-        <p>For contacts missing a company domain: pulls the company record. Beyond the domain, the same paid call now also captures the company phone, HQ location, and <b>employee count — the input that steers the waterfall routing below</b>.</p>
+        <p>For contacts missing a company domain: pulls the company record. Beyond the domain, the same paid call now also captures the company phone, HQ location, and <b>employee count, the input that steers the waterfall routing below</b>.</p>
         <div class="writes"><b>writes →</b> <span class="mono">company_domain</span> · <span class="mono">contacts.phone</span> (fill-only) · <span class="mono">employee_count</span> on the run item</div>
         <div class="chips"><span class="chip cost">≈$0.004 /company</span><span class="chip free">phone + size + HQ: no extra</span></div>
       </div>
@@ -619,7 +619,7 @@
           <span class="sched">phase 3 · waterfall</span>
         </div>
         <h3><span class="stepno">P3</span>Second-pass email waterfall</h3>
-        <p>The org-configurable centerpiece — see the routing map in the next section. The default method (pattern_mv) typically spends $0.004–0.011 per contact, worst-casing at ~$0.022 on the 10K MV bundle.</p>
+        <p>The org-configurable centerpiece: see the routing map in the next section. The default method (pattern_mv) typically spends $0.004–0.011 per contact, worst-casing at ~$0.022 on the 10K MV bundle.</p>
       </div>
       <div class="conn"><span class="stem"></span><span class="arrow"></span></div>
 
@@ -630,7 +630,7 @@
           <span class="chip opt">opt-in add-on</span>
         </div>
         <h3><span class="stepno">P4</span>LinkedIn activity score</h3>
-        <p>Scores posting recency (~2.5 posts fetched per person). <b>Auto-skipped</b> when the search already filtered on “recently posted” — no paying twice for the same signal.</p>
+        <p>Scores posting recency (~2.5 posts fetched per person). <b>Auto-skipped</b> when the search already filtered on “recently posted”: no paying twice for the same signal.</p>
         <div class="chips"><span class="chip cost">≈$0.005 /person</span><span class="chip">$0.002 /post</span></div>
       </div>
       <div class="conn"><span class="stem"></span><span class="arrow"></span></div>
@@ -665,7 +665,7 @@
             <span class="sched">every 5 min · live</span>
           </div>
           <h3>Verified email → Gmail sequence</h3>
-          <p>Verified (and risky-but-sending) people run the native Gmail sequence on the <b>per-mailbox warmup ramp</b> — daily volume ramps up gradually per mailbox instead of blasting on day one.</p>
+          <p>Verified (and risky-but-sending) people run the native Gmail sequence on the <b>per-mailbox warmup ramp</b>: daily volume ramps up gradually per mailbox instead of blasting on day one.</p>
           <div class="chips"><span class="chip free">native Gmail API · no per-send vendor fee</span></div>
         </div>
         <div class="node by-ext">
@@ -714,8 +714,8 @@
       <div class="grid3">
         <div class="branch default">
           <h4><span class="route-tag default">default · direct</span> pattern_mv</h4>
-          <p><b>Runs inline — no Apify at all.</b> Generates up to 6 permutations (<span class="mono" style="font-size:.72rem">first.last@ → first@ → flast@ → f.last@ → last@ → firstlast@</span>) and verifies each through Million Verifier; first <span class="mono" style="font-size:.72rem">ok</span> wins and writes the email.</p>
-          <div class="mini"><b>Batching:</b> ≤25 items/tick, 5 concurrent, 40s deadline. <b>Catch-all</b> guesses write only if the org toggle is on (off by default). MV only charges determinate verdicts — catch-all and unknown are free.</div>
+          <p><b>Runs inline: no Apify at all.</b> Generates up to 6 permutations (<span class="mono" style="font-size:.72rem">first.last@ → first@ → flast@ → f.last@ → last@ → firstlast@</span>) and verifies each through Million Verifier; first <span class="mono" style="font-size:.72rem">ok</span> wins and writes the email.</p>
+          <div class="mini"><b>Batching:</b> ≤25 items/tick, 5 concurrent, 40s deadline. <b>Catch-all</b> guesses write only if the org toggle is on (off by default). MV only charges determinate verdicts, catch-all and unknown are free.</div>
           <div class="chips">
             <span class="chip cost">≤$0.022 /contact worst case</span>
             <span class="chip free">typ. 1–3 credits ≈ $0.004–0.011</span>
@@ -731,12 +731,12 @@
             <span class="chip cost">≈$0.003 /domain</span>
             <span class="chip free">measured $0.0015–0.0029</span>
           </div>
-          <div class="mini" style="border-left:3px solid var(--indigo)"><b>scrape_plus_pattern:</b> a scrape miss flips the item to <b>pattern_mv</b> and re-queues it — two-stage, cheapest-second.</div>
+          <div class="mini" style="border-left:3px solid var(--indigo)"><b>scrape_plus_pattern:</b> a scrape miss flips the item to <b>pattern_mv</b> and re-queues it, two-stage, cheapest-second.</div>
         </div>
 
         <div class="branch fallback">
           <h4><span class="route-tag fallback">opt-in · fallback</span> bovi</h4>
-          <p>Hosted community email finder <span class="mono" style="font-size:.72rem">bovi~email-finder-bulk</span> — pays only per <i>found</i> email. Kept as the third-party fallback when neither in-house method fits.</p>
+          <p>Hosted community email finder <span class="mono" style="font-size:.72rem">bovi~email-finder-bulk</span>, pays only per <i>found</i> email. Kept as the third-party fallback when neither in-house method fits.</p>
           <div class="chips">
             <span class="chip cost">≈$0.0049 /found email</span>
             <span class="chip">est. $0.02 /domain budgeted</span>
@@ -757,7 +757,7 @@
   <section>
     <p class="eyebrow">Timeline · what runs when</p>
     <h2>The cadence layer</h2>
-    <p class="lede">Everything advances on Vercel cron ticks — no long-lived workers. A search usually lands in minutes (one actor run); an enrichment run then advances one phase-batch per minute-tick, so a 100-contact run typically completes in the tens of minutes, spending only while a phase is actually running.</p>
+    <p class="lede">Everything advances on Vercel cron ticks: no long-lived workers. A search usually lands in minutes (one actor run); an enrichment run then advances one phase-batch per minute-tick, so a 100-contact run typically completes in the tens of minutes, spending only while a phase is actually running.</p>
 
     <div class="tablewrap">
       <table>
@@ -810,7 +810,7 @@
   <section>
     <p class="eyebrow">Unit economics</p>
     <h2>Cost per piece</h2>
-    <p class="lede">Rates come from <span class="mono" style="font-size:.8rem">live-pricing.ts</span>, which pulls each actor’s current pay-per-event price from Apify (cached ~1h) so estimates never go stale; measured figures come from real runs. Real run cost is always read back from Apify’s <span class="mono" style="font-size:.8rem">usageTotalUsd</span>. Million Verifier is prepaid tiered credits — all MV figures below assume the <b>10K bundle</b> ($37 / 10,000 = $0.0037 per credit; owner call, Aug&nbsp;25).</p>
+    <p class="lede">Rates come from <span class="mono" style="font-size:.8rem">live-pricing.ts</span>, which pulls each actor’s current pay-per-event price from Apify (cached ~1h) so estimates never go stale; measured figures come from real runs. Real run cost is always read back from Apify’s <span class="mono" style="font-size:.8rem">usageTotalUsd</span>. Million Verifier is prepaid tiered credits, all MV figures below assume the <b>10K bundle</b> ($37 / 10,000 = $0.0037 per credit; owner call, Aug&nbsp;25).</p>
 
     <div class="tablewrap">
       <table>
@@ -818,7 +818,7 @@
           <tr><th>Piece</th><th>Billed by</th><th>Unit cost</th><th>Notes</th></tr>
         </thead>
         <tbody>
-          <tr class="group"><td colspan="4">Sourcing — LinkedIn door</td></tr>
+          <tr class="group"><td colspan="4">Sourcing: LinkedIn door</td></tr>
           <tr>
             <td>Search page<span class="sub">harvestapi~linkedin-profile-search</span></td>
             <td><span class="who ext">Apify</span></td>
@@ -835,7 +835,7 @@
             <td>Email search at source</td>
             <td><span class="who ext">Apify</span></td>
             <td class="num">+$0.01 / profile</td>
-            <td>Full+email ≈ $0.014 per result — confirmed by live runs ($0.28/18, $0.33/25)</td>
+            <td>Full+email ≈ $0.014 per result: confirmed by live runs ($0.28/18, $0.33/25)</td>
           </tr>
           <tr>
             <td>Deep search (auto-segmentation)</td>
@@ -844,7 +844,7 @@
             <td>Sub-query sweeps open more profiles than they keep; observed on a real run</td>
           </tr>
 
-          <tr class="group"><td colspan="4">Sourcing — Google Maps door</td></tr>
+          <tr class="group"><td colspan="4">Sourcing: Google Maps door</td></tr>
           <tr>
             <td>Maps result export</td>
             <td><span class="who ext">Scrap.io</span></td>
@@ -855,7 +855,7 @@
             <td>Decision-maker layer 1</td>
             <td><span class="who ext">Anthropic</span></td>
             <td class="num">$1 in / $5 out per M tok</td>
-            <td>Claude Haiku 4.5 website read — typically well under 1¢ per business</td>
+            <td>Claude Haiku 4.5 website read: typically well under 1¢ per business</td>
           </tr>
           <tr>
             <td>Decision-maker layer 2</td>
@@ -875,7 +875,7 @@
             <td>P2 · Company domain<span class="sub">harvestapi~linkedin-company</span></td>
             <td><span class="who ext">Apify</span></td>
             <td class="num">≈$0.004 / company</td>
-            <td>Phone, HQ + employee count captured on the same call — $0 extra</td>
+            <td>Phone, HQ + employee count captured on the same call: $0 extra</td>
           </tr>
           <tr>
             <td>P3 · pattern_mv <span class="sub">default waterfall method</span></td>
@@ -925,7 +925,7 @@
             <td>Apify plan floor</td>
             <td><span class="who ext">Apify</span></td>
             <td class="num">$29–$999 / mo</td>
-            <td>Non-rolling monthly platform plan — the real uncounted cost outside per-run estimates</td>
+            <td>Non-rolling monthly platform plan: the real uncounted cost outside per-run estimates</td>
           </tr>
           <tr>
             <td>Free-tier trap</td>
@@ -938,7 +938,7 @@
     </div>
 
     <p style="color:var(--ink-2); font-size:.85rem; max-width:76ch; margin:14px 0 0">
-      Rule of thumb for a fully-enriched LinkedIn contact on the default routing: <b>≈$0.014 sourced (Full+email)</b> or <b>≈$0.004 sourced (Short)</b>, + <b>$0.01</b> profile email if needed, + <b>$0.004</b> domain, + pattern_mv second pass <b>typ. $0.004–0.011</b> (≤$0.022 worst), + optional <b>$0.005</b> activity and <b>$0.0037</b> verify — roughly <b>3–6¢ per contact all-in</b> before the plan floor, at the 10K MV bundle rate.
+      Rule of thumb for a fully-enriched LinkedIn contact on the default routing: <b>≈$0.014 sourced (Full+email)</b> or <b>≈$0.004 sourced (Short)</b>, + <b>$0.01</b> profile email if needed, + <b>$0.004</b> domain, + pattern_mv second pass <b>typ. $0.004–0.011</b> (≤$0.022 worst), + optional <b>$0.005</b> activity and <b>$0.0037</b> verify, roughly <b>3–6¢ per contact all-in</b> before the plan floor, at the 10K MV bundle rate.
     </p>
   </section>
 
@@ -946,7 +946,7 @@
   <section>
     <p class="eyebrow">Control surfaces</p>
     <h2>Switches, gates, and the one retired actor</h2>
-    <p class="lede">Everything above is steered from Settings → Integrations. Runs snapshot these at start — flipping a switch never changes a run already in flight.</p>
+    <p class="lede">Everything above is steered from Settings → Integrations. Runs snapshot these at start: flipping a switch never changes a run already in flight.</p>
 
     <div class="switches" style="margin-bottom:22px">
       <div class="switch"><span class="defval">default ON</span><span class="mono">auto_run_after_search</span><p>A finished LinkedIn search auto-imports to Contacts and starts enrichment. Off = curate manually with “Import to Contacts.”</p></div>
@@ -954,7 +954,7 @@
       <div class="switch"><span class="defval">50</span><span class="mono">size_threshold</span><p>Employee-count boundary between the small and large routing bands.</p></div>
       <div class="switch"><span class="defval">pattern_mv</span><span class="mono">small / large / unknown_method</span><p>Waterfall method per size band: pattern_mv, site_scrape, scrape_plus_pattern, bovi, or off.</p></div>
       <div class="switch"><span class="defval off">default OFF</span><span class="mono">accept_catch_all_guesses</span><p>Lets pattern_mv write a catch-all guess (confidence 40, flagged risky at send). Off = only deliverable verdicts write.</p></div>
-      <div class="switch"><span class="defval">6</span><span class="mono">scrape_max_pages</span><p>Pages the site scraper crawls per domain — 6 keeps team/leadership pages in reach, where name-matches live.</p></div>
+      <div class="switch"><span class="defval">6</span><span class="mono">scrape_max_pages</span><p>Pages the site scraper crawls per domain: 6 keeps team/leadership pages in reach, where name-matches live.</p></div>
       <div class="switch"><span class="defval off">key-gated</span><span class="mono">Million Verifier key</span><p>No key = pattern_mv items park as “MV key required” and the pre-send gate is disarmed. Key + no credits = fail-closed hold + owner alert.</p></div>
       <div class="switch"><span class="defval off">key-gated</span><span class="mono">Apify key</span><p>Powers sourcing, phases 1–2, site_scrape, bovi, and the live-pricing feed. The spend card in Settings shows real historical charges.</p></div>
     </div>
@@ -962,13 +962,13 @@
     <div class="twocol">
       <div class="callout bad">
         <h4>Retired: vdrmota directory scraper (Aug 24, 2026)</h4>
-        <p>The old default second-pass actor pulled 10 directory leads per company hoping one matched — its single real run charged <b>$3.96 and filled zero fields</b> (≈$1.00/company on the free tier). There was no way to ask it for one person’s missing email.</p>
-        <p>Fully removed — provider, routing, settings. It’s the reason the waterfall is now surgical: pattern + verify by default, our own scraper for small-company sites, bovi as the only third-party fallback. Its historical spend still shows in the Apify spend card (real billing data).</p>
+        <p>The old default second-pass actor pulled 10 directory leads per company hoping one matched: its single real run charged <b>$3.96 and filled zero fields</b> (≈$1.00/company on the free tier). There was no way to ask it for one person’s missing email.</p>
+        <p>Fully removed: provider, routing, settings. It’s the reason the waterfall is now surgical: pattern + verify by default, our own scraper for small-company sites, bovi as the only third-party fallback. Its historical spend still shows in the Apify spend card (real billing data).</p>
       </div>
       <div class="callout">
         <h4>Why routing by company size matters</h4>
-        <p>A 500-person company’s website will never publish the decision-maker’s personal email — scraping it buys a dead <span class="mono" style="font-size:.76rem">info@</span> inbox. So the large band defaults to pattern_mv only.</p>
-        <p>For the small/local ICP the site scrape is genuinely useful — an owner’s email or a real phone number on the contact page — which is why <span class="mono" style="font-size:.76rem">scrape_plus_pattern</span> exists: scrape first, pattern-verify the leftovers, cheapest path second.</p>
+        <p>A 500-person company’s website will never publish the decision-maker’s personal email: scraping it buys a dead <span class="mono" style="font-size:.76rem">info@</span> inbox. So the large band defaults to pattern_mv only.</p>
+        <p>For the small/local ICP the site scrape is genuinely useful (an owner’s email or a real phone number on the contact page) which is why <span class="mono" style="font-size:.76rem">scrape_plus_pattern</span> exists: scrape first, pattern-verify the leftovers, cheapest path second.</p>
       </div>
     </div>
   </section>

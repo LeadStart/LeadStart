@@ -1,4 +1,4 @@
-// GET /api/buyer/usage — the buyer's token consumption history: the money events
+// GET /api/buyer/usage: the buyer's token consumption history: the money events
 // from their ledger (purchases + spends), newest first. Holds/releases are escrow
 // mechanics (the dashboard shows "on hold" separately), so they're excluded here.
 // Service-role, scoped to the buyer's org.

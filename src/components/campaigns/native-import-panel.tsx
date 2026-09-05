@@ -2,7 +2,7 @@
 
 // CSV import panel for NATIVE EMAIL campaigns, mounted on both the client
 // portal and the admin campaign detail page. Every read and write goes
-// through /api/campaigns/[id]/client-import — no direct browser Supabase
+// through /api/campaigns/[id]/client-import: no direct browser Supabase
 // access, so it works for client-role users after the contacts RLS lockdown.
 //
 // Mapping targets are campaign-aware: the standard contact fields PLUS the
@@ -86,7 +86,7 @@ export function NativeImportPanel({ campaignId }: { campaignId: string }) {
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
   const [result, setResult] = useState<ImportResult | null>(null);
-  // Chunked-upload progress (rows sent / total) — drives the progress bar and the
+  // Chunked-upload progress (rows sent / total): drives the progress bar and the
   // "keep this screen open" guard while a large list uploads batch by batch.
   const [importProgress, setImportProgress] = useState<{
     done: number;
@@ -182,7 +182,7 @@ export function NativeImportPanel({ campaignId }: { campaignId: string }) {
   }, [customTokens, columnMapping]);
 
   // Standard tokens the templates use whose backing contact field has no mapped
-  // column — those render BLANK at send time (buildTokenMap falls back to "" for
+  // column: those render BLANK at send time (buildTokenMap falls back to "" for
   // a missing standard field). Fully-defaulted tokens are excluded.
   const unmappedStandard = useMemo(() => {
     if (!bootstrap) return [];
@@ -232,7 +232,7 @@ export function NativeImportPanel({ campaignId }: { campaignId: string }) {
       setGrid(null);
       setFilename(null);
       setParseError(
-        `This file has ${parsed.length - 1} rows — the limit is ${maxRows} per upload. Split the file and upload the parts one at a time.`,
+        `This file has ${parsed.length - 1} rows: the limit is ${maxRows} per upload. Split the file and upload the parts one at a time.`,
       );
       return;
     }
@@ -299,13 +299,13 @@ export function NativeImportPanel({ campaignId }: { campaignId: string }) {
         if (t) activeMapping[h] = t;
       }
       // Chunk the upload so a large list (up to the per-file cap) never exceeds
-      // the serverless request-body limit — each request stays small and the
+      // the serverless request-body limit: each request stays small and the
       // per-row counts accumulate across chunks. The trade-off: this loop runs in
       // the browser, so the tab must stay open for the whole upload (we render a
       // progress bar + a "keep this screen open" note + a beforeunload guard).
       //
       // TODO(background-import): for lists well beyond 10k, replace this with a
-      // true background importer — stash the file/rows server-side and let a
+      // true background importer: stash the file/rows server-side and let a
       // worker cron process them so the user can close the tab. Tracked in the
       // in-app Tasks list ("Build true background CSV importer").
       const CHUNK = 1000;
@@ -337,7 +337,7 @@ export function NativeImportPanel({ campaignId }: { campaignId: string }) {
           const done = agg.inserted + agg.linked;
           setImportError(
             done > 0
-              ? `${data.error ?? `HTTP ${res.status}`} — stopped after adding ${done} contact${done === 1 ? "" : "s"}.`
+              ? `${data.error ?? `HTTP ${res.status}`}: stopped after adding ${done} contact${done === 1 ? "" : "s"}.`
               : data.error ?? `HTTP ${res.status}`,
           );
           if (done > 0) setResult(agg);
@@ -426,7 +426,7 @@ export function NativeImportPanel({ campaignId }: { campaignId: string }) {
             </p>
             <p className="text-xs text-muted-foreground">
               {filename
-                ? `${csvHeaders.length} columns detected — map them below`
+                ? `${csvHeaders.length} columns detected: map them below`
                 : `First row should be column headers (email is required, up to ${maxRows} rows)`}
             </p>
           </div>
@@ -616,7 +616,7 @@ export function NativeImportPanel({ campaignId }: { campaignId: string }) {
                   </span>
                 ))}{" "}
                 but no column is mapped to{" "}
-                {unmappedCustom.length === 1 ? "it" : "them"} — contacts
+                {unmappedCustom.length === 1 ? "it" : "them"}, contacts
                 without a value (and no <code>{"{{token|default}}"}</code>) will
                 be left blank.
               </span>
@@ -637,7 +637,7 @@ export function NativeImportPanel({ campaignId }: { campaignId: string }) {
                     </strong>
                   </span>
                 ))}{" "}
-                — with no column mapped, those spots will be blank for new
+               : with no column mapped, those spots will be blank for new
                 contacts.
               </span>
             </div>
@@ -795,7 +795,7 @@ export function NativeImportPanel({ campaignId }: { campaignId: string }) {
           </div>
           <p className="flex items-start gap-1.5 text-[11px] text-amber-700">
             <AlertCircle size={11} className="mt-0.5 shrink-0" />
-            Keep this screen open until the upload finishes — closing it or
+            Keep this screen open until the upload finishes: closing it or
             navigating away will stop the import partway.
           </p>
         </div>

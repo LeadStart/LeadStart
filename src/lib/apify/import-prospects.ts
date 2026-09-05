@@ -12,7 +12,7 @@ const IMPORT_EMAIL_RE = /^[A-Za-z0-9._%+\-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$/
 // (stamping the search's activity/verify add-on choices onto enrichment_data so
 // enqueueEnrichment can read them back), and bumps the search's saved_count.
 //
-// It does NOT enqueue enrichment — the caller owns that so it can react to the
+// It does NOT enqueue enrichment: the caller owns that so it can react to the
 // EnqueueResult. Already-existing (deduped) contacts are left untouched: like
 // the original manual save, they are not re-assigned to a campaign.
 
@@ -58,7 +58,7 @@ export async function importLinkedInProspects(
   const campaignClientId = opts.campaignClientId ?? null;
 
   // If the search filtered on "active on LinkedIn", the imported people are
-  // known-active — stamp them so the activity add-on (if on) skips the redundant
+  // known-active: stamp them so the activity add-on (if on) skips the redundant
   // pass. The per-search add-on choices ride the same enrichment_data blob.
   const skipActivity = search.query?.levers?.recentlyPostedOnLinkedIn === true;
   const addons = normalizeAddons(search.query?.addons);
@@ -91,7 +91,7 @@ export async function importLinkedInProspects(
 
   // Also dedupe by email (idx_contacts_org_email_unique, on lower(email)). The
   // linkedin_url check alone let a single pre-existing email violate the unique
-  // constraint and fail the WHOLE batch insert — saving nothing.
+  // constraint and fail the WHOLE batch insert: saving nothing.
   const existingEmails = new Set<string>();
   const emailVariants = Array.from(
     new Set(
@@ -138,7 +138,7 @@ export async function importLinkedInProspects(
       email: p.email && IMPORT_EMAIL_RE.test(p.email.trim()) ? p.email.trim().toLowerCase() : null,
       company_name: p.company_name,
       title: p.headline,
-      // The PERSON's LinkedIn profile location (migration 00078) — where they
+      // The PERSON's LinkedIn profile location (migration 00078): where they
       // live/work, not the company's address.
       location: p.location,
       linkedin_url: p.linkedin_url,
@@ -154,7 +154,7 @@ export async function importLinkedInProspects(
       status: "new",
       source: "linkedin-prospecting",
       // Client-bound imports (campaign has a client) are recipient rows, not
-      // agency prospects — they stay off the Prospects kanban, which is
+      // agency prospects: they stay off the Prospects kanban, which is
       // client_id-IS-NULL-only.
       pipeline_stage: campaignClientId ? null : "lead",
       pipeline_sort_order: 0,
@@ -174,12 +174,12 @@ export async function importLinkedInProspects(
       continue;
     }
     // A residual unique-constraint collision (23505) must not sink the whole
-    // batch — retry this chunk row-by-row and skip only the rows that conflict.
+    // batch: retry this chunk row-by-row and skip only the rows that conflict.
     if (error.code === "23505") {
       for (const oneRow of part) {
         const { data: one, error: oneErr } = await admin.from("contacts").insert(oneRow).select("id");
         if (oneErr) {
-          if (oneErr.code === "23505") continue; // already exists — skip
+          if (oneErr.code === "23505") continue; // already exists: skip
           throw oneErr;
         }
         const ids = (one as { id: string }[] | null) ?? [];

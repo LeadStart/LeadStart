@@ -1,4 +1,4 @@
-// POST /api/admin/contacts/push-to-campaign — bulk-assign contacts to a
+// POST /api/admin/contacts/push-to-campaign: bulk-assign contacts to a
 // campaign by setting contacts.campaign_id locally.
 //
 // Owner-only. Body: { contact_ids: string[], campaign_id: string }.

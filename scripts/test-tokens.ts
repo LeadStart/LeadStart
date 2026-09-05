@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Unit tests for src/lib/native/tokens.ts — the shared {{merge_tag}} token
+ * Unit tests for src/lib/native/tokens.ts: the shared {{merge_tag}} token
  * helpers used by BOTH the native sender and the builder preview.
  *
  * Covers:
@@ -12,7 +12,7 @@
  *   4. SAMPLE_TOKENS + sampleFallback produce a fully-filled string with no
  *      leftover {{...}}.
  *
- * No network. No DB. Imports the REAL production module by relative path — tsx
+ * No network. No DB. Imports the REAL production module by relative path: tsx
  * resolves the .ts extension.
  *
  * Usage:
@@ -165,7 +165,7 @@ console.log("\n■ SAMPLE_TOKENS + sampleFallback leave no {{...}} behind");
   const template =
     "Hi {{first_name}}, {{intro_line}}. As {{title}} at {{company}}, " +
     "does {{PropertyAddress}} still need work? Sold {{SoldDate}} in {{city}}. " +
-    "Reach {{listingAgent}} re: {{policy_number}}. — {{YourName}} ({{email}})";
+    "Reach {{listingAgent}} re: {{policy_number}}., {{YourName}} ({{email}})";
 
   const out = applyTokens(template, SAMPLE_TOKENS, sampleFallback);
 

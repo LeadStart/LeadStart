@@ -55,7 +55,7 @@ console.log("emailVariants + isAbTest");
 }
 
 // ── pickVariant: deterministic, sticky, even ─────────────────────────────────
-console.log("pickVariant — deterministic + even split");
+console.log("pickVariant, deterministic + even split");
 {
   const ab = emailNode("Sa", "Ba", "e1");
   ab.variants = [emailVariant("Sb", "Bb", "vb")]; // 2 variants: A, B
@@ -127,14 +127,14 @@ console.log("computeVariantStats");
   eq(node.leaderId, "vc", "leader = C (highest positive rate with ≥1 positive)");
 }
 
-console.log("computeVariantStats — no A/B nodes → empty");
+console.log("computeVariantStats, no A/B nodes → empty");
 {
   const graph: FlowGraph = { version: 1, nodes: [emailNode("S", "B", "e1")] };
   eq(computeVariantStats(graph, [{ variant_id: "e1", to_email: "x@x.com" }], new Map()).length, 0, "no A/B nodes → []");
 }
 
 // ── paused variants: annotation + activeVariants ─────────────────────────────
-console.log("emailVariants — paused annotation + activeVariants");
+console.log("emailVariants, paused annotation + activeVariants");
 {
   const ab = emailNode("Sa", "Ba", "e1");
   ab.variants = [emailVariant("Sb", "Bb", "vb"), emailVariant("Sc", "Bc", "vc")];
@@ -154,7 +154,7 @@ console.log("emailVariants — paused annotation + activeVariants");
 }
 
 // ── pickVariant: excludes paused for new leads, sticky for assigned ──────────
-console.log("pickVariant — excludes paused (new) + sticky (assigned)");
+console.log("pickVariant, excludes paused (new) + sticky (assigned)");
 {
   const ab = emailNode("Sa", "Ba", "e1");
   ab.variants = [emailVariant("Sb", "Bb", "vb")]; // A, B
@@ -173,7 +173,7 @@ console.log("pickVariant — excludes paused (new) + sticky (assigned)");
 }
 
 // ── computeVariantStats: paused reflected + locked winner ────────────────────
-console.log("computeVariantStats — paused variants + locked winner");
+console.log("computeVariantStats, paused variants + locked winner");
 {
   const e1 = emailNode("Subject A", "Body A", "e1");
   e1.variants = [emailVariant("Subject B", "Body B", "vb")];
@@ -192,7 +192,7 @@ console.log("computeVariantStats — paused variants + locked winner");
   eq(node.decided, true, "decided once a survivor stands alone");
 }
 
-console.log("computeVariantStats — mid-test (no pause) → leader but no winner");
+console.log("computeVariantStats, mid-test (no pause) → leader but no winner");
 {
   const e1 = emailNode("Subject A", "Body A", "e1");
   e1.variants = [emailVariant("Subject B", "Body B", "vb")];
@@ -208,7 +208,7 @@ console.log("computeVariantStats — mid-test (no pause) → leader but no winne
   eq(node.leaderId, "e1", "A leads (holds the positive)");
 }
 
-console.log("computeVariantStats — autoPause reflects node config + campaign default");
+console.log("computeVariantStats, autoPause reflects node config + campaign default");
 {
   const on = emailNode("Sa", "Ba", "e1");
   on.variants = [emailVariant("Sb", "Bb", "vb")];

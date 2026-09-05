@@ -50,7 +50,7 @@ export function providerFor(creds: RegistrarCredentials, id: RegistrarId): Regis
   return null;
 }
 
-/** Every configured provider — for "buy where cheaper" availability sweeps. */
+/** Every configured provider: for "buy where cheaper" availability sweeps. */
 export function configuredProviders(creds: RegistrarCredentials): RegistrarProvider[] {
   const out: RegistrarProvider[] = [];
   if (creds.porkbun) out.push(createPorkbunProvider(creds.porkbun));

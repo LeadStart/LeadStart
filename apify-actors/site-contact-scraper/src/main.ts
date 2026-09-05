@@ -1,4 +1,4 @@
-// site-contact-scraper — LeadStart's private Apify actor for the site_scrape
+// site-contact-scraper: LeadStart's private Apify actor for the site_scrape
 // waterfall method. Reads a list of company targets and, per domain, runs the
 // 5-tier anti-bot fetch waterfall over the homepage + discovered contact pages,
 // extracting emails / phones / socials and flagging name-matched personal emails.

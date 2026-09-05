@@ -1,11 +1,11 @@
-// GET /api/campaigns/[id]/candidate-contacts?q=&tag=&limit= — owner/va search
+// GET /api/campaigns/[id]/candidate-contacts?q=&tag=&limit=: owner/va search
 // over a campaign's CLIENT's existing CRM contacts, for pulling them into the
 // campaign (Phase 2 of the contact-list ↔ campaign alignment). Returns each
 // contact's standard fields + custom_fields (so the panel can validate variable
 // coverage against the campaign registry) and whether it's already enrolled.
 //
 // Client-scoped: contacts belong to a client, and a native campaign sends to its
-// own client's contacts — so a campaign with no client assigned has no candidates
+// own client's contacts, so a campaign with no client assigned has no candidates
 // (the panel surfaces "assign a client first").
 
 import { NextRequest, NextResponse } from "next/server";

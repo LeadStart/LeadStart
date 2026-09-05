@@ -1,22 +1,22 @@
 #!/usr/bin/env node
 /**
- * Unit tests for src/lib/spintax/index.ts — the deterministic spintax engine
+ * Unit tests for src/lib/spintax/index.ts: the deterministic spintax engine
  * (Milestone 1 of the spintax/spam-word plan).
  *
  * Covers:
- *   1. Literal-brace rule — {shrug}, {}, {{first_name}} pass through untouched
+ *   1. Literal-brace rule: {shrug}, {}, {{first_name}} pass through untouched
  *      with NO warning.
- *   2. Nesting — {a|{b|c} d} renders and countVariants multiplies/sums.
+ *   2. Nesting: {a|{b|c} d} renders and countVariants multiplies/sums.
  *   3. Warnings: unbalanced_brace and empty_option fire.
- *   4. Determinism — same (template, seedKey) identical across 1000 calls.
- *   5. Distribution — 1000 distinct UUID-like seeds over {a|b} split ~50/50.
- *   6. Re:-coherence — a step-0 subject rendered twice with the same seedKey is
+ *   4. Determinism: same (template, seedKey) identical across 1000 calls.
+ *   5. Distribution: 1000 distinct UUID-like seeds over {a|b} split ~50/50.
+ *   6. Re:-coherence, a step-0 subject rendered twice with the same seedKey is
  *      byte-identical.
  *   7. countVariants respects the cap (explosive template) without hanging.
  *   8. sampleSpintax dedupes.
  *   9. textSegments flags inSpintax correctly and merges top-level literal runs.
  *
- * No network. No DB. Imports the REAL production module by relative path — tsx
+ * No network. No DB. Imports the REAL production module by relative path: tsx
  * resolves the .ts extension.
  *
  * Usage:
@@ -100,7 +100,7 @@ console.log("\n■ warnings fire correctly");
   assert(warnCodes("{a||b}").includes("empty_option"), "{a||b} raises empty_option");
   assert(warnCodes("{a|}").includes("empty_option"), "{a|} (trailing empty) raises empty_option");
   // A merge token inside a spin block is parsed correctly and raises NO warning
-  // (the advisory was removed — the engine handles it fine).
+  // (the advisory was removed, the engine handles it fine).
   assert(renderSpintax("{a|{{tok}}}", "s").length > 0, "{{tok}} inside spintax renders without error");
   // An unbalanced brace never throws and still renders.
   assert(renderSpintax("{a|b", "s") === "{a|b", "unbalanced template renders verbatim (never throws)");
@@ -109,7 +109,7 @@ console.log("\n■ warnings fire correctly");
   for (let i = 0; i < 60; i++) {
     assert(emptyLegal.has(renderSpintax("{a||b}", "e-" + i)), "{a||b} render is a/''/b");
   }
-  // Warnings deduped by code — a template with two unbalanced closers reports once.
+  // Warnings deduped by code: a template with two unbalanced closers reports once.
   assert(warnCodes("a } b } c").filter((c) => c === "unbalanced_brace").length === 1, "duplicate unbalanced warnings deduped");
 }
 
@@ -159,7 +159,7 @@ console.log("\n■ Re:-coherence: step-0 subject renders byte-identically on re-
   // A follow-up "Re:" fallback re-renders step 0's subject with the same seed key.
   const reRender = renderSpintax(subject0, seed);
   assert(original === reRender, `"Re: ${original}" reproduces the step-0 subject byte-for-byte`);
-  // Different seed keys (different contacts) may differ — but each is internally stable.
+  // Different seed keys (different contacts) may differ, but each is internally stable.
   const other = renderSpintax(subject0, "contact-xyz:0:subject");
   assert(renderSpintax(subject0, "contact-xyz:0:subject") === other, "a different contact's subject is also internally stable");
 }
@@ -183,7 +183,7 @@ console.log("\n■ countVariants respects the cap without hanging");
 // ---------- 8. sampleSpintax dedupes ----------
 console.log("\n■ sampleSpintax dedupes");
 {
-  // {a|b} has only 2 distinct outputs — asking for 5 returns at most 2 distinct.
+  // {a|b} has only 2 distinct outputs: asking for 5 returns at most 2 distinct.
   const samples = sampleSpintax("{a|b}", 5, "base");
   const uniq = new Set(samples);
   assert(samples.length === uniq.size, "no duplicate samples returned");

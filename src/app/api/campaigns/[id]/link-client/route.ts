@@ -1,4 +1,4 @@
-// PATCH /api/campaigns/[id]/link-client — owner-only: assign an orphan
+// PATCH /api/campaigns/[id]/link-client: owner-only: assign an orphan
 // campaign (client_id IS NULL) to a LeadStart client.
 //
 // Side effects (in order):
@@ -169,7 +169,7 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
     const pendingIds = unclassifiedIds;
     after(async () => {
       // Already-classified orphans: re-fetch and call sendHotLeadNotification
-      // directly. runReplyPipeline is the wrong tool here — its early-return
+      // directly. runReplyPipeline is the wrong tool here: its early-return
       // on final_class skips the notify step entirely.
       for (const rid of classifiedIds) {
         try {

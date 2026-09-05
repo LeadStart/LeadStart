@@ -79,7 +79,7 @@ import {
 const CONTACTS_PAGE_SIZE = 25;
 
 // Enrich cost estimate (per contact/step). The waterfall estimate depends on the
-// configured method (pattern / scrape / bovi) — see the pricing helpers.
+// configured method (pattern / scrape / bovi): see the pricing helpers.
 const ENRICH_COST_PROFILE = PROFILE_EMAIL_COST_USD;
 const ENRICH_COST_DOMAIN = DOMAIN_COST_USD;
 const ENRICH_COST_ACTIVITY = ACTIVITY_COST_USD;
@@ -193,7 +193,7 @@ function TagsCell({ tags }: { tags: string[] }) {
   );
 }
 
-// Visible statuses — user-selectable in filter + form.
+// Visible statuses: user-selectable in filter + form.
 // Note: "unsubscribed" remains in the DB enum (set by webhooks) but isn't
 // a manually-selectable state in the UI.
 const VISIBLE_STATUSES: ContactStatus[] = [
@@ -211,7 +211,7 @@ function statusLabel(s: ContactStatus) {
 
 // ---- Email verification status: list filter (Million Verifier vocab) ----
 // The per-row badge is rendered inline with verificationBadge() from
-// @/lib/millionverifier/labels — the single source of truth for status
+// @/lib/millionverifier/labels: the single source of truth for status
 // presentation. This filter narrows the list by that same MV status.
 type EmailStatusFilter = "all" | "verified" | "needs_enrichment" | "risky" | "invalid";
 const EMAIL_STATUS_FILTER_OPTIONS: { value: EmailStatusFilter; label: string }[] = [
@@ -302,7 +302,7 @@ export default function ContactsPage() {
   const [emailStatusFilter, setEmailStatusFilter] = useState<EmailStatusFilter>("all");
   const [clientFilter, setClientFilter] = useState<string>("all");
 
-  // Unified dialog state — null = closed, "add" = new, Contact = edit
+  // Unified dialog state: null = closed, "add" = new, Contact = edit
   const [dialogMode, setDialogMode] = useState<"add" | Contact | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
@@ -321,7 +321,7 @@ export default function ContactsPage() {
   const campaignMap = new Map(campaigns.map((c) => [c.id, c.name]));
 
   // Split by owner. LeadStart contacts (client_id IS NULL) are the agency's
-  // own prospects — they're the only ones eligible for the Prospects kanban.
+  // own prospects: they're the only ones eligible for the Prospects kanban.
   // Client contacts belong to a client's campaign recipient list.
   const contacts = allContacts.filter((c) =>
     ownerView === "leadstart" ? c.client_id === null : c.client_id !== null,
@@ -385,7 +385,7 @@ export default function ContactsPage() {
   const [enrichValidateCatchAll, setEnrichValidateCatchAll] = useState(false);
   const [enrichStarting, setEnrichStarting] = useState(false);
   const [enrichError, setEnrichError] = useState<string | null>(null);
-  // Org waterfall config (migration 00075) — fetched when the dialog opens so
+  // Org waterfall config (migration 00075): fetched when the dialog opens so
   // the estimate uses the real per-company lead cap and a config-disabled
   // waterfall shows as such instead of silently not running.
   const [enrichWaterfallCfg, setEnrichWaterfallCfg] = useState<{
@@ -563,7 +563,7 @@ export default function ContactsPage() {
     (c) => !c.first_name && !c.last_name && (c.company_name || c.company_domain),
   ).length;
   // The waterfall crawls per company DOMAIN (unique known domains + contacts that
-  // may still gain one), pulling up to the configured lead cap per domain — each
+  // may still gain one), pulling up to the configured lead cap per domain: each
   // lead billed. This is the honest per-domain math; the old per-contact estimate
   // under-counted ~100× on the free tier.
   const enrichWaterfallDomains = (() => {
@@ -652,7 +652,7 @@ export default function ContactsPage() {
         : 0;
       toast.success(
         `Enrichment started for ${data.total ?? 0} contact${data.total === 1 ? "" : "s"}` +
-          (skippedTotal ? ` — ${skippedTotal} skipped (already enriched or missing data)` : ""),
+          (skippedTotal ? `, ${skippedTotal} skipped (already enriched or missing data)` : ""),
       );
     } catch (err) {
       setEnrichError(err instanceof Error ? err.message : String(err));
@@ -826,7 +826,7 @@ export default function ContactsPage() {
         }
       }
       await refetch();
-      // Prospects kanban reads from a separate SWR cache key — invalidate
+      // Prospects kanban reads from a separate SWR cache key: invalidate
       // it so a contact added/edited with a pipeline stage shows up there
       // without a manual reload. Same pattern as the import-CSV path.
       await swrMutate("admin-contacts-with-pipeline");
@@ -861,7 +861,7 @@ export default function ContactsPage() {
         return;
       }
       await refetch();
-      // Pipeline kanban reads from a separate cache key — invalidate it so a
+      // Pipeline kanban reads from a separate cache key: invalidate it so a
       // deleted prospect doesn't linger on /admin/prospects.
       await swrMutate("admin-contacts-with-pipeline");
       closeDialog();
@@ -889,7 +889,7 @@ export default function ContactsPage() {
         }
       />
 
-      {/* Owner toggle — separates LeadStart's own prospects from client
+      {/* Owner toggle: separates LeadStart's own prospects from client
           campaign recipient lists. Only LeadStart contacts pipe into the
           Prospects kanban (enforced on the Prospects page query too). */}
       <div
@@ -995,7 +995,7 @@ export default function ContactsPage() {
         ) : null}
       </div>
 
-      {/* Bulk action bar — visible whenever any contact is selected */}
+      {/* Bulk action bar: visible whenever any contact is selected */}
       {selectedIds.size > 0 && (
         <div className="flex items-center justify-between rounded-lg border border-[#2E37FE]/30 bg-[#2E37FE]/5 px-4 py-2.5">
           <p className="text-sm font-medium text-[#0f172a]">
@@ -1060,14 +1060,14 @@ export default function ContactsPage() {
         onDismiss={() => setActiveRunId(null)}
       />
 
-      {/* Contacts table — row click opens edit dialog */}
+      {/* Contacts table: row click opens edit dialog */}
       <Card className="border-border/50 shadow-sm">
         <CardContent className="pt-6">
           {sorted.length === 0 ? (
             <p className="text-sm text-muted-foreground">No contacts found.</p>
           ) : (
             <>
-            {/* Mobile: contact cards — tap to edit; keep the select checkbox
+            {/* Mobile: contact cards, tap to edit; keep the select checkbox
                 for bulk actions; no sideways-scrolling table */}
             <div className="space-y-2.5 lg:hidden">
               {pageRows.map((row) => {
@@ -1242,7 +1242,7 @@ export default function ContactsPage() {
                               <Badge
                                 variant="secondary"
                                 className="border-amber-200 bg-amber-50 text-amber-700 text-[10px]"
-                                title="Pattern guess on a catch-all domain — the mailbox can't be individually verified (confidence 40); sends go out flagged risky"
+                                title="Pattern guess on a catch-all domain: the mailbox can't be individually verified (confidence 40); sends go out flagged risky"
                               >
                                 Catch-all
                               </Badge>
@@ -1251,7 +1251,7 @@ export default function ContactsPage() {
                               <Badge
                                 variant="secondary"
                                 className="border-slate-200 bg-slate-50 text-slate-600 text-[10px]"
-                                title="Generic company inbox backfilled from the website scrape — not a personal address"
+                                title="Generic company inbox backfilled from the website scrape: not a personal address"
                               >
                                 Company inbox
                               </Badge>
@@ -1396,7 +1396,7 @@ export default function ContactsPage() {
         </CardContent>
       </Card>
 
-      {/* Unified Contact dialog — Add mode (blank) or Edit mode (pre-filled) */}
+      {/* Unified Contact dialog: Add mode (blank) or Edit mode (pre-filled) */}
       <Dialog open={isDialogOpen} onOpenChange={(v) => { if (!v) closeDialog(); }}>
         <DialogContent className="max-w-lg max-h-[90vh] p-0 gap-0 flex flex-col">
           <DialogHeader className="px-6 pt-6 pb-3 border-b border-border/50 shrink-0">
@@ -1621,7 +1621,7 @@ export default function ContactsPage() {
         onImported={async () => {
           await refetch();
           // Bulk imports with pipeline_stage need to reach the Prospects
-          // kanban too — invalidate its specific cache key.
+          // kanban too: invalidate its specific cache key.
           await swrMutate("admin-contacts-with-pipeline");
         }}
         onEnrichStarted={(runId) => {
@@ -1687,13 +1687,13 @@ export default function ContactsPage() {
                     ? clientMap.get(commonClientId)
                     : "this client"}
                 </span>
-                . Contacts are assigned to the campaign here — then review and
+                . Contacts are assigned to the campaign here: then review and
                 enroll them into its sending sequence from the campaign page.
               </p>
               {unverifiedSelected > 0 && (
                 <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2.5 py-1.5">
                   {unverifiedSelected} selected contact{unverifiedSelected === 1 ? " has" : "s have"} no
-                  verified email — use a LinkedIn campaign for those.
+                  verified email: use a LinkedIn campaign for those.
                 </p>
               )}
               <Select
@@ -1874,7 +1874,7 @@ export default function ContactsPage() {
                   <span className="block text-[11px] text-muted-foreground">
                     no extra cost · on domains that accept every address, keep the best
                     pattern guess (flagged Catch-all, confidence 40) instead of discarding
-                    it — sends go out flagged risky and bounces auto-suppress
+                    it: sends go out flagged risky and bounces auto-suppress
                   </span>
                 </span>
               </label>

@@ -3,10 +3,10 @@
  * Build the compact geo_places seed TSV from the US Census reference files.
  * Reads the county-reference + place-gazetteer files (downloaded to a working
  * dir), strips them to (kind, name, state_code, state_name, fips), drops the
- * Census-Designated-Place noise (FUNCSTAT != 'A' — keep only incorporated
+ * Census-Designated-Place noise (FUNCSTAT != 'A', keep only incorporated
  * municipalities), and writes supabase/seed/geo-places.tsv. States come from the
  * bundled authoritative list. Run once; the TSV is committed as the reproducible
- * seed source (NOT app-bundled — it only feeds seed-geo-places).
+ * seed source (NOT app-bundled, it only feeds seed-geo-places).
  *
  *   npx tsx scripts/build-geo-seed.ts [workingDir]
  */
@@ -59,7 +59,7 @@ for (const s of US_STATES) {
 }
 
 // ── Cities: USPS \t GEOID \t ANSICODE \t NAME \t LSAD \t FUNCSTAT \t ... ──
-// Keep only incorporated municipalities (FUNCSTAT === 'A') — drops the ~13k
+// Keep only incorporated municipalities (FUNCSTAT === 'A'): drops the ~13k
 // Census Designated Places (unincorporated hamlets) that are pure prospecting
 // noise. Strip the trailing LSAD word ("Austin city" → "Austin"; note "Kansas
 // City city" → "Kansas City", because only the final LSAD token is removed).

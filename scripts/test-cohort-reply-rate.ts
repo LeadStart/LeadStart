@@ -33,9 +33,9 @@ console.log("computeCohortReplies");
   ];
   const replies = [
     { lead_email: "A@x.com" }, // case-insensitive, first-touched day1
-    { lead_email: "a@x.com" }, // same contact replied again — must count once
+    { lead_email: "a@x.com" }, // same contact replied again: must count once
     { lead_email: "c@x.com" }, // first-touched day2
-    { lead_email: "ghost@x.com" }, // replied but no first-touch send on record — skip
+    { lead_email: "ghost@x.com" }, // replied but no first-touch send on record: skip
   ];
   const m = computeCohortReplies(sends, replies);
   eq(m.get("2026-08-01"), 1, "day1 cohort = 1 (A, deduped across 2 replies; B never replied)");
@@ -69,7 +69,7 @@ function snap(p: Partial<CampaignSnapshot>): CampaignSnapshot {
   };
 }
 
-console.log("calculateMetrics — per-contact reply rate");
+console.log("calculateMetrics, per-contact reply rate");
 {
   // cohort present: 12 cohort repliers / 200 contacts contacted = 6.00%
   const snaps = [

@@ -1,7 +1,7 @@
 import type { LinkedInProspect } from "@/types/app";
 import { extractProfileId, normalizeDomain, sanitizeCompanyUrl } from "../domain";
 
-// LinkedIn people-search sourcing — the top-of-funnel actor that finds NEW
+// LinkedIn people-search sourcing: the top-of-funnel actor that finds NEW
 // people by ICP filters (as opposed to the enrichment providers, which take
 // people we already have and fill in their email/domain/activity).
 //
@@ -13,7 +13,7 @@ export const PROFILE_SEARCH_ACTOR_ID = "harvestapi~linkedin-profile-search";
 
 // The actor's depth dial. Short = search pages only (cheapest, basic profile);
 // Full = opens each profile; "Full + email" also runs an email search. Cost
-// climbs with depth — we default to Short and let the enrichment waterfall find
+// climbs with depth: we default to Short and let the enrichment waterfall find
 // emails on only the people we keep. Short-mode price pinned on the first run.
 export type ProfileSearchDepth = "short" | "full" | "full_email";
 export const PROFILE_SEARCH_MODE_LABEL: Record<ProfileSearchDepth, string> = {
@@ -22,7 +22,7 @@ export const PROFILE_SEARCH_MODE_LABEL: Record<ProfileSearchDepth, string> = {
   full_email: "Full + email search",
 };
 
-// App-facing ICP levers. Values within a field are OR'd; fields are AND'd —
+// App-facing ICP levers. Values within a field are OR'd; fields are AND'd,
 // the actor's own semantics. Empty/undefined fields are omitted from the input
 // so an empty array never over-constrains the search.
 export interface ProfileSearchLevers {
@@ -102,7 +102,7 @@ export function buildProfileSearchInput(
   }
   if (levers.recentlyChangedJobs) input.recentlyChangedJobs = true;
   if (levers.recentlyPostedOnLinkedIn) input.recentlyPostedOnLinkedIn = true;
-  // Segmentation: takePages applies PER segment, maxItems caps the whole run —
+  // Segmentation: takePages applies PER segment, maxItems caps the whole run,
   // so the actor sweeps country→state→seniority sub-queries until it has
   // maxItems unique profiles, bypassing the per-query wall. "default" levels =
   // country + state + seniority (industry stays off).
@@ -150,7 +150,7 @@ function pickEmail(rec: Rec): string | null {
 }
 
 // Flatten + de-duplicate a dataset (by profile URN id, then by normalized
-// LinkedIn URL). Rows with no LinkedIn identity are dropped — they can't be
+// LinkedIn URL). Rows with no LinkedIn identity are dropped: they can't be
 // dedupe-keyed against contacts and aren't actionable.
 export function parseProfileSearchResults(datasetItems: unknown[]): LinkedInProspect[] {
   const out: LinkedInProspect[] = [];
@@ -174,7 +174,7 @@ export function parseProfileSearchResults(datasetItems: unknown[]): LinkedInPros
       linkedin_url,
       location: pickLocation(raw),
       company_name: pos ? str(pos.companyName) : str(raw.companyName),
-      // Only a real /company/ page — a search-link placeholder becomes null.
+      // Only a real /company/ page: a search-link placeholder becomes null.
       company_linkedin_url: sanitizeCompanyUrl(
         pos ? (str(pos.companyLinkedinUrl) ?? str(pos.companyUrl)) : null,
       ),

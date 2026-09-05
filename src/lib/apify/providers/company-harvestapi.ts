@@ -36,7 +36,7 @@ function companyEmployeeCount(rec: Rec): number | null {
   return null;
 }
 
-// Compact HQ location line (provenance only) — field names vary, so probe a few.
+// Compact HQ location line (provenance only): field names vary, so probe a few.
 function companyHq(rec: Rec): string | null {
   const fromLoc = (loc: unknown): string | null => {
     if (typeof loc === "string") return str(loc);

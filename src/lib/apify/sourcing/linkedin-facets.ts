@@ -1,16 +1,16 @@
 // LinkedIn's controlled taxonomy for the profile-search facets. Unlike keywords
 // and job titles (free text, fuzzy-matched), these are the exact codes the
-// harvestapi/linkedin-profile-search actor expects — so they give precise,
+// harvestapi/linkedin-profile-search actor expects, so they give precise,
 // non-wildcard targeting. Sourced from the actor's input schema (seniority,
 // function, headcount) and LinkedIn's Industry Codes V2 (industries). Every id
-// here is confirmed against those references — none are guessed.
+// here is confirmed against those references: none are guessed.
 
 export interface Facet {
   value: string;
   label: string;
 }
 
-// Company size buckets (companyHeadcount, A–I) — verified against the actor schema.
+// Company size buckets (companyHeadcount, A–I): verified against the actor schema.
 export const HEADCOUNTS: Facet[] = [
   { value: "A", label: "Self-employed" },
   { value: "B", label: "1–10" },
@@ -23,7 +23,7 @@ export const HEADCOUNTS: Facet[] = [
   { value: "I", label: "10,001+" },
 ];
 
-// Seniority (seniorityLevelIds, 100–320) — verified against the actor schema.
+// Seniority (seniorityLevelIds, 100–320): verified against the actor schema.
 export const SENIORITY_LEVELS: Facet[] = [
   { value: "100", label: "In training" },
   { value: "110", label: "Entry level" },
@@ -37,7 +37,7 @@ export const SENIORITY_LEVELS: Facet[] = [
   { value: "320", label: "Owner / Partner" },
 ];
 
-// Job functions (functionIds, 1–26) — verified against the actor schema.
+// Job functions (functionIds, 1–26): verified against the actor schema.
 export const FUNCTIONS: Facet[] = [
   { value: "1", label: "Accounting" },
   { value: "2", label: "Administrative" },
@@ -67,9 +67,9 @@ export const FUNCTIONS: Facet[] = [
   { value: "26", label: "Customer Success and Support" },
 ];
 
-// Industries (industryIds) — a broad B2B set drawn from LinkedIn's Industry
+// Industries (industryIds): a broad B2B set drawn from LinkedIn's Industry
 // Codes V2 (434 total). Every id below is validated against the actor's own
-// industry CSV (HarvestAPI/linkedin-industry-codes-v2) — none guessed. The UI
+// industry CSV (HarvestAPI/linkedin-industry-codes-v2): none guessed. The UI
 // renders these as a searchable multi-select.
 export const INDUSTRIES: Facet[] = [
   { value: "4", label: "Software Development" },

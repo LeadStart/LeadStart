@@ -5,7 +5,7 @@ import { DEFAULT_LAYER2_MODEL } from "@/lib/decision-maker/pricing";
 //
 // Body: { api_key: string }
 //
-// No auth check — the user is testing a key they just typed in their own
+// No auth check: the user is testing a key they just typed in their own
 // settings page. Validates by firing a tiny Sonar chat completion.
 
 export const maxDuration = 15;
@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
         model: DEFAULT_LAYER2_MODEL,
         messages: [{ role: "user", content: "ping" }],
         // Perplexity requires max_tokens >= 16 (a lower value 400s before the key
-        // is even checked). Keep it minimal — this is just a reachability probe.
+        // is even checked). Keep it minimal: this is just a reachability probe.
         max_tokens: 16,
       }),
     });

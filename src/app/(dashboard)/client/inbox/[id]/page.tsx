@@ -37,7 +37,7 @@ const REPLYABLE_CLASSES: ReplyClass[] = [
   "qualifying_question",
 ];
 
-// Brand gradients (inline — custom gradient classes don't reliably generate
+// Brand gradients (inline, custom gradient classes don't reliably generate
 // under Tailwind v4, per project convention).
 const GRAD = "linear-gradient(135deg, #6B72FF 0%, #2E37FE 30%, #1C24B8 65%, #0F1880 100%)";
 const GREEN = "linear-gradient(135deg, #10b981 0%, #059669 100%)";
@@ -85,7 +85,7 @@ export default function ReplyDossierPage() {
   const [outcomeSaved, setOutcomeSaved] = useState(false);
   const [excludeSaving, setExcludeSaving] = useState(false);
 
-  // Portal-reply composer state (open by default — the hot-lead email's
+  // Portal-reply composer state (open by default, the hot-lead email's
   // "Reply" button lands the client here to respond).
   const [composerSubject, setComposerSubject] = useState("");
   const [composerBody, setComposerBody] = useState("");
@@ -241,7 +241,7 @@ export default function ReplyDossierPage() {
   const callLink = telHref(reply.lead_phone_e164);
   const urgency = urgencyColor(reply.received_at);
 
-  // Identity: a known person, or a generic company inbox (no lead_name — e.g.
+  // Identity: a known person, or a generic company inbox (no lead_name, e.g.
   // a Maps info@ lead) where the email itself is the identity.
   const isGeneric = !reply.lead_name?.trim();
   const emailDomain = reply.lead_email.includes("@") ? reply.lead_email.split("@")[1] : "";
@@ -373,7 +373,7 @@ export default function ReplyDossierPage() {
         </CardContent>
       </Card>
 
-      {/* Their reply — chat bubble */}
+      {/* Their reply: chat bubble */}
       <Card className="border-border/50 shadow-sm">
         <CardContent className="px-5 py-4">
           <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-3">
@@ -523,7 +523,7 @@ export default function ReplyDossierPage() {
             )}
           </div>
           <p className="text-xs text-muted-foreground -mt-1">
-            Tell us what happened — it keeps your dashboard and reports accurate.
+            Tell us what happened: it keeps your dashboard and reports accurate.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {OUTCOME_OPTIONS.map((opt) => (

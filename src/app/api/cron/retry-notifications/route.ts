@@ -1,12 +1,12 @@
-// GET /app/api/cron/retry-notifications — scheduled every 10 min via vercel.json.
+// GET /app/api/cron/retry-notifications: scheduled every 10 min via vercel.json.
 //
 // Picks up lead_replies rows where a previous sendHotLeadNotification attempt
 // hit a transient failure (Resend 429 / 5xx / unknown SDK error) and drives
 // them toward either success or permanent-fail-parked. Exponential backoff
-// keyed on notification_retry_count — first retry waits 1 min since last
+// keyed on notification_retry_count: first retry waits 1 min since last
 // attempt, then 2, 4, 8, 16. After 5 retries the row stays `failed` with
 // retry_count below the parked sentinel (PERMANENT_FAIL_RETRY_COUNT = 99 in
-// send-hot-lead), and nothing picks it up again — that's the terminal state.
+// send-hot-lead), and nothing picks it up again: that's the terminal state.
 //
 // Stale-retry guards: we skip rows whose reply has been handled since the
 // original notification attempt (status in sent/resolved/expired/rejected),
@@ -22,7 +22,7 @@ import type { LeadReply, Client } from "@/types/app";
 
 // Force dynamic rendering on every invocation. Without this, a Vercel cron
 // (which hits the same URL with no query params) can receive an edge-cached
-// response from a prior tick, skipping the function body entirely — the DB
+// response from a prior tick, skipping the function body entirely: the DB
 // is never touched but the route returns the old payload. Caught on
 // 2026-05-27 in an earlier cron route;
 // applying the same guard to every cron route preemptively.
@@ -43,7 +43,7 @@ function backoffWaitMs(retryCount: number): number {
   return Math.pow(2, exp) * 60 * 1000;
 }
 
-// Statuses where the reply has moved past "waiting on a notification" —
+// Statuses where the reply has moved past "waiting on a notification",
 // we must not send a retry. Everything else (new, classified) is still in
 // the "hot lead not yet actioned" window.
 const STALE_REPLY_STATUSES = new Set(["sent", "resolved", "expired", "rejected"]);

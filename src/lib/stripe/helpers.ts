@@ -18,7 +18,7 @@ export interface PlanStripeIds {
  *
  * Stripe Prices are immutable (amount / currency / recurring cadence cannot
  * be edited), so the archive-and-replace pattern is required. Existing
- * subscriptions stay on their original price — Stripe default behavior —
+ * subscriptions stay on their original price: Stripe default behavior,
  * until explicitly migrated. The admin UI surfaces this to avoid surprise.
  *
  * In demo mode, returns deterministic fake IDs so the UI can exercise the
@@ -95,7 +95,7 @@ export async function syncPlanToStripe(
         currency: target.currency,
         unit_amount: target.monthly_price_cents,
         recurring: { interval: "month" },
-        nickname: `${target.name} — monthly`,
+        nickname: `${target.name}, monthly`,
         metadata: {
           plan_id: target.id,
           plan_slug: target.slug,
@@ -193,7 +193,7 @@ export async function createCheckoutSessionForQuote({
         currency: quote.currency,
         unit_amount: quote.contact_sourcing_cents,
         product_data: {
-          name: `Contact sourcing — ${client.name}`,
+          name: `Contact sourcing, ${client.name}`,
           description: quote.contacts_count
             ? `${quote.contacts_count.toLocaleString()} verified contacts (one-time).`
             : "One-time contact sourcing.",
@@ -209,14 +209,14 @@ export async function createCheckoutSessionForQuote({
         currency: quote.currency,
         unit_amount: quote.setup_fee_cents,
         product_data: {
-          name: `Setup fee — ${client.name}`,
+          name: `Setup fee, ${client.name}`,
           description: "One-time onboarding and inbox warming.",
         },
       },
       quantity: 1,
     });
   }
-  // Recurring: Lead management (ad-hoc — no stored plan price).
+  // Recurring: Lead management (ad-hoc, no stored plan price).
   lineItems.push({
     price_data: {
       currency: quote.currency,
@@ -247,7 +247,7 @@ export async function createCheckoutSessionForQuote({
   // the first charge lands on exactly the date the client was shown. Legacy
   // quotes with no stored date fall back to the old on-the-fly computation. If
   // the frozen day has already passed (client accepted late, e.g. an open-ended
-  // quote with no expiry), skip the trial and bill now — Stripe rejects a
+  // quote with no expiry), skip the trial and bill now: Stripe rejects a
   // trial_end in the past.
   const launch = quote.launch_date
     ? new Date(quote.launch_date)
@@ -292,10 +292,10 @@ export interface TokenPackCheckoutResult {
  * Create a HOSTED Stripe Checkout session for a one-time token-pack purchase
  * (the self-serve token product). Fully data-driven: the pack's price is ad-hoc
  * `price_data` from token_packs.price_usd, so defining a pack is just entering a
- * price — no pre-created Stripe products. Everything the webhook needs to credit
+ * price: no pre-created Stripe products. Everything the webhook needs to credit
  * the ledger rides in `metadata` (purpose + org + tokens), and the credit is
  * idempotent per Checkout session (see the unique index in migration 00108), so
- * no idempotency key on the session itself — each purchase is its own session.
+ * no idempotency key on the session itself: each purchase is its own session.
  *
  * In demo mode (no STRIPE_SECRET_KEY) returns a demo URL so the flow stays
  * clickable without keys.
@@ -334,7 +334,7 @@ export async function createTokenPackCheckoutSession({
           currency: "usd",
           unit_amount: Math.round(pack.price_usd * 100),
           product_data: {
-            name: `${pack.name} — ${pack.tokens.toLocaleString()} tokens`,
+            name: `${pack.name} · ${pack.tokens.toLocaleString()} tokens`,
             description: "LeadStart contact-sourcing tokens (one-time).",
           },
         },

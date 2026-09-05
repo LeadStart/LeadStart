@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
 
-// Web App Manifest — makes LeadStart installable as a PWA (Android/Chrome +
+// Web App Manifest: makes LeadStart installable as a PWA (Android/Chrome +
 // iOS 16.4+). iOS home-screen icon itself comes from the `apple-icon.png`
 // file-convention + the `appleWebApp` metadata in layout.tsx; this manifest
 // covers the rest of the install surface.
@@ -11,7 +11,7 @@ import type { MetadataRoute } from "next";
 // explicitly. Public assets (icon-192/512.png) are served under /app too.
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "LeadStart — Cold Email Dashboard",
+    name: "LeadStart, Cold Email Dashboard",
     short_name: "LeadStart",
     description:
       "Campaign management and client portal for cold email outreach",

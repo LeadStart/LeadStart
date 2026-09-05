@@ -3,7 +3,7 @@
 // The map (src/components/workflows/enrichment-flow-map.data.ts) hard-declares a
 // few things that can't be a live import: the Apify/provider actor IDs and the
 // activity post-sample count. This test extracts the CURRENT values from the
-// real source and fails if the map hasn't kept up — so "they MUST stay synced"
+// real source and fails if the map hasn't kept up, so "they MUST stay synced"
 // is enforced, not remembered. Costs + default behaviour are auto-synced (the
 // data module imports the live constants), and this test also asserts that
 // wiring is still in place.

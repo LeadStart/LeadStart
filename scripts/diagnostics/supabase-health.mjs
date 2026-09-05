@@ -63,7 +63,7 @@ async function mgmtGet(path, timeout = 30000) {
   }
 }
 
-console.log(`\nSupabase health — project ${ref} — ${new Date().toISOString()}\n`);
+console.log(`\nSupabase health: project ${ref}, ${new Date().toISOString()}\n`);
 
 // 1) Project + plan + region
 const proj = await mgmtGet(`/v1/projects/${ref}`);
@@ -71,7 +71,7 @@ if (proj.j) {
   console.log(`  status:  ${proj.j.status}`);
   console.log(`  region:  ${proj.j.region}`);
 } else if (proj.skipped) {
-  console.log("  (SUPABASE_ACCESS_TOKEN not set — skipping Management API checks)");
+  console.log("  (SUPABASE_ACCESS_TOKEN not set, skipping Management API checks)");
 } else {
   console.log(`  project lookup failed: ${proj.status ?? ""} ${proj.error ?? proj.t ?? ""}`);
 }
@@ -85,7 +85,7 @@ const health = await mgmtGet(`/v1/projects/${ref}/health?services=db,rest,auth,r
 if (Array.isArray(health.j)) {
   console.log("\n  services:");
   for (const s of health.j) {
-    console.log(`    ${s.name.padEnd(9)} ${s.healthy ? "OK" : "UNHEALTHY"}${s.error ? "  — " + s.error : ""}`);
+    console.log(`    ${s.name.padEnd(9)} ${s.healthy ? "OK" : "UNHEALTHY"}${s.error ? " , " + s.error : ""}`);
   }
 }
 

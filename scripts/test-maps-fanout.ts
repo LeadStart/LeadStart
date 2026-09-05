@@ -33,7 +33,7 @@ function ok(cond: boolean, msg: string) {
   eq(Boolean(cond), true, msg);
 }
 
-// Compact MapsPlace factory — only the id matters for dedupe/order tests.
+// Compact MapsPlace factory: only the id matters for dedupe/order tests.
 function place(id: string, name?: string): MapsPlace {
   return {
     google_place_id: id,
@@ -60,7 +60,7 @@ function place(id: string, name?: string): MapsPlace {
   };
 }
 
-console.log("coerceMapsArea — validation + normalization");
+console.log("coerceMapsArea, validation + normalization");
 eq(coerceMapsArea({ level: "city", name: "Dallas", state: "Texas" }), { level: "city", countryCode: "us", name: "Dallas", state: "Texas" }, "city → keeps name+state, country defaults us");
 eq(coerceMapsArea({ level: "county", name: "Dallas County", state: "Texas" }), { level: "county", countryCode: "us", name: "Dallas County", state: "Texas" }, "county → name+state");
 eq(coerceMapsArea({ level: "state", state: "Texas" }), { level: "state", countryCode: "us", state: "Texas" }, "state → state only");
@@ -75,7 +75,7 @@ eq(coerceMapsArea({ level: "metro", name: "DFW" }), null, "unknown level → rej
 eq(coerceMapsArea(null), null, "null → rejected");
 eq(coerceMapsArea("Dallas, TX"), null, "string → rejected");
 
-console.log("coerceMapsAreas — filter + order");
+console.log("coerceMapsAreas, filter + order");
 const areas = coerceMapsAreas([
   { level: "city", name: "Dallas", state: "Texas" },
   { level: "city", name: "Broken" }, // no state → dropped
@@ -88,7 +88,7 @@ eq(coerceMapsAreas(undefined), [], "undefined → []");
 eq(coerceMapsAreas("nope"), [], "non-array → []");
 eq(coerceMapsAreas([]), [], "empty → []");
 
-console.log("perAreaMaxItems — ceil division, clamped");
+console.log("perAreaMaxItems, ceil division, clamped");
 eq(perAreaMaxItems(200, 1), 200, "1 area → full target");
 eq(perAreaMaxItems(200, 2), 100, "2 areas → half");
 eq(perAreaMaxItems(200, 3), 67, "3 areas → ceil(200/3)=67 (union can still reach 200)");
@@ -97,7 +97,7 @@ eq(perAreaMaxItems(1, 5), 1, "target 1 across 5 → at least 1");
 eq(perAreaMaxItems(0, 2), 1, "target 0 → clamped to 1");
 eq(perAreaMaxItems(100, 0), 100, "areaCount 0 → treated as 1");
 
-console.log("mergeMapsPlaces — dedupe union, existing-wins, order-stable");
+console.log("mergeMapsPlaces, dedupe union, existing-wins, order-stable");
 eq(mergeMapsPlaces([place("a"), place("b")], [place("b"), place("c")]).map((p) => p.google_place_id), ["a", "b", "c"], "union dedupes the shared id");
 eq(mergeMapsPlaces([place("a", "First")], [place("a", "Second")])[0].name, "First", "existing wins on collision");
 eq(mergeMapsPlaces([], [place("x")]).map((p) => p.google_place_id), ["x"], "empty existing → incoming");
@@ -108,7 +108,7 @@ eq(mergeMapsPlaces([place("x")], []).map((p) => p.google_place_id), ["x"], "empt
   eq(mergeMapsPlaces([noId], [bad]).length, 1, "drops a place with a blank id");
 }
 
-console.log("ingestAreaResult — accumulate → advance / finalize");
+console.log("ingestAreaResult, accumulate → advance / finalize");
 // Area 1 of 2 → not done, accumulation = this area, cursor advances.
 const s1 = ingestAreaResult({ areaIndex: 0, areaCount: 2, accumulated: [], incoming: [place("a"), place("b")], target: 10 });
 ok(!s1.done, "area 1 of 2 → not done");

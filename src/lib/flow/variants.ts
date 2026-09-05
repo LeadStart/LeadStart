@@ -1,8 +1,8 @@
-// Email A/B (and C/D…) testing — assignment + measurement.
+// Email A/B (and C/D…) testing: assignment + measurement.
 //
 // A flow email node can carry extra `variants`. The sender assigns each
-// enrollment a variant DETERMINISTICALLY from (contactId, nodeId) — a stable,
-// even split with no stored state (sticky across re-sends) — and stamps
+// enrollment a variant DETERMINISTICALLY from (contactId, nodeId): a stable,
+// even split with no stored state (sticky across re-sends), and stamps
 // native_sends.variant_id. Measurement joins those sends to lead_replies for a
 // per-variant reply / positive-reply rate. Pure: no IO.
 
@@ -19,7 +19,7 @@ import {
 import { replyClassGroup } from "./runtime";
 import type { ReplyClass } from "@/types/app";
 
-// FNV-1a 32-bit — a tiny deterministic string hash for an even, stable split.
+// FNV-1a 32-bit: a tiny deterministic string hash for an even, stable split.
 function hashStr(s: string): number {
   let h = 0x811c9dc5;
   for (let i = 0; i < s.length; i++) {
@@ -40,7 +40,7 @@ function hashStr(s: string): number {
  *    active pool, so pausing a variant re-balances new leads across the rest.
  *  - `opts.assignedId` makes it STICKY: when a contact was already assigned a
  *    variant for this node (recorded in native_sends.variant_id) we return that
- *    exact variant — even if it is now paused — so a lead's thread never
+ *    exact variant (even if it is now paused) so a lead's thread never
  *    re-routes mid-flight (e.g. a follow-up's "Re:" subject stays on the variant
  *    they actually received). An unknown/stale assignedId falls through to a
  *    fresh active-pool pick.
@@ -52,7 +52,7 @@ export function pickVariant(
 ): ResolvedVariant {
   if (opts?.assignedId) {
     const already = emailVariants(node).find((v) => v.id === opts.assignedId);
-    if (already) return already; // sticky — honor the recorded assignment, paused or not
+    if (already) return already; // sticky: honor the recorded assignment, paused or not
   }
   const pool = activeVariants(node);
   if (pool.length <= 1) return pool[0];
@@ -79,11 +79,11 @@ export interface AbNodeStats {
   /**
    * Current front-runner among the ACTIVE (non-paused) variants: highest
    * positive-reply rate with ≥1 send and ≥1 positive; else null. Not
-   * necessarily final — see `winnerId` for a locked auto-winner.
+   * necessarily final: see `winnerId` for a locked auto-winner.
    */
   leaderId: string | null;
   /**
-   * The locked auto-winner: set only once the test is DECIDED — exactly one
+   * The locked auto-winner: set only once the test is DECIDED, exactly one
    * active variant remains and ≥1 other was auto-paused. Null while the test is
    * still gathering data or has no pauses yet.
    */
@@ -97,7 +97,7 @@ export interface AbNodeStats {
 /**
  * Per-A/B-node variant tallies, from native_sends.variant_id + lead_replies.
  * `campaignAutoPauseDefault` (campaigns.ab_auto_pause_default) is the fallback a
- * node inherits when it hasn't overridden auto-pause — used only to set each
+ * node inherits when it hasn't overridden auto-pause: used only to set each
  * node's display `autoPause` (the effective on/off shown in the results table).
  */
 export function computeVariantStats(
@@ -149,7 +149,7 @@ export function computeVariantStats(
         paused: v.paused,
       };
     });
-    // Leader = best positive-reply rate among the ACTIVE (non-paused) variants —
+    // Leader = best positive-reply rate among the ACTIVE (non-paused) variants,
     // the front-runner a paused-out test has settled on, or the current best
     // while a test is still running.
     let leaderId: string | null = null;

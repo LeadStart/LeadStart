@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Light e2e for the A/B auto-winner against the LIVE DB — entirely on a DRAFT
+ * Light e2e for the A/B auto-winner against the LIVE DB: entirely on a DRAFT
  * campaign (prod's hourly sync-analytics filters status='active', so it never
  * touches this) with .invalid recipients (zero real sends, zero spend). Proves
  * the DB integration the unit tests can't: real native_sends + lead_replies rows
@@ -50,7 +50,7 @@ function ok(cond: boolean, msg: string, extra?: unknown) {
     console.log(`  ✓ ${msg}`);
   } else {
     fail++;
-    console.log(`  ✗ ${msg}${extra !== undefined ? ` — ${JSON.stringify(extra)}` : ""}`);
+    console.log(`  ✗ ${msg}${extra !== undefined ? `, ${JSON.stringify(extra)}` : ""}`);
   }
 }
 

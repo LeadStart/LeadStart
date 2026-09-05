@@ -3,7 +3,7 @@
 // classification / client-email path in src/lib/replies/pipeline.ts.
 //
 // Config: VAPID keys via env (NEXT_PUBLIC_VAPID_PUBLIC_KEY + VAPID_PRIVATE_KEY
-// + optional VAPID_SUBJECT). If they're unset, every send silently no-ops —
+// + optional VAPID_SUBJECT). If they're unset, every send silently no-ops,
 // the feature is off until the keys land, exactly like the Resend path.
 
 import webpush from "web-push";
@@ -107,7 +107,7 @@ export async function sendHotLeadPush(args: {
         } catch (err: unknown) {
           const statusCode = (err as { statusCode?: number })?.statusCode;
           if (statusCode === 404 || statusCode === 410) {
-            // Endpoint is gone — prune so we stop trying.
+            // Endpoint is gone: prune so we stop trying.
             await args.admin
               .from("push_subscriptions")
               .delete()

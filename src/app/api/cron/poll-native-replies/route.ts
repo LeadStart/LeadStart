@@ -12,7 +12,7 @@
 // Matching is by Gmail threadId only: a reply to our email carries the same
 // threadId as the original send, so we look up native_sends by
 // (mailbox_id, gmail_thread_id). Anything without a thread match is
-// non-campaign mail and is dropped silently — the poller never ingests
+// non-campaign mail and is dropped silently: the poller never ingests
 // arbitrary inbox mail.
 //
 // Not gated by the send window: replies and bounces arrive at any hour.
@@ -80,7 +80,7 @@ export async function GET(request: NextRequest) {
     .from("native_mailboxes")
     .select("*")
     // Poll active + paused (a paused inbox still receives replies/bounces);
-    // skip 'error' — its delegation is broken, so reads would just fail.
+    // skip 'error': its delegation is broken, so reads would just fail.
     .in("status", ["active", "paused"])
     .order("last_polled_at", { ascending: true, nullsFirst: true })
     .limit(MAILBOXES_PER_TICK);
@@ -100,7 +100,7 @@ export async function GET(request: NextRequest) {
   let processed = 0;
   let fetched = 0;
   const summary = { replies: 0, bounces: 0, softBounces: 0, dropped: 0, duplicates: 0, errors: 0, truncated: 0 };
-  // Domains that took a HARD bounce this tick — evaluated once each, after the
+  // Domains that took a HARD bounce this tick: evaluated once each, after the
   // loop, by the bounce circuit breaker (fast burn-prevention: a burst of hard
   // bounces tires the domain within a minute, ahead of the hourly health rollup).
   const bouncedDomains = new Set<string>();
@@ -207,7 +207,7 @@ export async function GET(request: NextRequest) {
           if (isBounce(parsed)) {
             // Only permanent (hard) bounces suppress. A soft bounce is a
             // transient failure Gmail retries on its own; suppressing on it
-            // would wrongly kill a reachable lead. So we don't suppress — but we
+            // would wrongly kill a reachable lead. So we don't suppress, but we
             // DO stamp the send row so inbox-health can surface a rising
             // soft-bounce rate (an early throttling/greylisting signal). A
             // persistent failure still arrives later as a hard DSN.
@@ -299,7 +299,7 @@ export async function GET(request: NextRequest) {
 
           // ---- Reply branch ----
           if (!sendRow) {
-            // Not a reply to any of our campaign sends (spam-foldered or not) — ignore.
+            // Not a reply to any of our campaign sends (spam-foldered or not): ignore.
             summary.dropped++;
             continue;
           }
@@ -313,7 +313,7 @@ export async function GET(request: NextRequest) {
             continue;
           }
 
-          // Stop-on-reply — but never on an auto-reply (OOO), which would
+          // Stop-on-reply, but never on an auto-reply (OOO), which would
           // wrongly halt the sequence. Human reply → halt + mark replied.
           if (!isAutoSubmitted(parsed)) {
             if (sendRow.enrollment_id) {
@@ -392,7 +392,7 @@ export async function GET(request: NextRequest) {
             if (!replyId) continue;
           }
 
-          // Classify + notify inline (we're in a cron, not a webhook — no
+          // Classify + notify inline (we're in a cron, not a webhook, no
           // after() to defer to; the pipeline is idempotent on final_class).
           try {
             await runReplyPipeline(replyId, admin);
@@ -444,8 +444,8 @@ export async function GET(request: NextRequest) {
 
 // ── Bounce circuit breaker ──────────────────────────────────────────────────
 // A burst of hard bounces means a poisoned list segment is actively torching a
-// domain. This reacts within a minute (poll runs every minute) — well ahead of
-// the hourly health rollup — by tiring the domain: closing it to NEW leads while
+// domain. This reacts within a minute (poll runs every minute): well ahead of
+// the hourly health rollup: by tiring the domain: closing it to NEW leads while
 // its in-flight follow-ups drain. Gated by organizations.domain_lifecycle_enabled
 // (migration 00082): OFF → observe (log only, no write), matching the lifecycle
 // cron. Only warming/active domains can be tripped; the trip is a guarded CAS
@@ -544,7 +544,7 @@ async function evaluateCircuitBreakers(
       result.observed += 1;
       console.warn(
         `[cron/native-replies] circuit breaker WOULD tire ${d.domain} ` +
-          `(${hb24 ?? 0} hard bounces/24h) — domain_lifecycle_enabled is off.`,
+          `(${hb24 ?? 0} hard bounces/24h): domain_lifecycle_enabled is off.`,
       );
       continue;
     }

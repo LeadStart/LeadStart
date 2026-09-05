@@ -1,4 +1,4 @@
-// GET /app/api/cron/advance-domain-provisioning — runs every 10 min (vercel.json).
+// GET /app/api/cron/advance-domain-provisioning: runs every 10 min (vercel.json).
 //
 // Advances every sending domain in 'provisioning' one tick:
 //   - provisioning JSONB set (an owner started the workspace flow) → run the full

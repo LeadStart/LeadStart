@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>LeadStart — UI Performance Audit</title>
+<title>LeadStart: UI Performance Audit</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
@@ -179,7 +179,7 @@
     transform: translateY(-1px);
   }
 
-  /* Optimized: pseudo-element opacity fade — browser rasterizes shadow once */
+  /* Optimized: pseudo-element opacity fade, browser rasterizes shadow once */
   .card-optimized {
     position: relative;
     width: 220px; height: 100px;
@@ -312,7 +312,7 @@
     position: relative;
   }
 
-  /* Current — filter: drop-shadow (double-stacked) */
+  /* Current: filter: drop-shadow (double-stacked) */
   .nav-demo.current .nav-active {
     color: #fff; font-weight: 600;
     filter: drop-shadow(0 0 10px rgba(107,114,255,0.5)) drop-shadow(0 3px 10px rgba(28,36,184,0.35));
@@ -326,7 +326,7 @@
     border-radius: 10px 0 0 10px;
   }
 
-  /* Optimized — box-shadow on the pseudo-element */
+  /* Optimized: box-shadow on the pseudo-element */
   .nav-demo.optimized .nav-active {
     color: #fff; font-weight: 600;
   }
@@ -419,7 +419,7 @@
 <body>
 
 <header>
-  <h1><span>LeadStart</span> — UI Performance Audit</h1>
+  <h1><span>LeadStart</span>: UI Performance Audit</h1>
   <div class="fps-box">
     <span>Live FPS:</span>
     <div class="fps-bar"><div class="fps-bar-fill" id="fpsBar"></div></div>
@@ -442,9 +442,9 @@
 <section id="cards">
   <h2>1. Card hover shadow stack <span class="badge-cost cost-high">Highest impact</span></h2>
   <div class="finding">
-    Every <code>[data-slot="card"]</code> has a 3-layer box-shadow and transitions <strong>the entire shadow stack</strong> on hover — that's a repaint of all three shadows each frame of the 200ms transition. Dashboards render 10-30+ cards; hovering through them forces repaint cascades.
+    Every <code>[data-slot="card"]</code> has a 3-layer box-shadow and transitions <strong>the entire shadow stack</strong> on hover: that's a repaint of all three shadows each frame of the 200ms transition. Dashboards render 10-30+ cards; hovering through them forces repaint cascades.
     <br><br>
-    <strong>Fix:</strong> paint the hover shadow on a <code>::after</code> pseudo-element and animate <code>opacity</code>. Browser rasterizes the shadow once, then composites — GPU-only, no repaint.
+    <strong>Fix:</strong> paint the hover shadow on a <code>::after</code> pseudo-element and animate <code>opacity</code>. Browser rasterizes the shadow once, then composites, GPU-only, no repaint.
   </div>
   <div class="compare">
     <div class="compare-col current">
@@ -458,7 +458,7 @@
   <span class="val">inset</span> 0 0 0 1px rgba(46,55,254,.18),
   0 4px 14px rgba(46,55,254,.12);
 <span class="key">&:hover</span> {
-  <span class="key">box-shadow</span>: /* 3 new layers — full repaint */
+  <span class="key">box-shadow</span>: /* 3 new layers: full repaint */
 }</div>
     </div>
     <div class="compare-col optimized">
@@ -489,7 +489,7 @@
 <section id="charts">
   <h2>2. Recharts entrance animation on every re-render <span class="badge-cost cost-high">High impact</span></h2>
   <div class="finding">
-    Recharts <code>isAnimationActive</code> defaults to <code>true</code>. Every data change replays the 1.5s entrance animation — and with your SWR prefetch/warm-cache flow, charts can re-animate 2-3× per page load. Not just visually distracting: re-animation forces SVG path interpolation + repaints for the duration.
+    Recharts <code>isAnimationActive</code> defaults to <code>true</code>. Every data change replays the 1.5s entrance animation, and with your SWR prefetch/warm-cache flow, charts can re-animate 2-3× per page load. Not just visually distracting: re-animation forces SVG path interpolation + repaints for the duration.
     <br><br>
     <strong>Fix:</strong> add <code>isAnimationActive={false}</code> to each <code>&lt;Area&gt;</code>, <code>&lt;Line&gt;</code>, <code>&lt;Bar&gt;</code>, <code>&lt;Pie&gt;</code>.
   </div>
@@ -538,13 +538,13 @@
   </div>
   <div class="controls">
     <button class="primary" onclick="replayChart()">Simulate SWR refetch (replay animation)</button>
-    <span style="font-size:12px;color:#64748b;">Click rapidly — watch left chart re-animate every time</span>
+    <span style="font-size:12px;color:#64748b;">Click rapidly, watch left chart re-animate every time</span>
   </div>
 </section>
 
 <!-- ============ SECTION 3: BUTTON GLOW ============ -->
 <section id="buttons">
-  <h2>3. Button glow — multi-layer shadow + hover transition <span class="badge-cost cost-med">Medium impact</span></h2>
+  <h2>3. Button glow: multi-layer shadow + hover transition <span class="badge-cost cost-med">Medium impact</span></h2>
   <div class="finding">
     <code>.btn-blue</code> / <code>.btn-gold</code> stack three shadow layers including a <code>0 0 22px</code> glow, and the whole stack transitions on hover. On rows with many action buttons (contacts, clients, campaigns tables), hover-sweep triggers repaints.
     <br><br>
@@ -588,9 +588,9 @@
 
 <!-- ============ SECTION 4: NAV DROP-SHADOW ============ -->
 <section id="nav">
-  <h2>4. Nav active item uses <code>filter: drop-shadow</code> (2×) <span class="badge-cost cost-low">Low impact — easy win</span></h2>
+  <h2>4. Nav active item uses <code>filter: drop-shadow</code> (2×) <span class="badge-cost cost-low">Low impact, easy win</span></h2>
   <div class="finding">
-    <code>filter: drop-shadow()</code> is the most expensive CSS filter: it rasterizes the element's alpha mask and blurs it each frame. Only one nav item is active at a time, so total cost is low — but <code>box-shadow</code> on the existing <code>::before</code> pseudo-element gives identical visuals for zero filter overhead.
+    <code>filter: drop-shadow()</code> is the most expensive CSS filter: it rasterizes the element's alpha mask and blurs it each frame. Only one nav item is active at a time, so total cost is low, but <code>box-shadow</code> on the existing <code>::before</code> pseudo-element gives identical visuals for zero filter overhead.
   </div>
   <div class="compare">
     <div class="compare-col current">
@@ -662,7 +662,7 @@
 
 <!-- ============ SECTION 6: ResponsiveContainer ============ -->
 <section id="observers">
-  <h2>6. Every chart mounts its own ResizeObserver <span class="badge-cost cost-low">Low impact — architectural</span></h2>
+  <h2>6. Every chart mounts its own ResizeObserver <span class="badge-cost cost-low">Low impact: architectural</span></h2>
   <div class="finding">
     Recharts' <code>&lt;ResponsiveContainer&gt;</code> creates one <code>ResizeObserver</code> per chart. Pages with 4+ charts (client/reports, client/activity) stack observers firing on every layout shift. Not catastrophic, but wasteful.
     <br><br>
@@ -670,7 +670,7 @@
   </div>
   <div class="compare">
     <div class="compare-col current">
-      <h3>◆ Current — one observer per chart</h3>
+      <h3>◆ Current: one observer per chart</h3>
       <div class="demo-area" style="flex-direction:column;align-items:stretch;">
         <div class="observer-demo">
           <div class="observer-chart">📈 Chart 1 <span class="observer-count">+1 observer</span></div>
@@ -682,7 +682,7 @@
       </div>
     </div>
     <div class="compare-col optimized">
-      <h3>◆ Optimized — shared observer</h3>
+      <h3>◆ Optimized: shared observer</h3>
       <div class="demo-area" style="flex-direction:column;align-items:stretch;">
         <div class="observer-demo">
           <div class="observer-chart">📈 Chart 1 <span class="observer-count good">shared</span></div>
@@ -698,9 +698,9 @@
 
 <!-- ============ SECTION 7: GRADIENTS (OK) ============ -->
 <section id="gradients">
-  <h2>7. Gradients — not a concern <span class="badge-cost cost-low">No impact</span></h2>
+  <h2>7. Gradients: not a concern <span class="badge-cost cost-low">No impact</span></h2>
   <div class="finding">
-    Linear and radial gradients are GPU-rasterized once per element and cached. Sidebar gradient, button gradient, card gradient — all essentially free. Don't optimize these.
+    Linear and radial gradients are GPU-rasterized once per element and cached. Sidebar gradient, button gradient, card gradient: all essentially free. Don't optimize these.
   </div>
   <div class="demo-area">
     <div class="gradient-demo">
@@ -786,7 +786,7 @@
     }, 30);
   }
 
-  // CSS hover only fires on actual cursor hover — so we add a .hover-sim class
+  // CSS hover only fires on actual cursor hover, so we add a .hover-sim class
   // and replicate the hover styles on it
   const hoverStyleSheet = document.createElement('style');
   hoverStyleSheet.textContent = `
@@ -820,12 +820,12 @@
     el.style.gridTemplateColumns = 'repeat(2, 1fr)';
     let html = '';
     const half = Math.ceil(n / 2);
-    html += '<div><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#dc2626;margin-bottom:8px;">CURRENT — ' + half + ' cards</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;">';
+    html += '<div><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#dc2626;margin-bottom:8px;">CURRENT, ' + half + ' cards</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;">';
     for (let i = 0; i < half; i++) {
       html += '<div class="card-current" style="width:auto;height:80px;padding:10px;"><div class="card-label">Metric ' + (i+1) + '</div><div class="card-value" style="font-size:16px;">' + Math.floor(Math.random() * 9999) + '</div></div>';
     }
     html += '</div></div>';
-    html += '<div><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#059669;margin-bottom:8px;">OPTIMIZED — ' + half + ' cards</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;">';
+    html += '<div><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#059669;margin-bottom:8px;">OPTIMIZED, ' + half + ' cards</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;">';
     for (let i = 0; i < half; i++) {
       html += '<div class="card-optimized" style="width:auto;height:80px;padding:10px;"><div class="card-label">Metric ' + (i+1) + '</div><div class="card-value" style="font-size:16px;">' + Math.floor(Math.random() * 9999) + '</div></div>';
     }
@@ -853,10 +853,10 @@
     el.style.gridTemplateColumns = 'repeat(2, 1fr)';
     const half = Math.ceil(n / 2);
     let html = '';
-    html += '<div><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#dc2626;margin-bottom:8px;">CURRENT — ' + half + ' buttons</div><div style="display:flex;flex-wrap:wrap;gap:6px;">';
+    html += '<div><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#dc2626;margin-bottom:8px;">CURRENT, ' + half + ' buttons</div><div style="display:flex;flex-wrap:wrap;gap:6px;">';
     for (let i = 0; i < half; i++) html += '<button class="btn-current" style="padding:6px 12px;font-size:12px;">Action ' + (i+1) + '</button>';
     html += '</div></div>';
-    html += '<div><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#059669;margin-bottom:8px;">OPTIMIZED — ' + half + ' buttons</div><div style="display:flex;flex-wrap:wrap;gap:6px;">';
+    html += '<div><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#059669;margin-bottom:8px;">OPTIMIZED, ' + half + ' buttons</div><div style="display:flex;flex-wrap:wrap;gap:6px;">';
     for (let i = 0; i < half; i++) html += '<button class="btn-optimized" style="padding:6px 12px;font-size:12px;">Action ' + (i+1) + '</button>';
     html += '</div></div>';
     el.innerHTML = html;
@@ -890,10 +890,10 @@
     el.style.gridTemplateColumns = 'repeat(2, 1fr)';
     const half = Math.ceil(n / 2);
     let html = '';
-    html += '<div><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#dc2626;margin-bottom:8px;">CURRENT — ' + half + ' avatars</div><div style="display:grid;grid-template-columns:repeat(auto-fill,28px);gap:4px;">';
+    html += '<div><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#dc2626;margin-bottom:8px;">CURRENT, ' + half + ' avatars</div><div style="display:grid;grid-template-columns:repeat(auto-fill,28px);gap:4px;">';
     for (let i = 0; i < half; i++) html += `<div class="avatar avatar-current" style="width:28px;height:28px;font-size:10px;background:${avatarColors[i % avatarColors.length]}">${avatarInitials[i % avatarInitials.length]}</div>`;
     html += '</div></div>';
-    html += '<div><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#059669;margin-bottom:8px;">OPTIMIZED — ' + half + ' avatars</div><div style="display:grid;grid-template-columns:repeat(auto-fill,28px);gap:4px;">';
+    html += '<div><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#059669;margin-bottom:8px;">OPTIMIZED, ' + half + ' avatars</div><div style="display:grid;grid-template-columns:repeat(auto-fill,28px);gap:4px;">';
     for (let i = 0; i < half; i++) html += `<div class="avatar avatar-optimized" style="width:28px;height:28px;font-size:10px;background:${avatarColors[i % avatarColors.length]}">${avatarInitials[i % avatarInitials.length]}</div>`;
     html += '</div></div>';
     el.innerHTML = html;

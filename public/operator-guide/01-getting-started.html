@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Getting Started — LeadStart Operator Guide</title>
+<title>Getting Started: LeadStart Operator Guide</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -236,7 +236,7 @@
         That's the only URL you need to bookmark.
       </p>
       <p>
-        The <code>/app</code> at the end is required — it's the app's base path. If you go to
+        The <code>/app</code> at the end is required: it's the app's base path. If you go to
         the bare domain you'll see a 404. (For local development the URL is
         <code>http://localhost:3000/app/login</code>.)
       </p>
@@ -281,7 +281,7 @@
   <div class="annot">
     <div class="annot-row"><div class="annot-num">1</div><div><strong>The blue gradient logo</strong> is the LeadStart wordmark. If you see it, you're on the right page.</div></div>
     <div class="annot-row"><div class="annot-num">2</div><div><strong>Sign In</strong> button is the brand gradient (indigo &rarr; deep blue). It's the only primary action on this page.</div></div>
-    <div class="annot-row"><div class="annot-num">3</div><div><strong>"Forgot your password?"</strong> sends a Supabase reset email — it works, but only for accounts that exist in Supabase.</div></div>
+    <div class="annot-row"><div class="annot-num">3</div><div><strong>"Forgot your password?"</strong> sends a Supabase reset email: it works, but only for accounts that exist in Supabase.</div></div>
   </div>
 
   <!-- =============== STEP 2 =============== -->
@@ -292,13 +292,13 @@
     <div class="step-body">
       <h3>Use the email + password the owner gave you</h3>
       <p>
-        LeadStart uses Supabase Auth — the same email and password you'd use anywhere.
+        LeadStart uses Supabase Auth: the same email and password you'd use anywhere.
         There is no SSO and no magic link in this version.
       </p>
       <ul>
         <li>Enter email, enter password, click <strong>Sign In</strong>.</li>
-        <li>If your role is <code>owner</code> or <code>va</code>, you'll land on <code>/app/admin</code> — the operator dashboard.</li>
-        <li>If your role is <code>client</code>, you'll land on <code>/app/client</code> — the client portal (a different view; see Step 6 for what each role sees).</li>
+        <li>If your role is <code>owner</code> or <code>va</code>, you'll land on <code>/app/admin</code>: the operator dashboard.</li>
+        <li>If your role is <code>client</code>, you'll land on <code>/app/client</code>: the client portal (a different view; see Step 6 for what each role sees).</li>
       </ul>
     </div>
   </div>
@@ -306,13 +306,13 @@
   <div class="callout warn">
     <div class="callout-title">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-      Watch out — wrong landing page?
+      Watch out: wrong landing page?
     </div>
     <p>If you land on <code>/app/client</code> when you expected to be in the admin view, your role isn't set to <code>owner</code> or <code>va</code> in Supabase. Ask the owner to update your <code>profiles.role</code> column. It's <strong>not</strong> something you can fix from the UI.</p>
   </div>
 
   <!-- =============== STEP 3 =============== -->
-  <h2><span class="num">Step 3</span> Get oriented — the dashboard at a glance</h2>
+  <h2><span class="num">Step 3</span> Get oriented: the dashboard at a glance</h2>
 
   <div class="step">
     <div class="step-num">3</div>
@@ -372,7 +372,7 @@
             </div>
             <div class="panel">
               <div class="panel-head">
-                <div><div class="panel-title">Daily volume — all clients</div><div class="panel-sub">Sent · Opens · Replies</div></div>
+                <div><div class="panel-title">Daily volume: all clients</div><div class="panel-sub">Sent · Opens · Replies</div></div>
                 <div class="panel-sub">Last 30 days</div>
               </div>
               <div class="chart">
@@ -390,13 +390,13 @@
   </div>
 
   <div class="annot">
-    <div class="annot-row"><div class="annot-num">1</div><div><strong>Sidebar (left, dark slate)</strong> — primary navigation. The active item gets an indigo tint and a brighter icon.</div></div>
-    <div class="annot-row"><div class="annot-num">2</div><div><strong>Top bar (white)</strong> — search, notifications bell, and your user menu. Sticky on scroll.</div></div>
-    <div class="annot-row"><div class="annot-num">3</div><div><strong>Page content (center)</strong> — title, optional subtitle, then KPIs / panels / tables. Same shape on every page.</div></div>
+    <div class="annot-row"><div class="annot-num">1</div><div><strong>Sidebar (left, dark slate)</strong>: primary navigation. The active item gets an indigo tint and a brighter icon.</div></div>
+    <div class="annot-row"><div class="annot-num">2</div><div><strong>Top bar (white)</strong>: search, notifications bell, and your user menu. Sticky on scroll.</div></div>
+    <div class="annot-row"><div class="annot-num">3</div><div><strong>Page content (center)</strong>: title, optional subtitle, then KPIs / panels / tables. Same shape on every page.</div></div>
   </div>
 
   <!-- =============== STEP 4 =============== -->
-  <h2><span class="num">Step 4</span> The sidebar — what each item is for</h2>
+  <h2><span class="num">Step 4</span> The sidebar: what each item is for</h2>
 
   <div class="step">
     <div class="step-num">4</div>
@@ -410,7 +410,7 @@
     <table>
       <thead><tr><th style="width:32%">Item</th><th style="width:42%">What it is</th><th>Covered in</th></tr></thead>
       <tbody>
-        <tr><td><strong>Dashboard</strong></td><td>All clients at a glance — cards sorted by health, KPIs, drill-in.</td><td>This guide</td></tr>
+        <tr><td><strong>Dashboard</strong></td><td>All clients at a glance: cards sorted by health, KPIs, drill-in.</td><td>This guide</td></tr>
         <tr><td><strong>Clients</strong></td><td>List of every client, add new ones, archive, drill into per-client detail.</td><td>Guide 02</td></tr>
         <tr><td><strong>Campaigns</strong></td><td>Every campaign across every client. Create native email campaigns. Pause / resume / delete.</td><td>Guide 03</td></tr>
         <tr><td><strong>Inbox</strong></td><td>All replies routed through the AI pipeline. Filter by client / class / outcome.</td><td>Guide 04</td></tr>
@@ -425,7 +425,7 @@
   </div>
 
   <!-- =============== STEP 5 =============== -->
-  <h2><span class="num">Step 5</span> The top bar — what each control does</h2>
+  <h2><span class="num">Step 5</span> The top bar: what each control does</h2>
 
   <div class="step">
     <div class="step-num">5</div>
@@ -435,9 +435,9 @@
         The top bar is intentionally minimal. Most actions live on the page itself, not up here.
       </p>
       <ul>
-        <li><strong>Search</strong> — placeholder for now. Doesn't return live results yet. Don't rely on it.</li>
-        <li><strong>Notification bell</strong> — placeholder. Hot&#8209;lead alerts go to <em>email</em>, not the bell. (See Guide 04.)</li>
-        <li><strong>Your name + avatar</strong> — opens a dropdown with <em>Profile</em>, <em>Settings</em>, <em>Switch view</em> (only if you have multiple roles), and <em>Sign out</em>.</li>
+        <li><strong>Search</strong>: placeholder for now. Doesn't return live results yet. Don't rely on it.</li>
+        <li><strong>Notification bell</strong>: placeholder. Hot&#8209;lead alerts go to <em>email</em>, not the bell. (See Guide 04.)</li>
+        <li><strong>Your name + avatar</strong>: opens a dropdown with <em>Profile</em>, <em>Settings</em>, <em>Switch view</em> (only if you have multiple roles), and <em>Sign out</em>.</li>
       </ul>
     </div>
   </div>
@@ -451,7 +451,7 @@
   </div>
 
   <!-- =============== STEP 6 =============== -->
-  <h2><span class="num">Step 6</span> Roles — who can do what</h2>
+  <h2><span class="num">Step 6</span> Roles: who can do what</h2>
 
   <div class="step">
     <div class="step-num">6</div>
@@ -510,7 +510,7 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
       Search and notifications are placeholders
     </div>
-    <p>The search bar at the top doesn't return real results yet. The bell is decorative. Don't expect either to do anything — use the sidebar.</p>
+    <p>The search bar at the top doesn't return real results yet. The bell is decorative. Don't expect either to do anything: use the sidebar.</p>
   </div>
 
   <div class="callout">
@@ -518,7 +518,7 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
       Forgot your password?
     </div>
-    <p>The "Forgot your password?" link sends a Supabase reset email. Check spam. If you don't get it within a few minutes, ping the owner — your account may not exist in Supabase yet.</p>
+    <p>The "Forgot your password?" link sends a Supabase reset email. Check spam. If you don't get it within a few minutes, ping the owner: your account may not exist in Supabase yet.</p>
   </div>
 
   <!-- =============== Next nav =============== -->

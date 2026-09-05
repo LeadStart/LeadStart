@@ -1,4 +1,4 @@
-// POST /api/replies/[id]/outcome — log the post-contact disposition on a
+// POST /api/replies/[id]/outcome: log the post-contact disposition on a
 // reply (called, emailed, no_contact).
 //
 // Replaces the direct RLS UPDATE that the client dossier used to do. Going

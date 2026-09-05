@@ -1,6 +1,6 @@
 import type { KPIHealth } from "@/types/app";
 
-// No open rate or click rate — tracking pixels hurt deliverability
+// No open rate or click rate: tracking pixels hurt deliverability
 
 export interface KPIDefinition {
   key: string;

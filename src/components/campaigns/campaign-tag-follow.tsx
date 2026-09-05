@@ -2,7 +2,7 @@
 
 // Live mailbox-tag binding control for a campaign's Setup tab (migration 00119).
 // When a campaign "follows" a tag, its sending pool auto-syncs to the inboxes
-// carrying that tag — add an inbox to the tag and it joins the campaign on the
+// carrying that tag: add an inbox to the tag and it joins the campaign on the
 // next reconcile. This component owns the bind/unbind action
 // (a dedicated PUT that reconciles server-side) and refreshes the page so the
 // pool + banner reflect the new state. While bound, the parent disables the
@@ -56,9 +56,9 @@ export function CampaignTagFollow({
         const bits: string[] = [];
         if (data.added.length) bits.push(`added ${data.added.length}`);
         if (data.removed.length) bits.push(`removed ${data.removed.length}`);
-        let msg = `Now following “${data.tag}”${bits.length ? ` — ${bits.join(", ")} inbox${data.added.length + data.removed.length === 1 ? "" : "es"}` : ""}.`;
+        let msg = `Now following “${data.tag}”${bits.length ? `: ${bits.join(", ")} inbox${data.added.length + data.removed.length === 1 ? "" : "es"}` : ""}.`;
         if (data.emptyGuard) {
-          msg += " No inbox could be added for this tag right now — new inboxes you tag will be added automatically.";
+          msg += " No inbox could be added for this tag right now: new inboxes you tag will be added automatically.";
         }
         if (data.skippedInUse.length) {
           msg += ` ${data.skippedInUse.length} tagged inbox${data.skippedInUse.length === 1 ? " is" : "es are"} in use by another campaign and were skipped.`;

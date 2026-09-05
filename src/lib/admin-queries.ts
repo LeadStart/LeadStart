@@ -1,7 +1,7 @@
 /**
  * Shared admin page queries. Each admin page exports its SWR key + fetcher
  * here so the `<AdminPrefetcher />` can warm all of them in parallel on
- * dashboard mount — later navigations get instant cache hits.
+ * dashboard mount: later navigations get instant cache hits.
  *
  * Whenever you change one of these fetchers, the matching page and the
  * prefetcher both pick up the change automatically.
@@ -25,11 +25,11 @@ import {
 
 type SupabaseClient = ReturnType<typeof createClient>;
 
-// Snapshot columns minus `raw_data` — that JSONB blob is only ever
+// Snapshot columns minus `raw_data`: that JSONB blob is only ever
 // written by the analytics-sync cron and never read by any admin page.
 // The Overview + All Campaigns pulls are all-time (their KPIs default to
-// All-Time and derive 7d/30d client-side), so excluding the raw payload —
-// the single largest contributor to first-paint download size — is what
+// All-Time and derive 7d/30d client-side), so excluding the raw payload,
+// the single largest contributor to first-paint download size: is what
 // keeps the all-time pull light.
 const SNAPSHOT_COLUMNS =
   "id, campaign_id, snapshot_date, total_leads, emails_sent, replies, " +
@@ -50,7 +50,7 @@ const CONTACT_LIST_COLUMNS =
   "email_verified_at, email_did_you_mean, " +
   // Scalar projections out of enrichment_data (kept out of the select above for
   // weight) so the list can tier/badge emails: generic-inbox kind + catch-all
-  // provenance. PostgREST JSON-path selection — not real columns.
+  // provenance. PostgREST JSON-path selection: not real columns.
   "email_kind:enrichment_data->enrichment->email->>kind, " +
   "email_provider_status:enrichment_data->enrichment->email->>provider_status, " +
   "created_at, updated_at";
@@ -66,13 +66,13 @@ export type AdminOverviewCard = {
   health: "good" | "warning" | "bad" | "none";
   stepAlerts: StepHealthAlert[];
   // 6-point send-volume sparkline (5-day buckets across the last 30 days,
-  // oldest→newest). Derived from the snapshots we already fetch — no extra
+  // oldest→newest). Derived from the snapshots we already fetch: no extra
   // query. Powers the "Trend" column on the Overview portfolio table and stays
   // a 30-day view regardless of the selected KPI period.
   trend: number[];
   // This client's all-time snapshots (campaign-partitioned, so no duplication
   // across cards). The Overview page recomputes reply/bounce/positive for the
-  // selected 7d/30d/All-Time lens from these — client-side, no refetch. `metrics`
+  // selected 7d/30d/All-Time lens from these: client-side, no refetch. `metrics`
   // and `health` above are the baked All-Time default.
   snapshots: CampaignSnapshot[];
 };
@@ -112,7 +112,7 @@ export type AdminOverviewData = {
 
 // Portfolio-row health: no sends → "no data"; otherwise driven by step-health
 // alerts. emails_sent is window-dependent, so the Overview page recomputes this
-// per selected period — hence a shared pure helper rather than inline logic.
+// per selected period: hence a shared pure helper rather than inline logic.
 export function deriveCardHealth(
   metrics: KPIMetrics,
   stepAlerts: StepHealthAlert[],
@@ -131,7 +131,7 @@ export async function fetchAdminOverview(
       supabase.from("clients").select("*").order("name"),
       supabase.from("campaigns").select("*"),
       // All-time pull: the Overview reply/bounce/positive KPIs default to
-      // All-Time (a rolling 30-day reply rate understates badly — fresh leads
+      // All-Time (a rolling 30-day reply rate understates badly, fresh leads
       // dilute the denominator). 7d/30d are derived client-side from this set;
       // the 30-day trend sparkline and the 7-day rollups below filter by date.
       supabase
@@ -172,7 +172,7 @@ export async function fetchAdminOverview(
     );
     // Baked metrics are ALL-TIME (the default lens). The Overview page
     // recomputes reply/bounce/positive per selected period client-side from
-    // `snapshots` when the operator switches to 7d/30d — no refetch.
+    // `snapshots` when the operator switches to 7d/30d: no refetch.
     const metrics = calculateMetrics(clientSnapshots);
 
     const clientStepAlerts = allStepAlerts.filter((a) =>
@@ -316,7 +316,7 @@ export const API_BILLING_DATA_PATH = "/api/billing/data";
 export const ADMIN_CONTACTS_PIPELINE_KEY = "admin-contacts-with-pipeline";
 
 export async function fetchAdminContactsPipeline(supabase: SupabaseClient) {
-  // Prospects kanban is LeadStart's own sales funnel — exclude contacts
+  // Prospects kanban is LeadStart's own sales funnel: exclude contacts
   // that belong to a client (those are campaign recipients, not leads
   // we are selling to).
   const res = await supabase.from("contacts").select("*").is("client_id", null);

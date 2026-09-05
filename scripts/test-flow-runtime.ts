@@ -54,7 +54,7 @@ const REPLIED_ANY: FlowSignals = { hasReplied: true, hasBounced: false, replyCla
 const INTERESTED: FlowSignals = { hasReplied: true, hasBounced: false, replyClass: "true_interest" };
 const OBJECTION: FlowSignals = { hasReplied: true, hasBounced: false, replyClass: "objection_price" };
 const NOT_INT: FlowSignals = { hasReplied: true, hasBounced: false, replyClass: "not_interested" };
-// An out-of-office is an AUTO reply — the poller doesn't set contact.status, so
+// An out-of-office is an AUTO reply: the poller doesn't set contact.status, so
 // hasReplied is false, but its class is still ingested (replyClass 'ooo').
 const OOO: FlowSignals = { hasReplied: false, hasBounced: false, replyClass: "ooo" };
 const BOUNCED: FlowSignals = { hasReplied: false, hasBounced: true, replyClass: null };
@@ -68,7 +68,7 @@ function info(a: FlowRuntimeAction) {
 }
 
 // ── evalCondition + trigger helpers ──────────────────────────────────────────
-console.log("evalCondition — inbound-signal semantics");
+console.log("evalCondition, inbound-signal semantics");
 eq(evalCondition("replied", REPLIED_ANY), true, "replied + any reply → yes");
 eq(evalCondition("replied", INTERESTED), true, "replied + a classified reply → yes (any)");
 eq(evalCondition("replied", NONE), false, "replied + no reply → no");
@@ -78,7 +78,7 @@ eq(evalCondition("opened", REPLIED_ANY), false, "opened → no (retired, no sign
 eq(evalCondition("clicked", BOUNCED), false, "clicked → no (retired)");
 eq(evalCondition("manual", REPLIED_ANY), false, "manual → no (retired)");
 
-console.log("evalCondition — reply-class sentiment groups");
+console.log("evalCondition, reply-class sentiment groups");
 eq(evalCondition("reply_interested", INTERESTED), true, "reply_interested + interested class → yes");
 eq(evalCondition("reply_interested", OBJECTION), false, "reply_interested + objection class → no");
 eq(evalCondition("reply_interested", REPLIED_ANY), false, "reply_interested + unclassified reply → no");
@@ -141,7 +141,7 @@ console.log("fresh start + wait accumulation");
 }
 
 // ── Top-level condition (replied), both branches (lazy re-eval) ──────────────
-console.log("top-level 'replied' condition — both branches");
+console.log("top-level 'replied' condition, both branches");
 {
   const graph = g([
     emailNode("Hi", "b", "e1"),
@@ -222,7 +222,7 @@ console.log("reply-class routing (sentiment groups)");
   eq(
     info(resolveFlowAction(graph, pos, OBJECTION)),
     { type: "email", id: "nurtureEmail", waitDays: 0, matched: true },
-    "objection → inner YES → nurture email (matched=true — author is handling it)",
+    "objection → inner YES → nurture email (matched=true, author is handling it)",
   );
   eq(
     info(resolveFlowAction(graph, pos, NOT_INT)),

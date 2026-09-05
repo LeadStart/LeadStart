@@ -5,7 +5,7 @@ import { getStripe, isStripeDemoMode } from "@/lib/stripe/client";
 import type { ClientSubscription } from "@/types/app";
 
 /**
- * Admin cancel — schedules the subscription to cancel at the end of the
+ * Admin cancel: schedules the subscription to cancel at the end of the
  * current period (per decision #7: no pro-ration, service runs until period
  * end). Reversible: Stripe allows re-activating by setting
  * `cancel_at_period_end: false` again before the period ends.
@@ -66,7 +66,7 @@ export async function POST(
 
   // Mirror via the service-role client: client_subscriptions is service-role-only
   // under the hardened RLS (00100), so a user-client update is silently denied.
-  // Non-fatal — Stripe already accepted the change and the webhook confirms it.
+  // Non-fatal: Stripe already accepted the change and the webhook confirms it.
   const admin = createAdminClient();
   const { error: mirrorErr } = await admin
     .from("client_subscriptions")

@@ -1,6 +1,6 @@
 "use client";
 
-// A/B test results — one table per A/B email node, variants ranked with the
+// A/B test results: one table per A/B email node, variants ranked with the
 // leader (highest positive-reply rate) flagged. Once the auto-winner reaches a
 // verdict it locks a Winner and marks the losers Paused; until then it shows the
 // current front-runner as Leading. Measured on inbound outcomes only (reply /
@@ -22,9 +22,9 @@ export function AbResults({ stats }: { stats: AbNodeStats[] }) {
               <span className="text-xs text-muted-foreground">
                 {node.firstEmail ? "first email" : "follow-up"} ·{" "}
                 {node.decided
-                  ? "winner locked — losers auto-paused"
+                  ? "winner locked: losers auto-paused"
                   : node.autoPause
-                    ? "auto-winner on — leader by positive-reply rate"
+                    ? "auto-winner on: leader by positive-reply rate"
                     : "leader by positive-reply rate (auto-pause off)"}
               </span>
             </div>
@@ -95,7 +95,7 @@ export function AbResults({ stats }: { stats: AbNodeStats[] }) {
             <p className="mt-2 text-[11px] text-muted-foreground">
               {node.decided ? (
                 <>
-                  Test decided — new leads now route to the winner. {pausedCount} losing
+                  Test decided: new leads now route to the winner. {pausedCount} losing
                   variant{pausedCount === 1 ? "" : "s"} paused; leads already in a paused
                   variant’s thread stay on it.
                 </>
@@ -107,7 +107,7 @@ export function AbResults({ stats }: { stats: AbNodeStats[] }) {
                 </>
               ) : (
                 <>
-                  Even split, sticky per lead. Auto-winner is off — pick a winner yourself, or
+                  Even split, sticky per lead. Auto-winner is off: pick a winner yourself, or
                   enable auto-pause on this step or in campaign settings.
                 </>
               )}

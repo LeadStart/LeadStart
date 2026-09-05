@@ -40,9 +40,9 @@ export function DashboardShell({
     <div className="flex h-screen overflow-hidden bg-background">
       {isAdmin && <AdminPrefetcher />}
       <Sidebar role={role} open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-      {/* Offset (desktop) clears the floating rail — see globals.css `.app-shell-content`.
+      {/* Offset (desktop) clears the floating rail: see globals.css `.app-shell-content`.
           The whole column scrolls as one (overflow-y-auto here, not on <main>), so the
-          topbar is NOT pinned — it sits at the top of each page and scrolls away with
+          topbar is NOT pinned: it sits at the top of each page and scrolls away with
           the content rather than staying fixed. */}
       <div className="app-shell-content flex flex-1 flex-col overflow-y-auto min-w-0">
         <Topbar
@@ -59,7 +59,7 @@ export function DashboardShell({
           {children}
         </main>
       </div>
-      {/* Mobile primary nav — fixed bottom tab bar (hidden at lg) */}
+      {/* Mobile primary nav: fixed bottom tab bar (hidden at lg) */}
       <MobileTabBar role={role} />
     </div>
   );

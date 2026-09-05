@@ -47,7 +47,7 @@
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
 
-  /* Brand palette — Blue */
+  /* Brand palette: Blue */
   --color-brand-50: #EDEEFF;
   --color-brand-100: #D1D3FF;
   --color-brand-200: #A3A8FF;
@@ -71,7 +71,7 @@
 }
 
 /* ============================================================
-   FLAT — Slate neutrals + blue primary, dark sidebar
+   FLAT: Slate neutrals + blue primary, dark sidebar
    Contract: /UI_RULES.md. Depth = hairline + tint, never gradient/glow.
    ============================================================ */
 :root {
@@ -99,7 +99,7 @@
   --chart-4: #F59E0B;
   --chart-5: #8B5CF6;
   --radius: 0.5rem;
-  /* Sidebar — dark solid panel, light text, solid brand active pill */
+  /* Sidebar: dark solid panel, light text, solid brand active pill */
   --sidebar: #0f172a;
   --sidebar-foreground: #cbd5e1;
   --sidebar-primary: #2E37FE;
@@ -152,7 +152,7 @@
 }
 
 /* ============================================================
-   Floating shell — desktop ≥1024px.
+   Floating shell: desktop ≥1024px.
    The rail detaches from the edges into an inset, rounded,
    elevated card; content clears it on the left. The elevation
    shadow + the logo bloom are DELIBERATE exceptions to the flat
@@ -190,7 +190,7 @@
   }
 }
 
-/* Triple-bounce envelope loader (Loader 07) — keyframes at top level so Tailwind v4 preserves them */
+/* Triple-bounce envelope loader (Loader 07): keyframes at top level so Tailwind v4 preserves them */
 @keyframes ls7-bounce {
   0%, 80%, 100% { transform: translateY(0) rotate(0deg); }
   40% { transform: translateY(-28px) rotate(-6deg); }
@@ -209,7 +209,7 @@
 }
 
 /* ============================================================
-   Flat button aliases — legacy .btn-gold / .btn-dark call sites.
+   Flat button aliases: legacy .btn-gold / .btn-dark call sites.
    Solid primary + flat secondary; no gradient, no glow.
    ============================================================ */
 .btn-gold {
@@ -232,7 +232,7 @@
 }
 
 /* ============================================================
-   Badge — solid semantic fill + white text (flat). Names kept
+   Badge: solid semantic fill + white text (flat). Names kept
    because lib modules return them as data.
    ============================================================ */
 .badge-green  { background: #059669; color: #fff; border-color: transparent; }

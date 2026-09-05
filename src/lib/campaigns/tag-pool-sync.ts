@@ -4,26 +4,26 @@
 // campaign_mailboxes rotation pool is kept in sync with the inboxes currently
 // carrying the tag, so adding an inbox to the tag automatically adds it to the
 // campaign, and removing it drops it from NEW first-touches.
-// This is the piece the browser-only picker never did — there the tag was
+// This is the piece the browser-only picker never did: there the tag was
 // expanded to fixed IDs at pick time.
 //
 // Called from two places:
-//   * the bind route (/api/admin/campaigns/[id]/mailbox-tag) — immediate sync
+//   * the bind route (/api/admin/campaigns/[id]/mailbox-tag): immediate sync
 //     when the operator sets/refreshes the binding, and
-//   * the reconcile-campaign-tags cron — every 5 min, to pick up inboxes added
+//   * the reconcile-campaign-tags cron: every 5 min, to pick up inboxes added
 //     to / removed from the tag afterward.
 //
 // The SEND PATH is untouched: run-native-sequences reads campaign_mailboxes
 // verbatim. Auto-join works purely by keeping that table in sync here.
 //
 // Invariants honored:
-//   * Dedicated-inbox policy — a tagged inbox already claimed by ANOTHER
+//   * Dedicated-inbox policy: a tagged inbox already claimed by ANOTHER
 //     non-completed campaign is skipped (reported in `skippedInUse`), never
 //     double-attached.
-//   * Never empty a live pool — if the tag currently resolves to zero eligible
+//   * Never empty a live pool: if the tag currently resolves to zero eligible
 //     inboxes, we DON'T strip the existing pool (a mis-tag or a mass re-claim
 //     shouldn't silently halt a running campaign); `emptyGuard` flags it.
-//   * Diff, not replace — we insert only the newly-tagged and delete only the
+//   * Diff, not replace: we insert only the newly-tagged and delete only the
 //     no-longer-tagged rows, so a concurrent send-cron tick never observes an
 //     empty pool mid-write (same discipline as the manual PUT route).
 
@@ -69,7 +69,7 @@ export function computeTagPoolDiff(
 
 /**
  * Reconcile one campaign's rotation pool against its bound tag. A no-op (returns
- * synced:false) when `tag` is null/blank — unbinding leaves the current pool
+ * synced:false) when `tag` is null/blank, unbinding leaves the current pool
  * frozen as a manual snapshot for the operator to edit. Throws on a hard DB
  * error so the caller (route or cron) can surface / log it.
  */

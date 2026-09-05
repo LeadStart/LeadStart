@@ -1,6 +1,6 @@
 // Per-mailbox inbox-health scorer for the native email channel.
 //
-// Pure function over already-collected signals — no I/O here, so it's trivially
+// Pure function over already-collected signals: no I/O here, so it's trivially
 // testable and safe to import anywhere (all cross-module imports are types,
 // erased at compile time, so nothing pulls node:dns into a client bundle).
 // The cron (/api/cron/check-inbox-health) gathers the inputs (DNS, Spamhaus
@@ -8,7 +8,7 @@
 //
 // Model: start at 100, subtract a fixed penalty per unhealthy signal. A signal
 // we couldn't measure (no data, sample too small, no key) is reported as
-// "unchecked" with a zero penalty — never guessed, never punished. So a
+// "unchecked" with a zero penalty: never guessed, never punished. So a
 // brand-new mailbox with good DNS and no send/warmup history scores 100 with
 // several "unchecked" rows visible, rather than being dinged for missing data.
 //
@@ -17,7 +17,7 @@
 //   watch    50–79         (badge-amber)
 //   critical < 50          (badge-red)
 //
-// Penalty weights (single source of truth — the table below is the spec):
+// Penalty weights (single source of truth, the table below is the spec):
 //   blacklist (DBL listed)                         -60
 //   SPF        fail -15 / warn -5
 //   DKIM       fail -15 / warn -5   (check.ts only ever warns for DKIM)
@@ -33,7 +33,7 @@
 //                  Promotions majority -5   (latest COMPLETE placement test no
 //                  older than PLACEMENT_FRESHNESS_DAYS; older or none = unchecked)
 //
-// Bounce/soft-bounce/reply are *behavioral* signals — everything above them is
+// Bounce/soft-bounce/reply are *behavioral* signals: everything above them is
 // a config/DNS check that only moves when you edit DNS or get blacklisted, which
 // is why a correctly-configured mailbox otherwise sits at 100 indefinitely.
 // Seed placement is the one DIRECT measurement: a probe sent to inboxes we
@@ -56,7 +56,7 @@ export const HEALTHY_MIN = 80;
 export const CRITICAL_MAX = 49; // score <= 49 is critical (i.e. below 50)
 export const MIN_SENT_FOR_BOUNCE_SCORE = 20; // mirrors kpi/step-health MIN_SENT_FOR_ALERT
 // Reply signal needs more volume than bounce rate before a zero-reply run is
-// meaningful — cold-email reply rates are low (~1–5%), so at small samples a
+// meaningful: cold-email reply rates are low (~1–5%), so at small samples a
 // zero is just noise. 40 sends over 14 days is the floor below which we say
 // nothing (component reads "unchecked").
 export const MIN_SENT_FOR_REPLY_SIGNAL = 40;
@@ -156,7 +156,7 @@ export function bandLabel(band: HealthBand): string {
 }
 
 /**
- * One-line, plain-language summary of what's wrong — the `detail` of every
+ * One-line, plain-language summary of what's wrong: the `detail` of every
  * component that's "bad", falling back to "warn" if nothing is outright bad.
  * Used in owner-alert bodies. Empty string when the mailbox is clean.
  */
@@ -216,7 +216,7 @@ function bounceComponent(
       label,
       status: "unchecked",
       deduction: 0,
-      detail: `Only ${sent} send${sent === 1 ? "" : "s"} in the last 7 days — need ${MIN_SENT_FOR_BOUNCE_SCORE} to score bounce rate.`,
+      detail: `Only ${sent} send${sent === 1 ? "" : "s"} in the last 7 days, need ${MIN_SENT_FOR_BOUNCE_SCORE} to score bounce rate.`,
     };
   }
   const rate = bounces.bounced7d / bounces.sent7d;
@@ -231,8 +231,8 @@ function bounceComponent(
  * Soft (transient, 4.x.x) bounce rate over the last 7 days. Warn-only by
  * design: a soft bounce is a temporary failure Gmail retries on its own, so it
  * never suppresses a contact and never alone drives a mailbox critical. But a
- * *rising* soft-bounce rate is an early throttling / greylisting signal — the
- * receiving side deferring our mail — worth a small nudge before it turns into
+ * *rising* soft-bounce rate is an early throttling / greylisting signal: the
+ * receiving side deferring our mail: worth a small nudge before it turns into
  * hard bounces or spam-foldering. Same >= 20-send floor as the hard-bounce
  * component; unchecked below it or when softBounced7d wasn't supplied.
  */
@@ -252,18 +252,18 @@ function softBounceComponent(
       detail:
         soft == null
           ? "Soft-bounce rate not measured."
-          : `Only ${sent} send${sent === 1 ? "" : "s"} in the last 7 days — need ${MIN_SENT_FOR_BOUNCE_SCORE} to score soft-bounce rate.`,
+          : `Only ${sent} send${sent === 1 ? "" : "s"} in the last 7 days, need ${MIN_SENT_FOR_BOUNCE_SCORE} to score soft-bounce rate.`,
     };
   }
   const rate = soft / sent;
-  const detail = `${soft} of ${sent} sends soft-bounced this week (${(rate * 100).toFixed(1)}%) — transient, not suppressed.`;
+  const detail = `${soft} of ${sent} sends soft-bounced this week (${(rate * 100).toFixed(1)}%): transient, not suppressed.`;
   if (rate > 0.25) return { key, label, status: "warn", deduction: 15, detail };
   if (rate > 0.1) return { key, label, status: "warn", deduction: 8, detail };
   return { key, label, status: "ok", deduction: 0, detail };
 }
 
 /**
- * Reply signal over the last 14 days — the first component that reflects how
+ * Reply signal over the last 14 days: the first component that reflects how
  * recipients *respond*, not how the domain is configured. Rationale: at steady
  * sending volume, a reply rate that collapses to zero is the cheapest available
  * proxy for landing in spam (mail that reaches a real inbox eventually draws
@@ -271,7 +271,7 @@ function softBounceComponent(
  *
  * Deliberately conservative to avoid false alarms: warn-only, never critical;
  * unchecked below MIN_SENT_FOR_REPLY_SIGNAL sends (a zero at low volume is
- * noise); and it only fires on an *absolute zero* — any reply at all reads ok.
+ * noise); and it only fires on an *absolute zero*: any reply at all reads ok.
  * It does not score reply-rate deltas, which are too noisy at these volumes.
  */
 function replySignalComponent(
@@ -286,7 +286,7 @@ function replySignalComponent(
       label,
       status: "unchecked",
       deduction: 0,
-      detail: `Only ${sent} send${sent === 1 ? "" : "s"} in the last 14 days — need ${MIN_SENT_FOR_REPLY_SIGNAL} to read the reply signal.`,
+      detail: `Only ${sent} send${sent === 1 ? "" : "s"} in the last 14 days, need ${MIN_SENT_FOR_REPLY_SIGNAL} to read the reply signal.`,
     };
   }
   if (replies.replied14d === 0) {
@@ -295,7 +295,7 @@ function replySignalComponent(
       label,
       status: "warn",
       deduction: 10,
-      detail: `No replies across ${sent} sends in 14 days — possible inbox-placement issue (check seed/placement before scaling this mailbox).`,
+      detail: `No replies across ${sent} sends in 14 days, possible inbox-placement issue (check seed/placement before scaling this mailbox).`,
     };
   }
   const rate = replies.replied14d / replies.sent14d;
@@ -309,15 +309,15 @@ function replySignalComponent(
 }
 
 /**
- * Seed placement — the only component that measures where mail lands rather
+ * Seed placement: the only component that measures where mail lands rather
  * than inferring it. Graded on the latest complete test's seed outcomes:
  * spam is graded hardest (it is the thing every other signal is a proxy for),
- * "missing" softer (a gateway rejection or a delay — ambiguous until re-run),
+ * "missing" softer (a gateway rejection or a delay, ambiguous until re-run),
  * and a Promotions majority lightest (delivered, but read as marketing). The
  * detail names the receiver-side SPF/DKIM/DMARC verdicts so the operator can
  * tell an authentication problem from a reputation/content one at a glance.
  * Deliberately sized so that a bad panel alone lands in "watch", not
- * "critical": a 3–5 seed panel is a strong hint, not a verdict — critical
+ * "critical": a 3–5 seed panel is a strong hint, not a verdict, critical
  * needs corroboration from bounces, blacklist, or DNS.
  */
 function seedPlacementComponent(p: PlacementSignal | null | undefined): HealthComponent {
@@ -329,7 +329,7 @@ function seedPlacementComponent(p: PlacementSignal | null | undefined): HealthCo
       label,
       status: "unchecked",
       deduction: 0,
-      detail: `No placement test in the last ${PLACEMENT_FRESHNESS_DAYS} days — run one from Mailboxes → Seed inboxes to measure where this mailbox actually lands.`,
+      detail: `No placement test in the last ${PLACEMENT_FRESHNESS_DAYS} days, run one from Mailboxes → Seed inboxes to measure where this mailbox actually lands.`,
     };
   }
   const total = p.inbox + p.promotions + p.spam + p.missing;
@@ -339,7 +339,7 @@ function seedPlacementComponent(p: PlacementSignal | null | undefined): HealthCo
       label,
       status: "unchecked",
       deduction: 0,
-      detail: "The last placement test had no readable seeds — check the seed panel and re-run.",
+      detail: "The last placement test had no readable seeds, check the seed panel and re-run.",
     };
   }
   const when = new Date(p.testedAt).toLocaleDateString("en-US", {
@@ -351,7 +351,7 @@ function seedPlacementComponent(p: PlacementSignal | null | undefined): HealthCo
   const summary = `${describeCounts({ total, inbox: p.inbox, promotions: p.promotions, spam: p.spam, missing: p.missing })} on ${when} (${probeLabel}).`;
   const authFailures = describeAuthFailures(p.authSummary);
   const authNote = authFailures
-    ? ` Receiver-side auth: ${authFailures} — fix authentication before anything else.`
+    ? ` Receiver-side auth: ${authFailures}, fix authentication before anything else.`
     : p.authSummary && p.authSummary.checked > 0
       ? " Receiver-side SPF/DKIM/DMARC passed, so this is reputation or content, not authentication."
       : "";
@@ -368,7 +368,7 @@ function seedPlacementComponent(p: PlacementSignal | null | undefined): HealthCo
       label,
       status: "warn",
       deduction: 10,
-      detail: `${summary} A missing probe usually means a gateway rejection or a delay — re-run before acting on it.${authNote}`,
+      detail: `${summary} A missing probe usually means a gateway rejection or a delay, re-run before acting on it.${authNote}`,
     };
   }
   if (p.promotions > p.inbox) {
@@ -377,7 +377,7 @@ function seedPlacementComponent(p: PlacementSignal | null | undefined): HealthCo
       label,
       status: "warn",
       deduction: 5,
-      detail: `${summary} Most seeds filed it under Promotions — Gmail reads the message as marketing; try a plainer, more personal first line.`,
+      detail: `${summary} Most seeds filed it under Promotions, Gmail reads the message as marketing; try a plainer, more personal first line.`,
     };
   }
   return { key, label, status: "ok", deduction: 0, detail: `${summary}${authNote}` };

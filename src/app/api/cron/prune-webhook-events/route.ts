@@ -4,7 +4,7 @@ import { checkCronAuth } from "@/lib/security/cron-auth";
 
 // Force dynamic rendering on every invocation. Without this, a Vercel cron
 // (which hits the same URL with no query params) can receive an edge-cached
-// response from a prior tick, skipping the function body entirely — the DB
+// response from a prior tick, skipping the function body entirely: the DB
 // is never touched but the route returns the old payload. Caught on
 // 2026-05-27 in an earlier cron route;
 // applying the same guard to every cron route preemptively.
@@ -13,10 +13,10 @@ export const dynamic = "force-dynamic";
 // project's Fluid-compute default (300s per Vercel's docs, read 2026-09-05).
 export const maxDuration = 60;
 
-// D3 — webhook_events retention cron. Daily at 4am UTC (see vercel.json).
+// D3: webhook_events retention cron. Daily at 4am UTC (see vercel.json).
 //
 // Deletes processed webhook_events older than 90 days. Keeps rows with
-// `processed = false` regardless of age — per SAFETY-TODO Phase D, those
+// `processed = false` regardless of age: per SAFETY-TODO Phase D, those
 // are forensic gold for debugging stuck events and we never auto-drop
 // them. A human can clean them up by hand once investigated.
 //

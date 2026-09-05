@@ -6,11 +6,11 @@ import { promoteSearchContacts } from "./promotion";
 import { segmentForQuery } from "./segment";
 import type { SearchKind } from "./pricing-math";
 
-// Phase 4 — SEGMENT CACHE serve (the resale path, ~100% margin). When a buyer
+// Phase 4: SEGMENT CACHE serve (the resale path, ~100% margin). When a buyer
 // starts a search whose segment (vein + terms + area) was pulled recently enough
 // (within token_pricing_config.segment_cache_freshness_days), we serve the pool's
-// matching contacts straight into the buyer's org — a copy in `contacts` + a
-// promotion-granted ownership row + the SAME token charge — with NO actor run.
+// matching contacts straight into the buyer's org: a copy in `contacts` + a
+// promotion-granted ownership row + the SAME token charge: with NO actor run.
 //
 // Gated OFF by default (segment_cache_enabled=false) and behind a fresh-pull +
 // balance check. The money path REUSES the proven billing primitives: placeHold
@@ -18,7 +18,7 @@ import type { SearchKind } from "./pricing-math";
 // owned pool rows) → settleSearch (charge the delivered outcomes, release the
 // rest). So a cache serve bills identically to a fresh pull, no resale discount
 // (owner decision D3). Any failure or ineligibility yields `skip`, and the caller
-// runs the normal sourcing flow — the cache never blocks a search.
+// runs the normal sourcing flow: the cache never blocks a search.
 
 type Admin = ReturnType<typeof createAdminClient>;
 
@@ -174,7 +174,7 @@ async function insertServedContacts(
       .insert(masterToContactInsert(m, organizationId, searchId, searchKind, now))
       .select("id");
     if (error) {
-      if (error.code === "23505") continue; // already in the buyer's org — keep theirs
+      if (error.code === "23505") continue; // already in the buyer's org: keep theirs
       throw error;
     }
     for (const r of (data as { id: string }[] | null) ?? []) ids.push(r.id);
@@ -291,7 +291,7 @@ export async function maybeServeFromCache(
     console.error("[maybeServeFromCache] delivery failed, rolling back:", e);
     // Best-effort rollback so the buyer is neither charged nor left with a stub:
     // drop the hold (restores available), the served copies, the ownership grants,
-    // and the search row — then let the caller source normally.
+    // and the search row: then let the caller source normally.
     await admin.from("token_ledger").delete().eq("search_id", opts.searchId).in("entry_type", ["hold", "charge", "release"]);
     await admin.from("contact_ownership").delete().eq("search_id", opts.searchId);
     await admin.from("contacts").delete().eq("organization_id", opts.organizationId).contains("enrichment_data", { [`${opts.searchKind}_search_id`]: opts.searchId, served_from_cache: true });

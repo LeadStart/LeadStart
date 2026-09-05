@@ -5,9 +5,9 @@ import { ApifyClient } from "@/lib/apify/client";
 // GET /api/admin/apify/spend
 //
 // The AUTHORITATIVE Apify spend for the current billing cycle, read straight
-// from Apify — not our per-run tallies (which drift on retries, aborts, and
+// from Apify: not our per-run tallies (which drift on retries, aborts, and
 // deleted rows). `usageUsd` is Apify's own cycle total; `byActor` breaks the
-// actor-run charges down by actor, and — crucially — counts FAILED/ABORTED runs
+// actor-run charges down by actor, and (crucially) counts FAILED/ABORTED runs
 // too, so nothing is hidden. This is what should match the Apify invoice.
 
 export const maxDuration = 30;

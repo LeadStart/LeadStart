@@ -1,13 +1,13 @@
-// Name→domain discovery — the fallback for contacts whose employer has no
+// Name→domain discovery: the fallback for contacts whose employer has no
 // LinkedIn company page (small local businesses). Given a company NAME (+ the
 // contact's location for disambiguation), ask a web-search LLM for the company's
-// official website, then STRICTLY validate the answer before we trust it — a
+// official website, then STRICTLY validate the answer before we trust it: a
 // wrong domain would feed the pattern-guesser and produce an email at the wrong
 // company.
 //
 // Everything here is pure except the runner, which takes injected network
 // functions (the LLM call + a homepage fetch) so the validation logic is
-// unit-testable with no network — mirrors pattern-mv.ts. All DB writes + key/
+// unit-testable with no network: mirrors pattern-mv.ts. All DB writes + key/
 // cost handling live in the cron caller (run-apify-enrichment).
 
 import { normalizeDomain, normalizeCompanyName } from "../apify/domain";
@@ -48,7 +48,7 @@ export type FetchPageFn = (url: string) => Promise<string>;
 
 // ---------------------------------------------------------------- token helpers
 
-// Words we never treat as a business's distinctive identity — an industry/
+// Words we never treat as a business's distinctive identity: an industry/
 // descriptor token shared by thousands of companies. (normalizeCompanyName
 // already drops legal suffixes like LLC/Inc/Group/Company, so those aren't here.)
 const GENERIC_NAME_TOKENS = new Set([
@@ -124,7 +124,7 @@ export function buildDomainDiscoveryPrompt(companyName: string, location: string
 Business: ${companyName}${locLine}
 
 RULES:
-- Return the business's OWN website only — NOT LinkedIn, Facebook, Instagram, Yelp,
+- Return the business's OWN website only: NOT LinkedIn, Facebook, Instagram, Yelp,
   Google Maps, Yellow Pages, BBB, Thumbtack, Angi, directories, aggregators, review
   sites, or news articles.
 - This is likely a small local business. Prefer a site whose name clearly matches the business name${location ? " and its location" : ""}.
@@ -190,7 +190,7 @@ export function nameTokenMatch(companyName: string, domain: string): boolean {
 }
 
 // A citation confirms a domain when the LLM's own source_url (or any grounding
-// citation) is on that domain — a made-up domain won't appear in real citations.
+// citation) is on that domain: a made-up domain won't appear in real citations.
 function citationConfirms(domain: string, answer: DomainLookupAnswer, citations: string[]): boolean {
   const target = normalizeDomain(domain);
   if (!target) return false;
@@ -230,7 +230,7 @@ export function preValidateCandidate(
 }
 
 // Live confirmation: the homepage text must mention the company. Empty text
-// (blocked / timed out / parked domain / SSRF-refused) is a STRICT reject — we'd
+// (blocked / timed out / parked domain / SSRF-refused) is a STRICT reject: we'd
 // rather miss a real domain than write a wrong one.
 export function confirmViaHomepage(
   companyName: string,
@@ -238,7 +238,7 @@ export function confirmViaHomepage(
   homepageText: string,
 ): HomepageValidation {
   if (!homepageText || !homepageText.trim()) {
-    return { kind: "reject", reason: "unconfirmed — homepage unreachable" };
+    return { kind: "reject", reason: "unconfirmed, homepage unreachable" };
   }
   const hay = homepageText.toLowerCase();
   const { all, distinctive } = companyTokens(companyName);
@@ -278,14 +278,14 @@ async function discoverOne(
   const pre = preValidateCandidate(item.companyName, answer, citations);
   if (pre.kind === "reject") return { kind: "not_found", note: `rejected: ${pre.reason}`, cost };
   if (pre.kind === "accept") {
-    return { kind: "found", domain: pre.domain, note: `discovered via ${providerLabel} — ${pre.note}`, cost };
+    return { kind: "found", domain: pre.domain, note: `discovered via ${providerLabel}: ${pre.note}`, cost };
   }
 
   // needs_homepage → live confirmation
   const homepageText = await fetchHomepage(`https://${pre.domain}`);
   const conf = confirmViaHomepage(item.companyName, pre.domain, homepageText);
   return conf.kind === "accept"
-    ? { kind: "found", domain: pre.domain, note: `discovered via ${providerLabel} — ${conf.note}`, cost }
+    ? { kind: "found", domain: pre.domain, note: `discovered via ${providerLabel}: ${conf.note}`, cost }
     : { kind: "not_found", note: `rejected: ${conf.reason}`, cost };
 }
 
@@ -298,7 +298,7 @@ export interface RunDomainDiscoveryOpts {
 // Discover domains for a batch. One paid LLM call per unique (name + location)
 // group; the outcome fans out to every member with the cost split evenly.
 // Deadline-bounded: groups not reached are absent from the map (caller leaves
-// those items pending for the next tick). Never throws for a per-call failure —
+// those items pending for the next tick). Never throws for a per-call failure,
 // those surface as `inconclusive`.
 export async function runDomainDiscovery(
   items: DiscoveryItem[],

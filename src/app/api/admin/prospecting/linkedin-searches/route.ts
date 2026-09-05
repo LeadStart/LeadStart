@@ -5,7 +5,7 @@ import { requireEnrichmentContext } from "@/lib/apify/auth";
 //
 // Lists the org's recent LinkedIn people-searches for the collapsible
 // "Prior runs" section on the Prospecting panel. Strips the heavy `results`
-// JSONB — the list only needs summaries; clicking a run hits the [id] endpoint
+// JSONB: the list only needs summaries; clicking a run hits the [id] endpoint
 // to load its full results. Mirrors the Scrap.io searches list route.
 
 export const maxDuration = 10;

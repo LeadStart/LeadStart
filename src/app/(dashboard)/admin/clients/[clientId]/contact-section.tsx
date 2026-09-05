@@ -15,7 +15,7 @@ import { appUrl } from "@/lib/api-url";
 import type { Client } from "@/types/app";
 
 /**
- * Contact card on the client dossier — the client's on-file contact details
+ * Contact card on the client dossier: the client's on-file contact details
  * (email + phone). Editable by owner/va, saved through /api/clients/[id]
  * (service-role write + validation) so it actually persists. This is the
  * durable "email on file" that pre-fills quotes and shows in Campaigns.

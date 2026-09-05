@@ -3,7 +3,7 @@
 // Serves the 'imap' seed provider: Yahoo, consumer Gmail, and any generic
 // mailbox reachable with an app password. The ONE hard rule mirrors the rest
 // of the placement rig: seeds are measurement instruments, never participants.
-// Every mailbox is opened with { readOnly: true } (IMAP EXAMINE — the server
+// Every mailbox is opened with { readOnly: true } (IMAP EXAMINE, the server
 // itself refuses flag mutations), fetches read headers/labels only (PEEK
 // semantics; nothing is marked \Seen), and there is no STORE/MOVE/APPEND
 // anywhere in this file. See memory: project_no_warmup_pool_deliberate.
@@ -13,19 +13,19 @@
 //   - X-GM-RAW `rfc822msgid:` search across All Mail (Spam is excluded from
 //     All Mail, so Spam gets its own pass),
 //   - X-GM-LABELS to tell Inbox from archived,
-//   - a second `category:promotions` search for the Promotions verdict —
+//   - a second `category:promotions` search for the Promotions verdict,
 //     the thing plain-IMAP folder inspection can't see.
 // Generic servers get an RFC 3501 HEADER Message-ID search over INBOX, then
 // the junk folder (special-use \Junk first, common names as fallback).
 //
 // imapflow is the one external dependency (see the plan): IMAP is a stateful
-// non-HTTP protocol — literals, UTF-7 mailbox names, untagged responses — and
+// non-HTTP protocol (literals, UTF-7 mailbox names, untagged responses) and
 // the house hand-rolled-fetch convention doesn't extend to it.
 
 import { ImapFlow, type ListResponse } from "imapflow";
 import type { SeedImapAuth } from "@/types/app";
 
-/** Bad credentials / revoked app password — the caller benches the seed. */
+/** Bad credentials / revoked app password: the caller benches the seed. */
 export class ImapAuthError extends Error {
   constructor(message: string) {
     super(message);
@@ -33,7 +33,7 @@ export class ImapAuthError extends Error {
   }
 }
 
-/** Network / server trouble — the caller leaves the row pending and retries. */
+/** Network / server trouble: the caller leaves the row pending and retries. */
 export class ImapTransientError extends Error {
   constructor(message: string) {
     super(message);
@@ -91,7 +91,7 @@ async function connectClient(auth: SeedImapAuth): Promise<ImapFlow> {
 }
 
 /**
- * The add-seed gate — the IMAP analog of the Workspace getProfile probe.
+ * The add-seed gate: the IMAP analog of the Workspace getProfile probe.
  * Connects, opens INBOX read-only, disconnects. Throws ImapAuthError on bad
  * credentials, ImapTransientError on an unreachable host.
  */
@@ -164,11 +164,11 @@ async function gmailLookup(
     };
   }
 
-  // Spam is excluded from All Mail — probe it explicitly.
+  // Spam is excluded from All Mail: probe it explicitly.
   try {
     await client.mailboxOpen(spamPath, { readOnly: true });
   } catch {
-    return notFound(); // no Spam folder visible over IMAP — nothing more to check
+    return notFound(); // no Spam folder visible over IMAP: nothing more to check
   }
   const spamHit = await searchByMessageId(client, bareId, false);
   if (spamHit != null) {
@@ -232,7 +232,7 @@ function lastSegment(path: string): string {
 /**
  * Find the probe's UID in the OPEN mailbox. Prefers Gmail's X-GM-RAW
  * `rfc822msgid:` (exact-id semantics) when asked; falls back to the RFC 3501
- * HEADER search, which is substring-based — the bare id matches whether the
+ * HEADER search, which is substring-based: the bare id matches whether the
  * stored header carries angle brackets or not. Returns null when absent.
  */
 async function searchByMessageId(
@@ -265,7 +265,7 @@ async function gmRawSearch(client: ImapFlow, raw: string): Promise<number[] | nu
 
 /**
  * Read the probe's Authentication-Results header (+ X-GM-LABELS on Gmail).
- * Header-only fetch — PEEK semantics, nothing is marked read.
+ * Header-only fetch: PEEK semantics, nothing is marked read.
  */
 async function fetchProbeMeta(
   client: ImapFlow,
@@ -303,6 +303,6 @@ async function safeLogout(client: ImapFlow): Promise<void> {
   try {
     await client.logout();
   } catch {
-    // Connection already gone — nothing to release.
+    // Connection already gone: nothing to release.
   }
 }

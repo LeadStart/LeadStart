@@ -1,6 +1,6 @@
-// POST /api/admin/registrar/test — validate a saved registrar key by making one
+// POST /api/admin/registrar/test: validate a saved registrar key by making one
 // real availability call (a registered domain like example.com returns
-// "not available", which is a SUCCESSFUL call — it proves the credentials work).
+// "not available", which is a SUCCESSFUL call: it proves the credentials work).
 // Body: { provider: "porkbun" | "spaceship" }. Owner only. Spends no money.
 
 import { NextRequest, NextResponse } from "next/server";
@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       ok: true,
       provider,
-      detail: `Connected. example.com reads as ${result.available ? "available" : "registered"} — credentials valid.`,
+      detail: `Connected. example.com reads as ${result.available ? "available" : "registered"}, credentials valid.`,
     });
   } catch (err) {
     return NextResponse.json({

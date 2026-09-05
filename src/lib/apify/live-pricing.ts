@@ -56,9 +56,9 @@ export interface LivePricing {
     activity: number;
     bovi: number;
     site_scrape: number;
-    // Web-lookup domain discovery (not an Apify actor — token-based, static).
+    // Web-lookup domain discovery (not an Apify actor, token-based, static).
     domain_discovery: number;
-    // Owner-name (decision-maker) discovery — token-based (Anthropic/Perplexity),
+    // Owner-name (decision-maker) discovery: token-based (Anthropic/Perplexity),
     // static ceiling; not an Apify actor.
     naming: number;
   };
@@ -98,7 +98,7 @@ async function currentEvents(token: string, actorId: string): Promise<Events | n
 
 const round4 = (n: number) => Math.round(n * 1e4) / 1e4;
 
-// Per-token cache — pricing changes rarely; a short TTL keeps the dialog fresh
+// Per-token cache: pricing changes rarely; a short TTL keeps the dialog fresh
 // without hitting Apify on every open.
 const cache = new Map<string, { at: number; value: LivePricing }>();
 const TTL_MS = 60 * 60 * 1000;

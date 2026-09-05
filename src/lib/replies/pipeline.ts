@@ -1,5 +1,5 @@
 // Orchestrator: run the two-layer classifier on a lead_replies row and
-// — if the final_class is a hot one for this client — fire the
+// (if the final_class is a hot one for this client) fire the
 // notification email.
 //
 // Called from the webhook handler via Next.js `after()` so it runs after
@@ -69,7 +69,7 @@ export async function runReplyPipeline(
   }
 
   // We need a body to classify. If the tag arrived before reply_received,
-  // wait — the webhook that adds body_text will re-fire the pipeline.
+  // wait: the webhook that adds body_text will re-fire the pipeline.
   if (!reply.body_text || !reply.body_text.trim()) {
     return { skipped: true, skippedReason: "no_body_yet" };
   }
@@ -108,7 +108,7 @@ export async function runReplyPipeline(
       });
     } catch (err) {
       if (err instanceof MissingAnthropicKeyError) {
-        console.warn("[pipeline] ANTHROPIC_API_KEY missing — running without Claude");
+        console.warn("[pipeline] ANTHROPIC_API_KEY missing, running without Claude");
       } else {
         console.error("[pipeline] Claude classifier failed:", err);
       }
@@ -173,7 +173,7 @@ export async function runReplyPipeline(
   // the per-client hot-lead email below: this fires for every classified reply
   // (orphan-client rows included) whose class matches the org's notify_on gate,
   // even when the client has no notification_email. Best-effort + fully
-  // self-guarded — it never throws, so it can't affect classification or the
+  // self-guarded: it never throws, so it can't affect classification or the
   // hot-lead path. Idempotent via the already_classified early-return above.
   await deliverReplyAutomations({
     admin,
@@ -239,7 +239,7 @@ export async function runReplyPipeline(
     };
   }
 
-  // Admin web-push — fire it here (before the client-email checks below) so the
+  // Admin web-push: fire it here (before the client-email checks below) so the
   // owner is pinged even when the client has no notification_email. Self-guarded
   // (never throws) and no-ops until VAPID keys are set, so it can't affect the
   // hot-lead email path. Awaited so it completes before this serverless fn ends.

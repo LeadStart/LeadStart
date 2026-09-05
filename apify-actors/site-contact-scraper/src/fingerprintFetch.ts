@@ -1,4 +1,4 @@
-// Self-hosted anti-bot fetch — TLS/HTTP-2 fingerprint impersonation via curl_cffi.
+// Self-hosted anti-bot fetch: TLS/HTTP-2 fingerprint impersonation via curl_cffi.
 // Ported from the saasassins engine. Shells out to fingerprint_fetch.py and
 // returns { html, status } so it drops into the fetch waterfall unchanged.
 //
@@ -57,7 +57,7 @@ function parseHelperLine(stdout: string): Record<string, unknown> {
 }
 
 // One-time cached probe: is curl_cffi actually importable in this interpreter? A
-// misconfigured Python must NOT hard-fail the caller — it reports "not configured"
+// misconfigured Python must NOT hard-fail the caller: it reports "not configured"
 // so the waterfall falls through to the next tier.
 let configuredProbe: Promise<boolean> | null = null;
 
@@ -70,11 +70,11 @@ export function isFingerprintConfigured(): Promise<boolean> {
           console.log(`[fingerprint] ready (python=${resolvePython()}, impersonate=${impersonateTarget()})`);
           return true;
         }
-        console.warn(`[fingerprint] disabled — helper check failed: ${String(parsed?.error) || "unknown"}`);
+        console.warn(`[fingerprint] disabled, helper check failed: ${String(parsed?.error) || "unknown"}`);
         return false;
       } catch (err) {
         console.warn(
-          `[fingerprint] disabled — could not run helper (python=${resolvePython()}): ${
+          `[fingerprint] disabled: could not run helper (python=${resolvePython()}): ${
             err instanceof Error ? err.message : String(err)
           }`,
         );

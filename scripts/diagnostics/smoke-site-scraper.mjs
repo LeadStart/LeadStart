@@ -104,7 +104,7 @@ for (const r of items) {
   if (socStr) console.log(`  socials: ${socStr}`);
 }
 
-// Log tail — shows tier escalation decisions
+// Log tail: shows tier escalation decisions
 const logRes = await fetch(`https://api.apify.com/v2/actor-runs/${run.id}/log?token=${token}`);
 const log = await logRes.text().catch(() => "");
 const lines = log.split(/\r?\n/).filter(Boolean);

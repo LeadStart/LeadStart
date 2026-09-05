@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Unit tests for discover.ts — pure, no network. Run: npx tsx test/discover.test.ts
+// Unit tests for discover.ts: pure, no network. Run: npx tsx test/discover.test.ts
 import { discoverContactPages } from "../src/discover.js";
 
 let pass = 0;
@@ -9,7 +9,7 @@ function eq(a: unknown, b: unknown, msg: string): void {
   if (JSON.stringify(a) === JSON.stringify(b)) pass++;
   else {
     fail++;
-    failures.push(`${msg} — got ${JSON.stringify(a)}, want ${JSON.stringify(b)}`);
+    failures.push(`${msg}, got ${JSON.stringify(a)}, want ${JSON.stringify(b)}`);
   }
 }
 function ok(cond: boolean, msg: string): void {

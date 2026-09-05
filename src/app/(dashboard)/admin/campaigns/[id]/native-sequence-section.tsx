@@ -3,7 +3,7 @@
 // Composes the Sequence & schedule card with the deliverability pre-flight.
 // The deliverability check state lives here so its trigger can sit in the
 // sequence card header (next to Edit) while the results render in the
-// DeliverabilityCard below — which only mounts once a check has started.
+// DeliverabilityCard below, which only mounts once a check has started.
 
 import { useState } from "react";
 import { ShieldCheck, Loader2 } from "lucide-react";

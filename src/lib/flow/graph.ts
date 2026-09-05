@@ -1,4 +1,4 @@
-// Flow graph — the data model behind the visual campaign builder.
+// Flow graph: the data model behind the visual campaign builder.
 //
 // A campaign sequence is a recursive tree of nodes. Most nodes sit on a single
 // spine; a `condition` node forks the spine into a `yes` branch (peel-off, e.g.
@@ -12,7 +12,7 @@
 // (linkedin/internal) nodes so an email's cadence is preserved.
 
 export type FlowConditionTrigger =
-  // Inbound signals we route on — no outbound tracking required.
+  // Inbound signals we route on: no outbound tracking required.
   | "replied" // any inbound reply, regardless of class
   | "reply_interested" // reply classified interested/positive (the hot classes)
   | "reply_objection" // reply classified as an objection (price / timing)
@@ -38,7 +38,7 @@ export interface FlowNodeBase {
 /** One A/B/C… variant of an email node (its own subject + body). */
 export interface EmailVariant {
   id: string;
-  subject: string; // may be "" on follow-ups — they thread as "Re:"
+  subject: string; // may be "" on follow-ups: they thread as "Re:"
   body: string;
 }
 
@@ -47,7 +47,7 @@ export interface EmailVariant {
  * and opt-in per node: it only ever acts when `autoPause === true`. Every other
  * field tunes the winner rule; when absent the evaluator uses
  * DEFAULT_AB_WINNER_CONFIG (src/lib/flow/ab-winner.ts). Defined here (not in
- * ab-winner.ts) so graph.ts stays dependency-free — ab-winner imports graph.
+ * ab-winner.ts) so graph.ts stays dependency-free: ab-winner imports graph.
  */
 export interface EmailAbConfig {
   autoPause?: boolean; // MUST be true for the auto-winner to touch this node
@@ -60,7 +60,7 @@ export interface EmailAbConfig {
 
 export interface EmailNode extends FlowNodeBase {
   kind: "email";
-  subject: string; // may be "" on follow-ups — they thread as "Re:"
+  subject: string; // may be "" on follow-ups: they thread as "Re:"
   body: string;
   // A/B/C… testing (optional). When ≥1 extra variant is present, the sender
   // splits enrollments across variant A (this node's own subject/body) + these
@@ -95,7 +95,7 @@ export interface InternalNode extends FlowNodeBase {
   kind: "internal";
   action: FlowInternalAction;
   label: string;
-  target?: string; // e.g. a teammate / channel — free text for now
+  target?: string; // e.g. a teammate / channel: free text for now
 }
 
 export interface ConditionNode extends FlowNodeBase {
@@ -184,21 +184,21 @@ export function emptyGraph(): FlowGraph {
  * The starter template a new native campaign opens with: a first email, then a
  * "did they reply?" fork (yes → notify the account manager; no → two follow-ups).
  * Shows the branching flow on load; the executed path is the three emails down
- * the `no` branch. Reply-based only — we don't track opens/clicks, so the fork
+ * the `no` branch. Reply-based only: we don't track opens/clicks, so the fork
  * routes on the one inbound signal we actually have.
  */
 export function starterGraph(): FlowGraph {
   const first = emailNode(
     "Quick question, {{first_name}}",
-    "Hi {{first_name}},\n\n{{intro_line}}\n\nDoes {{company}} still handle this by hand? We help teams like yours get more done without adding headcount.\n\nWorth a quick look?\n\n— [Your name]",
+    "Hi {{first_name}},\n\n{{intro_line}}\n\nDoes {{company}} still handle this by hand? We help teams like yours get more done without adding headcount.\n\nWorth a quick look?\n\n[Your name]",
   );
   const followUp = emailNode(
     "",
-    "Just following up, {{first_name}} — worth a quick 15-minute chat to see if there's a fit?",
+    "Just following up, {{first_name}}. Worth a quick 15-minute chat to see if there's a fit?",
   );
   const breakup = emailNode(
     "",
-    "Closing the loop here. If the timing's off, no worries — reach out anytime.",
+    "Closing the loop here. If the timing's off, no worries: reach out anytime.",
   );
   const replied = conditionNode(
     "replied",
@@ -212,7 +212,7 @@ export function starterGraph(): FlowGraph {
 
 /**
  * The primary (executed) path: a flat list with every condition replaced by
- * its `no` branch, recursively. Condition nodes themselves are dropped — they
+ * its `no` branch, recursively. Condition nodes themselves are dropped: they
  * are control flow, not steps.
  */
 export function flattenPrimaryPath(nodes: FlowNode[]): FlowNode[] {
@@ -251,7 +251,7 @@ export interface ResolvedVariant {
   label: string;
   subject: string;
   body: string;
-  /** Auto-winner has paused this variant — excluded from new assignments. */
+  /** Auto-winner has paused this variant: excluded from new assignments. */
   paused: boolean;
 }
 
@@ -283,7 +283,7 @@ export function emailVariants(node: EmailNode): ResolvedVariant[] {
 /**
  * Variants still eligible for NEW assignments (not auto-paused). Falls back to
  * ALL variants if every one is somehow paused, so the sender can never be left
- * with nothing to send — the auto-winner never pauses the leader, so this
+ * with nothing to send: the auto-winner never pauses the leader, so this
  * fallback is a pure safety net.
  */
 export function activeVariants(node: EmailNode): ResolvedVariant[] {
@@ -298,7 +298,7 @@ export function isAbTest(node: EmailNode): boolean {
 }
 
 /**
- * Every email template string in the graph — subject + body of every A/B/C
+ * Every email template string in the graph: subject + body of every A/B/C
  * variant, across BOTH condition branches. This is the full set of copy the
  * campaign can actually send, so token extraction sees B/C-variant and yes-branch
  * tokens that graphToSteps (primary path, variant A only) would miss. Feeds the
@@ -353,7 +353,7 @@ export function graphToSteps(graph: FlowGraph): DerivedStep[] {
       });
       pendingWait = 0;
     }
-    // linkedin / internal: not executed yet — leave pendingWait intact so it
+    // linkedin / internal: not executed yet, leave pendingWait intact so it
     // applies to the next email on the path.
   }
   return steps;

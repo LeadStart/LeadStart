@@ -1,5 +1,5 @@
 // Relative (not "@/") so the standalone tsx test harness can import this
-// module without tsconfig path resolution — matches the repo's other pure-lib
+// module without tsconfig path resolution: matches the repo's other pure-lib
 // test targets. Webpack resolves this the same in production.
 import {
   EMAIL_REGEX,
@@ -10,7 +10,7 @@ import {
 
 // Anchored, NON-global copy of the shared email regex. EMAIL_REGEX carries the
 // `g` flag, so calling .test() on it directly is stateful (lastIndex) and
-// flaky — never do that. Rebuild from its source instead.
+// flaky: never do that. Rebuild from its source instead.
 export const EMAIL_FULL = new RegExp(`^${EMAIL_REGEX.source}$`);
 
 export interface EmailPerson {
@@ -26,7 +26,7 @@ export interface SanitizeResult {
 }
 
 // Reject provider-returned junk (malformed / tracking-pixel / CDN noise), and
-// flag — but keep — emails that look off (name mismatch, generic mailbox, or a
+// flag (but keep) emails that look off (name mismatch, generic mailbox, or a
 // domain that differs from the company domain). Fatal rejects become
 // not_found; flags are appended to the item note.
 export function sanitizeFoundEmail(

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Unit tests for src/lib/deliverability/inbox-health.ts — the pure per-mailbox
+ * Unit tests for src/lib/deliverability/inbox-health.ts: the pure per-mailbox
  * health scorer. No network, no DB; imports the REAL production module by
  * relative path (type-only cross-imports are erased at runtime).
  *
@@ -155,7 +155,7 @@ console.log("\n■ 30% soft bounce on 100 sends → warn -15 → 85 / healthy");
   const soft = r.components.find((c) => c.key === "soft_bounce_rate");
   assert(soft?.status === "warn" && soft.deduction === 15, "soft bounce is warn, -15");
   assert(r.score === 85, `score is 85 (got ${r.score})`);
-  assert(r.band === "healthy", `band is healthy — soft bounces never critical alone (got ${r.band})`);
+  assert(r.band === "healthy", `band is healthy, soft bounces never critical alone (got ${r.band})`);
 }
 
 console.log("\n■ soft bounce unchecked when softBounced7d omitted");
@@ -222,7 +222,7 @@ console.log("\n■ seed placement: 2 of 3 seeds in spam → bad -45 → 55 / wat
   const sp = r.components.find((c) => c.key === "seed_placement");
   assert(sp?.status === "bad" && sp.deduction === 45, "seed placement is bad, -45");
   assert(r.score === 55, `score is 55 (got ${r.score})`);
-  assert(r.band === "watch", `band is watch — a bad panel alone never goes critical (got ${r.band})`);
+  assert(r.band === "watch", `band is watch, a bad panel alone never goes critical (got ${r.band})`);
   assert(!!sp && sp.detail.includes("2 of 3 seeds in spam"), `detail names the spam count (got "${sp?.detail}")`);
   assert(!!sp && sp.detail.includes("reputation or content"), "detail says auth passed → reputation/content");
 }

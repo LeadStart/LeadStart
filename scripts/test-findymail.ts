@@ -20,7 +20,7 @@ function assert(cond: boolean, msg: string): void {
   }
 }
 
-console.log("■ parseFindResponse — hit");
+console.log("■ parseFindResponse, hit");
 {
   const r = parseFindResponse({ contact: { name: "Elon Musk", email: "elon@tesla.com", domain: "tesla.com" } });
   assert(r.found === true, "a contact with an email is found");
@@ -29,14 +29,14 @@ console.log("■ parseFindResponse — hit");
   assert(r.credit_charged === true, "a hit charges a credit");
 }
 
-console.log("■ parseFindResponse — trims + tolerates whitespace");
+console.log("■ parseFindResponse, trims + tolerates whitespace");
 {
   const r = parseFindResponse({ contact: { name: "  Jane Doe  ", email: "  jane@acme.com  " } });
   assert(r.email === "jane@acme.com", "email is trimmed");
   assert(r.name === "Jane Doe", "name is trimmed");
 }
 
-console.log("■ parseFindResponse — misses never charge");
+console.log("■ parseFindResponse, misses never charge");
 {
   assert(parseFindResponse({ contact: null }).found === false, "null contact = miss");
   assert(parseFindResponse({ contact: null }).credit_charged === false, "null contact = no charge");
@@ -48,7 +48,7 @@ console.log("■ parseFindResponse — misses never charge");
   assert(parseFindResponse({ contact: "nope" as unknown as Record<string, unknown> }).found === false, "non-object contact = miss");
 }
 
-console.log("■ parseFindResponse — name-only miss preserves the name");
+console.log("■ parseFindResponse, name-only miss preserves the name");
 {
   const r = parseFindResponse({ contact: { name: "No Email Person" } });
   assert(r.found === false, "no email = miss");

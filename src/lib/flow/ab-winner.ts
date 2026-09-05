@@ -1,4 +1,4 @@
-// A/B auto-winner — the significance test that pauses losing variants once a
+// A/B auto-winner: the significance test that pauses losing variants once a
 // test has gathered enough data, plus the pure graph mutations that persist and
 // preserve those pauses.
 //
@@ -8,7 +8,7 @@
 // update-sequence save route calls mergeStoredPauses to keep an auto-decision
 // alive across a manual builder edit.
 //
-// Measured on POSITIVE-REPLY RATE only — we never track opens/clicks
+// Measured on POSITIVE-REPLY RATE only: we never track opens/clicks
 // (deliverability), so that inbound signal is the sole yardstick.
 
 import {
@@ -36,7 +36,7 @@ export interface AbWinnerConfig {
 }
 
 // OFF by default (autoPause:false), and conservative once on. Positive-reply
-// rates are low, so a verdict needs real volume AND a real gap before it fires —
+// rates are low, so a verdict needs real volume AND a real gap before it fires,
 // never call a winner on noise. Tunable per node via EmailNode.ab_config.
 export const DEFAULT_AB_WINNER_CONFIG: AbWinnerConfig = {
   autoPause: false,
@@ -132,7 +132,7 @@ function leaderBeats(lead: VariantStat, chal: VariantStat, zCrit: number): boole
 /**
  * Decide which of an A/B node's ACTIVE variants to pause. Pure: takes the
  * already-computed per-variant stats and a threshold config, returns the losers
- * to pause (never the leader, never below the min-sends floors). Monotonic — it
+ * to pause (never the leader, never below the min-sends floors). Monotonic: it
  * only ever proposes NEW pauses among currently-active variants; the caller
  * unions them into the graph, so a decision, once made, sticks.
  */
@@ -161,7 +161,7 @@ export function decideAbWinner(
       leaderId: active[0]?.id ?? null,
       pauseIds: [],
       decided: active.length === 1 && node.variants.some((v) => v.paused),
-      reason: "single active variant — nothing left to test",
+      reason: "single active variant, nothing left to test",
     };
   }
 
@@ -182,7 +182,7 @@ export function decideAbWinner(
     (a, b) => b.positiveRatePct - a.positiveRatePct || b.sent - a.sent || (a.id < b.id ? -1 : 1),
   );
   const leader = ranked[0];
-  // Evidence gate: the leader needs real volume AND enough positives — never
+  // Evidence gate: the leader needs real volume AND enough positives, never
   // crown on a thin sample or one lucky reply.
   if (leader.sent < config.minSentPerVariant || leader.positive < config.minPositives) {
     return {
@@ -229,7 +229,7 @@ export function decideAbWinner(
 
 /**
  * Union auto-winner pause plans into a graph. For each plan, adds its pauseIds
- * to the matching email node's paused_variant_ids — deduped, and only ids that
+ * to the matching email node's paused_variant_ids: deduped, and only ids that
  * are real variants of that node. Returns a NEW graph and whether anything
  * changed; the evaluator persists only when `changed` (so a steady state writes
  * nothing).
@@ -277,8 +277,8 @@ export function mergePausedIntoGraph(
 
 /**
  * Re-apply the auto-winner's STORED pauses onto an INCOMING graph (a manual
- * builder save). paused_variant_ids is server-owned — the builder never authors
- * it — so a save must not clear it. For every email node the stored graph has
+ * builder save). paused_variant_ids is server-owned: the builder never authors
+ * it, so a save must not clear it. For every email node the stored graph has
  * pauses on, set the incoming node's paused_variant_ids to the stored ids that
  * still exist in the incoming node (a deleted variant drops its pause).
  */

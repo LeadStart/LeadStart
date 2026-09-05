@@ -1,7 +1,7 @@
 // Deliverability pre-flight for the native email channel. Two independent
 // checks, both pure-ish (DNS is the only I/O):
-//   1. Per-domain authentication — SPF / DKIM / DMARC via live DNS lookups.
-//   2. Sequence-copy spam signals — links, trigger phrases, shouting, etc.
+//   1. Per-domain authentication: SPF / DKIM / DMARC via live DNS lookups.
+//   2. Sequence-copy spam signals: links, trigger phrases, shouting, etc.
 //
 // This is advisory, not a gate: it surfaces what to fix before a campaign goes
 // live so early sends don't land in spam. Sending routes through Google's IPs,
@@ -61,7 +61,7 @@ export async function checkDomainAuth(domain: string): Promise<DomainAuth> {
   const dkimRec = dkimSel.find((r) => /v=DKIM1/i.test(r));
   const dkim: AuthCheck = dkimRec
     ? { status: "pass", detail: "DKIM published on the google selector." }
-    : { status: "warn", detail: "No DKIM on the 'google' selector — enable it in Google Admin → Gmail → Authenticate email (or a custom selector is in use)." };
+    : { status: "warn", detail: "No DKIM on the 'google' selector, enable it in Google Admin → Gmail → Authenticate email (or a custom selector is in use)." };
 
   const dmarcRec = dmarc.find((r) => /^v=DMARC1/i.test(r.trim()));
   let dmarcCheck: AuthCheck;
@@ -78,7 +78,7 @@ export async function checkDomainAuth(domain: string): Promise<DomainAuth> {
       dmarcCheck = {
         status: "warn",
         detail:
-          "DMARC present but p=none (monitoring only — set p=quarantine or p=reject once SPF/DKIM alignment is confirmed to enforce it).",
+          "DMARC present but p=none (monitoring only, set p=quarantine or p=reject once SPF/DKIM alignment is confirmed to enforce it).",
       };
     } else {
       dmarcCheck = { status: "pass", detail: `DMARC present and enforcing (p=${policy}).` };
@@ -93,7 +93,7 @@ export async function checkDomainAuth(domain: string): Promise<DomainAuth> {
  * receive the bounce reports and replies our poller depends on, and is a
  * strong signal something is misconfigured. Kept separate from DomainAuth
  * (not folded into checkDomainAuth) so the campaign deliverability card, which
- * consumes DomainAuth, is unaffected — only the inbox-health cron calls this.
+ * consumes DomainAuth, is unaffected: only the inbox-health cron calls this.
  */
 export async function checkMx(domain: string): Promise<AuthCheck> {
   try {
@@ -105,11 +105,11 @@ export async function checkMx(domain: string): Promise<AuthCheck> {
       };
     }
   } catch {
-    // NXDOMAIN / ENODATA / timeout — treat as missing, same stance as txt().
+    // NXDOMAIN / ENODATA / timeout: treat as missing, same stance as txt().
   }
   return {
     status: "fail",
-    detail: "No MX records — replies and bounce reports can't reach this domain.",
+    detail: "No MX records, replies and bounce reports can't reach this domain.",
   };
 }
 

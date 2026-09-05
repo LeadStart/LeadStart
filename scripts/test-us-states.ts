@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Unit tests for the bundled US states module — the abbr↔full-name↔FIPS lookups
+ * Unit tests for the bundled US states module: the abbr↔full-name↔FIPS lookups
  * the maps-search route uses to force every area's state to the full NAME the
  * compass actor requires. No network, no DB. Run: npx tsx scripts/test-us-states.ts
  */
@@ -29,7 +29,7 @@ function ok(cond: boolean, msg: string) {
   eq(Boolean(cond), true, msg);
 }
 
-console.log("US_STATES — completeness");
+console.log("US_STATES, completeness");
 eq(US_STATES.length, 51, "50 states + DC = 51 rows");
 ok(US_STATES.every((s) => /^[A-Z]{2}$/.test(s.code)), "every code is a 2-letter uppercase abbr");
 ok(US_STATES.every((s) => /^\d{2}$/.test(s.fips)), "every FIPS is 2 digits");
@@ -55,7 +55,7 @@ eq(stateNameFromFips("48"), "Texas", "48 → Texas");
 eq(stateNameFromFips("06"), "California", "06 → California");
 eq(stateNameFromFips("99"), null, "unknown FIPS → null");
 
-console.log("normalizeStateName — the route's abbr/name → full name");
+console.log("normalizeStateName, the route's abbr/name → full name");
 eq(normalizeStateName("TX"), "Texas", "abbr TX → Texas");
 eq(normalizeStateName("texas"), "Texas", "lowercase name → Texas");
 eq(normalizeStateName("Texas"), "Texas", "full name passes through");

@@ -2,7 +2,7 @@ import type { ApifyRun, ApifyUser } from "./types";
 
 // Minimal Apify REST v2 client. Mirrors the style of src/lib/scrapio/client.ts
 // (plain fetch, 3 attempts, exponential backoff) with one deliberate rule:
-// startActorRun retries ONLY on HTTP 429 — never on a thrown network error,
+// startActorRun retries ONLY on HTTP 429: never on a thrown network error,
 // because a POST that may already have reached Apify must not be replayed
 // (that would start a second paid actor run). Reads (GET) retry on network
 // errors and 5xx as usual.
@@ -26,7 +26,7 @@ interface RequestOpts {
   method?: string;
   body?: unknown;
   searchParams?: Record<string, string | number | boolean>;
-  // false for run starts — do not replay a POST that may have landed.
+  // false for run starts: do not replay a POST that may have landed.
   retryOnNetworkError?: boolean;
 }
 
@@ -84,7 +84,7 @@ export class ApifyClient {
         const parsed = text ? (JSON.parse(text) as T) : ({} as T);
         return { body: parsed, headers: response.headers };
       } catch (err) {
-        // ApifyApiError is a definitive HTTP failure — do not retry it.
+        // ApifyApiError is a definitive HTTP failure: do not retry it.
         if (err instanceof ApifyApiError) throw err;
         lastError = err as Error;
         // A thrown fetch error means the request may or may not have landed.
@@ -166,7 +166,7 @@ export class ApifyClient {
   }
 
   // Dataset metadata. `itemCount` is the number of items pushed so far and is
-  // readable while the owning run is still in progress — Apify's documented
+  // readable while the owning run is still in progress: Apify's documented
   // live-progress signal (the run object's own stats carry no item count).
   async getDatasetItemCount(datasetId: string): Promise<number | null> {
     const { body } = await this.request<{ data: { itemCount?: number } }>(
@@ -180,7 +180,7 @@ export class ApifyClient {
 
   // The account's current monthly usage cycle: window, dollars used, and cap.
   // `usageUsd` is Apify's own authoritative cycle total (includes every run,
-  // succeeded or not, plus storage) — the number to trust over our per-run tallies.
+  // succeeded or not, plus storage): the number to trust over our per-run tallies.
   async getMonthlyUsage(): Promise<{
     cycleStart: string | null;
     cycleEnd: string | null;
@@ -204,7 +204,7 @@ export class ApifyClient {
   }
 
   // Recent actor runs across the account (newest first), each with its real
-  // charge — the raw material for the per-actor spend breakdown.
+  // charge: the raw material for the per-actor spend breakdown.
   async listRuns(
     opts: { limit?: number } = {},
   ): Promise<

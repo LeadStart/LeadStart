@@ -1,4 +1,4 @@
-// POST /api/admin/domains/[id]/provisioning/advance — "Check now". Forces one
+// POST /api/admin/domains/[id]/provisioning/advance: "Check now". Forces one
 // provisioning advance (resetting any failed step to retry). For a domain with
 // no provisioning state (a manually-tracked or backfilled domain) it runs the
 // DKIM-watch path only: a live DKIM probe that stamps dkim_verified_at and flips

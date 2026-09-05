@@ -4,7 +4,7 @@
 // "Check now" route so both behave identically.
 //
 // Contract: each step is observe-then-act and idempotent (409/412 = already
-// done). Steps run strictly in order — the loop stops at the first step that
+// done). Steps run strictly in order: the loop stops at the first step that
 // stays `in_progress` (waiting on an external clock) or `failed` (permanent),
 // because later steps depend on it. Passwords are returned once (revealed) and
 // never persisted.
@@ -145,7 +145,7 @@ export async function advanceProvisioning(
     if (outcome.becameWarming) becameWarming = true;
     advanced.push(id);
 
-    // Stop if this step didn't complete — later steps depend on it.
+    // Stop if this step didn't complete: later steps depend on it.
     if (!isCompleteStatus(state.steps[id].status)) break;
   }
 
@@ -248,7 +248,7 @@ async function dnsRecordsStep(
     );
     return { state: markStep(state, "dns_records", { status: "done", attempts, last_error: null }, now) };
   } catch (err) {
-    // DNS writes are retryable — a registrar hiccup shouldn't be terminal.
+    // DNS writes are retryable: a registrar hiccup shouldn't be terminal.
     return { state: markStep(state, "dns_records", { status: "in_progress", attempts, last_error: msg(err) }, now) };
   }
 }
@@ -325,7 +325,7 @@ async function siteVerificationStep(
           attempts,
           last_error:
             `Google confirmed the DNS token; Workspace is finalizing verification for ${domain.domain}. ` +
-            "This completes automatically — usually within minutes, occasionally up to a couple hours on " +
+            "This completes automatically: usually within minutes, occasionally up to a couple hours on " +
             "Google's side. No action needed.",
         },
         now,
@@ -369,7 +369,7 @@ async function usersStep(
         permanentError = msg(err);
         break;
       }
-      // Transient (e.g. domain-not-verified propagation window) — retry next tick.
+      // Transient (e.g. domain-not-verified propagation window): retry next tick.
     }
   }
 
@@ -437,11 +437,11 @@ async function mailboxesStep(
   for (const u of users) {
     if (!u.created || u.mailbox_id) continue;
     try {
-      // Confirm the mailbox is live (DWD round-trip) — can 404 for minutes
+      // Confirm the mailbox is live (DWD round-trip): can 404 for minutes
       // after user creation (eventual consistency).
       await deps.gmail.getProfile(u.email);
     } catch {
-      continue; // not ready yet — retry next tick
+      continue; // not ready yet: retry next tick
     }
     const { data, error } = await deps.admin
       .from("native_mailboxes")
@@ -457,7 +457,7 @@ async function mailboxesStep(
     if (data?.id) {
       u.mailbox_id = data.id as string;
     } else if (error?.code === "23505") {
-      // Already registered — adopt the existing row.
+      // Already registered: adopt the existing row.
       const { data: existing } = await deps.admin
         .from("native_mailboxes")
         .select("id")

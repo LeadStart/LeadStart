@@ -1,9 +1,9 @@
 // Provider-dispatched seed readers for placement tests (migration 00085).
 //
-// SERVER-ONLY — imported by placement-runner.ts (and nothing client-side).
+// SERVER-ONLY: imported by placement-runner.ts (and nothing client-side).
 // One job: given a seed inbox and a probe's RFC Message-ID, report where the
 // probe landed in that seed, in a provider-neutral shape. The runner never
-// talks to Gmail/Graph/IMAP for seed reads directly anymore — it goes through
+// talks to Gmail/Graph/IMAP for seed reads directly anymore: it goes through
 // readerFor(seed, ctx).findProbe(...).
 //
 // Error contract (parity with the original Gmail-only path):
@@ -13,7 +13,7 @@
 //     pass (until PLACEMENT_TIMEOUT_MS, when the runner gives up as
 //     'unreadable' without benching).
 //
-// Seeds are read-only instruments: every reader is a pure lookup — no
+// Seeds are read-only instruments: every reader is a pure lookup, no
 // mark-read, no move, no rescue (see memory: project_no_warmup_pool_deliberate).
 
 import type {
@@ -66,9 +66,9 @@ export interface SeedReader {
 
 export interface ReaderContext {
   admin: AdminClient; // the graph reader persists rotated refresh tokens (session 2)
-  /** Org DWD client — required for google_workspace seeds. */
+  /** Org DWD client: required for google_workspace seeds. */
   gmail: GmailClient | null;
-  /** Org-level Entra app credentials — required for microsoft_graph seeds. */
+  /** Org-level Entra app credentials: required for microsoft_graph seeds. */
   msApp: { clientId: string; clientSecret: string } | null;
 }
 
@@ -103,7 +103,7 @@ class WorkspaceDwdReader implements SeedReader {
         seed.email_address,
         `rfc822msgid:${stripMessageIdBrackets(rfcMessageId)}`,
         5,
-        true, // include spam/trash — the whole point is finding it in SPAM
+        true, // include spam/trash: the whole point is finding it in SPAM
       );
     } catch (err) {
       throw mapGmailError(err, seed.email_address);
@@ -149,7 +149,7 @@ const imapReader: SeedReader = {
     const auth = seed.auth as SeedImapAuth | null;
     if (!auth || !auth.host || !auth.username || !auth.password) {
       throw new SeedReadAuthError(
-        `Seed ${seed.email_address} has no stored IMAP sign-in — remove it and add it again.`,
+        `Seed ${seed.email_address} has no stored IMAP sign-in: remove it and add it again.`,
       );
     }
     let result;
@@ -196,13 +196,13 @@ class MsGraphReader implements SeedReader {
     const app = this.ctx.msApp;
     if (!app) {
       throw new SeedReadAuthError(
-        "The Microsoft OAuth app isn't configured — add it in Settings → Integrations, then reconnect this seed.",
+        "The Microsoft OAuth app isn't configured: add it in Settings → Integrations, then reconnect this seed.",
       );
     }
     const auth = seed.auth as SeedGraphAuth | null;
     if (!auth?.refresh_token) {
       throw new SeedReadAuthError(
-        `Seed ${seed.email_address} isn't connected to Microsoft — use the Reconnect button.`,
+        `Seed ${seed.email_address} isn't connected to Microsoft: use the Reconnect button.`,
       );
     }
     const graph = new MsGraphClient(app.clientId, app.clientSecret);
@@ -223,7 +223,7 @@ class MsGraphReader implements SeedReader {
     }
     if (!msg) return { found: false };
 
-    // Folder ids are stable per mailbox — resolve once, cache on the entry.
+    // Folder ids are stable per mailbox: resolve once, cache on the entry.
     const entry = graphCache.get(seed.id);
     if (entry && (!entry.inboxId || !entry.junkId)) {
       try {
@@ -254,7 +254,7 @@ class MsGraphReader implements SeedReader {
         ? await graph.folderDisplayName(accessToken, meta.parentFolderId).catch(() => meta.parentFolderId)
         : folderName,
     ];
-    // Focused/Other is a different axis from placement — record it, don't
+    // Focused/Other is a different axis from placement: record it, don't
     // classify it (Outlook has no Promotions).
     if (meta.inferenceClassification === "other") labels.push("focused:other");
 
@@ -272,7 +272,7 @@ class MsGraphReader implements SeedReader {
 
   /**
    * A valid access token for the seed. Refreshes when the cached one is within
-   * 60s of expiry, and — critically — PERSISTS the rotated refresh token to
+   * 60s of expiry, and (critically) PERSISTS the rotated refresh token to
    * seed_inboxes.auth before handing back the access token, because MSA
    * invalidates the old refresh token the moment it issues a new one.
    */
@@ -294,7 +294,7 @@ class MsGraphReader implements SeedReader {
       .update({ auth: newAuth })
       .eq("id", seed.id);
     if (error) {
-      // Persisting the rotated token failed — do NOT use the access token
+      // Persisting the rotated token failed: do NOT use the access token
       // (the DB still holds the old, now-invalid refresh token). Transient:
       // the row stays pending and the next pass retries from a clean state.
       throw new Error(`Could not save the rotated Microsoft token: ${error.message}`);

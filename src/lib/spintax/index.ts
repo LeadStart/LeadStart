@@ -1,8 +1,8 @@
-// Spintax engine — deterministic per-recipient variation for cold email copy.
+// Spintax engine: deterministic per-recipient variation for cold email copy.
 //
 // This file has ZERO imports on purpose: it must be safe in the client bundle
 // AND runnable under plain node type-stripping (no npm deps, no node: builtins,
-// no enums — union string-literal types only).
+// no enums: union string-literal types only).
 //
 // ── The one disambiguation rule ──────────────────────────────────────────────
 //
@@ -22,19 +22,19 @@
 // There is NO escape syntax. The top-level-pipe test is the ONLY disambiguator;
 // a literal "{a|b}" meant to render verbatim is an accepted non-goal.
 //
-// Determinism (load-bearing — the native email sender relies on it): the chosen
+// Determinism (load-bearing, the native email sender relies on it): the chosen
 // option for a spin node is a deterministic hash of (seedKey, blockIndex).
 // Same (template, seedKey) always yields identical output. Math.random is
 // forbidden anywhere in this file.
 //
-// The choice hash is DOUBLE-hashed — blockChoiceHash(seedKey, blockIndex) below
+// The choice hash is DOUBLE-hashed: blockChoiceHash(seedKey, blockIndex) below
 // remixes fnv1a(seedKey + "#" + blockIndex) through a second fnv1a pass. This is
 // load-bearing for VARIETY, not just determinism: a single fnv1a of
 // `${seedKey}#${blockIndex}` leaves the low bit perfectly correlated across
 // adjacent block indices (appending "#0" vs "#1" flips only one input bit, and
 // FNV-1a's final odd-prime multiply preserves that into a complementary low
 // bit). Without the remix, two adjacent 2-option blocks in one template would
-// ALWAYS co-vary — every recipient gets "first-of-each-pair" or
+// ALWAYS co-vary: every recipient gets "first-of-each-pair" or
 // "second-of-each-pair", collapsing half the intended variation. The second
 // hash pass decorrelates the blocks while staying fully deterministic.
 
@@ -75,8 +75,8 @@ export function fnv1a(str: string): number {
 // ── Warning messages (plain language) ────────────────────────────────────────
 
 const WARNING_MESSAGES: Record<SpintaxWarningCode, string> = {
-  unbalanced_brace: "Unbalanced { } — check the spintax braces.",
-  empty_option: "A spintax option is empty — it will render as blank text.",
+  unbalanced_brace: "Unbalanced { }, check the spintax braces.",
+  empty_option: "A spintax option is empty, it will render as blank text.",
 };
 
 // ── Parser ───────────────────────────────────────────────────────────────────
@@ -106,12 +106,12 @@ function warn(ctx: ParseCtx, code: SpintaxWarningCode): void {
 /**
  * Parse a run of nodes until we hit a delimiter that belongs to the caller.
  *
- * `stopAtGroupEnd` — true when we are inside a spin option: the run ends at a
+ * `stopAtGroupEnd`: true when we are inside a spin option: the run ends at a
  * top-level `|` (next option) or `}` (end of group), which are left unconsumed
  * for the caller to inspect. At the document top level it is false, so `|` and
  * `}` are ordinary characters (a stray top-level `}` is flagged + emitted).
  *
- * `depth` — 0 at the document top level, >0 inside any spin option. Used only
+ * `depth`: 0 at the document top level, >0 inside any spin option. Used only
  * to decide whether a `{{token}}` should raise token_in_spintax.
  */
 function parseNodes(ctx: ParseCtx, stopAtGroupEnd: boolean, depth: number): SpinNode[] {
@@ -146,7 +146,7 @@ function parseNodes(ctx: ParseCtx, stopAtGroupEnd: boolean, depth: number): Spin
       const group = tryParseSpinGroup(ctx, depth);
       if (group === null) {
         // Not spintax (no top-level pipe, or unbalanced). The helper advanced
-        // the cursor and stashed the verbatim text on ctx._literal — fold it
+        // the cursor and stashed the verbatim text on ctx._literal: fold it
         // into the current literal run so it renders exactly as written.
         literal += ctx._literal ?? "";
         ctx._literal = undefined;
@@ -158,7 +158,7 @@ function parseNodes(ctx: ParseCtx, stopAtGroupEnd: boolean, depth: number): Spin
     }
 
     if (ch === "}" && !stopAtGroupEnd) {
-      // Stray top-level closing brace — emit literally, flag once.
+      // Stray top-level closing brace: emit literally, flag once.
       warn(ctx, "unbalanced_brace");
       literal += ch;
       ctx.pos++;
@@ -189,7 +189,7 @@ function readOpaqueToken(ctx: ParseCtx): string {
     }
     ctx.pos++;
   }
-  // EOF before "}}" — treat the whole remainder as literal token text.
+  // EOF before "}}": treat the whole remainder as literal token text.
   warn(ctx, "unbalanced_brace");
   return ctx.src.slice(start, ctx.pos);
 }
@@ -239,7 +239,7 @@ function tryParseSpinGroup(ctx: ParseCtx, depth: number): { type: "spin"; blockI
     const optNodes = parseNodes(sub, true, depth + 1);
     options.push(optNodes);
     if (sub.pos >= sub.src.length) {
-      // Ran off the end before a matching "}" — unbalanced.
+      // Ran off the end before a matching "}": unbalanced.
       break;
     }
     const delim = sub.src[sub.pos];
@@ -270,7 +270,7 @@ function tryParseSpinGroup(ctx: ParseCtx, depth: number): { type: "spin"; blockI
       ctx.pos = ctx.src.length;
     } else {
       // Balanced but no pipe (e.g. "{shrug}", "{}"): consume just this group,
-      // emit verbatim, NO warning — that is the rule.
+      // emit verbatim, NO warning: that is the rule.
       ctx.pos = sub.pos;
     }
     // Signal "literal" to the caller by returning null AFTER stashing the
@@ -314,7 +314,7 @@ export function parseSpintax(template: string): ParsedSpintax {
 /**
  * Deterministic option index for one spin block. Double-hashed to decorrelate
  * adjacent block indices (see the header note on determinism/variety). Pure
- * function of (seedKey, blockIndex) — same inputs always yield the same choice.
+ * function of (seedKey, blockIndex): same inputs always yield the same choice.
  */
 function blockChoiceHash(seedKey: string, blockIndex: number): number {
   return fnv1a(fnv1a(seedKey + "#" + blockIndex).toString(36));
@@ -333,7 +333,7 @@ function renderNodes(nodes: SpinNode[], seedKey: string): string {
   return out;
 }
 
-/** Parse then deterministically render. Lenient — never throws. */
+/** Parse then deterministically render. Lenient: never throws. */
 export function renderSpintax(template: string, seedKey: string): string {
   const { nodes } = parseSpintax(template);
   return renderNodes(nodes, seedKey);
@@ -349,7 +349,7 @@ export function hasSpintax(template: string): boolean {
 // variants(sequence) = product of child variants
 // variants(text)     = 1
 // variants(spin)     = sum over options of variants(option-sequence)
-// Clamped to `cap` at every multiply/add and short-circuited — we never build
+// Clamped to `cap` at every multiply/add and short-circuited: we never build
 // or enumerate the full product.
 
 function countNodes(nodes: SpinNode[], cap: number): number {

@@ -5,11 +5,11 @@ import {
   requireEnrichmentContext,
 } from "@/lib/apify/auth";
 
-// GET/POST /api/admin/enrichment/settings — read + write the org's enrichment
+// GET/POST /api/admin/enrichment/settings: read + write the org's enrichment
 // waterfall config (organizations.enrichment_settings, migration 00075).
 //
 // GET returns the stored blob merged over code defaults, so the settings card
-// always renders a complete shape. POST body: { settings: Partial<...> } —
+// always renders a complete shape. POST body: { settings: Partial<...> },
 // merged over the CURRENT stored settings then clamped/validated, so a partial
 // payload never wipes other keys. Same owner/VA gate as the other enrich routes.
 
@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
     .update({ enrichment_settings: next })
     .eq("id", organizationId);
   if (error) {
-    // e.g. migration 00075 not applied yet — surface instead of claiming saved.
+    // e.g. migration 00075 not applied yet: surface instead of claiming saved.
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
   return NextResponse.json({ settings: next });

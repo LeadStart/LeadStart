@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Unit tests for src/lib/enrichment/pattern-mv.ts — the pure email-candidate
+ * Unit tests for src/lib/enrichment/pattern-mv.ts: the pure email-candidate
  * generator. No network, no DB. Imports the REAL module by relative path (tsx
  * resolves the .ts extension); the module's `import type` reference to the MV
  * client is erased at load, so nothing else is pulled in.
@@ -67,7 +67,7 @@ eq(generateEmailCandidates("Jane", "Doe", ""), [], "no domain → no candidates"
 eq(generateEmailCandidates("Jane", "Doe", null), [], "null domain → no candidates");
 
 // Single-letter first: flast (jdoe) === firstlast (jdoe), and f.last (j.doe) ===
-// first.last (j.doe) — the duplicates dedupe out, preserving first occurrence.
+// first.last (j.doe): the duplicates dedupe out, preserving first occurrence.
 eq(
   generateEmailCandidates("J", "Doe", "acme.com"),
   ["j.doe@acme.com", "j@acme.com", "jdoe@acme.com", "doe@acme.com"],

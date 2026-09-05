@@ -1,6 +1,6 @@
 "use client";
 
-// Enrichment waterfall — org-level config for the second-pass email waterfall
+// Enrichment waterfall: org-level config for the second-pass email waterfall
 // (migration 00075): master toggle, company-size routing (small/large/unknown
 // bands split at an employee-count threshold), and the catch-all toggle. Default
 // method is pattern_mv; site_scrape/scrape_plus_pattern need the private actor,
@@ -23,13 +23,13 @@ import { appUrl } from "@/lib/api-url";
 import type { EnrichmentSettings, EnrichmentWaterfallMethod } from "@/types/app";
 
 // Available methods. site_scrape + scrape_plus_pattern need the private Apify
-// actor deployed (apify-actors/site-contact-scraper) — see the hint below.
+// actor deployed (apify-actors/site-contact-scraper): see the hint below.
 const METHOD_OPTIONS: { value: EnrichmentWaterfallMethod; label: string }[] = [
   { value: "pattern_mv", label: "Pattern + verify (Million Verifier)" },
   { value: "scrape_plus_pattern", label: "Site scrape, then pattern + verify" },
   { value: "site_scrape", label: "Site scrape (phone + generic email + personal)" },
   { value: "bovi", label: "Pattern finder (bovi)" },
-  { value: "off", label: "Off — skip this band" },
+  { value: "off", label: "Off, skip this band" },
 ];
 
 const BANDS: { key: "small_method" | "large_method" | "unknown_method"; label: string; hint: string }[] = [
@@ -131,7 +131,7 @@ export function WaterfallSettingsCard() {
           </div>
         ) : (
           <>
-            {/* auto-run kill-switch — the Prospecting → Contacts → Enrich flow */}
+            {/* auto-run kill-switch: the Prospecting → Contacts → Enrich flow */}
             <label className="flex items-start gap-2 text-sm cursor-pointer">
               <input
                 type="checkbox"
@@ -151,7 +151,7 @@ export function WaterfallSettingsCard() {
               </span>
             </label>
 
-            {/* domain discovery — independent of the waterfall master toggle */}
+            {/* domain discovery: independent of the waterfall master toggle */}
             <label className="flex items-start gap-2 text-sm cursor-pointer">
               <input
                 type="checkbox"
@@ -165,7 +165,7 @@ export function WaterfallSettingsCard() {
                 Discover websites for companies without a LinkedIn page
                 <span className="block text-[11px] text-muted-foreground">
                   During the domain step, a web lookup (Perplexity or Claude) finds the
-                  company&apos;s website when it has no LinkedIn page — validated against the
+                  company&apos;s website when it has no LinkedIn page: validated against the
                   live site before saving, so the email waterfall can still run. ≈ $0.005/company.
                 </span>
               </span>
@@ -185,7 +185,7 @@ export function WaterfallSettingsCard() {
                 Run the second-pass waterfall
                 <span className="block text-[11px] text-muted-foreground">
                   When off, enrichment runs stop after the LinkedIn profile + domain
-                  steps — no second-pass email search is billed.
+                  steps: no second-pass email search is billed.
                 </span>
               </span>
             </label>
@@ -249,7 +249,7 @@ export function WaterfallSettingsCard() {
               </p>
             </div>
 
-            {/* catch-all toggle — live in Phase 2 (pattern_mv) */}
+            {/* catch-all toggle: live in Phase 2 (pattern_mv) */}
             <label className="flex items-start gap-2 text-sm cursor-pointer">
               <input
                 type="checkbox"
@@ -270,7 +270,7 @@ export function WaterfallSettingsCard() {
               </span>
             </label>
 
-            {/* Findymail catch-all recovery — OFF by default. Needs a Findymail
+            {/* Findymail catch-all recovery: OFF by default. Needs a Findymail
                 API key, and the resale billing for recovered emails is still being
                 finalized, so it stays a deliberate opt-in toggle. */}
             <label className="flex items-start gap-2 text-sm cursor-pointer">

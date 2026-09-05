@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Unit tests for extract.ts — pure, no network. Run: npx tsx test/extract.test.ts
+// Unit tests for extract.ts: pure, no network. Run: npx tsx test/extract.test.ts
 import { extractContacts } from "../src/extract.js";
 
 let pass = 0;
@@ -13,7 +13,7 @@ function ok(cond: boolean, msg: string): void {
   }
 }
 function eq(a: unknown, b: unknown, msg: string): void {
-  ok(JSON.stringify(a) === JSON.stringify(b), `${msg} — got ${JSON.stringify(a)}, want ${JSON.stringify(b)}`);
+  ok(JSON.stringify(a) === JSON.stringify(b), `${msg}, got ${JSON.stringify(a)}, want ${JSON.stringify(b)}`);
 }
 
 const html = `

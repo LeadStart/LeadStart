@@ -1,4 +1,4 @@
-// POST /api/replies/[id]/reclassify — admin/VA override of a reply's
+// POST /api/replies/[id]/reclassify: admin/VA override of a reply's
 // final_class. Used to correct needs_review items or to train future
 // classifier calibration.
 //
@@ -7,7 +7,7 @@
 //   - Bumps status from 'new' → 'classified' so the reply clears the
 //     "waiting on classifier" queue; other statuses are preserved.
 //   - Writes audit columns (migration 00028): reclassified_by, _at, _from.
-//   - Does NOT re-fire the client notification — reclassifications are
+//   - Does NOT re-fire the client notification: reclassifications are
 //     oversight-layer changes, not new signals.
 //
 // Access: owner/VA in the reply's organization only. Client users cannot
@@ -19,7 +19,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import type { LeadReply, ReplyClass } from "@/types/app";
 import { suppressUnsubscribe } from "@/lib/replies/suppression";
 
-// Full taxonomy — mirror of the ReplyClass union in src/types/app.ts.
+// Full taxonomy: mirror of the ReplyClass union in src/types/app.ts.
 // Drift breaks admin reclassify validation.
 const VALID_CLASSES: ReplyClass[] = [
   "true_interest",

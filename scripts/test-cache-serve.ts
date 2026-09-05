@@ -14,7 +14,7 @@
  * Toggles token_pricing_config.segment_cache_enabled + a maps tier price; both are
  * captured up front and restored (and verified restored) in the finally block.
  *
- *   NODE_OPTIONS unused — run: npx tsx --tsconfig scripts/tsconfig.harness.json scripts/test-cache-serve.ts
+ *   NODE_OPTIONS unused: run: npx tsx --tsconfig scripts/tsconfig.harness.json scripts/test-cache-serve.ts
  */
 import { readFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";

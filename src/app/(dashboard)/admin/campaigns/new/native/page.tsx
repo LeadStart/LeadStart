@@ -92,7 +92,7 @@ export default function NewNativeCampaignPage() {
     setError(null);
     // Draft saves freely: if no name is typed yet, auto-name it "Untitled
     // campaign" rather than block the save. Client, mailboxes, and a complete
-    // sequence are all optional here — the launch-readiness panel surfaces what's
+    // sequence are all optional here: the launch-readiness panel surfaces what's
     // still needed, and the Launch button stays gated until it's ready.
     const campaignName = name.trim() || "Untitled campaign";
 
@@ -179,12 +179,12 @@ export default function NewNativeCampaignPage() {
           </TabsTrigger>
         </TabsList>
 
-        {/* Sequence — the full-height Flow canvas */}
+        {/* Sequence: the full-height Flow canvas */}
         <TabsContent value="sequence" className="flex min-h-0 flex-col pt-2">
           <FlowEditor value={graph} onChange={setGraph} clientId={clientId || undefined} />
         </TabsContent>
 
-        {/* Options — client + sending mailboxes */}
+        {/* Options: client + sending mailboxes */}
         <TabsContent value="options" className="min-h-0 overflow-y-auto pt-4">
           <div className="max-w-2xl space-y-6">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -224,7 +224,7 @@ export default function NewNativeCampaignPage() {
           </div>
         </TabsContent>
 
-        {/* Leads — pre-save empty state */}
+        {/* Leads: pre-save empty state */}
         <TabsContent value="leads" className="min-h-0 overflow-y-auto pt-4">
           <div className="flex max-w-2xl flex-col items-start gap-2 rounded-xl border border-dashed border-border p-6">
             <Users size={22} className="text-muted-foreground" />
@@ -236,7 +236,7 @@ export default function NewNativeCampaignPage() {
           </div>
         </TabsContent>
 
-        {/* Schedule — defaults for a new campaign */}
+        {/* Schedule: defaults for a new campaign */}
         <TabsContent value="schedule" className="min-h-0 overflow-y-auto pt-4">
           <div className="max-w-2xl space-y-3 rounded-xl border border-border p-5 text-sm">
             <div className="flex items-center justify-between border-b border-border pb-2">
@@ -252,17 +252,17 @@ export default function NewNativeCampaignPage() {
               <span className="font-medium">Lead-local</span>
             </div>
             <p className="pt-1 text-xs text-muted-foreground">
-              Starter defaults — fine-tune the window, weekdays, and daily new-lead cap from the campaign after you save.
+              Starter defaults: fine-tune the window, weekdays, and daily new-lead cap from the campaign after you save.
             </p>
           </div>
         </TabsContent>
 
-        {/* Deliverability — the probe */}
+        {/* Deliverability: the probe */}
         <TabsContent value="deliverability" className="min-h-0 overflow-y-auto pt-4">
           <CampaignProbeCard />
         </TabsContent>
 
-        {/* Analytics — empty until activated */}
+        {/* Analytics: empty until activated */}
         <TabsContent value="analytics" className="min-h-0 overflow-y-auto pt-4">
           <div className="flex max-w-2xl flex-col items-start gap-2 rounded-xl border border-dashed border-border p-6">
             <BarChart3 size={22} className="text-muted-foreground" />

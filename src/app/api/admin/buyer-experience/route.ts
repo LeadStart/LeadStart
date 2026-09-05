@@ -1,4 +1,4 @@
-// GET/POST /api/admin/buyer-experience — owner/va read + write of the buyer portal
+// GET/POST /api/admin/buyer-experience: owner/va read + write of the buyer portal
 // content (the "Buyer experience" editor). Writes go through the service-role
 // client; the posted blob is normalized over defaults before storing, so a partial
 // or malformed edit can never corrupt what buyers render.

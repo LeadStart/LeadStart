@@ -2,12 +2,12 @@
 
 // The single "Add" entry point for the Mailboxes tab. One blue button opens a
 // chooser with three doors, then walks the guided flow for each:
-//   • Sending inboxes — domain (bring-your-own / use-existing / buy) → Workspace
+//   • Sending inboxes: domain (bring-your-own / use-existing / buy) → Workspace
 //     → name inboxes (first/last + handle) → review DNS → provision (kicks off
 //     the state machine, reveals one-time passwords, embeds the live stepper +
 //     DKIM paste from DomainProvisioningDetail).
-//   • A domain only — track one you own or buy a fresh one (inboxes later).
-//   • Connect an existing inbox — register an address on a Workspace we manage.
+//   • A domain only: track one you own or buy a fresh one (inboxes later).
+//   • Connect an existing inbox: register an address on a Workspace we manage.
 // Everything here talks to the real routes; nothing is stubbed.
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
@@ -96,7 +96,7 @@ export function AddMailboxWizard({
   const [step, setStep] = useState(1);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  // Which registrars actually have API keys saved — so the picker can show
+  // Which registrars actually have API keys saved, so the picker can show
   // connection state instead of silently offering an unconfigured registrar.
   const [registrarStatus, setRegistrarStatus] = useState<{
     has_porkbun: boolean;
@@ -106,7 +106,7 @@ export function AddMailboxWizard({
   // (the error banner renders at the top, which is off-screen on long steps).
   const bodyRef = useRef<HTMLDivElement>(null);
 
-  // Step 1 — domain
+  // Step 1: domain
   const [domainMode, setDomainMode] = useState<DomainMode>("track");
   const [trackDomain, setTrackDomain] = useState("");
   const [trackRegistrar, setTrackRegistrar] = useState<RegistrarId | "manual">("manual");
@@ -119,19 +119,19 @@ export function AddMailboxWizard({
   // the client's real site so the bare domain never shows a dead parked page.
   const [forwardTo, setForwardTo] = useState("");
 
-  // Step 2 — workspace
+  // Step 2: workspace
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [wsId, setWsId] = useState<string | null>(null);
   const [wsAdding, setWsAdding] = useState(false);
   const [wsLabel, setWsLabel] = useState("");
   const [wsEmail, setWsEmail] = useState("");
 
-  // Step 3 — inboxes
+  // Step 3: inboxes
   const [inboxes, setInboxes] = useState<InboxSpec[]>([
     { first: "", last: "", local: "", touched: false },
   ]);
 
-  // Step 5 — result
+  // Step 5: result
   const [result, setResult] = useState<KickoffResult | null>(null);
 
   // Connect-existing door
@@ -156,7 +156,7 @@ export function AddMailboxWizard({
       setWorkspaces(list);
       setWsId((cur) => cur ?? list.find((w) => w.is_default)?.id ?? list[0]?.id ?? null);
     } catch {
-      /* best-effort — the Workspace step surfaces the empty state */
+      /* best-effort: the Workspace step surfaces the empty state */
     }
   }, []);
 
@@ -178,7 +178,7 @@ export function AddMailboxWizard({
       // Only steer the default; never override a manual choice the user made.
       setTrackRegistrar((cur) => (cur === "manual" ? preferred : cur));
     } catch {
-      /* best-effort — the picker just won't show connection state */
+      /* best-effort: the picker just won't show connection state */
     }
   }, []);
 
@@ -364,7 +364,7 @@ export function AddMailboxWizard({
         }
         domainRow = data.domain as SendingDomain;
       } else {
-        // buy — spends real money; gated behind registrar keys + spend cap.
+        // buy: spends real money; gated behind registrar keys + spend cap.
         const res = await fetch(appUrl("/api/admin/registrar/provision"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -395,7 +395,7 @@ export function AddMailboxWizard({
       }
 
       // Optional URL forwarding (Porkbun only). Best-effort: a forwarding hiccup
-      // must not fail the setup — it can always be set later from the domain row.
+      // must not fail the setup: it can always be set later from the domain row.
       if (forwardingSupported && forwardTo.trim()) {
         try {
           await fetch(appUrl("/api/admin/registrar/forward"), {
@@ -735,7 +735,7 @@ function Chooser({ onPick }: { onPick: (d: Door) => void }) {
     <div>
       <h3 className="text-[15px] font-semibold">What do you want to add?</h3>
       <p className="mb-3.5 mt-1 text-xs text-muted-foreground">
-        Inboxes live inside a domain, and a domain lives on a Google Workspace — so most of the time you
+        Inboxes live inside a domain, and a domain lives on a Google Workspace, so most of the time you
         want the first one.
       </p>
       {doors.map((d) => (
@@ -817,12 +817,12 @@ function RegistrarPicker({
           onChange={(e) => onChange(e.target.value as RegistrarId | "manual")}
         >
           <option value="porkbun">
-            {pkOn ? "Porkbun — auto-writes DNS" : "Porkbun — not connected (add key in Settings)"}
+            {pkOn ? "Porkbun: auto-writes DNS" : "Porkbun: not connected (add key in Settings)"}
           </option>
           <option value="spaceship">
-            {ssOn ? "Spaceship — auto-writes DNS" : "Spaceship — not connected (add key in Settings)"}
+            {ssOn ? "Spaceship: auto-writes DNS" : "Spaceship: not connected (add key in Settings)"}
           </option>
-          <option value="manual">Manual — you&rsquo;ll add the records by hand</option>
+          <option value="manual">Manual: you&rsquo;ll add the records by hand</option>
         </select>
       </div>
       {missing ? (
@@ -1012,7 +1012,7 @@ function WorkspaceStep(props: {
     <div>
       <h3 className="text-[15px] font-semibold">Which Google Workspace should host it?</h3>
       <p className="mb-3.5 mt-1 text-xs text-muted-foreground">
-        Every inbox sends through one service account that impersonates the address — so what matters is
+        Every inbox sends through one service account that impersonates the address, so what matters is
         that the Workspace has authorized that service account.
       </p>
       <div className="space-y-2">
@@ -1042,7 +1042,7 @@ function WorkspaceStep(props: {
         ))}
         {props.workspaces.length === 0 && (
           <p className="rounded-lg border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
-            No Workspaces yet. Add one below — its admin still needs to authorize the service account&rsquo;s
+            No Workspaces yet. Add one below: its admin still needs to authorize the service account&rsquo;s
             client ID in Google Admin before provisioning can run.
           </p>
         )}
@@ -1087,7 +1087,7 @@ function InboxesStep(props: {
     <div>
       <h3 className="text-[15px] font-semibold">Name the inboxes</h3>
       <p className="mb-3.5 mt-1 text-xs text-muted-foreground">
-        Google creates each user with a real first &amp; last name — that&rsquo;s the From name recipients
+        Google creates each user with a real first &amp; last name: that&rsquo;s the From name recipients
         see. The mailbox handle is auto-suggested from the first name; edit it freely. Avoid role addresses
         like <span className="font-mono">info@</span>.
       </p>
@@ -1136,12 +1136,12 @@ function InboxesStep(props: {
       )}
       {n > RECOMMENDED_MAX ? (
         <Callout kind="warn" className="mt-2.5">
-          <b>{n} inboxes on one domain.</b> {RECOMMENDED_MAX} is the recommended max for deliverability —
+          <b>{n} inboxes on one domain.</b> {RECOMMENDED_MAX} is the recommended max for deliverability,
           you can add more, but warm them slowly and watch placement.
         </Callout>
       ) : (
         <p className="mt-2.5 text-xs text-muted-foreground">
-          Tip: {RECOMMENDED_MAX} inboxes per domain is the deliverability sweet spot — add more only if you need to.
+          Tip: {RECOMMENDED_MAX} inboxes per domain is the deliverability sweet spot, add more only if you need to.
         </p>
       )}
     </div>
@@ -1192,7 +1192,7 @@ function ReviewStep(props: {
             <tr><td>TXT</td><td className="whitespace-nowrap">@</td><td className="[overflow-wrap:anywhere]">v=spf1 include:_spf.google.com ~all</td></tr>
             <tr><td>TXT</td><td className="whitespace-nowrap">_dmarc</td><td className="[overflow-wrap:anywhere]">v=DMARC1; p=none;</td></tr>
             <tr><td>TXT</td><td className="whitespace-nowrap">@</td><td className="[overflow-wrap:anywhere]">google-site-verification=… <span className="text-muted-foreground">(added during setup)</span></td></tr>
-            <tr><td>TXT</td><td className="whitespace-nowrap">google._domainkey</td><td className="text-muted-foreground [overflow-wrap:anywhere]">DKIM — generated in Google Admin, pasted at the last step</td></tr>
+            <tr><td>TXT</td><td className="whitespace-nowrap">google._domainkey</td><td className="text-muted-foreground [overflow-wrap:anywhere]">DKIM, generated in Google Admin, pasted at the last step</td></tr>
           </tbody>
         </table>
       </div>
@@ -1217,7 +1217,7 @@ function ReviewStep(props: {
         )}
       </Callout>
       <p className="mt-2 text-[11px] text-muted-foreground">
-        One DMARC / SPF / DKIM record covers every inbox on the domain — email auth is per-domain, not per-inbox.
+        One DMARC / SPF / DKIM record covers every inbox on the domain: email auth is per-domain, not per-inbox.
       </p>
 
       {/* Optional URL forwarding (Porkbun only). */}
@@ -1239,7 +1239,7 @@ function ReviewStep(props: {
         ) : (
           <p className="mt-0.5 text-[11px] text-muted-foreground">
             {props.registrar === "spaceship"
-              ? "Spaceship has no forwarding API — set the redirect manually in the Spaceship dashboard."
+              ? "Spaceship has no forwarding API: set the redirect manually in the Spaceship dashboard."
               : "Available on connected Porkbun domains. You can also set it later from the domain’s row under Mailboxes."}
           </p>
         )}
@@ -1257,7 +1257,7 @@ function ProvisionStep({ result, onDone }: { result: KickoffResult; onDone: () =
       {result.passwords.length > 0 && (
         <div className="mb-3 rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs">
           <div className="mb-1.5 flex items-center gap-1.5 font-semibold text-amber-900">
-            <KeyRound size={13} /> Inbox passwords — shown once, never stored
+            <KeyRound size={13} /> Inbox passwords: shown once, never stored
           </div>
           <ul className="space-y-0.5 font-mono text-amber-900">
             {result.passwords.map((p) => (
@@ -1267,14 +1267,14 @@ function ProvisionStep({ result, onDone }: { result: KickoffResult; onDone: () =
             ))}
           </ul>
           <p className="mt-1.5 text-amber-700">
-            Sending uses the service account, so you don&rsquo;t need these to send — reset in Google Admin if
+            Sending uses the service account, so you don&rsquo;t need these to send: reset in Google Admin if
             you ever need console login.
           </p>
         </div>
       )}
       <p className="mb-2 text-xs text-muted-foreground">
         Steps run in order and pick up where they left off. Watch progress here, finish DKIM, or close and it
-        continues in the background — the domain now shows this same panel in its row.
+        continues in the background: the domain now shows this same panel in its row.
       </p>
       <DomainProvisioningDetail domain={result.domain} onChange={onDone} />
     </div>
@@ -1311,7 +1311,7 @@ function DomainOnlyStep(props: {
         />
         <Callout kind="info">
           The domain lands as <b>provisioning</b> with zero inboxes. Its row gets a <b>Set up inboxes</b>{" "}
-          button — the same wizard, resumed from the Workspace step.
+          button: the same wizard, resumed from the Workspace step.
         </Callout>
       </div>
     </div>
@@ -1331,7 +1331,7 @@ function ConnectStep(props: {
       <h3 className="text-[15px] font-semibold">Connect an existing inbox</h3>
       <p className="mb-3.5 mt-1 text-xs text-muted-foreground">
         Registers an address you already send from, so it can join campaign rotation. It must be on a
-        Workspace we&rsquo;ve authorized — we verify domain-wide delegation live before saving.
+        Workspace we&rsquo;ve authorized: we verify domain-wide delegation live before saving.
       </p>
       <div className="space-y-3">
         <div>
@@ -1354,7 +1354,7 @@ function ConnectStep(props: {
           </div>
         </div>
         <Callout kind="info">
-          No provisioning, no DNS, no password — we just start sending through it. It ramps from 5/day like any
+          No provisioning, no DNS, no password: we just start sending through it. It ramps from 5/day like any
           new inbox unless you override the cap.
         </Callout>
       </div>

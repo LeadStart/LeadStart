@@ -1,5 +1,5 @@
 // Validate the hardened extractContacts against the exact real pages that produced
-// garbage in the smoke test (tier-1 plain fetch only — no browser, no Apify, no
+// garbage in the smoke test (tier-1 plain fetch only, no browser, no Apify, no
 // prod writes). Run: npx tsx scripts/diagnostics/test-extract-realpages.ts
 import { extractContacts } from "../../apify-actors/site-contact-scraper/src/extract.js";
 

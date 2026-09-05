@@ -427,7 +427,7 @@ export function ReportsClient({
           </div>
           <div>
             <CardTitle className="text-base">Generate Report</CardTitle>
-            <p className="text-xs text-muted-foreground mt-0.5">Creates a draft for review — send when ready</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Creates a draft for review: send when ready</p>
           </div>
         </CardHeader>
         <CardContent>
@@ -617,7 +617,7 @@ export function ReportsClient({
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <Settings2 size={18} className="text-[#2E37FE]" />
-                Schedule — {editingScheduleClient.name}
+                Schedule: {editingScheduleClient.name}
               </DialogTitle>
             </DialogHeader>
             <div className="space-y-5 mt-2">
@@ -629,10 +629,10 @@ export function ReportsClient({
                   onValueChange={(val) => setScheduleFrequency((val ?? "off") as "off" | ReportFrequency)}
                 >
                   <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Off — no auto-send" />
+                    <SelectValue placeholder="Off: no auto-send" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="off">Off — no auto-send</SelectItem>
+                    <SelectItem value="off">Off: no auto-send</SelectItem>
                     <SelectItem value="weekly">Weekly</SelectItem>
                     <SelectItem value="biweekly">Biweekly (every other week)</SelectItem>
                     <SelectItem value="monthly">Monthly</SelectItem>
@@ -640,7 +640,7 @@ export function ReportsClient({
                 </Select>
               </div>
 
-              {/* Day picker — weekly/biweekly */}
+              {/* Day picker: weekly/biweekly */}
               {(scheduleFrequency === "weekly" || scheduleFrequency === "biweekly") && (
                 <div className="space-y-2">
                   <Label className="text-sm font-medium">Day of Week</Label>
@@ -664,7 +664,7 @@ export function ReportsClient({
                 </div>
               )}
 
-              {/* Day picker — monthly */}
+              {/* Day picker: monthly */}
               {scheduleFrequency === "monthly" && (
                 <div className="space-y-2">
                   <Label className="text-sm font-medium">Day of Month</Label>
@@ -687,7 +687,7 @@ export function ReportsClient({
                     </SelectContent>
                   </Select>
                   <p className="text-[11px] text-muted-foreground">
-                    Capped at 28 so every month is guaranteed to fire — use &quot;Last day&quot; for end-of-month cadence.
+                    Capped at 28 so every month is guaranteed to fire: use &quot;Last day&quot; for end-of-month cadence.
                   </p>
                 </div>
               )}
@@ -782,7 +782,7 @@ export function ReportsClient({
                 return (
                   <div className="rounded-lg bg-blue-50 border border-blue-200 p-3">
                     <p className="text-xs text-blue-700">
-                      {summary ?? "Incomplete schedule"} — sends to <strong>{selectedCount} recipient(s)</strong>. Each report covers the trailing {periodLabel} period.
+                      {summary ?? "Incomplete schedule"}: sends to <strong>{selectedCount} recipient(s)</strong>. Each report covers the trailing {periodLabel} period.
                     </p>
                   </div>
                 );
@@ -839,7 +839,7 @@ export function ReportsClient({
                         <div className="flex items-center gap-3 mt-0.5">
                           <span className="text-xs text-muted-foreground flex items-center gap-1">
                             <Calendar size={11} />
-                            {report.report_period_start} — {report.report_period_end}
+                            {report.report_period_start} to {report.report_period_end}
                           </span>
                         </div>
                       </div>
@@ -906,7 +906,7 @@ export function ReportsClient({
                 <div>
                   <span>{clientMap.get(selectedReport.client_id)?.name || "Unknown"}</span>
                   <p className="text-xs font-normal text-muted-foreground mt-0.5">
-                    {selectedReport.report_period_start} — {selectedReport.report_period_end}
+                    {selectedReport.report_period_start} to {selectedReport.report_period_end}
                   </p>
                 </div>
               </DialogTitle>

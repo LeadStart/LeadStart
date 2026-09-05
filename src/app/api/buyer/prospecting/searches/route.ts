@@ -1,4 +1,4 @@
-// GET /api/buyer/prospecting/searches — the buyer's own Maps + LinkedIn searches
+// GET /api/buyer/prospecting/searches: the buyer's own Maps + LinkedIn searches
 // (status + delivered), newest first, each annotated with its master-pool SEGMENT
 // coverage ("you own N of ~M in this segment"). Served via the service-role client
 // scoped to the buyer's org, so no per-table buyer RLS policy is needed.

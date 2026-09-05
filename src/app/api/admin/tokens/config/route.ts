@@ -1,4 +1,4 @@
-// GET/POST /api/admin/tokens/config — owner-only read + write of the token
+// GET/POST /api/admin/tokens/config: owner-only read + write of the token
 // product config (the Settings -> Tokens page). Reads/writes the singleton
 // pricing config, the per-vein price tiers, and the Stripe packs. Writes go
 // through the service-role client with a field whitelist (the shell can't

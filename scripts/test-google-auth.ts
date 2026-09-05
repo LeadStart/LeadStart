@@ -131,7 +131,7 @@ eq(new GmailRateLimitError() instanceof GoogleRateLimitError, true, "GmailRateLi
 eq(new GmailTransientError("x") instanceof GoogleTransientError, true, "GmailTransientError is a GoogleTransientError");
 eq(new GmailPermanentError("x") instanceof GooglePermanentError, true, "GmailPermanentError is a GooglePermanentError");
 eq(new GmailConfigError("x").name, "GmailConfigError", "GmailConfigError keeps its own name");
-// ...but a bare GoogleAuthError is NOT a GmailAuthError — which is exactly why
+// ...but a bare GoogleAuthError is NOT a GmailAuthError, which is exactly why
 // GmailClient.getAccessToken translates via asGmailError.
 eq(new GoogleAuthError("x") instanceof GmailAuthError, false, "a bare GoogleAuthError is not a GmailAuthError (translation required)");
 

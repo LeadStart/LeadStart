@@ -110,7 +110,7 @@ export default async function AdminReplyDetailPage({
       <div className="flex items-center gap-2 rounded-xl px-4 py-2 bg-slate-100 text-slate-700 text-xs">
         <Eye size={14} />
         <span>
-          Admin view — the client sees this reply in their own inbox with phone
+          Admin view: the client sees this reply in their own inbox with phone
           CTA + outcome capture.
         </span>
       </div>
@@ -145,7 +145,7 @@ export default async function AdminReplyDetailPage({
                   )}
                 </div>
               )}
-              {/* Lead contact — the email is always shown so the lead is reachable */}
+              {/* Lead contact: the email is always shown so the lead is reachable */}
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-xs">
                 <a
                   href={`mailto:${reply.lead_email}`}
@@ -272,7 +272,7 @@ export default async function AdminReplyDetailPage({
                 {reply.referral_contact.title && (
                   <span className="text-muted-foreground font-normal">
                     {" "}
-                    — {reply.referral_contact.title}
+                   : {reply.referral_contact.title}
                   </span>
                 )}
               </p>

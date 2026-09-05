@@ -1,4 +1,4 @@
-// Claude Haiku 4.5 classifier — Layer 2 of the two-layer reply-routing
+// Claude Haiku 4.5 classifier: Layer 2 of the two-layer reply-routing
 // classifier.
 //
 // Called after the deterministic keyword prefilter (Layer 1). Output is
@@ -13,7 +13,7 @@ import type { ReplyClass } from "@/types/app";
 import type { PrefilterResult } from "@/lib/replies/keyword-prefilter";
 
 // Runtime Zod schema. Kept in sync with the ReplyClass union in
-// src/types/app.ts — drift here breaks classifier output validation.
+// src/types/app.ts: drift here breaks classifier output validation.
 const REPLY_CLASS_VALUES = [
   "true_interest",
   "meeting_booked",
@@ -106,7 +106,7 @@ function renderUserMessage(input: ClassifierInput): string {
 /**
  * Run the Haiku classifier. Throws on network / API errors and on
  * validation errors (Zod schema mismatch between Claude's output and
- * ClassifierOutputSchema — should never happen if the enum stays in sync
+ * ClassifierOutputSchema: should never happen if the enum stays in sync
  * with ReplyClass).
  *
  * @param input - reply body + optional enrichment

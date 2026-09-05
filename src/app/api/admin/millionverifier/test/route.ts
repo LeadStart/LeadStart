@@ -1,4 +1,4 @@
-// POST /api/admin/millionverifier/test — validate a Million Verifier API key by
+// POST /api/admin/millionverifier/test: validate a Million Verifier API key by
 // fetching its credit balance. Owner-only.
 //
 // We deliberately do NOT copy the no-auth /prospecting/validate-key precedent:
@@ -78,10 +78,10 @@ export async function POST(req: NextRequest) {
         ? err.kind === "credits"
           ? "This key has no verification credits left."
           : err.kind === "blocked"
-            ? "This server's IP is blocked by Million Verifier — contact their support."
+            ? "This server's IP is blocked by Million Verifier: contact their support."
             : err.kind === "auth"
               ? "Million Verifier rejected this API key."
-              : "Couldn't reach Million Verifier — try again."
+              : "Couldn't reach Million Verifier, try again."
         : err instanceof Error
           ? err.message
           : "Verification test failed";

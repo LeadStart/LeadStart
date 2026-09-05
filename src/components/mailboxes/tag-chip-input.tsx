@@ -6,7 +6,7 @@
 // one instead of free-typing a near-duplicate. Selecting an existing tag adopts
 // its canonical casing, so "client a" can never fragment "Client A". Creating a
 // brand-new tag is still possible, but as a clearly-separate action rather than
-// the default. Presentational — the parent owns the value and decides when to
+// the default. Presentational: the parent owns the value and decides when to
 // persist. Shared by the per-row tag editor and the bulk "tag selected" panel on
 // Admin → Mailboxes. Mirrors the campaign MailboxPoolPicker's combobox pattern.
 
@@ -94,7 +94,7 @@ export function TagChipInput({
   }
 
   // Enter/comma commits, but never on an empty field unless the user has
-  // explicitly arrowed onto a row — so auto-opening the list can't add a tag by
+  // explicitly arrowed onto a row, so auto-opening the list can't add a tag by
   // accident.
   function commitFromKey() {
     if (!trimmed && !navigated) return;

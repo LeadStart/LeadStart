@@ -1,12 +1,12 @@
-// Enrichment Flow Map — DATA (single source for the diagram content).
+// Enrichment Flow Map: DATA (single source for the diagram content).
 //
-// SYNC CONTRACT (see docs/PROSPECTING_FLOW.md — the canonical flow doc):
+// SYNC CONTRACT (see docs/PROSPECTING_FLOW.md, the canonical flow doc):
 //   • Costs + default behaviour are DERIVED from the live constants below
 //     (pricing.ts, types/app.ts). A price change or a flipped default updates
 //     the map automatically; a renamed constant breaks the build.
 //   • Actor IDs are the string literals in ACTORS. scripts/test-flow-map-sync.ts
 //     extracts the current ids from the provider source and FAILS if the map
-//     falls out of sync — run it (and update this file) whenever a sourcing
+//     falls out of sync: run it (and update this file) whenever a sourcing
 //     actor, enrichment phase/provider, cost, or the default config changes.
 //   • Structure (phase order, skip logic, branches) is hand-drawn here and in
 //     PROSPECTING_FLOW.md; keep the two in step in the SAME change.
@@ -102,7 +102,7 @@ export const MAPS_NODES: FlowNode[] = [
   { id: "src", kind: "box", x: 140, y: 20, w: 300, h: 80, tone: "srcMaps",
     lines: [{ t: "Source · geo + business type", s: "title" }, { t: ACTORS.mapsSource, s: "actor" }, { t: `~${usd(MAPS_PLACE_COST_USD)} / place · ON HIT`, s: "hit" }, { t: "gets phone + domain · no email/person", s: "muted" }] },
   { id: "prof", kind: "box", x: 140, y: 140, w: 300, h: 56, tone: "skip",
-    lines: [{ t: "Phase 1 · Profiles", s: "title" }, { t: "SKIPPED — no LinkedIn URL", s: "muted" }] },
+    lines: [{ t: "Phase 1 · Profiles", s: "title" }, { t: "SKIPPED, no LinkedIn URL", s: "muted" }] },
   { id: "dom", kind: "box", x: 140, y: 236, w: 300, h: 66, tone: "step",
     lines: [{ t: "Phase 2 · Domains", s: "title" }, { t: "web-lookup if missing", s: "actor" }, { t: `~${usd(DOMAIN_DISCOVERY_COST_USD)} · often no-op`, s: "muted" }] },
   { id: "nam", kind: "box", x: 140, y: 344, w: 300, h: 78, tone: "addon",
@@ -114,7 +114,7 @@ export const MAPS_NODES: FlowNode[] = [
   { id: "ss", kind: "box", x: 330, y: 578, w: 220, h: 80, tone: "step",
     lines: [{ t: "Waterfall · site_scrape", s: "titleSm" }, { t: ACTORS.siteScrape, s: "actor" }, { t: `~${usd(SITE_SCRAPE_MEASURED_USD)}/site · PER QUERY`, s: "pq" }, { t: "info@ → contacts.email conf 30", s: "muted" }] },
   { id: "act", kind: "box", x: 140, y: 700, w: 300, h: 56, tone: "skip",
-    lines: [{ t: "Phase 4 · Activity", s: "title" }, { t: "SKIPPED — no LinkedIn URL", s: "muted" }] },
+    lines: [{ t: "Phase 4 · Activity", s: "title" }, { t: "SKIPPED, no LinkedIn URL", s: "muted" }] },
   { id: "ver", kind: "box", x: 140, y: 796, w: 300, h: 66, tone: "addon",
     lines: [{ t: `Phase 5 · Verify  ${addonTag(ADDONS.verify)}`, s: "title" }, { t: "Million Verifier · or send-gate", s: "actor" }, { t: `~${usd(MV_CREDIT_COST_USD)} / decisive · ON HIT`, s: "opt" }] },
   { id: "ready", kind: "pill", x: 210, y: 904, w: 160, h: 44, tone: "done",

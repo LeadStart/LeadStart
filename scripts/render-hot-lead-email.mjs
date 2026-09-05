@@ -26,7 +26,7 @@ const states = [
       leadLinkedinUrl: "https://linkedin.com/in/sarahchen",
       replySubject: "Re: Cutting Acme's fulfillment costs ~20%",
       replyBodyPreview:
-        "Thanks for reaching out — this is actually really timely. We just wrapped a board review and lead gen was flagged as a gap. Can you do a quick call tomorrow afternoon? I'm free after 2pm PT. Also curious how you'd handle our EU entity — we've had compliance headaches there before.",
+        "Thanks for reaching out, this is actually really timely. We just wrapped a board review and lead gen was flagged as a gap. Can you do a quick call tomorrow afternoon? I'm free after 2pm PT. Also curious how you'd handle our EU entity. We've had compliance headaches there before.",
       replyThreadUrl: THREAD,
       receivedAt: now,
     },
@@ -42,7 +42,7 @@ const states = [
       leadLinkedinUrl: null,
       replySubject: "Re: Reducing pallet-handling costs",
       replyBodyPreview:
-        "This is interesting timing — we're reviewing our 3PL contracts next month. I don't have a direct line handy, but email me and we can set something up. What kind of savings do you typically see for a fleet our size?",
+        "This is interesting timing: we're reviewing our 3PL contracts next month. I don't have a direct line handy, but email me and we can set something up. What kind of savings do you typically see for a fleet our size?",
       replyThreadUrl: THREAD,
       receivedAt: now,
     },
@@ -58,7 +58,7 @@ const states = [
       leadLinkedinUrl: null,
       replySubject: "Re: Cutting your cleaning-supply costs",
       replyBodyPreview:
-        "Thanks for reaching out — yes, we'd be open to hearing more about your cleaning-supply program. Can you send over pricing, or let us know a good time to call this week?",
+        "Thanks for reaching out: yes, we'd be open to hearing more about your cleaning-supply program. Can you send over pricing, or let us know a good time to call this week?",
       replyThreadUrl: THREAD,
       receivedAt: now,
     },

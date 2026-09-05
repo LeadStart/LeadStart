@@ -1,4 +1,4 @@
-// POST /api/admin/findymail/test — validate a Findymail API key by fetching its
+// POST /api/admin/findymail/test: validate a Findymail API key by fetching its
 // remaining finder credits. Owner-only (same rationale as the Million Verifier
 // test route: an unauthenticated key probe is an IP-block / abuse vector).
 //
@@ -8,7 +8,7 @@
 // also refresh the cached balance so the settings card shows a current number.
 //
 // NOTE: the finder itself (used by the enrichment recovery step) works off the
-// saved key regardless of this test — a failed test never blocks saving or using
+// saved key regardless of this test: a failed test never blocks saving or using
 // the key, it just means the credit readout couldn't be fetched.
 
 import { NextRequest, NextResponse } from "next/server";
@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
           ? "This Findymail key has no finder credits left."
           : err.kind === "auth"
             ? "Findymail rejected this API key."
-            : "Couldn't reach Findymail — try again."
+            : "Couldn't reach Findymail, try again."
         : err instanceof Error
           ? err.message
           : "Findymail test failed";

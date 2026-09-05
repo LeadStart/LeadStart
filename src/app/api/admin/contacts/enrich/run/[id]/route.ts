@@ -59,7 +59,7 @@ export async function GET(
   }
 
   // Join contacts.company_email (migration 00076) onto each item so the search
-  // results can chart person-email vs company-only vs none — the generic inbox
+  // results can chart person-email vs company-only vs none: the generic inbox
   // lives on the contact, not the run item.
   const contactIds = Array.from(
     new Set(items.map((it) => (it as { contact_id?: string }).contact_id).filter(Boolean) as string[]),

@@ -1,11 +1,11 @@
 "use client";
 
-// Microsoft OAuth app (seed inboxes) — the Entra app registration used to
+// Microsoft OAuth app (seed inboxes): the Entra app registration used to
 // connect Outlook.com / Microsoft 365 seed inboxes for placement testing
 // (migration 00085). Two fields: client id + secret. The secret is never read
 // back into the browser (the route returns only has_* booleans), so the inputs
 // start blank; typing replaces the stored value, blank keeps it. No test
-// button — the Connect Microsoft seed button on the Mailboxes page validates
+// button: the Connect Microsoft seed button on the Mailboxes page validates
 // the credentials by actually running the OAuth flow.
 
 import { useCallback, useEffect, useState } from "react";
@@ -33,7 +33,7 @@ export function MsOauthSettingsCard() {
       const d = await res.json();
       if (res.ok) setStatus(d as Status);
     } catch {
-      /* non-fatal — the card still lets you save */
+      /* non-fatal: the card still lets you save */
     }
   }, []);
   useEffect(() => {
@@ -148,7 +148,7 @@ export function MsOauthSettingsCard() {
         </div>
         <p className="text-[11px] text-muted-foreground">
           Client secrets expire (max 24 months). When one lapses, Microsoft seeds stop reading and
-          show a Reconnect prompt — save a fresh secret here, then reconnect.
+          show a Reconnect prompt: save a fresh secret here, then reconnect.
         </p>
       </CardContent>
     </Card>

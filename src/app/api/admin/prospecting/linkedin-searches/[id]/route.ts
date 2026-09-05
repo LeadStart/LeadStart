@@ -8,7 +8,7 @@ import type { LinkedInProspect } from "@/types/app";
 // Returns the search row for the polling UI. Mirrors enrich/run/[id].
 //
 // While a sourcing run is in flight, the response overlays LIVE data read
-// straight from Apify — both the dataset item count AND a capped page of the
+// straight from Apify: both the dataset item count AND a capped page of the
 // parsed rows themselves, so the results table streams profiles in as the
 // actor scrapes them (Phase 1 live review). The UI polls this route every 3s,
 // but the cron (the state machine + DB writer) only refreshes the row once a

@@ -1,12 +1,12 @@
 // Drift guard for the in-app Onboarding Preview (Admin → Workflows → Onboarding).
 //
 // The preview (src/components/workflows/onboarding-preview.tsx) renders the REAL
-// client-facing surfaces — the proposal email, the hosted quote page, and the
-// welcome page — fed by the live default config. "Live" only holds if two things
+// client-facing surfaces: the proposal email, the hosted quote page, and the
+// welcome page: fed by the live default config. "Live" only holds if two things
 // stay true, and neither can be a runtime assertion, so this test enforces them:
 //
 //   1. The preview DERIVES its defaults (warm-up, quote-expiry, email subject +
-//      sender) from the shared constants, by import — never a re-typed literal.
+//      sender) from the shared constants, by import: never a re-typed literal.
 //   2. Every CONSUMER surface a customer actually hits keeps using those same
 //      constants, so what ships == what the preview shows.
 //

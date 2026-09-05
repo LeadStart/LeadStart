@@ -34,7 +34,7 @@ export default function AllCampaignsPage() {
   const { campaigns, clients, snapshots } = data || { campaigns: [], clients: [], snapshots: [] };
   const clientMap = new Map(clients.map((c) => [c.id, c]));
 
-  // KPI time-window lens. Defaults to All-Time — a rolling 30-day reply rate
+  // KPI time-window lens. Defaults to All-Time: a rolling 30-day reply rate
   // understated it (fresh, unreplied leads dilute the denominator). 7d/30d
   // filter the all-time snapshot pull client-side (no refetch on switch).
   const [period, setPeriod] = useState<MetricsPeriod>(DEFAULT_METRICS_PERIOD);
@@ -101,7 +101,7 @@ export default function AllCampaignsPage() {
               </p>
               <PeriodToggle period={period} onChange={setPeriod} />
             </div>
-            {/* Mobile: stacked cards — no sideways-scrolling table */}
+            {/* Mobile: stacked cards, no sideways-scrolling table */}
             <div className="space-y-2.5 lg:hidden">
               {pageRows.map((row) => {
                 const isOrphan = row.client_id === null;

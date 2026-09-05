@@ -63,7 +63,7 @@ import {
 } from "@/lib/apify/pricing";
 import { PlanFloorNote } from "@/components/prospecting/plan-floor-note";
 
-// The DIY Google-Maps lead-search flow — a "D + running cart" build experience.
+// The DIY Google-Maps lead-search flow: a "D + running cart" build experience.
 // LEFT: where your customers are (a Smart Search location picker → multi-region),
 // then ready-to-run audiences. RIGHT: a sticky "Your search" cart (areas /
 // audiences / enrichment / how many leads / outcome estimate / run). Sources
@@ -75,7 +75,7 @@ const POLL_MS = 3000;
 const RESULTS_PAGE_SIZE = 25;
 const GEO_DEBOUNCE_MS = 180;
 
-// Ready-to-run audiences — each adds a bundle of Google Maps search terms.
+// Ready-to-run audiences: each adds a bundle of Google Maps search terms.
 const AUDIENCES: { label: string; terms: string[]; blurb: string; icon: LucideIcon }[] = [
   { label: "Med spas", terms: ["med spa", "medical spa"], blurb: "Aesthetic & wellness clinics", icon: Sparkles },
   { label: "Dentists", terms: ["dentist", "dental clinic"], blurb: "General & cosmetic dental", icon: Stethoscope },
@@ -283,7 +283,7 @@ export function MapsDiyPanel() {
   // Keep the sticky "Your search" cart vertically centered in the viewport while
   // the page scrolls (lg only). The sticky `top` is set to the offset that centers
   // the cart's box. Two escapes: below lg the cart isn't sticky (clear the override),
-  // and when the cart is taller than the viewport we drop the pin entirely — a
+  // and when the cart is taller than the viewport we drop the pin entirely: a
   // pinned over-tall cart would park its Run button below the fold, unreachable.
   // Re-runs on viewport resize and whenever the cart's height changes (areas/audiences).
   useEffect(() => {
@@ -298,7 +298,7 @@ export function MapsDiyPanel() {
       const vh = window.innerHeight;
       const ch = el.offsetHeight;
       if (ch > vh - 32) {
-        // Taller than the viewport — scroll normally so the whole cart is reachable.
+        // Taller than the viewport: scroll normally so the whole cart is reachable.
         el.style.position = "static";
         el.style.top = "";
       } else {
@@ -521,7 +521,7 @@ export function MapsDiyPanel() {
     setError(null);
     setSaveMsg(null);
     if (areas.length === 0) {
-      setError("Add at least one area — a city, county, state, or ZIP");
+      setError("Add at least one area, a city, county, state, or ZIP");
       return;
     }
     if (terms.length === 0) {
@@ -665,9 +665,9 @@ export function MapsDiyPanel() {
     <div className="space-y-6">
       {/* D + running cart */}
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
-        {/* LEFT — the build */}
+        {/* LEFT: the build */}
         <div className="min-w-0 space-y-6">
-          {/* Prior searches — left column (half width) */}
+          {/* Prior searches: left column (half width) */}
           {priorRuns.length > 0 && (
             <Card className="border-border/50 shadow-sm">
               <CardHeader className="flex flex-row items-center gap-2 pb-3">
@@ -676,7 +676,7 @@ export function MapsDiyPanel() {
                 </div>
                 <div>
                   <CardTitle className="text-base">Prior searches</CardTitle>
-                  <p className="text-xs text-muted-foreground">Click to reload cached results — no new charges.</p>
+                  <p className="text-xs text-muted-foreground">Click to reload cached results: no new charges.</p>
                 </div>
               </CardHeader>
               <CardContent>
@@ -747,7 +747,7 @@ export function MapsDiyPanel() {
                 <MapPin size={16} /> Where are your customers?
               </CardTitle>
               <p className="text-xs text-muted-foreground">
-                Search a city, county, state, or ZIP and add it. Add as many regions as you like — we search each and
+                Search a city, county, state, or ZIP and add it. Add as many regions as you like: we search each and
                 merge the results.
               </p>
             </CardHeader>
@@ -845,7 +845,7 @@ export function MapsDiyPanel() {
             </CardContent>
           </Card>
 
-          {/* Who do you want? — audiences */}
+          {/* Who do you want?: audiences */}
           <Card className="border-border/50 shadow-sm">
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-base">
@@ -854,7 +854,7 @@ export function MapsDiyPanel() {
               <p className="text-xs text-muted-foreground">Tap a ready-to-run audience, or type your own business type.</p>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* Audience cards — whole card is the click target */}
+              {/* Audience cards: whole card is the click target */}
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 {AUDIENCES.map((a) => {
                   const active = audienceActive(a.terms);
@@ -968,10 +968,10 @@ export function MapsDiyPanel() {
           </Card>
         </div>
 
-        {/* RIGHT — the running cart */}
+        {/* RIGHT: the running cart */}
         <div className="min-w-0">
           {/* Lift the cart toward the page-header row; held sticky and vertically
-              centered in the viewport on scroll (lg only — see the cartRef effect). */}
+              centered in the viewport on scroll (lg only, see the cartRef effect). */}
           <div ref={cartRef} className="lg:sticky lg:top-6 lg:-mt-[120px] space-y-3">
             <Card className="border-indigo-200/70 shadow-md">
               <CardHeader className="pb-3">
@@ -1259,7 +1259,7 @@ function ToggleRow({ checked, onChange, title, sub }: { checked: boolean; onChan
 }
 
 // Illustrative tier-mix bar for the pre-run estimate (the outcome tiers the
-// pricing bills, NOT a business-count prediction — counts are deliberately never
+// pricing bills, NOT a business-count prediction: counts are deliberately never
 // shown pre-run). The real mix renders as the radial once a run completes.
 function TierMixBar() {
   const segs = [

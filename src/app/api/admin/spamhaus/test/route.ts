@@ -1,4 +1,4 @@
-// POST /api/admin/spamhaus/test — validates a Spamhaus DQS key end-to-end by
+// POST /api/admin/spamhaus/test: validates a Spamhaus DQS key end-to-end by
 // querying the domain blocklist for dbltest.com, Spamhaus's always-listed test
 // fixture. A working key returns "listed"; a missing/blocked key returns
 // "unchecked" (a DQS status code, not a listing). Owner-only.
@@ -11,7 +11,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { checkDbl } from "@/lib/deliverability/dnsbl";
 
-// checkDbl uses node:dns — force the Node runtime (matches the deliverability route).
+// checkDbl uses node:dns, force the Node runtime (matches the deliverability route).
 export const runtime = "nodejs";
 
 interface TestBody {
@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
     {
       error:
         result.status === "clean"
-          ? "Key reached Spamhaus but the test domain came back clean — that shouldn't happen; double-check the key."
+          ? "Key reached Spamhaus but the test domain came back clean: that shouldn't happen; double-check the key."
           : `Spamhaus didn't accept the key: ${result.detail}`,
     },
     { status: 400 },

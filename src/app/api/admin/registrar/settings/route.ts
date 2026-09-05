@@ -1,7 +1,7 @@
-// GET  /api/admin/registrar/settings — registrar config status. NEVER returns
+// GET  /api/admin/registrar/settings: registrar config status. NEVER returns
 //                                       secret values: just whether each provider
 //                                       is configured + the monthly spend cap.
-// POST /api/admin/registrar/settings — save keys + spend cap (partial: only the
+// POST /api/admin/registrar/settings: save keys + spend cap (partial: only the
 //                                       fields present in the body are touched;
 //                                       an explicit "" clears a key). Owner only.
 //

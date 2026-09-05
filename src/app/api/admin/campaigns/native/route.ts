@@ -1,8 +1,8 @@
-// POST /api/admin/campaigns/native — create a native email sequence
+// POST /api/admin/campaigns/native: create a native email sequence
 // campaign. Owner-only. Inserts a campaigns row (source_channel=
 // 'native_email'), its campaign_steps (all kind='email'; step 0 carries the
 // subject, later steps thread as "Re:"), and the campaign_mailboxes rotation
-// pool — rolling back the campaign if any dependent insert fails.
+// pool: rolling back the campaign if any dependent insert fails.
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
   const steps = Array.isArray(body.steps) ? body.steps : [];
 
   // A campaign is created as a DRAFT from just a name. Client, mailboxes, and a
-  // complete sequence are all optional here — launch readiness (src/lib/campaigns/
+  // complete sequence are all optional here: launch readiness (src/lib/campaigns/
   // launch-readiness.ts) surfaces what's still needed and the activate route
   // hard-gates on it. Only the name is required to save a draft.
   if (!name) return NextResponse.json({ error: "Name is required" }, { status: 400 });
@@ -136,7 +136,7 @@ export async function POST(req: NextRequest) {
     body.flow_graph && typeof body.flow_graph === "object" ? body.flow_graph : null;
 
   // Seed the variable registry (migration 00092) from the campaign's copy. Prefer
-  // the full flow graph — all A/B variants + both branches — so B/C-variant tokens
+  // the full flow graph (all A/B variants + both branches) so B/C-variant tokens
   // are registered; fall back to the linear steps for a graph-less create.
   const registryTemplates =
     flowGraph && Array.isArray((flowGraph as FlowGraph).nodes)
@@ -168,7 +168,7 @@ export async function POST(req: NextRequest) {
   }
   const campaignId = (created as { id: string }).id;
 
-  // Steps are optional for a draft — insert only what was authored.
+  // Steps are optional for a draft: insert only what was authored.
   if (sorted.length > 0) {
     const stepRows = sorted.map((s, i) => ({
       campaign_id: campaignId,

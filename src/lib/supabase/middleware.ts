@@ -26,7 +26,7 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
-  // If the URL has a `code` param (Supabase PKCE flow — password reset, magic link, etc.)
+  // If the URL has a `code` param (Supabase PKCE flow, password reset, magic link, etc.)
   // exchange it for a session right here in the middleware
   const code = request.nextUrl.searchParams.get("code");
   if (code) {
@@ -57,12 +57,12 @@ export async function updateSession(request: NextRequest) {
     const expiresAt = session.expires_at * 1000; // convert to ms
     const REFRESH_THRESHOLD = 5 * 60 * 1000; // 5 minutes before expiry
     if (Date.now() > expiresAt - REFRESH_THRESHOLD) {
-      // Token expired or expiring soon — refresh via network call
+      // Token expired or expiring soon: refresh via network call
       const { data } = await supabase.auth.getUser();
       user = data.user;
     }
   } else if (!session) {
-    // No session at all — try getUser() to recover from refresh token
+    // No session at all: try getUser() to recover from refresh token
     const { data } = await supabase.auth.getUser();
     user = data.user;
   }
@@ -98,7 +98,7 @@ export async function updateSession(request: NextRequest) {
   };
 
   // Public routes that don't require auth. `/site-chat.js` is the
-  // embeddable widget served to the public LeadStart.io marketing site —
+  // embeddable widget served to the public LeadStart.io marketing site,
   // it must load with no session. (The chat API it calls,
   // /api/site-chat, is already public via the `/api/` bypass below and
   // enforces its own origin allowlist + rate limit.)
@@ -108,7 +108,7 @@ export async function updateSession(request: NextRequest) {
   );
 
   // API routes still handle their own authorization logic (cron secrets,
-  // webhook secrets, role checks) — but we forward user headers so they
+  // webhook secrets, role checks), but we forward user headers so they
   // don't have to rebuild a Supabase SSR client just to read identity.
   if (pathname.startsWith("/api/")) {
     return forwardResponse();
@@ -119,7 +119,7 @@ export async function updateSession(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     // Preserve the intended destination so post-login routing can honor it.
-    // Used by the "Open in Portal" link in hot-lead notification emails — a
+    // Used by the "Open in Portal" link in hot-lead notification emails: a
     // logged-out client clicking that link should land on the specific reply
     // after signing in, not the generic /client home.
     const nextTarget = pathname + (request.nextUrl.search || "");
@@ -127,7 +127,7 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // If logged in, route based on role — but honor a safe `?next=` first.
+  // If logged in, route based on role, but honor a safe `?next=` first.
   if (user && (pathname === "/" || pathname === "/login")) {
     const role = (user.app_metadata?.role as string) || "client";
     const url = request.nextUrl.clone();
@@ -165,7 +165,7 @@ export async function updateSession(request: NextRequest) {
   // missing role falls through leniently (its home is /client, which admits it)
   // and can't ping-pong into a redirect loop.
 
-  // /admin — owner/va only. Bounce client + buyer.
+  // /admin: owner/va only. Bounce client + buyer.
   if (user && pathname.startsWith("/admin")) {
     const role = user.app_metadata?.role as string | undefined;
     if (role === "client" || role === "buyer") {
@@ -175,7 +175,7 @@ export async function updateSession(request: NextRequest) {
     }
   }
 
-  // /client — client only. Bounce owner/va + buyer.
+  // /client: client only. Bounce owner/va + buyer.
   if (user && pathname.startsWith("/client")) {
     const role = user.app_metadata?.role as string | undefined;
     if (role === "owner" || role === "va" || role === "buyer") {
@@ -185,7 +185,7 @@ export async function updateSession(request: NextRequest) {
     }
   }
 
-  // /buyer — buyer only. Bounce owner/va + client.
+  // /buyer: buyer only. Bounce owner/va + client.
   if (user && pathname.startsWith("/buyer")) {
     const role = user.app_metadata?.role as string | undefined;
     if (role === "owner" || role === "va" || role === "client") {

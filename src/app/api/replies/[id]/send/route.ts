@@ -1,4 +1,4 @@
-// POST /api/replies/[id]/send — send the client's edited reply back through the
+// POST /api/replies/[id]/send: send the client's edited reply back through the
 // native Gmail mailbox that received it, threaded into the same conversation,
 // and CC the client's notification email so the thread lives in their inbox.
 //
@@ -7,7 +7,7 @@
 //   2. Per-channel precondition check.
 //   3. Atomic load+claim: UPDATE status='sent' WHERE id=:id AND status IN
 //      ('new','classified') RETURNING *. Guards against double-click and
-//      concurrent sends — only one request wins the row.
+//      concurrent sends: only one request wins the row.
 //   4. Channel send. On failure, roll back: set status='classified' and
 //      record the error so the client can retry.
 //

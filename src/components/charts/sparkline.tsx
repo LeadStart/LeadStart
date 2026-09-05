@@ -4,7 +4,7 @@
  * Tiny inline-SVG sparkline for dense table cells (e.g. the Overview
  * portfolio "Trend" column). Flat contract: a single 1.6px polyline, no
  * fill, no gradient. Stroke is emerald when the series ends at or above
- * where it started, red when it ends lower — a quick up/down read.
+ * where it started, red when it ends lower: a quick up/down read.
  */
 export function Sparkline({
   values,
@@ -20,7 +20,7 @@ export function Sparkline({
   if (!values || values.length < 2) {
     return (
       <span className="text-xs text-muted-foreground" aria-hidden>
-        —
+       ,
       </span>
     );
   }

@@ -1,5 +1,5 @@
 // Diagnostic: read the LAST few runs of each enrichment actor straight from the
-// Apify API and print their FINAL usageTotalUsd — to compare against what the
+// Apify API and print their FINAL usageTotalUsd: to compare against what the
 // worker captured on enrichment_runs.cost_usd. Token is read internally from the
 // org row via Supabase REST and never printed.
 import { readFileSync } from "node:fs";

@@ -1,4 +1,4 @@
-// POST /api/admin/mailboxes/tags — bulk add/remove tags across many inboxes.
+// POST /api/admin/mailboxes/tags: bulk add/remove tags across many inboxes.
 // Owner-only, org-scoped. Body: { mailbox_ids: string[], add?: string[],
 // remove?: string[] }. `add` and `remove` are the same for every selected inbox;
 // each row's resulting tag list is recomputed from its own existing tags (add is

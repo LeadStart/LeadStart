@@ -1,11 +1,11 @@
 // Activation pre-flight for native email campaigns (server-only).
 //
 // Advisory, not a gate: when an owner/VA activates a native campaign, this
-// gathers "worth a look before you go live" warnings — copy score, domain
+// gathers "worth a look before you go live" warnings: copy score, domain
 // authentication, and the latest campaign-copy placement result. The activate
 // route returns them as a 409 the first time; the user reviews them in a dialog
 // and re-submits with acknowledge_warnings to proceed. It NEVER blocks (the
-// hard blocks — no mailbox, no steps — stay in the route). Fail-open: any check
+// hard blocks, no mailbox or steps, stay in the route). Fail-open: any check
 // that throws is skipped, never surfaced as a false problem.
 
 import type { createAdminClient } from "@/lib/supabase/admin";
@@ -24,7 +24,7 @@ export interface PreflightWarning {
 const FRESHNESS_DAYS = 7;
 
 /**
- * Rank a placement test by how bad its outcome is — the ladder the seed_placement
+ * Rank a placement test by how bad its outcome is: the ladder the seed_placement
  * health component uses. Higher = worse. Used to pick the single worst result
  * across a campaign's sending mailboxes.
  */
@@ -147,7 +147,7 @@ export async function runActivationPreflight(
       }
 
       if (seedCount === 0) {
-        // No panel to measure with — flag it, and don't also nag about a
+        // No panel to measure with: flag it, and don't also nag about a
         // missing placement test (same gap).
         warnings.push({
           kind: "seeds",

@@ -41,7 +41,7 @@ import {
 import type { Organization } from "@/types/app";
 import { appUrl } from "@/lib/api-url";
 
-// Brand icon — Lucide's brand-icon set was removed upstream, so inline.
+// Brand icon: Lucide's brand-icon set was removed upstream, so inline.
 function LinkedinIcon({ size = 16, className = "" }: { size?: number; className?: string }) {
   return (
     <svg
@@ -128,7 +128,7 @@ export default function IntegrationsPage() {
     { kind: "success"; model: string } | { kind: "fail"; message: string } | null
   >(null);
 
-  // Unipile (LinkedIn channel — migration 00046)
+  // Unipile (LinkedIn channel, migration 00046)
   const [unipileKey, setUnipileKey] = useState("");
   const [unipileDsn, setUnipileDsn] = useState("");
   const [savingUnipile, setSavingUnipile] = useState(false);
@@ -138,7 +138,7 @@ export default function IntegrationsPage() {
     "success" | "fail" | null
   >(null);
 
-  // Native email — Google service account w/ domain-wide delegation (migration 00056)
+  // Native email: Google service account w/ domain-wide delegation (migration 00056)
   const [gmailSaEmail, setGmailSaEmail] = useState("");
   const [gmailSaKey, setGmailSaKey] = useState("");
   const [savingGmail, setSavingGmail] = useState(false);
@@ -159,7 +159,7 @@ export default function IntegrationsPage() {
     { kind: "success" } | { kind: "fail"; message: string } | null
   >(null);
 
-  // Email verification — Million Verifier (migration 00069): API key + the
+  // Email verification: Million Verifier (migration 00069): API key + the
   // last-seen credit balance / error surfaced on the card.
   const [millionVerifierKey, setMillionVerifierKey] = useState("");
   const [millionVerifierMeta, setMillionVerifierMeta] = useState<{
@@ -176,7 +176,7 @@ export default function IntegrationsPage() {
     { kind: "success"; credits: number } | { kind: "fail"; message: string } | null
   >(null);
 
-  // Findymail (catch-all email validation — migration 00099)
+  // Findymail (catch-all email validation, migration 00099)
   const [findymailKey, setFindymailKey] = useState("");
   const [findymailMeta, setFindymailMeta] = useState<{ credits: number | null; checkedAt: string | null }>({
     credits: null,
@@ -190,7 +190,7 @@ export default function IntegrationsPage() {
     { kind: "success"; credits: number } | { kind: "fail"; message: string } | null
   >(null);
 
-  // Apify (Contacts → Enrich: profile→email, company→domain, waterfall — migration 00070)
+  // Apify (Contacts → Enrich: profile→email, company→domain, waterfall, migration 00070)
   const [apifyKey, setApifyKey] = useState("");
   const [savingApify, setSavingApify] = useState(false);
   const [apifySaved, setApifySaved] = useState(false);
@@ -238,7 +238,7 @@ export default function IntegrationsPage() {
           if (dmOrg.perplexity_api_key) setPerplexityKey(dmOrg.perplexity_api_key);
           if (dmOrg.unipile_api_key) setUnipileKey(dmOrg.unipile_api_key);
           if (dmOrg.unipile_dsn) setUnipileDsn(dmOrg.unipile_dsn);
-          // Inbox health (migration 00061). Separate cast — same reason as above.
+          // Inbox health (migration 00061). Separate cast: same reason as above.
           const ihOrg = data as {
             spamhaus_dqs_key?: string | null;
             inbox_health_offline_threshold?: number | null;
@@ -269,7 +269,7 @@ export default function IntegrationsPage() {
             setGmailSaEmail(gmOrg.gmail_service_account_email);
           if (gmOrg.gmail_service_account_key)
             setGmailSaKey(gmOrg.gmail_service_account_key);
-          // Email verification — Million Verifier (migration 00069). Same
+          // Email verification: Million Verifier (migration 00069). Same
           // stale-type cast as above until 00069 is applied everywhere.
           const mvOrg = data as {
             millionverifier_api_key?: string | null;
@@ -319,7 +319,7 @@ export default function IntegrationsPage() {
   async function handleResetBlacklist() {
     if (
       !confirm(
-        "Reset the Scrap.io blacklist for this org? Future searches will be allowed to re-pull every business they've ever fetched — credits WILL be charged again. This is intended for starting fresh on a region you scraped a long time ago.",
+        "Reset the Scrap.io blacklist for this org? Future searches will be allowed to re-pull every business they've ever fetched: credits WILL be charged again. This is intended for starting fresh on a region you scraped a long time ago.",
       )
     ) {
       return;
@@ -608,7 +608,7 @@ export default function IntegrationsPage() {
       .eq("id", organizationId);
     setSavingInboxHealth(false);
     if (error) {
-      // Surface it rather than claiming "Saved" — e.g. migration 00068 not
+      // Surface it rather than claiming "Saved": e.g. migration 00068 not
       // applied yet (unknown column) fails the whole update, key included.
       setInboxHealthError(error.message);
       return;
@@ -699,7 +699,7 @@ export default function IntegrationsPage() {
       .eq("id", organizationId);
     setSavingMillionVerifier(false);
     if (error) {
-      // Surface it rather than claiming "Saved" — e.g. migration 00069 not
+      // Surface it rather than claiming "Saved": e.g. migration 00069 not
       // applied yet (unknown column) fails the whole update.
       setMillionVerifierError(error.message);
       return;
@@ -749,7 +749,7 @@ export default function IntegrationsPage() {
       .eq("id", organizationId);
     setSavingFindymail(false);
     if (error) {
-      // Surface it rather than claiming "Saved" — e.g. migration 00099 not
+      // Surface it rather than claiming "Saved": e.g. migration 00099 not
       // applied yet (unknown column) fails the whole update.
       setFindymailError(error.message);
       return;
@@ -762,7 +762,7 @@ export default function IntegrationsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Inbox health — Spamhaus blocklist key + auto-pause threshold (migration 00061) */}
+      {/* Inbox health: Spamhaus blocklist key + auto-pause threshold (migration 00061) */}
       <Card className="border-border/50 shadow-sm">
         <CardHeader className="flex flex-row items-center gap-2 pb-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-600">
@@ -811,7 +811,7 @@ export default function IntegrationsPage() {
             />
             <p className="text-[11px] text-muted-foreground">
               Pause a mailbox automatically when its score stays below this number
-              for two checks in a row. Leave blank to only alert — mailboxes are
+              for two checks in a row. Leave blank to only alert: mailboxes are
               never paused automatically. 50 is a sensible starting point.
             </p>
           </div>
@@ -869,7 +869,7 @@ export default function IntegrationsPage() {
             <div className="flex items-center gap-2 rounded-lg bg-emerald-50 border border-emerald-200 p-3">
               <CheckCircle size={16} className="text-emerald-500" />
               <span className="text-sm font-medium text-emerald-700">
-                Key works — the test domain came back listed as expected.
+                Key works: the test domain came back listed as expected.
               </span>
             </div>
           )}
@@ -884,7 +884,7 @@ export default function IntegrationsPage() {
         </CardContent>
       </Card>
 
-      {/* Native email — Google service account w/ domain-wide delegation (migration 00056) */}
+      {/* Native email: Google service account w/ domain-wide delegation (migration 00056) */}
       <Card className="border-border/50 shadow-sm">
         <CardHeader className="flex flex-row items-center gap-2 pb-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#EA4335]">
@@ -929,7 +929,7 @@ export default function IntegrationsPage() {
               authorize this account&apos;s client ID for the{" "}
               <span className="font-mono">gmail.send</span> and{" "}
               <span className="font-mono">gmail.readonly</span> scopes in Google
-              Admin — see the setup runbook.
+              Admin: see the setup runbook.
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -949,7 +949,7 @@ export default function IntegrationsPage() {
         </CardContent>
       </Card>
 
-      {/* Email verification — Million Verifier (migration 00069) */}
+      {/* Email verification: Million Verifier (migration 00069) */}
       <Card className="border-border/50 shadow-sm">
         <CardHeader className="flex flex-row items-center gap-2 pb-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-600">
@@ -1034,7 +1034,7 @@ export default function IntegrationsPage() {
             <div className="flex items-center gap-2 rounded-lg bg-emerald-50 border border-emerald-200 p-3">
               <CheckCircle size={16} className="text-emerald-500" />
               <span className="text-sm font-medium text-emerald-700">
-                Connected — {millionVerifierTestResult.credits.toLocaleString()} credits
+                Connected: {millionVerifierTestResult.credits.toLocaleString()} credits
                 remaining.
               </span>
             </div>
@@ -1050,7 +1050,7 @@ export default function IntegrationsPage() {
         </CardContent>
       </Card>
 
-      {/* Findymail — catch-all email validation (migration 00099) */}
+      {/* Findymail: catch-all email validation (migration 00099) */}
       <Card className="border-border/50 shadow-sm">
         <CardHeader className="flex flex-row items-center gap-2 pb-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600">
@@ -1079,7 +1079,7 @@ export default function IntegrationsPage() {
             />
             <p className="text-[11px] text-muted-foreground">
               Find your key at <span className="font-mono">app.findymail.com</span>. Charged 1
-              credit only when a deliverable email is found — misses and risky catch-alls are free.
+              credit only when a deliverable email is found: misses and risky catch-alls are free.
             </p>
           </div>
           {(findymailMeta.credits !== null || findymailMeta.checkedAt) && (
@@ -1115,7 +1115,7 @@ export default function IntegrationsPage() {
             <div className="flex items-center gap-2 rounded-lg bg-emerald-50 border border-emerald-200 p-3">
               <CheckCircle size={16} className="text-emerald-500" />
               <span className="text-sm font-medium text-emerald-700">
-                Connected — {findymailTestResult.credits.toLocaleString()} credits remaining.
+                Connected: {findymailTestResult.credits.toLocaleString()} credits remaining.
               </span>
             </div>
           )}
@@ -1187,7 +1187,7 @@ export default function IntegrationsPage() {
             <p className="text-[11px] text-muted-foreground">
               Every business pulled by the Prospecting tab is added to a Scrap.io
               blacklist for this org. Future searches automatically skip those
-              businesses (no credits charged). Reset wipes the list — only do
+              businesses (no credits charged). Reset wipes the list: only do
               this when you want to re-pull a region you scraped a long time ago.
             </p>
             <div className="flex items-center gap-3">
@@ -1220,7 +1220,7 @@ export default function IntegrationsPage() {
         </CardContent>
       </Card>
 
-      {/* Apify — Contacts enrichment (migration 00070) */}
+      {/* Apify: Contacts enrichment (migration 00070) */}
       <Card className="border-border/50 shadow-sm">
         <CardHeader className="flex flex-row items-center gap-2 pb-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-600">
@@ -1267,7 +1267,7 @@ export default function IntegrationsPage() {
               <span className="text-sm font-medium text-emerald-700">
                 Connection successful
                 {apifyTestResult.username && (
-                  <span className="text-emerald-700/70 font-normal"> — {apifyTestResult.username}</span>
+                  <span className="text-emerald-700/70 font-normal">: {apifyTestResult.username}</span>
                 )}
                 {apifyTestResult.plan && (
                   <span className="text-emerald-700/70 font-normal"> · {apifyTestResult.plan}</span>
@@ -1284,22 +1284,22 @@ export default function IntegrationsPage() {
         </CardContent>
       </Card>
 
-      {/* Apify spend — authoritative cost breakdown read live from Apify */}
+      {/* Apify spend: authoritative cost breakdown read live from Apify */}
       <ApifySpendCard />
 
-      {/* Enrichment waterfall — second-pass method routing + caps (migration 00075) */}
+      {/* Enrichment waterfall: second-pass method routing + caps (migration 00075) */}
       <WaterfallSettingsCard />
 
-      {/* Domain registrars — Porkbun/Spaceship keys + spend cap (Phase 2, migration 00084) */}
+      {/* Domain registrars: Porkbun/Spaceship keys + spend cap (Phase 2, migration 00084) */}
       <RegistrarSettingsCard />
 
-      {/* Microsoft OAuth app — connect Outlook/M365 seed inboxes (migration 00085) */}
+      {/* Microsoft OAuth app: connect Outlook/M365 seed inboxes (migration 00085) */}
       <MsOauthSettingsCard />
 
-      {/* Internal automations — reply-triggered Slack/webhook/email pings (migration 00087) */}
+      {/* Internal automations: reply-triggered Slack/webhook/email pings (migration 00087) */}
       <AutomationsSettingsCard />
 
-      {/* Anthropic — decision-maker enrichment Layer 1 */}
+      {/* Anthropic: decision-maker enrichment Layer 1 */}
       <Card className="border-border/50 shadow-sm">
         <CardHeader className="flex flex-row items-center gap-2 pb-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500">
@@ -1358,7 +1358,7 @@ export default function IntegrationsPage() {
                 Connection successful{" "}
                 {anthropicTestResult.model && (
                   <span className="text-emerald-700/70 font-normal">
-                    — {anthropicTestResult.model}
+                   : {anthropicTestResult.model}
                   </span>
                 )}
               </span>
@@ -1375,7 +1375,7 @@ export default function IntegrationsPage() {
         </CardContent>
       </Card>
 
-      {/* Perplexity — decision-maker enrichment Layer 2 (optional) */}
+      {/* Perplexity: decision-maker enrichment Layer 2 (optional) */}
       <Card className="border-border/50 shadow-sm">
         <CardHeader className="flex flex-row items-center gap-2 pb-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-500">
@@ -1444,7 +1444,7 @@ export default function IntegrationsPage() {
                 Connection successful{" "}
                 {perplexityTestResult.model && (
                   <span className="text-emerald-700/70 font-normal">
-                    — {perplexityTestResult.model}
+                   : {perplexityTestResult.model}
                   </span>
                 )}
               </span>
@@ -1461,7 +1461,7 @@ export default function IntegrationsPage() {
         </CardContent>
       </Card>
 
-      {/* Unipile — LinkedIn channel (migration 00046) */}
+      {/* Unipile: LinkedIn channel (migration 00046) */}
       <Card className="border-border/50 shadow-sm">
         <CardHeader className="flex flex-row items-center gap-2 pb-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#0A66C2]">
@@ -1542,7 +1542,7 @@ export default function IntegrationsPage() {
             <div className="flex items-center gap-2 rounded-lg bg-red-50 border border-red-200 p-3">
               <XCircle size={16} className="text-red-500" />
               <span className="text-sm font-medium text-red-700">
-                Connection failed — check the API key and DSN
+                Connection failed: check the API key and DSN
               </span>
             </div>
           )}

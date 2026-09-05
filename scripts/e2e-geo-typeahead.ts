@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 /**
- * Gazetteer lookup test against the seeded geo_places table — exercises the exact
+ * Gazetteer lookup test against the seeded geo_places table: exercises the exact
  * per-kind prefix query the geo-typeahead endpoint runs, and asserts the
  * confirmatory disambiguation works on REAL Census data. Read-only, no spend, no
  * mutation. Run: npx tsx scripts/e2e-geo-typeahead.ts
  *
  * (The HANDOFF's "Dallas→3 counties / Springfield→3 states" were illustrative;
- * the real data is 5 and 16 — asserted below as ≥3 with the key states present.)
+ * the real data is 5 and 16: asserted below as ≥3 with the key states present.)
  */
 import { readFileSync } from "node:fs";
 import { createClient } from "@supabase/supabase-js";
@@ -33,7 +33,7 @@ function ok(cond: boolean, msg: string, extra?: unknown) {
     console.log(`  ✓ ${msg}`);
   } else {
     fail++;
-    console.log(`  ✗ ${msg}${extra !== undefined ? ` — ${JSON.stringify(extra)}` : ""}`);
+    console.log(`  ✗ ${msg}${extra !== undefined ? `, ${JSON.stringify(extra)}` : ""}`);
   }
 }
 
@@ -88,7 +88,7 @@ async function main() {
   console.log("state prefix match");
   const tex = await typeahead("tex", ["state"]);
   ok(tex.some((r) => r.name === "Texas"), "'tex' → Texas (state)");
-  ok(tex.every((r) => r.kind === "state"), "kind filter honored — only states returned");
+  ok(tex.every((r) => r.kind === "state"), "kind filter honored, only states returned");
 
   console.log("city prefix match + label shape");
   const austin = await typeahead("Austin", ["city"]);

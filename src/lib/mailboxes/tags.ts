@@ -1,5 +1,5 @@
 // Mailbox tag helpers (migration 00101). Tags are free-form operator labels on
-// native_mailboxes — named pools the campaign mailbox picker can add en masse.
+// native_mailboxes: named pools the campaign mailbox picker can add en masse.
 // Shared by the mailbox PATCH route, the bulk tag route, and the UI so every
 // entry point normalizes the same way.
 
@@ -29,7 +29,7 @@ export function normalizeTags(input: unknown): string[] {
   return out;
 }
 
-/** Case-insensitive membership — the picker groups tags by lowercased identity. */
+/** Case-insensitive membership: the picker groups tags by lowercased identity. */
 export function hasTag(tags: string[], tag: string): boolean {
   const key = tag.trim().toLowerCase();
   return tags.some((t) => t.toLowerCase() === key);

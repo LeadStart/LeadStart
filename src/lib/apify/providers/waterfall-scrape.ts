@@ -3,7 +3,7 @@ import { normalizeDomain } from "../domain";
 import { trimRaw, type PhaseProvider, type PhaseResult, type ProviderItem } from "./types";
 
 // Our own site-contact scraper (Phase 3). Runs the private Apify actor built in
-// apify-actors/site-contact-scraper — a 5-tier anti-bot fetch waterfall that
+// apify-actors/site-contact-scraper: a 5-tier anti-bot fetch waterfall that
 // crawls the company site + discovered contact pages and extracts emails,
 // phones, socials, and name-matched personal emails. Company-level compute
 // pricing (no per-lead events), unlike vdrmota.
@@ -127,7 +127,7 @@ export const waterfallScrapeProvider: PhaseProvider = {
         continue;
       }
 
-      // Company-level extras written regardless of a personal-email hit — these
+      // Company-level extras written regardless of a personal-email hit: these
       // land in the dedicated company_* columns, NOT contacts.email/phone: the
       // company main line + a generic info@/contact@ inbox (full list also kept
       // in enrichment_data).

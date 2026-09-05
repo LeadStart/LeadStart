@@ -13,7 +13,7 @@
 // backticks or ${...}, so the template literal is safe.
 
 export const SITE_CHAT_WIDGET_JS = String.raw`/*
- * LeadStart site chat widget — embeddable, dependency-free.
+ * LeadStart site chat widget: embeddable, dependency-free.
  *
  * Drop ONE line onto leadstart.io (or any site):
  *
@@ -26,9 +26,9 @@ export const SITE_CHAT_WIDGET_JS = String.raw`/*
  * when the bot changes.
  *
  * Optional config via data-* attributes on the <script> tag:
- *   data-title    — header text       (default: "Chat with LeadStart")
- *   data-greeting — first bot message (default: generic welcome)
- *   data-accent   — primary hex color (default: LeadStart indigo)
+ *   data-title   : header text       (default: "Chat with LeadStart")
+ *   data-greeting: first bot message (default: generic welcome)
+ *   data-accent  : primary hex color (default: LeadStart indigo)
  */
 (function () {
   "use strict";
@@ -50,7 +50,7 @@ export const SITE_CHAT_WIDGET_JS = String.raw`/*
     })();
 
   if (!me || !me.src) {
-    // Can't figure out where we're served from — bail quietly rather
+    // Can't figure out where we're served from: bail quietly rather
     // than guess an API URL.
     return;
   }
@@ -69,7 +69,7 @@ export const SITE_CHAT_WIDGET_JS = String.raw`/*
   var ACCENT_2 = "#7c3aed";
   var MAX_TURNS = 24;
 
-  // Conversation state (resets on page reload — fine for an MVP).
+  // Conversation state (resets on page reload, fine for an MVP).
   var convo = [];
   var busy = false;
 

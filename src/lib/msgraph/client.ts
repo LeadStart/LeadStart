@@ -1,9 +1,9 @@
 // Microsoft Graph client for external seed inboxes (migration 00085).
 //
-// Hand-rolled fetch, no SDK — the house convention (same as gmail/client.ts
+// Hand-rolled fetch, no SDK: the house convention (same as gmail/client.ts
 // and unipile/client.ts). Serves the 'microsoft_graph' seed provider: reads a
 // personal Outlook.com or Microsoft 365 mailbox to find a placement probe and
-// report its folder + receiver-side auth. OAuth from day one — Microsoft is
+// report its folder + receiver-side auth. OAuth from day one: Microsoft is
 // retiring basic auth for SMTP AUTH on 2026-04-30, and Graph never needed it.
 //
 // Flow: buildAuthorizeUrl → (consent) → exchangeCode → {access, refresh}. The
@@ -54,7 +54,7 @@ interface RawTokenResponse {
   error_description?: string;
 }
 
-// AADSTS codes / OAuth errors that mean "the grant is dead — reconnect", as
+// AADSTS codes / OAuth errors that mean "the grant is dead: reconnect", as
 // opposed to a transient blip. AADSTS7000222 = expired client secret.
 const DEAD_GRANT_MARKERS = [
   "invalid_grant",
@@ -99,7 +99,7 @@ export class MsGraphClient {
     });
   }
 
-  /** Redeem a refresh token. Returns a NEW refresh token (rotated) — persist it. */
+  /** Redeem a refresh token. Returns a NEW refresh token (rotated): persist it. */
   async refresh(refreshToken: string): Promise<MsTokenSet> {
     return this.tokenRequest({
       grant_type: "refresh_token",
@@ -131,7 +131,7 @@ export class MsGraphClient {
       if (res.status === 429) throw new MsGraphRateLimitError("Microsoft token endpoint rate-limited.");
       if (res.status >= 500) throw new MsGraphTransientError(`Microsoft token endpoint ${res.status}.`);
       if (isDeadGrant(text)) {
-        throw new MsGraphAuthError("Microsoft sign-in expired — reconnect this seed.");
+        throw new MsGraphAuthError("Microsoft sign-in expired, reconnect this seed.");
       }
       throw new MsGraphPermanentError(`Microsoft token exchange failed (${res.status}): ${text.slice(0, 300)}`);
     }
@@ -165,7 +165,7 @@ export class MsGraphClient {
       );
     }
     if (res.status === 401 || res.status === 403) {
-      throw new MsGraphAuthError("Microsoft access was rejected — reconnect this seed.");
+      throw new MsGraphAuthError("Microsoft access was rejected, reconnect this seed.");
     }
     if (res.status === 429) throw new MsGraphRateLimitError("Graph rate-limited.");
     if (res.status >= 500) throw new MsGraphTransientError(`Graph ${res.status}.`);
@@ -242,7 +242,7 @@ export class MsGraphClient {
     };
   }
 
-  /** Display name of an arbitrary folder — only fetched for the 'other' branch. */
+  /** Display name of an arbitrary folder: only fetched for the 'other' branch. */
   async folderDisplayName(accessToken: string, folderId: string): Promise<string> {
     try {
       const data = await this.graphGet<{ displayName?: string }>(

@@ -1,4 +1,4 @@
-// POST /api/admin/domains — track an existing (already-owned) domain as a
+// POST /api/admin/domains: track an existing (already-owned) domain as a
 // Gmail-tier sending domain in 'provisioning'. Lets a domain the owner already
 // controls go through the whole Workspace provisioning flow (verify, users,
 // mailboxes, DKIM) with zero registrar spend. Optionally associate the registrar

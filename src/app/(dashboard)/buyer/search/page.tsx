@@ -118,7 +118,7 @@ export default function BuyerSearchPage() {
       });
       const d = (await res.json().catch(() => ({}))) as { error?: string; held?: number };
       if (res.ok) {
-        setNotice(`Search started — reserved ${d.held ?? 0} tokens. It will appear below and settle to what we deliver.`);
+        setNotice(`Search started, reserved ${d.held ?? 0} tokens. It will appear below and settle to what we deliver.`);
         setTerms("");
         loadSearches();
       } else {
@@ -144,7 +144,7 @@ export default function BuyerSearchPage() {
       if (res.ok) {
         setNotice(
           d.served && d.served > 0
-            ? `Added ${d.served} contacts from the pool — charged ${d.charged ?? 0} tokens.`
+            ? `Added ${d.served} contacts from the pool: charged ${d.charged ?? 0} tokens.`
             : d.message || "Nothing new to add right now.",
         );
         loadSearches();

@@ -1,22 +1,22 @@
 import type { CampaignSnapshot, KPIMetrics } from "@/types/app";
 
-// Reply rate is per-contact everywhere: repliers ÷ contacts contacted — "of the
-// people we first emailed, what share replied" — rather than replies ÷ emails
+// Reply rate is per-contact everywhere: repliers ÷ contacts contacted, "of the
+// people we first emailed, what share replied": rather than replies ÷ emails
 // sent. This holds for any set of snapshots, windowed or lifetime:
 //
 //   - Numerator: cohort_replies (distinct repliers attributed to their
 //     first-touch day; written by sync-analytics). Falls back to unique_replies
-//     when cohort data isn't populated yet — the window between migration 00093
-//     and the next cron tick — so the number degrades gracefully instead of
+//     when cohort data isn't populated yet: the window between migration 00093
+//     and the next cron tick, so the number degrades gracefully instead of
 //     reading 0%.
 //   - Denominator: new_leads_contacted (distinct contacts whose first email
-//     went out). In a windowed view both sides cover the same cohort — contacts
-//     first-emailed inside the window — so a 7-day rate stays honest instead of
+//     went out). In a windowed view both sides cover the same cohort: contacts
+//     first-emailed inside the window, so a 7-day rate stays honest instead of
 //     dividing window replies by an all-history contact base.
 //
 // positive_reply_rate and reply_to_meeting_rate stay ratios OF replies, so they
 // keep the arrival-based unique_replies denominator (their numerators are
-// arrival-based too) — only the headline reply_rate becomes per-contact.
+// arrival-based too): only the headline reply_rate becomes per-contact.
 export function calculateMetrics(snapshots: CampaignSnapshot[]): KPIMetrics {
   const totals = snapshots.reduce(
     (acc, s) => ({

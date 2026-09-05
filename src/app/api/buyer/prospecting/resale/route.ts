@@ -1,4 +1,4 @@
-// POST /api/buyer/prospecting/resale — buyer "get the remaining contacts in this
+// POST /api/buyer/prospecting/resale: buyer "get the remaining contacts in this
 // segment from the pool". Takes an existing search of theirs, resolves its segment,
 // and serves the master-pool contacts they don't already own straight into their
 // org (a copy + ownership + the same token charge, no actor run) via the explicit

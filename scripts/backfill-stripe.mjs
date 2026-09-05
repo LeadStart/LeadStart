@@ -1,7 +1,7 @@
 /**
  * Backfill existing Stripe customers/subscriptions/invoices into Supabase.
  *
- * Use this for subs that pre-date the webhook endpoint — Stripe only delivers
+ * Use this for subs that pre-date the webhook endpoint: Stripe only delivers
  * events created after the endpoint exists, so historical state needs a pull.
  *
  *   node scripts/backfill-stripe.mjs              # dry-run: list what would change

@@ -103,7 +103,7 @@ export async function scrapeDomain(target: ScrapeTarget, opts: ScrapeOptions): P
 
   if (!domain) return empty("error", "no domain");
 
-  // 1. Homepage — accept anything (we need HTML to discover from).
+  // 1. Homepage: accept anything (we need HTML to discover from).
   const home = await fetchPage(baseUrl, { proxyUrl: opts.proxyUrl, unblockerKey: opts.unblockerKey });
   if (!home.html) {
     const outcome: FetchOutcome = home.status === 403 || home.status === 429 ? "blocked" : home.status === 0 ? "error" : "empty";
@@ -115,7 +115,7 @@ export async function scrapeDomain(target: ScrapeTarget, opts: ScrapeOptions): P
   mergeInto(merged, extractContacts(home.html, extractTarget, domain));
 
   // 2. Discover + fetch contact-bearing pages. Accept a page that yields an
-  //    email OR the target's name — a clean-but-empty page escalates to a browser
+  //    email OR the target's name: a clean-but-empty page escalates to a browser
   //    render (which may reveal JS-injected mailtos) instead of being a miss.
   const accept = (html: string) => EMAIL_ANYWHERE.test(html);
   const candidates = discoverContactPages(home.html, baseUrl, {

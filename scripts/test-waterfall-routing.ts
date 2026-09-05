@@ -31,14 +31,14 @@ eq(hasUsableName("Jo", null), true, "2-char first is usable");
 
 const cfg = (over: Partial<EnrichmentSettings>): EnrichmentSettings => ({ ...DEFAULT_ENRICHMENT_SETTINGS, ...over });
 
-console.log("methodForItem — named items keep their band method");
+console.log("methodForItem, named items keep their band method");
 eq(methodForItem(cfg({ unknown_method: "pattern_mv" }), null, true), "pattern_mv", "named + unknown band = pattern_mv");
 eq(methodForItem(cfg({ small_method: "pattern_mv" }), 10, true), "pattern_mv", "named + small band");
 eq(methodForItem(cfg({ large_method: "bovi" }), 500, true), "bovi", "named + large band = bovi");
 eq(methodForItem(cfg({ unknown_method: "site_scrape" }), null, true), "site_scrape", "named + site_scrape stays");
 eq(methodForItem(cfg({ unknown_method: "off" }), null, true), "off", "named + off stays off");
 
-console.log("methodForItem — name-less items force site_scrape for name-based methods");
+console.log("methodForItem, name-less items force site_scrape for name-based methods");
 eq(methodForItem(cfg({ unknown_method: "pattern_mv" }), null, false), "site_scrape", "nameless + pattern_mv → site_scrape");
 eq(methodForItem(cfg({ unknown_method: "bovi" }), null, false), "site_scrape", "nameless + bovi → site_scrape");
 eq(
@@ -49,7 +49,7 @@ eq(
 eq(methodForItem(cfg({ unknown_method: "site_scrape" }), null, false), "site_scrape", "nameless + site_scrape stays");
 eq(methodForItem(cfg({ unknown_method: "off" }), null, false), "off", "nameless + off stays off (no wasted work)");
 
-console.log("methodForItem — size banding still applies");
+console.log("methodForItem, size banding still applies");
 eq(
   methodForItem(cfg({ size_threshold: 50, small_method: "site_scrape", large_method: "pattern_mv" }), 10, true),
   "site_scrape",

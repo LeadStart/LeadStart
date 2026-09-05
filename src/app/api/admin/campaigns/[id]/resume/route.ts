@@ -1,4 +1,4 @@
-// POST /api/admin/campaigns/[id]/resume — mark a paused campaign 'active'
+// POST /api/admin/campaigns/[id]/resume: mark a paused campaign 'active'
 // again so the cron workers pick it back up. Owner or VA.
 
 import { NextRequest, NextResponse } from "next/server";

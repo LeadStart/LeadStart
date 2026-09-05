@@ -1,4 +1,4 @@
-// GET /api/buyer/contacts — the buyer's own sourced contacts (their org), newest
+// GET /api/buyer/contacts: the buyer's own sourced contacts (their org), newest
 // first, paginated 25/page. Served via the service-role client scoped to the
 // buyer's org (contacts RLS is owner/va-only, so buyers never read it directly).
 // This is the "results" surface: what a buyer paid for and can work + download.

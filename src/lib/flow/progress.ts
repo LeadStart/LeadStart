@@ -1,4 +1,4 @@
-// Flow observability — turn a campaign's live enrollments into a per-node
+// Flow observability: turn a campaign's live enrollments into a per-node
 // occupancy map + a rollup, so an operator can SEE the branching working (who
 // peeled off, who's still in follow-up, the reply / positive-reply rates).
 //
@@ -72,7 +72,7 @@ export function computeFlowProgress(
       rollup[e.status as (typeof ROLLUP_STATUSES)[number]] += 1;
     }
 
-    // Reply outcome (from lead_replies — the true reply count, independent of the
+    // Reply outcome (from lead_replies, the true reply count, independent of the
     // enrollment status, since a matching reply-condition routes without halting).
     const email = e.email?.trim().toLowerCase();
     if (email && replyByEmail.has(email)) {
@@ -98,7 +98,7 @@ export function computeFlowProgress(
   return { rollup, byNode };
 }
 
-/** Sum active occupancy over a node subtree — the count "flowing through" a branch. */
+/** Sum active occupancy over a node subtree: the count "flowing through" a branch. */
 export function subtreeActive(
   nodes: FlowNode[],
   byNode: FlowProgressData["byNode"],

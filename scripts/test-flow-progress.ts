@@ -61,7 +61,7 @@ const enr = (
 console.log("collectNodeIds");
 eq(collectNodeIds(GRAPH.nodes).sort(), ["c1", "e1", "e2", "notify", "w1"], "all node ids incl. both branches");
 
-console.log("computeFlowProgress — rollup + occupancy");
+console.log("computeFlowProgress, rollup + occupancy");
 {
   const replies = new Map<string, ReplyClass | null>([
     ["peeled@x.com", "true_interest"], // interested → positive
@@ -101,7 +101,7 @@ console.log("computeFlowProgress — rollup + occupancy");
   eq(subtreeActive(cond.no, p.byNode), 1, "NO subtree (w1,e2) active = 1");
 }
 
-console.log("computeFlowProgress — empty");
+console.log("computeFlowProgress, empty");
 {
   const p = computeFlowProgress(GRAPH, [], new Map());
   eq(p.rollup.enrolled, 0, "empty → enrolled 0");

@@ -1,4 +1,4 @@
-// Contact extraction from a page's raw HTML — pure, dependency-free, unit-tested.
+// Contact extraction from a page's raw HTML: pure, dependency-free, unit-tested.
 // Pulls emails (mailto + text), phones (tel + text), socials, and flags
 // personEmails whose local part / nearby text matches a target name.
 
@@ -20,7 +20,7 @@ export interface ExtractedContacts {
   socials: { linkedin?: string; twitter?: string; facebook?: string; instagram?: string };
 }
 
-// Role/department local-parts — company inboxes, never a decision-maker's personal.
+// Role/department local-parts: company inboxes, never a decision-maker's personal.
 const ROLE_LOCALPARTS = new Set([
   "info", "sales", "contact", "contactus", "hello", "hi", "support", "admin",
   "office", "team", "mail", "email", "enquiries", "enquiry", "inquiries", "inquiry",
@@ -191,7 +191,7 @@ export function extractContacts(
     phones.push(p);
   };
   // tel: hrefs are trusted (the site declared them) and pushed first, so phones[0]
-  // — the value the provider writes fill-only to contacts.phone — is the best one.
+  // (the value the provider writes fill-only to contacts.phone) is the best one.
   for (const m of html.matchAll(TEL_RE)) addPhone(decodeURIComponent(m[1]), true);
   // Text phones: sequences that look like real numbers; gated hard in normalizePhone.
   for (const m of text.matchAll(/(\+?\d[\d\s().\-]{6,}\d)/g)) addPhone(m[0], false);

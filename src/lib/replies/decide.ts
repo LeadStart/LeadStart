@@ -1,4 +1,4 @@
-// Two-layer classification merger — Layer 3 of the reply-routing classifier.
+// Two-layer classification merger: Layer 3 of the reply-routing classifier.
 //
 // Takes two independent signals and produces a single `final_class` that
 // downstream routing (client notification, dossier, etc.) uses.

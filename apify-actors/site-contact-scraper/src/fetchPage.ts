@@ -1,16 +1,16 @@
-// The anti-bot fetch waterfall — the actor's core "get this page's HTML past its
+// The anti-bot fetch waterfall: the actor's core "get this page's HTML past its
 // bot defenses" primitive. Generalized from the saasassins engine, with two tiers
 // added (fingerprint-over-proxy, and the unblocker key-gated).
 //
 // Tier order (fast/free → slow/paid). Each tier's result is gated by an optional
 // `accept(html, status)` predicate; a rejected result falls through:
-//   1. direct              — plain HTTPS + Chrome UA, datacenter IP (~100ms, free)
-//   2. fingerprint         — curl_cffi TLS/JA3 + HTTP-2 Chrome impersonation, no
-//                            browser (~250ms, free) — beats TLS/WAF gating
-//   3. fingerprint+proxy   — same, over a residential IP (small proxy cost) —
+//   1. direct             : plain HTTPS + Chrome UA, datacenter IP (~100ms, free)
+//   2. fingerprint        : curl_cffi TLS/JA3 + HTTP-2 Chrome impersonation, no
+//                            browser (~250ms, free): beats TLS/WAF gating
+//   3. fingerprint+proxy  : same, over a residential IP (small proxy cost),
 //                            beats IP-reputation blocks a datacenter IP fails
-//   4. playwright+stealth  — real rendered browser, only for JS-BUILT pages
-//   5. unblocker           — managed ASP+render_js, key-gated, hard CF/DataDome
+//   4. playwright+stealth : real rendered browser, only for JS-BUILT pages
+//   5. unblocker          : managed ASP+render_js, key-gated, hard CF/DataDome
 //
 // Politeness (enforced): a per-domain minimum gap between request starts, and a
 // per-domain cooldown once a domain refuses (403/429) at EVERY tier. We escalate
@@ -118,7 +118,7 @@ export async function closeBrowser(): Promise<void> {
 }
 
 // ---------------------------------------------------------------- block heuristics
-// A 200 whose body is a challenge page is NOT a success. Deliberately specific —
+// A 200 whose body is a challenge page is NOT a success. Deliberately specific,
 // a bare "cloudflare"/"captcha" mention appears on legit pages. We do NOT reject
 // on page smallness: legit minimal company/team pages are often tiny.
 const BLOCK_TEXT =
@@ -258,7 +258,7 @@ export async function fetchPage(url: string, opts: FetchPageOptions = {}): Promi
 
   if (statuses.some((s) => s === 403 || s === 429)) {
     domainBlockedUntil.set(domain, Date.now() + BLOCKED_COOLDOWN_MS);
-    console.warn(`[fetch] ${domain} refused at every tier (403/429) — cooling down 6h`);
+    console.warn(`[fetch] ${domain} refused at every tier (403/429), cooling down 6h`);
   }
   return { html: null, status: statuses.find((s) => s > 0) ?? 0, via: null, error: errors.join("; ") };
 }

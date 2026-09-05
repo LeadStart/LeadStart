@@ -1,4 +1,4 @@
-// pattern_mv — the direct (non-Apify) second-pass email method (migration 00075,
+// pattern_mv: the direct (non-Apify) second-pass email method (migration 00075,
 // Phase 2). Generates the common first/last/domain email permutations and
 // verifies each through Million Verifier, keeping the first that comes back
 // deliverable. Surgical and cheap (~≤6 MV credits/contact, catch-all + unknown
@@ -79,7 +79,7 @@ export interface PatternMvItem {
 }
 
 // sawCatchAll marks that at least one candidate came back catch_all on this
-// domain — the signal the cron uses to route an item to Findymail catch-all
+// domain: the signal the cron uses to route an item to Findymail catch-all
 // recovery. Optional: only set where a catch-all was actually seen.
 export type PatternMvOutcome =
   | { kind: "found"; email: string; confidence: number; mvResult: "ok" | "catch_all"; credits: number; candidatesTried: number; sawCatchAll?: boolean }
@@ -131,7 +131,7 @@ async function processItem(
       res = await client.verify(candidate, { timeoutSec: opts.timeoutSec });
     } catch (e) {
       if (e instanceof MillionVerifierError && e.definitive) throw e;
-      sawIndeterminate = true; // transient (network/5xx/timeout) — retry the item later
+      sawIndeterminate = true; // transient (network/5xx/timeout): retry the item later
       continue;
     }
     if (isCharged(res.result)) credits++;

@@ -1,4 +1,4 @@
-// Keyword prefilter for inbound replies — Layer 1 of the two-layer
+// Keyword prefilter for inbound replies: Layer 1 of the two-layer
 // classifier.
 //
 // Runs before Claude, fully deterministic, pure function. Scans the reply
@@ -13,7 +13,7 @@ export interface PrefilterResult {
   // and shown in the admin classification-trail.
   flags: string[];
 
-  // Any email addresses found in the body that are NOT the sender's — likely
+  // Any email addresses found in the body that are NOT the sender's: likely
   // referral targets. Extracted for downstream routing (auto-follow-up, etc.).
   embedded_emails: string[];
 
@@ -63,7 +63,7 @@ const WRONG_PERSON_PATTERNS: RegExp[] = [
   /\bshould\s+be\s+directed\s+to\b/i,
 ];
 
-// Referral / forwarding phrases — implies a new contact is provided.
+// Referral / forwarding phrases: implies a new contact is provided.
 const REFERRAL_PATTERNS: RegExp[] = [
   /\bforward(ing)?\s+(this|you|to)\b/i,
   /\bconnect(ing)?\s+you\s+(with|to)\b/i,
@@ -81,8 +81,8 @@ const REFERRAL_PATTERNS: RegExp[] = [
 // tick), plus the legacy org-wide contacts.status='unsubscribed' flip for the
 // non-native channels.
 //
-// Design goal: catch the real opt-outs — "stop", "no more", "remove me", and
-// their variations — WITHOUT firing on an interested lead who happens to use
+// Design goal: catch the real opt-outs, "stop", "no more", "remove me", and
+// their variations: WITHOUT firing on an interested lead who happens to use
 // the word "stop" ("stop by my office", "Stop, this is amazing!"). So bare
 // "stop"/"no more" only count when they stand alone on their line (SMS-style
 // opt-out) or are attached to a communication target; ambiguous mid-sentence
@@ -137,7 +137,7 @@ const OOO_PATTERNS: RegExp[] = [
   /\baway\s+from\s+(my\s+)?(desk|office|e-?mail)\b/i,
 ];
 
-// Clear rejections (NOT opt-outs — the person is declining but not demanding
+// Clear rejections (NOT opt-outs, the person is declining but not demanding
 // removal). Kept precise so soft/ambiguous replies ("maybe later") fall
 // through to needs_review instead of being wrongly killed. Checked BEFORE the
 // positive patterns so "not interested" never reads as "interested".
@@ -343,7 +343,7 @@ export function runKeywordPrefilter(
     suggested_class = "unsubscribe";
     reason = "Opt-out phrase matched";
   } else if (oooHit && !wrongPersonHit && !referralHit && !interestHit && !meetingHit) {
-    // Only OOO when there's no competing positive signal — "out until Monday,
+    // Only OOO when there's no competing positive signal: "out until Monday,
     // let's connect then" is a warm lead, not a dead auto-reply.
     suggested_class = "ooo";
     reason = "Out-of-office phrase matched";

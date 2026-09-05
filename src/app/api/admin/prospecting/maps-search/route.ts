@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
   const termsTrimmed = dedupedTerms.length > MAX_TERMS;
   const terms = dedupedTerms.slice(0, MAX_TERMS);
   // Location is supplied EITHER as structured `areas` (the DIY multi-region path)
-  // OR the legacy free-text `locationQuery`. Never both — structured wins, and
+  // OR the legacy free-text `locationQuery`. Never both: structured wins, and
   // the cron's coerceMapsAreas keys off `areas` to fan out one run per region.
   const areas = normalizeAreas(raw.areas);
   const location = typeof raw.locationQuery === "string" ? raw.locationQuery.trim() : "";
@@ -102,7 +102,7 @@ export async function POST(request: NextRequest) {
   }
   if (areas.length === 0 && !location) {
     return NextResponse.json(
-      { error: "Add at least one area — a city, county, state, or ZIP" },
+      { error: "Add at least one area, a city, county, state, or ZIP" },
       { status: 400 },
     );
   }

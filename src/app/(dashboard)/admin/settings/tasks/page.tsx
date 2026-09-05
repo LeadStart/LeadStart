@@ -82,7 +82,7 @@ export default function TasksPage() {
   const [newCategory, setNewCategory] = useState("");
   const [newDueDate, setNewDueDate] = useState("");
 
-  // Inline edit state — which row is being edited + a working copy of its fields.
+  // Inline edit state, which row is being edited + a working copy of its fields.
   const [editingId, setEditingId] = useState<string | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
   const [editTitle, setEditTitle] = useState("");
@@ -225,7 +225,7 @@ export default function TasksPage() {
     refetch();
   }
 
-  // Enter saves, Escape cancels — for a quick keyboard-driven inline edit.
+  // Enter saves, Escape cancels: for a quick keyboard-driven inline edit.
   function handleEditKeyDown(e: KeyboardEvent<HTMLInputElement>) {
     if (e.key === "Enter") {
       e.preventDefault();

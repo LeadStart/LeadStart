@@ -1,4 +1,4 @@
-// Discovery-driven page selection — pure, dependency-free, unit-tested.
+// Discovery-driven page selection: pure, dependency-free, unit-tested.
 // Parse a homepage's internal links (href + anchor text), match them against
 // contact-bearing keywords, and return same-origin candidate URLs in priority
 // order (contact → team/leadership → about). The hardcoded FALLBACK_PATHS are

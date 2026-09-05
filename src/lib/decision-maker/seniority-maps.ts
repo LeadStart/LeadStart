@@ -9,7 +9,7 @@
 // 80+ Google-Maps category IDs map to 22 operations groups + 8 events
 // groups. Each group has an ordered array of titles (highest seniority
 // first) and an ordered skip list. The same category can map to different
-// groups across service types — e.g. "church" targets Senior Pastor for
+// groups across service types: e.g. "church" targets Senior Pastor for
 // operations work but Youth Pastor / Events Coordinator for events work.
 
 export type ServiceType = "operations" | "events";

@@ -13,7 +13,7 @@ import { hasUsableName, methodForItem } from "@/lib/enrichment/waterfall-routing
 //
 // Body: { contact_ids: string[], run_profiles?, run_domains?, run_waterfall?,
 //         run_activity? } (all steps default true). Email verification is NOT a
-// step here — Million Verifier owns it at its own pre-send gate.
+// step here: Million Verifier owns it at its own pre-send gate.
 //
 // Creates one enrichment_runs row + one enrichment_run_items row per eligible
 // contact. The cron worker (run-apify-enrichment) picks it up. One active run
@@ -73,15 +73,15 @@ export async function POST(request: NextRequest) {
   // Prospecting per-search toggles.
   const runActivity = body.run_activity === undefined ? false : Boolean(body.run_activity);
   const runVerify = body.run_verify === undefined ? false : Boolean(body.run_verify);
-  // Owner-name discovery add-on (default OFF). No Apify — decision-maker Layer 1/2.
+  // Owner-name discovery add-on (default OFF). No Apify: decision-maker Layer 1/2.
   const runNaming = body.run_naming === undefined ? false : Boolean(body.run_naming);
   // Per-run catch-all opt-in (default OFF): ORs over the org setting by flipping
-  // accept_catch_all_guesses on this run's config snapshot — pattern_mv then
+  // accept_catch_all_guesses on this run's config snapshot: pattern_mv then
   // keeps the best catch-all guess (confidence 40, flagged) instead of dropping it.
   const includeCatchAll =
     body.include_catch_all === undefined ? false : Boolean(body.include_catch_all);
   // Findymail catch-all validation add-on (default OFF): ORs over the org setting
-  // by flipping validate_catch_all on this run's config snapshot — the cron then
+  // by flipping validate_catch_all on this run's config snapshot: the cron then
   // hands catch-all misses to Findymail to recover a deliverable address.
   const validateCatchAll =
     body.validate_catch_all === undefined ? false : Boolean(body.validate_catch_all);
@@ -112,7 +112,7 @@ export async function POST(request: NextRequest) {
   // Org waterfall config (migration 00075). The run_waterfall request is honored
   // when the org's waterfall is enabled AND at least one size band names a real
   // method (not 'off'). The Apify actor snapshot may be null when every band is
-  // a direct method (pattern_mv) — that's fine, the worker routes per item. The
+  // a direct method (pattern_mv): that's fine, the worker routes per item. The
   // settings are snapshotted onto the run so it never re-reads live config.
   const settings = await loadEnrichmentSettings(admin, organizationId);
   const waterfallActor = resolveWaterfallActor(settings);
@@ -150,7 +150,7 @@ export async function POST(request: NextRequest) {
   const seedVerifyNow = initialPhase === "verify";
   const seedNamingNow = initialPhase === "naming";
   // When waterfall is the ONLY phase (no profiles/domains ahead of it), there's
-  // no domains→waterfall transition for the worker to seed from — so stamp the
+  // no domains→waterfall transition for the worker to seed from, so stamp the
   // method + pending at insert here (mirrors seedVerifyNow). Normal runs seed in
   // advancePhase.seedWaterfallItems.
   const seedWaterfallNow = initialPhase === "waterfall";
@@ -212,7 +212,7 @@ export async function POST(request: NextRequest) {
       !hasCompanyRef &&
       Boolean(c.company_name?.trim());
     // A contact that already has a domain but no email (a Google-Maps business
-    // lead, or any imported company+website row) still has waterfall work — the
+    // lead, or any imported company+website row) still has waterfall work: the
     // site scraper can find a company/owner email. Without this it matched no
     // want-flag and was dropped from the run entirely.
     const wantWaterfallOnly = runWaterfallEffective && !c.email && Boolean(c.company_domain);
@@ -220,7 +220,7 @@ export async function POST(request: NextRequest) {
     // Works even without a domain (Layer 2 web-searches by name + city).
     const wantNaming =
       runNaming && !c.email && !c.first_name && !c.last_name && Boolean(c.company_name?.trim());
-    // Activity scoring only needs a profile URL — works even for contacts that
+    // Activity scoring only needs a profile URL: works even for contacts that
     // already have an email/domain (assigned to its phase by the worker).
     const wantActivity = runActivity && Boolean(profileId);
     // Verify only applies to a contact that already has (or will have) an email.
@@ -283,7 +283,7 @@ export async function POST(request: NextRequest) {
               waterfall_method: wfMethod,
               ...(hasUsableName(c.first_name, c.last_name)
                 ? {}
-                : { waterfall_notes: "no person name — routed to site scrape" }),
+                : { waterfall_notes: "no person name, routed to site scrape" }),
             };
 
     itemRows.push({

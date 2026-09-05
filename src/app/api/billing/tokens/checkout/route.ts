@@ -1,4 +1,4 @@
-// POST /api/billing/tokens/checkout — buyer starts a token-pack purchase.
+// POST /api/billing/tokens/checkout: buyer starts a token-pack purchase.
 //
 // Buyer-authenticated. Validates the requested pack is active + priced, then
 // creates a hosted Stripe Checkout session (data-driven from token_packs) and

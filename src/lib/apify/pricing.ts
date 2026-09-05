@@ -19,7 +19,7 @@ export const SOURCING_FULL_USD = 0.008;
 export const SOURCING_FULL_EMAIL_USD = 0.014;
 
 // Cost of ONE Million Verifier credit at the org's purchase tier. MV is a
-// prepaid tiered pool ($37/10K ≈ $0.0037 … $549/1M ≈ $0.00055 — verified
+// prepaid tiered pool ($37/10K ≈ $0.0037 … $549/1M ≈ $0.00055, verified
 // against MV pricing 2026-08-25); owner call 2026-08-25: assume the 10K
 // pay-as-you-go bundle until purchasing changes. Pattern_mv typically resolves
 // in 1–3 charged credits (~$0.004–0.011/contact; ≤6 worst case ≈ $0.022;
@@ -77,7 +77,7 @@ export function estimateNamingCost(businesses: number): number {
 // catch-all domain, Findymail's finder recovers a genuinely deliverable address
 // and charges 1 credit ONLY when it returns one (misses / risky catch-alls cost
 // nothing, bounces are refunded). Entry tier $49/1k = $0.049/hit; bulk $249/15k
-// ≈ $0.017/hit. This entry-tier per-HIT rate is the estimate ceiling — since
+// ≈ $0.017/hit. This entry-tier per-HIT rate is the estimate ceiling: since
 // only the catch-all subset is validated and misses are free, real spend is
 // typically well under (leads × rate).
 export const FINDYMAIL_CATCHALL_COST_USD = 0.049;
@@ -99,7 +99,7 @@ export function estimateMapsLeadsCost(places: number): number {
 
 // Google Maps place record (compass~google-maps-extractor `place-scraped` event).
 // Tiered FREE $0.005 → DIAMOND $0.0008; this BRONZE/Starter midpoint is the
-// estimate — actual cost is read from the run's usageTotalUsd. Filter events
+// estimate: actual cost is read from the run's usageTotalUsd. Filter events
 // (min-rating / website filter) add ~$0.001/place each when used.
 export const MAPS_PLACE_COST_USD = 0.004;
 export function estimateMapsPlaceCost(places: number): number {

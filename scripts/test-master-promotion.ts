@@ -139,7 +139,7 @@ async function main() {
       .maybeSingle();
     ok("segment_pulls records M=2 for the segment", (sp as { master_contact_count?: number } | null)?.master_contact_count === 2, sp);
 
-    // coverage read — exactly what the buyer searches route surfaces (N of ~M):
+    // coverage read: exactly what the buyer searches route surfaces (N of ~M):
     const covOwned = segOwn ?? 0;
     const covAvail = (sp as { master_contact_count?: number } | null)?.master_contact_count ?? 0;
     ok("coverage readout resolves to 'you own 2 of ~2'", covOwned === 2 && covAvail === 2, { owned: covOwned, available: covAvail });
@@ -156,7 +156,7 @@ async function main() {
       .eq("organization_id", orgId);
     ok("buyer owns exactly 2 master rows", ownCount === 2, ownCount);
 
-    // ---- promote (second pass) — idempotent ----
+    // ---- promote (second pass): idempotent ----
     const r2 = await promoteSearchContacts(admin, { searchId, searchKind: "maps", contactIds });
     ok("re-promotion grants 0 (idempotent)", r2?.granted === 0, r2);
     const { count: ownCount2 } = await admin

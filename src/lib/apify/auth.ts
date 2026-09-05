@@ -61,7 +61,7 @@ export function normalizeEnrichmentSettings(
 }
 
 // Coerce a stored/posted blob into a complete EnrichmentAddons. Both flags
-// default OFF — a missing stamp (older contact) or a non-boolean value reads as
+// default OFF: a missing stamp (older contact) or a non-boolean value reads as
 // false, matching the "add-ons are opt-in" contract.
 export function normalizeAddons(input: unknown): EnrichmentAddons {
   const o = input && typeof input === "object" ? (input as Record<string, unknown>) : {};
@@ -74,7 +74,7 @@ export function normalizeAddons(input: unknown): EnrichmentAddons {
   };
 }
 
-// Load an org's enrichment settings, merged over defaults. Never throws — a
+// Load an org's enrichment settings, merged over defaults. Never throws: a
 // missing column (migration not applied) or missing row yields the defaults.
 export async function loadEnrichmentSettings(
   admin: SupabaseClient,
@@ -93,7 +93,7 @@ export async function loadEnrichmentSettings(
 
 // Shared gate for the Contacts → Enrich API routes. Same shape as
 // requireDecisionMakerContext (401 no user, 403 unless owner/va, 400 no org),
-// but does NOT 400 on a missing key — the start route decides whether the
+// but does NOT 400 on a missing key: the start route decides whether the
 // requested phases need one, and the read routes need none.
 export async function requireEnrichmentContext(): Promise<
   | { error: NextResponse }

@@ -2,7 +2,7 @@
 // layers. Pricing is per-token (not per-million) so calculateCost can sum
 // directly. Update if Anthropic / Perplexity change their rates.
 //
-// Layer 1 always uses Claude Haiku 4.5. Layer 2 uses Perplexity 'sonar' ONLY —
+// Layer 1 always uses Claude Haiku 4.5. Layer 2 uses Perplexity 'sonar' ONLY,
 // the Claude web_search fallback was removed (owner directive 2026-08-28). With
 // no Perplexity key, Layer 2 does not run.
 

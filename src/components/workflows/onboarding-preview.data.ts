@@ -1,16 +1,16 @@
-// Onboarding Preview — DATA (single source for the inputs the preview feeds
+// Onboarding Preview: DATA (single source for the inputs the preview feeds
 // into the REAL client-facing surfaces).
 //
 // SYNC CONTRACT (mirrors enrichment-flow-map.data.ts):
-//   • The DEFAULTS a customer actually gets — warm-up window, quote-expiry,
-//     email subject + sender — are DERIVED from the live constants below
+//   • The DEFAULTS a customer actually gets: warm-up window, quote-expiry,
+//     email subject + sender: are DERIVED from the live constants below
 //     (schedule.ts, quote-proposal.ts). Change one there and this preview
 //     follows automatically; rename one and the build breaks.
-//   • The SAMPLE identity + pricing are illustrative — there is no single
+//   • The SAMPLE identity + pricing are illustrative: there is no single
 //     org-wide price, so a believable mid-market deal is declared here (clearly
 //     separated below) purely so every line of every surface has real content.
 //   • scripts/test-onboarding-preview-sync.ts extracts the live values from
-//     source and FAILS if the preview — or any consumer surface — drifts. Run
+//     source and FAILS if the preview (or any consumer surface) drifts. Run
 //     it whenever a default, the sender, or a rendered surface changes.
 
 import {
@@ -31,17 +31,17 @@ export const PREVIEW_QUOTE_EXPIRY_DAYS = DEFAULT_QUOTE_EXPIRY_DAYS;
 export const PREVIEW_EMAIL_SUBJECT = QUOTE_EMAIL_SUBJECT;
 /**
  * The "From" clients see. The preview runs client-side and can't read the
- * server's EMAIL_FROM, so it shows the shared fallback — the same string the
+ * server's EMAIL_FROM, so it shows the shared fallback: the same string the
  * send path falls back to when EMAIL_FROM is unset.
  */
 export const PREVIEW_EMAIL_FROM = QUOTE_EMAIL_FROM_FALLBACK;
 
-// ---- representative sample (illustrative — NOT org config) ------------------
+// ---- representative sample (illustrative, NOT org config) ------------------
 // A believable mid-market home-services deal, sized so every surface has real
 // content: pricing lines, a contact-sourcing line, a multi-item scope.
 export const SAMPLE_CONTACT_NAME = "Summit Home Services";
 export const SAMPLE_CONTACT_EMAIL = "ops@summithomeservices.com";
-// The contact PERSON (distinct from the company name above) — quotes and
+// The contact PERSON (distinct from the company name above): quotes and
 // notifications greet them by first name.
 export const SAMPLE_CONTACT_FIRST_NAME = "Jordan";
 export const SAMPLE_CONTACT_LAST_NAME = "Rivera";

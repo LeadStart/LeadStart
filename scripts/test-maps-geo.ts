@@ -36,7 +36,7 @@ const levers: MapsSearchLevers = {
   minStars: "4.0",
 };
 
-console.log("geoFieldsForArea — level → actor fields");
+console.log("geoFieldsForArea, level → actor fields");
 const city = geoFieldsForArea({ level: "city", name: "Dallas", state: "Texas" });
 eq(city.city, "Dallas", "city → city");
 eq(city.state, "Texas", "city → state (full name)");
@@ -57,7 +57,7 @@ eq(zip.postalCode, "75201", "zip → postalCode");
 eq(zip.countryCode, "us", "zip → country us");
 ok(!("city" in zip) && !("state" in zip) && !("county" in zip), "zip: Country + postalCode ONLY (never city/state/county)");
 
-console.log("buildMapsSearchInputForArea — structured, no locationQuery");
+console.log("buildMapsSearchInputForArea, structured, no locationQuery");
 const inCounty = buildMapsSearchInputForArea(
   levers,
   { level: "county", name: "Dallas County", state: "Texas" },
@@ -78,7 +78,7 @@ eq(zipInput.postalCode, "10001", "zip build → postalCode");
 ok(!("city" in zipInput) && !("state" in zipInput), "zip build: no city/state");
 eq(zipInput.maxCrawledPlacesPerSearch, 100, "single term → full cap per search");
 
-console.log("buildMapsSearchInput — legacy free-text still intact");
+console.log("buildMapsSearchInput, legacy free-text still intact");
 const legacy = buildMapsSearchInput({ searchTerms: ["dentist"], locationQuery: "Dallas, TX" }, { maxItems: 100 });
 eq(legacy.locationQuery, "Dallas, TX", "legacy sets locationQuery");
 ok(!("city" in legacy) && !("state" in legacy) && !("county" in legacy), "legacy: no structured fields");

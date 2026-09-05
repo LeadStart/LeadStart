@@ -123,7 +123,7 @@ export async function loadVerifierStates(
 }
 
 // Persist the tick's outcome per org and enqueue any edge-triggered owner
-// alerts. Never throws — a broken alert/persist path must not break the cron.
+// alerts. Never throws: a broken alert/persist path must not break the cron.
 export async function finalizeVerifierStates(
   admin: AdminClient,
   states: Map<string, VerifierTickState>,
@@ -198,7 +198,7 @@ export async function finalizeVerifierStates(
         await enqueueOwnerAlert({
           admin,
           kind: "email_verifier_unavailable",
-          subject: "Email verifier unavailable — new sends on hold",
+          subject: "Email verifier unavailable, new sends on hold",
           summary:
             st.errorKind === "credits"
               ? "Million Verifier is out of credits. New first-touch sends are held until it's topped up."

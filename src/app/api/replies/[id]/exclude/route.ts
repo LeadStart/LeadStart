@@ -1,4 +1,4 @@
-// POST /api/replies/[id]/exclude — include or exclude a reply from the
+// POST /api/replies/[id]/exclude: include or exclude a reply from the
 // client's statistics. Body: { excluded: boolean }.
 //
 // The native analytics roll-up (sync-analytics) skips excluded replies when it

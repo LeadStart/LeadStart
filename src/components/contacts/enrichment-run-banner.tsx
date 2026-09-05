@@ -26,7 +26,7 @@ export async function fetchActiveEnrichmentRunId(): Promise<string | null> {
 }
 
 function phaseLine(run: EnrichmentRun): string {
-  if (run.status === "pending") return "Queued — waiting for the worker";
+  if (run.status === "pending") return "Queued: waiting for the worker";
   if (run.status === "complete") return "Enrichment complete";
   if (run.status === "failed") return `Enrichment failed: ${run.error_message ?? "unknown error"}`;
   const n = run.processed_count;
@@ -84,11 +84,11 @@ export function EnrichmentRunBanner({
               doneFiredRef.current = runId;
               void onDoneRef.current?.(data.run);
             }
-            return; // stop polling — terminal
+            return; // stop polling: terminal
           }
         }
       } catch {
-        // transient — fall through to reschedule
+        // transient: fall through to reschedule
       }
       if (!cancelled) timer = setTimeout(poll, ENRICH_POLL_INTERVAL_MS);
     };
@@ -139,7 +139,7 @@ export function EnrichmentRunBanner({
           </p>
           {run.status === "complete" && noEmail > 0 && (
             <p className="text-[11px] font-medium">
-              {foundEmails} got an email · {noEmail} have none — filter &ldquo;Needs enrichment&rdquo; below to route them to a LinkedIn campaign or park them.
+              {foundEmails} got an email · {noEmail} have none: filter &ldquo;Needs enrichment&rdquo; below to route them to a LinkedIn campaign or park them.
             </p>
           )}
         </div>

@@ -71,7 +71,7 @@ if (process.env.REPLY_ID) {
   reply = data;
 } else {
   // Prefer a hot-classified row if one exists, otherwise fall back to any row.
-  // We don't need final_class for the email to render — the template handles null.
+  // We don't need final_class for the email to render: the template handles null.
   const { data, error } = await admin
     .from("lead_replies")
     .select("*")
@@ -85,7 +85,7 @@ if (process.env.REPLY_ID) {
   reply = data;
 }
 
-console.log(`Using reply ${reply.id} — ${reply.lead_name || reply.lead_email}`);
+console.log(`Using reply ${reply.id}: ${reply.lead_name || reply.lead_email}`);
 
 // 2. Resolve the recipient.
 let to;
@@ -113,7 +113,7 @@ if (process.env.TEST_NOTIFICATION_TO) {
   console.log(`Recipient (from clients.notification_email): ${to}`);
 }
 
-// 3. If the row already has notified_at, we'd skip — reset it so the test
+// 3. If the row already has notified_at, we'd skip: reset it so the test
 //    actually sends. The token hash will be overwritten by the send.
 if (reply.notified_at) {
   console.log(`Row already has notified_at=${reply.notified_at}; clearing for test.`);
@@ -140,5 +140,5 @@ const result = await sendHotLeadNotification(
 console.log("Result:", result);
 console.log("\n✓ Check the inbox at", to);
 console.log(
-  `  Dossier link uses /client/inbox/${reply.id}?token=... — token hash stored on the row.`
+  `  Dossier link uses /client/inbox/${reply.id}?token=...: token hash stored on the row.`
 );

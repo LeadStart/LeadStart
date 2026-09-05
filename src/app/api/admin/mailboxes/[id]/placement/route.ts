@@ -1,9 +1,9 @@
-// GET  /api/admin/mailboxes/[id]/placement — the mailbox's latest placement
+// GET  /api/admin/mailboxes/[id]/placement: the mailbox's latest placement
 //      test + per-seed results. If that test is still 'awaiting' and past the
 //      check delay, runs ONE check pass first, so the page's 10-second polling
 //      is what drives the answer (typically ~1 minute after sending). The
 //      run-placement-tests cron covers closed tabs and the 30-minute timeout.
-// POST /api/admin/mailboxes/[id]/placement — start a test.
+// POST /api/admin/mailboxes/[id]/placement: start a test.
 //      Body: { probe?: "neutral" | "campaign" }. 'neutral' sends a short,
 //      realistic, link-free note (reputation + auth in isolation); 'campaign'
 //      sends step 1 of the campaign this mailbox is pooled into, rendered with
@@ -125,7 +125,7 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
       test = checked.test;
       results = checked.results;
     } catch (err) {
-      // A failed check pass is not a failed test — return what we have and let
+      // A failed check pass is not a failed test: return what we have and let
       // the next poll (or the cron) try again.
       console.error("[placement] check pass failed:", err instanceof Error ? err.message : err);
       results = await loadResults(admin, test.id);
@@ -156,7 +156,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   if (!mailbox) return NextResponse.json({ error: "Mailbox not found" }, { status: 404 });
   if (mailbox.status === "error") {
     return NextResponse.json(
-      { error: "This mailbox is in an error state — fix its delegation and resume it first." },
+      { error: "This mailbox is in an error state, fix its delegation and resume it first." },
       { status: 400 },
     );
   }

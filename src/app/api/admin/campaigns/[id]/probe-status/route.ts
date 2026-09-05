@@ -4,7 +4,7 @@
 // campaign's sending pool, the latest CAMPAIGN-copy placement test of THIS
 // campaign (any status), plus how many seeds are available. Read-only; owner
 // or VA (so the card renders on the VA-facing detail page). No probe is started
-// here — the run affordance links to Admin → Mailboxes.
+// here: the run affordance links to Admin → Mailboxes.
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";

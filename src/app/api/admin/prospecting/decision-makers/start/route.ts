@@ -93,7 +93,7 @@ export async function POST(request: NextRequest) {
   }
 
   // Result reuse: any (search_id, google_id) pair that already has a
-  // complete result row gets skipped — the worker won't re-enrich it.
+  // complete result row gets skipped: the worker won't re-enrich it.
   const { data: existing } = await admin
     .from("decision_maker_results")
     .select("google_id, status")

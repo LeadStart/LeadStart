@@ -1,4 +1,4 @@
-// POST /api/admin/campaigns/[id]/pause — flip the campaigns row to 'paused'
+// POST /api/admin/campaigns/[id]/pause: flip the campaigns row to 'paused'
 // so the cron workers stop dispatching it. Owner or VA. Reversible via the
 // companion /resume route.
 

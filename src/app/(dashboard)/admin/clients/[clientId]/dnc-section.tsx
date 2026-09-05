@@ -2,7 +2,7 @@
 
 // Per-client do-not-contact list on the client detail page. Shows the
 // client's suppressed emails (auto-added on opt-out replies, plus manual
-// adds), with add/remove. Scoped to this client only — an entry here never
+// adds), with add/remove. Scoped to this client only: an entry here never
 // affects another client's campaigns.
 
 import { useEffect, useState } from "react";
@@ -110,7 +110,7 @@ export function DncSection({
             Do-not-contact list{entries ? ` (${entries.length})` : ""}
           </CardTitle>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Suppressed for {clientName}&apos;s campaigns only — never other clients.
+            Suppressed for {clientName}&apos;s campaigns only: never other clients.
           </p>
         </div>
         {open ? <ChevronDown size={18} /> : <ChevronRight size={18} />}

@@ -1,6 +1,6 @@
 "use client";
 
-// Internal automations — org-level notify config (migration 00087). The
+// Internal automations: org-level notify config (migration 00087). The
 // delivery side of the Flow builder's kind:'internal' notify/webhook nodes:
 // when a reply is classified, LeadStart pings the targets configured here
 // (Slack incoming webhook / generic outbound webhook / a teammate email).
@@ -149,7 +149,7 @@ export function AutomationsSettingsCard() {
         <div>
           <CardTitle className="text-base">Internal automations</CardTitle>
           <p className="text-xs text-muted-foreground">
-            Ping your team when a lead replies — post to Slack, hit a webhook, or
+            Ping your team when a lead replies: post to Slack, hit a webhook, or
             email a teammate. Fires from the reply pipeline.
           </p>
         </div>
@@ -177,7 +177,7 @@ export function AutomationsSettingsCard() {
               <span>
                 Enable reply notifications
                 <span className="block text-[11px] text-muted-foreground">
-                  When off, no Slack / webhook / email pings fire — the reply still
+                  When off, no Slack / webhook / email pings fire: the reply still
                   classifies and the per-client hot-lead email is unaffected.
                 </span>
               </span>
@@ -196,7 +196,7 @@ export function AutomationsSettingsCard() {
                 </SelectContent>
               </Select>
               <p className="text-[11px] text-muted-foreground">
-                &quot;Positive replies&quot; covers the hot classes — interested, meeting
+                &quot;Positive replies&quot; covers the hot classes: interested, meeting
                 booked, qualifying question, referral. &quot;Every reply&quot; also pings
                 on objections, out-of-office, not-interested, etc.
               </p>

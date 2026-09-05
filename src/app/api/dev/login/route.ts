@@ -12,7 +12,7 @@ import { appUrl } from "@/lib/api-url";
  *
  * How it stays safe:
  *  - Hard-gated to non-production: returns 404 whenever NODE_ENV === "production"
- *    (Vercel — prod AND preview deploys — always sets that), so this route does
+ *    (Vercel always sets that on prod AND preview deploys), so this route does
  *    not exist on any deployed environment.
  *  - Requires DEV_AUTOLOGIN_EMAIL, which only lives in local .env.local and is
  *    never set in the deployed environment. Double gate.
@@ -24,12 +24,12 @@ import { appUrl } from "@/lib/api-url";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
-  // Gate 1 — never in a deployed environment.
+  // Gate 1: never in a deployed environment.
   if (process.env.NODE_ENV === "production") {
     return new NextResponse("Not found", { status: 404 });
   }
 
-  // Gate 2 — must be explicitly configured locally.
+  // Gate 2: must be explicitly configured locally.
   const email = process.env.DEV_AUTOLOGIN_EMAIL;
   if (!email) {
     return new NextResponse(
@@ -86,6 +86,6 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  // Logged in — middleware routes "/" to /admin or /client by role.
+  // Logged in: middleware routes "/" to /admin or /client by role.
   return response;
 }

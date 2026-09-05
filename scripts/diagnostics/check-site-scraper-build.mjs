@@ -50,7 +50,7 @@ async function apify(path, token) {
 const { token, source, orgCount } = await resolveApifyToken();
 console.log(`Apify token source: ${source}${orgCount ? ` (${orgCount} orgs have a key)` : ""}`);
 if (!token) {
-  console.log("No Apify token reachable — cannot query the Apify API.");
+  console.log("No Apify token reachable, cannot query the Apify API.");
   process.exit(1);
 }
 
@@ -83,7 +83,7 @@ for (const b of items) {
 // 3) If the newest build didn't SUCCEED, pull its log tail to diagnose.
 const newest = items[0];
 if (newest && newest.status !== "SUCCEEDED") {
-  console.log(`\n=== Build #${newest.buildNumber} is ${newest.status} — fetching log tail ===`);
+  console.log(`\n=== Build #${newest.buildNumber} is ${newest.status}, fetching log tail ===`);
   const logRes = await fetch(
     `https://api.apify.com/v2/actor-builds/${newest.id}/log?token=${token}`,
   );
@@ -91,5 +91,5 @@ if (newest && newest.status !== "SUCCEEDED") {
   const lines = log.split(/\r?\n/);
   console.log(lines.slice(-60).join("\n"));
 } else if (newest) {
-  console.log(`\nNewest build #${newest.buildNumber} SUCCEEDED — actor is ready to run.`);
+  console.log(`\nNewest build #${newest.buildNumber} SUCCEEDED, actor is ready to run.`);
 }

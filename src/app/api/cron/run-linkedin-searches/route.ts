@@ -16,7 +16,7 @@ import { importLinkedInProspects } from "@/lib/apify/import-prospects";
 import { enqueueEnrichment } from "@/lib/apify/enqueue-enrichment";
 import { alertActorFailure } from "@/lib/notifications/actor-failure-alert";
 
-// GET /api/cron/run-linkedin-searches — every minute.
+// GET /api/cron/run-linkedin-searches: every minute.
 //
 // One tick advances one search: claim it under a 90s lease, then either START
 // the actor (if no run is in flight) or POLL the in-flight run. A single actor
@@ -71,7 +71,7 @@ async function resolveAutoRunUserId(
 
 // Best-effort auto-import of a completed search's sourced people into Contacts,
 // then start enrichment. Gated on the org's auto_run_after_search kill-switch.
-// Never throws — sourcing is already saved; a failure here degrades to the
+// Never throws: sourcing is already saved; a failure here degrades to the
 // manual "Import to Contacts" path. Returns a short progress note.
 async function autoImportAndEnrich(
   admin: ReturnType<typeof createAdminClient>,
@@ -82,7 +82,7 @@ async function autoImportAndEnrich(
     const settings = await loadEnrichmentSettings(admin, row.organization_id);
     if (!settings.auto_run_after_search) return null;
     const userId = await resolveAutoRunUserId(admin, row);
-    if (!userId) return "auto-import skipped — no owner to attribute the run to";
+    if (!userId) return "auto-import skipped: no owner to attribute the run to";
 
     const imported = await importLinkedInProspects(admin, {
       organizationId: row.organization_id,
@@ -110,7 +110,7 @@ async function autoImportAndEnrich(
     return `Imported ${imported.inserted} to Contacts · ${tail}`;
   } catch (err) {
     console.error("[run-linkedin-searches] auto-import failed:", err);
-    return "auto-import failed — import manually from the results table";
+    return "auto-import failed: import manually from the results table";
   }
 }
 
@@ -186,7 +186,7 @@ export async function GET(request: NextRequest) {
           await client.abortRun(row.active_apify_run_id).catch(() => {});
           const failures = row.consecutive_failures + 1;
           await release({
-            // A stuck+aborted actor still incurred charges — record what it
+            // A stuck+aborted actor still incurred charges: record what it
             // accrued (partial) so spend isn't hidden.
             cost_usd:
               Number(row.cost_usd) + (typeof run.usageTotalUsd === "number" ? run.usageTotalUsd : 0),
@@ -214,7 +214,7 @@ export async function GET(request: NextRequest) {
           return NextResponse.json({ status: "aborted_stuck", id: row.id });
         }
         // Surface live sourcing progress. The run object exposes no item count
-        // (its stats are runtime/memory/CPU only), so read the run's dataset —
+        // (its stats are runtime/memory/CPU only), so read the run's dataset,
         // itemCount updates as the actor pushes profiles (per profile in Full
         // modes, per 25-result search page in Short mode). Progress-only read:
         // a transient failure must not fail the poll tick.
@@ -266,7 +266,7 @@ export async function GET(request: NextRequest) {
       // Terminal-bad (FAILED / TIMED-OUT / ABORTED).
       const failures = row.consecutive_failures + 1;
       await release({
-        // A failed/aborted actor still cost money (per-event billing) — record
+        // A failed/aborted actor still cost money (per-event billing): record
         // the real charge so it isn't dropped from the search's cost.
         cost_usd:
           Number(row.cost_usd) + (typeof run.usageTotalUsd === "number" ? run.usageTotalUsd : 0),

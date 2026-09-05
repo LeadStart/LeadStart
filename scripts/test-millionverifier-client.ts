@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 /**
- * Unit tests for src/lib/millionverifier/client.ts — the HTTP client + error
+ * Unit tests for src/lib/millionverifier/client.ts: the HTTP client + error
  * taxonomy. globalThis.fetch is stubbed, so no real network by default. The
  * client has no imports, so tsx loads it standalone.
  *
  * An optional live section (MV_LIVE=1) hits the free sandbox keys to confirm the
- * documented result values — no credits consumed, no DB touched.
+ * documented result values: no credits consumed, no DB touched.
  *
  * Usage:
  *   npx tsx scripts/test-millionverifier-client.ts
@@ -159,7 +159,7 @@ async function main(): Promise<void> {
     const catchAll = await new MillionVerifierClient("API_KEY_FOR_CATCH_ALL").verify("test@example.com", { timeoutSec: 10 });
     assert(catchAll.result === "catch_all", "API_KEY_FOR_CATCH_ALL -> result catch_all");
   } else {
-    console.log("\n(skipping live sandbox section — set MV_LIVE=1 to enable)");
+    console.log("\n(skipping live sandbox section, set MV_LIVE=1 to enable)");
   }
 
   console.log(`\n${pass} passed, ${fail} failed`);

@@ -1,4 +1,4 @@
-// POST /api/admin/campaigns/linkedin — create a LinkedIn sequence campaign.
+// POST /api/admin/campaigns/linkedin: create a LinkedIn sequence campaign.
 // Owner-only. Inserts a campaigns row (source_channel='linkedin') plus
 // campaign_steps rows in one logical transaction; if step inserts fail,
 // rolls back the campaign too so we don't leave half-built sequences in

@@ -110,7 +110,7 @@ const HEALTH_META: Record<
   good: { label: "Healthy", badge: "badge-green", score: 0 },
 };
 
-// Rank a subscription's relevance when a client has more than one — the most
+// Rank a subscription's relevance when a client has more than one: the most
 // billing-urgent status wins the row.
 function subRank(status: string): number {
   return status === "past_due"
@@ -176,7 +176,7 @@ function SegmentChip({
 // The desktop "Book of business" table is 9 columns wide; on a phone it becomes
 // a sideways-scrolling mess. Below `lg` we render each client as a tap-through
 // card instead, surfacing the same numbers stacked. Delete-former lives on the
-// desktop table / the client page — kept off the card so the whole thing is one
+// desktop table / the client page: kept off the card so the whole thing is one
 // clean tap target (no nested interactive elements inside the <Link>).
 function replyTone(r: number): string {
   return r >= 5 ? "text-emerald-600" : r >= 2 ? "text-amber-600" : "text-red-600";
@@ -280,7 +280,7 @@ export default function AdminOverviewPage() {
     ADMIN_OVERVIEW_KEY,
     fetchAdminOverview,
   );
-  // Pre-warmed by AdminPrefetcher — shares that cache instead of a second
+  // Pre-warmed by AdminPrefetcher: shares that cache instead of a second
   // round-trip to Supabase.
   const { data: billing } = useApiQuery<BillingDataResponse>(
     API_BILLING_DATA_PATH,
@@ -288,7 +288,7 @@ export default function AdminOverviewPage() {
 
   const [clientFilter, setClientFilter] = useState<ClientStatus>("active");
   // KPI time-window lens for the reply/bounce/positive columns. Defaults to
-  // All-Time — a rolling 30-day reply rate understated it (fresh, unreplied
+  // All-Time: a rolling 30-day reply rate understated it (fresh, unreplied
   // leads dilute the denominator). 7d/30d derive client-side from card.snapshots.
   const [period, setPeriod] = useState<MetricsPeriod>(DEFAULT_METRICS_PERIOD);
   const [deleteTarget, setDeleteTarget] = useState<{
@@ -299,7 +299,7 @@ export default function AdminOverviewPage() {
   const [page, setPage] = useState(1);
 
   // Capture once per page instance so date math during render is referentially
-  // stable (react-hooks/purity). The dashboard isn't a live clock — the SWR
+  // stable (react-hooks/purity). The dashboard isn't a live clock: the SWR
   // cache lags too; navigating refreshes both.
   const [now] = useState<number>(() => Date.now());
 
@@ -429,7 +429,7 @@ export default function AdminOverviewPage() {
       alert(`Could not delete client: ${error.message}`);
       return;
     }
-    // Revalidate the overview cache so the deleted client drops out — a full
+    // Revalidate the overview cache so the deleted client drops out: a full
     // page reload would re-run the entire dashboard query set unnecessarily.
     await refetchOverview();
   }
@@ -684,7 +684,7 @@ export default function AdminOverviewPage() {
                             row.positive
                           ) : (
                             <span className="font-normal text-muted-foreground">
-                              —
+                             ,
                             </span>
                           )}
                         </TableCell>
@@ -696,7 +696,7 @@ export default function AdminOverviewPage() {
                             formatCents(row.mrrCents)
                           ) : (
                             <span className="font-normal text-muted-foreground">
-                              —
+                             ,
                             </span>
                           )}
                         </TableCell>

@@ -32,7 +32,7 @@ function eq<T>(got: T, want: T, msg: string) {
   }
 }
 function ok(cond: boolean, msg: string, extra?: unknown) {
-  eq(!!cond, true, extra !== undefined ? `${msg} — ${JSON.stringify(extra)}` : msg);
+  eq(!!cond, true, extra !== undefined ? `${msg}: ${JSON.stringify(extra)}` : msg);
 }
 
 async function main() {
@@ -141,7 +141,7 @@ function domainWith(state: unknown) {
   return { id: "dom-1", organization_id: "org-1", domain: "tryacme.com", provisioning: state };
 }
 
-console.log("advanceProvisioning — happy path");
+console.log("advanceProvisioning, happy path");
 {
   const state = initProvisioningState({
     now: T0,
@@ -169,7 +169,7 @@ console.log("advanceProvisioning — happy path");
   ok(!JSON.stringify(res.state).includes(pw), "password is NEVER serialized into the stored state");
 }
 
-console.log("advanceProvisioning — manual registrar skips DNS write steps");
+console.log("advanceProvisioning, manual registrar skips DNS write steps");
 {
   const state = initProvisioningState({
     now: T0, domain: "tryacme.com",
@@ -183,7 +183,7 @@ console.log("advanceProvisioning — manual registrar skips DNS write steps");
   eq(res.state.steps.dkim.status, "done", "still completes end-to-end");
 }
 
-console.log("advanceProvisioning — non-manual registrar with no API key fails DNS with guidance");
+console.log("advanceProvisioning, non-manual registrar with no API key fails DNS with guidance");
 {
   const state = initProvisioningState({
     now: T0, domain: "tryacme.com",
@@ -201,7 +201,7 @@ console.log("advanceProvisioning — non-manual registrar with no API key fails 
   ok(e.includes("Retry DNS"), "message tells the owner to Retry DNS", e);
 }
 
-console.log("advanceProvisioning — unverified domain shows an actionable hint, not Google's raw 400");
+console.log("advanceProvisioning, unverified domain shows an actionable hint, not Google's raw 400");
 {
   const state = initProvisioningState({
     now: T0, domain: "tryacme.com",
@@ -210,7 +210,7 @@ console.log("advanceProvisioning — unverified domain shows an actionable hint,
   });
   const deps = happyDeps();
   // On a connected registrar DNS/token succeed, but Google reports not-verified
-  // (TXT not visible yet) — the common wait state that used to surface a raw 400.
+  // (TXT not visible yet): the common wait state that used to surface a raw 400.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (deps.workspace.siteVerification as any).verifyDomain = async () => ({
     verified: false,
@@ -225,7 +225,7 @@ console.log("advanceProvisioning — unverified domain shows an actionable hint,
   ok(e.includes("google-site-verification") || e.includes("DNS records"), "hint names what to check", e);
 }
 
-console.log("advanceProvisioning — licensing configured assigns then completes");
+console.log("advanceProvisioning, licensing configured assigns then completes");
 {
   const state = initProvisioningState({
     now: T0, domain: "tryacme.com",
@@ -238,7 +238,7 @@ console.log("advanceProvisioning — licensing configured assigns then completes
   eq(res.state.users[0].licensed, true, "user marked licensed");
 }
 
-console.log("advanceProvisioning — permanent error halts and stamps completed_at");
+console.log("advanceProvisioning, permanent error halts and stamps completed_at");
 {
   const state = initProvisioningState({
     now: T0, domain: "tryacme.com",
@@ -260,7 +260,7 @@ console.log("advanceProvisioning — permanent error halts and stamps completed_
   ok((res.state.last_error ?? "").includes("another account"), "surfaces the failure message");
 }
 
-console.log("advanceProvisioning — 409-resume reveals no password; re-run is a no-op");
+console.log("advanceProvisioning, 409-resume reveals no password; re-run is a no-op");
 {
   const state = initProvisioningState({
     now: T0, domain: "tryacme.com",

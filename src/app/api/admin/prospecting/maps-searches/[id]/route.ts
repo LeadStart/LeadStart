@@ -74,7 +74,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
   return NextResponse.json({ search });
 }
 
-// PATCH /api/admin/prospecting/maps-searches/[id] — rename. The custom name lives
+// PATCH /api/admin/prospecting/maps-searches/[id]: rename. The custom name lives
 // on the `query` JSONB as `query.name`; an empty name clears it (UI falls back to
 // the auto summary). Mirrors the linkedin-searches PATCH.
 const MAX_NAME = 80;

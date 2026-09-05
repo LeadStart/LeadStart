@@ -8,14 +8,14 @@ import { createAdminClient } from "@/lib/supabase/admin";
 // (optional) Perplexity keys with env-var fallback, and hands back a
 // ready-to-use admin DB client.
 //
-// Mirrors requireProspectingContext (src/lib/scrapio/auth.ts) — same
+// Mirrors requireProspectingContext (src/lib/scrapio/auth.ts): same
 // discriminated-union return shape so callers can do:
 //
 //   const ctx = await requireDecisionMakerContext();
 //   if ("error" in ctx) return ctx.error;
 //   const { anthropicKey, perplexityKey, organizationId, admin, user } = ctx;
 //
-// Anthropic is required (400 if missing) — Layer 1 site-read uses Haiku.
+// Anthropic is required (400 if missing): Layer 1 site-read uses Haiku.
 // Perplexity powers Layer 2 web-search and there is NO Claude fallback (owner
 // directive 2026-08-28): with no Perplexity key, Layer 2 is skipped and the
 // item stays name-less. `perplexityKey` is null when not configured.

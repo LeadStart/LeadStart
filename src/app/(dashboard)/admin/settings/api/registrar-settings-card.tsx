@@ -1,6 +1,6 @@
 "use client";
 
-// Domain registrars (Phase 2) — Porkbun + Spaceship API credentials and the
+// Domain registrars (Phase 2): Porkbun + Spaceship API credentials and the
 // hard monthly spend cap for automated domain purchases. Secrets are never
 // returned by the API (only has_porkbun/has_spaceship + the cap), so the inputs
 // start blank; typing a value replaces the stored one, leaving it blank keeps it.
@@ -134,11 +134,11 @@ export function RegistrarSettingsCard() {
   const partialHint = (keySet?: boolean, secretSet?: boolean) =>
     keySet && !secretSet ? (
       <p className="flex items-center gap-1.5 text-[11px] text-amber-600">
-        <AlertTriangle size={12} /> API key saved, but the <b>secret key</b> is missing — enter it and Save.
+        <AlertTriangle size={12} /> API key saved, but the <b>secret key</b> is missing: enter it and Save.
       </p>
     ) : !keySet && secretSet ? (
       <p className="flex items-center gap-1.5 text-[11px] text-amber-600">
-        <AlertTriangle size={12} /> Secret key saved, but the <b>API key</b> is missing — enter it and Save.
+        <AlertTriangle size={12} /> Secret key saved, but the <b>API key</b> is missing: enter it and Save.
       </p>
     ) : null;
 
@@ -182,13 +182,13 @@ export function RegistrarSettingsCard() {
               type="password"
               value={pkKey}
               onChange={(e) => setPkKey(e.target.value)}
-              placeholder={status?.has_porkbun ? "API key (saved — enter to replace)" : "API key"}
+              placeholder={status?.has_porkbun ? "API key (saved, enter to replace)" : "API key"}
             />
             <Input
               type="password"
               value={pkSecret}
               onChange={(e) => setPkSecret(e.target.value)}
-              placeholder={status?.has_porkbun ? "Secret key (saved — enter to replace)" : "Secret key"}
+              placeholder={status?.has_porkbun ? "Secret key (saved, enter to replace)" : "Secret key"}
             />
           </div>
           <div className="flex items-center gap-3">
@@ -206,7 +206,7 @@ export function RegistrarSettingsCard() {
           </div>
           {status && partialHint(status.porkbun_key, status.porkbun_secret)}
           <p className="text-[11px] text-muted-foreground">
-            Supports API URL forwarding — a sending domain can 301-redirect to the client&rsquo;s site
+            Supports API URL forwarding: a sending domain can 301-redirect to the client&rsquo;s site
             automatically (set it per-domain under Mailboxes).
           </p>
         </div>
@@ -222,13 +222,13 @@ export function RegistrarSettingsCard() {
               type="password"
               value={ssKey}
               onChange={(e) => setSsKey(e.target.value)}
-              placeholder={status?.has_spaceship ? "API key (saved — enter to replace)" : "API key"}
+              placeholder={status?.has_spaceship ? "API key (saved, enter to replace)" : "API key"}
             />
             <Input
               type="password"
               value={ssSecret}
               onChange={(e) => setSsSecret(e.target.value)}
-              placeholder={status?.has_spaceship ? "API secret (saved — enter to replace)" : "API secret"}
+              placeholder={status?.has_spaceship ? "API secret (saved, enter to replace)" : "API secret"}
             />
           </div>
           <div className="flex items-center gap-3">
@@ -246,7 +246,7 @@ export function RegistrarSettingsCard() {
           </div>
           {status && partialHint(status.spaceship_key, status.spaceship_secret)}
           <p className="text-[11px] text-muted-foreground">
-            No forwarding API — set domain redirects manually in the Spaceship dashboard when needed.
+            No forwarding API: set domain redirects manually in the Spaceship dashboard when needed.
           </p>
         </div>
 
@@ -268,7 +268,7 @@ export function RegistrarSettingsCard() {
               className="max-w-[140px]"
             />
             <span className="text-xs text-muted-foreground">
-              per month — hard ceiling, fail-closed. Blank = purchasing disabled.
+              per month: hard ceiling, fail-closed. Blank = purchasing disabled.
             </span>
           </div>
         </div>

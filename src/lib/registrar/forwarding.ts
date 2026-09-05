@@ -1,4 +1,4 @@
-// URL forwarding helpers (pure — no I/O). A sending domain's bare hostname
+// URL forwarding helpers (pure, no I/O). A sending domain's bare hostname
 // 301-redirects to the client's real site so a lookalike domain never shows a
 // dead parked page. Porkbun sets this over its API (porkbun.ts); Spaceship
 // cannot (dashboard-only) and its client throws ManualForwardingRequiredError.
@@ -27,7 +27,7 @@ export const MANUAL_FORWARDING_MESSAGE: Record<string, string> = {
     "Spaceship has no URL-forwarding API. Set the redirect by hand in the Spaceship " +
     "dashboard: Domain → Advanced DNS / Forwarding → add a redirect to the destination URL.",
   manual:
-    "This domain's DNS is managed by hand — add the redirect at your DNS or hosting provider.",
+    "This domain's DNS is managed by hand: add the redirect at your DNS or hosting provider.",
 };
 
 /** The manual-setup instruction string for a registrar without API forwarding. */
@@ -59,7 +59,7 @@ export function normalizeDestinationUrl(raw: string): string | null {
 
 /**
  * The forwards a sending domain should have: the apex, plus www by default, both
- * pointing at `destination`. Permanent (301) and includePath off by default — a
+ * pointing at `destination`. Permanent (301) and includePath off by default: a
  * throwaway domain's paths don't map onto the real site's structure, so every
  * hit lands on the destination root. Returns [] if the destination is invalid.
  */
@@ -114,7 +114,7 @@ export interface ForwardDiff {
  * `desired`. Ownership is by SUBDOMAIN SLOT: for each desired subdomain we keep
  * an exact match, or delete what's there and add the new one. Forwards on
  * subdomains the desired set never mentions are left completely alone (same rule
- * as the DNS diff's untouched groups) — we never delete a forward we didn't set.
+ * as the DNS diff's untouched groups): we never delete a forward we didn't set.
  * Idempotent: re-applying an already-correct set produces no writes.
  */
 export function diffForwards(

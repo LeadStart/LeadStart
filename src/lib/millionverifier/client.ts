@@ -1,7 +1,7 @@
 // Million Verifier real-time API client.
 //
 // Single-address verification + a credits balance probe. Deliberately thin:
-// ONE fetch attempt per call (the send cron's next tick is the retry — we never
+// ONE fetch attempt per call (the send cron's next tick is the retry, we never
 // want an in-client retry loop eating the 60s cron budget), a hard client-side
 // abort, and a typed error taxonomy the caller uses to decide whether to hold,
 // skip, suppress, or alert.
@@ -14,13 +14,13 @@
 //
 // resultcode: 1 ok, 2 catch_all, 3 unknown, 4 error, 5 disposable, 6 invalid.
 // catch_all + unknown are "risky" and NOT charged. When our client-side timeout
-// param elapses server-side, the API returns result "unknown" (not an error) —
+// param elapses server-side, the API returns result "unknown" (not an error),
 // so a slow mail server costs nothing and is retried, never sent-to blindly.
 //
 // IP-block guard: repeated calls with a bad key get the CALLER IP blocked, and
 // Vercel egress IPs are shared. The caller (org-state + policy) therefore
 // validates keys on save and stops calling for 1h after any definitive account
-// error — this client just surfaces the right error kind for that decision.
+// error: this client just surfaces the right error kind for that decision.
 
 export const MV_BASE_URL = "https://api.millionverifier.com/api/v3";
 
@@ -42,7 +42,7 @@ export interface MillionVerifierResponse {
 }
 
 // ---------- Typed errors ----------
-// `definitive` errors (auth/credits/blocked) mean "stop calling for this org" —
+// `definitive` errors (auth/credits/blocked) mean "stop calling for this org",
 // they trip the 1h suppression window + alert immediately. `transient` errors
 // (network / 5xx / server timeout / internal) only trip the per-tick breaker
 // and alert after a run of consecutive failing ticks.
@@ -93,9 +93,9 @@ export class MillionVerifierTransientError extends MillionVerifierError {
 }
 
 // Map an API-level `error` string (or an *_ERROR_* sandbox key's message) to a
-// typed error. The exact strings are undocumented — pinned via
+// typed error. The exact strings are undocumented: pinned via
 // scripts/probe-millionverifier-sandbox.ts and matched by keyword here. An
-// unrecognized error is treated as TRANSIENT (hold, never send) — the safe
+// unrecognized error is treated as TRANSIENT (hold, never send): the safe
 // default given the fail-closed policy.
 export function classifyApiError(errorText: string): MillionVerifierError {
   const t = (errorText || "").toLowerCase();

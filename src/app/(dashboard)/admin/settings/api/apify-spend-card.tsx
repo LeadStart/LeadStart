@@ -1,9 +1,9 @@
 "use client";
 
-// Apify spend — the AUTHORITATIVE per-cycle cost, read live from Apify (not our
+// Apify spend: the AUTHORITATIVE per-cycle cost, read live from Apify (not our
 // per-run tallies, which drift on retries/aborts/deletes). Shows the cycle
 // total against the plan cap and a per-actor breakdown that INCLUDES failed and
-// aborted runs — so an aborted vdrmota waterfall shows up here instead of
+// aborted runs, so an aborted vdrmota waterfall shows up here instead of
 // vanishing. This should match the Apify invoice.
 
 import { useCallback, useEffect, useState } from "react";
@@ -78,7 +78,7 @@ export function ApifySpendCard() {
         <div className="min-w-0 flex-1">
           <CardTitle className="text-base">Apify spend</CardTitle>
           <p className="text-xs text-muted-foreground">
-            Actual charges from Apify this billing cycle — includes failed &amp; aborted runs. Matches
+            Actual charges from Apify this billing cycle: includes failed &amp; aborted runs. Matches
             your Apify invoice.
           </p>
         </div>
@@ -120,7 +120,7 @@ export function ApifySpendCard() {
                 </div>
                 {over && (
                   <span className="rounded-full bg-red-50 px-2.5 py-1 text-[11px] font-semibold text-red-700 border border-red-200">
-                    Cap reached — new runs 403
+                    Cap reached: new runs 403
                   </span>
                 )}
               </div>

@@ -31,14 +31,14 @@ export const maxDuration = 60;
 
 // Force dynamic rendering on every invocation. Without this, a Vercel cron
 // (which hits the same URL with no query params) can receive an edge-cached
-// response from a prior tick, skipping the function body entirely — the DB
+// response from a prior tick, skipping the function body entirely: the DB
 // is never touched but the route returns the old payload. Caught on
 // 2026-05-27 in an earlier cron route;
 // applying the same guard to every cron route preemptively.
 export const dynamic = "force-dynamic";
 
 // Per-tick limit. Each dispatch is ~500-1500ms (Unipile call + retry
-// backoff possible) so 30 enrollments uses up to ~45s — safely under
+// backoff possible) so 30 enrollments uses up to ~45s: safely under
 // Vercel's 60s budget.
 const ENROLLMENTS_PER_TICK = 30;
 
@@ -95,7 +95,7 @@ export async function GET(request: NextRequest) {
     .eq("campaigns.source_channel", "linkedin")
     .order("last_action_at", { ascending: true, nullsFirst: true })
     .order("created_at", { ascending: true })
-    .limit(ENROLLMENTS_PER_TICK * 3); // overfetch — many will be filtered out by wait_days
+    .limit(ENROLLMENTS_PER_TICK * 3); // overfetch: many will be filtered out by wait_days
 
   if (enrError) {
     console.error("[cron/linkedin-sequences] enrollment fetch failed:", enrError);
@@ -107,7 +107,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ status: "idle" });
   }
 
-  // Per-account dispatch counter — both for the per-account safety cap
+  // Per-account dispatch counter: both for the per-account safety cap
   // and so the per-tick budget can fall back to per-account fairness.
   const dispatchCounts: Record<string, { connect: number; message: number }> = {};
 
@@ -148,7 +148,7 @@ export async function GET(request: NextRequest) {
     const campaign = campaignMap.get(enrollment.campaign_id);
     if (!campaign) continue;
     if (campaign.status !== "active" || campaign.source_channel !== "linkedin") {
-      // Campaign paused/archived or not a LinkedIn campaign — skip silently.
+      // Campaign paused/archived or not a LinkedIn campaign: skip silently.
       continue;
     }
 
@@ -175,7 +175,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Fetch the current step. We do this per-enrollment because
-    // (campaign_id, step_index) isn't bulkable cleanly — only ~30 lookups
+    // (campaign_id, step_index) isn't bulkable cleanly: only ~30 lookups
     // per tick so the cost is acceptable.
     const { data: stepData } = await admin
       .from("campaign_steps")
@@ -195,7 +195,7 @@ export async function GET(request: NextRequest) {
       continue;
     }
 
-    // wait_days gate — for step 0 we use started_at, otherwise last_action_at.
+    // wait_days gate: for step 0 we use started_at, otherwise last_action_at.
     const referenceTime = enrollment.last_action_at ?? enrollment.started_at;
     if (step.wait_days > 0 && referenceTime) {
       const dueAt = new Date(
@@ -366,7 +366,7 @@ async function dispatchStep(ctx: DispatchContext): Promise<DispatchResult> {
         error: `Step kind '${step.kind}' not yet supported by the sequence engine.`,
       };
     default: {
-      // Exhaustiveness check — TS will complain if SequenceStepKind grows
+      // Exhaustiveness check: TS will complain if SequenceStepKind grows
       // and this default is missed.
       const _exhaustive: SequenceStepKind = step.kind;
       return { ok: false, error: `Unknown step kind: ${_exhaustive}` };
@@ -394,7 +394,7 @@ function extractProviderId(linkedinUrl: string | null): string | null {
 
 // Per-account dispatch count over a recent window. Uses
 // campaign_enrollments.last_action_at as a proxy for "did we send something
-// from this account around then" — joined with campaigns to filter to a
+// from this account around then": joined with campaigns to filter to a
 // single account's activity. Approximate but cheap.
 async function countActions(
   admin: ReturnType<typeof createAdminClient>,
@@ -404,7 +404,7 @@ async function countActions(
 ): Promise<number> {
   const since = new Date(Date.now() - windowDays * 86400000).toISOString();
   // We can't easily distinguish kinds from last_action_at alone; this
-  // counts ALL actions on the account in the window. Conservative — caps
+  // counts ALL actions on the account in the window. Conservative: caps
   // both metrics against the smaller of the two limits when a campaign
   // mixes kinds. Fine for v0; can split with a dispatch_log table later.
   void kind;

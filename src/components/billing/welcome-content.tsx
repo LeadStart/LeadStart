@@ -5,24 +5,24 @@ import leadstartLogo from "../../../public/leadstart-logo.png";
 export interface WelcomeContentProps {
   /** Warm-up window in calendar days (drives the launch-day copy). */
   warmingDays: number;
-  /** Recipient's first name — personalizes the greeting when present. */
+  /** Recipient's first name: personalizes the greeting when present. */
   firstName?: string | null;
   /**
-   * Frozen launch (first-charge) date, ISO string — the same value shown on the
+   * Frozen launch (first-charge) date, ISO string: the same value shown on the
    * quote and used for the Stripe trial_end. When omitted (admin preview), it's
    * estimated from the warming window off today.
    */
   launchDate?: string | null;
   /** When true, the copy adds the "sourcing your contacts and" clause. */
   sellsContacts: boolean;
-  /** Renders the "Demo mode — no real payment" note under the card. */
+  /** Renders the "Demo mode: no real payment" note under the card. */
   isDemo?: boolean;
   /** Extra classes for the root (the live page passes `min-h-screen`). */
   className?: string;
 }
 
 /**
- * The client-facing "You're all set" welcome surface — the page a client lands
+ * The client-facing "You're all set" welcome surface: the page a client lands
  * on right after Stripe Checkout completes.
  *
  * SHARED, on purpose: the live route (src/app/billing/welcome/page.tsx) and the
@@ -146,7 +146,7 @@ export function WelcomeContent({
 
           {isDemo && (
             <div className="rounded-lg border border-dashed border-amber-300 bg-amber-50 p-3 text-xs text-amber-800">
-              Demo mode — no real payment was charged. In production this page is
+              Demo mode: no real payment was charged. In production this page is
               shown after Stripe Checkout completes.
             </div>
           )}

@@ -32,7 +32,7 @@ export interface QuoteLayoutProps {
    * live admin draft preview), it's estimated from the warming window off today.
    */
   launchDate?: string | null;
-  /** Slot rendered after the terms — admin preview shows a hint, hosted page shows Accept button. */
+  /** Slot rendered after the terms: admin preview shows a hint, hosted page shows Accept button. */
   trailingSlot?: ReactNode;
 }
 
@@ -140,7 +140,7 @@ export function QuoteLayout({
                   {contactsCount
                     ? `${contactsCount.toLocaleString()} verified contacts`
                     : "Verified contacts"}{" "}
-                  — one-time.
+                 : one-time.
                 </p>
               </div>
               <p className="text-sm font-semibold shrink-0">
@@ -165,10 +165,10 @@ export function QuoteLayout({
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
               <p className="text-sm font-medium">
-                Lead management — monthly subscription
+                Lead management: monthly subscription
               </p>
               <p className="text-xs text-muted-foreground">
-                First charge {launch.toLocaleDateString()} — on launch day,
+                First charge {launch.toLocaleDateString()}: on launch day,
                 after {warmingDays} calendar days of warming.
               </p>
             </div>

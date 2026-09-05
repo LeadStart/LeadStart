@@ -105,7 +105,7 @@ export function DomainProvisioningDetail({
   onChange: () => void;
 }) {
   const prov = domain.provisioning as ProvisioningState | null;
-  // The step the flow is currently on (first not-done/skipped) — drives the
+  // The step the flow is currently on (first not-done/skipped): drives the
   // prominent status banner so it's never a mystery what's happening.
   const activeStepId = prov
     ? STEP_ORDER.find((id) => prov.steps[id].status !== "done" && prov.steps[id].status !== "skipped")
@@ -179,7 +179,7 @@ export function DomainProvisioningDetail({
           }
         }
       } catch {
-        /* quiet — the cron and manual Check now are the fallback */
+        /* quiet: the cron and manual Check now are the fallback */
       } finally {
         running = false;
       }
@@ -201,7 +201,7 @@ export function DomainProvisioningDetail({
         setNote(data.error ?? "Could not delete the domain.");
         return;
       }
-      onChange(); // refresh the list — this domain drops out
+      onChange(); // refresh the list: this domain drops out
     } catch (err) {
       setNote(err instanceof Error ? err.message : String(err));
     } finally {
@@ -270,7 +270,7 @@ export function DomainProvisioningDetail({
       {passwords.length > 0 && (
         <div className="rounded-lg border border-amber-300 bg-amber-50 p-2.5 text-xs">
           <div className="mb-1 flex items-center gap-1.5 font-medium text-amber-900">
-            <KeyRound size={13} /> Inbox passwords — shown once, not stored
+            <KeyRound size={13} /> Inbox passwords: shown once, not stored
           </div>
           <ul className="space-y-0.5 font-mono text-amber-900">
             {passwords.map((p) => (
@@ -353,7 +353,7 @@ export function DomainProvisioningDetail({
         </div>
       ) : null}
 
-      {/* DKIM paste — only while provisioning (active domains already have it) */}
+      {/* DKIM paste: only while provisioning (active domains already have it) */}
       {domain.lifecycle_status === "provisioning" && (
       <div className="space-y-1 border-t border-border/50 pt-3">
         <Label className="text-xs">DKIM authentication</Label>
@@ -392,7 +392,7 @@ export function DomainProvisioningDetail({
             <Button
               variant="ghost"
               size="sm"
-              title={`Reconciles this domain's DNS at your registrar (${domain.registrar}): writes the Google MX, SPF, DMARC and verification records AND removes conflicting strays like Porkbun's default fwd MX. Idempotent (writes nothing if already correct). This runs automatically during setup — use it only if a write failed or records were changed.`}
+              title={`Reconciles this domain's DNS at your registrar (${domain.registrar}): writes the Google MX, SPF, DMARC and verification records AND removes conflicting strays like Porkbun's default fwd MX. Idempotent (writes nothing if already correct). This runs automatically during setup, use it only if a write failed or records were changed.`}
               onClick={() => post(`/api/admin/domains/${domain.id}/dns/apply`, undefined, "retrydns")}
               disabled={busy === "retrydns"}
             >
@@ -423,14 +423,14 @@ export function DomainProvisioningDetail({
             </table>
             {domain.registrar === "manual" && (
               <p className="mt-1 text-[10px] text-muted-foreground">
-                Manual registrar — add these records at your DNS host by hand.
+                Manual registrar: add these records at your DNS host by hand.
               </p>
             )}
           </div>
         )}
       </div>
 
-      {/* URL forwarding — redirect the bare domain to the client's real site.
+      {/* URL forwarding: redirect the bare domain to the client's real site.
           Porkbun sets this over its API; Spaceship/manual show the manual step. */}
       <div className="space-y-1 border-t border-border/50 pt-3">
         <Label className="text-xs">URL forwarding</Label>
@@ -476,7 +476,7 @@ export function DomainProvisioningDetail({
         )}
       </div>
 
-      {/* Delete / re-provision — removes the domain from Google Workspace + our
+      {/* Delete / re-provision: removes the domain from Google Workspace + our
           tracking (registration + DNS untouched). Blocked if it has inboxes. */}
       <div className="border-t border-border/50 pt-3">
         {!confirmDelete ? (

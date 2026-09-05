@@ -4,7 +4,7 @@
 // contact-list ↔ campaign alignment). Sits next to the CSV import panel on the
 // campaign's Leads tab. Search/tag-filter the campaign's client's contacts,
 // select them, see coverage of the campaign's variables against the selection
-// (warn where a used variable has no value + no fallback), and enroll — reusing
+// (warn where a used variable has no value + no fallback), and enroll: reusing
 // the campaign variable registry from the same bootstrap the CSV panel uses.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -71,7 +71,7 @@ export function CrmPullPanel({ campaignId }: { campaignId: string }) {
   const [enrollError, setEnrollError] = useState<string | null>(null);
   const [result, setResult] = useState<EnrollResult | null>(null);
 
-  // Registry/token bootstrap (shared with the CSV panel) — for coverage warnings.
+  // Registry/token bootstrap (shared with the CSV panel): for coverage warnings.
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -81,7 +81,7 @@ export function CrmPullPanel({ campaignId }: { campaignId: string }) {
         const data = (await res.json()) as { tokens: CampaignTokens };
         if (!cancelled) setTokens(data.tokens);
       } catch {
-        /* coverage is advisory — ignore */
+        /* coverage is advisory: ignore */
       }
     })();
     return () => {
@@ -347,7 +347,7 @@ export function CrmPullPanel({ campaignId }: { campaignId: string }) {
                       {r.token}
                       {"}}"}
                     </strong>{" "}
-                    — {r.have}/{r.total} have a value (the rest send blank).
+                   : {r.have}/{r.total} have a value (the rest send blank).
                   </li>
                 ))}
               </ul>

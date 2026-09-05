@@ -31,7 +31,7 @@ export function CampaignLifecycleButton({
   status: Status;
   sourceChannel: string;
   // Hard launch blockers (native email). When present, the Launch button is
-  // disabled — the same rule the activate endpoint enforces server-side.
+  // disabled: the same rule the activate endpoint enforces server-side.
   blockers?: ReadinessItem[];
   // Extra disable (e.g. the workspace has unsaved changes), with a reason for
   // the tooltip. Blocks every lifecycle action, not just launch.

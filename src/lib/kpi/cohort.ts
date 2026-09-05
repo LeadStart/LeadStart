@@ -2,7 +2,7 @@
 //
 // A campaign's daily snapshots bucket replies by the day they ARRIVED, which
 // can't answer "of the people we first emailed in this window, what share
-// replied" — the numerator and denominator would cover different populations
+// replied": the numerator and denominator would cover different populations
 // (follow-up replies land weeks after a contact is first contacted). This
 // helper re-buckets repliers by each contact's FIRST-touch day so the numerator
 // lines up with new_leads_contacted (contacts whose first email went out that

@@ -2,7 +2,7 @@ import type { MapsLead, MapsPlace } from "@/types/app";
 import { normalizeDomain } from "../domain";
 import { MAPS_LEADS_PER_PLACE } from "../pricing";
 
-// Google Maps business-search sourcing — the second top-of-funnel actor (the
+// Google Maps business-search sourcing: the second top-of-funnel actor (the
 // LinkedIn twin is profile-search.ts). Finds NEW businesses by niche keywords +
 // location; the enrichment waterfall then fills their emails/phones. Pure module:
 // builds the actor input from app-facing levers and flattens the dataset into
@@ -16,7 +16,7 @@ import { MAPS_LEADS_PER_PLACE } from "../pricing";
 //   output fields: placeId, title, categoryName, categories[], website, phone,
 //     phoneUnformatted, address, street, city, state, postalCode, countryCode,
 //     location{lat,lng}, totalScore, reviewsCount, permanentlyClosed,
-//     temporarilyClosed, claimThisBusiness, url. (No email — we enrich ourselves.)
+//     temporarilyClosed, claimThisBusiness, url. (No email, we enrich ourselves.)
 //
 // Business-leads add-on (probe 2026-08-30, run phplPwGZ7lGaE2Yv7):
 //   `maximumLeadsEnrichmentRecords` is the max leads PER PLACE (schema title:
@@ -38,14 +38,14 @@ export type MapsAreaLevel = "city" | "county" | "state" | "zip";
 export interface MapsArea {
   level: MapsAreaLevel;
   name?: string; // city ("Dallas") or county ("Dallas County") name
-  state?: string; // full state NAME ("Texas") — city/county/state levels
-  postalCode?: string; // ZIP — zip level only
+  state?: string; // full state NAME ("Texas"): city/county/state levels
+  postalCode?: string; // ZIP: zip level only
   countryCode?: string; // ISO-2, default "us"
   label?: string; // display only, e.g. "Dallas County, TX"
 }
 
 // App-facing levers. searchTerms are OR'd across searches. Location is supplied
-// EITHER as `areas` (structured, one-or-more regions — the DIY path) OR as the
+// EITHER as `areas` (structured, one-or-more regions, the DIY path) OR as the
 // legacy free-text `locationQuery` (one area). websiteFilter/minStars/
 // categoryFilterWords each add a per-place filter charge, so they're sent ONLY
 // when explicitly set.
@@ -72,7 +72,7 @@ function cleanArr(v?: string[]): string[] | undefined {
 
 // The parts of the actor input shared by both the legacy free-text path and the
 // structured per-area path: the search terms, the per-search cap, and the
-// detail/contacts opt-outs (we enrich domains ourselves — far cheaper than the
+// detail/contacts opt-outs (we enrich domains ourselves, far cheaper than the
 // actor's per-place add-on events).
 function baseInput(levers: MapsSearchLevers, opts: { maxItems: number }): Record<string, unknown> {
   const terms = cleanArr(levers.searchTerms) ?? [];
@@ -103,7 +103,7 @@ function applyFilters(input: Record<string, unknown>, levers: MapsSearchLevers):
 }
 
 // Map ONE area to the actor's structured 📡 Geolocation fields. Deliberately
-// omits `locationQuery` — the actor gives the 📍 Location field priority over
+// omits `locationQuery`: the actor gives the 📍 Location field priority over
 // Geolocation, so a stray locationQuery would silently override these.
 export function geoFieldsForArea(area: MapsArea): Record<string, unknown> {
   const g: Record<string, unknown> = { countryCode: (area.countryCode || "us").toLowerCase() };
@@ -112,7 +112,7 @@ export function geoFieldsForArea(area: MapsArea): Record<string, unknown> {
   const zip = area.postalCode?.trim();
   switch (area.level) {
     case "zip":
-      if (zip) g.postalCode = zip; // Country + ZIP only — never combine with city
+      if (zip) g.postalCode = zip; // Country + ZIP only: never combine with city
       break;
     case "state":
       if (state) g.state = state;
@@ -129,7 +129,7 @@ export function geoFieldsForArea(area: MapsArea): Record<string, unknown> {
   return g;
 }
 
-// Legacy free-text builder (one area via `locationQuery`) — kept for searches
+// Legacy free-text builder (one area via `locationQuery`): kept for searches
 // created before the structured/multi-region path and any non-DIY caller.
 export function buildMapsSearchInput(
   levers: MapsSearchLevers,
@@ -142,7 +142,7 @@ export function buildMapsSearchInput(
 }
 
 // Structured builder for ONE area of a (possibly multi-region) search. `maxItems`
-// is this area's slice of the total cap — the cron divides target_max_results
+// is this area's slice of the total cap: the cron divides target_max_results
 // across the areas so the fan-out doesn't over-scrape.
 export function buildMapsSearchInputForArea(
   levers: MapsSearchLevers,
@@ -167,7 +167,7 @@ const VALID_AREA_LEVELS: readonly MapsAreaLevel[] = ["city", "county", "state", 
 
 // Coerce one stored/incoming value into a usable MapsArea, or null if it can't
 // address a real area. The level's identifying field is required (zip→postalCode;
-// city/county→name+state; state→state) — a half-filled area would silently widen
+// city/county→name+state; state→state): a half-filled area would silently widen
 // the search (e.g. a city with no state hits every same-named city nationwide).
 export function coerceMapsArea(raw: unknown): MapsArea | null {
   if (!raw || typeof raw !== "object") return null;
@@ -220,7 +220,7 @@ export function perAreaMaxItems(target: number, areaCount: number): number {
 // Union two place lists, de-duplicated by google_place_id, existing-wins (a place
 // seen in an earlier area is not replaced by a later area's copy). Order-stable:
 // existing first, then first-seen new places. Places without an id are dropped
-// (they can't be dedupe-keyed — parseMapsSearchResults already excludes them).
+// (they can't be dedupe-keyed, parseMapsSearchResults already excludes them).
 export function mergeMapsPlaces(existing: MapsPlace[], incoming: MapsPlace[]): MapsPlace[] {
   const seen = new Set<string>();
   const out: MapsPlace[] = [];
@@ -241,8 +241,8 @@ export interface IngestAreaResult {
   nextAreaIndex: number; // the cursor to persist (areaIndex + 1)
   accumulated: MapsPlace[]; // the running de-duplicated union across areas so far
   done: boolean; // true once every area has been ingested
-  finalResults?: MapsPlace[]; // present iff done — accumulated sliced to target
-  truncated?: boolean; // present iff done — union exceeded the target
+  finalResults?: MapsPlace[]; // present iff done: accumulated sliced to target
+  truncated?: boolean; // present iff done: union exceeded the target
 }
 
 // Fold one finished area's places into the running accumulation and decide
@@ -355,7 +355,7 @@ export function pickBestMapsLead(
 
 // Flatten + de-duplicate a dataset (by placeId). Permanently-closed businesses
 // are dropped (never a lead; cheaper than the skipClosedPlaces filter charge).
-// Rows with no placeId are dropped — they can't be dedupe-keyed.
+// Rows with no placeId are dropped: they can't be dedupe-keyed.
 export function parseMapsSearchResults(datasetItems: unknown[]): MapsPlace[] {
   const out: MapsPlace[] = [];
   const seen = new Set<string>();

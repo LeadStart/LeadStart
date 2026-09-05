@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
       ? Math.round(body.monthly_price_cents)
       : 0;
 
-  // Unique slug within the org — base on provided or derived, then suffix
+  // Unique slug within the org: base on provided or derived, then suffix
   // -2, -3, … if taken.
   const baseSlug = slugify(body.slug || name);
   const { data: existingRows } = await supabase

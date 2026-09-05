@@ -8,9 +8,9 @@ import { handleStripeEvent } from "@/lib/stripe/webhooks";
  * Stripe webhook receiver.
  *
  * Flow:
- *  1. Read raw body (required for signature verification — DO NOT JSON.parse first).
+ *  1. Read raw body (required for signature verification, DO NOT JSON.parse first).
  *  2. Verify signature against STRIPE_WEBHOOK_SECRET (skipped in demo mode so fixtures can be POSTed directly).
- *  3. Dedupe on `stripe_events.stripe_event_id` — Stripe retries, so idempotency is mandatory.
+ *  3. Dedupe on `stripe_events.stripe_event_id`: Stripe retries, so idempotency is mandatory.
  *  4. Insert event row, dispatch to handler, and on failure record the error so Stripe will retry.
  */
 export async function POST(req: NextRequest) {
@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
   // Service-role client: the webhook is a trusted server-to-server caller (the
   // Stripe signature is already verified above) with no user session, so it must
   // bypass RLS to write the billing-mirror tables (stripe_events,
-  // client_subscriptions, billing_invoices, payment_links, quotes) — all of which
+  // client_subscriptions, billing_invoices, payment_links, quotes): all of which
   // are service-role-only. Using the anon client here silently no-ops every write.
   const supabase = createAdminClient();
 

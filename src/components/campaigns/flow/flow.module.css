@@ -1,4 +1,4 @@
-/* Flow builder — visual branching sequence editor.
+/* Flow builder: visual branching sequence editor.
    Colors come from the global theme tokens (:root in globals.css). Channel
    accents match the app: email = Gmail red, LinkedIn = #0A66C2, internal =
    violet, wait = amber, condition = slate. Content nodes render as compact
@@ -171,7 +171,7 @@
   display: flex; flex-direction: column; overflow: hidden;
   transition: width .18s ease, max-height .18s ease;
 }
-/* "Expand" toggle — a wider, taller focused view for the email editor. */
+/* "Expand" toggle: a wider, taller focused view for the email editor. */
 .modalWide { width: min(1040px, 96vw); max-height: 92vh; }
 .mHead {
   display: flex; align-items: center; gap: 11px; padding: 12px 16px; flex-shrink: 0;

@@ -1,4 +1,4 @@
-// Saved LinkedIn search presets — list + save (upsert by name).
+// Saved LinkedIn search presets: list + save (upsert by name).
 // Owner/VA only, org-scoped. The admin client bypasses RLS; org scoping is
 // enforced in code (mirrors the other prospecting routes).
 
@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
   if (!config) return NextResponse.json({ error: "config is required" }, { status: 400 });
 
   const now = new Date().toISOString();
-  // Upsert by case-insensitive name — a few presets per org, so match in code
+  // Upsert by case-insensitive name: a few presets per org, so match in code
   // rather than lean on the functional unique index for onConflict.
   const { data: existing } = await ctx.admin
     .from("linkedin_search_presets")

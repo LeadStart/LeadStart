@@ -27,7 +27,7 @@ export const maxDuration = 60;
 
 // Force dynamic rendering on every invocation. Without this, a Vercel cron
 // (which hits the same URL with no query params) can receive an edge-cached
-// response from a prior tick, skipping the function body entirely — the DB
+// response from a prior tick, skipping the function body entirely: the DB
 // is never touched but the route returns the old payload. Caught on
 // 2026-05-27 in an earlier cron route;
 // applying the same guard to every cron route preemptively.
@@ -87,7 +87,7 @@ export async function GET(request: NextRequest) {
   const candidate = candidates[0] as RunRow;
   const claimAt = new Date().toISOString();
 
-  // Atomic claim — only one cron instance succeeds if two run at once.
+  // Atomic claim: only one cron instance succeeds if two run at once.
   const { data: claimedRows } = await admin
     .from("decision_maker_runs")
     .update({
@@ -173,7 +173,7 @@ export async function GET(request: NextRequest) {
   const pending = (pendingResults as ResultRow[] | null) ?? [];
 
   if (pending.length === 0) {
-    // No more work — finalize the run.
+    // No more work: finalize the run.
     await admin
       .from("decision_maker_runs")
       .update({
@@ -236,7 +236,7 @@ export async function GET(request: NextRequest) {
           tickProcessed++;
           tickCost += result.cost_usd;
         } else {
-          // Promise itself rejected — stamp the row as error so the run
+          // Promise itself rejected: stamp the row as error so the run
           // can finish even if one lead blew up unexpectedly.
           const errMsg =
             outcome.reason instanceof Error

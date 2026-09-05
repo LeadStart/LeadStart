@@ -6,7 +6,7 @@ import type { ManualTaskStatus } from "@/types/app";
 //
 // The complete / skip / reopen action behind the inbox. `done` and `skipped`
 // stamp completed_at (now); `open` clears it (undo). Org ownership is re-checked
-// even though the admin client bypasses RLS — defense in depth.
+// even though the admin client bypasses RLS: defense in depth.
 
 export const maxDuration = 10;
 

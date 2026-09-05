@@ -25,7 +25,7 @@ const MAX_TURNS = 24;
 const MAX_CHARS_PER_MESSAGE = 4000;
 
 // Best-effort per-IP rate limit. NOTE: this Map lives in the serverless
-// instance's memory, so it's per-instance, not global — good enough to
+// instance's memory, so it's per-instance, not global: good enough to
 // blunt a single IP hammering a warm instance for an MVP. The documented
 // upgrade path is a shared store (Supabase table or Upstash) if abuse
 // becomes real.
@@ -155,7 +155,7 @@ export async function POST(request: NextRequest) {
 
   if (isRateLimited(clientIp(request))) {
     return NextResponse.json(
-      { error: "Too many messages — give it a moment and try again." },
+      { error: "Too many messages, give it a moment and try again." },
       { status: 429, headers: cors }
     );
   }
@@ -204,11 +204,11 @@ export async function POST(request: NextRequest) {
       .trim();
 
     if (!reply) {
-      // Refusal or empty completion — don't echo nothing back.
+      // Refusal or empty completion: don't echo nothing back.
       return NextResponse.json(
         {
           reply:
-            "Sorry, I can't help with that one. I can answer questions about LeadStart though — what would you like to know?",
+            "Sorry, I can't help with that one. I can answer questions about LeadStart though: what would you like to know?",
         },
         { headers: cors }
       );
@@ -229,7 +229,7 @@ export async function POST(request: NextRequest) {
     ) {
       console.error("[site-chat] Anthropic transient error:", err);
       return NextResponse.json(
-        { error: "I'm a bit busy right now — try again in a moment." },
+        { error: "I'm a bit busy right now, try again in a moment." },
         { status: 503, headers: cors }
       );
     }

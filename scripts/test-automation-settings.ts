@@ -156,7 +156,7 @@ const reply = {
   lead_company: "Acme",
   from_address: "pat@acme.com",
   subject: "Re: quick question",
-  body_text: "Yes, very interested — can we chat Thursday?",
+  body_text: "Yes, very interested, can we chat Thursday?",
   received_at: "2026-08-26T10:00:00.000Z",
 } as unknown as LeadReply;
 const client = { id: "c1", name: "Cabrera Co" } as unknown as Client;
@@ -169,7 +169,7 @@ const client = { id: "c1", name: "Cabrera Co" } as unknown as Client;
   ok(ev.title.includes("Positive reply"), "hot title says Positive reply");
   ok(ev.title.includes("Pat Prospect"), "title uses lead name");
   eq(ev.reply?.from_address, "pat@acme.com", "reply from_address");
-  eq(ev.reply?.snippet, "Yes, very interested — can we chat Thursday?", "reply snippet");
+  eq(ev.reply?.snippet, "Yes, very interested, can we chat Thursday?", "reply snippet");
   eq(ev.node, null, "reply event has no node");
 
   const cold = buildReplyEvent({ reply, client, finalClass: "not_interested" });

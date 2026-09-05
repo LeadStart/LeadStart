@@ -19,7 +19,7 @@ export interface ProviderItem {
 export interface PhaseResult {
   status: "found" | "not_found";
   email?: string | null;
-  confidence?: number; // 0-100 — the provider's own confidence in `email`
+  confidence?: number; // 0-100: the provider's own confidence in `email`
   companyDomain?: string | null; // set by the domains phase (or profile currentPosition)
   companyLinkedinUrl?: string | null; // set by the profiles phase
   extra?: Record<string, unknown>; // merged into enrichment_data.enrichment.*
@@ -28,7 +28,7 @@ export interface PhaseResult {
 
 // One interface for every phase. `parseItems` returns a Map keyed by
 // ProviderItem.id; items with no entry are treated as not_found by the worker.
-// Email verification is NOT a provider concern — Million Verifier owns it.
+// Email verification is NOT a provider concern: Million Verifier owns it.
 export interface PhaseProvider {
   id: string; // 'harvestapi' | 'harvestapi-company' | 'site_scrape' | 'bovi'
   actorId: string; // Apify "username~actor" id

@@ -1,5 +1,5 @@
 // Loads the Workspace admin-subject clients from an org's stored Google
-// credentials (migration 00097). Mirrors src/lib/gmail/org.ts — the credential
+// credentials (migration 00097). Mirrors src/lib/gmail/org.ts: the credential
 // lookup lives in one place, shared by the provisioning route + cron.
 //
 // Auth model: the SAME service account that sends Gmail (DWD) is used, but the
@@ -99,7 +99,7 @@ export async function loadWorkspaceAdminForOrg(
   const licenseSku = ws?.license_sku_id ?? o.google_license_sku_id ?? null;
   if (!adminEmail) {
     throw new GoogleConfigError(
-      "No Google Workspace is configured. Add one (its super-admin email) in Settings, Integrations — the Directory API impersonates an admin, not a mailbox.",
+      "No Google Workspace is configured. Add one (its super-admin email) in Settings, Integrations: the Directory API impersonates an admin, not a mailbox.",
     );
   }
 

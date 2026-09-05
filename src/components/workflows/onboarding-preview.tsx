@@ -1,11 +1,11 @@
 "use client";
 
-// Onboarding Preview — the admin-facing, live-synced view of what a client
+// Onboarding Preview: the admin-facing, live-synced view of what a client
 // actually receives during onboarding: the proposal EMAIL, the hosted QUOTE
 // page they click through to, and the WELCOME page after they pay.
 //
-// Every surface here is the REAL production code — buildQuoteProposalEmail(),
-// <QuoteLayout/>, <WelcomeContent/> — fed the sample inputs + live defaults from
+// Every surface here is the REAL production code: buildQuoteProposalEmail(),
+// <QuoteLayout/>, <WelcomeContent/>: fed the sample inputs + live defaults from
 // ./onboarding-preview.data.ts. Nothing is re-implemented, so this can't drift
 // from what customers see; scripts/test-onboarding-preview-sync.ts enforces it.
 
@@ -112,7 +112,7 @@ function ConfigChip({ label, value }: { label: string; value: string }) {
 export function OnboardingPreview() {
   const [sellsContacts, setSellsContacts] = useState(true);
   // The surfaces render current dates (issued / launch / expiry). Those come
-  // from `new Date()`, so we only draw them after mount — otherwise the server
+  // from `new Date()`, so we only draw them after mount: otherwise the server
   // (UTC) and client (local tz) can format the same date differently and React
   // flags a hydration mismatch. The static config summary renders immediately.
   const [mounted, setMounted] = useState(false);
@@ -131,7 +131,7 @@ export function OnboardingPreview() {
             Onboarding preview
           </h1>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            Exactly what a client sees as they come aboard — the proposal email,
+            Exactly what a client sees as they come aboard: the proposal email,
             the hosted quote they accept, and the welcome page after payment.
             These are the live production surfaces fed by the current default
             config, so this preview stays in lock-step with what actually ships.
@@ -158,7 +158,7 @@ export function OnboardingPreview() {
               <span className="font-semibold text-foreground">
                 {SAMPLE_CONTACT_NAME}
               </span>{" "}
-              ({SAMPLE_CONTACT_FIRST_NAME} {SAMPLE_CONTACT_LAST_NAME}) —{" "}
+              ({SAMPLE_CONTACT_FIRST_NAME} {SAMPLE_CONTACT_LAST_NAME}),{" "}
               {formatCents(SAMPLE_MONTHLY_CENTS)}/mo,{" "}
               {formatCents(SAMPLE_SETUP_CENTS)} setup
               {sellsContacts
@@ -195,7 +195,7 @@ export function OnboardingPreview() {
   );
 }
 
-/** The three date-bearing surfaces — mounted-only (see OnboardingPreview). */
+/** The three date-bearing surfaces: mounted-only (see OnboardingPreview). */
 function Surfaces({
   sellsContacts,
   sourcingCents,
@@ -224,7 +224,7 @@ function Surfaces({
 
   return (
     <>
-      {/* Step 1 — proposal email */}
+      {/* Step 1: proposal email */}
       <section className="space-y-3">
         <StepHeading
           n={1}
@@ -259,7 +259,7 @@ function Surfaces({
         </Frame>
       </section>
 
-      {/* Step 2 — hosted quote page */}
+      {/* Step 2: hosted quote page */}
       <section className="space-y-3">
         <StepHeading
           n={2}
@@ -314,7 +314,7 @@ function Surfaces({
                       Accept &amp; pay {formatCents(dueToday)} today
                     </div>
                     <p className="text-center text-[11px] text-muted-foreground">
-                      Preview — the live button opens an on-site Stripe payment
+                      Preview: the live button opens an on-site Stripe payment
                       modal.
                     </p>
                   </div>
@@ -325,7 +325,7 @@ function Surfaces({
         </Frame>
       </section>
 
-      {/* Step 3 — welcome page */}
+      {/* Step 3: welcome page */}
       <section className="space-y-3">
         <StepHeading
           n={3}

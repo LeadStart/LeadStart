@@ -1,10 +1,10 @@
-// POST /api/admin/mailboxes/[id]/test — send a one-off test email from a
+// POST /api/admin/mailboxes/[id]/test: send a one-off test email from a
 // mailbox to an address of your choosing (defaults to the signed-in owner's
 // login email). Body: { to?: string }.
 //
 // Why not a self-send any more: mail from a mailbox to itself never leaves the
 // tenant and always lands in the inbox, so the old default only ever proved
-// that delegation worked — which adding the mailbox already proves. Sending to
+// that delegation worked, which adding the mailbox already proves. Sending to
 // an outside inbox is a real delivery, so besides exercising the whole
 // JWT → token → send path it gives a quick manual placement read: open the
 // recipient and see whether it arrived in Inbox, Promotions, or Spam. The copy
@@ -73,7 +73,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     return NextResponse.json(
       {
         error:
-          "Pick an address outside this mailbox — a message to itself never leaves the tenant, so it can't show you where your mail lands.",
+          "Pick an address outside this mailbox: a message to itself never leaves the tenant, so it can't show you where your mail lands.",
       },
       { status: 400 },
     );

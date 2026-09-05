@@ -1,6 +1,6 @@
 // Fail-closed monthly spend cap for automated domain purchases (Phase 2).
 //
-// Pure logic — no I/O. The purchase route sums the org's month-to-date spend
+// Pure logic: no I/O. The purchase route sums the org's month-to-date spend
 // from sending_domains.purchase_price_usd (migration 00081) and calls
 // checkSpendCap() before every registration. The guarantee: no cap set → NO
 // automated purchasing (never allowed), and a purchase that would push the
@@ -26,7 +26,7 @@ export function checkSpendCap(params: {
   if (capUsd == null) {
     return {
       allowed: false,
-      reason: "No monthly spend cap is set — automated domain purchasing is disabled.",
+      reason: "No monthly spend cap is set, automated domain purchasing is disabled.",
       monthToDateUsd,
       capUsd: null,
       remainingUsd: null,
@@ -60,7 +60,7 @@ export function checkSpendCap(params: {
 }
 
 /**
- * UTC first-of-month ISO timestamp for the month containing `now` — the lower
+ * UTC first-of-month ISO timestamp for the month containing `now`: the lower
  * bound for summing this month's purchases (sending_domains where
  * created_at >= this and purchase_price_usd is not null).
  */

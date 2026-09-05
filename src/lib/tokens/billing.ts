@@ -179,7 +179,7 @@ export async function settleSearch(
     .eq("entry_type", "hold")
     .maybeSingle();
   const hold = holdRow as { tokens: number; organization_id: string } | null;
-  if (!hold) return null; // not a buyer search — nothing to settle
+  if (!hold) return null; // not a buyer search: nothing to settle
 
   const held = Number(hold.tokens);
   const [tiers, config] = await Promise.all([loadPricingTiers(admin), loadPricingConfig(admin)]);

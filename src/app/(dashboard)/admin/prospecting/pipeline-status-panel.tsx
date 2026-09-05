@@ -25,7 +25,7 @@ import {
 // Direction A (vertical actor rail) with Direction B's radial for the overall.
 // It draws from two real sources: the LinkedIn SEARCH (sourcing stage) and, once
 // contacts are imported, the org's active ENRICHMENT RUN (the four Apify actor
-// phases). Verification is the final stage — it runs at first send, so it shows
+// phases). Verification is the final stage: it runs at first send, so it shows
 // as an informational step here, never live.
 
 // What the panel needs from the parent's search detail (kept loose so the
@@ -41,7 +41,7 @@ export type SearchStatusLite = {
 
 type StageState = "idle" | "queued" | "active" | "done" | "skipped" | "failed";
 
-// The 2nd-pass waterfall fans out by company size — each band routes to its own
+// The 2nd-pass waterfall fans out by company size: each band routes to its own
 // method. We only have the config snapshot (no per-band counts), so the rail shows
 // the routing PLAN, not fake per-method progress.
 type RouterBand = { label: string; method: EnrichmentWaterfallMethod };
@@ -85,7 +85,7 @@ const PHASE_ORDER: Record<string, number> = {
 };
 
 // Core stages (always shown) + the two opt-in add-ons (activity, verify). The
-// add-ons are filtered out of the rail unless enabled — see the assembly below.
+// add-ons are filtered out of the rail unless enabled: see the assembly below.
 const ENRICH_DEFS = [
   { key: "profiles", name: "Profile → email", actor: "profile-scraper", icon: Mail, color: "#3b46ff", unit: "emails", addon: false, found: (r: EnrichmentRun) => r.found_emails_profiles_count },
   { key: "domains", name: "Company → domain", actor: "linkedin-company", icon: Globe, color: "#6366f1", unit: "domains", addon: false, found: (r: EnrichmentRun) => r.found_domains_count },
@@ -133,7 +133,7 @@ export function PipelineStatusPanel({
           if (data.run.status === "complete" || data.run.status === "failed") return;
         }
       } catch {
-        // transient — reschedule
+        // transient: reschedule
       }
       if (!cancelled) timer = setTimeout(poll, ENRICH_POLL_INTERVAL_MS);
     };
@@ -189,7 +189,7 @@ export function PipelineStatusPanel({
   const enrichStages: StageView[] = defs.map((d) => {
     const base = { key: d.key, name: d.name, actor: d.actor, icon: d.icon, color: d.color, unit: d.unit, counted: true };
     if (d.key === "activity" && run && run.run_activity === false)
-      return { ...base, state: "skipped", frac: 1, note: "skipped — already gated on activity" };
+      return { ...base, state: "skipped", frac: 1, note: "skipped, already gated on activity" };
     if (d.key === "verify" && run && run.run_verify === false)
       return { ...base, state: "skipped", frac: 1, note: "verification off for this run" };
     if (d.key === "naming" && run && run.run_naming === false)
@@ -259,7 +259,7 @@ export function PipelineStatusPanel({
   // Only read a full 100% once the run has actually completed. A fully-processed
   // but not-yet-advanced active phase (e.g. activity 20/20 while the worker
   // finalizes the tick) has frac=1 and would otherwise show 100% with a stage
-  // still spinning — cap it at 99% until the run is complete.
+  // still spinning: cap it at 99% until the run is complete.
   const runComplete = run?.status === "complete";
   const overall = runComplete ? rawOverall : Math.min(rawOverall, 0.99);
   const pct = runComplete ? 100 : Math.min(99, Math.round(rawOverall * 100));

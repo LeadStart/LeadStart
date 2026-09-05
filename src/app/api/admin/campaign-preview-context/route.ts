@@ -23,7 +23,7 @@ type ContactRow = TokenContact & {
   email: string | null;
 };
 
-// display_name || email prefix — matches the sender's senderName rule.
+// display_name || email prefix: matches the sender's senderName rule.
 function nameFromMailbox(mb: { display_name: string | null; email_address: string } | null): string {
   if (!mb) return "";
   const display = mb.display_name?.trim();
@@ -94,7 +94,7 @@ export async function GET(req: NextRequest) {
 
   // Sender name: the campaign's first pooled mailbox, else a mailbox for the
   // campaign's/selected client, else any org mailbox (active preferred). Empty
-  // string is acceptable — buildTokenMap fills {{YourName}} blank in that case.
+  // string is acceptable: buildTokenMap fills {{YourName}} blank in that case.
   async function pickSenderName(): Promise<string> {
     if (campaignId) {
       const { data: pool } = await admin
@@ -136,7 +136,7 @@ export async function GET(req: NextRequest) {
   const name = [contact.first_name, contact.last_name].filter(Boolean).join(" ");
   let contactLabel: string;
   if (name) {
-    contactLabel = contact.company_name ? `${name} — ${contact.company_name}` : name;
+    contactLabel = contact.company_name ? `${name} · ${contact.company_name}` : name;
   } else {
     contactLabel = contact.email ?? "Sample contact";
   }

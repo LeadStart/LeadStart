@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Unit tests for src/lib/deliverability/placement.ts — the pure half of
+ * Unit tests for src/lib/deliverability/placement.ts: the pure half of
  * inbox-placement testing (folder classification, receiver-auth parsing,
  * roll-ups, probe copy). No network, no DB.
  *
@@ -64,11 +64,11 @@ console.log("\n■ classifyGraphPlacement");
 // ---------- 1c. IMAP classification (migration 00085) ----------
 console.log("\n■ classifyImapPlacement");
 {
-  // Generic servers (Yahoo etc.) — folder is the whole verdict.
+  // Generic servers (Yahoo etc.): folder is the whole verdict.
   assert(classifyImapPlacement({ folder: "junk" }) === "spam", "generic junk → spam");
   assert(classifyImapPlacement({ folder: "inbox" }) === "inbox", "generic inbox → inbox");
   assert(classifyImapPlacement({ folder: null }) === "other", "no folder → other");
-  // Gmail-over-IMAP — labels present, promotions verdict from the second search.
+  // Gmail-over-IMAP: labels present, promotions verdict from the second search.
   assert(
     classifyImapPlacement({ folder: "inbox", gmLabels: ["\\Inbox"], promotionsHit: true }) ===
       "promotions",

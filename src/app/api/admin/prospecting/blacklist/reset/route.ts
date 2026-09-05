@@ -5,7 +5,7 @@ import { requireProspectingContext } from "@/lib/scrapio/auth";
 // POST /api/admin/prospecting/blacklist/reset
 //
 // Wipes the org's Scrap.io blacklist so future searches can re-pull
-// previously-fetched businesses. Owner-only — VAs shouldn't be able to
+// previously-fetched businesses. Owner-only: VAs shouldn't be able to
 // silently spend credits re-scraping a region.
 
 export async function POST(_request: NextRequest) {
@@ -27,7 +27,7 @@ export async function POST(_request: NextRequest) {
     return NextResponse.json({ success: true });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Reset failed";
-    // Scrap.io returns 404 if the blacklist doesn't exist yet — which is
+    // Scrap.io returns 404 if the blacklist doesn't exist yet, which is
     // a no-op success from the user's perspective.
     if (message.includes("404")) {
       return NextResponse.json({ success: true, note: "List was empty" });

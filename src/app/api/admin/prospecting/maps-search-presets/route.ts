@@ -1,4 +1,4 @@
-// Saved Google Maps search presets — list (org + global) + save (upsert by name).
+// Saved Google Maps search presets: list (org + global) + save (upsert by name).
 // Owner/VA only, org-scoped writes. Global (org-NULL) presets are read-only here
 // (the future landing-page tier, seeded by service role). Mirrors search-presets.
 

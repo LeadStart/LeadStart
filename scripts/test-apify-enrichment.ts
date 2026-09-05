@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Unit tests for the Apify enrichment lib — pure functions + provider mappers +
+ * Unit tests for the Apify enrichment lib: pure functions + provider mappers +
  * the HTTP client against a monkeypatched fetch. No network, no DB; imports the
  * REAL production modules by relative path (type-only "@/" cross-imports are
  * erased at runtime by tsx).
@@ -191,7 +191,7 @@ console.log("waterfallBoviProvider.parseItems");
   eq(r.get("b2")?.status, "not_found", "bovi empty email → not_found");
 }
 
-// Email verification is Million Verifier's job now — no Apify verify provider.
+// Email verification is Million Verifier's job now: no Apify verify provider.
 
 // ---------------- activity harvestapi ----------------
 console.log("activityProvider.parseItems");
@@ -279,14 +279,14 @@ async function clientTests() {
 async function liveSmoke() {
   const token = process.env.APIFY_API_TOKEN;
   if (!token) {
-    console.log("\n(live smoke skipped — set APIFY_API_TOKEN to run it)");
+    console.log("\n(live smoke skipped, set APIFY_API_TOKEN to run it)");
     return;
   }
   console.log("\nLIVE smoke (APIFY_API_TOKEN present)");
   const c = new ApifyClient(token);
   const me = await c.getMe();
   console.log("  getMe →", me.username);
-  // Company batch — the deterministic one.
+  // Company batch: the deterministic one.
   const run = await c.startActorRun(
     "harvestapi~linkedin-company",
     { companies: ["https://www.linkedin.com/company/19178324"] },

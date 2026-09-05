@@ -8,14 +8,14 @@ import { Eye, Monitor, Smartphone } from "lucide-react";
 import { buildWeeklyReportEmail } from "@/lib/email/weekly-report";
 
 // Inline sample data so the preview renders without having to send a real
-// report. Kept minimal — just enough to exercise every section of the email
+// report. Kept minimal: just enough to exercise every section of the email
 // template (single campaign row + totals).
 const SAMPLE_REPORT_DATA = {
   client_name: "Acme Corp",
   period: { start: "2025-03-01", end: "2025-03-15" },
   campaigns: [
     {
-      campaign_name: "Acme — Commercial RE Investors Q1",
+      campaign_name: "Acme, Commercial RE Investors Q1",
       campaign_id: "sample-camp-001",
       metrics: {
         emails_sent: 680,
@@ -111,7 +111,7 @@ export default function ReportPreviewPage() {
             </div>
             <div className="flex-1 text-center">
               <span className="text-xs text-muted-foreground bg-muted rounded px-3 py-1">
-                Weekly Campaign Report — {reportData.client_name}
+                Weekly Campaign Report: {reportData.client_name}
               </span>
             </div>
           </div>

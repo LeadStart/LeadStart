@@ -1,6 +1,6 @@
 // Deterministic SEGMENT identity for the master-pool coverage readout (Phase 3)
 // and the segment cache (Phase 4). A segment is the SIMPLE triple (vein +
-// normalized search terms + normalized area) — owner decision D4: broad dedup, a
+// normalized search terms + normalized area): owner decision D4: broad dedup, a
 // simple key, NOT the finer ICP facets. Two buyers who pull the same niche in the
 // same place land on the same segment_key, so ownership/coverage aggregate and a
 // fresh pull can be served from cache.
@@ -14,11 +14,11 @@ import { coerceMapsAreas, type MapsArea } from "@/lib/apify/sourcing/maps-search
 export interface Segment {
   key: string; // stable id: `${vein}:${hash}`
   vein: SearchKind;
-  terms: string[]; // normalized, deduped, sorted — the human-readable "what"
-  area: string; // normalized — the human-readable "where"
+  terms: string[]; // normalized, deduped, sorted: the human-readable "what"
+  area: string; // normalized: the human-readable "where"
 }
 
-// A control char no user types — the field/term delimiter, so a term containing
+// A control char no user types: the field/term delimiter, so a term containing
 // "|" or "," can never collide with the field boundary in the hashed input.
 const SEP = "";
 
@@ -78,7 +78,7 @@ function linkedInTermsAndArea(query: unknown): { terms: string[]; area: string }
   const levers = (q.levers && typeof q.levers === "object" ? q.levers : {}) as Record<string, unknown>;
   // Simple "what": the free-text query + the current job titles (the primary
   // targeting). Finer facets (industries, seniority, companies) are deliberately
-  // excluded per D4 — the segment stays broad.
+  // excluded per D4: the segment stays broad.
   const terms = normList([
     ...(typeof levers.query === "string" ? [levers.query] : []),
     ...(Array.isArray(levers.currentJobTitles) ? levers.currentJobTitles : []),
@@ -89,7 +89,7 @@ function linkedInTermsAndArea(query: unknown): { terms: string[]; area: string }
 
 /**
  * The segment a search belongs to, or null when it can't be segmented (no terms
- * or no area). A null segment is not an error — promotion still grants ownership;
+ * or no area). A null segment is not an error: promotion still grants ownership;
  * the contact simply isn't attributed to a coverage/cache segment.
  */
 export function segmentForQuery(vein: SearchKind, query: unknown): Segment | null {

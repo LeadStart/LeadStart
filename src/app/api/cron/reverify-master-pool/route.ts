@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 // project's Fluid-compute default (300s per Vercel's docs, read 2026-09-05).
 export const maxDuration = 300;
 
-// Phase 4 maintenance — MASTER-POOL RE-VERIFY.
+// Phase 4 maintenance: MASTER-POOL RE-VERIFY.
 //
 // A verified email decays (~2-3%/month), so a contact resold from the master pool
 // weeks after it was sourced can be undeliverable. This cron re-checks the pool's
@@ -71,7 +71,7 @@ export async function GET(request: NextRequest) {
   }
 
   // 3) stale, clean pool rows (oldest re-check first). Strip the millisecond dot
-  //    from the cutoff — a PostgREST .or() filter parses `col.op.val` on dots, so a
+  //    from the cutoff: a PostgREST .or() filter parses `col.op.val` on dots, so a
   //    value containing one (…:56.789Z) would break the condition.
   const cutoffIso = new Date(Date.now() - cadenceDays * 24 * 60 * 60 * 1000).toISOString().replace(/\.\d+Z$/, "Z");
   const { data: rows } = await admin
@@ -102,14 +102,14 @@ export async function GET(request: NextRequest) {
       result = res.result;
     } catch (err) {
       if (err instanceof MillionVerifierError && err.definitive) {
-        // bad key / no credits / IP block — stop the tick, leave the rest for later.
+        // bad key / no credits / IP block: stop the tick, leave the rest for later.
         return NextResponse.json({ checked, still_ok: stillOk, degraded, skipped, halted: "mv_account_error" });
       }
-      skipped++; // transient (timeout / 5xx) — retry next tick, don't stamp it checked
+      skipped++; // transient (timeout / 5xx): retry next tick, don't stamp it checked
       continue;
     }
 
-    // 'unknown' / 'error' are inconclusive — don't downgrade a previously-clean row
+    // 'unknown' / 'error' are inconclusive: don't downgrade a previously-clean row
     // or stamp it checked; it gets retried next tick.
     if (result === "unknown" || result === "error") {
       skipped++;
@@ -125,7 +125,7 @@ export async function GET(request: NextRequest) {
       patch.email_verified_at = now;
       stillOk++;
     } else {
-      // catch_all / disposable / invalid — the address is no longer confirmed clean.
+      // catch_all / disposable / invalid: the address is no longer confirmed clean.
       degraded++;
     }
     await admin.from("master_contacts").update(patch).eq("id", row.id);

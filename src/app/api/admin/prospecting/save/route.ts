@@ -121,7 +121,7 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // Resolve the *effective* email for a row — the email that will be
+  // Resolve the *effective* email for a row: the email that will be
   // saved on the contact and used for dedup. Prefer the enriched personal
   // email when present; fall back to the first scraped email.
   function effectiveEmail(row: ScrapioBusiness): string | null {
@@ -191,7 +191,7 @@ export async function POST(request: NextRequest) {
         // Business city/state (migration 00078). For Scrap.io rows the business
         // location doubles as the contact's location.
         location: [row.city, row.state].filter(Boolean).join(", ") || null,
-        // The scraped website was only buried in enrichment_data before — also
+        // The scraped website was only buried in enrichment_data before: also
         // resolve it to a usable company domain so the email waterfall can run.
         company_domain: normalizeDomain(row.website) ?? null,
         linkedin_url: pickFirst(row.linkedin),

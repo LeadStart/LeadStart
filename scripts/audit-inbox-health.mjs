@@ -2,20 +2,20 @@
  * Read-only audit: why does every mailbox's inbox-health score sit at 100?
  *
  * Answers, from live data:
- *   1. What each native_mailbox's stored score/band/components actually are —
+ *   1. What each native_mailbox's stored score/band/components actually are,
  *      in particular which components are "unchecked" (zero-penalty) vs "ok".
  *   2. Send volume: native_sends counts by status, all-time and last 7 days
  *      per mailbox (bounce component only scores at >= 20 sends/7d).
  *   3. Whether ANY bounce has ever been recorded (native_sends.status='bounced',
  *      contacts.status='bounced').
  *   4. Whether the poller is alive at all (lead_replies from native_email,
- *      last_polled_at per mailbox) — replies flowing proves polling works,
+ *      last_polled_at per mailbox): replies flowing proves polling works,
  *      which narrows "no bounces" to either genuinely-clean lists or a
  *      detection gap.
  *   5. Org settings that gate signals: spamhaus_dqs_key presence (boolean
- *      only — the key itself is never printed) + offline threshold.
+ *      only: the key itself is never printed) + offline threshold.
  *   6. mailbox_health_checks snapshot count per mailbox (score transitions
- *      ever observed — 1 row per mailbox forever = score never moved).
+ *      ever observed: 1 row per mailbox forever = score never moved).
  *
  * Read-only. Safe to re-run any time.
  */

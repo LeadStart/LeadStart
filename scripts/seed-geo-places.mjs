@@ -41,7 +41,7 @@ for (const line of lines.slice(1)) {
 }
 console.log(`parsed ${rows.length} rows from TSV`);
 
-// Clear (full idempotent reseed) — geo_places has no other writer.
+// Clear (full idempotent reseed): geo_places has no other writer.
 const { error: delErr } = await admin.from("geo_places").delete().neq("id", -1);
 if (delErr) {
   console.error("clear failed:", delErr.message);

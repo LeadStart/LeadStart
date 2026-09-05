@@ -7,7 +7,7 @@
  *
  * Dry run parses + cleans + dedupes the buyer-agent CSV, resolves the four
  * sending mailboxes, previews the rendered copy, and reports exactly what it
- * WOULD create — without touching the database. Pass --apply to actually:
+ * WOULD create, without touching the database. Pass --apply to actually:
  *   - insert the cleaned contacts under the David Cabrera client (custom_fields
  *     carrying PropertyAddress / SoldDate / Price),
  *   - create (or reuse) the native_email campaign as a DRAFT,
@@ -25,7 +25,7 @@ import { randomUUID } from "node:crypto";
 // ---- Fixed identifiers (verified against prod on 2026-07-05) ----
 const ORG_ID = "bfc96611-8b2f-49c2-b4e0-49ebadc295e1"; // LeadStart Agency
 const CLIENT_ID = "9b15943d-ef85-4b5c-a9cb-01c911c542b8"; // David Cabrera
-const CAMPAIGN_NAME = "David Cabrera — Buyer Agent Outreach";
+const CAMPAIGN_NAME = "David Cabrera: Buyer Agent Outreach";
 const MAILBOX_EMAILS = [
   "molly@davidcabreraproperties.com",
   "jessica@davidcabreraproperties.com",
@@ -460,7 +460,7 @@ if (existingCampaign.length) {
   console.log(`  created campaign ${campaignId} (draft)`);
 }
 
-// 3) Steps — replace any existing set with a fresh 6.
+// 3) Steps: replace any existing set with a fresh 6.
 await rest("DELETE", `campaign_steps?campaign_id=eq.${campaignId}`, { prefer: "return=minimal" });
 const stepRows = STEPS.map((s, i) => ({
   campaign_id: campaignId,

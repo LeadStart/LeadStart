@@ -1,14 +1,14 @@
 // HMAC-signed, single-use portal deep-links for the hot-lead notification email.
 //
 // Why a signed URL and not a session token?
-//   The email is sent to clients.notification_email — which may or may not
+//   The email is sent to clients.notification_email, which may or may not
 //   be the address they log in with (e.g. personal Gmail vs. @company.com).
 //   The link has to work cold: tap on mobile, land in the dossier, no login.
 //   A short-lived HMAC token is the minimum machinery that proves the URL
 //   came from us.
 //
 // Why single-use?
-//   Email forwarding, screenshot sharing, URL scanners — any of these can
+//   Email forwarding, screenshot sharing, URL scanners: any of these can
 //   replay the link. The consumed-at check turns the token into a
 //   one-shot: first click wins, everything after is rejected.
 //
@@ -75,7 +75,7 @@ export interface SignedReplyUrl {
 /**
  * Mint a fresh signed token for a reply.
  *
- * Intentionally returns both `token` and `hash` — the two are always used
+ * Intentionally returns both `token` and `hash`: the two are always used
  * together (token goes in the URL, hash goes in the DB at the same time),
  * so handing the caller both removes a whole class of "forgot to store the
  * hash" bugs.
@@ -143,12 +143,12 @@ export function parseAndVerifyToken(token: string, now = Date.now()): ParsedToke
  * Full verify: HMAC + expiry + single-use consumption.
  *
  * On the first successful call for a given token, the row's
- * notification_token_consumed_at is stamped atomically. Subsequent calls —
- * including concurrent ones that won the race to our SELECT — are rejected
+ * notification_token_consumed_at is stamped atomically. Subsequent calls,
+ * including concurrent ones that won the race to our SELECT: are rejected
  * by the `IS NULL` predicate on the UPDATE and return null.
  *
  * Call from an unauthenticated route (the email link) passing the admin
- * client — this bypass is intentional; the HMAC + single-use IS the auth.
+ * client: this bypass is intentional; the HMAC + single-use IS the auth.
  */
 export async function verifyReplyUrl(
   token: string,
@@ -183,17 +183,17 @@ export async function verifyReplyUrl(
   return { replyId: parsed.replyId };
 }
 
-// ── OAuth CSRF state (migration 00085 — Microsoft seed connect flow) ──────
+// ── OAuth CSRF state (migration 00085, Microsoft seed connect flow) ──────
 //
 // Same base64url + HMAC + URL_SIGNING_SECRET machinery as the reply URLs, but
 // a different job: a `state` parameter round-tripped through Microsoft's
 // consent screen so the callback can prove the request it's completing was the
 // one THIS session started (the classic OAuth CSRF guard the Unipile precedent
-// left open). Not single-use — the callback additionally requires a live owner
+// left open). Not single-use: the callback additionally requires a live owner
 // session whose org matches the state, so a replay by that same owner is an
 // idempotent upsert, not an exploit. TTL-only.
 
-const OAUTH_STATE_TTL_MS = 15 * 60 * 1000; // 15 minutes — a consent screen round-trip
+const OAUTH_STATE_TTL_MS = 15 * 60 * 1000; // 15 minutes: a consent screen round-trip
 
 interface OAuthStatePayload {
   o: string; // organizationId

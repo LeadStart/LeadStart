@@ -1,7 +1,7 @@
 "use client";
 
 // Owner-side "exclude from stats" toggle on the admin reply detail page. Same
-// endpoint the client dossier uses — flips lead_replies.excluded_from_stats so
+// endpoint the client dossier uses: flips lead_replies.excluded_from_stats so
 // the native analytics roll-up stops counting this lead.
 
 import { useState } from "react";

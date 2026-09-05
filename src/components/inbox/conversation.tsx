@@ -1,7 +1,7 @@
 "use client";
 
 // Shared conversation pane for the admin + client inboxes. Shows the full
-// email back-and-forth for a reply: the copy WE sent (pulled live from Gmail —
+// email back-and-forth for a reply: the copy WE sent (pulled live from Gmail,
 // native_sends stores no body) above what the lead replied back with. The
 // stored reply row is always rendered immediately as the anchor so there's
 // never a blank pane; the live thread replaces it once it loads, and on any
@@ -47,7 +47,7 @@ export function useReplyThread(replyId: string): ThreadData {
   return data;
 }
 
-// Minimal reply shape the pane needs — both LeadReply and the admin's narrowed
+// Minimal reply shape the pane needs: both LeadReply and the admin's narrowed
 // row satisfy it.
 export interface ConversationReply {
   id: string;
@@ -136,8 +136,8 @@ export function Conversation({ reply }: { reply: ConversationReply }) {
               <p className="flex items-center justify-center gap-1.5 py-1 text-center text-[11px] text-muted-foreground/70">
                 <Mail size={11} />
                 {thread.reason === "unsupported_channel"
-                  ? "Showing the reply only — this channel has no linked email thread."
-                  : "Showing the reply only — the full sent thread isn't available right now."}
+                  ? "Showing the reply only: this channel has no linked email thread."
+                  : "Showing the reply only, the full sent thread isn't available right now."}
               </p>
             )}
           </>

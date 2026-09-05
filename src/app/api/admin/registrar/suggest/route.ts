@@ -1,4 +1,4 @@
-// POST /api/admin/registrar/suggest — brand → available lookalike domains. Runs
+// POST /api/admin/registrar/suggest: brand → available lookalike domains. Runs
 // the lookalike-name generator (try{brand}.com, get{brand}.com, {brand}hq.com…)
 // and checks each for availability + cheapest price across the configured
 // registrars, so the provision card can offer real, buyable candidates.

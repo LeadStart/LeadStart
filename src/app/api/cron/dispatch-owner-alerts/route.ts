@@ -1,4 +1,4 @@
-// GET /app/api/cron/dispatch-owner-alerts — runs every 5 min (vercel.json).
+// GET /app/api/cron/dispatch-owner-alerts: runs every 5 min (vercel.json).
 //
 // Drains the owner_alerts queue into one digest email per run. See
 // src/lib/notifications/owner-alerts.ts for the rationale (coalesce bursts,
@@ -16,7 +16,7 @@ import { dispatchPendingOwnerAlerts } from "@/lib/notifications/owner-alerts";
 
 // Force dynamic rendering on every invocation. Without this, a Vercel cron
 // (which hits the same URL with no query params) can receive an edge-cached
-// response from a prior tick, skipping the function body entirely — the DB
+// response from a prior tick, skipping the function body entirely: the DB
 // is never touched but the route returns the old payload. Caught on
 // 2026-05-27 in an earlier cron route;
 // applying the same guard to every cron route preemptively.

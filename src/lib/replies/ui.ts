@@ -62,7 +62,7 @@ export const REPLY_CATEGORIES: ReplyCategoryMeta[] = [
   {
     key: "review",
     label: "Needs review",
-    blurb: "Classifier wasn't sure — take a look",
+    blurb: "Classifier wasn't sure, take a look",
     classes: ["needs_review"],
   },
   {
@@ -138,7 +138,7 @@ export function telHref(phone: string | null): string | null {
 }
 
 // Escape minimal HTML so we can safely insert plain-text body with <br>s
-// via dangerouslySetInnerHTML. Does NOT handle rich content — webhook
+// via dangerouslySetInnerHTML. Does NOT handle rich content: webhook
 // ingestion should give us body_text (plain) for classification.
 export function formatBody(text: string | null): string {
   if (!text) return "";
@@ -234,7 +234,7 @@ export function isReplyActionable(reply: {
   return reply.status === "new" || reply.status === "classified";
 }
 
-// Urgency color ramp for the dossier banner — green < 15min, amber < 1h, red after.
+// Urgency color ramp for the dossier banner: green < 15min, amber < 1h, red after.
 export function urgencyColor(iso: string): string {
   const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
   if (mins < 15) return "#10b981";

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Unit tests for src/lib/enrichment/domain-discovery.ts — the pure name→domain
+ * Unit tests for src/lib/enrichment/domain-discovery.ts: the pure name→domain
  * validation logic. No network, no DB. Imports the REAL module by relative path
  * (tsx resolves the .ts extension); its only value dependency is the pure
  * apify/domain helpers.
@@ -90,7 +90,7 @@ eq(
 
 // ---- confirmViaHomepage ----
 eq(confirmViaHomepage("Morris Janitorial Services", "x.com", "Welcome to Morris Janitorial, family-owned since 1998").kind, "accept", "homepage mentions distinctive token → accept");
-eq(confirmViaHomepage("Morris Janitorial Services", "x.com", "Bob's Plumbing and Heating — call today").kind, "reject", "homepage lacks the name → reject");
+eq(confirmViaHomepage("Morris Janitorial Services", "x.com", "Bob's Plumbing and Heating, call today").kind, "reject", "homepage lacks the name → reject");
 eq(confirmViaHomepage("Morris Janitorial Services", "x.com", "").kind, "reject", "empty homepage text → reject (unreachable)");
 
 // ---- parseDomainLookupAnswer ----

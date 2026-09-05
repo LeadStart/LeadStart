@@ -3,7 +3,7 @@
  * One-off probe of the Million Verifier sandbox keys. Prints the RAW HTTP status
  * + body for every documented test key so we can pin the exact `error` strings
  * and response shapes that classifyApiError() (src/lib/millionverifier/client.ts)
- * keys off of. Sandbox keys are free — no credits are consumed, no DB touched.
+ * keys off of. Sandbox keys are free: no credits are consumed, no DB touched.
  *
  * Run this FIRST, then reconcile the printed `error` values with the keyword
  * matches in classifyApiError() and the fixtures in
@@ -19,7 +19,7 @@ const VERIFY_KEYS = [
   "API_KEY_FOR_OK",
   "API_KEY_FOR_CATCH_ALL",
   "API_KEY_FOR_INVALID",
-  "API_KEY_FOR_UNKOWN", // sic — the API spells it this way
+  "API_KEY_FOR_UNKOWN", // sic: the API spells it this way
   "API_KEY_FOR_DISPOSABLE",
   "API_KEY_FOR_UNVERIFIED",
   "API_KEY_FOR_TEST",

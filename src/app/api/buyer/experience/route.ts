@@ -1,4 +1,4 @@
-// GET /api/buyer/experience — the buyer portal's live content (the admin-edited
+// GET /api/buyer/experience: the buyer portal's live content (the admin-edited
 // copy/presentation), merged over code defaults. Service-role read scoped to a
 // buyer session; the content is global (same for every buyer), never per-buyer.
 

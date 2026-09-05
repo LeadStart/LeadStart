@@ -1,8 +1,8 @@
-// GET  /api/admin/mailboxes — list native sending inboxes with per-mailbox
+// GET  /api/admin/mailboxes: list native sending inboxes with per-mailbox
 //                             usage (sent today, bounces 7d, effective cap),
 //                             the latest placement test per mailbox, and the
 //                             org's active seed count (migration 00068).
-// POST /api/admin/mailboxes — register a new inbox. Verifies domain-wide
+// POST /api/admin/mailboxes: register a new inbox. Verifies domain-wide
 //                             delegation live (getProfile) before inserting,
 //                             so a mis-authorized domain fails loudly here
 //                             instead of silently in the send cron.
@@ -48,7 +48,7 @@ async function requireOwner() {
 /**
  * Resolve (or create) the sending_domains row for a mailbox's domain and return
  * its id, so the new mailbox can be linked (domain_id). Mirrors the 00081
- * backfill for hand-added mailboxes: Gmail-tier, already active. Non-fatal —
+ * backfill for hand-added mailboxes: Gmail-tier, already active. Non-fatal,
  * returns null on any failure so the mailbox still saves (unlinked, as before).
  * Handles the create race via the UNIQUE(org, domain) constraint.
  */
@@ -132,7 +132,7 @@ export async function GET() {
   }
 
   // Cumulative all-time sends per mailbox drive the volume-based warmup ramp.
-  // Count-only queries (head:true), one per mailbox, run in parallel — and in
+  // Count-only queries (head:true), one per mailbox, run in parallel, and in
   // parallel with the placement + seed lookups, which are independent.
   const totalSent: Record<string, number> = {};
   const [, latestPlacement, seedCountResult, domainRes, usage] = await Promise.all([
@@ -162,7 +162,7 @@ export async function GET() {
       .eq("organization_id", organizationId)
       .order("domain", { ascending: true }),
     // Which inboxes are claimed by another non-completed campaign (dedicated-inbox
-    // policy) — feeds the campaign builder's picker greying.
+    // policy): feeds the campaign builder's picker greying.
     mailboxUsageMap(admin, organizationId),
   ]);
 
@@ -226,7 +226,7 @@ export async function POST(req: NextRequest) {
   const admin = createAdminClient();
 
   // Verify domain-wide delegation is authorized for this mailbox before we
-  // store it — a cheap getProfile round-trips the whole JWT→token→API path.
+  // store it: a cheap getProfile round-trips the whole JWT→token→API path.
   try {
     const gmail = await loadGmailClientForOrg(admin, organizationId);
     await gmail.getProfile(email);

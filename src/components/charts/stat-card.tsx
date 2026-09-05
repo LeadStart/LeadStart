@@ -15,7 +15,7 @@ interface StatCardProps {
    * Pre-baked color scheme for at-a-glance signals. Sets sensible defaults
    * for icon background + value color when those props aren't provided
    * explicitly. Existing call sites that pass `iconBg`/`valueColor`
-   * keep their custom styling — this prop only fills in defaults.
+   * keep their custom styling: this prop only fills in defaults.
    */
   tone?: StatCardTone;
 }
@@ -29,7 +29,7 @@ const TONE_DEFAULTS: Record<StatCardTone, { iconBg: string; valueColor: string }
 
 /**
  * Consistent stat card with vertically aligned layout.
- * Icon top-left, label below, value at bottom — always aligned across a row.
+ * Icon top-left, label below, value at bottom: always aligned across a row.
  */
 export function StatCard({ label, value, icon, iconBg, valueColor, tone = "default" }: StatCardProps) {
   const defaults = TONE_DEFAULTS[tone];

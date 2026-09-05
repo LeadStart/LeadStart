@@ -1,6 +1,6 @@
 "use client";
 
-// Shared typed-confirmation delete dialog for a campaign — the single source of
+// Shared typed-confirmation delete dialog for a campaign: the single source of
 // truth so the Campaigns list row-actions menu and the campaign Setup tab present
 // an identical modal and hit the same owner-only /delete endpoint. The caller owns
 // the open state and decides what happens after a successful delete (the list

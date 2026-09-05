@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/layout/page-header";
 import { Coins, Workflow, Building2, Key, Tags, CreditCard, CheckSquare, Store } from "lucide-react";
 
-// Settings hub — one tab in the sidebar, with sub-sections switched by this
+// Settings hub: one tab in the sidebar, with sub-sections switched by this
 // sub-tab bar. Each tab is its own route under /admin/settings so deep links
 // and the browser back button work. Team + Integrations are the existing
 // pages folded in; Workflows was folded out of the top-level nav; Tokens is
@@ -30,7 +30,7 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
     <div className="space-y-6">
       <PageHeader title="Settings" />
 
-      {/* Sub-tab bar — flat underline tabs. Active tab carries the brand
+      {/* Sub-tab bar: flat underline tabs. Active tab carries the brand
           underline; the row scrolls horizontally on narrow screens. */}
       <div className="overflow-x-auto border-b border-border/60">
         <nav className="-mb-px flex min-w-max gap-1">

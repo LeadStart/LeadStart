@@ -1,6 +1,6 @@
 "use client";
 
-// Tokens — contact-sourcing product config. Reads + writes the real config
+// Tokens: contact-sourcing product config. Reads + writes the real config
 // (token_pricing_config singleton, token_price_tiers, token_packs) through
 // /api/admin/tokens/config (owner-only, service-role writes). Prices left blank
 // are stored NULL and a pack stays unpurchasable until priced.
@@ -29,11 +29,11 @@ interface Config { [k: string]: number | null | string | undefined; version?: nu
 // Human labels for the seeded tier_keys (the engine/pricing keys stay canonical).
 const TIER_LABELS: Record<string, { name: string; desc: string; cost: string }> = {
   record: { name: "Record", desc: "Business/person + phone + domain, no email", cost: "~$0.004" },
-  company_inbox: { name: "Company inbox", desc: "Generic/scraped info@ — the paid floor", cost: "~$0.007" },
+  company_inbox: { name: "Company inbox", desc: "Generic/scraped info@, the paid floor", cost: "~$0.007" },
   owner_name: { name: "Owner name", desc: "Decision-maker named", cost: "~$0.015" },
   personal_email: { name: "Personal email", desc: "Person-shaped address (unverified)", cost: "~$0.01–0.02" },
-  verified_personal_email: { name: "Verified personal email", desc: "MV-confirmed clean — premium", cost: "~$0.08" },
-  catch_all_guess: { name: "Catch-all guess", desc: "Pattern guess — labeled, never sold as verified", cost: "~$0.00" },
+  verified_personal_email: { name: "Verified personal email", desc: "MV-confirmed clean, premium", cost: "~$0.08" },
+  catch_all_guess: { name: "Catch-all guess", desc: "Pattern guess, labeled, never sold as verified", cost: "~$0.00" },
   catch_all_recovered: { name: "Catch-all recovered (Findymail)", desc: "Deliverable email on a catch-all domain", cost: "~$0.05/hit" },
 };
 
@@ -212,8 +212,8 @@ export default function TokensSettingsPage() {
         </CardContent>
       </Card>
 
-      <PriceCard title="Maps vein — price card" description="Local-business sourcing. Cheap sourcing + two cheap floors; price per delivered outcome." icon={<MapPin size={16} className="text-white" />} color="#059669" veinTiersList={veinTiers("maps")} onPrice={setTierPrice} />
-      <PriceCard title="LinkedIn vein — price card" description="Person-first sourcing. Pricier sourcing, richer record; separate prices from Maps." icon={<LinkedinIcon size={16} className="text-white" />} color="#0A66C2" veinTiersList={veinTiers("linkedin")} onPrice={setTierPrice} />
+      <PriceCard title="Maps vein: price card" description="Local-business sourcing. Cheap sourcing + two cheap floors; price per delivered outcome." icon={<MapPin size={16} className="text-white" />} color="#059669" veinTiersList={veinTiers("maps")} onPrice={setTierPrice} />
+      <PriceCard title="LinkedIn vein: price card" description="Person-first sourcing. Pricier sourcing, richer record; separate prices from Maps." icon={<LinkedinIcon size={16} className="text-white" />} color="#0A66C2" veinTiersList={veinTiers("linkedin")} onPrice={setTierPrice} />
 
       {/* Spend safety */}
       <Card className="border-border/50 shadow-sm">
@@ -303,7 +303,7 @@ export default function TokensSettingsPage() {
           <div className="space-y-1 border-t border-border/50 pt-4">
             <Label className="text-sm font-medium">Low-balance alert threshold (tokens)</Label>
             <Input type="number" value={cfgNum("low_balance_threshold_tokens")} onChange={(e) => setCfg("low_balance_threshold_tokens", e.target.value)} placeholder="200" className="max-w-[220px]" />
-            <p className="text-[11px] text-muted-foreground">Saved now so it&apos;s ready. The alert email itself is not wired yet (Planned above) — this only captures the threshold.</p>
+            <p className="text-[11px] text-muted-foreground">Saved now so it&apos;s ready. The alert email itself is not wired yet (Planned above): this only captures the threshold.</p>
           </div>
         </CardContent>
       </Card>

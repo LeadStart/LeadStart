@@ -10,7 +10,7 @@ async function verifyOwner() {
   return user;
 }
 
-// PATCH — update team member (name, role)
+// PATCH: update team member (name, role)
 export async function PATCH(request: NextRequest) {
   const user = await verifyOwner();
   if (!user) {
@@ -56,7 +56,7 @@ export async function PATCH(request: NextRequest) {
   return NextResponse.json({ success: true });
 }
 
-// PUT — toggle active status
+// PUT: toggle active status
 export async function PUT(request: NextRequest) {
   const user = await verifyOwner();
   if (!user) {
@@ -92,7 +92,7 @@ export async function PUT(request: NextRequest) {
   return NextResponse.json({ success: true });
 }
 
-// DELETE — remove team member
+// DELETE: remove team member
 export async function DELETE(request: NextRequest) {
   const user = await verifyOwner();
   if (!user) {

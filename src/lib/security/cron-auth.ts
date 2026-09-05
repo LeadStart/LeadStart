@@ -1,13 +1,13 @@
 // Centralized auth check for /api/cron/* routes.
 //
 // Why a helper instead of an inline guard: the inline pattern that lived in
-// each route file was —
+// each route file was,
 //
 //   if (process.env.CRON_SECRET && header !== `Bearer ${process.env.CRON_SECRET}`) {
 //     return 401;
 //   }
 //
-// — which falls OPEN when CRON_SECRET is missing from the environment. We hit
+// which falls OPEN when CRON_SECRET is missing from the environment. We hit
 // exactly that case in production: the env var was never set on Vercel, the
 // guard's left-hand side evaluated to falsy, and every cron endpoint became
 // publicly callable. The owner-heartbeat config check surfaced it; this

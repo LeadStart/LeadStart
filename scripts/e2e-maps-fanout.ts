@@ -5,7 +5,7 @@
  *
  * SAFETY: prod's every-minute run-maps-searches cron grabs any pending/running
  * maps_searches row (any org) and starts a REAL paid actor run. So this test
- * NEVER parks a pending/running row — it inserts the throwaway search already
+ * NEVER parks a pending/running row: it inserts the throwaway search already
  * `complete` (prod ignores complete) and drives the two "areas" through the pure
  * ingest step with FAKE datasets, persisting each area's accumulation to the row
  * and reading it back. It proves what the unit tests can't: the multi-area
@@ -54,7 +54,7 @@ function ok(cond: boolean, msg: string, extra?: unknown) {
     console.log(`  ✓ ${msg}`);
   } else {
     fail++;
-    console.log(`  ✗ ${msg}${extra !== undefined ? ` — ${JSON.stringify(extra)}` : ""}`);
+    console.log(`  ✗ ${msg}${extra !== undefined ? `, ${JSON.stringify(extra)}` : ""}`);
   }
 }
 function defer(msg: string) {
@@ -102,7 +102,7 @@ async function main() {
 
   let searchId: string | null = null;
   try {
-    // ── Per-area actor INPUT (no network) — the two runs the cron would start ──
+    // ── Per-area actor INPUT (no network): the two runs the cron would start ──
     const perArea = perAreaMaxItems(TARGET, AREAS.length);
     ok(perArea === 2, "per-area cap = ceil(3/2) = 2", perArea);
     const in0 = buildMapsSearchInputForArea({ searchTerms: ["med spa"] }, AREAS[0], { maxItems: perArea });
@@ -118,7 +118,7 @@ async function main() {
       results: [],
       result_count: 0,
       target_max_results: TARGET,
-      status: "complete", // NEVER pending/running — prod would start a paid run
+      status: "complete", // NEVER pending/running: prod would start a paid run
       actor: "compass~google-maps-extractor",
     };
     if (hasAreaIndex) seedRow.area_index = 0;

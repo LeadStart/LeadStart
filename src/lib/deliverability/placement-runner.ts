@@ -1,17 +1,17 @@
-// Inbox-placement testing — the I/O half. Sends probes from a sending mailbox
+// Inbox-placement testing: the I/O half. Sends probes from a sending mailbox
 // to the org's seed panel, later reads each seed back through its provider's
-// reader (Workspace DWD / Microsoft Graph / IMAP — see ./readers.ts), and
+// reader (Workspace DWD / Microsoft Graph / IMAP, see ./readers.ts), and
 // persists both halves to placement_tests / placement_test_results
 // (migrations 00068 + 00085). The pure classification/roll-up logic lives in
 // ./placement.ts; the health scorer consumes placementSignalFromTest().
 //
 // Three entry points, shared by the admin routes and the cron:
-//   startPlacementTest  — POST /api/admin/mailboxes/[id]/placement and the
+//   startPlacementTest : POST /api/admin/mailboxes/[id]/placement and the
 //                         weekly scheduler (run-placement-tests cron)
-//   checkPlacementTest  — GET  /api/admin/mailboxes/[id]/placement (so the
+//   checkPlacementTest : GET  /api/admin/mailboxes/[id]/placement (so the
 //                         page polling drives a quick answer) and the cron's
 //                         finalizer (so a closed tab still completes)
-//   latestPlacementTests / latestCompletePlacementTests — list + health cron
+//   latestPlacementTests / latestCompletePlacementTests: list + health cron
 //
 // Server-only (node:crypto via mime.ts, Supabase admin client). Never import
 // from a client component.
@@ -104,7 +104,7 @@ export async function startPlacementTest(
   const { admin, mailbox, probe, triggeredBy } = args;
   const organizationId = mailbox.organization_id;
 
-  // One open run per mailbox — a second run while the first is still being
+  // One open run per mailbox: a second run while the first is still being
   // read would double the probe volume and muddle "which probe landed where".
   const { data: open } = await admin
     .from("placement_tests")
@@ -115,7 +115,7 @@ export async function startPlacementTest(
     .maybeSingle();
   if (open) {
     throw new PlacementError(
-      "A placement test is already running for this mailbox — wait for it to finish.",
+      "A placement test is already running for this mailbox: wait for it to finish.",
     );
   }
 
@@ -138,7 +138,7 @@ export async function startPlacementTest(
     .slice(0, MAX_SEEDS_PER_TEST);
   if (seeds.length === 0) {
     throw new PlacementError(
-      `No active seed inbox on a domain other than ${senderDomain}. Add one under Seed inboxes — a seed on the sending domain can't measure placement.`,
+      `No active seed inbox on a domain other than ${senderDomain}. Add one under Seed inboxes: a seed on the sending domain can't measure placement.`,
     );
   }
 
@@ -214,7 +214,7 @@ export async function startPlacementTest(
       row.status = "send_failed";
       row.detail = message;
       if (err instanceof GmailAuthError) {
-        // Delegation broke for the SENDER — bench it (same as the send worker)
+        // Delegation broke for the SENDER: bench it (same as the send worker)
         // and stop probing; every further send would fail the same way.
         fatal = err.message;
         await admin
@@ -238,7 +238,7 @@ export async function startPlacementTest(
       ? { status: "awaiting", sent_at: nowIso }
       : {
           status: "failed",
-          error: fatal ?? "Every probe send failed — see the per-seed details.",
+          error: fatal ?? "Every probe send failed, see the per-seed details.",
           completed_at: nowIso,
         };
   const { data: updated } = await admin
@@ -252,7 +252,7 @@ export async function startPlacementTest(
 
 /**
  * Render step 1 of the (preferably active) native campaign this mailbox is
- * pooled into, with sample merge values — the same spintax-then-tokens order
+ * pooled into, with sample merge values: the same spintax-then-tokens order
  * the send worker uses, so the probe is the copy prospects actually receive.
  */
 async function renderCampaignProbe(
@@ -267,7 +267,7 @@ async function renderCampaignProbe(
   const ids = ((pool ?? []) as { campaign_id: string }[]).map((p) => p.campaign_id);
   if (ids.length === 0) {
     throw new PlacementError(
-      "This mailbox isn't in any campaign's sending pool — run a neutral probe instead.",
+      "This mailbox isn't in any campaign's sending pool: run a neutral probe instead.",
     );
   }
   const { data: campRows } = await admin
@@ -280,7 +280,7 @@ async function renderCampaignProbe(
   const campaign = camps.find((c) => c.status === "active") ?? camps[0];
   if (!campaign) {
     throw new PlacementError(
-      "No native email campaign uses this mailbox — run a neutral probe instead.",
+      "No native email campaign uses this mailbox: run a neutral probe instead.",
     );
   }
   const { data: stepRow } = await admin
@@ -355,7 +355,7 @@ export async function checkPlacementTest(
     .maybeSingle();
   const mailbox = mbRow as NativeMailbox | null;
 
-  // Seed rows for the pending results, fetched once per check — the reader
+  // Seed rows for the pending results, fetched once per check: the reader
   // dispatch needs each seed's provider and (for external providers) its
   // credentials. Service-role read, so `auth` is visible here.
   const pendingSeedIds = Array.from(
@@ -392,7 +392,7 @@ export async function checkPlacementTest(
     }
 
     // A seed row deleted mid-test falls back to the original DWD-by-email
-    // read — its address is the only thing we still know about it.
+    // read: its address is the only thing we still know about it.
     const seed =
       (r.seed_inbox_id ? seedById.get(r.seed_inbox_id) : undefined) ??
       ({
@@ -406,7 +406,7 @@ export async function checkPlacementTest(
       lookup = await readerFor(seed, ctx).findProbe(seed, r.rfc_message_id);
     } catch (err) {
       if (err instanceof SeedReadAuthError) {
-        // The SEED's credentials/consent/delegation are broken — that's our
+        // The SEED's credentials/consent/delegation are broken: that's our
         // config, not the sender's deliverability. Exclude the seed (never
         // count it as missing) and bench it until an owner fixes it.
         if (r.seed_inbox_id) {
@@ -422,8 +422,8 @@ export async function checkPlacementTest(
         });
       } else if (timedOut(r)) {
         // Still failing past the timeout window (dead IMAP host, flaky
-        // server): give up on THIS probe as unreadable — excluded from the
-        // totals, seed NOT benched — so one unreachable host can't pin the
+        // server): give up on THIS probe as unreadable, excluded from the
+        // totals, seed NOT benched, so one unreachable host can't pin the
         // test in 'awaiting' forever.
         await patch(r.id, {
           status: "unreadable",
@@ -466,7 +466,7 @@ export async function checkPlacementTest(
         const mins = Math.round(PLACEMENT_TIMEOUT_MS / 60_000);
         await patch(r.id, {
           status: "missing",
-          detail: `Not found in the seed (Inbox, Promotions, or Spam) within ${mins} minutes and no bounce came back — most likely rejected at the gateway, or still delayed.`,
+          detail: `Not found in the seed (Inbox, Promotions, or Spam) within ${mins} minutes and no bounce came back, most likely rejected at the gateway, or still delayed.`,
           checked_at: nowIso,
         });
       }
@@ -535,7 +535,7 @@ async function completeTest(
   const auth = summarizeAuth(results);
   const update: Record<string, unknown> = {
     status: counts.total === 0 ? "failed" : "complete",
-    error: counts.total === 0 ? "No seed could be sent to or read — check the seed panel." : null,
+    error: counts.total === 0 ? "No seed could be sent to or read, check the seed panel." : null,
     seeds_total: counts.total,
     inbox_count: counts.inbox,
     promotions_count: counts.promotions,
@@ -555,7 +555,7 @@ async function completeTest(
 
 // ── Lookups ─────────────────────────────────────────────────────────────
 
-/** Latest test (any status) per mailbox — for the mailboxes list. */
+/** Latest test (any status) per mailbox: for the mailboxes list. */
 export async function latestPlacementTests(
   admin: AdminClient,
   mailboxIds: string[],
@@ -576,7 +576,7 @@ export async function latestPlacementTests(
 
 /**
  * Latest COMPLETE test per mailbox across every org, completed on/after
- * `sinceIso` — the health cron's input. Returns { ok:false } on a read error
+ * `sinceIso`: the health cron's input. Returns { ok:false } on a read error
  * so the caller can treat the signal as unchecked rather than "no placement".
  */
 export async function latestCompletePlacementTests(

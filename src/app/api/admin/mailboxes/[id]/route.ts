@@ -1,6 +1,6 @@
-// PATCH  /api/admin/mailboxes/[id] — pause/resume, adjust caps, edit
+// PATCH  /api/admin/mailboxes/[id]: pause/resume, adjust caps, edit
 //                                    display name / client / ramp start.
-// DELETE /api/admin/mailboxes/[id] — delete the mailbox's Google Workspace user
+// DELETE /api/admin/mailboxes/[id]: delete the mailbox's Google Workspace user
 //                                    (frees the paid seat) and remove our row,
 //                                    cascading its send history / metrics away.
 // Owner only.
@@ -80,7 +80,7 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
   if (body.max_daily_cap !== undefined && body.max_daily_cap !== null) {
     const cap = Math.floor(body.max_daily_cap);
     if (cap <= 0) return NextResponse.json({ error: "max_daily_cap must be positive" }, { status: 400 });
-    // Clamp to the absolute per-inbox ceiling — an inbox can never send >20/day.
+    // Clamp to the absolute per-inbox ceiling: an inbox can never send >20/day.
     update.max_daily_cap = Math.min(cap, ABSOLUTE_MAX_DAILY_CAP);
   }
   if (body.daily_cap_override !== undefined) {
@@ -121,7 +121,7 @@ export async function DELETE(_req: NextRequest, { params }: RouteParams) {
 
   const admin = createAdminClient();
 
-  // Load the mailbox — we need its address (the Google user key) and its domain
+  // Load the mailbox: we need its address (the Google user key) and its domain
   // (to pick the right Workspace tenant).
   const { data: mbRow } = await admin
     .from("native_mailboxes")
@@ -149,7 +149,7 @@ export async function DELETE(_req: NextRequest, { params }: RouteParams) {
   // Delete the Google Workspace user (frees the paid seat). Mirrors the domain-
   // delete route: a missing Google config is a no-op (nothing to delete there),
   // an already-gone user (404) is fine, and any other Google error we surface
-  // while leaving our row in place — so a mailbox never loses its mapping while
+  // while leaving our row in place, so a mailbox never loses its mapping while
   // its Google user still exists.
   let googleDeleted: boolean | null = null;
   let googleError: string | null = null;
@@ -159,7 +159,7 @@ export async function DELETE(_req: NextRequest, { params }: RouteParams) {
     googleDeleted = res.deleted;
   } catch (err) {
     if (err instanceof GoogleConfigError) {
-      googleDeleted = null; // Google not configured for this org — nothing there.
+      googleDeleted = null; // Google not configured for this org: nothing there.
     } else {
       googleError = err instanceof Error ? err.message : String(err);
     }
@@ -167,13 +167,13 @@ export async function DELETE(_req: NextRequest, { params }: RouteParams) {
   if (googleError) {
     return NextResponse.json(
       {
-        error: `Could not delete ${mailbox.email_address} from Google Workspace: ${googleError}. Nothing was removed — try again, or delete the user in Google Admin first.`,
+        error: `Could not delete ${mailbox.email_address} from Google Workspace: ${googleError}. Nothing was removed, try again, or delete the user in Google Admin first.`,
       },
       { status: 502 },
     );
   }
 
-  // The Google user is gone (or was never ours to delete). Delete our row — its
+  // The Google user is gone (or was never ours to delete). Delete our row: its
   // native_sends history and campaign_mailboxes links cascade off with it
   // (campaign_enrollments keep, their mailbox pointer nulled).
   const { error: delError } = await admin

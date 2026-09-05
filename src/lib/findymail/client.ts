@@ -9,14 +9,14 @@
 // Billing (their published model): 1 credit per SUCCESSFUL find (a verified email
 // returned). No result = no charge. Risky catch-alls are withheld (not returned,
 // not charged). Bounces on a returned email are credit-refunded. So a find that
-// returns nothing costs nothing — the caller only pays on a hit.
+// returns nothing costs nothing: the caller only pays on a hit.
 //
 // Verified contract (their public API docs, 2026-08-29):
 //   POST https://app.findymail.com/api/search/name
 //     headers: Authorization: Bearer <key>, Content-Type: application/json
 //     body:    { "name": "<full name>", "domain": "<company domain>" }
 //     200:     { "contact": { "name": "...", "email": "...", "domain": "..." } }
-//              (a miss returns no email — contact null / absent / email empty)
+//              (a miss returns no email, contact null / absent / email empty)
 //
 // UNVERIFIED (confirm against the live account before trusting for anything but
 // the finder): the credits/account endpoint path and the exact miss-response
@@ -24,7 +24,7 @@
 // readout depends on the credits path; the finder itself does not.
 //
 // Deliberately thin, mirroring the Million Verifier client: ONE fetch attempt per
-// call (the cron's next tick is the retry — no in-client retry loop eating the
+// call (the cron's next tick is the retry, no in-client retry loop eating the
 // tick budget), a hard client-side abort, and a typed error taxonomy the caller
 // uses to decide whether to skip, hold, or alert.
 
@@ -33,7 +33,7 @@ export const FINDYMAIL_BASE_URL = "https://app.findymail.com";
 export type FindymailErrorKind = "auth" | "credits" | "blocked" | "transient";
 
 // Typed errors. `definitive` (auth/credits/blocked) means "stop calling for this
-// org" — unlike Million Verifier this is NOT a send gate, so a definitive error
+// org": unlike Million Verifier this is NOT a send gate, so a definitive error
 // just skips the recovery step for the run and can alert; it never holds sends.
 export class FindymailError extends Error {
   readonly kind: FindymailErrorKind;
@@ -147,7 +147,7 @@ export class FindymailClient {
     return parseFindResponse(data);
   }
 
-  // Remaining finder credits — used ONLY by the settings "Test connection"
+  // Remaining finder credits: used ONLY by the settings "Test connection"
   // button to validate the key and show a balance. VERIFY the endpoint path
   // against the live account before relying on the number; a wrong path here
   // surfaces as a Test-connection error and never touches the finder path.

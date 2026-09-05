@@ -3,10 +3,10 @@ import { extractProfileId, extractCompanyId, extractCompanySlug } from "./domain
 import { PROFILE_ACTOR, DOMAIN_ACTOR, ACTIVITY_ACTOR, resolveWaterfallActor } from "./providers";
 import { loadEnrichmentSettings, normalizeAddons } from "./auth";
 
-// Auto-enrichment enqueue — the "queue-behind" heart of the Prospecting →
+// Auto-enrichment enqueue: the "queue-behind" heart of the Prospecting →
 // Contacts handoff. Given a set of contact ids, it either starts an enrichment
 // run immediately (org is free) or stamps them enrich_queued_at (a run is
-// already active — one-active-run-per-org) so the drain cron picks them up when
+// already active: one-active-run-per-org) so the drain cron picks them up when
 // the org frees. Mirrors the run/item shape built by contacts/enrich/start.
 
 type ContactRow = {
@@ -52,7 +52,7 @@ function buildItemRows(
     const wantProfile = !c.email && Boolean(profileId);
     const wantDomain = !c.company_domain && Boolean(companyId || companySlug);
     // Name-only companies (no LinkedIn company page) → web-lookup discovery in
-    // the domains phase, when enabled. Born 'pending' so they enter the run —
+    // the domains phase, when enabled. Born 'pending' so they enter the run,
     // otherwise a sourced-email + name-only contact would be dropped entirely.
     const wantDomainDiscovery =
       discoveryEnabled &&
@@ -61,14 +61,14 @@ function buildItemRows(
       !companySlug &&
       Boolean(c.company_name?.trim());
     // A contact that already has a domain but no email (e.g. a Google-Maps
-    // business lead: company + website, no person) still has real work — the
+    // business lead: company + website, no person) still has real work, the
     // waterfall can scrape its site for a company/owner email. Without this it
     // matched no want-flag and was silently dropped from the run entirely.
     // Its item is born with waterfall_status null; seedWaterfallItems stamps the
     // method + pending at the domains→waterfall transition (advancePhase owns
     // waterfall seeding), so we do NOT pre-seed 'pending' here.
     const wantWaterfallOnly = !c.email && Boolean(c.company_domain?.trim());
-    // Name-less business lead that opted into the owner-name (naming) add-on —
+    // Name-less business lead that opted into the owner-name (naming) add-on,
     // eligible even with no domain (naming's Layer 2 web-searches by name + city).
     // Gated on the per-contact addon stamp so a run without naming doesn't pull in
     // contacts it can't work.
@@ -149,7 +149,7 @@ export async function enqueueEnrichment(
     contacts.push(...((data as ContactRow[] | null) ?? []));
   }
 
-  // Load the org's enrichment config up front — its domain_discovery_enabled flag
+  // Load the org's enrichment config up front: its domain_discovery_enabled flag
   // decides whether name-only companies become eligible (they gain a domain-
   // discovery item), so it must be known before we build the item rows. The same
   // snapshot is written onto the run below.
@@ -163,7 +163,7 @@ export async function enqueueEnrichment(
     settings.domain_discovery_enabled,
   );
   if (rows.length === 0) {
-    // Nothing to enrich — clear any stale queue stamp so the drain lets go.
+    // Nothing to enrich: clear any stale queue stamp so the drain lets go.
     await admin.from("contacts").update({ enrich_queued_at: null }).in("id", contactIds);
     return { status: "skipped", reason: "nothing_eligible" };
   }
@@ -209,7 +209,7 @@ export async function enqueueEnrichment(
   }
 
   // Snapshot the org's waterfall config (migration 00075) onto the run, same as
-  // contacts/enrich/start — so an auto-enqueued run honors the configured method
+  // contacts/enrich/start, so an auto-enqueued run honors the configured method
   // + size routing. (settings was loaded above for the discovery gate.)
   const waterfallActor = resolveWaterfallActor(settings);
   const runWaterfall =

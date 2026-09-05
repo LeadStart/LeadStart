@@ -1,6 +1,6 @@
-// A/B auto-winner evaluation for one campaign — the IO wrapper around the pure
+// A/B auto-winner evaluation for one campaign: the IO wrapper around the pure
 // decision in ab-winner.ts. Called by the hourly analytics cron (sync-analytics)
-// — NEVER the send hot-path — and exercised directly by the e2e. It takes the
+// (NEVER the send hot-path) and exercised directly by the e2e. It takes the
 // send log + reply rows the caller already paged, runs the significance test per
 // A/B node, and merge-safely persists any new pauses into campaigns.flow_graph.
 
@@ -24,7 +24,7 @@ export function countPausedVariants(graph: FlowGraph): number {
  * numbers the Analytics tab shows to pause losing variants once a node has
  * gathered enough sends, so new leads route to the leader. Pure decision
  * (decideAbWinner) + a merge-safe write: re-reads the current flow_graph, unions
- * the new pauses in, and persists only if something changed — an already-decided
+ * the new pauses in, and persists only if something changed: an already-decided
  * test writes nothing. Touches only flow_graph (a pause is a runtime event, not
  * a content edit). Returns the number of variants newly paused.
  */
@@ -49,7 +49,7 @@ export async function evaluateAbWinners(
 
   // Latest reply class per lead email (rows arrive oldest-first, so a later row
   // overwrites an earlier → newest wins). The "interested" grouping that counts
-  // as a positive lives in computeVariantStats — the same one the A/B table uses.
+  // as a positive lives in computeVariantStats: the same one the A/B table uses.
   const replyByEmail = new Map<string, ReplyClass | null>();
   for (const r of replies) {
     const em = r.lead_email?.trim().toLowerCase();

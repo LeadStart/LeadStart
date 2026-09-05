@@ -1,6 +1,6 @@
 // Shared owner-only guard for admin API routes. The same block was inlined in
 // every /api/admin route; the new domains + registrar routes share this one.
-// Returns { organizationId } on success, or { error } — a ready NextResponse to
+// Returns { organizationId } on success, or { error }: a ready NextResponse to
 // return straight from the handler.
 
 import { NextResponse } from "next/server";

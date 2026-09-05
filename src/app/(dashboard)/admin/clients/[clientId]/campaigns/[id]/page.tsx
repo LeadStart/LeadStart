@@ -62,7 +62,7 @@ export default async function CampaignDetailPage({
 
   const campaign = campaignRow as Campaign;
 
-  // LinkedIn campaigns get a different detail view — campaign_snapshots /
+  // LinkedIn campaigns get a different detail view: campaign_snapshots /
   // step_metrics are email-shaped and empty for LinkedIn.
   if (campaign.source_channel === "linkedin") {
     return (

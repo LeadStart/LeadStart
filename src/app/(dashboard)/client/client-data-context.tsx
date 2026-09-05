@@ -35,7 +35,7 @@ export function ClientDataProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const supabase = createClient();
-    // Use getSession() — reads JWT from cookie locally, no network call.
+    // Use getSession(): reads JWT from cookie locally, no network call.
     // The middleware already validated the user.
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!session?.user) {

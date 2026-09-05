@@ -4,7 +4,7 @@
 // permission, subscribe/unsubscribe, and reporting the current state.
 //
 // iOS note: web push only works inside the INSTALLED PWA (Add to Home Screen)
-// on iOS 16.4+, and the permission prompt must come from a user gesture — so
+// on iOS 16.4+, and the permission prompt must come from a user gesture, so
 // `enablePush()` is only ever called from a button/menu tap.
 
 import { appUrl } from "@/lib/api-url";

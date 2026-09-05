@@ -29,7 +29,7 @@ import {
  *    first.
  * 2. Warmed SEQUENTIALLY, one key at a time. Firing all fetchers at once put a
  *    burst of heavy queries on a small Supabase instance in parallel with the
- *    current page's own queries — they queued behind each other and made the
+ *    current page's own queries: they queued behind each other and made the
  *    click you just made feel slow. One-at-a-time keeps the DB unsaturated.
  *
  * Only the light-to-medium list keys are warmed. The prospects pipeline
@@ -103,7 +103,7 @@ export function AdminPrefetcher() {
           // Populate the cache slot without triggering a follow-up revalidation.
           await mutate(key, () => fetcher(supabase), { revalidate: false });
         } catch {
-          // Best-effort cache warming — a failure just means this tab fetches
+          // Best-effort cache warming: a failure just means this tab fetches
           // on click, same as if the prefetcher weren't mounted.
         }
       }

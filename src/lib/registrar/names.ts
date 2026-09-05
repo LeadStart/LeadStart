@@ -4,7 +4,7 @@
 // hurts the real business). Instead we register human-plausible lookalikes and
 // treat them as consumable sending infrastructure. This produces candidate bare
 // domains from a brand; the caller availability-checks them via the registrar
-// before buying. Pure — no I/O.
+// before buying. Pure: no I/O.
 
 /** Default patterns: conservative, pronounceable, common in cold-email setups. */
 export const DEFAULT_NAME_PATTERNS: ((brand: string) => string)[] = [
@@ -26,7 +26,7 @@ export function generateLookalikeDomains(params: {
   /** TLDs to pair each pattern with. Default ["com"]. */
   tlds?: string[];
   patterns?: ((brand: string) => string)[];
-  /** Domains to never emit — always include the real primary domain(s). */
+  /** Domains to never emit: always include the real primary domain(s). */
   excludePrimary?: string[];
   /** Cap the number of candidates returned. */
   limit?: number;

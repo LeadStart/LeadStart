@@ -1,6 +1,6 @@
-// GET  /api/admin/workspaces — list the org's Google Workspaces (for the setup
+// GET  /api/admin/workspaces: list the org's Google Workspaces (for the setup
 //                              picker). Never returns secrets.
-// POST /api/admin/workspaces — add a Workspace (label + super-admin email, plus
+// POST /api/admin/workspaces: add a Workspace (label + super-admin email, plus
 //                              an optional license SKU). The tenant's admin must
 //                              separately authorize the service account's client
 //                              ID (the DWD step) for provisioning to actually run.

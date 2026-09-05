@@ -1,4 +1,4 @@
-// Managed unblocker client (tier 5) — the paid last resort for hard
+// Managed unblocker client (tier 5): the paid last resort for hard
 // Cloudflare/DataDome cases the self-hosted tiers can't pass. Ported from the
 // saasassins ScrapFly client, including the consecutive-429 circuit breaker so a
 // quota-exhausted key fails instantly for the rest of the run instead of
@@ -37,8 +37,8 @@ export async function unblockerFetch(url: string, apiKey: string): Promise<Unblo
   let result: UnblockerResult = { html: null, status: 0, error: "unattempted" };
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     if (attempt > 0) {
-      const backoff = 3000 * Math.pow(2, attempt - 1); // 3s, 6s, 12s — clears transient concurrency 429s
-      console.log(`[unblocker] 429 — retry ${attempt}/${MAX_RETRIES} in ${backoff}ms for ${url}`);
+      const backoff = 3000 * Math.pow(2, attempt - 1); // 3s, 6s, 12s: clears transient concurrency 429s
+      console.log(`[unblocker] 429, retry ${attempt}/${MAX_RETRIES} in ${backoff}ms for ${url}`);
       await delay(backoff);
     }
     const wait = lastStart + MIN_GAP_MS - Date.now();
@@ -53,7 +53,7 @@ export async function unblockerFetch(url: string, apiKey: string): Promise<Unblo
     consecutive429 += 1;
     if (consecutive429 >= DISABLE_AFTER && !disabled) {
       disabled = true;
-      console.warn(`[unblocker] ${consecutive429} consecutive 429s — DISABLING for the rest of this run (quota likely exhausted)`);
+      console.warn(`[unblocker] ${consecutive429} consecutive 429s, DISABLING for the rest of this run (quota likely exhausted)`);
     }
   } else {
     consecutive429 = 0;

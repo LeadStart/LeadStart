@@ -1,6 +1,6 @@
 // Admin SDK Directory client (domain + user provisioning). Composes the shared
 // GoogleServiceAccount (src/lib/google/auth.ts) with the Directory scopes and a
-// fixed admin subject (a Workspace super-admin — unlike Gmail sends, the
+// fixed admin subject (a Workspace super-admin, unlike Gmail sends, the
 // Directory API always impersonates the same admin, not a per-mailbox subject).
 //
 // Resume semantics: insertDomain / insertUser return { created: false } on 409
@@ -61,7 +61,7 @@ export class DirectoryClient {
     }
   }
 
-  /** Read a domain's state — the post-verification gate reads `verified`. */
+  /** Read a domain's state: the post-verification gate reads `verified`. */
   async getDomain(domain: string): Promise<{ exists: boolean; verified: boolean }> {
     try {
       const { json } = await this.call<{ verified?: boolean }>(

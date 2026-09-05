@@ -27,7 +27,7 @@ function timeoutPromise<T>(ms: number, label: string): Promise<T> {
 function mergeResults(layer1: EnrichmentResult, layer2: EnrichmentResult): EnrichmentResult {
   // Layer 2 only "wins" if it actually produced a name. If both layers
   // came back empty we keep Layer 1's notes for context (they explain why
-  // it was empty — no website, unreachable, AI miss, etc.).
+  // it was empty: no website, unreachable, AI miss, etc.).
   const layer2Found = Boolean(layer2.first_name);
 
   const mergedNotes = [layer1.enrichment_notes, layer2.enrichment_notes]

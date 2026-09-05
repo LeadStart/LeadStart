@@ -71,7 +71,7 @@ export function MonthlyPositiveChart({ snapshots, height = 220 }: MonthlyPositiv
               </button>
               <span className="text-[10px] text-muted-foreground px-1">
                 {visibleMonths[0] && new Date(visibleMonths[0] + "-01").toLocaleDateString("en-US", { month: "short", year: "numeric" })}
-                {" — "}
+                {": "}
                 {visibleMonths[visibleMonths.length - 1] && new Date(visibleMonths[visibleMonths.length - 1] + "-01").toLocaleDateString("en-US", { month: "short", year: "numeric" })}
               </span>
               <button

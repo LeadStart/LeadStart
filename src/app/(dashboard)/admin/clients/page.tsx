@@ -129,7 +129,7 @@ export default function ClientsPage() {
             </p>
           ) : (
             <>
-            {/* Mobile: stacked cards — no sideways-scrolling table */}
+            {/* Mobile: stacked cards, no sideways-scrolling table */}
             <div className="space-y-2.5 lg:hidden">
               {pageRows.map((row) => {
                 const rowStatus: ClientStatus = (row.status ?? "active") as ClientStatus;

@@ -9,7 +9,7 @@ interface PageHeaderProps {
 }
 
 /**
- * Flat page header — plain typography, no gradient band. Replaces the
+ * Flat page header: plain typography, no gradient band. Replaces the
  * copy-pasted inline hero block. Title + optional eyebrow/subtitle on the
  * left, actions on the right (wraps below on mobile).
  */

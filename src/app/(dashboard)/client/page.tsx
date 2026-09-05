@@ -136,7 +136,7 @@ export default function ClientDashboardPage() {
         <div className="flex items-center gap-3">
           {datePreset !== "custom" && (
             <span className="text-xs text-muted-foreground">
-              {new Date(startDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })} — {new Date(endDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+              {new Date(startDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })} to {new Date(endDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
             </span>
           )}
           <Select value={datePreset} onValueChange={handlePresetChange}>

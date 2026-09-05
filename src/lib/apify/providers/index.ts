@@ -7,10 +7,10 @@ import { waterfallScrapeProvider, WATERFALL_SCRAPE_ACTOR_ID } from "./waterfall-
 import { activityProvider, ACTIVITY_ACTOR_ID } from "./activity-harvestapi";
 
 // Actor snapshots written onto enrichment_runs at start time. Email verification
-// is NOT an Apify phase — Million Verifier owns it.
+// is NOT an Apify phase: Million Verifier owns it.
 //
 // Since migration 00075 the waterfall METHOD is org-configurable and defaults to
-// pattern_mv (a direct method, no Apify actor) — see DEFAULT_ENRICHMENT_SETTINGS.
+// pattern_mv (a direct method, no Apify actor): see DEFAULT_ENRICHMENT_SETTINGS.
 // The run's waterfall actor is resolved per method by resolveWaterfallActor + the
 // worker's per-method routing.
 export const PROFILE_ACTOR = PROFILE_ACTOR_ID;
@@ -34,7 +34,7 @@ const WATERFALL_BY_ACTOR: Record<string, PhaseProvider> = {
 // run's `waterfall_actor` snapshot. Real per-item routing lives in the worker
 // (advancePhase stamps waterfall_method; startNextWaterfall picks the actor per
 // method group), so this is just a sensible default for the run row. Returns
-// null when no band names an Apify method (all pattern_mv / off) — the worker
+// null when no band names an Apify method (all pattern_mv / off): the worker
 // still routes those (direct pattern_mv, or the scrape actor per method).
 export function resolveWaterfallActor(settings: EnrichmentSettings): string | null {
   for (const m of [settings.unknown_method, settings.small_method, settings.large_method]) {

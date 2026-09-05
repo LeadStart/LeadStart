@@ -10,7 +10,7 @@
 // Every run:
 //   1. Bail immediately if we're outside the send window (cheap no-op tick).
 //   2. Pull active enrollments on native_email campaigns whose current
-//      step's wait_days has elapsed (channel filtered in SQL — see below).
+//      step's wait_days has elapsed (channel filtered in SQL, see below).
 //   3. For each, pick a mailbox (sticky per enrollment for thread
 //      continuity; else the least-loaded mailbox in the campaign's pool),
 //      render the step, then verify the recipient just-in-time (Million
@@ -97,7 +97,7 @@ type CampaignRow = {
   send_weekdays_only: boolean | null;
   daily_new_leads_cap: number | null;
   sending_strategy: string | null;
-  // Visual Flow builder graph (migration 00086). NULL = legacy/linear campaign —
+  // Visual Flow builder graph (migration 00086). NULL = legacy/linear campaign,
   // the sender walks campaign_steps by current_step_index exactly as before.
   // Present = the graph runtime (migration 00089) walks the tree from the
   // enrollment's current_node_id (branches + linkedin/internal nodes execute).
@@ -121,7 +121,7 @@ export async function GET(request: NextRequest) {
   if (authError) return authError;
 
   // Send windows are now per-campaign (migration 00058), so the global
-  // "outside window" bail moved into the loop below — each enrollment is
+  // "outside window" bail moved into the loop below: each enrollment is
   // gated on its OWN campaign's window (timezone + hours). The cron still
   // fires all day; ticks where every due campaign is out of window fetch a
   // little and then send nothing.
@@ -307,7 +307,7 @@ export async function GET(request: NextRequest) {
   // default) processes follow-ups first. Across campaigns the two classes
   // interleave by due-ness. Array.sort is stable in V8, so within a rank ties
   // keep the DB order (oldest-actioned / oldest-started first). This is the ONLY
-  // place strategy changes send order — the loop below is otherwise identical.
+  // place strategy changes send order: the loop below is otherwise identical.
   const enrollmentRank = (e: EnrollmentRow): number => {
     const strat = resolveSendingStrategy(campaignMap.get(e.campaign_id) ?? {});
     const isNewLead = e.last_action_at == null;
@@ -378,7 +378,7 @@ export async function GET(request: NextRequest) {
   };
 
   // ---- Flow-runtime reply signal ----
-  // A flow `condition` node can branch on the reply — its existence (`replied`)
+  // A flow `condition` node can branch on the reply: its existence (`replied`)
   // OR its classifier sentiment (`reply_interested` / `_objection` / …), read
   // from lead_replies.final_class. lead_replies has no contact_id, so we key by
   // campaign_id + the contact's email. Presence in the map = replied; value = the
@@ -422,7 +422,7 @@ export async function GET(request: NextRequest) {
   // A follow-up with an empty subject threads as "Re: <first email subject>",
   // rendered from the variant THIS contact received on the first email. Once the
   // auto-winner pauses a variant, freshly re-deriving that assignment would drop
-  // the paused one and could flip a lead already mid-thread — so we read the
+  // the paused one and could flip a lead already mid-thread, so we read the
   // variant they were ACTUALLY sent (native_sends.variant_id at step 0) and stay
   // on it. Keyed `${campaign_id}\n${contact_id}`; only the first-email A/B case
   // consults it, and only flow campaigns are in this tick's fetch set.
@@ -450,7 +450,7 @@ export async function GET(request: NextRequest) {
   // disarmed when no key is configured), the 1h suppression window carried over
   // from a definitive account error, and the per-tick breaker + tallies the
   // gate mutates as it runs. A missing-column error (migration 00069 not yet
-  // applied) disarms the gate rather than throwing — sends proceed unverified.
+  // applied) disarms the gate rather than throwing: sends proceed unverified.
   // Fail closed: if the verifier state cannot be read, nothing sends this tick
   // (SEND-51). The only surviving disarm is the pre-00069 missing-column case.
   let verifierByOrg: Awaited<ReturnType<typeof loadVerifierStates>>;
@@ -493,7 +493,7 @@ export async function GET(request: NextRequest) {
 
   // Domain lifecycle for drain-mode routing (migration 00081). A domain that is
   // NOT open to new leads (tired = draining, resting, etc.) accepts no fresh
-  // step-0 enrollments — but its in-flight sticky follow-ups continue untouched,
+  // step-0 enrollments, but its in-flight sticky follow-ups continue untouched,
   // because the sticky path below never consults this. A mailbox with no
   // domain_id (legacy / pre-backfill) is treated as open. On day one every
   // backfilled domain is 'active', so this filter is a no-op until the lifecycle
@@ -528,13 +528,13 @@ export async function GET(request: NextRequest) {
   }
   // A mailbox is eligible for NEW step-0 leads only if its domain is open
   // (warming/active). Unknown/legacy domains default open. Sticky follow-ups
-  // bypass this entirely — a draining domain must still finish its threads.
+  // bypass this entirely: a draining domain must still finish its threads.
   const domainOpenFor = (mb: NativeMailbox): boolean => {
     const st = domainStatusByMailbox.get(mb.id);
     return st == null || domainOpenForNewLeads(st);
   };
 
-  // Sends already made today, per mailbox (ET-day boundary, matching the cap) —
+  // Sends already made today, per mailbox (ET-day boundary, matching the cap),
   // both the count (for the daily cap) and the most-recent send time (for the
   // pacing gate below).
   const dayStart = new Date(startOfLocalDay()).toISOString();
@@ -576,7 +576,7 @@ export async function GET(request: NextRequest) {
   // that graduates mid-day sends cap+1 that day (SEND-66).
   const sentTodayStart: Record<string, number> = { ...sentToday };
 
-  // New leads (step-0 first-touches) already sent today, per campaign — drives
+  // New leads (step-0 first-touches) already sent today, per campaign: drives
   // the per-campaign daily new-leads cap. Follow-ups are not counted here.
   const newLeadsToday: Record<string, number> = {};
   {
@@ -592,7 +592,7 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // Cumulative all-time sends per mailbox — drives the volume-based warmup ramp
+  // Cumulative all-time sends per mailbox: drives the volume-based warmup ramp
   // (effectiveDailyCap). Count-only (head:true) so no rows transfer; a paused
   // inbox that hasn't sent stays at the low starting cap until it warms up.
   const totalSent: Record<string, number> = {};
@@ -616,7 +616,7 @@ export async function GET(request: NextRequest) {
   // fetched at all.)
 
   // Optional per-domain daily send cap (migration 00083). Inert unless some
-  // domain has max_daily_sends set — then count the domain's TRUE sends today
+  // domain has max_daily_sends set: then count the domain's TRUE sends today
   // across ALL its mailboxes (not just this campaign's pool) so the ceiling
   // holds domain-wide. domainInTick tracks this tick's sends per domain.
   const domainSentToday = new Map<string, number>();
@@ -646,7 +646,7 @@ export async function GET(request: NextRequest) {
       }
     }
   }
-  // A mailbox whose domain has hit its daily send ceiling is ineligible — for
+  // A mailbox whose domain has hit its daily send ceiling is ineligible: for
   // ALL sends (sticky follow-ups included), since the cap is a domain-wide daily
   // volume limit. No cap set (the common case) → always true.
   const domainUnderCap = (mb: NativeMailbox): boolean => {
@@ -672,7 +672,7 @@ export async function GET(request: NextRequest) {
     effectiveDailyCap(mb, rampSentAtDayStart(mb)) - (sentToday[mb.id] ?? 0) - (inTick[mb.id] ?? 0);
   // Rotation load: how many this inbox has already sent today (persisted + this
   // tick). The step-0 pool pick orders by this ASC so first-touches spread
-  // EVENLY across a campaign's inboxes — a freshly-added or smaller-cap inbox
+  // EVENLY across a campaign's inboxes: a freshly-added or smaller-cap inbox
   // actually receives traffic and warms up. (The prior "most-remaining-first"
   // greedy let a warmed high-cap inbox absorb every send in a low-volume
   // campaign, so a new inbox never sent and its ramp never advanced. Cap
@@ -997,7 +997,7 @@ export async function GET(request: NextRequest) {
 
     // Condition signals (per campaign+contact). hasReplied is the HUMAN-reply halt
     // signal: contact.status==='replied', which the reply poller sets ONLY for
-    // non-auto replies — so an out-of-office / auto-reply never halts the sequence
+    // non-auto replies, so an out-of-office / auto-reply never halts the sequence
     // (it still writes a lead_replies row, which we read as replyClass). replyClass
     // = the latest ingested reply's class (incl. 'ooo'), driving the reply_*
     // sentiment triggers. bounced = contact.status. opened/clicked/manual → NO.
@@ -1022,7 +1022,7 @@ export async function GET(request: NextRequest) {
       return { result: "completed" };
     }
 
-    // Wait gate — accumulated across the walk, measured from the last action (or
+    // Wait gate: accumulated across the walk, measured from the last action (or
     // enrollment start for the first). Checked BEFORE the reply-halt, matching
     // the linear path (a reply is acted on only once the next step is due).
     const referenceTime = enrollment.last_action_at ?? enrollment.started_at;
@@ -1033,7 +1033,7 @@ export async function GET(request: NextRequest) {
 
     // Reply-halt reconciliation: if the contact replied and NO reply-family
     // condition MATCHED en route to this action, halt the enrollment exactly as
-    // the linear sender does (a human takes over) — this also fail-safes an
+    // the linear sender does (a human takes over): this also fail-safes an
     // unhandled reply CLASS (replied, but no matching sentiment branch routed
     // them). When a reply condition did match, the graph is handling the reply so
     // we don't pre-empt. Applies to EVERY action type.
@@ -1041,7 +1041,7 @@ export async function GET(request: NextRequest) {
       await admin.from("campaign_enrollments").update({ status: "replied" }).eq("id", enrollment.id);
       return { result: "already_replied" };
     }
-    // Unsubscribe is a hard opt-out across channels — stop the enrollment.
+    // Unsubscribe is a hard opt-out across channels: stop the enrollment.
     if (contact.status === "unsubscribed") {
       await markEnrollmentFailed(admin, enrollment.id, "Contact is unsubscribed.");
       return { result: "suppressed_unsubscribed" };
@@ -1060,7 +1060,7 @@ export async function GET(request: NextRequest) {
         flowNodeId: action.node.id, // idempotency: one task per node per contact
       });
       if (task.error) {
-        // Best-effort insert failed — leave parked and retry next tick.
+        // Best-effort insert failed: leave parked and retry next tick.
         console.error("[cron/native-sequences] manual-task insert failed:", task.error);
         return { result: "flow_linkedin_error" };
       }
@@ -1114,7 +1114,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Mailbox pick — sticky after the first send, else least-loaded open mailbox
+    // Mailbox pick: sticky after the first send, else least-loaded open mailbox
     // in the pool (identical policy to the linear path). A mid-thread orphan
     // (sticky inbox deleted, thread ids kept) is failed, never re-homed (SEND-36).
     if (!enrollment.native_mailbox_id && enrollment.gmail_thread_id) {
@@ -1156,7 +1156,7 @@ export async function GET(request: NextRequest) {
     } else if ((variant.subject ?? "").trim()) {
       subject = renderTemplate(variant.subject ?? "", contact, mailbox, `${contact.id}:${stepIndex}:subject`);
     } else {
-      // Re: fallback — thread on the first primary-path email's subject as THIS
+      // Re: fallback, thread on the first primary-path email's subject as THIS
       // contact received it (their assigned variant), rendered with the step-0
       // seed key so it's byte-identical to the original send. Prefer the variant
       // they were ACTUALLY sent (sticky) so an auto-pause since then can't flip
@@ -1292,7 +1292,7 @@ export async function GET(request: NextRequest) {
       continue;
     }
 
-    // wait_days gate — step 0 uses started_at, later steps last_action_at.
+    // wait_days gate: step 0 uses started_at, later steps last_action_at.
     const referenceTime = enrollment.last_action_at ?? enrollment.started_at;
     if (step.wait_days > 0 && referenceTime) {
       const dueAt = new Date(referenceTime).getTime() + step.wait_days * 86_400_000;
@@ -1337,7 +1337,7 @@ export async function GET(request: NextRequest) {
     }
     // Per-client DNC: skip if this contact opted out of THIS campaign's client
     // (or an org-wide entry). Scoped so another client sharing the contact is
-    // unaffected — that's the whole point of the per-client list.
+    // unaffected: that's the whole point of the per-client list.
     const emailKey = contact.email.trim().toLowerCase();
     if (isDncSuppressed(emailKey, campaign)) {
       await markEnrollmentFailed(admin, enrollment.id, "Contact is on the client's DNC list.");
@@ -1348,7 +1348,7 @@ export async function GET(request: NextRequest) {
     // Per-campaign new-leads/day gate for step-0 first-touches. A cap of 0
     // pauses new leads in BOTH strategies (an explicit off switch). Under
     // finish_first the numeric cap throttles the daily first-touch rate; under
-    // reach_first the cap is NOT a rate limit — first-touches use full warmed
+    // reach_first the cap is NOT a rate limit: first-touches use full warmed
     // inbox capacity, still bounded by the per-mailbox ceiling in eligible().
     // Follow-ups (step 1+) are never gated here. Leaves the enrollment active to
     // retry once the day's count resets.
@@ -1381,11 +1381,11 @@ export async function GET(request: NextRequest) {
     if (enrollment.native_mailbox_id) {
       // Sticky: this enrollment already threads through one mailbox. If it's
       // ineligible this tick (paused, error, at cap, or not yet due per the
-      // spacing gate), wait — never reroute mid-thread (breaks threading + SPF).
+      // spacing gate), wait: never reroute mid-thread (breaks threading + SPF).
       mailbox = mailboxMap.get(enrollment.native_mailbox_id);
       if (!mailbox || !eligible(mailbox, campaign)) continue;
     } else {
-      // Step 0: spread first-touches EVENLY — pick the eligible pool mailbox
+      // Step 0: spread first-touches EVENLY, pick the eligible pool mailbox
       // that has sent fewest today (see `load`), so a new/smaller-cap inbox
       // warms instead of being starved by a warmed one. Filtered to inboxes
       // whose domain is still open to new leads (drain mode excludes
@@ -1424,7 +1424,7 @@ export async function GET(request: NextRequest) {
         continue;
       }
     } else if ((step.subject_template ?? "").trim()) {
-      // This follow-up carries its own subject line — send under it (still
+      // This follow-up carries its own subject line: send under it (still
       // threaded via References + threadId). Lets a sequence vary the subject
       // per step instead of forcing every follow-up to "Re: <first subject>".
       subject = renderTemplate(
@@ -1435,7 +1435,7 @@ export async function GET(request: NextRequest) {
       );
     } else {
       const step0 = steps?.get(0);
-      // Re: fallback — re-render STEP 0's subject with STEP 0's seed key (index
+      // Re: fallback, re-render STEP 0's subject with STEP 0's seed key (index
       // 0, NOT the sending step index) so the threaded subject is byte-identical
       // to the original send ("Re: Quick question", never "Re: Fast question").
       const baseSubject =
@@ -1519,18 +1519,18 @@ export async function GET(request: NextRequest) {
 // Render sequence copy against a contact + the sending mailbox. Resolves
 // {{token}} placeholders case/format-insensitively, in priority order:
 //
-//   1. Sender identity from the sending inbox — {{YourName}} / {{sender_name}}
+//   1. Sender identity from the sending inbox: {{YourName}} / {{sender_name}}
 //      resolve to the mailbox's display name (fallback: the address local
 //      part). This is what keeps a rotating-inbox signature correct: a send
 //      from molly@ signs "Molly Anderson", from jessica@ "Jessica Masterson".
 //   2. Standard contact columns (first_name, last_name, company, title,
 //      intro_line, email, phone, full_name).
 //   3. Anything the operator imported into contacts.custom_fields
-//      (e.g. PropertyAddress, SoldDate) — arbitrary per-recipient merge data.
+//      (e.g. PropertyAddress, SoldDate): arbitrary per-recipient merge data.
 //
 // A token that matches nothing is left in place unchanged (same stance as the
 // original fixed-tag renderer) so a typo'd placeholder never silently blanks
-// a line of copy — it shows up in a preview instead.
+// a line of copy: it shows up in a preview instead.
 function renderTemplate(
   template: string,
   contact: Contact,
@@ -1555,7 +1555,7 @@ function renderTemplate(
   // builder preview), keeping the send and the preview byte-identical.
   const map = buildTokenMap(contact, senderName);
   // Fail-safe: a LIVE email send (mailbox present) must NEVER emit a raw
-  // {{token}} to a recipient — an unresolved variable with no inline |default
+  // {{token}} to a recipient: an unresolved variable with no inline |default
   // blanks instead of leaking braces. A VA-facing linkedin/internal task body
   // (no mailbox) keeps the {{token}} visible so the human can fill it in.
   const missing = mailbox ? () => "" : undefined;

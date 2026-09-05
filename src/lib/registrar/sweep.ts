@@ -15,7 +15,7 @@ export interface AvailabilityQuote {
 export interface SweepResult {
   /** Available registrars only, cheapest first (a null/unknown price sorts last). */
   quotes: AvailabilityQuote[];
-  /** Per-provider failures (bad key, outage) — one bad provider never sinks the sweep. */
+  /** Per-provider failures (bad key, outage): one bad provider never sinks the sweep. */
   errors: string[];
 }
 
@@ -44,7 +44,7 @@ export function priceOrInf(p: number | null): number {
 }
 
 /**
- * Sum this month's automated domain spend for an org — the running total the
+ * Sum this month's automated domain spend for an org: the running total the
  * fail-closed cap is checked against (sending_domains rows created this month
  * with a non-null purchase_price_usd).
  */

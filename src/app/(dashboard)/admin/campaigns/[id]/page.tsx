@@ -2,7 +2,7 @@
 // client_id). For native_email campaigns this renders send/reply stats, the
 // mailbox pool, an inline CSV import panel, and the sequence editor. Per-client
 // detail at /admin/clients/[clientId]/campaigns/[campaignId] is the older view
-// — this one is what list rows link to from /admin/campaigns.
+// this one is what list rows link to from /admin/campaigns.
 
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
@@ -108,7 +108,7 @@ export default async function AdminCampaignDetailPage({
         .select(SNAPSHOT_COLUMNS)
         .eq("campaign_id", campaignId)
         .order("snapshot_date", { ascending: false }),
-      // Every client in the org — feeds both the orphan-linker card (legacy
+      // Every client in the org: feeds both the orphan-linker card (legacy
       // render) and the Setup tab's client selector, which can re-point or
       // unlink the campaign at any time.
       supabase
@@ -135,8 +135,8 @@ export default async function AdminCampaignDetailPage({
       : null;
 
   // Contacts assigned to this campaign (contacts.campaign_id) joined with
-  // their sequence-enrollment state. Assignment alone does not send — the
-  // dispatcher works exclusively off campaign_enrollments — so the card shows
+  // their sequence-enrollment state. Assignment alone does not send: the
+  // dispatcher works exclusively off campaign_enrollments, so the card shows
   // both facts per contact. Capped at the newest 1000 rows.
   const CONTACTS_CAP = 1000;
   const [assignedRes, campEnrollRes] = await Promise.all([
@@ -231,7 +231,7 @@ export default async function AdminCampaignDetailPage({
         );
 
     // Flow-progress: live per-node occupancy + reply-outcome rollup for the
-    // read-only branch view. Only computed for a real (stored) flow graph — for
+    // read-only branch view. Only computed for a real (stored) flow graph: for
     // legacy/linear campaigns current_node_id is null and the linear funnel serves.
     let flowProgress: FlowProgressData | null = null;
     let abStats: AbNodeStats[] = [];
@@ -505,7 +505,7 @@ export default async function AdminCampaignDetailPage({
                       ~{nativeStats.dailyInboxCapacity}/day
                     </span>{" "}
                     across {nativeStats.activeMailboxCount} active inbox
-                    {nativeStats.activeMailboxCount === 1 ? "" : "es"} (warmup-aware) —
+                    {nativeStats.activeMailboxCount === 1 ? "" : "es"} (warmup-aware),
                     ~{Math.round(nativeStats.dailyInboxCapacity / nativeStats.activeMailboxCount)}/day
                     per inbox on average.
                   </p>
@@ -544,7 +544,7 @@ export default async function AdminCampaignDetailPage({
               <div className="flex-1">
                 <CardTitle className="text-base">Import contacts</CardTitle>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Upload a CSV — contacts enroll immediately and the sender
+                  Upload a CSV: contacts enroll immediately and the sender
                   works through them at the mailbox caps. Columns can map to
                   this campaign&apos;s own {"{{variables}}"} as well as the
                   standard contact fields.
@@ -569,7 +569,7 @@ export default async function AdminCampaignDetailPage({
       )}
 
       {/* Everyone assigned to this campaign + whether they're actually in the
-          sending sequence. Channel-agnostic — renders for native email and
+          sending sequence. Channel-agnostic: renders for native email and
           LinkedIn alike. */}
       <CampaignContactsCard
         campaignId={campaign.id}
@@ -600,7 +600,7 @@ export default async function AdminCampaignDetailPage({
         </Card>
       )}
 
-      {/* KPIs + chart — snapshot metrics for non-native channels (LinkedIn).
+      {/* KPIs + chart: snapshot metrics for non-native channels (LinkedIn).
           Native email has its own stats card above (no campaign_snapshots),
           so skip this empty section for it. */}
       {campaign.source_channel !== "native_email" && (
@@ -703,7 +703,7 @@ interface NativeStats {
   mailboxes: { email: string; status: string }[];
   steps: { subject: string; body: string; wait_days: number }[];
   // Active enrollments bucketed by current_step_index (the next step they'll
-  // receive) and total sends logged per step — the stage-flow funnel data.
+  // receive) and total sends logged per step: the stage-flow funnel data.
   waitingByStep: number[];
   sentByStep: number[];
   // Warmup-aware daily send capacity across the ACTIVE inbox pool (sum of each
@@ -723,7 +723,7 @@ async function nativeStatsFor(
 ): Promise<NativeStats> {
   // One row-fetch of this campaign's sends (step_index + status) replaces the
   // separate sent/bounced count queries AND the per-step count N+1 further
-  // down — sent, bounced, and sent-per-step are all tallied from these rows.
+  // down: sent, bounced, and sent-per-step are all tallied from these rows.
   // native_sends is a narrow log; pulling two columns for one campaign is far
   // cheaper on this instance than a fan-out of count-only queries.
   const [campaignSendsRes, repliedRes, stepsRes, poolRes, enrRes] = await Promise.all([
@@ -782,7 +782,7 @@ async function nativeStatsFor(
     else verification.unverified++;
   }
 
-  // Sends logged per step so far — tallied from the campaign sends already
+  // Sends logged per step so far: tallied from the campaign sends already
   // fetched above (was one count query per step).
   const sentByStep = new Array(nSteps).fill(0) as number[];
   for (const s of campaignSends) {
@@ -793,7 +793,7 @@ async function nativeStatsFor(
   // Resolve the mailbox pool with a second query rather than a PostgREST
   // embed (embed typing is array-vs-object ambiguous for a to-one FK). Also
   // sum each ACTIVE inbox's current effective cap (effectiveDailyCap over its
-  // all-time send count) into the campaign's warmup-aware daily capacity — the
+  // all-time send count) into the campaign's warmup-aware daily capacity: the
   // reach_first first-touch rate and the honest ceiling either way.
   const mailboxIds = ((poolRes.data ?? []) as { mailbox_id: string }[]).map((r) => r.mailbox_id);
   let mailboxes: { email: string; status: string }[] = [];
@@ -868,7 +868,7 @@ async function nativeStatsFor(
 }
 
 // Inline client-linker for orphan campaigns. Tiny form, no full component
-// — POSTs to a one-shot route that updates campaigns.client_id.
+// POSTs to a one-shot route that updates campaigns.client_id.
 function LinkOrphanForm({
   campaignId,
   clients,

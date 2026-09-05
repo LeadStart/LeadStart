@@ -368,7 +368,7 @@ export default function ProspectsPage() {
 
     for (const stage of stagesToUpdate) {
       const items = list.filter((c) => c.pipeline_stage === stage);
-      // Fire the per-card position updates in parallel — they're independent
+      // Fire the per-card position updates in parallel: they're independent
       // rows, each setting an absolute sort_order by index. Reordering a large
       // column was previously N serial round-trips before the board settled.
       const results = await Promise.all(
@@ -535,7 +535,7 @@ export default function ProspectsPage() {
         </DndContext>
       )}
 
-      {/* Detail dialog — pipeline-only edits; contact info read-only */}
+      {/* Detail dialog: pipeline-only edits; contact info read-only */}
       {selected && (
         <Dialog open={!!selected} onOpenChange={() => setSelected(null)}>
           <DialogContent className="max-w-lg">
@@ -680,7 +680,7 @@ export default function ProspectsPage() {
                 <div>
                   <p className="text-sm font-medium">No contacts yet</p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Create a contact first — they&apos;re the source of truth for name, email, and company.
+                    Create a contact first: they&apos;re the source of truth for name, email, and company.
                   </p>
                 </div>
                 <Link href="/admin/contacts">

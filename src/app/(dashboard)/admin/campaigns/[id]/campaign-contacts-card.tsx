@@ -1,10 +1,10 @@
 "use client";
 
-// "Contacts in this campaign" — every contact assigned to the campaign
+// "Contacts in this campaign": every contact assigned to the campaign
 // (contacts.campaign_id) with its sequence-enrollment state. Assignment and
 // enrollment are separate facts: the dispatcher sends exclusively off
 // campaign_enrollments, so an assigned-but-unenrolled contact never receives
-// a step. This card is where that gap becomes visible — and fixable via the
+// a step. This card is where that gap becomes visible, and fixable via the
 // Enroll button, which upserts the missing enrollments through the existing
 // /api/admin/campaigns/[id]/enroll endpoint (idempotent, skips contacts with
 // a cached undeliverable email verdict).
@@ -76,7 +76,7 @@ export function CampaignContactsCard({
   contacts: CampaignContactRow[];
   truncated: boolean;
   // True for channels whose sequences run off campaign_enrollments
-  // (native email + LinkedIn) — the only ones the enroll endpoint accepts.
+  // (native email + LinkedIn): the only ones the enroll endpoint accepts.
   canEnroll: boolean;
 }) {
   const router = useRouter();
@@ -118,7 +118,7 @@ export function CampaignContactsCard({
       toast.success(
         `Enrolled ${enrolled} contact${enrolled === 1 ? "" : "s"} into the sequence` +
           (skippedUndeliverable > 0
-            ? ` — ${skippedUndeliverable} skipped (undeliverable email)`
+            ? `: ${skippedUndeliverable} skipped (undeliverable email)`
             : ""),
       );
       router.refresh();
@@ -167,12 +167,12 @@ export function CampaignContactsCard({
             {canEnroll && notEnrolled.length > 0 && (
               <p className="mb-3 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-800">
                 Assigned contacts are only emailed once they&apos;re enrolled in
-                the sequence — the {notEnrolled.length} not-enrolled contact
+                the sequence: the {notEnrolled.length} not-enrolled contact
                 {notEnrolled.length === 1 ? "" : "s"} below will not receive
                 any steps until you enroll them.
               </p>
             )}
-            {/* Mobile: stacked cards — no sideways-scrolling table */}
+            {/* Mobile: stacked cards, no sideways-scrolling table */}
             <div className="space-y-2.5 lg:hidden">
               {pageRows.map((c) => {
                 const name = [c.first_name, c.last_name].filter(Boolean).join(" ") || "—";

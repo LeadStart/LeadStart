@@ -1,4 +1,4 @@
-// GET /api/replies/[id]/thread — the full email back-and-forth for one reply.
+// GET /api/replies/[id]/thread: the full email back-and-forth for one reply.
 //
 // native_sends stores no message body (it's an append-only send log), so the
 // copy WE sent only lives in Gmail. This route pulls the whole Gmail thread by

@@ -1,8 +1,8 @@
-// D1 — 401 alerting on webhook endpoints.
+// D1: 401 alerting on webhook endpoints.
 //
 // Called from /api/webhooks/unipile and /api/webhooks/resend whenever a
 // request is rejected with 401 for a reason that represents a real auth
-// failure (bad_secret / invalid_signature) — NOT missing env. Missing env
+// failure (bad_secret / invalid_signature): NOT missing env. Missing env
 // is an operator config error and would flood this table; it's handled
 // inline at the handler with console.error + 401.
 //
@@ -15,12 +15,12 @@
 //      Resend wrapper. Upsert the checkpoint on send-success.
 //
 // Per SAFETY-TODO Phase D1: alerts do NOT go through the retry queue. A
-// failed alert is fine to drop — the underlying problem re-triggers the
+// failed alert is fine to drop: the underlying problem re-triggers the
 // alert on the next failure within the 10min window.
 //
 // Race: two concurrent threshold crossings can both pass the cooldown
 // check and send duplicate alerts (checkpoint is only written after send).
-// This is accepted — duplicates in a burst are less bad than a dropped
+// This is accepted: duplicates in a burst are less bad than a dropped
 // alert from a checkpoint-first / send-failure sequence.
 
 import { isIP } from "node:net";
@@ -106,7 +106,7 @@ export async function recordWebhookAuthFailure(
       `[webhook-auth-alert] checkpoint lookup failed for ${endpoint}:`,
       checkpointError,
     );
-    // Fall through — prefer a possible duplicate alert to a missed one.
+    // Fall through: prefer a possible duplicate alert to a missed one.
   }
 
   const lastAlertIso =
@@ -160,7 +160,7 @@ export async function recordWebhookAuthFailure(
   const ownerEmail = process.env.OWNER_ALERT_EMAIL;
   if (!ownerEmail) {
     console.error(
-      `[webhook-auth-alert] OWNER_ALERT_EMAIL is not set — alert path inert for ${endpoint} (count=${count}). Set the env to enable email alerts.`,
+      `[webhook-auth-alert] OWNER_ALERT_EMAIL is not set: alert path inert for ${endpoint} (count=${count}). Set the env to enable email alerts.`,
     );
     // Do NOT stamp checkpoint: once the env is configured, the next failure
     // should trigger a real alert immediately rather than wait for cooldown.
@@ -245,7 +245,7 @@ function buildAlertHtml(input: {
     ? topIps
         .map(
           (r) =>
-            `<li><code>${escapeHtml(r.value)}</code> — ${r.count}</li>`,
+            `<li><code>${escapeHtml(r.value)}</code>: ${r.count}</li>`,
         )
         .join("")
     : "<li><em>(no IP captured)</em></li>";
@@ -253,7 +253,7 @@ function buildAlertHtml(input: {
     ? topUAs
         .map(
           (r) =>
-            `<li><code>${escapeHtml(r.value)}</code> — ${r.count}</li>`,
+            `<li><code>${escapeHtml(r.value)}</code>: ${r.count}</li>`,
         )
         .join("")
     : "<li><em>(no user-agent captured)</em></li>";

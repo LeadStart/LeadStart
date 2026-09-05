@@ -1,8 +1,8 @@
 "use client";
 import { PageHeader } from "@/components/layout/page-header";
 
-// /admin/campaigns/new/linkedin — sequence builder for LinkedIn campaigns.
-// Minimum viable: name + client + step list. No drag/drop — steps are
+// /admin/campaigns/new/linkedin: sequence builder for LinkedIn campaigns.
+// Minimum viable: name + client + step list. No drag/drop, steps are
 // reordered with up/down buttons (and the default step set is sane). The
 // saved campaign lands as status='draft' so nothing fires until the owner
 // activates it from the campaign detail page.
@@ -60,25 +60,25 @@ const DEFAULT_STEPS: StepDraft[] = [
     kind: "connect_request",
     wait_days: 0,
     body_template:
-      "Hi {{first_name}} — saw your work at {{company}} and wanted to connect.",
+      "Hi {{first_name}}: saw your work at {{company}} and wanted to connect.",
   },
   {
     kind: "message",
     wait_days: 3,
     body_template:
-      "Thanks for connecting, {{first_name}}. Quick question — does {{company}} currently struggle with [problem]? Happy to share what's worked for similar teams.",
+      "Thanks for connecting, {{first_name}}. Quick question: does {{company}} currently struggle with [problem]? Happy to share what's worked for similar teams.",
   },
   {
     kind: "message",
     wait_days: 5,
     body_template:
-      "Following up — worth a 15-min chat to see if there's a fit?",
+      "Following up: worth a 15-min chat to see if there's a fit?",
   },
   {
     kind: "message",
     wait_days: 7,
     body_template:
-      "Closing the loop here. If timing's off, no worries — feel free to reach out anytime.",
+      "Closing the loop here. If timing's off, no worries: feel free to reach out anytime.",
   },
 ];
 
@@ -234,7 +234,7 @@ export default function NewLinkedinCampaignPage() {
               <Label htmlFor="name">Campaign name</Label>
               <Input
                 id="name"
-                placeholder="Q2 LinkedIn outreach — agency owners"
+                placeholder="Q2 LinkedIn outreach: agency owners"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
               />
@@ -257,7 +257,7 @@ export default function NewLinkedinCampaignPage() {
                   {clients.map((c) => (
                     <SelectItem key={c.id} value={c.id}>
                       {c.name}
-                      {c.unipile_account_status !== "connected" && " — LinkedIn not connected"}
+                      {c.unipile_account_status !== "connected" && ": LinkedIn not connected"}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -385,7 +385,7 @@ export default function NewLinkedinCampaignPage() {
                     rows={3}
                     placeholder={
                       step.kind === "like_post" || step.kind === "profile_visit"
-                        ? "(no message — engagement only)"
+                        ? "(no message, engagement only)"
                         : "Use {{first_name}} and {{company}} as placeholders."
                     }
                     value={step.body_template}

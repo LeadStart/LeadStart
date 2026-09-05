@@ -1,5 +1,5 @@
 // Pure decision logic for the just-in-time verification gate. No I/O, no DB, no
-// network — everything here is a function of a cached contact row, a raw API
+// network: everything here is a function of a cached contact row, a raw API
 // response, and the current time, so it is exhaustively unit-testable
 // (scripts/test-millionverifier-policy.ts).
 //
@@ -44,7 +44,7 @@ export type PolicyDecision =
   | { action: "hold"; reason: string }
   | { action: "verify" };
 
-// The only contact fields the cache decision reads — tests pass minimal objects.
+// The only contact fields the cache decision reads: tests pass minimal objects.
 export type CacheView = Pick<
   Contact,
   "email_verification_status" | "email_verified_at" | "email_verification_attempts"
@@ -71,7 +71,7 @@ const STATUS_VALUES: readonly EmailVerificationStatus[] = [
 ];
 const QUALITY_VALUES: readonly EmailVerificationQuality[] = ["good", "bad", "risky"];
 
-// A result we don't recognize is coerced to "error" (indeterminate, retried) —
+// A result we don't recognize is coerced to "error" (indeterminate, retried),
 // never silently treated as "ok".
 export function normalizeStatus(result: string): EmailVerificationStatus {
   return (STATUS_VALUES as readonly string[]).includes(result)

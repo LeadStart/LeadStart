@@ -1,10 +1,10 @@
-// POST /api/admin/registrar/provision — buy one domain and lay down its DNS.
+// POST /api/admin/registrar/provision: buy one domain and lay down its DNS.
 //
 // Flow: availability sweep across every configured registrar → pick the cheapest
 // available → enforce the fail-closed monthly spend cap → register → write the
 // tier's DNS records → insert a sending_domains row in 'provisioning'. Owner only.
 //
-// SPENDS REAL MONEY (a domain registration) when called with live keys — but
+// SPENDS REAL MONEY (a domain registration) when called with live keys, but
 // only ever within organizations.registrar_monthly_spend_cap_usd, and only on an
 // explicit owner action. No keys or no cap → it refuses before any purchase.
 // The Gmail tier is wired here; the SMTP tier needs a mail host + IP (Phase 4).
@@ -86,7 +86,7 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // Availability sweep — one provider failing (bad key, outage) doesn't sink the
+  // Availability sweep: one provider failing (bad key, outage) doesn't sink the
   // others. With a forced registrar, the sweep is just that one.
   const { quotes, errors } = await sweepAvailability(sweepProviders, domain);
   if (quotes.length === 0) {
@@ -135,7 +135,7 @@ export async function POST(request: NextRequest) {
 
   // Register, then DNS, then record the domain. If DNS write fails after a
   // successful purchase, we still record the domain (it's bought) and report the
-  // DNS error so the owner can retry writing records — never lose a paid domain.
+  // DNS error so the owner can retry writing records: never lose a paid domain.
   let registeredPrice = priceUsd;
   try {
     const reg = await chosen.provider.registerDomain(domain);

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAutomationContext, loadAutomationSettings } from "@/lib/automations/settings";
 import { fanOutAutomation, type AutomationEvent } from "@/lib/notifications/internal-automations";
 
-// POST /api/admin/automations/test — fire a synthetic event through the org's
+// POST /api/admin/automations/test: fire a synthetic event through the org's
 // SAVED automation targets so an owner can confirm Slack/webhook/email delivery
 // without waiting for a real reply. Bypasses the enabled + notify_on gates (the
 // point is to verify targets before turning the feature on), but still requires
@@ -42,7 +42,7 @@ export async function POST() {
       lead_name: "Test Prospect",
       lead_company: "Example Co.",
       subject: "Re: Quick question",
-      snippet: "This is a test — your LeadStart internal automation is wired up correctly.",
+      snippet: "This is a test, your LeadStart internal automation is wired up correctly.",
       received_at: new Date().toISOString(),
     },
     node: null,

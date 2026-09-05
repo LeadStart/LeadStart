@@ -1,4 +1,4 @@
-// createManualTask — the server-side hook the future "graph runtime" calls to
+// createManualTask: the server-side hook the future "graph runtime" calls to
 // drop a LinkedIn manual VA task into the queue. NOTHING calls it yet; this
 // session builds the table + inbox + API and exports this helper so the runtime
 // can wire it up without reshaping anything. Do NOT execute linkedin nodes in
@@ -20,7 +20,7 @@ export interface CreateManualTaskInput {
   kind: ManualTaskKind;
   /** The message/note the VA sends, already token-rendered by the caller. */
   renderedBody: string;
-  /** The client the campaign belongs to — denormalized so the inbox can show it. */
+  /** The client the campaign belongs to: denormalized so the inbox can show it. */
   clientId?: string | null;
   /** The FlowGraph node id. SET THIS for runtime dedup (one task per node per contact). */
   flowNodeId?: string | null;
@@ -39,7 +39,7 @@ export interface CreateManualTaskResult {
 
 /**
  * Insert an OPEN manual VA task. Requires a SERVICE-ROLE client
- * (`createAdminClient()`) — the caller is trusted server code that has already
+ * (`createAdminClient()`): the caller is trusted server code that has already
  * resolved the org; RLS is not relied on here.
  *
  * Idempotent when `flowNodeId` is set: a duplicate (campaign, contact, flow_node)
@@ -50,7 +50,7 @@ export interface CreateManualTaskResult {
  * ┌─ TODO(graph-runtime) ───────────────────────────────────────────────────────┐
  * │ This is the hook the separate "graph runtime" session wires up. When the     │
  * │ graph executor reaches a FlowGraph `linkedin` node for an enrolled contact,  │
- * │ it should render the node body and call this helper — roughly:               │
+ * │ it should render the node body and call this helper: roughly:               │
  * │                                                                              │
  * │   import { renderTemplate } from "@/lib/native/render"; // token substitution │
  * │   const kind = manualTaskKindForLinkedIn(node.li_kind);                      │
@@ -60,7 +60,7 @@ export interface CreateManualTaskResult {
  * │     clientId: campaign.client_id, flowNodeId: node.id,                       │
  * │   });                                                                        │
  * │                                                                              │
- * │ Intended call site: src/app/api/cron/run-native-sequences/route.ts — which   │
+ * │ Intended call site: src/app/api/cron/run-native-sequences/route.ts, which   │
  * │ this session deliberately did NOT touch. Until then, linkedin nodes are      │
  * │ skipped by the sender (see graphToSteps in src/lib/flow/graph.ts) and no     │
  * │ manual_tasks rows are ever created.                                          │
@@ -91,7 +91,7 @@ export async function createManualTask(
 
   if (error) {
     // 23505 = unique_violation: a task for this (campaign, contact, flow node)
-    // already exists — the idempotency guard doing its job, not a failure.
+    // already exists: the idempotency guard doing its job, not a failure.
     if ((error as { code?: string }).code === "23505") {
       return { id: null, created: false, error: null };
     }

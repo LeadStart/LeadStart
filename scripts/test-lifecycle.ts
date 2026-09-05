@@ -62,7 +62,7 @@ const decide = (status: DomainLifecycle, over: Partial<DomainSignals>, timers: L
   decideLifecycle(status, sig(over), NOW, timers);
 
 // ── Send-eligibility helpers ────────────────────────────────────────────────
-console.log("domainOpenForNewLeads — only warming + active accept new step-0 leads");
+console.log("domainOpenForNewLeads, only warming + active accept new step-0 leads");
 eq(domainOpenForNewLeads("warming"), true, "warming open to new leads");
 eq(domainOpenForNewLeads("active"), true, "active open to new leads");
 eq(domainOpenForNewLeads("tired"), false, "tired CLOSED to new leads (drain)");
@@ -71,7 +71,7 @@ eq(domainOpenForNewLeads("provisioning"), false, "provisioning closed to new lea
 eq(domainOpenForNewLeads("burned"), false, "burned closed");
 eq(domainOpenForNewLeads("retired"), false, "retired closed");
 
-console.log("domainCanSend — tired can still send (follow-ups); resting cannot");
+console.log("domainCanSend, tired can still send (follow-ups); resting cannot");
 eq(domainCanSend("warming"), true, "warming can send");
 eq(domainCanSend("active"), true, "active can send");
 eq(domainCanSend("tired"), true, "tired can send in-flight follow-ups");
@@ -89,7 +89,7 @@ eq(shouldTripCircuitBreaker({ hardBounces24h: 0, recentSends: 10, recentHardBoun
 eq(shouldTripCircuitBreaker({ hardBounces24h: 0, recentSends: 100, recentHardBounces: 6 }), true, "6/100 = 6% over large sample trips");
 
 // ── provisioning ────────────────────────────────────────────────────────────
-console.log("decideLifecycle — provisioning");
+console.log("decideLifecycle, provisioning");
 eq(decide("provisioning", { dkimVerified: false }).next, "provisioning", "no DKIM yet → stay provisioning");
 eq(decide("provisioning", { dkimVerified: false }).changed, false, "no-change flag false when staying");
 eq(decide("provisioning", { dkimVerified: true }).next, "warming", "DKIM verified → warming");
@@ -97,7 +97,7 @@ eq(decide("provisioning", { dkimVerified: true }).changed, true, "change flag tr
 eq(decide("provisioning", { dblListed: true }).next, "burned", "DBL during provisioning → burned");
 
 // ── warming ─────────────────────────────────────────────────────────────────
-console.log("decideLifecycle — warming");
+console.log("decideLifecycle, warming");
 eq(decide("warming", {}).next, "active", "warmed + aged + clean placement → active");
 eq(decide("warming", { allMailboxesWarmed: false }).next, "warming", "not all mailboxes warmed → stay warming");
 eq(decide("warming", { domainAgeDays: MIN_DOMAIN_AGE_DAYS - 1 }).next, "warming", "too young → stay warming even if ramp done");
@@ -108,7 +108,7 @@ eq(decide("warming", { dblListed: true }).next, "tired", "DBL during warmup → 
 eq(decide("warming", { placementMajoritySpam: true }).next, "resting", "majority-spam during warmup → resting");
 
 // ── active ──────────────────────────────────────────────────────────────────
-console.log("decideLifecycle — active");
+console.log("decideLifecycle, active");
 eq(decide("active", {}).next, "active", "healthy → stay active");
 eq(decide("active", {}).changed, false, "healthy active is not a change");
 eq(decide("active", { dblListed: true }).next, "tired", "DBL → tired");
@@ -119,7 +119,7 @@ eq(decide("active", { watchStreak: WATCH_STREAK_FOR_TIRED - 1 }).next, "active",
 eq(decide("active", { healthBand: "watch", watchStreak: 1 }).next, "active", "single watch day → stay active (noise)");
 
 // ── tired (drain) ───────────────────────────────────────────────────────────
-console.log("decideLifecycle — tired");
+console.log("decideLifecycle, tired");
 eq(decide("tired", {}, { drainUntil: NOW + DAY, restUntil: null }).next, "tired", "drain window open → keep draining");
 eq(decide("tired", {}, { drainUntil: NOW - DAY, restUntil: null }).next, "resting", "drain elapsed → resting");
 eq(decide("tired", {}, { drainUntil: null, restUntil: null }).next, "tired", "no drain timer set → stay tired (cron sets it on entry)");
@@ -127,7 +127,7 @@ eq(decide("tired", { dblListed: true }, { drainUntil: NOW + DAY, restUntil: null
 eq(decide("tired", { placementMajoritySpam: true }, { drainUntil: NOW + DAY, restUntil: null }).next, "resting", "majority-spam mid-drain → rest now");
 
 // ── resting ─────────────────────────────────────────────────────────────────
-console.log("decideLifecycle — resting");
+console.log("decideLifecycle, resting");
 eq(decide("resting", {}, { drainUntil: null, restUntil: NOW + DAY }).next, "resting", "rest not elapsed → keep resting");
 eq(decide("resting", {}, { drainUntil: null, restUntil: NOW - DAY }).next, "warming", "rest elapsed, recovered → re-warm");
 eq(decide("resting", {}, { drainUntil: null, restUntil: NOW - DAY }).changed, true, "resting→warming is a change");
@@ -135,12 +135,12 @@ eq(decide("resting", { restedButStillBad: true }, { drainUntil: null, restUntil:
 eq(decide("resting", {}, { drainUntil: null, restUntil: null }).next, "resting", "no rest timer → stay resting");
 
 // ── terminal states ─────────────────────────────────────────────────────────
-console.log("decideLifecycle — terminal states are stable");
+console.log("decideLifecycle, terminal states are stable");
 eq(decide("burned", { dkimVerified: true }).next, "burned", "burned never leaves on its own");
 eq(decide("retired", {}).next, "retired", "retired is terminal");
 
 // ── enterTimers ─────────────────────────────────────────────────────────────
-console.log("enterTimers — sets the right timer on entry");
+console.log("enterTimers, sets the right timer on entry");
 eq(enterTimers("tired", NOW).drain_until, new Date(NOW + DRAIN_DAYS * DAY).toISOString(), "tired sets drain_until = now + DRAIN_DAYS");
 eq(enterTimers("tired", NOW).rest_until, undefined, "tired sets no rest_until");
 eq(enterTimers("resting", NOW).rest_until, new Date(NOW + REST_DAYS * DAY).toISOString(), "resting sets rest_until = now + REST_DAYS");
@@ -149,7 +149,7 @@ eq(Object.keys(enterTimers("active", NOW)).length, 0, "active sets no timers");
 eq(Object.keys(enterTimers("warming", NOW)).length, 0, "warming sets no timers");
 
 // ── nextWatchStreak (daily accounting) ──────────────────────────────────────
-console.log("nextWatchStreak — counts consecutive UTC days in 'watch'");
+console.log("nextWatchStreak, counts consecutive UTC days in 'watch'");
 eq(nextWatchStreak("healthy", 5, "2026-08-25T12:00:00.000Z", "2026-08-26T10:00:00.000Z"), 0, "leaving watch resets to 0");
 eq(nextWatchStreak("critical", 5, "2026-08-25T12:00:00.000Z", "2026-08-26T10:00:00.000Z"), 0, "critical resets streak (tires via band, not streak)");
 eq(nextWatchStreak("watch", 0, null, "2026-08-26T10:00:00.000Z"), 1, "first-ever watch rollup → 1");
@@ -158,7 +158,7 @@ eq(nextWatchStreak("watch", 2, "2026-08-26T00:30:00.000Z", "2026-08-26T09:30:00.
 eq(nextWatchStreak("watch", WATCH_STREAK_FOR_TIRED - 1, "2026-08-25T12:00:00.000Z", "2026-08-26T12:00:00.000Z"), WATCH_STREAK_FOR_TIRED, "reaches the tire threshold on the 3rd distinct day");
 
 // ── gatherDomainSignals (pure signal derivation) ────────────────────────────
-console.log("gatherDomainSignals — derives DomainSignals from rows");
+console.log("gatherDomainSignals, derives DomainSignals from rows");
 
 const comp = (key: HealthComponent["key"], status: HealthComponent["status"]): HealthComponent =>
   ({ key, label: key, status, deduction: 0, detail: "" });

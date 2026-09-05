@@ -1,9 +1,9 @@
-// PATCH /api/clients/[clientId] — role-scoped update of client settings.
+// PATCH /api/clients/[clientId]: role-scoped update of client settings.
 //
 // Owners: full whitelist (reply-routing, persona, brand, notify classes,
 // reports cadence/recipients).
 //
-// Clients (linked via client_users): a safe subset — their own notification
+// Clients (linked via client_users): a safe subset, their own notification
 // routing + signature + report cadence. They cannot touch persona/brand
 // fields or auto_notify_classes (those are operational levers admins hold
 // for oversight).
@@ -35,7 +35,7 @@ const VALID_CLASSES: ReplyClass[] = [
 const MAX_CC_EMAILS = 10;
 const MAX_REPORT_RECIPIENTS = 10;
 
-// Basic shape check — not RFC-exact. Server is the last line of defense;
+// Basic shape check: not RFC-exact. Server is the last line of defense;
 // the real check is Resend rejecting on send. We filter anything obviously
 // bogus so we don't pollute the row with empty strings or spaces.
 const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -207,7 +207,7 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
   }
 
   // Reject attempts to set disallowed fields (explicit 403 instead of
-  // silently dropping — users should know if something wasn't saved).
+  // silently dropping: users should know if something wasn't saved).
   const disallowed = (Object.keys(body) as (keyof PatchBody)[]).filter(
     (k) => body[k] !== undefined && !allowedFields.includes(k)
   );

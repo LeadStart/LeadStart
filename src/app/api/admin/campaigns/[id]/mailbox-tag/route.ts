@@ -1,4 +1,4 @@
-// PUT /api/admin/campaigns/[id]/mailbox-tag — bind (or clear) the campaign's
+// PUT /api/admin/campaigns/[id]/mailbox-tag: bind (or clear) the campaign's
 // LIVE mailbox-tag (migration 00119). Owner-only, org-scoped.
 //
 // Body: { tag: string | null }

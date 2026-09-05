@@ -1,4 +1,4 @@
-// POST /api/admin/domains/[id]/dns/apply — (re)write the Gmail-tier DNS records
+// POST /api/admin/domains/[id]/dns/apply: (re)write the Gmail-tier DNS records
 // at the registrar. This is the recovery for a provision that returned
 // dns_written:false, and the way to (re)lay the tier records + site-verification
 // TXT. For a manual registrar there's nothing to write, so it returns the

@@ -23,7 +23,7 @@ export interface ApifyRun {
   // Only present when the token owns the run (our token does).
   usageTotalUsd?: number | null;
   // NOTE: the run's `stats` object carries NO dataset item count (verified
-  // against the live API — it holds runtime/memory/CPU/network numbers only).
+  // against the live API: it holds runtime/memory/CPU/network numbers only).
   // For live progress while a run is in flight, read the run's dataset:
   // ApifyClient.getDatasetItemCount(run.defaultDatasetId).
 }

@@ -21,7 +21,7 @@ export function ViewTracker({
       body: JSON.stringify({ token }),
       keepalive: true,
     }).catch(() => {
-      // Best-effort — don't disturb the page on failure.
+      // Best-effort: don't disturb the page on failure.
     });
   }, [quoteId, token]);
 

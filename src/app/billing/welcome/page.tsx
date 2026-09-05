@@ -3,7 +3,7 @@ import { WelcomeContent } from "@/components/billing/welcome-content";
 import { DEFAULT_WARMING_DAYS } from "@/lib/billing/schedule";
 
 export const metadata = {
-  title: "You're all set — LeadStart",
+  title: "You're all set, LeadStart",
 };
 
 interface Props {

@@ -190,7 +190,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     sending_strategy: sendingStrategy,
     updated_at: new Date().toISOString(),
   };
-  // Campaign-level A/B auto-winner default — only touched when the caller sends
+  // Campaign-level A/B auto-winner default: only touched when the caller sends
   // it, so legacy callers don't reset it. Coerced to a hard boolean (NOT NULL col).
   if (body.ab_auto_pause_default !== undefined) {
     campaignUpdate.ab_auto_pause_default = body.ab_auto_pause_default ?? false;
@@ -198,7 +198,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   // Only touch flow_graph when the caller sent one, so legacy/linear callers
   // don't wipe a stored graph. paused_variant_ids is server-owned (the A/B
   // auto-winner writes it, not the builder), so re-apply the stored pauses onto
-  // the incoming graph — a manual sequence edit must never clear an auto-pause.
+  // the incoming graph: a manual sequence edit must never clear an auto-pause.
   if (body.flow_graph !== undefined) {
     const incoming =
       body.flow_graph && typeof body.flow_graph === "object"

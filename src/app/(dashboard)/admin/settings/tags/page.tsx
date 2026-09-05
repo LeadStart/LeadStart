@@ -193,7 +193,7 @@ export default function TagsPage() {
         <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-800">
           <AlertTriangle size={16} className="mt-0.5 shrink-0" />
           <p className="text-sm">
-            The tag registry table isn’t set up yet — apply migration{" "}
+            The tag registry table isn’t set up yet: apply migration{" "}
             <span className="font-mono">00111</span>. Until then you can rename and
             delete tags already in use, but adding brand-new tags won’t save.
           </p>
@@ -301,7 +301,7 @@ export default function TagsPage() {
                         <div className="flex items-center gap-2 min-w-0">
                           <TagChip name={t.name} />
                           {!t.registered && (
-                            <span className="text-[11px] font-medium text-amber-600" title="In use on inboxes but not in the registry — rename or add it to adopt it">
+                            <span className="text-[11px] font-medium text-amber-600" title="In use on inboxes but not in the registry: rename or add it to adopt it">
                               unregistered
                             </span>
                           )}

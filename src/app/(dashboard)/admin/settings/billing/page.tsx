@@ -776,7 +776,7 @@ function NewQuoteDialog({
                 />
               )}
               <p className="text-xs text-muted-foreground">
-                Frozen when the quote is created — the client sees, and is billed
+                Frozen when the quote is created: the client sees, and is billed
                 on, this exact day:{" "}
                 <strong className="text-foreground">
                   {launchMode === "fixed" && !fixedLaunchDate
@@ -929,7 +929,7 @@ export default function BillingPage() {
   const [selectedTab, setSelectedTab] = useState<string>("subscriptions");
 
   // Initial hydrate goes through SWR so the admin prefetcher warms this
-  // cache slot on dashboard mount — re-visits render instantly from cache.
+  // cache slot on dashboard mount: re-visits render instantly from cache.
   // Local useState above is still the source of truth for optimistic updates
   // (canceling subs, editing plans, etc.); we just seed it from SWR data.
   const {
@@ -1350,7 +1350,7 @@ export default function BillingPage() {
             <div className="rounded-xl border border-dashed border-border/60 p-8 text-center text-sm text-muted-foreground">
               {loading
                 ? "Loading plans…"
-                : "No plans yet. Click New plan to create your first one — it'll sync to Stripe as a Product + Price on save."}
+                : "No plans yet. Click New plan to create your first one, it'll sync to Stripe as a Product + Price on save."}
             </div>
           )}
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
@@ -1825,7 +1825,7 @@ export default function BillingPage() {
                           </div>
                         ) : (
                           <span className="text-xs text-muted-foreground">
-                            —
+                           ,
                           </span>
                         )}
                       </TableCell>
@@ -1870,9 +1870,9 @@ export default function BillingPage() {
               />
               <p className="text-sm font-semibold">
                 {stripeMode === "live"
-                  ? "Connected — Live mode"
+                  ? "Connected: Live mode"
                   : stripeMode === "test"
-                    ? "Connected — Test mode"
+                    ? "Connected: Test mode"
                     : "Demo mode (no Stripe key configured)"}
               </p>
             </div>
@@ -2054,7 +2054,7 @@ export default function BillingPage() {
                 <>
                   <strong>{clientName(cancelNowSub.client_id, clients)}</strong>
                   {" "}
-                  will be canceled <strong>right now</strong> — no more charges
+                  will be canceled <strong>right now</strong>: no more charges
                   and access ends immediately. There is no pro-ration refund.
                   This cannot be reversed.
                 </>

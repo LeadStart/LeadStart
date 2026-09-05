@@ -1,4 +1,4 @@
-// POST /api/admin/campaigns/[id]/activate — flip a draft campaign to
+// POST /api/admin/campaigns/[id]/activate: flip a draft campaign to
 // active. For the local channels (native email / LinkedIn) there is no
 // upstream sequencer to start, so this is a local status change; the cron
 // workers only dispatch campaigns with status='active'.
@@ -20,7 +20,7 @@ export async function POST(
 ) {
   const { id: campaignId } = await params;
 
-  // Optional { acknowledge_warnings } — a body-less POST (every existing
+  // Optional { acknowledge_warnings }: a body-less POST (every existing
   // caller) parses to {} and behaves exactly as before.
   let ackWarnings = false;
   try {
@@ -77,13 +77,13 @@ export async function POST(
         error:
           c.status === "active"
             ? "Campaign is already active."
-            : `Only draft campaigns can be activated (this one is ${c.status}${c.status === "paused" ? " — use Resume instead" : ""}).`,
+            : `Only draft campaigns can be activated (this one is ${c.status}${c.status === "paused" ? ", use Resume instead" : ""}).`,
       },
       { status: 400 },
     );
   }
 
-  // Hard launch-readiness gate for native email — the SAME rule that drives the
+  // Hard launch-readiness gate for native email: the SAME rule that drives the
   // campaign detail badges + disables the Launch button (src/lib/campaigns/
   // launch-readiness.ts): a client assigned, a connected sending mailbox, and an
   // email step with a subject line. Server-enforced so the gate can't be bypassed.
@@ -95,7 +95,7 @@ export async function POST(
     if (!readiness.canLaunch) {
       return NextResponse.json(
         {
-          error: `Not ready to launch — ${readiness.blockers
+          error: `Not ready to launch, ${readiness.blockers
             .map((b) => b.label.toLowerCase())
             .join("; ")}.`,
           blockers: readiness.blockers,
@@ -106,7 +106,7 @@ export async function POST(
 
     // Advisory pre-flight (warn-with-override): surface copy / auth / placement
     // concerns the first time, then activate on the acknowledged re-submit.
-    // Never blocks — the hard blocks above already did their job.
+    // Never blocks: the hard blocks above already did their job.
     if (!ackWarnings) {
       const preflightWarnings = await runActivationPreflight(admin, campaignId);
       if (preflightWarnings.length > 0) {

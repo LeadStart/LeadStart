@@ -1,11 +1,11 @@
 // URL forwarding (redirects) for a tracked sending domain.
-//   GET  ?domain=acme.com  — read the current forwarding state
-//   POST { domain, destinationUrl, www?, includePath? } — set the redirect
+//   GET  ?domain=acme.com : read the current forwarding state
+//   POST { domain, destinationUrl, www?, includePath? }: set the redirect
 //
 // A lookalike sending domain usually 301-redirects its bare hostname to the
 // client's real site so it never shows a dead parked page. Porkbun sets this
 // over its API; Spaceship has no forwarding API (dashboard-only) and a 'manual'
-// registrar means hand-managed DNS — both return manual instructions instead of
+// registrar means hand-managed DNS: both return manual instructions instead of
 // pushing. Owner only, org-scoped. Spends no money.
 
 import { NextRequest, NextResponse } from "next/server";

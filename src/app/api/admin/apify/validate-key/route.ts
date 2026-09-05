@@ -4,7 +4,7 @@ import { ApifyClient } from "@/lib/apify/client";
 // POST /api/admin/apify/validate-key
 // Body: { api_key: string }
 // Probes Apify's /users/me with the supplied token so the settings UI can show
-// the account username inline. No auth check — it only echoes back what the
+// the account username inline. No auth check: it only echoes back what the
 // user just typed into their own settings page.
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}));

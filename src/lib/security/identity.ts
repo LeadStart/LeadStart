@@ -11,7 +11,7 @@ export interface ForwardedIdentity {
  * Reads the identity the auth middleware already resolved and forwarded on the
  * request via `x-user-*` headers (see src/lib/supabase/middleware.ts). Using
  * this avoids a second network round-trip to Supabase Auth
- * (`supabase.auth.getUser()`) on every API call — the middleware validated the
+ * (`supabase.auth.getUser()`) on every API call: the middleware validated the
  * token on the way in, so the headers are trustworthy (it strips any inbound
  * forgeries before setting them).
  *

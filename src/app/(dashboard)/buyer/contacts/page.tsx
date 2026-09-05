@@ -1,6 +1,6 @@
 "use client";
 
-// Buyer "My contacts" surface — the RESULTS a buyer paid for. Lists their sourced
+// Buyer "My contacts" surface: the RESULTS a buyer paid for. Lists their sourced
 // contacts (their org) 25/page with a search filter, and a one-click CSV download
 // of the full set. Data comes from the service-role /api/buyer/contacts route
 // (contacts RLS is owner/va-only), so a buyer only ever sees their own org.

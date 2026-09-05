@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Light e2e for the graph runtime against the LIVE DB — entirely on a DRAFT
+ * Light e2e for the graph runtime against the LIVE DB: entirely on a DRAFT
  * campaign (prod's every-5-min cron filters status='active', so it never touches
  * this) with a .invalid recipient (zero real sends, zero spend). Proves the DB
  * integration the unit tests can't: a flow_graph round-trips through JSONB, the
@@ -52,7 +52,7 @@ function ok(cond: boolean, msg: string, extra?: unknown) {
     console.log(`  ✓ ${msg}`);
   } else {
     fail++;
-    console.log(`  ✗ ${msg}${extra !== undefined ? ` — ${JSON.stringify(extra)}` : ""}`);
+    console.log(`  ✗ ${msg}${extra !== undefined ? `, ${JSON.stringify(extra)}` : ""}`);
   }
 }
 
@@ -244,7 +244,7 @@ async function main() {
     const repliedAction = resolveFlowAction(storedGraph, { currentNodeId: "E1", emailsSent: 1 }, REPLIED);
     ok(
       repliedAction.type === "internal" && repliedAction.node.id === "INT1",
-      "replied → re-routes to the internal notify node (YES arm) — the helper WOULD fire",
+      "replied → re-routes to the internal notify node (YES arm): the helper WOULD fire",
       repliedAction,
     );
     ok(

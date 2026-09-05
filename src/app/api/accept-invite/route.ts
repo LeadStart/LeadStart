@@ -3,7 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { clientIp, checkRateLimit, tooManyRequests } from "@/lib/security/rate-limit";
 
 export async function POST(request: NextRequest) {
-  // Rate-limit per IP — invite acceptance is gated by a guessable-in-theory
+  // Rate-limit per IP: invite acceptance is gated by a guessable-in-theory
   // invite_token, so throttle before the token lookup runs.
   const rl = await checkRateLimit({
     bucket: `accept-invite:ip:${clientIp(request)}`,

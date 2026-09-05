@@ -10,7 +10,7 @@ import { appUrl } from "@/lib/api-url";
  * Inline add/edit for a client's on-file email (clients.contact_email).
  *
  * Saves via PATCH /api/clients/[id] (owner/va, service-role write) so it persists
- * for VAs too — not just owners — and never silently no-ops. Safe to drop inside a
+ * for VAs too (not just owners) and never silently no-ops. Safe to drop inside a
  * clickable table row: it only renders <input>/<button> (excluded from row-click
  * navigation) and carries data-row-click-ignore as belt-and-suspenders.
  */

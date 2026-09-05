@@ -89,7 +89,7 @@ console.log("classifyContactOutcome");
   eq(bestTier(f), "tier_catch_all", "catch-all guess outranks phone-only");
 }
 {
-  // A backfilled generic that ALSO carries catch_all provenance stays company —
+  // A backfilled generic that ALSO carries catch_all provenance stays company,
   // the generic-inbox kind wins (it is a real scraped address, not a guess).
   const f = classifyContactOutcome({ ...base, email: "info@x.com", emailKind: "company_generic", emailProviderStatus: "catch_all" });
   eq(f.catch_all_email, false, "generic kind wins over catch_all provenance");

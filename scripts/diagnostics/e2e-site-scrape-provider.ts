@@ -73,7 +73,7 @@ async function main() {
     await fetch(`https://api.apify.com/v2/datasets/${run.defaultDatasetId}/items?token=${token}&clean=true`)
   ).json();
 
-  // The REAL provider parse — this is what the cron feeds to writeEmail.
+  // The REAL provider parse: this is what the cron feeds to writeEmail.
   const results = waterfallScrapeProvider.parseItems(dataset, items);
   const r = results.get("e2e-1");
   console.log("\nparseItems result:", JSON.stringify(r, null, 2));

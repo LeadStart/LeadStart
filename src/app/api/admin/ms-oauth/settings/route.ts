@@ -1,6 +1,6 @@
-// GET  /api/admin/ms-oauth/settings — { has_client_id, has_secret } (never the
+// GET  /api/admin/ms-oauth/settings: { has_client_id, has_secret } (never the
 //                                      values themselves).
-// POST /api/admin/ms-oauth/settings — save the Entra app's client id / secret
+// POST /api/admin/ms-oauth/settings: save the Entra app's client id / secret
 //                                      (migration 00085). Owner only.
 //
 // Mirrors the registrar-settings route: the client secret is sensitive, so it

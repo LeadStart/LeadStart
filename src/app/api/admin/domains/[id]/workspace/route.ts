@@ -1,11 +1,11 @@
-// POST /api/admin/domains/[id]/workspace — start Google Workspace provisioning
+// POST /api/admin/domains/[id]/workspace: start Google Workspace provisioning
 // for a domain in 'provisioning': add it to the tenant, mint + write the
 // site-verification TXT, create 1-3 users, (optionally) license them, and
 // register their mailboxes. Runs every step that doesn't need to wait inline;
 // the rest advance in the cron / Check-now. Passwords are returned ONCE and
 // never stored. Owner only, org-scoped.
 //
-// Note: no Gmail send-as / signature step — our MIME builder writes the From
+// Note: no Gmail send-as / signature step, our MIME builder writes the From
 // header (display name) on every send, so a server-side alias would never be read.
 
 import { NextRequest, NextResponse } from "next/server";

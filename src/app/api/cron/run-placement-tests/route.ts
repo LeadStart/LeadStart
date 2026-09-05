@@ -1,4 +1,4 @@
-// GET /app/api/cron/run-placement-tests — every 10 minutes (vercel.json).
+// GET /app/api/cron/run-placement-tests: every 10 minutes (vercel.json).
 //
 // Two jobs for the inbox-placement system (migration 00068):
 //
@@ -12,7 +12,7 @@
 //
 //   2) Schedule. For each org with placement_test_interval_days set, start a
 //      NEUTRAL probe for every active mailbox whose latest test is older than
-//      the interval (or that has never been tested) — at most
+//      the interval (or that has never been tested): at most
 //      MAX_SCHEDULED_PER_TICK mailboxes per run, so a big fleet's probes are
 //      spread across the hour rather than fired at once. This is what keeps
 //      the health score's seed_placement component populated without clicks.
@@ -87,7 +87,7 @@ export async function GET(request: NextRequest) {
         .from("placement_tests")
         .update({
           status: "failed",
-          error: "The send phase did not complete (timed out) — run the test again.",
+          error: "The send phase did not complete (timed out), run the test again.",
           completed_at: nowIso,
         })
         .eq("id", t.id);
@@ -184,7 +184,7 @@ export async function GET(request: NextRequest) {
           tally.scheduled += 1;
         } catch (err) {
           if (err instanceof PlacementError) {
-            // e.g. every seed is on this mailbox's own domain — nothing to do.
+            // e.g. every seed is on this mailbox's own domain: nothing to do.
             tally.scheduled_skipped += 1;
             continue;
           }

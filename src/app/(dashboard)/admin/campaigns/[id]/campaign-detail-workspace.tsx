@@ -1,6 +1,6 @@
 "use client";
 
-// Tabbed workspace for an existing native email campaign — the same shell the
+// Tabbed workspace for an existing native email campaign: the same shell the
 // new-campaign builder uses. The sequence is edited in the Flow canvas (loaded
 // from campaigns.flow_graph, or derived from campaign_steps for legacy rows);
 // Save persists the graph + the derived linear steps + the schedule via
@@ -159,7 +159,7 @@ export function CampaignDetailWorkspace({
   const [error, setError] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<number | null>(null);
 
-  // Setup tab — client link + mailbox pool are plain local edits (NO auto-save);
+  // Setup tab: client link + mailbox pool are plain local edits (NO auto-save);
   // like the sequence + schedule, they persist only via the "Save changes"
   // button below. Local state also drives the badges.
   const [clientId, setClientId] = useState<string>(client?.id ?? "");
@@ -171,7 +171,7 @@ export function CampaignDetailWorkspace({
   // (CampaignTagFollow → its own PUT), so we key off the server prop and refresh.
   const boundTag = initialMailboxTag && initialMailboxTag.trim() ? initialMailboxTag : null;
   // Distinct tags present on the org's inboxes (case-insensitive, first casing
-  // wins) — the tags a campaign can follow.
+  // wins): the tags a campaign can follow.
   const availableTags = useMemo(() => {
     const m = new Map<string, string>();
     for (const mb of allMailboxes) {
@@ -423,7 +423,7 @@ export function CampaignDetailWorkspace({
               </>
             ) : (
               <span className="inline-flex items-center gap-1 text-amber-700">
-                <AlertCircle size={12} /> Orphan campaign — not linked to a client
+                <AlertCircle size={12} /> Orphan campaign: not linked to a client
               </span>
             )}
           </p>
@@ -480,7 +480,7 @@ export function CampaignDetailWorkspace({
           </TabsTrigger>
         </TabsList>
 
-        {/* Sequence — the Flow canvas */}
+        {/* Sequence: the Flow canvas */}
         <TabsContent value="sequence" className="flex min-h-0 flex-col pt-2">
           <FlowEditor
             value={graph}
@@ -592,7 +592,7 @@ export function CampaignDetailWorkspace({
                   active={strategy === "finish_first"}
                   onClick={() => setStrategy("finish_first")}
                   title="Finish the sequence first"
-                  desc="Follow-ups get priority; new leads drip in at the cap. Steady and predictable — slower reach."
+                  desc="Follow-ups get priority; new leads drip in at the cap. Steady and predictable: slower reach."
                 />
                 <StrategyOption
                   active={strategy === "reach_first"}
@@ -620,7 +620,7 @@ export function CampaignDetailWorkspace({
                   </span>
                   <span className="mt-0.5 block text-xs text-muted-foreground">
                     Once an A/B step gathers enough sends, pause the losers so new leads route to
-                    the winner — at 95% significance with a ≥1&nbsp;pt lead on positive-reply rate.
+                    the winner: at 95% significance with a ≥1&nbsp;pt lead on positive-reply rate.
                     Sticky: a lead already in a variant’s thread stays there. Each A/B step can
                     override this default. Off unless you turn it on.
                   </span>
@@ -632,7 +632,7 @@ export function CampaignDetailWorkspace({
           </div>
         </TabsContent>
 
-        {/* Setup — client link + mailbox pool (configurable at any time) + delete */}
+        {/* Setup: client link + mailbox pool (configurable at any time) + delete */}
         <TabsContent value="options" className="min-h-0 overflow-y-auto pt-4">
           <div className="max-w-2xl space-y-6">
             {/* Client link */}
@@ -687,7 +687,7 @@ export function CampaignDetailWorkspace({
               />
               {boundTag != null && (
                 <p className="text-[11px] text-muted-foreground">
-                  This pool is managed by the tag above — inboxes sync
+                  This pool is managed by the tag above: inboxes sync
                   automatically. Unfollow to edit it by hand.
                 </p>
               )}
@@ -770,7 +770,7 @@ export function CampaignDetailWorkspace({
             />
           ) : (
             <div className="flex items-center gap-2 rounded-xl border border-dashed border-border p-6 text-sm text-muted-foreground">
-              <Inbox size={18} /> No stage data yet — activate the campaign and enroll leads to see the funnel.
+              <Inbox size={18} /> No stage data yet: activate the campaign and enroll leads to see the funnel.
             </div>
           )}
         </TabsContent>
@@ -843,7 +843,7 @@ export function CampaignDetailWorkspace({
   );
 }
 
-// Small red count badge on a tab — the "# still missing sending-required setup"
+// Small red count badge on a tab: the "# still missing sending-required setup"
 // for that category. Renders nothing at zero.
 function TabCount({ n }: { n: number }) {
   if (!n) return null;

@@ -1,7 +1,7 @@
 "use client";
 
 // Public self-serve buyer signup. Posts to the service-role /api/signup route
-// (the only signup path — Supabase public signup is disabled). Includes the
+// (the only signup path, Supabase public signup is disabled). Includes the
 // Turnstile widget, which renders nothing until a site key is configured, so the
 // form works today and gains the challenge the moment keys are set.
 

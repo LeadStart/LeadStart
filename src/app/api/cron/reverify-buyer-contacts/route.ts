@@ -99,10 +99,10 @@ export async function GET(request: NextRequest) {
         result = (await mv.verify(c.email, { timeoutSec: 15 })).result;
       } catch (err) {
         if (err instanceof MillionVerifierError && err.definitive) {
-          halted = true; // MV account error — stop, retry this id next tick
+          halted = true; // MV account error: stop, retry this id next tick
           break;
         }
-        result = null; // transient — inconclusive, count as attempted
+        result = null; // transient: inconclusive, count as attempted
       }
       if (result && result !== "unknown" && result !== "error") {
         const patch: Record<string, unknown> = { email_verification_status: result };

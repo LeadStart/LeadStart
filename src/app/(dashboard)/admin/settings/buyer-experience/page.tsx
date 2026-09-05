@@ -3,7 +3,7 @@
 // Admin "Buyer experience" editor. Edit the buyer-portal copy/presentation on the
 // left; the right pane is a LIVE PREVIEW rendering the real <BuyerDashboardView>
 // with your draft content, so what you see is exactly what buyers get. Save writes
-// the single buyer_experience_config the real buyer pages read — one edit, in sync
+// the single buyer_experience_config the real buyer pages read: one edit, in sync
 // everywhere.
 
 import { useEffect, useState, useCallback } from "react";
@@ -144,9 +144,9 @@ export default function BuyerExperiencePage() {
           </section>
         </div>
 
-        {/* Live preview — the real buyer dashboard */}
+        {/* Live preview: the real buyer dashboard */}
         <div className="lg:sticky lg:top-6 self-start">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Live preview — the buyer dashboard</p>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Live preview: the buyer dashboard</p>
           <div className="rounded-2xl border border-border bg-[#F4F5F9] p-4">
             <BuyerDashboardView
               content={draft}

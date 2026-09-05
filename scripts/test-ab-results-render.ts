@@ -2,7 +2,7 @@
 /**
  * Render smoke test for AbResults (the A/B table on the campaign Analytics tab).
  * Renders the component to static HTML with representative stats and asserts the
- * right labels appear for each state — a decided test (Winner + Paused), a
+ * right labels appear for each state: a decided test (Winner + Paused), a
  * running test (Leading, no Winner), and the reply/positive numbers. Proves the
  * display logic + data contract without a browser. Run:
  *   npx tsx scripts/test-ab-results-render.ts
@@ -85,7 +85,7 @@ const manual: AbNodeStats = {
   autoPause: false,
 };
 
-console.log("AbResults — decided test renders Winner + Paused");
+console.log("AbResults, decided test renders Winner + Paused");
 {
   const html = renderToStaticMarkup(createElement(AbResults, { stats: [decided] }));
   has(html, "Winner", "shows the Winner badge");
@@ -96,7 +96,7 @@ console.log("AbResults — decided test renders Winner + Paused");
   absent(html, "Leading", "a decided test does not show Leading");
 }
 
-console.log("AbResults — running test (auto-pause ON) renders Leading, no Winner");
+console.log("AbResults, running test (auto-pause ON) renders Leading, no Winner");
 {
   const html = renderToStaticMarkup(createElement(AbResults, { stats: [running] }));
   has(html, "Leading", "shows the provisional Leading tag");
@@ -106,7 +106,7 @@ console.log("AbResults — running test (auto-pause ON) renders Leading, no Winn
   has(html, "auto-winner on", "header shows the auto-pause-on caption");
 }
 
-console.log("AbResults — auto-pause OFF renders the manual caption");
+console.log("AbResults, auto-pause OFF renders the manual caption");
 {
   const html = renderToStaticMarkup(createElement(AbResults, { stats: [manual] }));
   has(html, "auto-pause off", "header flags auto-pause is off");
@@ -115,7 +115,7 @@ console.log("AbResults — auto-pause OFF renders the manual caption");
   has(html, "pick a winner yourself", "footer tells the user to decide manually");
 }
 
-console.log("AbResults — empty stats renders nothing");
+console.log("AbResults, empty stats renders nothing");
 {
   const html = renderToStaticMarkup(createElement(AbResults, { stats: [] }));
   if (html === "") {

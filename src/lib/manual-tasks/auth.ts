@@ -6,7 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 // Shared gate for the admin manual-task (LinkedIn to-dos) API routes. Same shape
 // as requireEnrichmentContext (401 no user, 403 unless owner/va, 400 no org) but
 // without the Apify-token lookup those routes carry. Returns a SERVICE-ROLE admin
-// client — the routes re-check organization_id on every read/write themselves.
+// client: the routes re-check organization_id on every read/write themselves.
 export async function requireManualTaskContext(): Promise<
   | { error: NextResponse }
   | { user: User; organizationId: string; admin: SupabaseClient }

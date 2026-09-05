@@ -112,7 +112,7 @@ export function allStepsComplete(state: ProvisioningState): boolean {
   return firstIncompleteStep(state) === null;
 }
 
-/** Every step terminal (done / skipped / failed) — nothing left the runner can do. */
+/** Every step terminal (done / skipped / failed): nothing left the runner can do. */
 export function allStepsTerminal(state: ProvisioningState): boolean {
   return PROVISIONING_STEP_ORDER.every((id) =>
     isTerminalStatus(state.steps[id].status),
@@ -120,7 +120,7 @@ export function allStepsTerminal(state: ProvisioningState): boolean {
 }
 
 /**
- * Reset failed steps back to pending and clear completed_at — the Check-now
+ * Reset failed steps back to pending and clear completed_at: the Check-now
  * force-retry. Attempts and last_error are kept for context; alerted is cleared
  * so a still-stuck step can re-alert.
  */

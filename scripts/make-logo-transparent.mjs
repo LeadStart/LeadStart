@@ -12,7 +12,7 @@ const OUT = "public/leadstart-logo-transparent.png";
 
 // Tunable thresholds. Pixels where min(R,G,B) >= HIGH are fully transparent.
 // Pixels where min(R,G,B) <= LOW are fully opaque. In between the alpha
-// interpolates linearly — this smooths the anti-aliased halo around the
+// interpolates linearly: this smooths the anti-aliased halo around the
 // design so it doesn't leave a crunchy white ring on a dark bg.
 const HIGH = 250;
 const LOW = 210;
@@ -46,5 +46,5 @@ await sharp(out, {
   .toFile(OUT);
 
 console.log(
-  `Wrote ${OUT} — ${info.width}×${info.height}, touched ${touched} pixels (${((touched / (info.width * info.height)) * 100).toFixed(1)}%)`
+  `Wrote ${OUT}: ${info.width}×${info.height}, touched ${touched} pixels (${((touched / (info.width * info.height)) * 100).toFixed(1)}%)`
 );

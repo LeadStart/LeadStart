@@ -1,4 +1,4 @@
-// DELETE /api/admin/domains/[id] — remove a sending domain: delete it from the
+// DELETE /api/admin/domains/[id]: remove a sending domain: delete it from the
 // Google Workspace tenant (Directory domains.delete) when it was added there,
 // and drop the sending_domains row. Refuses if the domain still has inboxes
 // (deleting would orphan live mailboxes, and Google rejects deleting a domain
@@ -6,7 +6,7 @@
 //
 // Used to re-provision a stuck / mis-set-up domain from scratch, or to clean up
 // one that was never finished. Does NOT touch the domain's registration or its
-// DNS records at the registrar — only the Workspace membership + our tracking.
+// DNS records at the registrar: only the Workspace membership + our tracking.
 
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -39,7 +39,7 @@ export async function DELETE(_req: NextRequest, { params }: RouteParams) {
   }
   const domain = domainRow as SendingDomain;
 
-  // Guard: never delete a domain that still has inboxes — that would orphan live
+  // Guard: never delete a domain that still has inboxes, that would orphan live
   // mailboxes (and Google rejects deleting a domain that still has users).
   const { count } = await admin
     .from("native_mailboxes")
@@ -65,7 +65,7 @@ export async function DELETE(_req: NextRequest, { params }: RouteParams) {
     googleDeleted = res.deleted;
   } catch (err) {
     if (err instanceof GoogleConfigError) {
-      googleDeleted = null; // Google not configured for this org — nothing there.
+      googleDeleted = null; // Google not configured for this org: nothing there.
     } else {
       googleError = err instanceof Error ? err.message : String(err);
     }
@@ -73,7 +73,7 @@ export async function DELETE(_req: NextRequest, { params }: RouteParams) {
   if (googleError) {
     return NextResponse.json(
       {
-        error: `Could not remove ${domain.domain} from Google Workspace: ${googleError}. The domain was left in place — if it has Google users, delete those first.`,
+        error: `Could not remove ${domain.domain} from Google Workspace: ${googleError}. The domain was left in place, if it has Google users, delete those first.`,
       },
       { status: 502 },
     );

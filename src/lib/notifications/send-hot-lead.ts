@@ -8,7 +8,7 @@
 //   4. On success, write notified_at + notification_token_hash +
 //      notification_email_id to lead_replies.
 //
-// Idempotency is handled by the caller (webhook handler, commit #6) — this
+// Idempotency is handled by the caller (webhook handler, commit #6): this
 // function no-ops if the row already has notified_at set, but the authoritative
 // dedupe lives upstream where we hold the row lock.
 
@@ -25,7 +25,7 @@ import {
 } from "./resend-client";
 import { enqueueOwnerAlert } from "./owner-alerts";
 
-// retry_count sentinel that parks a row permanently — above the retry cron's
+// retry_count sentinel that parks a row permanently: above the retry cron's
 // MAX_RETRIES threshold (5), so it stays visible to admins but isn't picked
 // up for another attempt.
 const PERMANENT_FAIL_RETRY_COUNT = 99;
@@ -52,7 +52,7 @@ function requireAppUrl(): string {
   const url = process.env.NEXT_PUBLIC_APP_URL;
   if (!url) {
     throw new Error(
-      "NEXT_PUBLIC_APP_URL is not set — needed to build the dossier deep-link."
+      "NEXT_PUBLIC_APP_URL is not set: needed to build the dossier deep-link."
     );
   }
   return url.replace(/\/$/, "");
@@ -66,9 +66,9 @@ export { ResendKeyMissingError as MissingResendKeyError };
 export interface HotLeadNotificationContext {
   /** The full lead_replies row we just classified. */
   reply: LeadReply;
-  /** From clients.notification_email — the address we're emailing. */
+  /** From clients.notification_email: the address we're emailing. */
   clientNotificationEmail: string;
-  /** From clients.notification_cc_emails — extra teammates to keep in the loop. */
+  /** From clients.notification_cc_emails: extra teammates to keep in the loop. */
   clientNotificationCcEmails?: string[];
 }
 
@@ -84,7 +84,7 @@ export interface HotLeadNotificationResult {
  * Send the hot-lead email for a single reply, then stamp the row.
  *
  * Throws on unrecoverable failure (missing env, Resend error). The webhook
- * handler in commit #6 catches and logs — we don't retry silently because
+ * handler in commit #6 catches and logs: we don't retry silently because
  * a stuck notification is observably worse than a visible error.
  */
 export async function sendHotLeadNotification(
@@ -144,7 +144,7 @@ export async function sendHotLeadNotification(
     });
 
     // 5. Stamp the row. If this write fails, the email is already out, but
-    //    the row won't reflect it — next run will detect notified_at is null
+    //    the row won't reflect it: next run will detect notified_at is null
     //    and may re-send. Acceptable because duplicates land at the same
     //    inbox, not at a prospect.
     const { error: updateError } = await admin
@@ -160,7 +160,7 @@ export async function sendHotLeadNotification(
       .eq("id", reply.id);
 
     if (updateError) {
-      // Surface so the caller logs it — email went out, row didn't record.
+      // Surface so the caller logs it: email went out, row didn't record.
       console.error(
         `[send-hot-lead] Email sent (${resendId}) but DB stamp failed for reply ${reply.id}:`,
         updateError,
@@ -170,7 +170,7 @@ export async function sendHotLeadNotification(
     return { resendId, tokenHash: hash, skipped: false };
   } catch (err) {
     // Typed errors from the wrapper map onto retry state. Anything else
-    // (including non-Error throws) we treat as transient — retrying is
+    // (including non-Error throws) we treat as transient: retrying is
     // safer than silently dropping a hot-lead email.
     const isPermanent = err instanceof PermanentResendError;
     const isRateLimited = err instanceof RateLimitedError;
@@ -208,7 +208,7 @@ export async function sendHotLeadNotification(
 
     // Persistent-failure alert: fire on Permanent (one-shot, parks at 99)
     // and on the moment the transient retry budget is exhausted (count
-    // crosses RETRY_BUDGET). Earlier transient retries stay silent — the
+    // crosses RETRY_BUDGET). Earlier transient retries stay silent: the
     // retry cron will keep trying and most resolve on their own.
     const exhaustedRetries =
       !isPermanent && nextRetryCount >= RETRY_BUDGET;
@@ -244,7 +244,7 @@ export async function sendHotLeadNotification(
     if (!isKnown) {
       // Wrap so upstream callers can still distinguish retryable from not.
       // Default to treating as transient because the wrapper already bucketed
-      // unknown SDK errors that way — we shouldn't be stricter here.
+      // unknown SDK errors that way: we shouldn't be stricter here.
       throw new TransientResendError(errorMessage);
     }
     throw err;

@@ -12,7 +12,7 @@ export async function GET(
 ) {
   const { id } = await params;
 
-  // Identity from middleware-forwarded headers — no getUser() round-trip.
+  // Identity from middleware-forwarded headers: no getUser() round-trip.
   // This route is polled every ~3s while a search runs, so the saved hop adds up.
   const identity = await getForwardedIdentity();
   if (!identity) {

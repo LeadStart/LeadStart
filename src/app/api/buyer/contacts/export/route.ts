@@ -1,4 +1,4 @@
-// GET /api/buyer/contacts/export — download the buyer's own sourced contacts as
+// GET /api/buyer/contacts/export: download the buyer's own sourced contacts as
 // CSV (their org, newest first). Service-role, scoped to the buyer's org. Capped
 // at MAX_ROWS so a runaway export can't blow the response; a buyer at the cap can
 // narrow with the on-page search before exporting.

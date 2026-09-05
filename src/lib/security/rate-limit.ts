@@ -5,7 +5,7 @@
 // backed by the rate_limits table + consume_rate_limit() RPC (migration 00105),
 // which every instance shares and increments atomically.
 //
-// FAILS OPEN: if the store is unreachable — or the migration isn't applied yet —
+// FAILS OPEN: if the store is unreachable, or the migration isn't applied yet,
 // the request is allowed and the error logged. These guards exist to blunt abuse,
 // not to lock legit users out on an infra hiccup, so anything security-critical
 // must ALSO rest on a structural guard (a token, the origin allowlist, an owner

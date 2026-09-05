@@ -6,7 +6,7 @@
 //     clients in the same run, the operator gets one email summarising the
 //     8, not 8 separate ones in the same minute.
 //   - Survives transient Resend outages. If the digest send fails, sent_at
-//     stays NULL and the next 5-min cron retries — alert events aren't lost
+//     stays NULL and the next 5-min cron retries: alert events aren't lost
 //     to a momentary Resend hiccup.
 //   - Decouples the failing path from the alerting path. A bug in the alert
 //     formatter can't break the cron whose failure we're trying to report;
@@ -14,10 +14,10 @@
 //
 // Recipient resolution lives in the DB (profiles WHERE role = 'owner') so
 // rotating owners doesn't need a redeploy. If no owner profiles exist we
-// log and skip the send — owners can still read the queue in the admin UI
+// log and skip the send: owners can still read the queue in the admin UI
 // once we build that view.
 //
-// Severity policy (not enforced here — enforced at the call sites):
+// Severity policy (not enforced here, enforced at the call sites):
 // alerts only fire on hard bounces, complaints, and persistent failures.
 // Soft bounces and transient errors stay silent because Resend retries
 // soft bounces internally and the hot-lead retry cron handles transient
@@ -67,7 +67,7 @@ interface OwnerAlertRow {
 }
 
 /**
- * Insert one alert event into the queue. Failures are logged and swallowed —
+ * Insert one alert event into the queue. Failures are logged and swallowed,
  * we never want a broken alert path to mask the original failure that
  * triggered it.
  */
@@ -134,7 +134,7 @@ interface DispatchResult {
  *
  * The send → stamp window is the only place an alert can theoretically
  * double-deliver: if step 3 succeeds but step 4 fails, the next cron picks
- * the same rows up and re-sends. We accept that — better a duplicate alert
+ * the same rows up and re-sends. We accept that: better a duplicate alert
  * than a missed one.
  */
 export async function dispatchPendingOwnerAlerts(
@@ -159,7 +159,7 @@ export async function dispatchPendingOwnerAlerts(
   const recipients = await getOwnerRecipients(admin);
   if (recipients.length === 0) {
     console.error(
-      `[owner-alerts] ${rows.length} alerts pending but no owner profiles found — leaving in queue.`,
+      `[owner-alerts] ${rows.length} alerts pending but no owner profiles found: leaving in queue.`,
     );
     return {
       pending: rows.length,
@@ -171,7 +171,7 @@ export async function dispatchPendingOwnerAlerts(
 
   if (!process.env.RESEND_API_KEY) {
     console.error(
-      `[owner-alerts] RESEND_API_KEY not set — ${rows.length} alerts left in queue.`,
+      `[owner-alerts] RESEND_API_KEY not set: ${rows.length} alerts left in queue.`,
     );
     return {
       pending: rows.length,
@@ -224,7 +224,7 @@ export async function dispatchPendingOwnerAlerts(
     .in("id", ids);
 
   if (updateError) {
-    // Email is out, sent_at didn't stamp — next cron will resend the same set.
+    // Email is out, sent_at didn't stamp: next cron will resend the same set.
     // Log loudly so the duplicate is explainable in the inbox.
     console.error(
       `[owner-alerts] Digest sent (${ids.length} rows) but sent_at update failed; expect a duplicate digest next run:`,
@@ -260,7 +260,7 @@ const KIND_LABEL: Record<OwnerAlertKind, string> = {
   inbox_health_auto_paused: "Mailbox auto-paused (health)",
   mailbox_benched: "Mailbox benched by the sender",
   client_csv_upload: "Client CSV upload",
-  email_verifier_unavailable: "Email verifier unavailable — new sends on hold",
+  email_verifier_unavailable: "Email verifier unavailable, new sends on hold",
   email_verifier_credits_low: "Email verifier credits low",
   domain_lifecycle: "Sending-domain lifecycle change",
   registrar_spend_cap: "Domain purchase blocked by the spend cap",
@@ -283,7 +283,7 @@ const KIND_COLOR: Record<OwnerAlertKind, string> = {
   email_verifier_credits_low: "#c2410c",
   // Operational: a domain moved through its burn-prevention lifecycle.
   domain_lifecycle: "#c2410c",
-  // A fail-closed refusal (purchase blocked) and a stuck provisioning step —
+  // A fail-closed refusal (purchase blocked) and a stuck provisioning step,
   // both need an owner to act, so amber like the other operational warnings.
   registrar_spend_cap: "#c2410c",
   domain_provisioning: "#c2410c",
@@ -333,7 +333,7 @@ function buildDigestHtml(rows: OwnerAlertRow[]): string {
   const range =
     firstAt === lastAt
       ? escapeHtml(firstAt)
-      : `${escapeHtml(firstAt)} — ${escapeHtml(lastAt)}`;
+      : `${escapeHtml(firstAt)} to ${escapeHtml(lastAt)}`;
 
   return `
 <div style="font-family:system-ui,-apple-system,Segoe UI,sans-serif;color:#111;max-width:680px;">
@@ -345,7 +345,7 @@ function buildDigestHtml(rows: OwnerAlertRow[]): string {
   ${cards}
   <p style="margin:16px 0 0;color:#666;font-size:12px;">
     Failure events here won't auto-recover (hard bounces, spam complaints,
-    or persistent send failures) — soft bounces and transient errors are
+    or persistent send failures): soft bounces and transient errors are
     handled by Resend and the retry cron. Informational events (like client
     CSV uploads) are included for visibility.
   </p>

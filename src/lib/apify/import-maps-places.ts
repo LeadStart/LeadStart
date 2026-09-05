@@ -4,10 +4,10 @@ import type { MapsPlace } from "@/types/app";
 // Shared Maps-place → contacts import. Used by BOTH the manual "Import to
 // Contacts" click (maps-save) and the automatic post-search import
 // (run-maps-searches, when auto_run_after_search is on). Dedupes by
-// google_place_id against the org (idx_contacts_org_place_unique) — a Maps place
+// google_place_id against the org (idx_contacts_org_place_unique): a Maps place
 // has no email, so the (org, lower(email)) unique index can't catch a repeat.
 //
-// It does NOT enqueue enrichment — the caller owns that so it can react to the
+// It does NOT enqueue enrichment: the caller owns that so it can react to the
 // EnqueueResult. Business-level data lands in the company_* columns (00076):
 // contacts.email/phone stay reserved for a decision-maker (the naming add-on).
 
@@ -80,7 +80,7 @@ export async function importMapsPlaces(
       last_name: null,
       email: null,
       company_name: p.name,
-      // A Maps phone is the company line (00076) — contacts.phone stays reserved
+      // A Maps phone is the company line (00076): contacts.phone stays reserved
       // for a decision-maker's own number, filled later by the naming add-on.
       company_phone: p.phone,
       company_domain: p.company_domain,
@@ -114,7 +114,7 @@ export async function importMapsPlaces(
       for (const r of rows) insertedIds.push(r.id);
       continue;
     }
-    // A residual place-id collision (23505) must not sink the whole batch — retry
+    // A residual place-id collision (23505) must not sink the whole batch: retry
     // row-by-row and skip only the rows that conflict.
     if (error.code === "23505") {
       for (const one of part) {

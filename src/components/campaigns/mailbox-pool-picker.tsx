@@ -1,12 +1,12 @@
 "use client";
 
-// Shared sending-mailbox picker for a campaign — used by the new-campaign builder
+// Shared sending-mailbox picker for a campaign: used by the new-campaign builder
 // and the campaign Setup tab. One unified type-to-search dropdown adds inboxes by
 // TAG (named pools, alphabetical, on top) or individually; the current selection
 // shows as removable chips. Under the dedicated-inbox policy, any tag/inbox already
 // claimed by another campaign sinks to the bottom of the list, greyed with an
 // "in use" pill, and can't be added (the server enforces the same rule).
-// Presentational + controlled — the parent owns `selected` and saves it on its
+// Presentational + controlled: the parent owns `selected` and saves it on its
 // own Save button.
 
 import { useEffect, useMemo, useRef, useState } from "react";

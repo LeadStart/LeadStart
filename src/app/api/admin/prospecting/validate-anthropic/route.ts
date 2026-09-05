@@ -6,7 +6,7 @@ import { HAIKU_MODEL_ID } from "@/lib/decision-maker/pricing";
 //
 // Body: { api_key: string }
 //
-// No auth check — the user is testing a key they just typed in their own
+// No auth check: the user is testing a key they just typed in their own
 // settings page. Mirrors validate-key/route.ts:10-12 for Scrap.io.
 //
 // Validates by firing a 4-token Haiku call. If it succeeds, the key works

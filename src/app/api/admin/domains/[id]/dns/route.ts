@@ -1,4 +1,4 @@
-// GET /api/admin/domains/[id]/dns — the DNS panel for one sending domain:
+// GET /api/admin/domains/[id]/dns: the DNS panel for one sending domain:
 //   expected         the records this Gmail-tier domain should have (Google MX,
 //                    SPF, DMARC, plus the site-verification TXT once minted)
 //   registrar_records what the registrar currently has (first real caller of the

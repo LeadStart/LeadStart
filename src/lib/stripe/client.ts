@@ -27,7 +27,7 @@ let cached: Stripe | null = null;
 
 /**
  * Returns the shared Stripe client. Throws if called in demo mode or without
- * a key — callers must check `isStripeDemoMode()` first and route demo paths
+ * a key: callers must check `isStripeDemoMode()` first and route demo paths
  * through the fakes in `src/lib/stripe/helpers.ts` (added in commit #3).
  */
 export function getStripe(): Stripe {

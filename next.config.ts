@@ -10,7 +10,7 @@ const nextConfig: NextConfig = {
   reactCompiler: true,
   experimental: {
     // Next 16 defaults dynamic staleTimes to 0, so the client router cache throws
-    // away a route's RSC payload the moment you leave it — every tab revisit
+    // away a route's RSC payload the moment you leave it: every tab revisit
     // re-runs the server render (heavy for the server-component pages:
     // campaigns/[id], clients/[clientId], inbox, reports). 30s lets quick
     // back-and-forth tab switching reuse the cached payload. Dashboard data is

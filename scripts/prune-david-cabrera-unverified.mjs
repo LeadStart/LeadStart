@@ -103,7 +103,7 @@ for (const c of contacts) {
   else remove.push(c);
 }
 // Verified emails that aren't in the campaign at all (were skipped at import
-// as dups / missing name). Informational only — we don't re-add here.
+// as dups / missing name). Informational only: we don't re-add here.
 const inCampaign = new Set(contacts.map((c) => (c.email ?? "").toLowerCase()));
 const verifiedNotInCampaign = [...verified].filter((e) => !inCampaign.has(e));
 
@@ -116,7 +116,7 @@ if (remove.length) {
 // Safety: every contact we would delete must carry the import source tag.
 const unsafe = remove.filter((c) => c.source !== IMPORT_SOURCE);
 if (unsafe.length) {
-  console.log(`\n⚠ ${unsafe.length} remove-candidates are NOT source='${IMPORT_SOURCE}' — they will be UN-ENROLLED but their contact row kept:`);
+  console.log(`\n⚠ ${unsafe.length} remove-candidates are NOT source='${IMPORT_SOURCE}', they will be UN-ENROLLED but their contact row kept:`);
   console.log(`  ${unsafe.slice(0, 8).map((c) => c.email).join(", ")}`);
 }
 console.log();

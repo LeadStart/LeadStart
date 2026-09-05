@@ -6,7 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 //
 // Returns the most recent ~20 searches for the caller's org for the
 // "Recent searches" list on the Prospecting page. Strips the `results`
-// JSONB so the list payload stays small — clicking a row hits the [id]
+// JSONB so the list payload stays small: clicking a row hits the [id]
 // endpoint to load the full results.
 
 export async function GET(_request: NextRequest) {

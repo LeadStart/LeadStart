@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
   }
 
   // Auth: an owner or VA in the SAME org as the target client. (This route
-  // previously had NO auth — anyone who knew a client_id could rewrite that
+  // previously had NO auth: anyone who knew a client_id could rewrite that
   // client's report schedule.)
   const supabase = await createServerClient();
   const {
@@ -118,7 +118,7 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // Biweekly anchor — if client switched to biweekly and no anchor is set,
+  // Biweekly anchor: if client switched to biweekly and no anchor is set,
   // stamp it now so the "on-week" cadence is deterministic from here.
   if (body.schedule_start !== undefined) {
     update.report_schedule_start = body.schedule_start || null;

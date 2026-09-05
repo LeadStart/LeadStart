@@ -58,8 +58,8 @@ export class SiteVerificationClient {
    */
   async verifyDomain(domain: string): Promise<{ verified: boolean; detail: string }> {
     try {
-      // NOTE: the codelab's instant-propagation trick — passing
-      // `owners: [adminSubject]` here — returns a PERSISTENT 503 for a secondary
+      // NOTE: the codelab's instant-propagation trick, passing
+      // `owners: [adminSubject]` here, returns a PERSISTENT 503 for a secondary
       // domain on an existing tenant / an already-verified resource (verified
       // live on gettubeseo.com, 6/6 triggers 503'd). That codelab targets a FRESH
       // Cloud Identity provision (new admin created ON the new domain), which is

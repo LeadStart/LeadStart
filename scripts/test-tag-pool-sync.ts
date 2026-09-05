@@ -4,7 +4,7 @@
  * (computeTagPoolDiff). No network, no DB. Run: npx tsx scripts/test-tag-pool-sync.ts
  *
  * The DB-touching syncCampaignTagPool wraps this diff with the tag resolution,
- * dedicated-inbox exclusion, and empty-pool guard — those are covered by the
+ * dedicated-inbox exclusion, and empty-pool guard: those are covered by the
  * route/cron behavior; here we lock the add/remove arithmetic that everything
  * else builds on.
  */
@@ -84,7 +84,7 @@ console.log("computeTagPoolDiff");
 
 console.log("");
 if (fail > 0) {
-  console.error(`FAIL — ${pass} passed, ${fail} failed: ${failures.join("; ")}`);
+  console.error(`FAIL, ${pass} passed, ${fail} failed: ${failures.join("; ")}`);
   process.exit(1);
 }
-console.log(`OK — ${pass} passed`);
+console.log(`OK, ${pass} passed`);

@@ -3,7 +3,7 @@
 // how many active contacts are waiting there right now (and how many have been
 // sent that step so far), topped by an explicit projected-completion banner and
 // closed by a terminal band (replied / completed / failed). Pure presentational
-// server component — all counts + the projection are computed in page.tsx and
+// server component: all counts + the projection are computed in page.tsx and
 // passed in. The red step badges deliberately mirror the Sequence & schedule
 // card directly below it so the owner reads flow and copy together.
 
@@ -19,7 +19,7 @@ import {
 import type { ReactNode } from "react";
 import type { CompletionProjection } from "@/lib/gmail/ramp";
 
-// Brand ramp — deepens as contacts progress toward the finish.
+// Brand ramp: deepens as contacts progress toward the finish.
 const STEP_COLORS = ["#A3A8FF", "#6B72FF", "#2E37FE", "#1C24B8"];
 function stepColor(i: number): string {
   return STEP_COLORS[Math.min(i, STEP_COLORS.length - 1)];
@@ -57,7 +57,7 @@ export function StageFlowCard({
         <div>
           <CardTitle className="text-base">Contacts by sending stage</CardTitle>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Where every enrolled contact sits in the sequence right now —{" "}
+            Where every enrolled contact sits in the sequence right now,{" "}
             <span className="font-medium text-foreground">
               {totals.active.toLocaleString()}
             </span>{" "}
@@ -69,7 +69,7 @@ export function StageFlowCard({
         <CompletionBanner projection={projection} strategyLabel={strategyLabel} />
 
         <div>
-          {/* Timeline — connector line runs behind the step badges */}
+          {/* Timeline: connector line runs behind the step badges */}
           <div className="relative">
             {stages.length > 1 && (
               <div
@@ -129,7 +129,7 @@ export function StageFlowCard({
             </ol>
           </div>
 
-          {/* Terminal band — contacts that have left the sequence */}
+          {/* Terminal band: contacts that have left the sequence */}
           <div className="ml-12 mt-1 flex flex-wrap items-center gap-3 rounded-xl border border-dashed border-border bg-muted/30 px-4 py-3">
             <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
               Left the sequence
@@ -226,7 +226,7 @@ function TermBadge({
   label: string;
   value: number;
 }) {
-  // A zero doesn't shout — muted slate until there's something to report.
+  // A zero doesn't shout: muted slate until there's something to report.
   const fills: Record<typeof tone, string> = {
     green: "#059669",
     blue: "#2E37FE",

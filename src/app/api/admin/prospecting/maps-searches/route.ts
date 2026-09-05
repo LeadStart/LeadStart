@@ -4,7 +4,7 @@ import { requireEnrichmentContext } from "@/lib/apify/auth";
 // GET /api/admin/prospecting/maps-searches
 //
 // Lists the org's recent Google Maps searches for the "Prior runs" section on the
-// Prospecting panel. Strips the heavy `results` JSONB — clicking a run hits the
+// Prospecting panel. Strips the heavy `results` JSONB: clicking a run hits the
 // [id] endpoint for full results. Mirrors the linkedin-searches list route.
 
 export const maxDuration = 10;

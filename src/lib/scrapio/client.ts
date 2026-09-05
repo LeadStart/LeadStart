@@ -104,7 +104,7 @@ export class ScrapioClient {
   }
 
   // Single page of /gmap/search. Pagination (looping on
-  // response.meta.next_cursor) is the caller's responsibility — that lets
+  // response.meta.next_cursor) is the caller's responsibility: that lets
   // the caller enforce a page cap and per-request budget.
   async search(params: ScrapioSearchParams): Promise<ScrapioSearchResponse> {
     const filterParams = buildFilterParams(params.filters);
@@ -130,7 +130,7 @@ export class ScrapioClient {
   //
   // Per Scrap.io docs: max 100 entries per call. We chunk automatically
   // so the caller can pass any size array. Failures on individual chunks
-  // are logged but don't block the rest — the worst case is paying credits
+  // are logged but don't block the rest: the worst case is paying credits
   // for a few items next time, which is recoverable.
   async blacklistAdd(
     listName: string,

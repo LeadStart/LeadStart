@@ -85,7 +85,7 @@ function TableRow({
   // Whole-row navigation: a click anywhere in the row (except on a genuinely-
   // interactive descendant) opens `href`, so the entire row behaves like its
   // primary link. The row keeps its real inner <Link> as the keyboard/AT anchor
-  // — this is a pointer-only convenience on top. Modifier / middle click opens a
+  // this is a pointer-only convenience on top. Modifier / middle click opens a
   // new tab, at parity with a real link (window.open bypasses the router, so it
   // needs the basePath that appUrl adds).
   const fromInteractive = (target: EventTarget | null) =>

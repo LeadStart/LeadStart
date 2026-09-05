@@ -82,7 +82,7 @@ export const HEADER_ALIASES: Record<string, string> = {
   linkedin: "linkedin_url",
   "linkedin url": "linkedin_url",
   "linkedin profile": "linkedin_url",
-  // LinkedIn / Apify export aliases (unambiguous only — see import-dialog.tsx
+  // LinkedIn / Apify export aliases (unambiguous only, see import-dialog.tsx
   // for the LinkedIn-mode overlay that adds the riskier ones like "website").
   "profile url": "linkedin_url",
   "linkedin profile url": "linkedin_url",
@@ -192,7 +192,7 @@ export function rowsFromCSV(
 }
 
 // Apply a user-provided column mapping to a parsed CSV grid.
-// mapping: { "CSV Header Name": "first_name", ... } — empty string = skip.
+// mapping: { "CSV Header Name": "first_name", ... }, empty string = skip.
 export function rowsWithMapping(
   grid: string[][],
   mapping: Record<string, string>,
@@ -377,7 +377,7 @@ export function buildInitialMappingForTargets(
     if (tok && claim(header, CUSTOM_TARGET_PREFIX + tok.token)) continue;
     // Unmatched column → a NEW custom variable named after it. Skip only a
     // blank/punctuation-only header (empty normalized key) or one that would
-    // shadow a sender-identity token ({{YourName}} etc.) — the import drops
+    // shadow a sender-identity token ({{YourName}} etc.): the import drops
     // those anyway, so offering them as a destination would mislead.
     if (key && !SENDER_TOKEN_KEYS.has(key) && claim(header, CUSTOM_TARGET_PREFIX + header)) {
       continue;

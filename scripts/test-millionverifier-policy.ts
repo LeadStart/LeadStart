@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Unit tests for src/lib/millionverifier/policy.ts — the pure decision logic of
+ * Unit tests for src/lib/millionverifier/policy.ts: the pure decision logic of
  * the pre-send verification gate. No network, no DB. Imports the REAL module by
  * relative path (tsx resolves the .ts extension); the module's `import type`
  * references to @/types/app and ./client are erased at load, so nothing else is

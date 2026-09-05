@@ -22,7 +22,7 @@ import { appUrl } from "@/lib/api-url";
 import { normalizeDomain } from "@/lib/apify/domain";
 // Shared CSV core (single parser + header-normalization rule + stage list), so
 // this Path-B importer no longer keeps its own copy that can drift from the
-// campaign importer. The alias TABLES below stay local — they're deliberately
+// campaign importer. The alias TABLES below stay local: they're deliberately
 // mode-split (a standard CSV keeps Website/Profile/Domain as custom variables).
 import {
   parseCSV,
@@ -387,7 +387,7 @@ export function ImportContactsDialog({
       }
 
       // DB linkedin dedupe (LinkedIn mode only). Exact-match .in() on both the
-      // raw and a lowercased variant — good enough for re-imports of the same
+      // raw and a lowercased variant: good enough for re-imports of the same
       // export (the real duplicate case).
       const existingLinkedin = new Set<string>();
       if (linkedinMode) {
@@ -471,7 +471,7 @@ export function ImportContactsDialog({
           continue;
         }
         if ((error as { code?: string }).code === "23505") {
-          // A case-variant email already exists — retry the chunk row-by-row.
+          // A case-variant email already exists: retry the chunk row-by-row.
           for (const one of part) {
             const { error: oneErr } = await supabase.from("contacts").insert(one);
             if (!oneErr) insertedIds.push(one.id);
@@ -567,7 +567,7 @@ export function ImportContactsDialog({
               {linkedinMode && (
                 <p className="text-xs text-muted-foreground">
                   For Apify / Sales Navigator exports. Rows need a LinkedIn URL, or first name + last
-                  name + company. Emails are optional — run enrichment afterward.
+                  name + company. Emails are optional: run enrichment afterward.
                 </p>
               )}
             </div>

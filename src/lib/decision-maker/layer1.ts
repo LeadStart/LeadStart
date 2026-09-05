@@ -1,9 +1,9 @@
-// Layer 1 — website-scrape decision-maker extraction.
+// Layer 1: website-scrape decision-maker extraction.
 //
 // Fetch the business homepage + up to 4 contact/team/about pages, strip to
 // plain text, ask Claude Haiku for the most senior decision maker using
 // the seniority hierarchy for the business's category. Falls through with
-// status='complete' and empty fields if no decision maker is found — the
+// status='complete' and empty fields if no decision maker is found: the
 // caller decides whether to escalate to Layer 2.
 //
 // Ported from server/enricher.ts:227-345 of the LeadEnrich reference build.

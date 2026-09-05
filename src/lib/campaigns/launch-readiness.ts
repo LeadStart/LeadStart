@@ -1,4 +1,4 @@
-// Launch readiness for a native email campaign — what BLOCKS activation vs. what
+// Launch readiness for a native email campaign: what BLOCKS activation vs. what
 // merely WARNS. A campaign is now created as a draft from just a name; readiness
 // is how the owner sees what's still needed before it can send.
 //
@@ -6,7 +6,7 @@
 // AND disable the Launch button in the UI, using this one shared definition so
 // the button and the endpoint never disagree. Soft warnings are surfaced but
 // never block launching. Deliverability advisories (domain auth, placement, copy)
-// stay in the separate activation pre-flight (warn-with-override) — this covers
+// stay in the separate activation pre-flight (warn-with-override): this covers
 // campaign completeness only.
 
 import type { createAdminClient } from "@/lib/supabase/admin";
@@ -35,7 +35,7 @@ export interface ReadinessInput {
   contactCount: number;
 }
 
-// Pure readiness rule — unit-tested, no I/O.
+// Pure readiness rule: unit-tested, no I/O.
 export function computeLaunchReadiness(input: ReadinessInput): LaunchReadiness {
   const blockers: ReadinessItem[] = [];
 
@@ -61,7 +61,7 @@ export function computeLaunchReadiness(input: ReadinessInput): LaunchReadiness {
       label:
         input.poolMailboxCount === 0
           ? "Add a sending mailbox"
-          : "Connect a sending mailbox — none attached are connected",
+          : "Connect a sending mailbox, none attached are connected",
     });
   }
 
@@ -69,7 +69,7 @@ export function computeLaunchReadiness(input: ReadinessInput): LaunchReadiness {
   if (input.contactCount === 0) {
     warnings.push({
       key: "contacts",
-      label: "No contacts yet — the campaign will sit idle until you add some",
+      label: "No contacts yet, the campaign will sit idle until you add some",
     });
   }
 

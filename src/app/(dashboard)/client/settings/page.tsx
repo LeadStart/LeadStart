@@ -309,7 +309,7 @@ export default function ClientSettingsPage() {
       }
       setAccountStatus({
         state: "saved",
-        message: "Confirmation email sent — check your inbox to apply the change.",
+        message: "Confirmation email sent, check your inbox to apply the change.",
       });
       setTimeout(() => setAccountStatus({ state: "idle" }), 6000);
       return;
@@ -368,7 +368,7 @@ export default function ClientSettingsPage() {
     const isWeeklyish = freq === "weekly" || freq === "biweekly";
 
     // Only stamp a fresh biweekly anchor when the client is NEWLY switching to
-    // biweekly — so saving other changes later doesn't re-anchor and shift the
+    // biweekly, so saving other changes later doesn't re-anchor and shift the
     // cadence out from under them.
     const newlyBiweekly = freq === "biweekly" && client?.report_frequency !== "biweekly";
 

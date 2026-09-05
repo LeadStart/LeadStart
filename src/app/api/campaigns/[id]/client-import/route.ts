@@ -1,4 +1,4 @@
-// GET/POST /api/campaigns/[id]/client-import — CSV contact import for native
+// GET/POST /api/campaigns/[id]/client-import: CSV contact import for native
 // email campaigns, callable by the campaign's own client (portal self-service)
 // or owner/va (admin). Not under /api/admin because clients must reach it; the
 // role-branching auth mirrors /api/replies/[id]/send.
@@ -14,16 +14,16 @@
 //   - contacts RLS is being locked down to owner/va (migration 00062), so all
 //     reads/writes here go through the service-role client after explicit
 //     checks. organization_id / client_id / campaign_id are always forced from
-//     the server-loaded campaign row — never from the request body.
+//     the server-loaded campaign row: never from the request body.
 //   - Dedup is CLIENT-scoped. The org-wide unique index
 //     idx_contacts_org_email_unique means an email can exist at most once per
 //     org; if it already belongs to a different client (or LeadStart's own
-//     CRM, client_id NULL), the row is SKIPPED — never reassigned, never
+//     CRM, client_id NULL), the row is SKIPPED: never reassigned, never
 //     duplicated. A client can technically probe whether an email exists
 //     somewhere in the org via the skipped count; accepted for trusted
 //     paying clients.
 //   - Emails are validated strictly (single @, no whitespace/control chars,
-//     ≤254) because contact.email flows raw into the Gmail To: header — this
+//     ≤254) because contact.email flows raw into the Gmail To: header, this
 //     is the import-side half of the header-injection fix (the sink half is
 //     in src/lib/gmail/mime.ts).
 //   - All values have ASCII control chars stripped: custom_fields values are
@@ -53,15 +53,15 @@ interface RouteParams {
   params: Promise<{ id: string }>;
 }
 
-// Rows accepted per REQUEST — kept modest so one chunk stays well under the
+// Rows accepted per REQUEST: kept modest so one chunk stays well under the
 // serverless request-body limit (~4.5MB). The client chunks a big list into
 // batches of this size or smaller, so this is NOT the per-list limit.
 const MAX_IMPORT_ROWS = 2000;
 // Rows accepted per FILE/list (sent to the client as max_rows). A list this large
-// uploads fine — the client splits it across several requests.
+// uploads fine: the client splits it across several requests.
 const MAX_LIST_ROWS = 10000;
 const MAX_BODY_BYTES = 4 * 1024 * 1024;
-// Per-client rows/day across all uploads — flood brake, not a business quota.
+// Per-client rows/day across all uploads: flood brake, not a business quota.
 const DAILY_ROW_BUDGET = 50000;
 
 const MAX_CUSTOM_KEYS_PER_ROW = 30;
@@ -86,7 +86,7 @@ const STANDARD_FIELD_CAPS: Record<string, number> = {
 
 // ── Sanitizers ────────────────────────────────────────────────────────────
 
-// Strip ASCII control chars (incl. CR/LF/NUL — subject-header injection
+// Strip ASCII control chars (incl. CR/LF/NUL, subject-header injection
 // vector via {{token}} substitution) and collapse whitespace runs.
 function cleanValue(v: unknown, cap: number): string | null {
   if (typeof v !== "string") return null;
@@ -101,7 +101,7 @@ function cleanValue(v: unknown, cap: number): string | null {
 // Conservative single-address validator. Stricter than the codebase's usual
 // `includes("@")` because this is an untrusted client path and the address
 // (a) flows into the Gmail To: header and (b) is interpolated into PostgREST
-// filter values — so it must exclude commas, quotes, parens, and other filter
+// filter values, so it must exclude commas, quotes, parens, and other filter
 // metacharacters as well as CR/LF. Requires a dotted domain. Not full RFC 5322
 // (which nobody needs for cold-outreach lists).
 const EMAIL_RE = /^[A-Za-z0-9._%+\-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$/;
@@ -342,7 +342,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   }
   if (rawRows.length > MAX_IMPORT_ROWS) {
     return NextResponse.json(
-      { error: `Maximum ${MAX_IMPORT_ROWS} rows per import — split the file` },
+      { error: `Maximum ${MAX_IMPORT_ROWS} rows per import, split the file` },
       { status: 400 },
     );
   }
@@ -422,7 +422,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       if (dncErr) {
         console.error("[client-import] DNC lookup failed:", dncErr);
         return NextResponse.json(
-          { error: "Could not check the do-not-contact list — try again." },
+          { error: "Could not check the do-not-contact list, try again." },
           { status: 503 },
         );
       }
@@ -450,7 +450,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     // Payload emails are lowercase and so are rows this route writes; older
     // rows added via the admin panels may be mixed-case and won't match the
     // exact `.in()` filter. Those escape to the insert bucket and would hit the
-    // org-wide lower(email) unique index — the insert step degrades to per-row
+    // org-wide lower(email) unique index: the insert step degrades to per-row
     // so one such collision can't fail the whole batch.
     for (const part of chunk(remaining, 200)) {
       const { data: rows, error: exErr } = await admin
@@ -461,7 +461,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       if (exErr) {
         console.error("[client-import] contact dedupe lookup failed:", exErr);
         return NextResponse.json(
-          { error: "Could not check existing contacts — try again." },
+          { error: "Could not check existing contacts, try again." },
           { status: 503 },
         );
       }
@@ -478,7 +478,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   let skippedUndeliverable = 0;
   const SUPPRESSED_STATUSES = new Set(["bounced", "unsubscribed", "replied"]);
   // A cached invalid/disposable verdict from an earlier send would be failed by
-  // the pre-send verification gate anyway — skip it here so counts are truthful.
+  // the pre-send verification gate anyway: skip it here so counts are truthful.
   // Advisory only (the cron re-checks at send time), mirroring the DNC filter.
   const UNDELIVERABLE = new Set(["invalid", "disposable"]);
 
@@ -488,7 +488,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       toInsert.push(row);
     } else if (existing.client_id === clientId) {
       if (SUPPRESSED_STATUSES.has(existing.status)) {
-        // Would never send (cron suppression) — keep counts truthful.
+        // Would never send (cron suppression): keep counts truthful.
         skippedSuppressed++;
       } else if (UNDELIVERABLE.has(existing.email_verification_status ?? "")) {
         skippedUndeliverable++;
@@ -496,7 +496,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
         toLink.push({ row, existing });
       }
     } else {
-      // Belongs to another client or LeadStart's own CRM — never reassign.
+      // Belongs to another client or LeadStart's own CRM: never reassign.
       skippedExistingElsewhere++;
     }
   }
@@ -678,7 +678,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
 
   // ── Owner alert (best-effort; enqueueOwnerAlert swallows its own errors) ─
   // Fire when contacts were added OR when a batch was skipped as "already in
-  // the system" — the latter surfaces a client probing for cross-client email
+  // the system": the latter surfaces a client probing for cross-client email
   // existence, which would otherwise be invisible.
   const added = inserted + linked;
   if (added > 0 || skippedExistingElsewhere > 0) {
@@ -696,7 +696,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     const subject =
       added > 0
         ? `${actor} added ${added} contact${added === 1 ? "" : "s"} to ${campaign.name}`
-        : `${actor} uploaded to ${campaign.name} — ${skippedExistingElsewhere} skipped (already in system)`;
+        : `${actor} uploaded to ${campaign.name}, ${skippedExistingElsewhere} skipped (already in system)`;
     await enqueueOwnerAlert({
       admin,
       kind: "client_csv_upload",

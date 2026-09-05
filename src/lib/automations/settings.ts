@@ -1,4 +1,4 @@
-// Internal-automation settings — org-level notify config (migration 00087,
+// Internal-automation settings: org-level notify config (migration 00087,
 // organizations.automation_settings). The load/normalize/auth helpers behind
 // the Settings → Integrations card and the delivery path in the reply pipeline.
 //
@@ -23,7 +23,7 @@ const NOTIFY_ON_VALUES: readonly AutomationNotifyOn[] = ["hot", "all_replies"];
 
 /**
  * Coerce an arbitrary stored/posted blob into a complete AutomationSettings by
- * merging over `base` (defaults). Types only — never validates URL shape and
+ * merging over `base` (defaults). Types only: never validates URL shape and
  * never throws, so a partial payload or an older/newer stored shape is safe.
  * String fields are trimmed; unknown keys are dropped.
  */
@@ -55,7 +55,7 @@ export function normalizeAutomationSettings(
 }
 
 /**
- * Load an org's automation settings, merged over defaults. Never throws — a
+ * Load an org's automation settings, merged over defaults. Never throws: a
  * missing column (migration 00087 not applied) or missing row yields defaults.
  */
 export async function loadAutomationSettings(

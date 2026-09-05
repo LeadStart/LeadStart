@@ -50,11 +50,11 @@ export function priceDelivered(
 }
 
 /**
- * Worst-case retail tokens a single delivered row could cost — the hold basis
+ * Worst-case retail tokens a single delivered row could cost: the hold basis
  * per row. A row follows ONE path: the fully-loaded personal path (owner name +
  * personal email + verified) is the realistic max; company-inbox and
  * catch-all-recovered are cheaper alternatives. Max of those is a tight but safe
- * upper bound (over-holding is safe — it's released; under-holding is not).
+ * upper bound (over-holding is safe, it's released; under-holding is not).
  */
 /**
  * Clamp a cron's computed per-run vendor-cost cap by a ceiling. Callers pass

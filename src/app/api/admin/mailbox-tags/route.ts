@@ -1,7 +1,7 @@
-// /api/admin/mailbox-tags — backend for the Settings → Tags manager. Manages the
+// /api/admin/mailbox-tags: backend for the Settings → Tags manager. Manages the
 // per-org mailbox tag registry (mailbox_tags, migration 00108) and cascades
 // rename/delete across every native_mailboxes.tags[] in the org. Owner-only,
-// org-scoped, admin-client writes — same auth + per-row fan-out shape as
+// org-scoped, admin-client writes: same auth + per-row fan-out shape as
 // /api/admin/mailboxes/tags. Verbs:
 //   GET    → list tag summaries (registry ∪ tags in use, with per-tag counts)
 //   POST   → add a tag to the registry           { name }
@@ -139,7 +139,7 @@ export async function GET() {
 
   // Registry (migration 00108). If the table isn't there yet, degrade to the
   // in-use-only view so the page still renders and can say the registry isn't
-  // ready — rather than 500-ing before the migration is applied.
+  // ready: rather than 500-ing before the migration is applied.
   let registryAvailable = true;
   const registry = new Map<string, { id: string; name: string }>();
   const { data: regRows, error: regErr } = await admin
@@ -199,7 +199,7 @@ export async function POST(req: NextRequest) {
   if (error) {
     if (isMissingTable(error)) {
       return NextResponse.json(
-        { error: "Tag registry isn’t set up yet — apply migration 00108." },
+        { error: "Tag registry isn’t set up yet, apply migration 00108." },
         { status: 503 },
       );
     }
@@ -252,7 +252,7 @@ export async function PATCH(req: NextRequest) {
     const clash = regRows.find((r) => r.name.toLowerCase() === newKey && r.id !== id);
     if (clash) {
       return NextResponse.json(
-        { error: `A tag named “${newName}” already exists — delete it first or pick another name.` },
+        { error: `A tag named “${newName}” already exists, delete it first or pick another name.` },
         { status: 409 },
       );
     }

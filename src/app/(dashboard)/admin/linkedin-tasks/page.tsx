@@ -1,6 +1,6 @@
 "use client";
 
-// LinkedIn to-dos — the VA task inbox. Lists manual_tasks (migration 00088)
+// LinkedIn to-dos: the VA task inbox. Lists manual_tasks (migration 00088)
 // that a FlowGraph `linkedin` node produces: connection requests + direct
 // messages a VA sends by hand. The native sender never executes these; they
 // only ever exist as rows here for a human to work off. List / complete / skip
@@ -96,7 +96,7 @@ function CopyButton({ text }: { text: string }) {
           setCopied(true);
           setTimeout(() => setCopied(false), 1400);
         } catch {
-          /* clipboard blocked — no-op */
+          /* clipboard blocked: no-op */
         }
       }}
       className="inline-flex items-center gap-1 rounded-md border border-border/60 bg-white px-2 py-1 text-xs font-medium text-[#0f172a] transition-colors hover:bg-muted/40 cursor-pointer"
@@ -179,7 +179,7 @@ export default function LinkedInTasksPage() {
         title="LinkedIn to-dos"
       />
 
-      {/* Stat cards — reflect the full set, not the current filter */}
+      {/* Stat cards: reflect the full set, not the current filter */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <StatCard label="Open" value={openCount} icon={<InboxIcon size={18} className="text-amber-500" />} iconBg="bg-amber-50" valueColor="text-amber-600" />
         <StatCard label="Done" value={doneCount} icon={<CheckCircle2 size={18} className="text-emerald-500" />} iconBg="bg-emerald-50" valueColor="text-emerald-600" />

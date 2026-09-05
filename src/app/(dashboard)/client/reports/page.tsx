@@ -76,7 +76,7 @@ export default function ClientReportsPage() {
                   <div className="flex items-center gap-3">
                     <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]"><FileText size={16} className="text-white" /></div>
                     <div>
-                      <p className="text-sm font-semibold">{new Date(period.start).toLocaleDateString("en-US", { month: "short", day: "numeric" })} — {new Date(period.end).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</p>
+                      <p className="text-sm font-semibold">{new Date(period.start).toLocaleDateString("en-US", { month: "short", day: "numeric" })} to {new Date(period.end).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</p>
                       <p className="text-xs text-muted-foreground">{campaigns.length} campaign{campaigns.length !== 1 ? "s" : ""} included</p>
                     </div>
                   </div>

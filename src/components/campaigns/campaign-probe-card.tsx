@@ -1,14 +1,14 @@
 "use client";
 
 // Campaign builder's placement-probe card. Shows where THIS campaign's copy
-// lands in the seed inboxes — Inbox / Promotions / Spam — before any prospect
+// lands in the seed inboxes (Inbox / Promotions / Spam) before any prospect
 // sees it. Two modes:
 //   • no campaignId (new-campaign builder, not saved yet) → a pure explanatory
 //     stub, no fetch.
 //   • with campaignId → the latest campaign-copy probe per pool mailbox, or a
 //     "no seeds configured" / "not tested yet" stub.
 // The run affordance is a link to Admin → Mailboxes (owner-only), where the
-// campaign-probe button already lives — this card starts no probes itself.
+// campaign-probe button already lives: this card starts no probes itself.
 
 import { useCallback, useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -45,7 +45,7 @@ function Shell({ children }: { children: React.ReactNode }) {
         <div>
           <CardTitle className="text-base">Placement probe</CardTitle>
           <p className="text-xs text-muted-foreground">
-            See where this campaign&apos;s first email lands — Inbox, Promotions, or Spam — in seed
+            See where this campaign&apos;s first email lands (Inbox, Promotions, or Spam) in seed
             inboxes you control, before a prospect ever sees it.
           </p>
         </div>
@@ -69,7 +69,7 @@ export function CampaignProbeCard({ campaignId }: { campaignId?: string }) {
       });
       if (res.ok) setStatus((await res.json()) as ProbeStatus);
     } catch {
-      /* non-fatal — the card just shows its stub */
+      /* non-fatal: the card just shows its stub */
     } finally {
       setLoading(false);
     }
@@ -78,7 +78,7 @@ export function CampaignProbeCard({ campaignId }: { campaignId?: string }) {
     load();
   }, [load]);
 
-  // New-campaign builder: nothing saved yet — pure stub.
+  // New-campaign builder: nothing saved yet, pure stub.
   if (!campaignId) {
     return (
       <Shell>
@@ -104,7 +104,7 @@ export function CampaignProbeCard({ campaignId }: { campaignId?: string }) {
     return (
       <Shell>
         <p className="text-muted-foreground">
-          No seed inboxes configured — the placement probe can&apos;t run yet. Set them up in Admin →
+          No seed inboxes configured: the placement probe can&apos;t run yet. Set them up in Admin →
           Mailboxes → Seed inboxes.
         </p>
         <MailboxesLink owner={owner} />
@@ -132,7 +132,7 @@ function probeSummary(test: PlacementTest | null): string {
   if (test.status === "sending" || test.status === "awaiting") {
     return placementStatusLabel("pending") + "…";
   }
-  if (test.status === "failed") return "Last probe didn't complete — try again.";
+  if (test.status === "failed") return "Last probe didn't complete: try again.";
   // complete
   const summary = describeCounts({
     total: test.seeds_total,
@@ -144,5 +144,5 @@ function probeSummary(test: PlacementTest | null): string {
   const when = test.completed_at ? new Date(test.completed_at) : null;
   const stale = when != null && Date.now() - when.getTime() > PLACEMENT_FRESHNESS_DAYS * 86_400_000;
   const date = when ? when.toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "";
-  return `${summary}${date ? ` · ${date}` : ""}${stale ? " · outdated — worth re-running" : ""}`;
+  return `${summary}${date ? ` · ${date}` : ""}${stale ? " · outdated, worth re-running" : ""}`;
 }

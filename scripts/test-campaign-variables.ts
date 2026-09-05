@@ -49,7 +49,7 @@ eq(splitToken(" first_name | there "), { name: "first_name", fallback: "there" }
 eq(splitToken("x|"), { name: "x", fallback: "" }, "explicit empty fallback preserved");
 eq(splitToken("a|b|c"), { name: "a", fallback: "b|c" }, "splits on FIRST pipe only");
 
-console.log("\napplyTokens — resolution");
+console.log("\napplyTokens, resolution");
 eq(applyTokens("Hi {{first_name}}", { firstname: "Ann" }), "Hi Ann", "resolves a standard token");
 eq(
   applyTokens("{{first_name}} at {{company}}", { firstname: "Ann", company: "Acme" }),
@@ -65,18 +65,18 @@ eq(
 );
 eq(applyTokens("{{ first_name | there }}", {}), "there", "whitespace around the pipe is trimmed");
 
-console.log("\napplyTokens — NEVER-LEAK invariant (sender fallback = '')");
+console.log("\napplyTokens, NEVER-LEAK invariant (sender fallback = '')");
 eq(applyTokens("Hi {{first_name}}", {}, blank), "Hi ", "unknown standard token → blank, not braces");
 eq(applyTokens("{{custom_x}}", {}, blank), "", "unknown CUSTOM token → blank, not {{custom_x}} (THE leak fix)");
 eq(applyTokens("{{custom_x|}}", {}), "", "explicit empty inline default → blank");
 eq(applyTokens("{{constructor}}", {}, blank), "", "Object.prototype key resolves to blank, never a function");
 
-console.log("\napplyTokens — preview behavior preserved (no fallback fn)");
+console.log("\napplyTokens, preview behavior preserved (no fallback fn)");
 eq(applyTokens("Hi {{first_name}}", {}), "Hi {{first_name}}", "no map + no fallback → left untouched (author sees typo)");
 eq(applyTokens("{{constructor}}", {}), "{{constructor}}", "prototype key left untouched, not the Object function");
 eq(applyTokens("Hi {{first_name}}", { firstname: "" }), "Hi ", "present-but-empty + no fallback → blank (prior behavior kept)");
 
-console.log("\nextractCampaignTokens — strip |default + classify");
+console.log("\nextractCampaignTokens, strip |default + classify");
 {
   const info = extractCampaignTokens(["Hi {{first_name|there}}, from {{company}}"]);
   eq(info.standard.length, 2, "two standard tokens");
@@ -92,7 +92,7 @@ eq(
   "sender-identity tokens are excluded",
 );
 
-console.log("\nextractCampaignTokens — hasFallback is AND across occurrences");
+console.log("\nextractCampaignTokens, hasFallback is AND across occurrences");
 eq(extractCampaignTokens(["{{x|d}}"]).custom[0].hasFallback, true, "single defaulted use → protected");
 eq(extractCampaignTokens(["{{x}} {{x|d}}"]).custom[0].hasFallback, false, "one bare use → NOT protected");
 eq(extractCampaignTokens(["{{x|d}} {{x|e}}"]).custom[0].hasFallback, true, "every use defaulted → protected");
@@ -102,7 +102,7 @@ eq(extractCampaignTokens(["{{x|d}} {{x|e}}"]).custom[0].hasFallback, true, "ever
   eq(info.custom[0].key, "propertyaddress", "custom key normalized");
 }
 
-console.log("\nallEmailTemplates + extraction — catches B/C variants AND branch tokens");
+console.log("\nallEmailTemplates + extraction, catches B/C variants AND branch tokens");
 {
   const graph: FlowGraph = {
     version: 1,
@@ -130,7 +130,7 @@ console.log("\nallEmailTemplates + extraction — catches B/C variants AND branc
   eq(keys, ["industry", "novar", "yesvar"], "extracts custom tokens from every variant + branch");
 }
 
-console.log("\nreconcileCampaignVariables — ordered de-duped union");
+console.log("\nreconcileCampaignVariables, ordered de-duped union");
 {
   const existing: CampaignVariable[] = [{ token: "OldVar", key: "oldvar", kind: "custom" }];
   const copy = extractCampaignTokens(["{{first_name}} {{new_var}}"]);
@@ -156,7 +156,7 @@ console.log("\nreconcileCampaignVariables — ordered de-duped union");
 }
 eq(reconcileCampaignVariables(null, { standard: [], custom: [] }, []), [], "empty everything → []");
 
-console.log("\nbuildInitialMappingForTargets — columns drive new variables");
+console.log("\nbuildInitialMappingForTargets, columns drive new variables");
 eq(
   buildInitialMappingForTargets(["Property Address"], null, []),
   { "Property Address": CUSTOM_TARGET_PREFIX + "Property Address" },

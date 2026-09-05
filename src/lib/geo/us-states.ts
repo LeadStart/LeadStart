@@ -1,4 +1,4 @@
-// US states + DC — the ONE piece of geo reference that's small enough (51 rows)
+// US states + DC: the ONE piece of geo reference that's small enough (51 rows)
 // and needed synchronously (server-side, in the maps-search route's abbr→name
 // normalization) to justify bundling. The big reference data (3k counties, ~19k
 // cities) lives in the geo_places table and is served by the typeahead endpoint,

@@ -22,7 +22,7 @@ import type { FlowGraph } from "@/lib/flow/graph";
 
 // Force dynamic rendering on every invocation. Without this, a Vercel cron
 // (which hits the same URL with no query params) can receive an edge-cached
-// response from a prior tick, skipping the function body entirely — the DB is
+// response from a prior tick, skipping the function body entirely: the DB is
 // never touched but the route returns the old payload. Applied to every cron
 // route preemptively after the 2026-05-27 edge-cache incident.
 export const dynamic = "force-dynamic";
@@ -164,7 +164,7 @@ async function runAnalyticsSync(campaignId: string | null) {
 
         // Cohort attribution for the per-contact reply rate: re-bucket distinct
         // repliers by each contact's first-touch day (uses the send log +
-        // replies already paged above — no extra fetch).
+        // replies already paged above: no extra fetch).
         const cohortByDay = computeCohortReplies(sends, replies);
 
         if (byDay.size > 0) {

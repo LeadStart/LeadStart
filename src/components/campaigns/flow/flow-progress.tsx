@@ -1,6 +1,6 @@
 "use client";
 
-// FlowProgress — read-only view of a flow campaign's live state. A rollup strip
+// FlowProgress: read-only view of a flow campaign's live state. A rollup strip
 // (enrolled / active / peeled / rates) plus a compact outline of the graph with
 // per-node occupancy ("N here") and, on each condition, the Yes/No branch split.
 // Reads campaign_enrollments.current_node_id (stamped by the graph runtime), so
@@ -13,10 +13,10 @@ import { subtreeActive, type FlowProgressData } from "@/lib/flow/progress";
 
 const CONDITION_LABEL: Record<FlowConditionTrigger, string> = {
   replied: "they reply (any)",
-  reply_interested: "reply — interested",
-  reply_objection: "reply — objection",
-  reply_not_interested: "reply — not interested",
-  reply_ooo: "reply — out of office",
+  reply_interested: "reply, interested",
+  reply_objection: "reply, objection",
+  reply_not_interested: "reply, not interested",
+  reply_ooo: "reply, out of office",
   bounced: "it bounces",
   opened: "they open (retired)",
   clicked: "they click (retired)",

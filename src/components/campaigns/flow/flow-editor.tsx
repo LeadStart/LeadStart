@@ -1,10 +1,10 @@
 "use client";
 
-// FlowEditor — the visual branching sequence editor. Renders a FlowGraph as a
+// FlowEditor: the visual branching sequence editor. Renders a FlowGraph as a
 // centered spine on a dotted canvas: compact "envelope" tiles for content nodes
 // (email/linkedin/internal), wait chips, and every condition forked into yes/no
 // arms (nested sequences). Clicking a content tile opens a centered compose
-// MODAL (instant, viewport-centered, contained) to edit it — the tiles stay a
+// MODAL (instant, viewport-centered, contained) to edit it: the tiles stay a
 // uniform summary. Controlled: the parent owns the graph and passes value +
 // onChange. Email/wait are the executed path today; linkedin/internal/condition
 // are authored + persisted but don't run yet.
@@ -59,20 +59,20 @@ function LinkedInGlyph({ size = 16 }: { size?: number }) {
 
 const TRIGGER_LABELS: Record<FlowConditionTrigger, string> = {
   replied: "they reply (any)",
-  reply_interested: "they reply — interested",
-  reply_objection: "they reply — objection",
-  reply_not_interested: "they reply — not interested",
-  reply_ooo: "they reply — out of office",
+  reply_interested: "they reply, interested",
+  reply_objection: "they reply, objection",
+  reply_not_interested: "they reply, not interested",
+  reply_ooo: "they reply, out of office",
   bounced: "it bounces",
-  // Retired — shown only if a stored graph still uses one (never offered anew).
+  // Retired: shown only if a stored graph still uses one (never offered anew).
   opened: "they open a message (retired)",
   clicked: "they click a link (retired)",
   manual: "a VA marks it (retired)",
 };
 
-// The triggers the builder OFFERS. We route on inbound signals only — replies
+// The triggers the builder OFFERS. We route on inbound signals only: replies
 // (+ classifier sentiment) and bounces. opened/clicked need open/link tracking we
-// deliberately never add (deliverability); manual has no automation — all retired.
+// deliberately never add (deliverability); manual has no automation: all retired.
 const OFFERED_TRIGGERS: FlowConditionTrigger[] = [
   "replied",
   "reply_interested",
@@ -155,7 +155,7 @@ function findNode(nodes: FlowNode[], id: string): FlowNode | null {
   return null;
 }
 
-// First non-empty line of a body — the tile's one-line preview.
+// First non-empty line of a body: the tile's one-line preview.
 function firstLine(s: string): string {
   return (s || "")
     .split("\n")
@@ -173,7 +173,7 @@ const INSERT_TOKENS = ["{{first_name}}", "{{company}}", "{{title}}", "{{intro_li
 
 // A/B/C… variant editor for an email node, as a compact ACCORDION. Variant A is
 // the node's own subject/body (the fields above in the modal); this manages the
-// extra variants (B, C…) — each collapses to a one-line row and springs open to
+// extra variants (B, C…): each collapses to a one-line row and springs open to
 // edit. Leads split evenly across all variants and we measure reply/positive-
 // reply rate per one.
 function EmailVariants({
@@ -242,7 +242,7 @@ function EmailVariants({
           <select className={styles.select} value={autoPauseValue} onChange={(e) => setAutoPause(e.target.value)}>
             <option value="inherit">Use campaign default ({abAutoPauseDefault ? "auto-pause on" : "off"})</option>
             <option value="on">Auto-pause losers on</option>
-            <option value="off">Off — decide manually</option>
+            <option value="off">Off: decide manually</option>
           </select>
           <p className={styles.hint} style={{ marginTop: 2 }}>
             When on, once this test has the volume it pauses the losing variants (95% significance
@@ -282,7 +282,7 @@ function EmailVariants({
                       <input
                         className={styles.input}
                         value={v.subject}
-                        placeholder={isFirst ? "Subject for this variant" : "Subject (optional — blank threads as “Re:”)"}
+                        placeholder={isFirst ? "Subject for this variant" : "Subject (optional, blank threads as “Re:”)"}
                         onChange={(e) => update(v.id, { subject: e.target.value })}
                       />
                       <textarea
@@ -321,9 +321,9 @@ export function FlowEditor({
   const [openPicker, setOpenPicker] = useState<string | null>(null);
   // Which content node's editor MODAL is open (null = none). Only ever set from a
   // click handler, so the portal below is only rendered client-side (openId is
-  // null through SSR + hydration) — no document/SSR guard needed.
+  // null through SSR + hydration): no document/SSR guard needed.
   const [openId, setOpenId] = useState<string | null>(null);
-  // Email modal "expand" toggle — a wider, taller focused view. Sticky across
+  // Email modal "expand" toggle: a wider, taller focused view. Sticky across
   // opens; only widens the email modal (the button lives only in its header).
   const [expanded, setExpanded] = useState(false);
 
@@ -585,7 +585,7 @@ export function FlowEditor({
     const preview =
       n.kind === "internal"
         ? INTERNAL_ACTION_LABEL[n.action] ?? n.action
-        : firstLine(n.body) || "Empty — click to write";
+        : firstLine(n.body) || "Empty, click to write";
 
     return (
       <div className={styles.tile} data-tile onClick={() => setOpenId(n.id)}>
@@ -688,8 +688,8 @@ export function FlowEditor({
                     padding: "6px 8px",
                   }}
                 >
-                  <b>Retired trigger.</b> We don’t track opens or clicks — it hurts
-                  deliverability — so this can’t fire; everyone follows the{" "}
+                  <b>Retired trigger.</b> We don’t track opens or clicks: it hurts
+                  deliverability, so this can’t fire; everyone follows the{" "}
                   <b>No</b> path. Switch to a reply- or bounce-based condition.
                 </p>
               )}
@@ -786,12 +786,12 @@ export function FlowEditor({
               <p className={styles.threadHelp}>
                 {hasSubject ? (
                   <>
-                    Custom subject — this email starts a <b>new thread</b>. Clear it to fall back to the
+                    Custom subject: this email starts a <b>new thread</b>. Clear it to fall back to the
                     first email’s thread.
                   </>
                 ) : (
                   <>
-                    Leave blank to stay on the <b>first email’s thread</b> — the recipient sees it as a
+                    Leave blank to stay on the <b>first email’s thread</b>: the recipient sees it as a
                     reply, no new subject line.
                   </>
                 )}
@@ -816,7 +816,7 @@ export function FlowEditor({
             ))}
           </div>
           {(() => {
-            // Flag copy tokens with no mapped contact column — under the
+            // Flag copy tokens with no mapped contact column: under the
             // columns-drive-variables model they never register a variable and
             // send blank. Mirrors the import panel's warning, at authoring time.
             const mapped = new Set(customChips.map((c) => normalizeVarKey(c.replace(/[{}]/g, ""))));
@@ -831,7 +831,7 @@ export function FlowEditor({
                 }}
               >
                 Not mapped to a contact column:{" "}
-                <b>{unmapped.map((t) => `{{${t.token}}}`).join(", ")}</b> — map a column when you
+                <b>{unmapped.map((t) => `{{${t.token}}}`).join(", ")}</b>: map a column when you
                 import contacts, or these send blank.
               </p>
             );
@@ -901,11 +901,11 @@ export function FlowEditor({
               className={styles.textarea}
               rows={4}
               value={n.body}
-              placeholder="Hi {{first_name}} — saw your work at {{company}}…"
+              placeholder="Hi {{first_name}}: saw your work at {{company}}…"
               onChange={(e) => patch(n.id, { body: e.target.value })}
             />
           </div>
-          <p className={styles.hint}>Manual for now — shows up as a VA task; it doesn’t send automatically.</p>
+          <p className={styles.hint}>Manual for now: shows up as a VA task; it doesn’t send automatically.</p>
         </div>
       );
     } else {
@@ -942,7 +942,7 @@ export function FlowEditor({
               onChange={(e) => patch(n.id, { label: e.target.value })}
             />
           </div>
-          <p className={styles.hint}>Runs when the flow reaches this point — doesn’t touch sending.</p>
+          <p className={styles.hint}>Runs when the flow reaches this point: doesn’t touch sending.</p>
         </div>
       );
     }

@@ -2,17 +2,17 @@
 //
 // Owner-only. Sets (or changes, or clears) a campaign's client link. Two callers:
 //
-//   1. The no-JS link-orphan form on /admin/campaigns/[id] — form-encoded
+//   1. The no-JS link-orphan form on /admin/campaigns/[id]: form-encoded
 //      `client_id=<uuid>`, answered with a 303 redirect back to the campaign.
 //      Form callers must pick a client (an empty value is rejected).
-//   2. The Setup tab on the campaign workspace — JSON `{ client_id: <uuid>|null }`,
+//   2. The Setup tab on the campaign workspace: JSON `{ client_id: <uuid>|null }`,
 //      answered with JSON. A null/empty client_id unlinks the campaign (back to
 //      orphan); any client_id re-points it, at any time.
 //
 // Catch-up notifications: replies ingested while the campaign was an orphan
 // classified but skipped notification (client_id was NULL). When we link an
 // orphan to a client we backfill their client_id and, after the response, fire
-// the deferred hot-lead notifications — already-classified rows call
+// the deferred hot-lead notifications: already-classified rows call
 // sendHotLeadNotification directly (runReplyPipeline early-returns on
 // classified rows), unclassified rows run the full pipeline. This is the path
 // lazy-created orphan campaigns depend on. Changing between two
@@ -164,7 +164,7 @@ export async function POST(
     const classifiedIds = alreadyClassifiedIds;
     const pendingIds = unclassifiedIds;
     after(async () => {
-      // Already-classified orphans: sendHotLeadNotification directly —
+      // Already-classified orphans: sendHotLeadNotification directly,
       // runReplyPipeline early-returns on classified rows, so it can't fire
       // the deferred notification.
       for (const rid of classifiedIds) {

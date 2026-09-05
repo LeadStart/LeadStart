@@ -2,7 +2,7 @@
 // Auth via X-Api-Key + X-Api-Secret headers. Availability + DNS are
 // well-established; registerDomain is to the documented shape but PENDING LIVE
 // VERIFICATION (registration needs pre-created contact IDs and returns 202 +
-// async op) — it throws clearly if the API rejects it.
+// async op): it throws clearly if the API rejects it.
 
 import type {
   DnsRecordInput,
@@ -17,7 +17,7 @@ import { diffDnsRecords } from "./dns";
 import { ManualForwardingRequiredError, manualForwardingMessage } from "./forwarding";
 
 // Spaceship's public API has no URL-forwarding endpoint (its resource groups are
-// domains, DNS, contacts, nameservers, transfer, SellerHub — no redirects). The
+// domains, DNS, contacts, nameservers, transfer, SellerHub: no redirects). The
 // feature exists only in the Spaceship dashboard, so forwarding is a manual step.
 
 const BASE = "https://spaceship.dev/api/v1";
@@ -88,7 +88,7 @@ export function fromSpaceshipRecord(item: {
 
 /**
  * Pull the first-year registration price out of an availability response. The
- * exact field is PENDING LIVE VERIFICATION — Spaceship returns a standard
+ * exact field is PENDING LIVE VERIFICATION: Spaceship returns a standard
  * price for non-premium domains that the original code never parsed (it only
  * read premiumPricing, so every normal .com came back null and got locked out
  * of "buy where cheaper"). We try the documented/likely fields in order and
@@ -225,7 +225,7 @@ export function createSpaceshipProvider(creds: { apiKey: string; apiSecret: stri
       if (!pending) return; // SUCCESS / COMPLETED / DONE
       await sleep(5000);
     }
-    // Timed out still pending — accept it; DNS/ownership retries confirm.
+    // Timed out still pending: accept it; DNS/ownership retries confirm.
   }
 
   async function getRecords(domain: string): Promise<DnsRecordInput[]> {
@@ -305,7 +305,7 @@ export function createSpaceshipProvider(creds: { apiKey: string; apiSecret: stri
       return getRecords(domain);
     },
 
-    // Forwarding isn't in Spaceship's API — callers gate on supportsUrlForwarding
+    // Forwarding isn't in Spaceship's API: callers gate on supportsUrlForwarding
     // and route to the manual dashboard flow; these throw if invoked directly.
     async getUrlForwards(_domain: string): Promise<UrlForward[]> {
       throw new ManualForwardingRequiredError("spaceship", manualForwardingMessage("spaceship"));

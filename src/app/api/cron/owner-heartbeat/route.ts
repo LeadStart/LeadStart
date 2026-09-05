@@ -1,4 +1,4 @@
-// GET /app/api/cron/owner-heartbeat — runs once daily (vercel.json: 0 13 * * *,
+// GET /app/api/cron/owner-heartbeat: runs once daily (vercel.json: 0 13 * * *,
 // = 09:00 ET in EDT / 08:00 ET in EST). Sends a status email to every owner
 // profile so the operator knows the alert pipeline is alive.
 //
@@ -24,7 +24,7 @@ import {
 
 // Force dynamic rendering on every invocation. Without this, a Vercel cron
 // (which hits the same URL with no query params) can receive an edge-cached
-// response from a prior tick, skipping the function body entirely — the DB
+// response from a prior tick, skipping the function body entirely: the DB
 // is never touched but the route returns the old payload. Caught on
 // 2026-05-27 in an earlier cron route;
 // applying the same guard to every cron route preemptively.

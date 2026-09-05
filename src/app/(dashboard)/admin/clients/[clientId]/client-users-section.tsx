@@ -25,7 +25,7 @@ export function ClientUsersSection({
 }: {
   clientId: string;
   users: LinkedUser[];
-  // null means "no override set" — every portal user receives reports by default
+  // null means "no override set": every portal user receives reports by default
   // (matches the convention in /admin/reports, where unset recipients = all checked).
   reportRecipients: string[] | null;
   onUsersChanged: () => void;

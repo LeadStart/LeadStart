@@ -5,7 +5,7 @@ import { getStripe, isStripeDemoMode } from "@/lib/stripe/client";
 import type { ClientSubscription } from "@/types/app";
 
 /**
- * Reverses a scheduled cancellation — flips `cancel_at_period_end` back to
+ * Reverses a scheduled cancellation: flips `cancel_at_period_end` back to
  * false on both Stripe and our mirror. Only valid while the subscription is
  * still active and the period end hasn't passed.
  */
@@ -43,7 +43,7 @@ export async function POST(
   }
   if (sub.status === "canceled") {
     return NextResponse.json(
-      { error: "Already fully canceled — cannot reverse" },
+      { error: "Already fully canceled, cannot reverse" },
       { status: 409 },
     );
   }
@@ -70,7 +70,7 @@ export async function POST(
 
   // Mirror via the service-role client: client_subscriptions is service-role-only
   // under the hardened RLS (00100), so a user-client update is silently denied.
-  // Non-fatal — Stripe already applied the change and the webhook confirms it.
+  // Non-fatal: Stripe already applied the change and the webhook confirms it.
   const admin = createAdminClient();
   const { error: mirrorErr } = await admin
     .from("client_subscriptions")

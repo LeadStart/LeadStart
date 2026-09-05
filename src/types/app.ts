@@ -32,7 +32,7 @@ export interface Organization {
   // fallback (web search). Either may fall back to env vars at runtime.
   anthropic_api_key: string | null;
   perplexity_api_key: string | null;
-  // Unipile (LinkedIn channel — migration 00046). DSN is the per-workspace
+  // Unipile (LinkedIn channel, migration 00046). DSN is the per-workspace
   // host Unipile assigns at signup (e.g. "api7.unipile.com:13779"). Webhook
   // ID is populated when commit #5 registers the messaging/account_status
   // webhooks; null until one-time setup runs.
@@ -47,7 +47,7 @@ export interface Organization {
   // Inbox-placement testing (migration 00068). Days between automatic
   // neutral probes per active mailbox; NULL = manual runs only.
   placement_test_interval_days: number | null;
-  // Email verification — Million Verifier (migration 00069). API key (NULL
+  // Email verification: Million Verifier (migration 00069). API key (NULL
   // disarms the pre-send gate). credits + checked_at are the last-seen balance;
   // the error trio drives 1h call-suppression after a definitive account error
   // (bad key / no credits / IP blocked) and the edge-triggered owner alert.
@@ -61,7 +61,7 @@ export interface Organization {
   // Apify token (migration 00070). One key powers the Contacts → Enrich
   // phases: LinkedIn profile → email, company → domain, and the second-pass
   // email waterfall. Falls back to process.env.APIFY_API_TOKEN at runtime.
-  // (Email verification is Million Verifier's, above — not Apify's.)
+  // (Email verification is Million Verifier's, above, not Apify's.)
   apify_api_key: string | null;
   // Configurable enrichment waterfall (migration 00075). NULL → code defaults
   // (DEFAULT_ENRICHMENT_SETTINGS). Read/merged via loadEnrichmentSettings.
@@ -99,13 +99,13 @@ export interface Client {
   contact_first_name: string | null;
   contact_last_name: string | null;
   notes: string | null;
-  // Fixed day/time schedule (migration 00040) — preferred
+  // Fixed day/time schedule (migration 00040): preferred
   report_frequency: ReportFrequency | null;
   report_day_of_week: number | null;   // 0-6, Sunday=0 (weekly/biweekly)
   report_day_of_month: number | null;  // 1-28 or -1 for "last day" (monthly)
   report_time_of_day: string | null;   // 'HH:MM' 24h, evaluated in report_timezone
   report_timezone: string | null;      // IANA tz (e.g., America/New_York)
-  // Legacy elapsed-time schedule — retained for back-compat, not read by cron
+  // Legacy elapsed-time schedule: retained for back-compat, not read by cron
   report_interval_days: number | null;
   report_schedule_start: string | null;
   report_last_sent_at: string | null;
@@ -116,7 +116,7 @@ export interface Client {
   // marketing outreach (migration 00048). Excluded from billing/MRR; pinned
   // in the campaign-linking picker. At most one per organization.
   is_internal: boolean;
-  // Reply routing pipeline (migration 00025) — populated during onboarding
+  // Reply routing pipeline (migration 00025): populated during onboarding
   notification_email: string | null;     // single address for hot-reply notifications
   notification_cc_emails: string[];       // extra teammates CC'd on notifications + portal sends (migration 00030)
   phone_number: string | null;            // for display in the dossier
@@ -152,7 +152,7 @@ export type SendingStrategy = "finish_first" | "reach_first";
 
 export interface Campaign {
   id: string;
-  // NULL for "orphan" campaigns — rows imported by the discovery cron
+  // NULL for "orphan" campaigns: rows imported by the discovery cron
   // before an owner has linked them to a LeadStart client. Existing admin
   // surfaces filter or degrade gracefully when client_id is NULL.
   client_id: string | null;
@@ -284,7 +284,7 @@ export interface CampaignSnapshot {
   unique_replies: number;
   /**
    * Distinct contacts (deduped by email across the campaign) first-touched on
-   * snapshot_date who have since replied — the numerator for the per-contact
+   * snapshot_date who have since replied: the numerator for the per-contact
    * (cohort) reply rate. Written by the sync-analytics cron; migration 00093.
    * Optional so the app tolerates snapshots read before that column exists /
    * is populated (calculateMetrics falls back to unique_replies).
@@ -382,7 +382,7 @@ export interface CampaignStepMetric {
   fetched_at: string;
 }
 
-// Step health — compares current period vs trailing average
+// Step health: compares current period vs trailing average
 export interface StepHealthAlert {
   campaign_id: string;
   campaign_name: string;
@@ -395,7 +395,7 @@ export interface StepHealthAlert {
   severity: "warning" | "critical";
 }
 
-// CRM / Pipeline stages — pipeline state lives on `contacts` (no separate prospects table).
+// CRM / Pipeline stages: pipeline state lives on `contacts` (no separate prospects table).
 // A contact is "in the pipeline" when pipeline_stage is non-null.
 export type ProspectStage = "lead" | "contacted" | "meeting" | "proposal" | "closed" | "lost";
 
@@ -429,11 +429,11 @@ export type EmailVerificationStatus =
 export type EmailVerificationQuality = "good" | "bad" | "risky";
 
 // Which method supplied the email during enrichment (migration 00070; waterfall
-// methods extended in 00075). Provenance only — verification itself is Million
+// methods extended in 00075). Provenance only: verification itself is Million
 // Verifier's, not Apify's. `pattern_mv` (pattern-permutation + Million Verifier)
 // and `site_scrape` (our own contact scraper) are the waterfall methods; `bovi`
 // is the pay-per-found Apify fallback. (Historical rows may carry the retired
-// `vdrmota` value in the plain-TEXT column — that's fine, it's provenance data.)
+// `vdrmota` value in the plain-TEXT column: that's fine, it's provenance data.)
 export type EmailProviderId =
   | "harvestapi"
   | "bovi"
@@ -441,7 +441,7 @@ export type EmailProviderId =
   | "site_scrape"
   // A personal email found by the decision-maker (naming) phase's Layer 1/2.
   | "decision_maker"
-  // A deliverable email recovered by Findymail's catch-all validation step —
+  // A deliverable email recovered by Findymail's catch-all validation step,
   // the one source that can crack catch-all domains pattern_mv is blind to.
   | "findymail";
 
@@ -456,7 +456,7 @@ export interface Contact {
   company_name: string | null;
   title: string | null;
   phone: string | null;
-  // Company-level contact info (migration 00076) — kept SEPARATE from the
+  // Company-level contact info (migration 00076): kept SEPARATE from the
   // decision-maker's own email/phone above. Filled by site scrape + the
   // harvestapi company actor (the company's main line / generic info@ inbox).
   company_phone: string | null;
@@ -485,7 +485,7 @@ export interface Contact {
   status: ContactStatus;
   source: string | null;
   notes: string | null;
-  // Pipeline state — null means "not in the pipeline"
+  // Pipeline state: null means "not in the pipeline"
   pipeline_stage: ProspectStage | null;
   pipeline_sort_order: number;
   pipeline_notes: string | null;
@@ -503,12 +503,12 @@ export interface Contact {
   email_did_you_mean: string | null;
   email_verified_at: string | null;
   email_verification_attempts: number;
-  // NOT real columns — scalars projected out of enrichment_data by the list
+  // NOT real columns: scalars projected out of enrichment_data by the list
   // fetchers (admin-queries CONTACT_LIST_COLUMNS, enrich/run/[id] join) so list
   // UIs can tier/badge emails without hauling the whole JSONB blob. Absent on
   // fetches that don't project them.
-  email_kind?: string | null; // enrichment.email.kind — 'company_generic' for a backfilled inbox
-  email_provider_status?: string | null; // enrichment.email.provider_status — 'catch_all' for an unprovable guess
+  email_kind?: string | null; // enrichment.email.kind: 'company_generic' for a backfilled inbox
+  email_provider_status?: string | null; // enrichment.email.provider_status: 'catch_all' for an unprovable guess
   created_at: string;
   updated_at: string;
 }
@@ -639,7 +639,7 @@ export interface ClientSubscription {
   canceled_at: string | null;
   setup_fee_cents: number | null;
   setup_fee_paid_at: string | null;
-  /** Pricing snapshot from the accepted quote (tiers retired — no plan to read). */
+  /** Pricing snapshot from the accepted quote (tiers retired, no plan to read). */
   monthly_price_cents: number | null;
   contact_sourcing_cents: number | null;
   contacts_count: number | null;
@@ -697,7 +697,7 @@ export type ReplyStatus =
   | "rejected"            // client explicitly dismissed
   | "expired"             // auto-expired after 48h of no action
   | "pending_enrichment"  // webhook's getEmail call failed; retry cron will attempt enrichment
-  | "enrichment_failed";  // enrichment retries exhausted — terminal state, no auto-processing
+  | "enrichment_failed";  // enrichment retries exhausted: terminal state, no auto-processing
 
 // Classifier output. Matches final_class text column. See plan taxonomy.
 export type ReplyClass =
@@ -729,7 +729,7 @@ export type SourceChannel = "linkedin" | "native_email";
 export interface LeadReply {
   id: string;
   organization_id: string;
-  // NULL for orphan replies — replies captured by the webhook handler
+  // NULL for orphan replies: replies captured by the webhook handler
   // when the campaign wasn't yet linked to a LeadStart client. The
   // classifier still runs; notification is skipped until B3 links the
   // campaign and a follow-up UPDATE populates client_id.
@@ -783,14 +783,14 @@ export interface LeadReply {
   notification_token_hash: string | null;
   notification_token_consumed_at: string | null;
   notification_email_id: string | null;
-  // Notification reliability (migration 00032) — retry-queue state
+  // Notification reliability (migration 00032): retry-queue state
   notification_status: "pending" | "sent" | "failed" | "retrying";
   notification_retry_count: number;
   notification_last_attempt_at: string | null;
   notification_last_error: string | null;
   notification_delivered_at: string | null;
   notification_bounced_at: string | null;
-  // Enrichment retry (migration 00037) — populated when webhook's getEmail
+  // Enrichment retry (migration 00037): populated when webhook's getEmail
   // fails and the row is parked as status='pending_enrichment'.
   enrichment_retry_count: number;
   enrichment_last_attempt_at: string | null;
@@ -821,7 +821,7 @@ export interface LeadReply {
   // reply-send call.
   sent_external_email_id: string | null;
   error: string | null;
-  // D2 idempotency tombstone — sha256(reply.id + body_text).slice(0, 16).
+  // D2 idempotency tombstone: sha256(reply.id + body_text).slice(0, 16).
   // Stamped on atomic claim; persists through error rollbacks.
   idempotency_key: string | null;
 
@@ -847,7 +847,7 @@ export interface NativeMailbox {
   // Link to the sending_domains row for this inbox's domain (migration 00081).
   // Null on legacy rows until backfilled. Drives domain-level lifecycle/drain.
   domain_id: string | null;
-  // Free-form operator tags (migration 00101) — named pools the campaign mailbox
+  // Free-form operator tags (migration 00101): named pools the campaign mailbox
   // picker can add en masse. Always an array; '{}' by default.
   tags: string[];
   ramp_started_at: string;        // 'YYYY-MM-DD'
@@ -856,7 +856,7 @@ export interface NativeMailbox {
   // All-time-send offset for the warmup ramp (migration 00081). 0 = unchanged;
   // set to the current send count when re-activating a RESTED mailbox so it
   // re-warms from ramp stage 1 instead of resuming at full cap. Applied at the
-  // dispatcher's effectiveDailyCap() call site — ramp.ts math is untouched.
+  // dispatcher's effectiveDailyCap() call site: ramp.ts math is untouched.
   ramp_baseline_sent: number;
   last_error: string | null;
   last_error_at: string | null;
@@ -875,7 +875,7 @@ export interface NativeMailbox {
   updated_at: string;
 }
 
-// Mailbox tag registry (migration 00108) — the org's canonical tag vocabulary,
+// Mailbox tag registry (migration 00108): the org's canonical tag vocabulary,
 // managed on Settings → Tags. Independent of which inboxes carry each tag;
 // rename/delete cascade to native_mailboxes.tags[] in the API route.
 export interface MailboxTag {
@@ -904,7 +904,7 @@ export type DomainRegistrar = "porkbun" | "spaceship" | "manual";
 //   active        full duty
 //   tired         intake CLOSED to new leads; in-flight follow-ups drain
 //   resting       all mailboxes paused; DNS/MX live so late replies still arrive
-//   burned        DBL-listed or still failing after a full rest — never reused
+//   burned        DBL-listed or still failing after a full rest: never reused
 //   retired       not renewed (terminal)
 export type DomainLifecycle =
   | "provisioning"
@@ -928,7 +928,7 @@ export interface SendingDomain {
   drain_until: string | null; // tired: when drain ends → resting
   rest_until: string | null; // resting: when rest ends → (re-)warming
   registrar: DomainRegistrar;
-  registered_at: string | null; // 'YYYY-MM-DD' — drives the age gate
+  registered_at: string | null; // 'YYYY-MM-DD': drives the age gate
   expires_at: string | null; // 'YYYY-MM-DD'
   purchase_price_usd: number | null;
   dkim_verified_at: string | null;
@@ -1001,7 +1001,7 @@ export interface ProvisioningStep {
 
 export interface ProvisioningUserSpec {
   local_part: string; // "jane"
-  display_name: string; // "Jane Doe" — the From name recipients see
+  display_name: string; // "Jane Doe": the From name recipients see
   given_name?: string; // explicit first name (preferred over splitting display_name)
   family_name?: string; // explicit last name
   email: string; // local_part@domain, derived once at init
@@ -1013,7 +1013,7 @@ export interface ProvisioningUserSpec {
 export interface ProvisioningState {
   version: 1;
   started_at: string;
-  updated_at: string; // bumped on every state write — the CAS token
+  updated_at: string; // bumped on every state write: the CAS token
   steps: Record<ProvisioningStepId, ProvisioningStep>;
   site_verification_token: string | null; // full "google-site-verification=…" string
   users: ProvisioningUserSpec[];
@@ -1067,9 +1067,9 @@ export interface HealthComponent {
 export type SeedInboxStatus = "active" | "paused" | "error";
 
 // How a seed inbox is read back (migration 00085):
-//   google_workspace — org-level service account + DWD (the original path)
-//   microsoft_graph  — per-seed OAuth refresh token, Graph Mail.Read
-//   imap             — app-password IMAP (Yahoo, consumer Gmail, generic)
+//   google_workspace: org-level service account + DWD (the original path)
+//   microsoft_graph : per-seed OAuth refresh token, Graph Mail.Read
+//   imap            : app-password IMAP (Yahoo, consumer Gmail, generic)
 // Consumer Gmail deliberately rides IMAP, not OAuth: gmail.readonly is a
 // restricted scope (unverified apps blocked; testing-mode tokens die in 7
 // days), while app passwords are durable and Gmail's IMAP extensions still
@@ -1132,7 +1132,7 @@ export type PlacementResultStatus =
   | "unreadable";
 
 // SPF/DKIM/DMARC verdicts as the RECEIVING side reported them in the probe's
-// Authentication-Results header — the authoritative answer to "did auth pass
+// Authentication-Results header: the authoritative answer to "did auth pass
 // on delivery", as opposed to our own DNS checks of what's published.
 export interface PlacementAuthResults {
   spf: string | null;
@@ -1191,7 +1191,7 @@ export interface PlacementTestResult {
   checked_at: string | null;
 }
 
-// Append-only send log — one row per successful send. Doubles as the
+// Append-only send log: one row per successful send. Doubles as the
 // per-mailbox daily-cap counter, the sent/bounced metric source, and the
 // reply-thread match index.
 export interface NativeSend {
@@ -1211,7 +1211,7 @@ export interface NativeSend {
   sent_at: string;
   bounced_at: string | null;
   // Soft (4.x.x, transient) bounce timestamp (migration 00067). Does NOT change
-  // status — soft bounces aren't suppressed — but feeds the inbox-health
+  // status (soft bounces aren't suppressed) but feeds the inbox-health
   // soft-bounce signal. Null = no soft bounce observed for this send.
   soft_bounced_at: string | null;
   // What the pre-send verification gate saw at send time (migration 00069).
@@ -1246,7 +1246,7 @@ export const OWNER_NOTIFY_HOT_CLASSES: ReplyClass[] = [
 // Prospecting (Scrap.io lead enrichment)
 
 // Flattened business row stored in prospect_searches.results and shown in
-// the Prospecting table. Mirrors what the Replit reference build emitted —
+// the Prospecting table. Mirrors what the Replit reference build emitted,
 // purposely matches the shape of contacts (name, email, phone, etc.) so
 // the save-to-contacts mapping stays one-to-one.
 export interface ScrapioBusiness {
@@ -1399,7 +1399,7 @@ export interface MapsPlace {
   leads?: MapsLead[];
 }
 
-// Cached Maps-search audit row + async Apify run tracking — the Google-Maps twin
+// Cached Maps-search audit row + async Apify run tracking: the Google-Maps twin
 // of LinkedInSearch. The background worker (/api/cron/run-maps-searches) starts
 // the compass actor and polls it across ticks; the page polls this row for
 // progress. delivered_counts is the outcome ledger (Phase 5).
@@ -1434,7 +1434,7 @@ export type DmRunStatus = "pending" | "running" | "complete" | "failed";
 export type DmServiceType = "operations" | "events";
 export type DmResultStatus = "pending" | "complete" | "error" | "skipped";
 
-// Parent run row — one created per "Find decision makers" click. The cron
+// Parent run row: one created per "Find decision makers" click. The cron
 // worker /api/cron/run-decision-maker-enrichment processes the children.
 export interface DecisionMakerRun {
   id: string;
@@ -1485,7 +1485,7 @@ export interface DecisionMakerResult {
 // The core waterfall (profiles → domains → waterfall) always runs; `activity`
 // and `verify` are OPT-IN add-ons (migration 00077, run_activity / run_verify).
 // The `verify` phase is Million Verifier run inline on every found email so the
-// enrichment report carries a verification verdict — MV stays the single source
+// enrichment report carries a verification verdict: MV stays the single source
 // of truth; its pre-send gate is the backstop (and hits the 30-day cache, so no
 // double spend). A run with verify off writes no verification columns here.
 
@@ -1502,11 +1502,11 @@ export type EnrichmentStepStatus =
   | "pending" | "in_flight" | "found" | "not_found" | "skipped" | "error";
 
 // The pluggable second-pass email waterfall methods (migration 00075):
-//   pattern_mv          — first/last/domain permutations verified by Million Verifier (default)
-//   scrape_plus_pattern — our site scraper, then pattern_mv on the still-missing
-//   site_scrape         — our own 5-tier anti-bot company-site scraper
-//   bovi                — pay-per-found Apify pattern finder (fallback)
-//   off                 — skip the waterfall for this size band
+//   pattern_mv         : first/last/domain permutations verified by Million Verifier (default)
+//   scrape_plus_pattern: our site scraper, then pattern_mv on the still-missing
+//   site_scrape        : our own 5-tier anti-bot company-site scraper
+//   bovi               : pay-per-found Apify pattern finder (fallback)
+//   off                : skip the waterfall for this size band
 export type EnrichmentWaterfallMethod =
   | "scrape_plus_pattern"
   | "pattern_mv"
@@ -1524,7 +1524,7 @@ export const ENRICHMENT_WATERFALL_METHODS: readonly EnrichmentWaterfallMethod[] 
 
 // The two opt-in add-on stages a prospecting search can bolt onto the core
 // pipeline (chosen per-search, stamped on each imported contact's
-// enrichment_data, then read back by enqueueEnrichment). Both default OFF — a
+// enrichment_data, then read back by enqueueEnrichment). Both default OFF: a
 // missing/partial stamp coerces to false. See normalizeAddons in lib/apify/auth.
 export interface EnrichmentAddons {
   // Score LinkedIn posting recency (harvestapi profile-posts).
@@ -1537,7 +1537,7 @@ export interface EnrichmentAddons {
   naming: boolean;
   // Keep the best pattern guess on a catch-all domain (confidence 40, flagged
   // catch_all) instead of discarding it. Per-run OR over the org-level
-  // accept_catch_all_guesses setting — the run's waterfall_config snapshot is
+  // accept_catch_all_guesses setting: the run's waterfall_config snapshot is
   // overridden to true when any enrolled contact carries this stamp.
   include_catch_all: boolean;
   // Validate catch-all emails through Findymail: when pattern_mv is blind on a
@@ -1589,7 +1589,7 @@ export interface EnrichmentSettings {
 }
 
 // Defaults route every band to pattern_mv (pattern-permutation + Million
-// Verifier) — ~$0.004/contact, surgical, no Apify. site_scrape / scrape_plus_pattern
+// Verifier): ~$0.004/contact, surgical, no Apify. site_scrape / scrape_plus_pattern
 // and the bovi fallback are opt-in per band.
 export const DEFAULT_ENRICHMENT_SETTINGS: EnrichmentSettings = {
   waterfall_enabled: true,
@@ -1601,7 +1601,7 @@ export const DEFAULT_ENRICHMENT_SETTINGS: EnrichmentSettings = {
   // Off by default: Findymail catch-all recovery is opt-in per search and needs
   // a Findymail key, same posture as accept_catch_all_guesses.
   validate_catch_all: false,
-  // 6 (not 4): owner wants team/leadership/staff pages in the crawl — they're
+  // 6 (not 4): owner wants team/leadership/staff pages in the crawl, they're
   // where personMatch hits live. Discovery-driven selection keeps this cheap.
   scrape_max_pages: 6,
   // On by default: a finished search flows straight into enrichment so the
@@ -1614,29 +1614,29 @@ export const DEFAULT_ENRICHMENT_SETTINGS: EnrichmentSettings = {
 };
 
 // ── Internal automations (migration 00087) ───────────────────────────────
-// Org-level config for event-triggered "internal automation" notifications —
+// Org-level config for event-triggered "internal automation" notifications,
 // the delivery side of the Flow builder's kind:'internal' notify/webhook nodes.
 // Today these fire from the reply pipeline on a classified inbound reply; the
 // graph runtime will reuse the same targets for inline nodes later.
 
 // Which reply events fan out a notification.
-//   "hot"          → only HOT_REPLY_CLASSES (positive replies) — the default.
+//   "hot"          → only HOT_REPLY_CLASSES (positive replies): the default.
 //   "all_replies"  → every classified inbound reply, any class.
 export type AutomationNotifyOn = "hot" | "all_replies";
 
 export interface AutomationSettings {
-  // Master switch. OFF by default — nothing fires until an org opts in and
+  // Master switch. OFF by default: nothing fires until an org opts in and
   // configures at least one target.
   enabled: boolean;
   // Event filter (see AutomationNotifyOn).
   notify_on: AutomationNotifyOn;
   // Slack incoming-webhook URL. "" = Slack channel off. Treated as a secret
-  // (write-only in the settings API — never echoed back to the browser).
+  // (write-only in the settings API, never echoed back to the browser).
   slack_webhook_url: string;
   // Extra teammate address emailed on each event (via Resend). "" = off. This
   // is org-level and independent of the per-client hot-lead notification_email.
   notify_email: string;
-  // Generic outbound webhook — we POST a JSON event here. "" = off. Secret.
+  // Generic outbound webhook: we POST a JSON event here. "" = off. Secret.
   outbound_webhook_url: string;
   // Optional shared secret. When set, the outbound POST carries an
   // X-LeadStart-Signature: sha256=<hmac> header over the raw body. Secret.
@@ -1660,7 +1660,7 @@ export const AUTOMATION_SECRET_FIELDS = [
   "outbound_webhook_secret",
 ] as const;
 
-// Masked read shape returned by GET /api/admin/automations/settings — non-secret
+// Masked read shape returned by GET /api/admin/automations/settings: non-secret
 // config as values, secrets collapsed to booleans (+ a host hint for URLs).
 export interface AutomationSettingsStatus {
   enabled: boolean;
@@ -1740,7 +1740,7 @@ export interface EnrichmentRunItem {
   // Which waterfall method advancePhase routed this item to (migration 00075).
   // NULL until the waterfall phase stamps it (Phase 2 routing).
   waterfall_method: EnrichmentWaterfallMethod | null;
-  // Employee count captured in the domains phase — the size-routing input.
+  // Employee count captured in the domains phase: the size-routing input.
   employee_count: number | null;
   profile_status: EnrichmentStepStatus;
   profile_apify_run_id: string | null;

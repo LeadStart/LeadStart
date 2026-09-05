@@ -31,7 +31,7 @@ export const NUMERIC_FILTER_MAP = {
 export type ScrapioBooleanFilterKey = keyof typeof BOOLEAN_FILTER_MAP;
 export type ScrapioNumericFilterKey = keyof typeof NUMERIC_FILTER_MAP;
 
-// Loose input type — comes from the form on the Prospecting page where
+// Loose input type: comes from the form on the Prospecting page where
 // each control may be undefined (untouched), boolean, or a coerced string.
 // Encoding all three avoids a parsing layer in the UI.
 export type ScrapioFilters = Partial<{
@@ -42,7 +42,7 @@ export type ScrapioFilters = Partial<{
   }>;
 
 // Translates a UI filter object into the flat `{api_param: value}` map
-// Scrap.io expects. Returns a fresh object — does not mutate `filters`.
+// Scrap.io expects. Returns a fresh object: does not mutate `filters`.
 //
 // Boolean rules: the value coerces to 1 for true | 1 | "1", to 0 for
 // false | 0 | "0", and is dropped for undefined | null | "" | "all".

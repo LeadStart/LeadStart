@@ -1,16 +1,16 @@
 #!/usr/bin/env node
 /**
- * Unit tests for src/lib/deliverability/copy.ts — the spintax-aware spam-word
+ * Unit tests for src/lib/deliverability/copy.ts: the spintax-aware spam-word
  * matcher and the backward-compatible scoreCopy (Milestone 1).
  *
  * Covers:
- *   1. Word-boundary matching — "free" matches but "freelance" does NOT.
- *   2. Punctuation classics — "$$$" matches (non-word edges, no \b).
- *   3. Multi-word phrases — "act now" matches across single AND double space.
- *   4. Spintax-aware scan — {free|complimentary} yields a SpamMatch with
+ *   1. Word-boundary matching: "free" matches but "freelance" does NOT.
+ *   2. Punctuation classics: "$$$" matches (non-word edges, no \b).
+ *   3. Multi-word phrases: "act now" matches across single AND double space.
+ *   4. Spintax-aware scan: {free|complimentary} yields a SpamMatch with
  *      inSpintax:true on the "free" branch.
  *   5. scoreCopy returns perStep with per-step scores.
- *   6. Aggregate parity — exact aggregate score + issue count on a documented
+ *   6. Aggregate parity: exact aggregate score + issue count on a documented
  *      spintax-free fixture, per the 100 − warns×15 − infos×5 formula.
  *   7. alternatives populated for known top offenders.
  *   8. Unbalanced-brace step yields the WARN spintax issue.
@@ -63,7 +63,7 @@ console.log("\n■ punctuation classics ($$$, repeated !/?)");
   assert(phrases("$$$").includes("$$$"), '"$$$" matches alone');
   // A pair of $ should not spuriously match the triple.
   assert(!phrases("cost is $5 or $9").includes("$$$"), '"$$$" does not match scattered single $');
-  // Runs of !/? are NOT spam phrases — the structural [!?]{2,} check owns that
+  // Runs of !/? are NOT spam phrases: the structural [!?]{2,} check owns that
   // signal, so they must not appear as a phrase match (avoids double-counting).
   assert(!phrases("wow!!! amazing").includes("!!!"), '"!!!" is not a spam phrase (structural check owns it)');
   const punct = scoreCopy([{ subject: "hi", body: "wow this is really great!! take a look sometime soon" }]);
@@ -149,7 +149,7 @@ console.log("\n■ aggregate parity: exact score + issue count on a spintax-free
   const r = scoreCopy([{ subject: "hi", body: "act now" }]);
   const warns = r.issues.filter((i) => i.severity === "warn").length;
   const infos = r.issues.filter((i) => i.severity === "info").length;
-  assert(warns === 2, `exactly 2 aggregate warns — phrase + zero-personalization (got ${warns})`);
+  assert(warns === 2, `exactly 2 aggregate warns, phrase + zero-personalization (got ${warns})`);
   assert(infos === 1, `exactly 1 aggregate info (got ${infos})`);
   assert(r.issues.length === 3, `exactly 3 aggregate issues total (got ${r.issues.length})`);
   assert(r.score === 65, `aggregate score is exactly 65 per 100−2×15−5 (got ${r.score})`);
@@ -164,7 +164,7 @@ console.log("\n■ aggregate parity: exact score + issue count on a spintax-free
 
   // A fully clean AND personalized fixture scores 100 with zero issues. (Post-W4
   // a clean email must carry a merge tag or spintax, else zero-personalization
-  // fires — which is correct: an unpersonalized cold email is a real signal.)
+  // fires, which is correct: an unpersonalized cold email is a real signal.)
   const clean = scoreCopy([
     {
       subject: "A note on your onboarding",
@@ -207,7 +207,7 @@ console.log("\n■ unbalanced brace surfaces a WARN spintax issue on the step");
   assert(warn !== undefined, "unbalanced brace produces a WARN-severity spintax issue on the step");
 
   // A variable inside a spin block is valid copy and must NOT raise any spintax
-  // issue (the advisory was removed — the engine renders it correctly).
+  // issue (the advisory was removed, the engine renders it correctly).
   const r2 = scoreCopy([
     {
       subject: "hi",

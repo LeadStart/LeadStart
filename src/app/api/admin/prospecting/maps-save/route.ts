@@ -9,8 +9,8 @@ import { importMapsPlaces, type ImportMapsSearchRow } from "@/lib/apify/import-m
 // Body: { search_id, google_place_ids: string[], campaign_id?: string }
 //
 // The manual Prospecting → Contacts handoff for the Maps vein. Saves the chosen
-// places into contacts (deduped by google_place_id) via importMapsPlaces — the
-// same helper the auto-import path uses — then auto-enqueues enrichment. The
+// places into contacts (deduped by google_place_id) via importMapsPlaces: the
+// same helper the auto-import path uses: then auto-enqueues enrichment. The
 // Google-Maps twin of linkedin-save.
 
 export const maxDuration = 30;

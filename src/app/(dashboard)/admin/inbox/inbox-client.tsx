@@ -48,7 +48,7 @@ import { QuickActionBar } from "@/components/inbox/quick-action-bar";
 import { useReclassifyGroup, classAccent } from "@/components/inbox/reclassify-control";
 
 // Narrowed row shape for the inbox. Columns must match the server component's
-// select() — adding a field here without adding it to the query renders undefined.
+// select(): adding a field here without adding it to the query renders undefined.
 export interface InboxRowReply {
   id: string;
   client_id: string | null;
@@ -389,7 +389,7 @@ function AdminThread({
 
       {/* Admin view banner */}
       <div className="flex flex-none items-center gap-2 bg-slate-100 px-4 py-1.5 text-[11px] text-slate-600 sm:px-5">
-        <Eye size={12} /> Admin view — retagging here corrects the classifier and does not re-notify the client.
+        <Eye size={12} /> Admin view: retagging here corrects the classifier and does not re-notify the client.
       </div>
 
       {/* Conversation */}
@@ -461,7 +461,7 @@ function TrailFooter({ reply, onExclude }: { reply: InboxRowReply; onExclude: (v
               <p className="font-medium text-foreground">
                 {reply.referral_contact.name || reply.referral_contact.email}
                 {reply.referral_contact.title && (
-                  <span className="font-normal text-muted-foreground"> — {reply.referral_contact.title}</span>
+                  <span className="font-normal text-muted-foreground">: {reply.referral_contact.title}</span>
                 )}
               </p>
               {reply.referral_contact.email && (

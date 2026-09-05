@@ -113,7 +113,7 @@ const DEPTHS: { value: Depth; label: string; hint: string; rate: number }[] = [
 
 // Per-person enrichment rates (the Contacts waterfall), for the cost breakdown.
 // Actors: profile-scraper (email), linkedin-company (domain), pattern + verify
-// (2nd pass — the default method), profile-posts (activity); verify is Million
+// (2nd pass, the default method), profile-posts (activity); verify is Million
 // Verifier (not Apify).
 // All rates derive from pricing.ts (single source of truth, SPEND-35), so they
 // can never drift from the constants two lines away. waterfall/verify are Million
@@ -134,10 +134,10 @@ const ENRICH_RATES = {
 
 // Deep search (auto query-segmentation) sweeps many sub-queries and opens far
 // more profiles than it returns after de-duplication, so it bills well above
-// rate × target — a single-query search does not. Observed ≈3.5× on a Full+email
+// rate × target: a single-query search does not. Observed ≈3.5× on a Full+email
 // run (target 25 → $1.25 actual vs a $0.35 base estimate). Applied as a
 // multiplier so the estimate is a realistic ceiling instead of a 3–4× undercount.
-// Approximate (overlap varies with how broad the ICP is) — refine as more runs land.
+// Approximate (overlap varies with how broad the ICP is): refine as more runs land.
 const DEEP_SEARCH_MULTIPLIER = 3.5;
 
 const MAX_OPTIONS = [100, 250, 500, 1000] as const;
@@ -159,15 +159,15 @@ const PRESETS: Preset[] = [
   {
     // Law-firm decision-makers, cast wide for max recall on the SEO/marketing
     // pitch. Three buyer paths, all OR'd into one search: (1) owners / partners /
-    // founders — who pick the vendor at small firms; (2) firm executives /
-    // administrators — who own the budget at mid/large firms; (3) marketing / BD
-    // leaders — where a marketing function exists. Industry scopes to law firms
+    // founders: who pick the vendor at small firms; (2) firm executives /
+    // administrators: who own the budget at mid/large firms; (3) marketing / BD
+    // leaders: where a marketing function exists. Industry scopes to law firms
     // (9 Law Practice + 10 Legal Services), so NO seniority/function AND-filter
     // (either would drop one of the three paths). Titles are OR'd + fuzzy-matched,
-    // so a long list only widens the net (no extra cost — segmentation splits by
+    // so a long list only widens the net (no extra cost, segmentation splits by
     // geo/seniority, not title). Left headcount-agnostic; set A/B/C per run for
     // the small-firm motion. NOTE: a title net can't catch solo practitioners
-    // whose title is just "Attorney"/"Lawyer" (no leadership word) — adding bare
+    // whose title is just "Attorney"/"Lawyer" (no leadership word): adding bare
     // "Attorney" here would flood associates at big firms. Catch those in a
     // separate pass: headcount A (Self-employed) + "Attorney"/"Lawyer" + this
     // industry (at a solo firm the attorney IS the owner).
@@ -232,14 +232,14 @@ const PRESETS: Preset[] = [
   },
 ];
 
-// Every info affordance on this page opens one of these overlay modals —
+// Every info affordance on this page opens one of these overlay modals,
 // never an inline box that shifts the form.
 type InfoKey = "tips" | "keywords" | "titles" | "locations" | "depth" | "estimate" | "segment" | "actual";
 
 // Click-to-fill Keywords patterns. searchQuery is one fuzzy query over the
 // whole profile; these double as operator teaching examples (quotes, AND/OR/
-// NOT + grouping — LinkedIn requires the operators in UPPERCASE).
-// Every positive term here is a vertical / skill / phrase — never a job title
+// NOT + grouping: LinkedIn requires the operators in UPPERCASE).
+// Every positive term here is a vertical / skill / phrase: never a job title
 // (that's what the Job titles field is for). Role words appear only inside NOT()
 // as exclusions, the one role-thing Keywords does that Job titles can't.
 const KEYWORD_PATTERNS: { label: string; value: string }[] = [
@@ -278,24 +278,24 @@ const LOCATION_QUICK_ADDS: { label: string; locations: string[] }[] = [
 ];
 
 // Known location-input traps. The actor resolves free text via LinkedIn's
-// autocomplete and silently pins the TOP hit — these are inputs where that
+// autocomplete and silently pins the TOP hit: these are inputs where that
 // hit is wrong (abbreviations) or a coin flip (shared names). `fix` = safe
 // replacement offered as a one-click swap; otherwise the hint says how to
 // qualify. Keys are matched on the trimmed, lowercased chip value.
 const LOCATION_TRAPS: Record<string, { fix?: string; hint: string }> = {
   uk: { fix: "United Kingdom", hint: "resolves to Ukraine on LinkedIn" },
   "u.k.": { fix: "United Kingdom", hint: "resolves to Ukraine on LinkedIn" },
-  us: { fix: "United States", hint: "abbreviations resolve unreliably — use the full name" },
-  "u.s.": { fix: "United States", hint: "abbreviations resolve unreliably — use the full name" },
-  usa: { fix: "United States", hint: "abbreviations resolve unreliably — use the full name" },
-  "u.s.a.": { fix: "United States", hint: "abbreviations resolve unreliably — use the full name" },
-  america: { fix: "United States", hint: "abbreviations resolve unreliably — use the full name" },
-  uae: { fix: "United Arab Emirates", hint: "abbreviations resolve unreliably — use the full name" },
-  georgia: { hint: "the country and the US state collide — use “Georgia, United States” for the state" },
-  washington: { hint: "the state and the capital collide — use “Washington, D.C.” or “Washington State”" },
-  cambridge: { hint: "UK and Massachusetts collide — use “Cambridge, Massachusetts” or “Cambridge, United Kingdom”" },
-  birmingham: { hint: "UK and Alabama collide — use “Birmingham, Alabama” or “Birmingham, United Kingdom”" },
-  portland: { hint: "Oregon and Maine collide — use “Portland, Oregon” or “Portland, Maine”" },
+  us: { fix: "United States", hint: "abbreviations resolve unreliably, use the full name" },
+  "u.s.": { fix: "United States", hint: "abbreviations resolve unreliably, use the full name" },
+  usa: { fix: "United States", hint: "abbreviations resolve unreliably, use the full name" },
+  "u.s.a.": { fix: "United States", hint: "abbreviations resolve unreliably, use the full name" },
+  america: { fix: "United States", hint: "abbreviations resolve unreliably, use the full name" },
+  uae: { fix: "United Arab Emirates", hint: "abbreviations resolve unreliably, use the full name" },
+  georgia: { hint: "the country and the US state collide, use “Georgia, United States” for the state" },
+  washington: { hint: "the state and the capital collide, use “Washington, D.C.” or “Washington State”" },
+  cambridge: { hint: "UK and Massachusetts collide, use “Cambridge, Massachusetts” or “Cambridge, United Kingdom”" },
+  birmingham: { hint: "UK and Alabama collide, use “Birmingham, Alabama” or “Birmingham, United Kingdom”" },
+  portland: { hint: "Oregon and Maine collide, use “Portland, Oregon” or “Portland, Maine”" },
 };
 
 // US state (+ DC) abbreviation -> full name. LinkedIn's location autocomplete
@@ -349,7 +349,7 @@ type SearchDetail = {
 };
 
 // One row of the collapsible "Prior runs" list (the [id] `results` JSONB is
-// stripped by the list endpoint — clicking a run loads it via the poll).
+// stripped by the list endpoint: clicking a run loads it via the poll).
 type PriorRun = {
   id: string;
   query: { name?: string; levers?: Record<string, unknown>; depth?: string } | null;
@@ -443,9 +443,9 @@ function ChipInput({
   // Comma commits a chip by default. Locations pass false because the value
   // itself contains a comma ("Sacramento, California"); there, Enter or blur adds.
   commitOnComma = true,
-  // Multi-value fields all add on Enter/comma — say so. Override for a field-
+  // Multi-value fields all add on Enter/comma: say so. Override for a field-
   // specific note; pass null to hide entirely.
-  hint = "Press Enter or comma to add several — each is searched as its own term.",
+  hint = "Press Enter or comma to add several: each is searched as its own term.",
 }: {
   placeholder: string;
   values: string[];
@@ -655,7 +655,7 @@ function Code({ children }: { children: ReactNode }) {
 }
 
 // A clickable preset row inside an info modal: name on top, the value it fills
-// below — stacked (not side-by-side) so long values wrap in place instead of
+// below: stacked (not side-by-side) so long values wrap in place instead of
 // truncating or forcing the modal to scroll sideways.
 function PresetRow({ label, value, onClick }: { label: string; value: string; onClick: () => void }) {
   return (
@@ -697,7 +697,7 @@ function SavedSearches({
       const data = await res.json();
       if (res.ok) setPresets((data.presets ?? []) as { id: string; name: string; config: SearchConfig }[]);
     } catch {
-      // ignore — leave list as-is
+      // ignore: leave list as-is
     }
     setLoading(false);
   }, []);
@@ -837,7 +837,7 @@ function SavedSearches({
               <p className="px-1 py-2 text-[12px] text-muted-foreground">Loading…</p>
             ) : presets.length === 0 ? (
               <p className="px-1 py-2 text-[12px] text-muted-foreground">
-                No saved searches yet — name one above.
+                No saved searches yet: name one above.
               </p>
             ) : (
               <div className="max-h-56 overflow-auto">
@@ -921,7 +921,7 @@ function SavedSearches({
 }
 
 export function LinkedInSearchPanel() {
-  // Optional name for this run — labels it in Prior runs + above the results
+  // Optional name for this run: labels it in Prior runs + above the results
   // (renamable later). Stored on the search's query.name at creation.
   const [searchNameInput, setSearchNameInput] = useState("");
   // Levers
@@ -945,7 +945,7 @@ export function LinkedInSearchPanel() {
   const [domainDiscoveryOn, setDomainDiscoveryOn] = useState(true);
   // Deep search (auto query-segmentation): a PAID-Apify feature that splits a
   // search into sub-queries to pull past LinkedIn's 2,500-per-query ceiling.
-  // OFF by default — it's only for bulk pulls, and on the free Apify tier the
+  // OFF by default: it's only for bulk pulls, and on the free Apify tier the
   // actor refuses to segment and returns zero.
   const [autoSegment, setAutoSegment] = useState(false);
   const [depth, setDepth] = useState<Depth>("short");
@@ -977,7 +977,7 @@ export function LinkedInSearchPanel() {
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
 
-  // The org's active enrichment run — drives the enrichment stages of the live
+  // The org's active enrichment run: drives the enrichment stages of the live
   // status panel. Set on import; resumed on mount so a refresh mid-run recovers.
   const [enrichmentRunId, setEnrichmentRunId] = useState<string | null>(null);
   useEffect(() => {
@@ -994,7 +994,7 @@ export function LinkedInSearchPanel() {
   // Polls the same run the status panel radial reads, but pulls the item rows
   // so each sourced row's email/domain/activity fills in live as it's found.
   const [enrichByUrl, setEnrichByUrl] = useState<Map<string, EnrichLite>>(new Map());
-  // URLs the user imported this session — lets a row show "Queued" the instant
+  // URLs the user imported this session: lets a row show "Queued" the instant
   // it's sent, before the run's item rows exist to poll.
   const [importedUrls, setImportedUrls] = useState<Set<string>>(new Set());
   // Actual enrichment-run spend (Apify usageTotalUsd accumulated by the worker),
@@ -1082,10 +1082,10 @@ export function LinkedInSearchPanel() {
           }
           setEnrichByUrl(map);
           setEnrichRunCost(Number(data.run.cost_usd) || 0);
-          if (data.run.status === "complete" || data.run.status === "failed") return; // terminal — stop
+          if (data.run.status === "complete" || data.run.status === "failed") return; // terminal: stop
         }
       } catch {
-        // transient — reschedule
+        // transient: reschedule
       }
       if (!cancelled) enrichTimer.current = setTimeout(poll, POLL_MS);
     };
@@ -1108,7 +1108,7 @@ export function LinkedInSearchPanel() {
       const data = await res.json();
       setPriorRuns(Array.isArray(data.searches) ? (data.searches as PriorRun[]) : []);
     } catch {
-      // ignore — leave list as-is
+      // ignore: leave list as-is
     }
   }, []);
   useEffect(() => {
@@ -1198,7 +1198,7 @@ export function LinkedInSearchPanel() {
           }
         }
       } catch {
-        // transient — keep polling
+        // transient: keep polling
       }
       timer.current = setTimeout(() => poll(id), POLL_MS);
     },
@@ -1279,7 +1279,7 @@ export function LinkedInSearchPanel() {
     setRecentlyChanged(Boolean(c.recentlyChanged));
     setActivePosters(Boolean(c.activePosters));
     // Deep search is opt-in ($0.10/page swept across segments, regardless of
-    // yield). Presets saved before the toggle existed have no autoSegment key —
+    // yield). Presets saved before the toggle existed have no autoSegment key,
     // they must NOT silently enable it (that's how a 2-result search cost $1.10).
     setAutoSegment(c.autoSegment === true);
     setAddActivity(Boolean(c.addActivity));
@@ -1377,8 +1377,8 @@ export function LinkedInSearchPanel() {
 
   const rawResults = detail?.results ?? [];
   // Found-first ordering on finished lists (owner ruling 2026-08-26): once
-  // sourcing is complete, rows float to the top by delivered email tier —
-  // personal -> company inbox -> catch-all -> none — re-sorting live as the
+  // sourcing is complete, rows float to the top by delivered email tier,
+  // personal -> company inbox -> catch-all -> none: re-sorting live as the
   // enrichment overlay lands emails. Mid-sourcing keeps pure arrival order.
   const results = useMemo(() => {
     if (!detail || (detail.status !== "complete" && detail.status !== "failed")) return rawResults;
@@ -1412,7 +1412,7 @@ export function LinkedInSearchPanel() {
   const emailCount = useMemo(() => results.filter((r) => Boolean(r.email)).length, [results]);
   const hasEmails = emailCount > 0;
   // Once an import kicks off enrichment, reveal the Email/Domain/Activity
-  // columns so the Phase-2 overlay has somewhere to land — even for a Short
+  // columns so the Phase-2 overlay has somewhere to land: even for a Short
   // search that sourced no emails of its own.
   const showEnrichCols = enrichByUrl.size > 0 || importedUrls.size > 0;
   // How many imported rows have landed an email so far (live progress line).
@@ -1421,8 +1421,8 @@ export function LinkedInSearchPanel() {
     for (const e of enrichByUrl.values()) if (e.email) n++;
     return n;
   }, [enrichByUrl]);
-  // Email-outcome split for the results radial: a decision-maker (person) email —
-  // from Full+email sourcing or the enrichment overlay — vs a company-only generic
+  // Email-outcome split for the results radial: a decision-maker (person) email,
+  // from Full+email sourcing or the enrichment overlay: vs a company-only generic
   // inbox vs none yet. Fills in live as enrichment lands on each row.
   const emailOutcome = useMemo(() => {
     let person = 0;
@@ -1484,7 +1484,7 @@ export function LinkedInSearchPanel() {
   // Findymail catch-all validation (pay-on-hit; ~20% of leads yield a recoverable
   // catch-all, so the per-person ceiling is a fraction of the per-hit rate).
   const catchAllRate = addValidateCatchAll ? ENRICH_RATES.catch_all * 0.2 : 0;
-  // Website discovery — a web lookup for the subset of people whose company has
+  // Website discovery: a web lookup for the subset of people whose company has
   // no LinkedIn page. Counted per-person as a small ceiling addition (only that
   // subset actually incurs it), unless discovery is turned off in settings.
   const discoveryRate = domainDiscoveryOn
@@ -1497,7 +1497,7 @@ export function LinkedInSearchPanel() {
   // Est. cost per email type for the results radial, from the same live rates as
   // the estimate above: a person email via the email finders, a company inbox
   // from one site scrape, and "none" = the full per-contact spend that still
-  // turned up nothing (the priciest outcome — it exhausts every method).
+  // turned up nothing (the priciest outcome, it exhausts every method).
   const outcomeCosts = {
     person: emailRate,
     company: livePricing?.enrich.site_scrape ?? 0.003,
@@ -1561,8 +1561,8 @@ export function LinkedInSearchPanel() {
 
   // Add-ons for the live panel: a created/running search reflects its stored
   // choice; a fresh form reflects the current toggles.
-  // naming (owner-name discovery) is a Maps-vein add-on — LinkedIn contacts
-  // already carry names — so it's always false here.
+  // naming (owner-name discovery) is a Maps-vein add-on: LinkedIn contacts
+  // already carry names, so it's always false here.
   const panelAddons: EnrichmentAddons = detail?.query?.addons
     ? {
         activity: detail.query.addons.activity === true,
@@ -1616,7 +1616,7 @@ export function LinkedInSearchPanel() {
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Optional name for this run — the label it carries in Prior runs
+          {/* Optional name for this run: the label it carries in Prior runs
               and above the results (renamable there too). */}
           <div className="space-y-1.5">
             <Label>
@@ -1627,12 +1627,12 @@ export function LinkedInSearchPanel() {
               value={searchNameInput}
               onChange={(e) => setSearchNameInput(e.target.value)}
               maxLength={80}
-              placeholder="e.g. Commercial cleaning — US founders"
+              placeholder="e.g. Commercial cleaning: US founders"
               style={{ height: 38 }}
             />
             <p className="text-[11px] text-muted-foreground">
               Labels this run in Prior runs and above the results. Leave blank to
-              auto-name it from your filters — you can rename it any time.
+              auto-name it from your filters: you can rename it any time.
             </p>
           </div>
 
@@ -1690,7 +1690,7 @@ export function LinkedInSearchPanel() {
                       >
                         <AlertTriangle size={12} className="shrink-0 text-amber-500" />
                         <span>
-                          <span className="font-medium">&ldquo;{f.value}&rdquo;</span> — {f.hint}
+                          <span className="font-medium">&ldquo;{f.value}&rdquo;</span>: {f.hint}
                         </span>
                         {fix && (
                           <button
@@ -1779,7 +1779,7 @@ export function LinkedInSearchPanel() {
             </button>
           </div>
 
-          {/* Enrichment add-ons — opt-in stages that extend the pipeline. */}
+          {/* Enrichment add-ons: opt-in stages that extend the pipeline. */}
           <div className="rounded-lg border border-border/60 bg-muted/30 p-3">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
               Enrichment add-ons
@@ -1801,7 +1801,7 @@ export function LinkedInSearchPanel() {
                   <span className="block text-[11px] text-muted-foreground">
                     Scores each person&apos;s LinkedIn posting recency (last 30 days).
                     {activePosters
-                      ? " Already covered by your “Active on LinkedIn” filter — will be skipped."
+                      ? " Already covered by your “Active on LinkedIn” filter: will be skipped."
                       : ""}
                   </span>
                 </span>
@@ -1887,7 +1887,7 @@ export function LinkedInSearchPanel() {
                     />
                   </div>
                 </div>
-                {/* Deep search — the default; opt out here only for a cheap single-query search. */}
+                {/* Deep search: the default; opt out here only for a cheap single-query search. */}
                 <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 border-t border-border/60 pt-3">
                   <button
                     type="button"
@@ -1911,7 +1911,7 @@ export function LinkedInSearchPanel() {
                   </button>
                   <span className="text-[12px] text-muted-foreground">
                     Only for bulk pulls beyond ~2,500 matches per query (sweeps sub-queries).{" "}
-                    <span className="font-medium text-amber-600">Paid Apify only</span> — the free tier returns 0 with this on.
+                    <span className="font-medium text-amber-600">Paid Apify only</span>: the free tier returns 0 with this on.
                   </span>
                   <InfoButton label="About Deep search" onClick={() => setInfoOpen("segment")} />
                 </div>
@@ -1958,7 +1958,7 @@ export function LinkedInSearchPanel() {
                       setMaxResults(Math.max(1, Math.min(2500, Number.isFinite(v) ? v : 1)));
                     }}
                     aria-label="Custom max people (up to 2,500)"
-                    title="Custom — up to 2,500"
+                    title="Custom: up to 2,500"
                     className="w-[74px] rounded-md border border-border bg-background px-2 py-1 text-[12px] tabular-nums outline-none focus:border-[#2E37FE]"
                   />
                   {MAX_OPTIONS.map((n) => (
@@ -2030,7 +2030,7 @@ export function LinkedInSearchPanel() {
       />
       </div>
 
-      {/* Prior runs — collapsible. Click a run to reload its results (no new
+      {/* Prior runs: collapsible. Click a run to reload its results (no new
           Apify charge; a completed run resolves on the first poll tick). */}
       {priorRuns.length > 0 && (
         <Card className="border-border/50 shadow-sm">
@@ -2151,15 +2151,15 @@ export function LinkedInSearchPanel() {
         </Card>
       )}
 
-      {/* Info modals — the single popup pattern for every (i) on this page */}
+      {/* Info modals: the single popup pattern for every (i) on this page */}
       <InfoDialog open={infoOpen === "tips"} onClose={() => setInfoOpen(null)} title="How to search" wide>
         <div className="space-y-3 text-[12px] text-slate-600">
           <div className="space-y-1.5 rounded-lg border border-[#2E37FE]/20 bg-[#EDEEFF]/40 p-3">
             <p className="text-[13px] font-medium text-slate-900">How your filters combine</p>
             <p>
               <span className="font-medium text-slate-800">Within a field</span>, multiple values are
-              OR&apos;d — match <span className="font-medium">any</span>. <span className="font-medium text-slate-800">Across fields</span> — Keywords,
-              Job titles, Locations, Seniority, every one — it&apos;s <span className="font-medium">AND</span>: each field you
+              OR&apos;d: match <span className="font-medium">any</span>. <span className="font-medium text-slate-800">Across fields</span>: Keywords,
+              Job titles, Locations, Seniority, every one: it&apos;s <span className="font-medium">AND</span>: each field you
               fill removes anyone who doesn&apos;t match it, so more fields means fewer, tighter
               results, never more.
             </p>
@@ -2167,7 +2167,7 @@ export function LinkedInSearchPanel() {
               <span className="font-medium text-slate-800">Example:</span> Job titles{" "}
               <span className="font-mono">VP Sales, Head of Sales</span> + Keywords{" "}
               <span className="font-mono">fintech</span> returns only those title-holders whose profile
-              also says fintech — a fintech CMO drops out (wrong title), and a VP Sales who never wrote
+              also says fintech: a fintech CMO drops out (wrong title), and a VP Sales who never wrote
               &ldquo;fintech&rdquo; drops out (no keyword).
             </p>
             <p>
@@ -2179,13 +2179,13 @@ export function LinkedInSearchPanel() {
           </div>
           <ul className="list-disc space-y-1 pl-4">
             <li>
-              <span className="font-medium text-slate-800">Multiple values:</span> in Job titles and Locations, type a value and press Enter (or comma) to add several — results match <span className="font-medium">any</span> of them. e.g. VP Sales, Head of Sales, CRO.
+              <span className="font-medium text-slate-800">Multiple values:</span> in Job titles and Locations, type a value and press Enter (or comma) to add several, results match <span className="font-medium">any</span> of them. e.g. VP Sales, Head of Sales, CRO.
             </li>
             <li>
-              <span className="font-medium text-slate-800">Seniority · Function · Industry</span> are multi-select (Industry is searchable) — pick as many as apply.
+              <span className="font-medium text-slate-800">Seniority · Function · Industry</span> are multi-select (Industry is searchable): pick as many as apply.
             </li>
             <li>
-              <span className="font-medium text-slate-800">Keywords</span> reads the whole profile, not just the title — and it&apos;s the only field with operators: an &ldquo;exact phrase&rdquo; in quotes, plus AND / OR / NOT — e.g. &ldquo;commercial cleaning&rdquo; OR janitorial NOT recruiter. (Roles go in Job titles, not here.)
+              <span className="font-medium text-slate-800">Keywords</span> reads the whole profile, not just the title, and it&apos;s the only field with operators: an &ldquo;exact phrase&rdquo; in quotes, plus AND / OR / NOT, e.g. &ldquo;commercial cleaning&rdquo; OR janitorial NOT recruiter. (Roles go in Job titles, not here.)
             </li>
             <li>
               <span className="font-medium text-slate-800">For precise, non-wildcard targeting,</span> lean on the facets (they map to LinkedIn&apos;s own codes) over Keywords. Company size and the timing toggles narrow further.
@@ -2215,28 +2215,28 @@ export function LinkedInSearchPanel() {
       <InfoDialog
         open={infoOpen === "keywords"}
         onClose={() => setInfoOpen(null)}
-        title="Keywords — fuzzy whole-profile search"
+        title="Keywords: fuzzy whole-profile search"
       >
         <div className="space-y-3 text-[12px] text-muted-foreground">
           <p>
             One free-text query matched{" "}
-            <span className="font-medium text-foreground">fuzzily across the whole profile</span> —
+            <span className="font-medium text-foreground">fuzzily across the whole profile</span>,
             headline, about, experience, skills. It reaches wider than any other field (a single
             keyword alone returns more people than the same word as a title) and it&apos;s the{" "}
             <span className="font-medium text-foreground">only field that understands operators</span>.
           </p>
           <p>
-            But it doesn&apos;t stack on top of Job titles — it{" "}
+            But it doesn&apos;t stack on top of Job titles: it{" "}
             <span className="font-medium text-foreground">AND&apos;s</span> with them. Keywords + Job
             titles returns only the <span className="font-medium text-foreground">overlap</span>
             (people who match both), not the sum. Use it to catch profile signals a title can&apos;t
             express, not to re-state the title.
           </p>
           <div>
-            <p className="font-medium text-foreground">LinkedIn operators — UPPERCASE only</p>
+            <p className="font-medium text-foreground">LinkedIn operators: UPPERCASE only</p>
             <ul className="mt-1 list-disc space-y-0.5 pl-4">
               <li>
-                <Code>&quot;exact phrase&quot;</Code> — quotes lock a phrase:{" "}
+                <Code>&quot;exact phrase&quot;</Code>: quotes lock a phrase:{" "}
                 <Code>&quot;property management&quot;</Code>
               </li>
               <li>
@@ -2250,7 +2250,7 @@ export function LinkedInSearchPanel() {
             <p className="font-medium text-foreground">Tips</p>
             <ul className="mt-1 list-disc space-y-0.5 pl-4">
               <li>
-                It&apos;s one query, not a list — join alternatives with <Code>OR</Code>, not commas.
+                It&apos;s one query, not a list: join alternatives with <Code>OR</Code>, not commas.
               </li>
               <li>
                 Keywords is for niche / industry / tech words (&ldquo;HVAC&rdquo;, &ldquo;med
@@ -2258,14 +2258,14 @@ export function LinkedInSearchPanel() {
                 titles.
               </li>
               <li>
-                Whole-profile matching is noisy — pair it with the Seniority / Function facets, and
+                Whole-profile matching is noisy: pair it with the Seniority / Function facets, and
                 add <Code>NOT recruiter</Code>: recruiters&apos; profiles mention every title they
                 hire for.
               </li>
             </ul>
           </div>
           <div>
-            <p className="mb-1.5 font-medium text-foreground">Patterns — click to fill</p>
+            <p className="mb-1.5 font-medium text-foreground">Patterns: click to fill</p>
             <div className="space-y-1">
               {KEYWORD_PATTERNS.map((p) => (
                 <PresetRow
@@ -2286,12 +2286,12 @@ export function LinkedInSearchPanel() {
       <InfoDialog
         open={infoOpen === "titles"}
         onClose={() => setInfoOpen(null)}
-        title="Job titles — current title, any match"
+        title="Job titles: current title, any match"
       >
         <div className="space-y-3 text-[12px] text-muted-foreground">
           <p>
             A structured filter on the person&apos;s{" "}
-            <span className="font-medium text-foreground">current title only</span> — past roles
+            <span className="font-medium text-foreground">current title only</span>: past roles
             don&apos;t count, and it looks at the title, not the rest of the profile (that&apos;s
             Keywords&apos; job). Each chip is OR&apos;d: a person matches if their title matches{" "}
             <span className="font-medium text-foreground">any</span> chip, so extra chips widen this
@@ -2301,16 +2301,16 @@ export function LinkedInSearchPanel() {
             <p className="font-medium text-foreground">What to expect</p>
             <ul className="mt-1 list-disc space-y-0.5 pl-4">
               <li>
-                Abbreviations aren&apos;t reliably expanded — add both &ldquo;VP Sales&rdquo; and
+                Abbreviations aren&apos;t reliably expanded: add both &ldquo;VP Sales&rdquo; and
                 &ldquo;Vice President of Sales&rdquo; when it matters. The variant packs below do this
                 for you.
               </li>
               <li>
                 It targets the title precisely, so it won&apos;t fuzzy-match a role from someone&apos;s
-                About or skills — reach for Keywords when you want the whole profile read.
+                About or skills: reach for Keywords when you want the whole profile read.
               </li>
               <li>
-                Plain titles only: quotes and AND / OR / NOT do nothing here — operators live in
+                Plain titles only: quotes and AND / OR / NOT do nothing here, operators live in
                 Keywords.
               </li>
             </ul>
@@ -2323,13 +2323,13 @@ export function LinkedInSearchPanel() {
                 Exclude job titles: Assistant, Intern, Former.
               </li>
               <li>
-                Titles are free text people invent — the Seniority facet is the precise way to
+                Titles are free text people invent: the Seniority facet is the precise way to
                 enforce level. Use both together.
               </li>
             </ul>
           </div>
           <div>
-            <p className="mb-1.5 font-medium text-foreground">Variant packs — click to add</p>
+            <p className="mb-1.5 font-medium text-foreground">Variant packs: click to add</p>
             <div className="space-y-1">
               {TITLE_PACKS.map((p) => (
                 <PresetRow
@@ -2350,18 +2350,18 @@ export function LinkedInSearchPanel() {
       <InfoDialog
         open={infoOpen === "locations"}
         onClose={() => setInfoOpen(null)}
-        title="Locations — resolved by LinkedIn autocomplete"
+        title="Locations: resolved by LinkedIn autocomplete"
       >
         <div className="space-y-3 text-[12px] text-muted-foreground">
           <p>
             Each value runs through LinkedIn&apos;s location autocomplete and is pinned to the{" "}
-            <span className="font-medium text-foreground">top hit — silently</span>. People in{" "}
+            <span className="font-medium text-foreground">top hit: silently</span>. People in{" "}
             <span className="font-medium text-foreground">any</span> listed location match.
           </p>
           <div>
             <p className="font-medium text-foreground">Whose location is it?</p>
             <p className="mt-1">
-              The <span className="font-medium text-foreground">person&apos;s</span> — their LinkedIn
+              The <span className="font-medium text-foreground">person&apos;s</span>: their LinkedIn
               profile location (usually where they live/work), not the company&apos;s address. For
               small local businesses the two almost always coincide; for larger companies you may
               match a remote exec whose company is headquartered elsewhere. The person&apos;s location
@@ -2373,12 +2373,12 @@ export function LinkedInSearchPanel() {
             <p className="font-medium text-foreground">Granularity</p>
             <ul className="mt-1 list-disc space-y-0.5 pl-4">
               <li>
-                Country, state/region, or city — nothing finer. No zip codes, no counties, no
+                Country, state/region, or city: nothing finer. No zip codes, no counties, no
                 mile radius.
               </li>
               <li>
                 A city may resolve to LinkedIn&apos;s wider metro area (&ldquo;Greater Chicago
-                Area&rdquo;) — that&apos;s normal and usually helpful.
+                Area&rdquo;): that&apos;s normal and usually helpful.
               </li>
             </ul>
           </div>
@@ -2390,7 +2390,7 @@ export function LinkedInSearchPanel() {
                 <span className="font-medium text-foreground">
                   &ldquo;UK&rdquo; resolves to Ukraine
                 </span>{" "}
-                — write &ldquo;United Kingdom&rdquo;. Same idea for &ldquo;United States&rdquo; and
+               : write &ldquo;United Kingdom&rdquo;. Same idea for &ldquo;United States&rdquo; and
                 &ldquo;United Arab Emirates&rdquo;.
               </li>
               <li>
@@ -2422,7 +2422,7 @@ export function LinkedInSearchPanel() {
       <InfoDialog
         open={infoOpen === "segment"}
         onClose={() => setInfoOpen(null)}
-        title="Deep search — query segmentation"
+        title="Deep search: query segmentation"
         wide
       >
         <div className="space-y-3 text-[12px] text-muted-foreground">
@@ -2430,7 +2430,7 @@ export function LinkedInSearchPanel() {
             <span className="font-semibold">Requires a paid Apify plan.</span> On the free Apify tier
             the actor refuses to segment and the search comes back with{" "}
             <span className="font-medium">0 results</span>. (The free tier also caps every run at 25
-            items — a plan limit, not this feature.)
+            items: a plan limit, not this feature.)
           </div>
           <p>
             LinkedIn won&apos;t return more than{" "}
@@ -2439,7 +2439,7 @@ export function LinkedInSearchPanel() {
             <span className="font-medium text-foreground">
               splitting your search into many narrower sub-queries
             </span>{" "}
-            — by country, state, then seniority — and sweeping across them, deduping, until it reaches
+            (by country, state, then seniority) and sweeping across them, deduping, until it reaches
             your Max people. It&apos;s a tool for <span className="font-medium text-foreground">bulk pulls</span>.
           </p>
           <div>
@@ -2448,7 +2448,7 @@ export function LinkedInSearchPanel() {
               <li>
                 On a paid plan, a{" "}
                 <span className="font-medium">normal search already returns up to your Max people</span>{" "}
-                (anything up to 2,500 per query) — no segmentation required.
+                (anything up to 2,500 per query): no segmentation required.
               </li>
               <li>
                 Only turn it on when you genuinely want{" "}
@@ -2459,7 +2459,7 @@ export function LinkedInSearchPanel() {
           </div>
           <p className="rounded-md bg-[#EDEEFF]/70 px-2.5 py-2 text-[11px]">
             Seeing only 25 results? That&apos;s the{" "}
-            <span className="font-medium text-foreground">free Apify tier&apos;s per-run cap</span> —
+            <span className="font-medium text-foreground">free Apify tier&apos;s per-run cap</span>,
             upgrade the plan and a normal search returns up to your Max people, no Deep search needed.
           </p>
         </div>
@@ -2473,13 +2473,13 @@ export function LinkedInSearchPanel() {
         <div className="space-y-2 text-[12px] text-muted-foreground">
           <p>How deep the actor reads each result:</p>
           <p>
-            <span className="font-medium text-foreground">Short</span> — reads only the search-result pages: name, headline, company, location, profile URL. Cheapest, no email. Best when you&apos;ll enrich the keepers afterward.
+            <span className="font-medium text-foreground">Short</span>: reads only the search-result pages: name, headline, company, location, profile URL. Cheapest, no email. Best when you&apos;ll enrich the keepers afterward.
           </p>
           <p>
-            <span className="font-medium text-foreground">Full</span> — opens every profile for full detail (about, experience, education). Richer data, higher cost.
+            <span className="font-medium text-foreground">Full</span>: opens every profile for full detail (about, experience, education). Richer data, higher cost.
           </p>
           <p>
-            <span className="font-medium text-foreground">Full + email</span> — Full, plus an email lookup per profile (≈ $10 / 1k). Only worth it if you&apos;re <em>not</em> running the enrichment waterfall afterward.
+            <span className="font-medium text-foreground">Full + email</span>: Full, plus an email lookup per profile (≈ $10 / 1k). Only worth it if you&apos;re <em>not</em> running the enrichment waterfall afterward.
           </p>
           <p>
             Default is Short: the waterfall finds emails on just the people you keep, so you don&apos;t pay the email premium on people you&apos;ll discard.
@@ -2626,7 +2626,7 @@ export function LinkedInSearchPanel() {
               ) : (
                 ""
               )}
-              {panelAddons.verify ? " + Million Verifier" : ""} — billed only on the people you
+              {panelAddons.verify ? " + Million Verifier" : ""}, billed only on the people you
               imported.
             </p>
           </div>
@@ -2640,7 +2640,7 @@ export function LinkedInSearchPanel() {
             Sourcing is billed for <span className="font-medium text-foreground">total work</span>, not
             the profiles you keep: <span className="font-mono">Full + email</span> opens each profile
             for an email lookup (~$10/1k), and <span className="font-medium text-foreground">Deep
-            search</span> sweeps sub-queries — opening far more profiles than the
+            search</span> sweeps sub-queries: opening far more profiles than the
             {" "}{detail?.result_count ?? 0} it returns after de-duplication. That&apos;s why the
             per-returned-profile figure looks high. To cut it, drop to{" "}
             <span className="font-medium text-foreground">Short</span> depth and let the enrichment
@@ -2649,7 +2649,7 @@ export function LinkedInSearchPanel() {
         </div>
       </InfoDialog>
 
-      {/* Results — appears the moment sourced rows stream in (Phase 1) and
+      {/* Results: appears the moment sourced rows stream in (Phase 1) and
           gains live Email/Domain/Activity columns as enrichment lands (Phase 2). */}
       {showResults && (
         <Card className="border-border/50 shadow-sm">
@@ -2668,7 +2668,7 @@ export function LinkedInSearchPanel() {
                   )}
                 </div>
                 <div className="min-w-0">
-                  {/* Editable search name — custom label, else the ICP summary. */}
+                  {/* Editable search name: custom label, else the ICP summary. */}
                   {searchId && renamingId === searchId ? (
                     <div className="mb-1 flex items-center gap-1.5">
                       <input
@@ -2725,7 +2725,7 @@ export function LinkedInSearchPanel() {
                   </CardTitle>
                   <p className="text-xs text-muted-foreground">
                     {isRunning
-                      ? "Rows stream in as they're scraped — select any to import"
+                      ? "Rows stream in as they're scraped: select any to import"
                       : selected.size > 0
                         ? `${selected.size} selected`
                         : "Select people to import"}
@@ -2739,7 +2739,7 @@ export function LinkedInSearchPanel() {
                       </span>
                     )}
                     {detail?.truncated && (
-                      <span className="ml-1 text-amber-600">· more available — raise the cap</span>
+                      <span className="ml-1 text-amber-600">· more available: raise the cap</span>
                     )}
                   </p>
                 </div>
@@ -2777,7 +2777,7 @@ export function LinkedInSearchPanel() {
           </CardHeader>
           {!resultsCollapsed && (
           <CardContent className="space-y-3">
-            {/* Email-outcome radial — person vs company-only vs none. Shows once
+            {/* Email-outcome radial: person vs company-only vs none. Shows once
                 there's email data (Full+email sourcing or enrichment underway). */}
             {(hasEmails || showEnrichCols) && (
               <div className="rounded-xl border border-border/50 bg-muted/20 px-4 py-3">
@@ -2831,7 +2831,7 @@ export function LinkedInSearchPanel() {
             )}
 
             {/* table-fixed + per-cell truncation keeps every column inside the
-                card — no horizontal scroll — while whitespace-nowrap (from the
+                card (no horizontal scroll) while whitespace-nowrap (from the
                 Table primitives) keeps every row a single, uniform line. When
                 the enrichment columns are live, Headline + Location step aside
                 so Email/Domain/Activity/Status fit without crowding. */}
@@ -3039,7 +3039,7 @@ function EnrichCell({
 }
 
 // The Email cell, color-coded to match the Email-outcomes radial: a person's
-// direct address in blue, or — when that's all we found — the company's generic
+// direct address in blue, or (when that's all we found) the company's generic
 // inbox in green with a "company" tag so it's never mistaken for a personal one.
 function EmailCell({
   person,
@@ -3122,7 +3122,7 @@ function RowStatusBadge({
       </span>
     );
   }
-  // Terminal, but no email landed — still done, just nothing to send to.
+  // Terminal, but no email landed: still done, just nothing to send to.
   return (
     <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">
       <XCircle size={10} /> No email
@@ -3165,7 +3165,7 @@ function EmailOutcomeRadial({
     { key: "catchAll" as const, v: catchAll, color: "#f97316", label: "Catch-all guess" },
     { key: "none" as const, v: none, color: "#94a3b8", label: "No email" },
   ];
-  // Catch-all guesses stay out of the headline count — unprovable addresses
+  // Catch-all guesses stay out of the headline count: unprovable addresses
   // chart as their own segment.
   const withEmail = person + company;
   let acc = 0;

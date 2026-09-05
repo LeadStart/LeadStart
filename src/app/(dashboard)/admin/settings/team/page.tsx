@@ -327,8 +327,8 @@ export default function TeamPage() {
                             }`}
                             title={
                               member.receives_contact_notifications
-                                ? "Receives contact form emails — click to mute"
-                                : "Muted — click to receive contact form emails"
+                                ? "Receives contact form emails: click to mute"
+                                : "Muted, click to receive contact form emails"
                             }
                           >
                             {member.receives_contact_notifications ? <Bell size={11} /> : <BellOff size={11} />}

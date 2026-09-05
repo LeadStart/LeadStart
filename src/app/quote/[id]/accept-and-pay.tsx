@@ -11,7 +11,7 @@ import { loadStripe, type StripeEmbeddedCheckout } from "@stripe/stripe-js";
  *
  * POSTs to the accept endpoint, which records the acceptance audit and creates
  * an EMBEDDED Stripe Checkout session. On success we open an on-site modal and
- * mount Stripe's embedded checkout inside it — the recipient never leaves the
+ * mount Stripe's embedded checkout inside it: the recipient never leaves the
  * quote page. Stripe redirects to the welcome page once payment completes. In
  * demo mode (no key) we fall back to a direct redirect to the welcome page.
  */
@@ -74,7 +74,7 @@ export function AcceptAndPay({
         demo_redirect_url?: string | null;
       };
 
-      // Demo mode (no Stripe key) — no real checkout, go straight to welcome.
+      // Demo mode (no Stripe key): no real checkout, go straight to welcome.
       if (!data.client_secret || !data.publishable_key) {
         if (data.demo_redirect_url) {
           window.location.href = data.demo_redirect_url;

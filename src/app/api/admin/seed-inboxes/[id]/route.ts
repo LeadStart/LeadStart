@@ -1,10 +1,10 @@
-// PATCH  /api/admin/seed-inboxes/[id] — pause/resume, relabel, or set the
+// PATCH  /api/admin/seed-inboxes/[id]: pause/resume, relabel, or set the
 //                                       rotation role of a seed. Resuming
 //                                       clears a stale read error. Credentials
-//                                       (`auth`) are NOT patchable — change an
+//                                       (`auth`) are NOT patchable: change an
 //                                       IMAP password by removing + re-adding;
 //                                       reconnect a Microsoft seed.
-// DELETE /api/admin/seed-inboxes/[id] — remove a seed. Past results keep the
+// DELETE /api/admin/seed-inboxes/[id]: remove a seed. Past results keep the
 //                                       seed's address (FK is SET NULL), so
 //                                       history stays readable.
 // Owner only. Migrations 00068 + 00085.
@@ -14,7 +14,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { SeedInbox } from "@/types/app";
 
-// Browser-safe columns — never expose the `auth` credential column.
+// Browser-safe columns: never expose the `auth` credential column.
 const SEED_SELECT =
   "id, organization_id, email_address, label, provider, role, status, last_error, last_error_at, created_at, updated_at";
 

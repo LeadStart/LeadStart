@@ -1,7 +1,7 @@
-// Layer 2 — web-search decision-maker lookup.
+// Layer 2: web-search decision-maker lookup.
 //
 // **Perplexity Sonar ONLY** (owner directive 2026-08-28): the Claude web_search
-// fallback was removed. Without a Perplexity key, Layer 2 is a no-op — the item
+// fallback was removed. Without a Perplexity key, Layer 2 is a no-op: the item
 // stays name-less and falls through to the generic path. Triggered only when
 // Layer 1 returns no first_name and the run was configured with use_layer2=true.
 //
@@ -35,10 +35,10 @@ export async function enrichWithWebSearch(
   input: EnrichmentInput,
   opts: EnrichmentOptions,
 ): Promise<EnrichmentResult> {
-  // Perplexity-only. No Claude web_search fallback — no key means Layer 2 does
+  // Perplexity-only. No Claude web_search fallback: no key means Layer 2 does
   // not run and the item stays name-less.
   if (!opts.perplexityKey) {
-    return EMPTY("Layer 2 skipped — no Perplexity key configured", "complete");
+    return EMPTY("Layer 2 skipped, no Perplexity key configured", "complete");
   }
 
   const prompt = DEFAULT_LAYER2_PROMPT

@@ -41,7 +41,7 @@ function staticFallback(): LivePricing {
       domain_discovery: DOMAIN_DISCOVERY_COST_USD,
       naming: NAMING_COST_USD,
     },
-    notes: ["No Apify token set — showing stored fallback prices"],
+    notes: ["No Apify token set, showing stored fallback prices"],
   };
 }
 

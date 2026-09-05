@@ -1,6 +1,6 @@
 import { OnboardingPreview } from "@/components/workflows/onboarding-preview";
 
-export const metadata = { title: "Onboarding — LeadStart" };
+export const metadata = { title: "Onboarding, LeadStart" };
 
 // Workflows → Onboarding. A live-synced preview of the client-facing onboarding
 // surfaces (proposal email, hosted quote page, welcome page), rendered from the

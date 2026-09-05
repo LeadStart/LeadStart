@@ -151,7 +151,7 @@ export default function ClientCampaignPage({
         />
       </div>
 
-      {/* Self-service CSV import — active native email campaigns only */}
+      {/* Self-service CSV import: active native email campaigns only */}
       {typedCampaign.source_channel === "native_email" &&
         typedCampaign.status === "active" && (
           <Card className="border-border/50 shadow-sm p-5">
@@ -159,7 +159,7 @@ export default function ClientCampaignPage({
               Add contacts to this campaign
             </h2>
             <p className="text-xs text-muted-foreground mb-4">
-              Upload a CSV of people to reach. Map your columns once — the
+              Upload a CSV of people to reach. Map your columns once: the
               mapping is remembered for your next upload.
             </p>
             <NativeImportPanel campaignId={typedCampaign.id} />
@@ -175,7 +175,7 @@ export default function ClientCampaignPage({
         <div className="flex items-center gap-3">
           {datePreset !== "custom" && (
             <span className="text-xs text-muted-foreground">
-              {new Date(startDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })} — {new Date(endDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+              {new Date(startDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })} to {new Date(endDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
             </span>
           )}
           <Select value={datePreset} onValueChange={handlePresetChange}>

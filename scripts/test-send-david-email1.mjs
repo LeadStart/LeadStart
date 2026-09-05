@@ -67,7 +67,7 @@ console.log(`Subject: ${subject}`);
 console.log(`Unresolved placeholders left: ${leftover ? leftover.join(", ") : "none ✓"}`);
 console.log("---\n" + bodyText + "\n---");
 
-if (!SEND) { console.log("\nDRY RUN — pass --send to actually deliver it."); process.exit(0); }
+if (!SEND) { console.log("\nDRY RUN, pass --send to actually deliver it."); process.exit(0); }
 
 // ================= SEND via Gmail (DWD) =================
 const org = (await rest(`organizations?select=gmail_service_account_email,gmail_service_account_key&limit=1`))[0];
@@ -104,7 +104,7 @@ function toFlowed(text, width = 72) {
   return out.join("\r\n");
 }
 // Lightweight HTML: escape, then paragraphs (blank line) → spacing, single
-// newlines → <br>. No images, no tracking, no links — just reflowable text.
+// newlines → <br>. No images, no tracking, no links: just reflowable text.
 function toHtml(text) {
   const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const paras = text.split(/\r?\n\r?\n/).map((p) => `<p style="margin:0 0 14px;">${esc(p).replace(/\r?\n/g, "<br>")}</p>`).join("");
@@ -122,5 +122,5 @@ const raw = [
 ].join("\r\n");
 const send = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", { method: "POST", headers: { Authorization: `Bearer ${tok.access_token}`, "Content-Type": "application/json" }, body: JSON.stringify({ raw: b64url(raw) }) });
 const sr = await send.json();
-console.log(send.ok ? `\n✓ SENT — Gmail id ${sr.id}, thread ${sr.threadId}. Check ${TO}.` : `\n✗ SEND FAILED (${send.status}): ${JSON.stringify(sr)}`);
+console.log(send.ok ? `\n✓ SENT, Gmail id ${sr.id}, thread ${sr.threadId}. Check ${TO}.` : `\n✗ SEND FAILED (${send.status}): ${JSON.stringify(sr)}`);
 process.exit(send.ok ? 0 : 1);

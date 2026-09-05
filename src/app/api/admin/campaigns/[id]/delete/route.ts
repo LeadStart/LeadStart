@@ -1,6 +1,6 @@
-// POST /api/admin/campaigns/[id]/delete — drop the campaign's local row.
+// POST /api/admin/campaigns/[id]/delete: drop the campaign's local row.
 // Owner only (matches the pattern for team management, client-user
-// provisioning — anything irreversible or destructive). Requires the client
+// provisioning: anything irreversible or destructive). Requires the client
 // to have already completed the typed-confirmation dialog on the UI; this
 // route does NOT duplicate that check server-side (the confirm is a UX belt,
 // not an auth mechanism).

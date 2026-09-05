@@ -14,7 +14,7 @@
  *      - token for replyId A cannot consume a row stored for replyId B
  *
  * No network. No DB. The verifyReplyUrl tests use a chainable stub Supabase
- * client — enough to exercise the contract without a live connection.
+ * client: enough to exercise the contract without a live connection.
  *
  * Usage:
  *   npx tsx scripts/test-signed-urls.mjs
@@ -35,7 +35,7 @@ function loadEnvLocal() {
 loadEnvLocal();
 
 if (!process.env.URL_SIGNING_SECRET || process.env.URL_SIGNING_SECRET.length < 32) {
-  // Generate a deterministic test secret — 64 hex chars = 32 bytes.
+  // Generate a deterministic test secret: 64 hex chars = 32 bytes.
   process.env.URL_SIGNING_SECRET = "0".repeat(64);
   console.log("(URL_SIGNING_SECRET not set in env; using throwaway test secret.)");
 }
@@ -104,7 +104,7 @@ console.log("\n■ tampered tokens return null");
   const tamperedMac = `${payloadB64}.${flipped}`;
   assert(parseAndVerifyToken(tamperedMac) === null, "flipped HMAC rejected");
 
-  // Tamper payload instead — HMAC won't recompute to the same value.
+  // Tamper payload instead: HMAC won't recompute to the same value.
   const tamperedPayload = `${payloadB64.slice(0, -2)}XX.${macB64}`;
   assert(parseAndVerifyToken(tamperedPayload) === null, "modified payload rejected");
 

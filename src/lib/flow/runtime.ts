@@ -1,10 +1,10 @@
-// Flow graph — runtime walker (graph-runtime phase #3).
+// Flow graph: runtime walker (graph-runtime phase #3).
 //
 // The native sender used to execute only the derived linear `campaign_steps`
 // (graphToSteps). This module makes it walk the authored `flow_graph` tree
 // directly, so condition / linkedin / internal nodes actually run. It is a PURE
-// function of (graph, position, signals) → next action — no IO, no dates, no
-// Supabase — so the cron can unit-test the branch logic exhaustively and the
+// function of (graph, position, signals) → next action: no IO, no dates, no
+// Supabase, so the cron can unit-test the branch logic exhaustively and the
 // side-effecting bits (send / task / notify) stay in run-native-sequences.
 //
 // ── Position model ───────────────────────────────────────────────────────────
@@ -19,20 +19,20 @@
 // (email/linkedin/internal) or the end. Conditions and waits are re-traversed
 // every tick (lazy) so a reply that lands mid-wait re-routes at the next tick.
 // current_node_id only advances to an action node when that action actually
-// fires — never past a condition — which is what makes the routing self-heal.
+// fires (never past a condition) which is what makes the routing self-heal.
 //
 // This preserves the linear cadence exactly: the accumulated wait to the next
 // email equals graphToSteps' accumulated wait_days for that step (both walk the
 // primary path summing wait nodes across skipped nodes). One ACTION per due tick.
 //
-// ── Condition semantics (PRE-DECIDED — see run-native-sequences for the full
+// ── Condition semantics (PRE-DECIDED, see run-native-sequences for the full
 //    reconciliation with the global reply-halt) ───────────────────────────────
-// We route on INBOUND signals only (replies + bounces) — never on opens/clicks,
+// We route on INBOUND signals only (replies + bounces): never on opens/clicks,
 // which would need tracking pixels/links we deliberately don't add.
 //   replied              → yes iff the contact sent a HUMAN reply (hasReplied =
 //                          contact.status==='replied'; the reply poller sets this
 //                          only for non-auto replies, so OOO/auto never trips it
-//                          or the global halt — matching the linear sender).
+//                          or the global halt: matching the linear sender).
 //   reply_interested     → yes iff the latest reply's final_class ∈ {true_interest,
 //                          meeting_booked, qualifying_question, referral_forward}.
 //   reply_objection      → yes iff final_class ∈ {objection_price, objection_timing}.
@@ -46,7 +46,7 @@
 //                          legacy stored graphs still load. isUntrackedTrigger.
 // When a reply-family condition MATCHES (takes yes), the walk sets
 // matchedReplyRoute so the sender knows the author is handling that reply and the
-// global reply-halt stands down — but an UNHANDLED reply class still halts (a
+// global reply-halt stands down, but an UNHANDLED reply class still halts (a
 // replied contact is never emailed again unless a matching branch routes them).
 
 import {
@@ -75,11 +75,11 @@ export interface FlowSignals {
  * The next thing the sender should do for an enrollment this tick.
  *  - email/linkedin/internal: the actionable node reached, the wait days
  *    accumulated from the resume point (the cron gates the action on
- *    reference_time + waitDays before performing it), and matchedReplyRoute —
+ *    reference_time + waitDays before performing it), and matchedReplyRoute,
  *    true when a reply-family condition MATCHED en route, which stands the global
  *    reply-halt down (the graph is handling the reply).
  *  - complete: the walk ran off the end of the tree (or the parked node was
- *    deleted / the enrollment is past the graph) — mark the enrollment completed.
+ *    deleted / the enrollment is past the graph): mark the enrollment completed.
  */
 export type FlowRuntimeAction =
   | { type: "email"; node: EmailNode; waitDays: number; matchedReplyRoute: boolean }
@@ -89,9 +89,9 @@ export type FlowRuntimeAction =
 
 /** An enrollment's position in the graph, as stored on campaign_enrollments. */
 export interface FlowPosition {
-  /** current_node_id — the node last acted on, or null before the first action. */
+  /** current_node_id: the node last acted on, or null before the first action. */
   currentNodeId: string | null;
-  /** current_step_index — # of emails sent so far (0 = none). */
+  /** current_step_index: # of emails sent so far (0 = none). */
   emailsSent: number;
 }
 
@@ -103,14 +103,14 @@ export const UNTRACKED_TRIGGERS: readonly FlowConditionTrigger[] = [
   "manual",
 ];
 
-/** True for triggers we cannot measure — their YES arm never fires at runtime. */
+/** True for triggers we cannot measure: their YES arm never fires at runtime. */
 export function isUntrackedTrigger(t: FlowConditionTrigger): boolean {
   return UNTRACKED_TRIGGERS.includes(t);
 }
 
 // Reply-family triggers route on an inbound reply (existence or class). When one
 // MATCHES (evaluates true), the walk records matchedReplyRoute so the sender's
-// global reply-halt stands down — the author is handling that reply.
+// global reply-halt stands down: the author is handling that reply.
 export const REPLY_TRIGGERS: readonly FlowConditionTrigger[] = [
   "replied",
   "reply_interested",
@@ -191,7 +191,7 @@ export function primaryEmails(graph: FlowGraph): EmailNode[] {
   );
 }
 
-/** The first email on the primary path — the step-0 send + the "Re:" thread base. */
+/** The first email on the primary path: the step-0 send + the "Re:" thread base. */
 export function firstPrimaryEmail(graph: FlowGraph): EmailNode | null {
   return primaryEmails(graph)[0] ?? null;
 }
@@ -200,7 +200,7 @@ export function firstPrimaryEmail(graph: FlowGraph): EmailNode | null {
 //
 // A frame is "process list[index], list[index+1], …". Descending into a
 // condition branch pushes a frame; exhausting a frame pops back to the parent's
-// continuation (the sibling AFTER the condition — matching flattenPrimaryPath,
+// continuation (the sibling AFTER the condition, matching flattenPrimaryPath,
 // which splices a condition's branch inline then continues the parent list).
 
 interface Frame {
@@ -285,7 +285,7 @@ export function resolveFlowAction(
       stack.push({ list: takeYes ? cond.yes : cond.no, index: 0 }); // branch rejoins here
       continue;
     }
-    // Actionable node — stop here.
+    // Actionable node: stop here.
     if (node.kind === "email") return { type: "email", node, waitDays, matchedReplyRoute };
     if (node.kind === "linkedin") return { type: "linkedin", node, waitDays, matchedReplyRoute };
     return { type: "internal", node, waitDays, matchedReplyRoute };

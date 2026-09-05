@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Self-hosted anti-bot fetch helper — TLS/HTTP-2 fingerprint impersonation.
+"""Self-hosted anti-bot fetch helper: TLS/HTTP-2 fingerprint impersonation.
 
 Ported from the saasassins anti-bot engine (144/144 recovery on a hard set).
 Replaces a paid unblocker for sites that gate on their TLS/JA3 + HTTP-2 (Akamai)
 fingerprint rather than a JS challenge: curl_cffi reproduces a real Chrome
 fingerprint, so a plain fetch sails through and the content is already in the
-static HTML — no browser/JS render needed.
+static HTML: no browser/JS render needed.
 
 Invoked from src/fingerprintFetch.ts via child_process. Prints a SINGLE JSON
 line to stdout so the Node side can JSON.parse it:

@@ -2,7 +2,7 @@ import type { CampaignSnapshot } from "@/types/app";
 
 // Time-window lens for the admin analytics surfaces (Overview portfolio + All
 // Campaigns list). Reply / bounce / positive are cumulative quality metrics, so
-// a rolling 30-day window understates the reply rate badly — the denominator
+// a rolling 30-day window understates the reply rate badly: the denominator
 // (leads first-contacted in the window) counts fresh leads who have not had time
 // to reply yet. All-Time is therefore the default; 7d / 30d remain available as
 // recent-activity lenses. Mirrors the 7d/30d/lifetime toggle on the client
@@ -11,7 +11,7 @@ export type MetricsPeriod = "7d" | "30d" | "all";
 
 export const METRICS_PERIODS: MetricsPeriod[] = ["7d", "30d", "all"];
 
-// All-Time is the default across the admin analytics surfaces — never 30 days.
+// All-Time is the default across the admin analytics surfaces: never 30 days.
 export const DEFAULT_METRICS_PERIOD: MetricsPeriod = "all";
 
 export const PERIOD_LABELS: Record<MetricsPeriod, string> = {
@@ -28,7 +28,7 @@ export const PERIOD_BLURBS: Record<MetricsPeriod, string> = {
 };
 
 // Filter daily snapshots to the selected rolling window. "all" is a pass-through.
-// `now` is injected so React callers can pass a render-stable clock —
+// `now` is injected so React callers can pass a render-stable clock,
 // react-hooks/purity forbids calling Date.now() during render.
 export function filterSnapshotsByPeriod(
   snapshots: CampaignSnapshot[],

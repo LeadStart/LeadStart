@@ -1,7 +1,7 @@
-// POST /api/admin/clients/[clientId]/linkedin/disconnect — owner-only.
+// POST /api/admin/clients/[clientId]/linkedin/disconnect: owner-only.
 // Clears the Unipile binding on this client (account_id null + status
 // 'disconnected'). Does NOT call Unipile to delete the remote account
-// — keeping it lets us reconnect without a fresh OAuth dance, and the
+// keeping it lets us reconnect without a fresh OAuth dance, and the
 // user can revoke from LinkedIn directly if they want a hard reset.
 
 import { NextRequest, NextResponse } from "next/server";

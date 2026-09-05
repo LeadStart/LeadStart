@@ -1,9 +1,9 @@
-// GET /app/api/cron/check-inbox-health — runs hourly at :30 (vercel.json).
+// GET /app/api/cron/check-inbox-health: runs hourly at :30 (vercel.json).
 //
-// Scores every native (Gmail) sending mailbox 0–100 from free signals — live
+// Scores every native (Gmail) sending mailbox 0–100 from free signals: live
 // SPF/DKIM/DMARC/MX DNS, the Spamhaus domain blocklist, the 7-day hard/soft
 // bounce rates from native_sends, the 14-day reply signal, and the latest
-// seed placement test (migration 00068; the one direct measurement) — then:
+// seed placement test (migration 00068; the one direct measurement): then:
 //   - writes the denormalized score onto native_mailboxes (always),
 //   - inserts a mailbox_health_checks snapshot ONLY when the score changed or
 //     an action was taken (keeps that table a transition timeline),
@@ -36,7 +36,7 @@ import { nextWatchStreak } from "@/lib/deliverability/lifecycle";
 import { enqueueOwnerAlert } from "@/lib/notifications/owner-alerts";
 import type { HealthBand, HealthComponent, NativeMailbox } from "@/types/app";
 
-// See dispatch-owner-alerts/route.ts — force-dynamic so a Vercel cron never
+// See dispatch-owner-alerts/route.ts: force-dynamic so a Vercel cron never
 // gets an edge-cached response instead of running the body.
 export const dynamic = "force-dynamic";
 // node:dns lookups need the Node runtime (matches the campaign deliverability route).
@@ -71,7 +71,7 @@ export async function GET(request: NextRequest) {
   }
 
   // 2) Per-org keys + threshold. Bail on a read error rather than proceeding
-  // with an empty org map — otherwise every mailbox would be scored with no
+  // with an empty org map: otherwise every mailbox would be scored with no
   // key and no threshold, writing an inflated "healthy" score over its real
   // state and disabling enforcement. A failed run just retries next tick.
   const orgIds = Array.from(new Set(mailboxes.map((m) => m.organization_id)));
@@ -86,7 +86,7 @@ export async function GET(request: NextRequest) {
     ((orgRows ?? []) as OrgSettings[]).map((o) => [o.id, o]),
   );
 
-  // 2b) Prior domain rollup state (migration 00081) — the watch_streak and last
+  // 2b) Prior domain rollup state (migration 00081): the watch_streak and last
   // check date, for the daily watch-streak accounting below. Keyed by domain_id.
   // A read error here is non-fatal: domains just start their streak fresh (the
   // rollup is advisory and nothing enforces on it yet).
@@ -154,7 +154,7 @@ export async function GET(request: NextRequest) {
 
   // 3b) 14-day native-email reply counts per mailbox, for the reply signal.
   // Unlike the sweeps above, a read error here does NOT fail the run: the reply
-  // signal is advisory, and — critically — on error we must treat it as
+  // signal is advisory, and (critically) on error we must treat it as
   // "unchecked", never "zero replies" (which would fire a false placement
   // warning). replyReadOk gates that: false → pass replies:null (unchecked).
   const repliesByMailbox = new Map<string, number>();
@@ -189,7 +189,7 @@ export async function GET(request: NextRequest) {
 
   // Per-domain health rollup accumulator (migration 00081). A domain shares its
   // reputation across every inbox on it, so its health is that of its WORST
-  // (lowest-scoring) member mailbox — the weakest inbox is the burn risk. The
+  // (lowest-scoring) member mailbox: the weakest inbox is the burn risk. The
   // worst mailbox's components come along so the domain card's score and its
   // "why" always agree. Keyed by domain_id; written after the loop. Choice of
   // "worst inbox" is deliberately conservative and Phase-5-tunable (nothing
@@ -353,7 +353,7 @@ export async function GET(request: NextRequest) {
   // Persist the per-domain health rollups (migration 00081). watch_streak counts
   // CONSECUTIVE DAYS in the 'watch' band (the future lifecycle cron tires a
   // domain at WATCH_STREAK_FOR_TIRED consecutive days): it advances at most once
-  // per UTC day, and resets to 0 the moment the domain leaves 'watch' — a
+  // per UTC day, and resets to 0 the moment the domain leaves 'watch': a
   // 'critical' domain tires via the band directly, not via the streak. Purely
   // additive: nothing reads these columns yet except the (future) lifecycle cron.
   const rollupIso = new Date(now).toISOString();

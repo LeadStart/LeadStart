@@ -1,7 +1,7 @@
-// Pure URL/domain helpers for the enrichment pipeline. No network, no deps —
+// Pure URL/domain helpers for the enrichment pipeline. No network, no deps,
 // exercised directly by scripts/test-apify-enrichment.ts.
 
-// Hosts that are never a company's own website — social, aggregators, generic
+// Hosts that are never a company's own website: social, aggregators, generic
 // site builders, link-in-bio. Matched as an exact host or a subdomain suffix.
 export const REJECTED_HOSTS: readonly string[] = [
   "linkedin.com",
@@ -56,7 +56,7 @@ const MULTI_PART_TLDS = new Set([
 const IPV4_RE = /^\d{1,3}(\.\d{1,3}){3}$/;
 
 // Reduce a hostname to its registrable domain (eTLD+1), using the small
-// MULTI_PART_TLDS set rather than a full public-suffix list (deliberate — the
+// MULTI_PART_TLDS set rather than a full public-suffix list (deliberate, the
 // long tail isn't worth the dependency for cold-email domains).
 export function registrableDomain(host: string): string {
   const labels = host.split(".").filter(Boolean);
@@ -119,7 +119,7 @@ export function extractCompanyId(url: string | null | undefined): string | null 
 
 // Keep a company LinkedIn URL only if it's a real /company/ page. HarvestAPI
 // hands back a SEARCH link (linkedin.com/search/results/all/?keywords=Name) when
-// a person's employer has no LinkedIn company page — that's not a company URL, so
+// a person's employer has no LinkedIn company page: that's not a company URL, so
 // storing it just pollutes company_linkedin_url and makes the domains phase log a
 // misleading "no parseable company LinkedIn URL". Drop it to null instead.
 export function sanitizeCompanyUrl(url: string | null | undefined): string | null {

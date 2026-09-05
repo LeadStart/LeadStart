@@ -77,7 +77,7 @@ export function ClientDetailClient({
 }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
-  // Default to lifetime (All-Time) — a rolling 30-day reply rate understates it
+  // Default to lifetime (All-Time): a rolling 30-day reply rate understates it
   // (fresh, unreplied leads dilute the denominator). 7d/30d stay one click away.
   const [period, setPeriod] = useState<Period>("lifetime");
   const [statusUpdating, setStatusUpdating] = useState(false);
@@ -245,7 +245,7 @@ export function ClientDetailClient({
       {periodSnapshots.length > 0 && (
         <DailyChart
           snapshots={periodSnapshots}
-          title={`${client.name} — ${periodLabel}`}
+          title={`${client.name}: ${periodLabel}`}
         />
       )}
 

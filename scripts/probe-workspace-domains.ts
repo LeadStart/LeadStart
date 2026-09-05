@@ -53,7 +53,7 @@ async function main() {
   });
   const domains = json.domains ?? [];
   for (const d of domains) {
-    console.log(`  ${d.domainName}${d.isPrimary ? " (primary)" : ""} — verified: ${d.verified}`);
+    console.log(`  ${d.domainName}${d.isPrimary ? " (primary)" : ""}, verified: ${d.verified}`);
   }
   console.log(`  total: ${domains.length}`);
 
@@ -62,7 +62,7 @@ async function main() {
     token,
     `SELECT domain, tier, lifecycle_status, registrar FROM sending_domains WHERE organization_id = '${ORG_ID}' ORDER BY domain;`,
   )) as { domain: string; tier: string; lifecycle_status: string; registrar: string }[];
-  for (const r of rows) console.log(`  ${r.domain} — ${r.tier}/${r.lifecycle_status}/${r.registrar}`);
+  for (const r of rows) console.log(`  ${r.domain}: ${r.tier}/${r.lifecycle_status}/${r.registrar}`);
   console.log(`  total: ${rows.length}`);
 }
 

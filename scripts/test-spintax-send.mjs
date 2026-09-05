@@ -9,12 +9,12 @@
 //     Re: fallback    ->  `${contact.id}:0:subject`   (step index 0, on purpose)
 //
 // It proves three properties without touching the network:
-//   (i)   determinism  — a second pass yields byte-identical output
-//   (ii)  distribution — variety across the 3 contacts
-//   (iii) Re:-coherence — the "Re:" subject re-uses the original step-0 render
+//   (i)   determinism : a second pass yields byte-identical output
+//   (ii)  distribution: variety across the 3 contacts
+//   (iii) Re:-coherence, the "Re:" subject re-uses the original step-0 render
 //                         so the threaded subject is byte-identical
 //
-//   node scripts/test-spintax-send.mjs           # DRY — in-memory only, NO network
+//   node scripts/test-spintax-send.mjs           # DRY: in-memory only, NO network
 //   node scripts/test-spintax-send.mjs --send    # delivers ONE rendered email via Gmail
 //
 // The --send path mirrors scripts/test-send-david-email1.mjs (Gmail service
@@ -28,7 +28,7 @@ const SEND = process.argv.includes("--send");
 // ---- Sample step (hardcoded spintax) ----
 const SUBJECT_TPL = "{Quick|Fast} question about {{company}}";
 const BODY_TPL =
-  "{Hi|Hey|Hello} {{first_name}} — {quick|fast} question about {{company}}.\n\n" +
+  "{Hi|Hey|Hello} {{first_name}}, {quick|fast} question about {{company}}.\n\n" +
   "{We help|I help} teams like yours {win more meetings|book more calls}. {Worth a chat?|Open to a quick call?}";
 
 // ---- Fixed fake contacts (stable UUIDs → deterministic renders) ----
@@ -86,7 +86,7 @@ for (const c of CONTACTS) {
 
 console.log("\n=== Assertions ===");
 
-// (i) Determinism — a second pass is byte-identical.
+// (i) Determinism: a second pass is byte-identical.
 console.log("\n(i) Determinism (second pass identical):");
 let detOk = true;
 CONTACTS.forEach((c, i) => {
@@ -96,13 +96,13 @@ CONTACTS.forEach((c, i) => {
 });
 ok(detOk, "all 3 contacts render byte-identical on the second pass");
 
-// (ii) Distribution — variety across contacts (not all identical).
+// (ii) Distribution: variety across contacts (not all identical).
 console.log("\n(ii) Distribution (variety across contacts):");
 const subjects = first.map((f) => f.subject);
 const bodies = first.map((f) => f.body);
 ok(new Set(subjects).size > 1 || new Set(bodies).size > 1, "renders differ across the 3 contacts (spintax varies)");
 
-// (iii) Re:-coherence — the Re: subject equals "Re: " + the original step-0 subject.
+// (iii) Re:-coherence, the Re: subject equals "Re: " + the original step-0 subject.
 console.log("\n(iii) Re:-coherence (threaded subject byte-identical to original):");
 let reOk = true;
 first.forEach((f) => {
@@ -114,11 +114,11 @@ ok(reOk, "Re: subject == 'Re: ' + the exact step-0 subject for the same contact"
 console.log(`\n=== ${pass} passed, ${fail} failed ===`);
 
 if (!SEND) {
-  console.log("\nDRY RUN — no network calls made. Pass --send to deliver one rendered email.");
+  console.log("\nDRY RUN, no network calls made. Pass --send to deliver one rendered email.");
   process.exit(fail === 0 ? 0 : 1);
 }
 
-// ================= SEND via Gmail (DWD) — mirrors test-send-david-email1.mjs =================
+// ================= SEND via Gmail (DWD): mirrors test-send-david-email1.mjs =================
 // Guarded: only reached with --send. Delivers ONE email (the first contact's
 // step-0 render) so a human can eyeball the resolved copy in a real inbox.
 const ENV = "C:/Users/danie/Documents/Claude/leadstart/.env.local";
@@ -187,5 +187,5 @@ const raw = [
 ].join("\r\n");
 const send = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", { method: "POST", headers: { Authorization: `Bearer ${tok.access_token}`, "Content-Type": "application/json" }, body: JSON.stringify({ raw: b64url(raw) }) });
 const sr = await send.json();
-console.log(send.ok ? `\n✓ SENT — Gmail id ${sr.id}, thread ${sr.threadId}. Check ${TO}.` : `\n✗ SEND FAILED (${send.status}): ${JSON.stringify(sr)}`);
+console.log(send.ok ? `\n✓ SENT, Gmail id ${sr.id}, thread ${sr.threadId}. Check ${TO}.` : `\n✗ SEND FAILED (${send.status}): ${JSON.stringify(sr)}`);
 process.exit(send.ok ? 0 : 1);

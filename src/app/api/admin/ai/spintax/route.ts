@@ -2,7 +2,7 @@
 //
 // Owner-only. Takes campaign copy the owner wrote and asks Claude Haiku to
 // rewrite it with meaning-equivalent spintax alternatives ({a|b|c}). The
-// owner reviews the before/after in the builder and explicitly accepts —
+// owner reviews the before/after in the builder and explicitly accepts,
 // this route never persists anything.
 //
 // Request:  { subject: string | null, body: string }
@@ -123,7 +123,7 @@ export async function POST(request: Request) {
 
     if (!response.parsed_output) {
       return NextResponse.json(
-        { error: "The AI produced no output — try again." },
+        { error: "The AI produced no output, try again." },
         { status: 502 },
       );
     }
@@ -139,7 +139,7 @@ export async function POST(request: Request) {
   const outputTags = mergeTags(`${output.subject ?? ""}\n${output.body}`);
   if (!sameTags(inputTags, outputTags)) {
     return NextResponse.json(
-      { error: "The AI produced invalid spintax — try again." },
+      { error: "The AI produced invalid spintax, try again." },
       { status: 502 },
     );
   }
@@ -150,7 +150,7 @@ export async function POST(request: Request) {
     hasBlockingWarning(output.body)
   ) {
     return NextResponse.json(
-      { error: "The AI produced invalid spintax — try again." },
+      { error: "The AI produced invalid spintax, try again." },
       { status: 502 },
     );
   }

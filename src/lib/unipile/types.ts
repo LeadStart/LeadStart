@@ -1,4 +1,4 @@
-// Unipile API types — covers what the LinkedIn channel needs:
+// Unipile API types: covers what the LinkedIn channel needs:
 // account hosting, invitations, messaging, and webhooks. WhatsApp /
 // Instagram / email types from the wider Unipile surface are out of scope.
 //
@@ -139,7 +139,7 @@ export interface UnipileWebhookResponse {
   webhook_id: string;
 }
 
-// Decoded payloads — what the webhook handler in commit #5 cares about.
+// Decoded payloads: what the webhook handler in commit #5 cares about.
 
 export interface UnipileMessagingEvent {
   source: "messaging";

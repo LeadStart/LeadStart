@@ -1,4 +1,4 @@
-// POST /api/admin/clients/[clientId]/linkedin/connect-start —
+// POST /api/admin/clients/[clientId]/linkedin/connect-start,
 // owner-only. Generates a Unipile hosted-auth link the operator visits
 // to connect this client's LinkedIn account. Returns { url }; the UI
 // performs a full-page nav so the success_redirect_url lands the same

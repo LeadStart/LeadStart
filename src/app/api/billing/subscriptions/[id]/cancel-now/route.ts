@@ -5,7 +5,7 @@ import { getStripe, isStripeDemoMode } from "@/lib/stripe/client";
 import type { ClientSubscription } from "@/types/app";
 
 /**
- * Immediate cancel — ends the subscription right now, no period-end grace.
+ * Immediate cancel: ends the subscription right now, no period-end grace.
  * Destructive: there is no pro-ration refund and the client loses access
  * immediately. Use the plain /cancel endpoint for the normal soft-cancel.
  */
@@ -62,7 +62,7 @@ export async function POST(
 
   // Mirror via the service-role client: client_subscriptions is service-role-only
   // under the hardened RLS (00100), so a user-client update is silently denied.
-  // Non-fatal — Stripe already canceled and the webhook confirms it.
+  // Non-fatal: Stripe already canceled and the webhook confirms it.
   const admin = createAdminClient();
   const { error: mirrorErr } = await admin
     .from("client_subscriptions")

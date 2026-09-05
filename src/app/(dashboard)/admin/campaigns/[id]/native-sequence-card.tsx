@@ -284,13 +284,13 @@ export function NativeSequenceCard({
               {strategy === "reach_first" ? (
                 <>
                   In <span className="font-medium">Reach everyone first</span> this is only an
-                  on/off — first-touches use full inbox capacity regardless of the number.
+                  on/off: first-touches use full inbox capacity regardless of the number.
                   Set 0 to pause new leads while replies keep sending.
                 </>
               ) : (
                 <>
                   New first-touches started per day on this campaign. Follow-ups aren&apos;t
-                  limited by this — set 0 to pause new leads while replies keep sending.
+                  limited by this: set 0 to pause new leads while replies keep sending.
                 </>
               )}
             </p>
@@ -298,7 +298,7 @@ export function NativeSequenceCard({
           <p className="text-[11px] text-muted-foreground">{formatSendWindow(win)}</p>
         </div>
 
-        {/* Sending strategy — how the day's send budget is split between new
+        {/* Sending strategy: how the day's send budget is split between new
             first-touches and follow-ups. Neither option changes total volume
             (inbox warmup caps set that); they change which emails win the slots. */}
         <div className="rounded-lg border border-border/50 p-4 space-y-3">
@@ -310,7 +310,7 @@ export function NativeSequenceCard({
               active={strategy === "finish_first"}
               onClick={() => setStrategy("finish_first")}
               title="Finish the sequence first"
-              desc="Follow-ups get priority; new leads drip in at the cap above. Every contact is walked through the whole sequence. Steady and predictable — slower reach."
+              desc="Follow-ups get priority; new leads drip in at the cap above. Every contact is walked through the whole sequence. Steady and predictable: slower reach."
             />
             <StrategyOption
               active={strategy === "reach_first"}

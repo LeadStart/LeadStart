@@ -2,7 +2,7 @@
  * Shared, CLIENT-SAFE token helpers for native email {{merge_tag}} substitution.
  *
  * This module is the single source of truth for how the native sender resolves
- * {{tokens}} — it is imported by BOTH the real sender (server, in
+ * {{tokens}}: it is imported by BOTH the real sender (server, in
  * src/app/api/cron/run-native-sequences/route.ts) and the builder preview
  * (client component). Keep it free of `node:` imports and npm deps so it bundles
  * into the browser.
@@ -13,7 +13,7 @@
  *   - buildTokenMap produces the same standard map the sender builds, plus every
  *     custom_fields entry keyed by its normalized name.
  *   - applyTokens leaves an unknown {{token}} untouched (unless a fallback is
- *     supplied) — a typo'd placeholder shows up in a preview instead of silently
+ *     supplied): a typo'd placeholder shows up in a preview instead of silently
  *     blanking a line of copy.
  *
  * Spintax is resolved SEPARATELY, before tokens, by the caller (see the sender's
@@ -85,7 +85,7 @@ export function buildTokenMap(
 // fallback, on the FIRST "|":  "{{first_name | there}}" -> { name: "first_name",
 // fallback: "there" }; "{{first_name}}" -> { name: "first_name", fallback: null }.
 // Both sides are trimmed. Spintax is always resolved BEFORE tokens (see the
-// sender's renderTemplate), so a "|" inside {{ }} is never a spintax pipe — it is
+// sender's renderTemplate), so a "|" inside {{ }} is never a spintax pipe: it is
 // always an author-written default.
 export function splitToken(raw: string): { name: string; fallback: string | null } {
   const i = raw.indexOf("|");
@@ -100,7 +100,7 @@ export function splitToken(raw: string): { name: string; fallback: string | null
 //   1. A non-empty resolved value from the map wins.
 //   2. Else an inline `|fallback` (even an explicit empty one, {{token|}}, which
 //      means "blank it") fills the spot.
-//   3. Else a present-but-empty map value blanks it — identical to the prior
+//   3. Else a present-but-empty map value blanks it: identical to the prior
 //      behavior, where a standard token for a missing contact field resolved to
 //      "" rather than leaking.
 //   4. Else the caller's `fallback` fn decides. The live sender passes
@@ -141,7 +141,7 @@ export const SENDER_TOKEN_KEYS: ReadonlySet<string> = new Set([
 ]);
 
 // Which contact columns satisfy each standard token (normalizeVarKey form).
-// Mirrors the keys buildTokenMap derives from contact columns — if a token
+// Mirrors the keys buildTokenMap derives from contact columns: if a token
 // key is listed here, mapping a CSV column to the named field(s) fills it.
 export const STANDARD_TOKEN_FIELDS: Record<string, string[]> = {
   firstname: ["first_name"],
@@ -175,7 +175,7 @@ export interface CampaignTokenInfo {
 // An inline default ({{token|there}}) is stripped before the name/key are
 // computed, so a fallback'd token is counted under its real variable name (not
 // "token|there"). `hasFallback` is true only when EVERY occurrence of the token
-// carries an inline default — i.e. the token can never render blank — so the
+// carries an inline default (i.e. the token can never render blank) so the
 // import/preview "this will be blank" warnings can suppress fully-defaulted vars.
 export function extractCampaignTokens(
   templates: (string | null | undefined)[],
@@ -194,7 +194,7 @@ export function extractCampaignTokens(
       const has = fallback !== null;
       const existing = seen.get(key);
       if (existing) {
-        // "Protected" only if ALL uses default — one bare {{x}} can still blank.
+        // "Protected" only if ALL uses default: one bare {{x}} can still blank.
         existing.hasFallback = existing.hasFallback && has;
         continue;
       }
@@ -294,7 +294,7 @@ export function sampleFallback(rawName: string): string {
 export interface CampaignVariable {
   /** Canonical raw spelling (variable name only, no |fallback). */
   token: string;
-  /** normalizeVarKey(token) — the identity used for de-duping + resolution. */
+  /** normalizeVarKey(token): the identity used for de-duping + resolution. */
   key: string;
   kind: "standard" | "custom";
   /** For standard vars: which contact columns satisfy the token. */
@@ -310,7 +310,7 @@ export interface CampaignVariable {
 // blank; it never becomes a phantom Insert chip. STANDARD tokens (first_name,
 // company, …) map to built-in contact columns, so they always stay. Returns the
 // ordered, de-duped (by key) union: existing registry first (preserving order,
-// spelling, kind), then copy STANDARD tokens, then mapped custom columns. Pure —
+// spelling, kind), then copy STANDARD tokens, then mapped custom columns. Pure,
 // callers persist the result.
 export function reconcileCampaignVariables(
   existing: CampaignVariable[] | null | undefined,
@@ -338,7 +338,7 @@ export function reconcileCampaignVariables(
   for (const t of copyTokens.standard) {
     add({ token: t.token, key: t.key, kind: "standard", fields: t.fields });
   }
-  // Copy CUSTOM tokens deliberately do NOT register — only a mapped column does.
+  // Copy CUSTOM tokens deliberately do NOT register: only a mapped column does.
   for (const t of mappedCustom ?? []) {
     if (t && typeof t.key === "string" && typeof t.token === "string") {
       add({ token: t.token, key: t.key, kind: "custom" });

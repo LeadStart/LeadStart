@@ -20,7 +20,7 @@ import { enqueueEnrichment } from "@/lib/apify/enqueue-enrichment";
 import { alertActorFailure } from "@/lib/notifications/actor-failure-alert";
 import { loadBuyerRunCeiling, capRunCharge } from "@/lib/tokens/billing";
 
-// GET /api/cron/run-maps-searches — every minute. The Google-Maps twin of
+// GET /api/cron/run-maps-searches: every minute. The Google-Maps twin of
 // run-linkedin-searches: one tick advances one search under a 90s lease, either
 // STARTING the compass~google-maps-extractor actor or POLLING the in-flight run.
 // A single run returns up to target_max_results, so the lifecycle is start →
@@ -55,7 +55,7 @@ type SearchRow = {
   cost_usd: number | string;
   // Multi-region fan-out (Phase 2): the running de-duplicated union across areas.
   // The area cursor (area_index) is read lazily in the multi-area handler, NOT
-  // here — so this hot-path SELECT never references a column that may not exist
+  // here, so this hot-path SELECT never references a column that may not exist
   // until migration 00094 is applied (keeps the single-area path deploy-safe
   // regardless of migration timing).
   results: MapsPlace[] | null;
@@ -80,7 +80,7 @@ async function resolveAutoRunUserId(
 
 // Best-effort auto-import of a completed search's places into Contacts, then
 // start enrichment. Gated on the org's auto_run_after_search kill-switch. Never
-// throws — sourcing is already saved; a failure here degrades to the manual
+// throws: sourcing is already saved; a failure here degrades to the manual
 // "Import to Contacts" path. Returns a short progress note.
 async function autoImportAndEnrich(
   admin: ReturnType<typeof createAdminClient>,
@@ -91,7 +91,7 @@ async function autoImportAndEnrich(
     const settings = await loadEnrichmentSettings(admin, row.organization_id);
     if (!settings.auto_run_after_search) return null;
     const userId = await resolveAutoRunUserId(admin, row);
-    if (!userId) return "auto-import skipped — no owner to attribute the run to";
+    if (!userId) return "auto-import skipped: no owner to attribute the run to";
 
     const imported = await importMapsPlaces(admin, {
       organizationId: row.organization_id,
@@ -117,7 +117,7 @@ async function autoImportAndEnrich(
     return `Imported ${imported.inserted} to Contacts · ${tail}`;
   } catch (err) {
     console.error("[run-maps-searches] auto-import failed:", err);
-    return "auto-import failed — import manually from the results table";
+    return "auto-import failed: import manually from the results table";
   }
 }
 
@@ -125,7 +125,7 @@ async function autoImportAndEnrich(
 // the hot-path claim SELECT so single-area searches never touch this column,
 // which may not exist until migration 00094 is applied. If the column IS missing
 // while a multi-area row somehow exists (migration applied AFTER the route that
-// writes `areas` — an order we flag against), this throws a clear error; the GET
+// writes `areas`: an order we flag against), this throws a clear error; the GET
 // handler's catch then fails the search safely WITHOUT starting any paid run.
 async function readAreaIndex(
   admin: ReturnType<typeof createAdminClient>,
@@ -138,7 +138,7 @@ async function readAreaIndex(
     .maybeSingle();
   if (error) {
     throw new Error(
-      `maps_searches.area_index missing — apply migration 00094 before running multi-region searches (${error.message})`,
+      `maps_searches.area_index missing: apply migration 00094 before running multi-region searches (${error.message})`,
     );
   }
   const n = (data as { area_index?: number } | null)?.area_index;
@@ -302,7 +302,7 @@ async function advanceMultiAreaSearch(
   }
 
   // (B) No run in flight → start the current area. Cursor already past the end
-  // (shouldn't happen — completion sets `complete`) → finalize defensively.
+  // (shouldn't happen, completion sets `complete`) → finalize defensively.
   if (areaIndex >= areaCount) {
     const places = accumulated.slice(0, row.target_max_results);
     await release({

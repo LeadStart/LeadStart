@@ -58,10 +58,10 @@ import {
   type LlmSearchFn,
 } from "@/lib/enrichment/domain-discovery";
 
-// GET /api/cron/run-apify-enrichment — one worker tick (60s budget).
+// GET /api/cron/run-apify-enrichment: one worker tick (60s budget).
 //
 // Drives the four-phase Apify pipeline (profiles → domains → waterfall →
-// activity). Email verification is NOT a phase here — Million Verifier owns it
+// activity). Email verification is NOT a phase here: Million Verifier owns it
 // (its own pre-send gate); this worker only fills contacts.email (fill-only) +
 // provenance. Deliberate deviation from the decision-maker worker: a 90s
 // `locked_at` lease on the claim, because each tick makes PAID external calls
@@ -92,14 +92,14 @@ const PATTERN_MV_VERIFY_TIMEOUT_SEC = 6;
 const PATTERN_MV_DEADLINE_SEC = 40;
 
 // Domain-discovery (inline web lookup for companies with no LinkedIn page).
-// Smaller batch + pool than pattern_mv — each item is an LLM web search (slower)
+// Smaller batch + pool than pattern_mv: each item is an LLM web search (slower)
 // plus an optional homepage fetch.
 const DISCOVERY_BATCH = 10;
 const DISCOVERY_CONCURRENCY = 3;
 const DISCOVERY_DEADLINE_SEC = 40;
 
-// Naming (inline decision-maker Layer 1/2). The heaviest inline step — each item
-// scrapes a site (Layer 1) and may web-search (Layer 2) — so small batch + pool
+// Naming (inline decision-maker Layer 1/2). The heaviest inline step: each item
+// scrapes a site (Layer 1) and may web-search (Layer 2), so small batch + pool
 // + a per-business timeout well under the tick budget.
 const NAMING_BATCH = 4;
 const NAMING_CONCURRENCY = 2;
@@ -107,10 +107,10 @@ const NAMING_DEADLINE_SEC = 45;
 const NAMING_PER_BUSINESS_TIMEOUT_MS = 30_000;
 
 // Waterfall methods by execution style:
-//   DIRECT   — run inline in the tick via Million Verifier, no Apify run.
-//   SCRAPE   — our site-contact-scraper actor (site_scrape + the scrape stage of
+//   DIRECT  : run inline in the tick via Million Verifier, no Apify run.
+//   SCRAPE  : our site-contact-scraper actor (site_scrape + the scrape stage of
 //              scrape_plus_pattern, which then hands misses to pattern_mv).
-//   APIFY_SOLO — the single-actor community scraper (bovi).
+//   APIFY_SOLO: the single-actor community scraper (bovi).
 // All Apify styles use the existing start-run → poll → ingest path.
 const DIRECT_METHODS: EnrichmentWaterfallMethod[] = ["pattern_mv"];
 const SCRAPE_METHODS: EnrichmentWaterfallMethod[] = ["site_scrape", "scrape_plus_pattern"];
@@ -172,12 +172,12 @@ const PHASE_COLS: Record<
 > = {
   profiles: { status: "profile_status", runId: "profile_apify_run_id", notes: "profile_notes" },
   domains: { status: "domain_status", runId: "domain_apify_run_id", notes: "domain_notes" },
-  // Naming is inline (decision-maker Layer 1/2, no Apify run) — runId is never
+  // Naming is inline (decision-maker Layer 1/2, no Apify run): runId is never
   // queried; runPhase short-circuits before the Apify path, like verify.
   naming: { status: "naming_status", runId: "naming_apify_run_id", notes: "naming_notes" },
   waterfall: { status: "waterfall_status", runId: "waterfall_apify_run_id", notes: "waterfall_notes" },
   activity: { status: "activity_status", runId: "activity_apify_run_id", notes: "activity_notes" },
-  // Verify is inline (Million Verifier, no Apify run) — runId is never queried
+  // Verify is inline (Million Verifier, no Apify run): runId is never queried
   // for it; runPhase short-circuits before the Apify start/poll path.
   verify: { status: "verify_status", runId: "verify_apify_run_id", notes: "verify_notes" },
 };
@@ -203,7 +203,7 @@ function estimatePerItem(phase: EnrichmentPhase): number {
 // Add a failed/aborted run's real Apify charge to the enrichment run total.
 // Pay-per-event billing charges as events happen, so a run that never SUCCEEDED
 // still cost money; only the success path recorded it before, which silently
-// hid the spend (e.g. an aborted vdrmota waterfall). No estimate fallback here —
+// hid the spend (e.g. an aborted vdrmota waterfall). No estimate fallback here,
 // a run that didn't finish has no item count to estimate from; record only what
 // Apify actually reports.
 async function recordBadRunCost(
@@ -254,7 +254,7 @@ export async function GET(request: NextRequest) {
   }
   const candidate = candidates[0] as unknown as RunRow;
 
-  // 2. Lease claim — only one tick may hold a run at a time.
+  // 2. Lease claim: only one tick may hold a run at a time.
   const { data: claimed } = await admin
     .from("enrichment_runs")
     .update({ status: "running", started_at: candidate.started_at ?? nowIso, locked_at: nowIso })
@@ -327,13 +327,13 @@ async function runPhase(
   const phase = run.phase as Exclude<EnrichmentPhase, "complete">;
   const cols = PHASE_COLS[phase];
 
-  // Verify is an inline Million Verifier phase (no Apify run) — handle it before
+  // Verify is an inline Million Verifier phase (no Apify run): handle it before
   // the provider lookup / Apify start-poll path, same as pattern_mv inside the
   // waterfall.
   if (phase === "verify") {
     return runVerifyPhase(admin, client, run, tickStart);
   }
-  // Naming is an inline decision-maker phase (no Apify run) — same pattern.
+  // Naming is an inline decision-maker phase (no Apify run): same pattern.
   if (phase === "naming") {
     return runNamingBatch(admin, client, run, tickStart);
   }
@@ -357,7 +357,7 @@ async function runPhase(
           /* best-effort */
         }
         // Apify bills per event as it runs, so a stuck+aborted run still cost
-        // money — record whatever it accrued (partial) so spend isn't hidden.
+        // money: record whatever it accrued (partial) so spend isn't hidden.
         await recordBadRunCost(admin, run, apRun);
         await requeueOrFail(admin, run, cols, "stuck >20min; aborted");
         await clearActive(admin, run.id);
@@ -378,7 +378,7 @@ async function runPhase(
       await admin
         .from("enrichment_runs")
         .update({
-          progress_message: `Waiting on Apify (${phase}) run ${run.active_apify_run_id} — ${apRun.status}`,
+          progress_message: `Waiting on Apify (${phase}) run ${run.active_apify_run_id}: ${apRun.status}`,
           locked_at: null,
         })
         .eq("id", run.id);
@@ -420,7 +420,7 @@ async function runPhase(
     }
 
     if (isTerminalBad(apRun.status)) {
-      // A FAILED/TIMED-OUT/ABORTED run still incurred its per-event charges —
+      // A FAILED/TIMED-OUT/ABORTED run still incurred its per-event charges,
       // record the real cost (usageTotalUsd is final here) before requeueing,
       // or the spend disappears from the run total.
       await recordBadRunCost(admin, run, apRun);
@@ -452,16 +452,16 @@ async function startNextBatch(
   provider: ReturnType<typeof getProvider>,
   tickStart: number,
   // When set (an internal apify-waterfall sub-batch), scope the pending select
-  // to one method group and do NOT advance the phase on an empty batch — the
+  // to one method group and do NOT advance the phase on an empty batch: the
   // waterfall router owns advancing. Absent = a normal phase batch.
   methodFilter?: EnrichmentWaterfallMethod[],
   // When set (the domains linkedin-company sub-batch), scope the pending select
-  // to items WITH a company ref and do NOT advance on empty — the domains router
+  // to items WITH a company ref and do NOT advance on empty: the domains router
   // owns advancing (it also runs the inline web-lookup discovery sub-stage).
   domainsRefsOnly?: boolean,
 ): Promise<Record<string, unknown>> {
   // The waterfall phase has per-item methods (incl. the direct pattern_mv
-  // pathway), so it's routed specially — unless we're already inside a
+  // pathway), so it's routed specially: unless we're already inside a
   // method-scoped apify sub-batch call.
   if (phase === "waterfall" && !methodFilter) {
     return startNextWaterfall(admin, client, run, cols, tickStart);
@@ -480,7 +480,7 @@ async function startNextBatch(
     .eq("run_id", run.id)
     .eq(cols.status, "pending");
   if (methodFilter) pendingQuery = pendingQuery.in("waterfall_method", methodFilter);
-  // Scope to items that actually carry a LinkedIn company ref — a mixed batch
+  // Scope to items that actually carry a LinkedIn company ref: a mixed batch
   // would feed ref-less items into the company actor, which returns nothing for
   // them and marks them not_found before discovery ever gets a chance.
   if (domainsRefsOnly) pendingQuery = pendingQuery.or("company_id.not.is.null,company_slug.not.is.null");
@@ -496,7 +496,7 @@ async function startNextBatch(
     return { status: "advanced", phase: run.phase };
   }
 
-  // Re-check the contacts — someone may have filled the target field since the
+  // Re-check the contacts: someone may have filled the target field since the
   // run was created / a prior phase ran.
   batch = await dropAlreadyDone(admin, run, phase, cols, batch);
   if (batch.length === 0) {
@@ -505,7 +505,7 @@ async function startNextBatch(
 
   const input = provider.buildInput(batch, run.waterfall_config ?? null);
   if (isEmptyInput(input)) {
-    // Nothing actionable in this batch (e.g. all lacked a domain) — mark
+    // Nothing actionable in this batch (e.g. all lacked a domain): mark
     // not_found so the run can progress.
     await admin
       .from("enrichment_run_items")
@@ -519,7 +519,7 @@ async function startNextBatch(
   const waitSec = Math.max(0, Math.min(20, START_BUDGET_SEC - elapsedSec));
 
   // Call Apify FIRST. A throw here leaves items 'pending' (nothing marked) and
-  // is caught by the tick's try/catch — the only crash window is between this
+  // is caught by the tick's try/catch: the only crash window is between this
   // POST and the item update, which at worst orphans one paid run (no data
   // corruption), and the lease prevents a concurrent second start.
   // Hard per-run charge cap (~$0.06/item ceiling; the worst real per-phase
@@ -621,7 +621,7 @@ async function startNextWaterfall(
   cols: { status: string; runId: string; notes: string },
   tickStart: number,
 ): Promise<Record<string, unknown>> {
-  // 1. Direct pattern_mv group (cheap, no external run) — also picks up
+  // 1. Direct pattern_mv group (cheap, no external run): also picks up
   //    scrape_plus_pattern items downgraded to pattern_mv after a scrape miss.
   if ((await countWaterfallMethodPending(admin, run.id, DIRECT_METHODS)) > 0) {
     return runPatternMvBatch(admin, run, cols, tickStart);
@@ -682,7 +682,7 @@ async function startNextDomains(
   if ((await countDomainsPending(admin, run.id, false)) > 0) {
     return runDomainDiscoveryBatch(admin, run, cols, tickStart);
   }
-  // 3. Any remaining pending (ref-less AND nameless — shouldn't happen) can't be
+  // 3. Any remaining pending (ref-less AND nameless, shouldn't happen) can't be
   //    resolved either way; mark them so they don't strand the phase, then advance.
   await admin
     .from("enrichment_run_items")
@@ -716,7 +716,7 @@ async function recordMvDefinitiveError(
     await enqueueOwnerAlert({
       admin,
       kind: "email_verifier_unavailable",
-      subject: "Email verifier unavailable — enrichment waterfall on hold",
+      subject: "Email verifier unavailable, enrichment waterfall on hold",
       summary:
         err.kind === "credits"
           ? "Million Verifier is out of credits. Pattern-based email enrichment is held until it's topped up."
@@ -738,7 +738,7 @@ async function runPatternMvBatch(
   tickStart: number,
 ): Promise<Record<string, unknown>> {
   // Org MV key + error/suppression state, plus the Findymail key for catch-all
-  // recovery (a finder, not a send gate — a Findymail failure just skips recovery).
+  // recovery (a finder, not a send gate, a Findymail failure just skips recovery).
   const { data: orgRow } = await admin
     .from("organizations")
     .select(
@@ -785,7 +785,7 @@ async function runPatternMvBatch(
     return { status: "no_mv_key", items: batch.length };
   }
 
-  // Suppression window after a recent definitive error — hold, don't call MV.
+  // Suppression window after a recent definitive error: hold, don't call MV.
   const kind = org?.millionverifier_last_error_kind;
   const definitive = !!kind && kind !== "transient";
   if (definitive && org?.millionverifier_last_error_at) {
@@ -793,7 +793,7 @@ async function runPatternMvBatch(
     if (!Number.isNaN(at) && Date.now() < at + ORG_ERROR_SUPPRESS_MS) {
       await admin
         .from("enrichment_runs")
-        .update({ progress_message: "Waterfall held — email verifier unavailable (retrying shortly)", locked_at: null })
+        .update({ progress_message: "Waterfall held, email verifier unavailable (retrying shortly)", locked_at: null })
         .eq("id", run.id);
       return { status: "mv_suppressed" };
     }
@@ -843,11 +843,11 @@ async function runPatternMvBatch(
       await recordMvDefinitiveError(admin, run.organization_id, org?.millionverifier_error_streak ?? 0, err);
       await admin
         .from("enrichment_runs")
-        .update({ progress_message: `Waterfall held — ${err.message.slice(0, 150)}`, locked_at: null })
+        .update({ progress_message: `Waterfall held, ${err.message.slice(0, 150)}`, locked_at: null })
         .eq("id", run.id);
       return { status: "mv_error", kind: err.kind };
     }
-    throw err; // unexpected — the tick's outer try/catch handles it
+    throw err; // unexpected: the tick's outer try/catch handles it
   }
 
   // Fetch the batch's contacts for fill-only writes.
@@ -874,7 +874,7 @@ async function runPatternMvBatch(
   // confidence-40 guess.
   const deferred: { item: ItemRow; outcome: PatternMvOutcome; share: number }[] = [];
 
-  // Write an item's ORIGINAL pattern_mv outcome — the fallback used when recovery
+  // Write an item's ORIGINAL pattern_mv outcome: the fallback used when recovery
   // is off, misses, or errors: a found-catch_all guess via writeEmail, else a
   // not_found finalize. Closes over the counters above.
   const writeOriginal = async (item: ItemRow, outcome: PatternMvOutcome, share: number): Promise<void> => {
@@ -901,13 +901,13 @@ async function runPatternMvBatch(
 
   for (const item of batch) {
     const outcome = outcomes.get(item.id);
-    if (!outcome) continue; // hit the deadline — stays pending for the next tick
+    if (!outcome) continue; // hit the deadline: stays pending for the next tick
     totalCredits += outcome.credits;
     const share = outcome.credits * MV_CREDIT_COST_USD;
 
     // A catch-all outcome (an accepted confidence-40 guess, or a catch-all miss)
     // is deferred to Findymail when recovery is on. Inconclusive items are left
-    // to retry — they resolve to found/not_found on a later tick, then recover.
+    // to retry: they resolve to found/not_found on a later tick, then recover.
     const isCatchAll =
       (outcome.kind === "found" && outcome.mvResult === "catch_all") ||
       (outcome.kind === "not_found" && outcome.sawCatchAll === true);
@@ -935,7 +935,7 @@ async function runPatternMvBatch(
         .eq("id", item.id);
       notFound++;
     } else {
-      // inconclusive — retry unless we've hit the attempt cap.
+      // inconclusive: retry unless we've hit the attempt cap.
       const attempts = (item.attempts ?? 0) + 1;
       if (attempts >= MAX_ITEM_ATTEMPTS) {
         await admin
@@ -961,7 +961,7 @@ async function runPatternMvBatch(
   // For each deferred catch-all item, ask Findymail for a genuinely deliverable
   // address (pay-on-hit). A hit is written clean (provider findymail, conf 75);
   // a miss, or any Findymail error, falls back to the original pattern_mv outcome
-  // so no lead is lost. Findymail is NOT a send gate — errors never hold the run,
+  // so no lead is lost. Findymail is NOT a send gate: errors never hold the run,
   // and a definitive error just stops calling for the rest of this batch.
   let recovered = 0;
   let findymailCost = 0;
@@ -1002,7 +1002,7 @@ async function runPatternMvBatch(
           notFound++;
         }
       } else {
-        // Findymail found nothing (no charge) — keep the original outcome.
+        // Findymail found nothing (no charge): keep the original outcome.
         await writeOriginal(d.item, d.outcome, d.share);
       }
     }
@@ -1029,14 +1029,14 @@ async function runPatternMvBatch(
   return { status: "pattern_mv", found, not_found: notFound, skipped, inconclusive, credits: totalCredits, recovered };
 }
 
-// Process one domain-discovery batch inline (no Apify run) — the domains-phase
+// Process one domain-discovery batch inline (no Apify run): the domains-phase
 // fallback for contacts whose employer has no LinkedIn page. Web-looks-up each
-// company's website (Perplexity Sonar ONLY — no Claude web_search fallback,
+// company's website (Perplexity Sonar ONLY, no Claude web_search fallback,
 // owner directive 2026-08-28), strictly
 // validates it (name↔domain + citation + homepage), and writes company_domain
 // fill-only so the email waterfall can run. Per-item failures are inconclusive
 // (retried to the attempt cap); no key → not_found with a config note (run
-// continues). Never uses in_flight — recoverOrphans would reset it.
+// continues). Never uses in_flight: recoverOrphans would reset it.
 async function runDomainDiscoveryBatch(
   admin: Admin,
   run: RunRow,
@@ -1058,7 +1058,7 @@ async function runDomainDiscoveryBatch(
     return { status: "discovery_disabled" };
   }
 
-  // Org key — Perplexity ONLY (no Claude web_search fallback).
+  // Org key: Perplexity ONLY (no Claude web_search fallback).
   const { data: orgRow } = await admin
     .from("organizations")
     .select("perplexity_api_key")
@@ -1146,7 +1146,7 @@ async function runDomainDiscoveryBatch(
 
   for (const item of batch) {
     const outcome = outcomes.get(item.id);
-    if (!outcome) continue; // deadline — stays pending for the next tick
+    if (!outcome) continue; // deadline: stays pending for the next tick
     totalCost += outcome.cost;
 
     if (outcome.kind === "found") {
@@ -1174,7 +1174,7 @@ async function runDomainDiscoveryBatch(
         .eq("id", item.id);
       notFound++;
     } else {
-      // inconclusive — retry unless we've hit the attempt cap.
+      // inconclusive: retry unless we've hit the attempt cap.
       const attempts = (item.attempts ?? 0) + 1;
       if (attempts >= MAX_ITEM_ATTEMPTS) {
         await admin
@@ -1230,13 +1230,13 @@ function namingContext(ed: unknown): { category: string | null; city: string | n
   return { category, city, state };
 }
 
-// Process one naming batch inline (no Apify run) — the opt-in owner-name add-on.
+// Process one naming batch inline (no Apify run): the opt-in owner-name add-on.
 // Runs the decision-maker orchestrator (Layer 1 site scrape → Layer 2 web search)
 // per name-less item, writing first/last/title onto the item AND the contact so
 // the waterfall's pattern_mv can then build a personal email from name + domain
 // (and a returned personal email is written straight through as provider
 // 'decision_maker'). No Anthropic key → not_found with a config note (run
-// continues). Per-item errors retry to the attempt cap. Never uses in_flight —
+// continues). Per-item errors retry to the attempt cap. Never uses in_flight,
 // recoverOrphans would reset it.
 async function runNamingBatch(
   admin: Admin,
@@ -1246,7 +1246,7 @@ async function runNamingBatch(
 ): Promise<Record<string, unknown>> {
   const cols = PHASE_COLS.naming;
 
-  // Org keys — Anthropic is mandatory (Layer 1 is Haiku); Perplexity required
+  // Org keys: Anthropic is mandatory (Layer 1 is Haiku); Perplexity required
   // for Layer 2 web-search (no Claude fallback; Layer 2 is skipped without it).
   const { data: orgRow } = await admin
     .from("organizations")
@@ -1364,7 +1364,7 @@ async function runNamingBatch(
 
   for (const item of batch) {
     const outcome = outcomes.get(item.id);
-    if (!outcome) continue; // deadline — stays pending for the next tick
+    if (!outcome) continue; // deadline: stays pending for the next tick
     totalCost += outcome.cost_usd;
     const contact = contactMap.get(item.contact_id);
 
@@ -1394,11 +1394,11 @@ async function runNamingBatch(
         .is("first_name", null)
         .select("id");
       if (!nameUpd || nameUpd.length === 0) {
-        // Name already set since we read it — still record provenance.
+        // Name already set since we read it: still record provenance.
         await admin.from("contacts").update({ enrichment_data: curEd }).eq("id", contact.id);
       }
 
-      // 2) Personal email, if the layers returned one — sanitize, then fill-only.
+      // 2) Personal email, if the layers returned one: sanitize, then fill-only.
       let itemEmail: string | null = null;
       if (outcome.personal_email) {
         const san = sanitizeFoundEmail(outcome.personal_email, {
@@ -1523,7 +1523,7 @@ async function writeVerifyItem(
 
 // The opt-in verification phase (run_verify): Million Verifier each found email
 // so the enrichment report carries a verdict. Inline, no Apify. Fill-only on the
-// contact's verification columns (00069) — MV is the single source of truth, so
+// contact's verification columns (00069): MV is the single source of truth, so
 // the send-gate later reads this from its 30-day cache (no double spend). Cache
 // hits (<30d) cost nothing. Fail-closed on a definitive MV error; no key marks
 // the phase's items skipped with a config note and completes the phase.
@@ -1564,7 +1564,7 @@ async function runVerifyPhase(
     return { status: "no_mv_key", phase: run.phase };
   }
 
-  // Suppression window after a recent definitive error — hold, don't call MV.
+  // Suppression window after a recent definitive error: hold, don't call MV.
   const kind = org?.millionverifier_last_error_kind;
   const definitive = !!kind && kind !== "transient";
   if (definitive && org?.millionverifier_last_error_at) {
@@ -1572,7 +1572,7 @@ async function runVerifyPhase(
     if (!Number.isNaN(at) && Date.now() < at + ORG_ERROR_SUPPRESS_MS) {
       await admin
         .from("enrichment_runs")
-        .update({ progress_message: "Verification held — email verifier unavailable (retrying shortly)", locked_at: null })
+        .update({ progress_message: "Verification held, email verifier unavailable (retrying shortly)", locked_at: null })
         .eq("id", run.id);
       return { status: "mv_suppressed" };
     }
@@ -1716,7 +1716,7 @@ async function runVerifyPhase(
     await recordMvDefinitiveError(admin, run.organization_id, org?.millionverifier_error_streak ?? 0, errBox.e);
     await admin
       .from("enrichment_runs")
-      .update({ progress_message: `Verification held — ${errBox.e.message.slice(0, 150)}`, locked_at: null })
+      .update({ progress_message: `Verification held, ${errBox.e.message.slice(0, 150)}`, locked_at: null })
       .eq("id", run.id);
     return { status: "mv_error", kind: errBox.e.kind, processed };
   }
@@ -1759,7 +1759,7 @@ async function seedWaterfallItems(admin: Admin, run: RunRow): Promise<number> {
   if (rows.length === 0) return 0;
 
   // Group by resolved method. Track name-less items (methodForItem routes them to
-  // site_scrape) so we can stamp a provenance note — these are the Google-Maps
+  // site_scrape) so we can stamp a provenance note: these are the Google-Maps
   // business leads with no decision-maker resolved yet.
   const groups = new Map<EnrichmentWaterfallMethod, string[]>();
   const namelessRouted: string[] = [];
@@ -1790,7 +1790,7 @@ async function seedWaterfallItems(admin: Admin, run: RunRow): Promise<number> {
   for (let i = 0; i < namelessRouted.length; i += 200) {
     await admin
       .from("enrichment_run_items")
-      .update({ waterfall_notes: "no person name — routed to site scrape" })
+      .update({ waterfall_notes: "no person name, routed to site scrape" })
       .in("id", namelessRouted.slice(i, i + 200));
   }
   return pending;
@@ -1857,9 +1857,9 @@ async function writePhaseResult(
 
   if (phase === "domains") {
     // Company-level extras the harvestapi actor already returns (migration
-    // 00075): the company phone fills contacts.company_phone (migration 00076 —
+    // 00075): the company phone fills contacts.company_phone (migration 00076,
     // NOT contacts.phone, which is reserved for the decision-maker's own line)
-    // fill-only, zero extra spend; employeeCount lands on the item — the
+    // fill-only, zero extra spend; employeeCount lands on the item: the
     // waterfall's size-routing input. Both exist even when the record had no
     // usable website (not_found path).
     const company = (res.extra?.company ?? null) as Record<string, unknown> | null;
@@ -1892,7 +1892,7 @@ async function writePhaseResult(
         .update({
           domain_status: "found",
           company_domain: res.companyDomain,
-          // Discovery supplies its own provenance ("discovered via sonar —
+          // Discovery supplies its own provenance ("discovered via sonar,
           // homepage-confirmed"); the linkedin-company actor supplies matched_by.
           domain_notes:
             (res.extra?.found_note as string) ??
@@ -1932,7 +1932,7 @@ async function writePhaseResult(
         .eq("id", item.id);
       return "found";
     }
-    // No posts — still stamp checked-at so we know we looked (recency = none).
+    // No posts: still stamp checked-at so we know we looked (recency = none).
     if (contact) {
       await admin
         .from("contacts")
@@ -1951,7 +1951,7 @@ async function writePhaseResult(
     return "not_found";
   }
 
-  // profiles | waterfall — both produce an email via writeEmail. profiles also
+  // profiles | waterfall: both produce an email via writeEmail. profiles also
   // backfills the company LinkedIn URL for the domain phase.
   if (phase === "profiles" && res.companyLinkedinUrl && !item.company_linkedin_url) {
     await admin
@@ -2007,7 +2007,7 @@ async function finishWaterfallMiss(
     await admin.from("contacts").update({ enrichment_data: ed }).eq("id", contact.id);
   }
   const named = hasUsableName(item.first_name, item.last_name);
-  // scrape_plus_pattern hands a scrape miss to pattern_mv — but only with a name
+  // scrape_plus_pattern hands a scrape miss to pattern_mv, but only with a name
   // to build guesses from. A name-less miss can't be helped by pattern_mv, so it
   // falls through to the generic-inbox backfill / terminal path below.
   if (item.waterfall_method === "scrape_plus_pattern" && named) {
@@ -2025,7 +2025,7 @@ async function finishWaterfallMiss(
   }
 
   // Generic-inbox backfill: for a name-less business lead with no personal email,
-  // a scraped company inbox (info@/contact@) IS the actionable address — the
+  // a scraped company inbox (info@/contact@) IS the actionable address: the
   // native sender mails contacts.email and skips email-less rows, so a generic
   // living only in company_email would be unsendable. Fill contacts.email
   // (fill-only) with the generic at low confidence + provenance so the lead is
@@ -2072,7 +2072,7 @@ async function finishWaterfallMiss(
 
 // Guard scraped phones before they touch contacts.phone. The site-contact-scraper
 // already hardens these, but an older actor build (or a manual run) could still
-// hand back a copyright year-range or date stamp — never write one to a CRM field.
+// hand back a copyright year-range or date stamp: never write one to a CRM field.
 function isPlausibleContactPhone(raw: string): boolean {
   const s = raw.trim();
   if (/(^|\D)(19|20)\d{2}\s*[-–—]\s*(19|20)\d{2}(\D|$)/.test(s)) return false; // 1996-2026
@@ -2132,12 +2132,12 @@ async function writeEmail(
 
   const noteFlags = san.flags.length ? san.flags.join("; ") : null;
   // The provider's own status string (e.g. bovi/scrape verdict), kept as
-  // provenance only — never a verification verdict. Million Verifier is the
+  // provenance only: never a verification verdict. Million Verifier is the
   // authority, applied later at its pre-send gate.
   const providerStatus = (extraPatch.waterfall_status as string | null | undefined) ?? null;
 
   // Fill-only write of the email onto the contact. This worker NEVER writes
-  // email_verification_* — those columns are Million Verifier's (single source
+  // email_verification_*: those columns are Million Verifier's (single source
   // of truth). We only fill the address + record provenance in enrichment_data.
   if (contact) {
     const ed = mergeEnrichment(contact.enrichment_data, {
@@ -2363,14 +2363,14 @@ async function seedVerifyItems(admin: Admin, run: RunRow): Promise<number> {
 
 // Final cost reconciliation at run completion. Per-batch accruals read a run's
 // usageTotalUsd the moment it finished, but Apify posts pay-per-event charges
-// asynchronously — a fast same-tick batch records ~$0 (compute only), so
+// asynchronously: a fast same-tick batch records ~$0 (compute only), so
 // cost_usd can badly undercount (observed: $0.00005 recorded vs $0.028 billed).
 // By completion every batch's charges have long settled, so re-read each
 // distinct Apify run's FINAL usage and floor cost_usd with the sum. max() keeps
 // the accrued figure when it's already higher (it also contains the non-Apify
 // MV-credit + discovery-LLM shares); when the Apify sum alone exceeds it, the
 // accrual provably under-captured and the reconciled figure is far closer to
-// truth (short only by those small non-Apify shares). Best-effort — never fails
+// truth (short only by those small non-Apify shares). Best-effort: never fails
 // the run.
 async function reconcileRunCost(admin: Admin, client: ApifyClient, run: RunRow): Promise<void> {
   try {
@@ -2438,10 +2438,10 @@ async function reconcileRunCost(admin: Admin, client: ApifyClient, run: RunRow):
 // Delivered-outcome ledger (Phase 5). At completion, classify each of the run's
 // contacts by delivered tier (record / phone / company_email / owner_name /
 // personal_email / verified_email) and roll the counts onto the run
-// (outcome_counts) and — for search-sourced contacts — merge-increment the
+// (outcome_counts) and (for search-sourced contacts) merge-increment the
 // source search's delivered_counts. The margin substrate for future billing.
 // Best-effort; never breaks completion. (A search enriched across multiple
-// drain-merged runs accumulates; a rare manual re-enrichment can double-count —
+// drain-merged runs accumulates; a rare manual re-enrichment can double-count,
 // acceptable for a rough ledger.)
 type ContactOutcomeRow = {
   id: string;
@@ -2579,7 +2579,7 @@ async function advancePhase(admin: Admin, client: ApifyClient, run: RunRow): Pro
       phase = "domains";
       if (run.run_domains) {
         // Re-activate domain items the profile phase backfilled a company ref to.
-        // id OR slug — a profile-supplied /company/<slug> URL yields a slug only
+        // id OR slug: a profile-supplied /company/<slug> URL yields a slug only
         // (the company actor matches by slug too), and used to be stranded here.
         await admin
           .from("enrichment_run_items")
@@ -2664,7 +2664,7 @@ async function advancePhase(admin: Admin, client: ApifyClient, run: RunRow): Pro
       phase = "verify";
       if (run.run_verify) {
         // Verify every item that actually has an email (found this run or
-        // imported with one) — the report's verifiable set. Last phase so it
+        // imported with one): the report's verifiable set. Last phase so it
         // covers waterfall-recovered addresses too.
         const n = await seedVerifyItems(admin, run);
         if (n > 0) break;

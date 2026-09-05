@@ -1,4 +1,4 @@
-// LeadStart push service worker. Deliberately minimal — it exists only to
+// LeadStart push service worker. Deliberately minimal: it exists only to
 // receive web-push for hot-lead reply notifications and route a tap to the
 // right inbox thread. No offline caching (yet). Served at /app/sw.js (the app
 // runs under basePath /app), scope /app/.
@@ -38,7 +38,7 @@ self.addEventListener("notificationclick", (event) => {
               try {
                 client.navigate(url);
               } catch (_e) {
-                /* cross-origin/edge — fall through to focus */
+                /* cross-origin/edge: fall through to focus */
               }
             }
             return client.focus();

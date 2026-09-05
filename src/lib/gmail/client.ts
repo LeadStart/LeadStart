@@ -1,5 +1,5 @@
 // Hand-rolled Gmail API client using a Google service account with
-// domain-wide delegation (DWD). No googleapis / google-auth-library dep —
+// domain-wide delegation (DWD). No googleapis / google-auth-library dep,
 // the whole thing is a JWT signed with node:crypto plus fetch(), the same
 // hand-rolled API-client convention as src/lib/unipile/client.ts.
 //
@@ -14,7 +14,7 @@
 // Error taxonomy mirrors src/lib/notifications/resend-client.ts: callers
 // distinguish retryable failures (rate limit / transient 5xx) from permanent
 // ones. GmailAuthError specifically means "this mailbox's delegation is
-// misconfigured or revoked" — the worker flips the mailbox to status='error'
+// misconfigured or revoked": the worker flips the mailbox to status='error'
 // rather than retrying.
 //
 // No token-bucket throttle here (unlike the Resend client): the send worker
@@ -283,7 +283,7 @@ export class GmailClient {
   /**
    * Fetch a whole thread (all messages, oldest→newest as Gmail returns them).
    * format 'full' returns each message's parsed payload so the caller can read
-   * the bodies — used by the inbox conversation view to show the outbound
+   * the bodies: used by the inbox conversation view to show the outbound
    * send(s) alongside the lead's reply (native_sends stores no body, so the
    * sent copy only lives in Gmail).
    */

@@ -7,7 +7,7 @@
 //
 // Once the secret IS set the gate is enforced fail-CLOSED: a missing or invalid
 // token fails, and a transient error verifying with Cloudflare also fails
-// (someone set the secret because they want the gate — silently waving traffic
+// (someone set the secret because they want the gate, silently waving traffic
 // past a configured challenge is worse than a rare false reject, and the public
 // forms already tell users they can reach us directly).
 //

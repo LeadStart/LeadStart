@@ -1,12 +1,12 @@
-// POST /api/campaigns/[id]/enroll-existing — pull EXISTING CRM contacts into a
+// POST /api/campaigns/[id]/enroll-existing: pull EXISTING CRM contacts into a
 // native email campaign (Phase 2 of the contact-list ↔ campaign alignment).
 // Owner/VA only. Body: { contact_ids: string[] }.
 //
 // Mirrors the CSV import's tail for existing contacts: assigns the contacts to
 // the campaign (contacts.campaign_id, so they show on the Leads tab) AND enrolls
-// them for sending (campaign_enrollments upsert, onConflict ignoreDuplicates —
+// them for sending (campaign_enrollments upsert, onConflict ignoreDuplicates,
 // re-adds nobody). Client-scoped: only the campaign's own client's contacts can
-// be pulled in. No copy/registry mutation — CRM contacts fill existing variable
+// be pulled in. No copy/registry mutation: CRM contacts fill existing variable
 // VALUES; the panel warns where they don't (validation is client-side).
 
 import { NextRequest, NextResponse } from "next/server";
@@ -23,7 +23,7 @@ interface Body {
 
 const MAX_PER_REQUEST = 500;
 // A cached invalid/disposable verdict would be failed by the pre-send
-// verification gate anyway — don't enroll those (mirrors the CSV + enroll routes).
+// verification gate anyway: don't enroll those (mirrors the CSV + enroll routes).
 const UNDELIVERABLE = new Set(["invalid", "disposable"]);
 
 export async function POST(req: NextRequest, { params }: RouteParams) {

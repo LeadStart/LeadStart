@@ -4,21 +4,21 @@ import { classifyContactOutcome, bestTier } from "@/lib/enrichment/outcomes";
 import type { SearchKind } from "./pricing-math";
 import { segmentForQuery } from "./segment";
 
-// Phase 4 — master-pool PROMOTION. At settlement, a buyer search's delivered
+// Phase 4: master-pool PROMOTION. At settlement, a buyer search's delivered
 // contacts are promoted into the shared, platform-owned `master_contacts` pool
 // (deduped by natural key) and the buyer org is granted OWNERSHIP of each. The
 // buyer keeps their per-org working copy (the `contacts` row); the master row is
 // the resellable asset + the cross-buyer dedup index.
 //
 // Option A (owner-locked): the agency `contacts` table and the shared enrichment
-// engine are UNTOUCHED — promotion is a purely additive read of the buyer's own
+// engine are UNTOUCHED: promotion is a purely additive read of the buyer's own
 // delivered contacts plus a write to the two new pool tables, gated to buyer
-// searches (those carrying a token hold — the same signal settleSearch uses).
+// searches (those carrying a token hold, the same signal settleSearch uses).
 //
 // Two hard invariants (this runs inside enrichment completion):
-//   1. It must NEVER throw to the caller — a promotion hiccup cannot break the
+//   1. It must NEVER throw to the caller: a promotion hiccup cannot break the
 //      enrichment run (agency deliverability rides on that run finishing).
-//   2. It must be idempotent — a search drains across multiple enrichment runs,
+//   2. It must be idempotent: a search drains across multiple enrichment runs,
 //      so the same contact is re-seen; ownership is granted once, and the master
 //      merge only ever accretes (COALESCE, never clobber).
 
@@ -53,7 +53,7 @@ interface PromotableContact {
  * id (Maps place > LinkedIn url) before the mutable email fallback, so the same
  * real-world entity always resolves to one master row even as enrichment fills in
  * a personal email later. Returns null when a contact carries no keyable id
- * (skip — an unkeyable row can't be safely deduped into the shared pool).
+ * (skip, an unkeyable row can't be safely deduped into the shared pool).
  */
 export function naturalKeyFor(c: {
   google_place_id: string | null;
@@ -69,7 +69,7 @@ export function naturalKeyFor(c: {
   return null;
 }
 
-// Best delivered tier for the master row's coverage/reporting column — recomputed
+// Best delivered tier for the master row's coverage/reporting column: recomputed
 // from the contact's final columns (same classifier the run outcome ledger uses).
 function bestTierFor(c: PromotableContact): string {
   const ed = (c.enrichment_data && typeof c.enrichment_data === "object" ? c.enrichment_data : {}) as Record<string, unknown>;
@@ -117,7 +117,7 @@ export interface PromotionResult {
 
 /**
  * Promote a buyer search's delivered contacts into the master pool + grant
- * ownership. Returns null for an agency search (no hold) — a true no-op. Never
+ * ownership. Returns null for an agency search (no hold): a true no-op. Never
  * throws: any failure is swallowed and logged so enrichment completion is safe.
  */
 export async function promoteSearchContacts(
@@ -134,11 +134,11 @@ export async function promoteSearchContacts(
       .eq("entry_type", "hold")
       .maybeSingle();
     const organizationId = (holdRow as { organization_id: string } | null)?.organization_id;
-    if (!organizationId) return null; // agency search — nothing to promote
+    if (!organizationId) return null; // agency search: nothing to promote
 
     if (opts.contactIds.length === 0) return { candidates: 0, promoted: 0, granted: 0, segmentKey: null };
 
-    // Load the delivered rows for this run's batch (buyer-scoped, small — a buyer
+    // Load the delivered rows for this run's batch (buyer-scoped, small, a buyer
     // search is capped at max_rows_per_search).
     const rows: PromotableContact[] = [];
     for (let i = 0; i < opts.contactIds.length; i += 300) {

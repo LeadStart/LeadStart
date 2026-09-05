@@ -1,4 +1,4 @@
-// POST /api/webhooks/unipile — inbound webhook for the LinkedIn channel.
+// POST /api/webhooks/unipile: inbound webhook for the LinkedIn channel.
 //
 // Optional ?secret= verification, audit log to webhook_events, deferred
 // reply pipeline via Next.js after().
@@ -12,7 +12,7 @@
 //                                       primary writer)
 //
 // users.invitation_* and messaging.message_read are audit-logged but
-// otherwise no-op — sequence-engine handling lands in commit #7.
+// otherwise no-op: sequence-engine handling lands in commit #7.
 
 import { NextRequest, NextResponse } from "next/server";
 import { after } from "next/server";
@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
   const client = clientRow as ResolvedClient | null;
 
   if (!client) {
-    // Unknown account — likely a stale webhook from a previously-deleted
+    // Unknown account: likely a stale webhook from a previously-deleted
     // binding or an account that belongs to a different LeadStart org. Not
     // an error condition; we ack and move on so Unipile doesn't retry.
     return NextResponse.json({
@@ -145,7 +145,7 @@ export async function POST(request: NextRequest) {
 // We fetch the full message via UnipileClient.getMessage to read is_sender;
 // outbound messages from the sequence engine could in theory fire the same
 // event, and we don't want our own outreach masquerading as a reply. The
-// fetch is best-effort — when org creds are missing or the call fails we
+// fetch is best-effort: when org creds are missing or the call fails we
 // fall back to the webhook payload's text and assume inbound.
 async function handleMessageReceived(
   admin: ReturnType<typeof createAdminClient>,
@@ -193,7 +193,7 @@ async function handleMessageReceived(
     return null;
   }
 
-  // Synthetic lead_email — lead_replies.lead_email is NOT NULL but
+  // Synthetic lead_email: lead_replies.lead_email is NOT NULL but
   // LinkedIn DMs don't carry an email address. Use a stable per-sender id
   // so a second message from the same sender is at least linkable.
   const syntheticEmail = `linkedin:${event.sender_id}`;
@@ -230,7 +230,7 @@ async function handleMessageReceived(
 }
 
 // account_status.{disconnected | credentials_invalid | connected} → write
-// the resulting status to the client row. Idempotent — skips the UPDATE
+// the resulting status to the client row. Idempotent: skips the UPDATE
 // when the value already matches.
 async function handleAccountStatus(
   admin: ReturnType<typeof createAdminClient>,

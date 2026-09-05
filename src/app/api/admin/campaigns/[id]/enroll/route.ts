@@ -1,4 +1,4 @@
-// POST /api/admin/campaigns/[id]/enroll — bulk-enroll contacts into a
+// POST /api/admin/campaigns/[id]/enroll: bulk-enroll contacts into a
 // LinkedIn sequence. Owner-only. Inserts campaign_enrollments rows with
 // status='active', current_step_index=0, last_action_at=null so the cron
 // worker picks them up on the next tick.
@@ -86,7 +86,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     .in("id", contactIds)
     .eq("organization_id", c.organization_id);
   // A cached invalid/disposable verdict would be failed by the pre-send
-  // verification gate anyway — don't enroll those.
+  // verification gate anyway: don't enroll those.
   const UNDELIVERABLE = new Set(["invalid", "disposable"]);
   const orgContacts =
     (validContacts as { id: string; email_verification_status: string | null }[] | null) ?? [];

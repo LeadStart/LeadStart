@@ -44,7 +44,7 @@ console.log("stepsToGraph");
   eq(countEmails(g), 2, "two email nodes");
 }
 
-console.log("graphToSteps — linear roundtrip");
+console.log("graphToSteps, linear roundtrip");
 {
   const steps = [
     { wait_days: 0, subject_template: "A", body_template: "x" },
@@ -54,7 +54,7 @@ console.log("graphToSteps — linear roundtrip");
   eq(graphToSteps(stepsToGraph(steps)), steps, "steps -> graph -> steps is identity");
 }
 
-console.log("graphToSteps — condition follows the NO branch, drops YES");
+console.log("graphToSteps, condition follows the NO branch, drops YES");
 {
   const g: FlowGraph = {
     version: 1,
@@ -77,7 +77,7 @@ console.log("graphToSteps — condition follows the NO branch, drops YES");
   );
 }
 
-console.log("graphToSteps — wait accumulates across skipped linkedin/internal");
+console.log("graphToSteps, wait accumulates across skipped linkedin/internal");
 {
   const g: FlowGraph = {
     version: 1,
@@ -99,7 +99,7 @@ console.log("graphToSteps — wait accumulates across skipped linkedin/internal"
   );
 }
 
-console.log("nested condition — primary path + countEmails");
+console.log("nested condition, primary path + countEmails");
 {
   const g: FlowGraph = {
     version: 1,

@@ -16,7 +16,7 @@ interface Body {
  *               access (if you want to end access too, cancel instead).
  *  - "resume" → Clears pause_collection, Stripe resumes normal billing.
  *
- * The subscription status in Stripe stays "active" while paused — Stripe
+ * The subscription status in Stripe stays "active" while paused: Stripe
  * signals pause via the `pause_collection` field, not status. We mirror that
  * state in our DB by setting our own `status = "paused"` and relying on the
  * webhook handler to keep it in sync (see webhooks.ts).
@@ -89,7 +89,7 @@ export async function POST(
 
   // Mirror via the service-role client: client_subscriptions is service-role-only
   // under the hardened RLS (00100), so a user-client update is silently denied.
-  // Non-fatal — Stripe already applied the change and the webhook confirms it.
+  // Non-fatal: Stripe already applied the change and the webhook confirms it.
   const admin = createAdminClient();
   const { error: mirrorErr } = await admin
     .from("client_subscriptions")

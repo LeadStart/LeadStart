@@ -1,6 +1,6 @@
 "use client";
 
-// Cloudflare Turnstile widget — the client half of the bot gate. Pairs with
+// Cloudflare Turnstile widget: the client half of the bot gate. Pairs with
 // verifyTurnstile() in src/lib/security/turnstile.ts.
 //
 // INERT UNTIL CONFIGURED: with no NEXT_PUBLIC_TURNSTILE_SITE_KEY set this renders

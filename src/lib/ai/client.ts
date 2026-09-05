@@ -31,7 +31,7 @@ export function getAnthropic(): Anthropic {
   return cached;
 }
 
-/** Reset the singleton — used by tests that swap the key mid-process. */
+/** Reset the singleton: used by tests that swap the key mid-process. */
 export function _resetAnthropicForTests(): void {
   cached = null;
 }

@@ -1,7 +1,7 @@
 // Load an org's Microsoft OAuth app credentials (migration 00085).
 //
 // Mirrors gmail/org.ts: reads the org's ms_oauth_client_id / _secret columns.
-// Returns null (never throws) when unconfigured — the caller decides whether a
+// Returns null (never throws) when unconfigured: the caller decides whether a
 // missing app is a 400 (the connect route) or a benched seed (the reader).
 
 import type { createAdminClient } from "@/lib/supabase/admin";

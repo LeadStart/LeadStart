@@ -1,4 +1,4 @@
-// POST /app/api/webhooks/resend — Resend delivery webhook receiver.
+// POST /app/api/webhooks/resend: Resend delivery webhook receiver.
 //
 // Subscribes to Resend's email.delivered / email.bounced / email.complained
 // events so we can distinguish "Resend accepted our send" (notified_at,
@@ -8,7 +8,7 @@
 // accepted but the client's mail server rejected leaves the hot-lead
 // pipeline looking fine from our side while the client never sees it.
 //
-// Security: Resend signs webhooks using Svix's scheme — headers
+// Security: Resend signs webhooks using Svix's scheme, headers
 // svix-id / svix-timestamp / svix-signature. We compute HMAC-SHA256 of
 // `${id}.${timestamp}.${rawBody}` with the signing secret (base64 payload
 // of RESEND_WEBHOOK_SECRET's whsec_… prefix) and compare in constant
@@ -16,7 +16,7 @@
 // than 5 min are rejected to thwart replay.
 //
 // No-op behavior: until RESEND_WEBHOOK_SECRET is set in the environment,
-// every request is rejected with 401. That's the safe default — better
+// every request is rejected with 401. That's the safe default: better
 // to drop events than to trust unverified webhook input.
 
 import { NextRequest, NextResponse } from "next/server";
@@ -35,7 +35,7 @@ interface ResendWebhookPayload {
     to?: string | string[];
     bounce?: {
       // Resend marks Permanent for hard bounces, Transient for soft.
-      // Field absent on older payloads — see classifyBounce() below.
+      // Field absent on older payloads: see classifyBounce() below.
       type?: string;
       subType?: string;
       message?: string;
@@ -53,9 +53,9 @@ interface BounceClassification {
 
 /**
  * Decide whether a bounce event is hard (alertable) or soft (Resend will
- * retry — stay quiet). Conservative default: if Resend doesn't include a
+ * retry: stay quiet). Conservative default: if Resend doesn't include a
  * bounce.type, treat as hard so the operator hears about it. The
- * alternative — silently swallow ambiguous events — is the failure mode
+ * alternative (silently swallow ambiguous events) is the failure mode
  * this whole feature is trying to fix.
  */
 function classifyBounce(payload: ResendWebhookPayload): BounceClassification {
@@ -141,7 +141,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Read body as text first — signature verification needs the exact raw
+  // Read body as text first: signature verification needs the exact raw
   // bytes. Re-parse as JSON after verification succeeds.
   const rawBody = await request.text();
 
@@ -184,7 +184,7 @@ export async function POST(request: NextRequest) {
   const eventType = payload.type;
   const emailId = payload.data?.email_id;
   if (!eventType || !emailId) {
-    // Not an event we care about — respond 200 so Resend doesn't retry.
+    // Not an event we care about: respond 200 so Resend doesn't retry.
     return NextResponse.json({ ignored: true, reason: "missing_fields" });
   }
 
@@ -214,7 +214,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ignored: true, event_type: eventType });
   }
 
-  // Try lead_replies first — that's the high-volume path. If we don't match,
+  // Try lead_replies first: that's the high-volume path. If we don't match,
   // fall through to kpi_reports. Either match (or none) is normal: the same
   // email_id can only live in one of the two tables.
   const { data: leadMatches, error: leadError } = await admin
@@ -252,7 +252,7 @@ export async function POST(request: NextRequest) {
   const reportMatched = (reportMatches?.length ?? 0) > 0;
 
   // Severity filter for the owner alert: hard bounces and complaints only.
-  // Soft bounces fall through to the digest as informational? — no: by user
+  // Soft bounces fall through to the digest as informational?: no: by user
   // policy soft bounces stay silent (Resend retries internally; we don't
   // want digest noise on transient inbox-full / greylist events).
   if (eventType === "email.bounced" || eventType === "email.complained") {

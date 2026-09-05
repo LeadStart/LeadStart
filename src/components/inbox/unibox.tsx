@@ -2,7 +2,7 @@
 
 // Shared two-pane "unibox" shell for the admin + client inboxes (direction #5).
 // Desktop: sender list left, conversation + action bar right. Mobile: it's
-// master-detail — the list is full-width until a reply is opened, then the
+// master-detail: the list is full-width until a reply is opened, then the
 // thread takes over full-width with a Back control. Height is a viewport calc
 // so each pane scrolls internally instead of the whole page.
 
@@ -27,7 +27,7 @@ export function Unibox({
 }) {
   return (
     <div className="flex h-[calc(100dvh-11.5rem)] min-h-[460px] overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm lg:h-[calc(100dvh-8.5rem)]">
-      {/* List — full width on mobile, fixed rail on sm+. Hidden on mobile once
+      {/* List: full width on mobile, fixed rail on sm+. Hidden on mobile once
           a reply is open. */}
       <div
         className={`w-full flex-col border-border/60 sm:flex sm:max-w-[380px] sm:shrink-0 sm:border-r ${
@@ -36,7 +36,7 @@ export function Unibox({
       >
         {list}
       </div>
-      {/* Detail — hidden on mobile until a reply is open. */}
+      {/* Detail: hidden on mobile until a reply is open. */}
       <div
         className={`min-h-0 min-w-0 flex-1 flex-col sm:flex ${
           hasSelection ? "flex" : "hidden sm:flex"

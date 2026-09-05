@@ -1,4 +1,4 @@
-// GET /app/api/cron/manage-mailbox-lifecycle — runs hourly at :45 (vercel.json).
+// GET /app/api/cron/manage-mailbox-lifecycle: runs hourly at :45 (vercel.json).
 //
 // The burn-prevention lifecycle driver (Phase 5 of the deliverability-
 // infrastructure plan). For every sending domain it gathers the signals the
@@ -110,7 +110,7 @@ export async function GET(request: NextRequest) {
   // 4) All-time send count per mailbox (count-only), for ramp graduation and the
   // ramp reset on re-warm. Small fleet; count queries are cheap. Only mailboxes
   // on warming/resting domains actually need it, but computing for all keeps the
-  // code simple — revisit if the mailbox count grows large.
+  // code simple: revisit if the mailbox count grows large.
   const totalSent = new Map<string, number>();
   await Promise.all(
     ((mbRows ?? []) as NativeMailbox[]).map(async (mb) => {
@@ -172,7 +172,7 @@ export async function GET(request: NextRequest) {
       } else {
         // Staying put. Backfill a missing timer for a timed state (e.g. a domain
         // the future circuit breaker set 'tired' without one) so it can still
-        // progress — but never RESET a running timer.
+        // progress, but never RESET a running timer.
         if (!enabled) continue;
         const backfill = backfillTimer(domain, now);
         if (backfill) {
@@ -235,7 +235,7 @@ async function applyTransition(
 
   // Side effects on the domain's mailboxes.
   if (next === "resting" || next === "burned") {
-    // Pause every active mailbox — it stops sending. health_paused_at marks a
+    // Pause every active mailbox: it stops sending. health_paused_at marks a
     // system pause (distinct from a manual one), so re-warm can safely resume it.
     const { data: paused, error: pauseErr } = await admin
       .from("native_mailboxes")
@@ -247,7 +247,7 @@ async function applyTransition(
     tally.mailboxes_paused += (paused ?? []).length;
   } else if (next === "warming" && domain.lifecycle_status === "resting") {
     // Re-warm after a rest: resume the mailboxes the rest paused (system-paused,
-    // health_paused_at set — never a manually paused one) and RESET each ramp so
+    // health_paused_at set: never a manually paused one) and RESET each ramp so
     // it re-warms from stage 1 rather than resuming at full cap.
     const toResume = mailboxes.filter(
       (m) => m.status === "paused" && m.health_paused_at != null,
@@ -302,7 +302,7 @@ async function alertTransition(
       summary: `${domain.domain} finished resting and its mailboxes resumed on a fresh warmup ramp (low daily volume, climbing). It returns to full duty once warmed and placement is clean.`,
     },
     burned: {
-      subject: `Domain ${domain.domain} is burned — replace it`,
+      subject: `Domain ${domain.domain} is burned, replace it`,
       summary: `${domain.domain} did not recover after a full rest (still blacklisted or landing in spam). Its mailboxes are paused. Retire it and provision a replacement.`,
     },
   };

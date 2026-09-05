@@ -51,7 +51,7 @@ export async function GET(request: NextRequest) {
     state_name: string | null;
   };
 
-  // One prefix query per kind (parallel), each capped — guarantees every group
+  // One prefix query per kind (parallel), each capped: guarantees every group
   // is represented instead of the first kind eating the whole limit.
   const prefix = `${q}%`;
   const settled = await Promise.allSettled(

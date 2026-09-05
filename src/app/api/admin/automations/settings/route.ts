@@ -8,7 +8,7 @@ import {
 } from "@/lib/automations/settings";
 import type { AutomationSettings } from "@/types/app";
 
-// GET/POST /api/admin/automations/settings — read + write the org's internal-
+// GET/POST /api/admin/automations/settings: read + write the org's internal-
 // automation notify config (organizations.automation_settings, migration 00087).
 //
 // GET returns a MASKED status: non-secret config as values, the three secret-ish
@@ -113,7 +113,7 @@ export async function POST(request: NextRequest) {
     .update({ automation_settings: next })
     .eq("id", organizationId);
   if (error) {
-    // e.g. migration 00087 not applied yet — surface instead of claiming saved.
+    // e.g. migration 00087 not applied yet: surface instead of claiming saved.
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
   return NextResponse.json({ status: toAutomationStatus(next) });

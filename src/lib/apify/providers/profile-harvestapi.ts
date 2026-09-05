@@ -10,9 +10,9 @@ function str(v: unknown): string | null {
   return typeof v === "string" && v.trim() ? v.trim() : null;
 }
 
-// The exact email field name is not documented — pin on the first live call.
+// The exact email field name is not documented: pin on the first live call.
 // Until then, scan the common shapes defensively. `verified` is the actor's own
-// SMTP-validation signal — provider-local, kept only to nudge our stored
+// SMTP-validation signal: provider-local, kept only to nudge our stored
 // confidence. Million Verifier is the authority that gates the actual send.
 function pickEmail(rec: Rec): { email: string | null; verified: boolean } {
   let email =
@@ -44,7 +44,7 @@ function pickCompanyLinkedinUrl(rec: Rec): string | null {
     (Array.isArray(rec.experience) && rec.experience) ||
     [];
   for (const p of positions as Rec[]) {
-    // Real /company/ page only — a search-link placeholder is not a company URL.
+    // Real /company/ page only: a search-link placeholder is not a company URL.
     const url = sanitizeCompanyUrl(str(p?.companyLinkedinUrl) ?? str(p?.companyUrl));
     if (url) return url;
   }

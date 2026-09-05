@@ -14,20 +14,20 @@ import type { ScrapioBusiness } from "@/types/app";
 //
 // On every successful page, the fetched google_ids are pushed to Scrap.io's
 // blacklist (fire-and-forget). Future searches automatically skip those
-// rows AND don't count them toward credits — that's the dedup guarantee.
+// rows AND don't count them toward credits: that's the dedup guarantee.
 
 export const maxDuration = 60;
 
 // Force dynamic rendering on every invocation. Without this, a Vercel cron
 // (which hits the same URL with no query params) can receive an edge-cached
-// response from a prior tick, skipping the function body entirely — the DB
+// response from a prior tick, skipping the function body entirely: the DB
 // is never touched but the route returns the old payload. Caught on
 // 2026-05-27 in an earlier cron route;
 // applying the same guard to every cron route preemptively.
 export const dynamic = "force-dynamic";
 
 // 8 pages × 50 per page = 400 results per tick. Each page is ~3-5s plus
-// 300ms throttle, so a tick runs ~30-45s — comfortably under Vercel's 60s
+// 300ms throttle, so a tick runs ~30-45s: comfortably under Vercel's 60s
 // budget. A 5000-result search completes in ~13 ticks (~13 minutes at the
 // 1-per-minute cron schedule).
 const PAGES_PER_TICK = 8;
@@ -69,7 +69,7 @@ export async function GET(request: NextRequest) {
   const candidate = candidates[0] as SearchRow;
   const claimAt = new Date().toISOString();
 
-  // Atomic claim — only one cron instance succeeds if two run at once.
+  // Atomic claim: only one cron instance succeeds if two run at once.
   const { data: claimedRows } = await admin
     .from("prospect_searches")
     .update({
@@ -163,7 +163,7 @@ export async function GET(request: NextRequest) {
       cursor = meta.next_cursor ?? undefined;
 
       // Push google_ids to Scrap.io blacklist asynchronously. Failures
-      // here only mean the user pays credits for those rows next time —
+      // here only mean the user pays credits for those rows next time,
       // recoverable, so don't block the search on blacklist success.
       const idsToBlacklist = newRows
         .map((r) => r.google_id)

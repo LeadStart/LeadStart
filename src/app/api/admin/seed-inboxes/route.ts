@@ -1,16 +1,16 @@
-// GET  /api/admin/seed-inboxes — list the org's inbox-placement seed panel.
-// POST /api/admin/seed-inboxes — add one seed, by provider:
-//   google_workspace (default) — verifies domain-wide delegation live via
+// GET  /api/admin/seed-inboxes: list the org's inbox-placement seed panel.
+// POST /api/admin/seed-inboxes: add one seed, by provider:
+//   google_workspace (default): verifies domain-wide delegation live via
 //                                getProfile, same as adding a sending mailbox.
-//   imap                       — verifies an app-password IMAP login live
+//   imap                      : verifies an app-password IMAP login live
 //                                (Yahoo, consumer Gmail, generic).
-//   microsoft_graph            — added via the Connect flow, not this route.
-//   { import_sending_mailboxes: true } — register every sending mailbox as a
+//   microsoft_graph           : added via the Connect flow, not this route.
+//   { import_sending_mailboxes: true }, register every sending mailbox as a
 //                                seed (already DWD-verified; free cross-domain panel).
 // Owner only. Migrations 00068 + 00085.
 //
 // The seed row's `auth` column (IMAP password / Graph refresh token) is NEVER
-// returned to the browser — every read here uses SEED_SELECT, and migration
+// returned to the browser: every read here uses SEED_SELECT, and migration
 // 00085 revokes column-level SELECT on `auth` from the client roles as a
 // backstop. Server code uses the service-role client and is unaffected.
 
@@ -23,10 +23,10 @@ import { GmailConfigError, GmailAuthError } from "@/lib/gmail/client";
 import { verifyImapLogin, ImapAuthError, ImapTransientError } from "@/lib/imap/client";
 import type { NativeMailbox, SeedInbox } from "@/types/app";
 
-// IMAP needs raw TCP/TLS sockets — pin the Node runtime (matches the placement route).
+// IMAP needs raw TCP/TLS sockets: pin the Node runtime (matches the placement route).
 export const runtime = "nodejs";
 
-// Browser-safe columns — everything on seed_inboxes EXCEPT `auth`.
+// Browser-safe columns: everything on seed_inboxes EXCEPT `auth`.
 const SEED_SELECT =
   "id, organization_id, email_address, label, provider, role, status, last_error, last_error_at, created_at, updated_at";
 
@@ -171,7 +171,7 @@ export async function POST(req: NextRequest) {
       password: parsed.data.imap.password,
     };
 
-    // Live login gate — the IMAP analog of the DWD getProfile check. A seed we
+    // Live login gate: the IMAP analog of the DWD getProfile check. A seed we
     // can't read is useless, and a clear failure here beats a silent
     // "unreadable" every probe.
     try {

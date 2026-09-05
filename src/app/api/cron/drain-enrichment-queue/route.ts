@@ -3,7 +3,7 @@ import { checkCronAuth } from "@/lib/security/cron-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { enqueueEnrichment } from "@/lib/apify/enqueue-enrichment";
 
-// GET /api/cron/drain-enrichment-queue — every minute.
+// GET /api/cron/drain-enrichment-queue: every minute.
 //
 // The queue-behind drain. Imports made while an enrichment run was already
 // active for the org are stamped contacts.enrich_queued_at (enqueue-enrichment).
@@ -63,7 +63,7 @@ export async function GET(request: NextRequest) {
     .maybeSingle();
   const userId = (owner as { id: string } | null)?.id;
   if (!userId) {
-    // No owner to attribute a run to — clear the stamps so we don't spin on it.
+    // No owner to attribute a run to: clear the stamps so we don't spin on it.
     await admin
       .from("contacts")
       .update({ enrich_queued_at: null })

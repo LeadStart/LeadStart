@@ -6,20 +6,20 @@
  *
  * ALREADY RAN 2026-07-20 against prod (org bfc96611…): removed 17 synthetic
  * lead_replies + the fake "Smoke Test" client (CASCADE also took 1 client_user
- * + 2 kpi_reports). Idempotent — after that run both predicates match 0 rows,
+ * + 2 kpi_reports). Idempotent: after that run both predicates match 0 rows,
  * so a re-run is a no-op.
  *
  * The seed data was two families:
  *   1. 14 templated personas on @example-inbound-test.com (Sarah Chen, Daniel
  *      Ortiz, Taylor Brooks, Chris Hale, Morgan Reed, Alex Winters, Jordan
- *      Park) — each inserted twice (under "Rainier Facility Solutions" and
+ *      Park): each inserted twice (under "Rainier Facility Solutions" and
  *      "David Cabrera"). source_channel NULL, all dated 2026-04-21.
  *   2. 3 replies under the "Smoke Test" client (2× "Synthetic Smoke", 1×
- *      "Daniel Tuccillo") — seeded by the former
+ *      "Daniel Tuccillo"): seeded by the former
  *      scripts/create-smoke-test-client-user.mjs (removed in this same cleanup).
  *
  * Real replies (SaaSassins not-interested + David Cabrera native_email
- * unsubscribes/OOO — real domains, real threads) are matched by NEITHER
+ * unsubscribes/OOO: real domains, real threads) are matched by NEITHER
  * predicate and are preserved.
  */
 import { readFileSync } from "node:fs";
@@ -65,7 +65,7 @@ console.log(`synthetic lead_replies matched : ${matchedReplies.length}`);
 console.log(`smoke-test client present      : ${smokeClient.length}`);
 
 if (!APPLY) {
-  console.log("\nDRY RUN — pass --apply to delete. (No writes performed.)");
+  console.log("\nDRY RUN, pass --apply to delete. (No writes performed.)");
 } else {
   const delReplies = await rest("DELETE", `lead_replies?${replyFilter}`, { prefer: "return=representation" });
   const delClient = await rest("DELETE", `clients?id=eq.${SMOKE_CLIENT_ID}`, { prefer: "return=representation" });

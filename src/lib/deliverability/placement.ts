@@ -1,4 +1,4 @@
-// Inbox-placement testing — the PURE half (no I/O). Classification of where a
+// Inbox-placement testing: the PURE half (no I/O). Classification of where a
 // probe landed, receiver-side auth parsing, probe copy, and result roll-ups.
 // The I/O half (sending probes, reading seed inboxes, persisting) lives in
 // ./placement-runner.ts; the health scorer (./inbox-health.ts) consumes the
@@ -16,7 +16,7 @@
 //   3. Roll the per-seed outcomes up into counts the health scorer grades.
 //
 // Probes are never logged to native_sends (not campaign mail), and no seed is
-// ever mutated (the delegation scope is gmail.readonly) — this is measurement,
+// ever mutated (the delegation scope is gmail.readonly): this is measurement,
 // not a warmup game. See memory: project_no_warmup_pool_deliberate.
 
 import type {
@@ -25,12 +25,12 @@ import type {
   PlacementResultStatus,
 } from "@/types/app";
 
-// Don't look for a probe sooner than this after sending — cross-tenant Gmail
+// Don't look for a probe sooner than this after sending: cross-tenant Gmail
 // delivery is usually seconds, but the spam verdict is attached on delivery and
 // an early read of a not-yet-delivered message just wastes a Gmail call.
 export const PLACEMENT_CHECK_DELAY_MS = 45_000;
 // After this long, a probe that still isn't in the seed is declared missing
-// (blocked at the gateway, or bounced — the runner checks for a DSN first).
+// (blocked at the gateway, or bounced, the runner checks for a DSN first).
 export const PLACEMENT_TIMEOUT_MS = 30 * 60_000;
 // A placement result older than this no longer informs the health score.
 export const PLACEMENT_FRESHNESS_DAYS = 7;
@@ -68,7 +68,7 @@ export function stripMessageIdBrackets(messageId: string): string {
  * Map a Microsoft Graph message's folder to a placement bucket. The reader
  * resolves the message's parentFolderId against the account's well-known
  * "inbox" and "junkemail" folder ids and passes the resolved name here (or
- * the raw display name for anything else — archive, a user rule's folder).
+ * the raw display name for anything else: archive, a user rule's folder).
  * Outlook has no Promotions concept; Focused/Other is a different axis and is
  * recorded in `labels` by the reader, never classified as promotions.
  */
@@ -84,7 +84,7 @@ export function classifyGraphPlacement(
  * Map an IMAP probe lookup to a placement bucket. Two shapes arrive here:
  *   - Gmail-over-IMAP (X-GM-EXT-1): folder reflects All Mail/Spam membership,
  *     gmLabels carries X-GM-LABELS, and promotionsHit is the result of a
- *     second `category:promotions` search — the Promotions verdict plain IMAP
+ *     second `category:promotions` search, the Promotions verdict plain IMAP
  *     folder inspection can't see.
  *   - Generic IMAP (Yahoo etc.): folder is inbox/junk from a per-folder
  *     search; gmLabels/promotionsHit are null.
@@ -137,7 +137,7 @@ export function isAuthFailure(verdict: string | null | undefined): boolean {
 // ── Roll-ups ────────────────────────────────────────────────────────────
 
 export interface PlacementCounts {
-  /** Readable seeds — everything except send_failed / unreadable. */
+  /** Readable seeds: everything except send_failed / unreadable. */
   total: number;
   inbox: number;
   promotions: number;
@@ -225,18 +225,18 @@ export interface ProbeCopy {
 // A small pool so a weekly run to the same panel isn't byte-identical every
 // time (near-duplicate mail to the same recipients is itself a bulk signal).
 // Deliberately shaped like the 1:1 B2B notes the channel actually sends:
-// short, plain, no links, no images, a signature — so the verdict reflects the
+// short, plain, no links, no images, a signature, so the verdict reflects the
 // domain/mailbox reputation and auth rather than the probe's own content.
 const NEUTRAL_PROBES: { subject: string; body: (name: string) => string }[] = [
   {
     subject: "quick question",
     body: (name) =>
-      `Hi there,\n\nHope your week is going well. I wanted to see whether you'd have a few minutes this week or next to talk through what you're working on — happy to work around your schedule.\n\nIf now isn't a good time, just let me know and I'll check back later.\n\nBest,\n${name}`,
+      `Hi there,\n\nHope your week is going well. I wanted to see whether you'd have a few minutes this week or next to talk through what you're working on: happy to work around your schedule.\n\nIf now isn't a good time, just let me know and I'll check back later.\n\nBest,\n${name}`,
   },
   {
     subject: "following up",
     body: (name) =>
-      `Hi,\n\nJust following up on my note from earlier — no rush at all. If it would be useful, I can send over a short summary of what I had in mind so you can see whether it's relevant.\n\nEither way, thanks for your time.\n\n${name}`,
+      `Hi,\n\nJust following up on my note from earlier: no rush at all. If it would be useful, I can send over a short summary of what I had in mind so you can see whether it's relevant.\n\nEither way, thanks for your time.\n\n${name}`,
   },
   {
     subject: "checking in",
@@ -246,7 +246,7 @@ const NEUTRAL_PROBES: { subject: string; body: (name: string) => string }[] = [
   {
     subject: "a quick thought",
     body: (name) =>
-      `Hi,\n\nI had a quick thought after looking at what you've been up to recently and figured it was worth a short note. Would you be open to a ten-minute call sometime next week?\n\nIf not, no problem — I appreciate you reading this.\n\nKind regards,\n${name}`,
+      `Hi,\n\nI had a quick thought after looking at what you've been up to recently and figured it was worth a short note. Would you be open to a ten-minute call sometime next week?\n\nIf not, no problem: I appreciate you reading this.\n\nKind regards,\n${name}`,
   },
 ];
 

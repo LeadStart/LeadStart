@@ -1,7 +1,7 @@
-// PUT /api/admin/campaigns/[id]/mailboxes — set the campaign's sending-mailbox
+// PUT /api/admin/campaigns/[id]/mailboxes: set the campaign's sending-mailbox
 // rotation pool (campaign_mailboxes) to an exact set. Owner-only, org-scoped.
 //
-// Body: { mailbox_ids: string[] }  — the full desired pool. The route diffs
+// Body: { mailbox_ids: string[] } , the full desired pool. The route diffs
 // against the current pool and only inserts the newly-selected / deletes the
 // deselected rows, so a concurrent send-cron tick never sees an empty pool from
 // a delete-all-then-reinsert. Unknown or cross-org ids are dropped rather than

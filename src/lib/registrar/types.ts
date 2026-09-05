@@ -1,4 +1,4 @@
-// Registrar automation — provider-agnostic contract (Phase 2).
+// Registrar automation: provider-agnostic contract (Phase 2).
 //
 // Both Porkbun and Spaceship expose full buy + DNS APIs; this interface is what
 // the app codes against so a caller can buy a domain and write its DNS without
@@ -44,7 +44,7 @@ export interface RegisterResult {
 /** permanent = 301, temporary = 302. We default to permanent. */
 export type UrlForwardType = "permanent" | "temporary";
 
-/** A desired forward — provider-agnostic; the client maps it to its own shape. */
+/** A desired forward: provider-agnostic; the client maps it to its own shape. */
 export interface UrlForwardInput {
   /** Subdomain to forward, or "" for the apex/root. */
   subdomain: string;
