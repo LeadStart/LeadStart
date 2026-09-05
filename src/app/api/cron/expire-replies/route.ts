@@ -8,6 +8,8 @@ import { checkCronAuth } from "@/lib/security/cron-auth";
 // is never touched but the route returns the old payload. Caught on
 // 2026-05-27 in an earlier cron route;
 // applying the same guard to every cron route preemptively.
+// Schedule: once a day at 06:00 UTC (vercel.json `0 6 * * *`), so the
+// effective expiry latency is 48-72h. (An older comment said "every 6h".)
 export const dynamic = "force-dynamic";
 // Explicit function budget (SEND_RUNTIME_AUDIT.md CRON-05): never rely on the
 // project's Fluid-compute default (300s per Vercel's docs, read 2026-09-05).
@@ -15,7 +17,7 @@ export const maxDuration = 60;
 
 // Marks unresolved hot replies as `expired` after 48h with no outcome logged.
 // Prevents stale "call this lead now" rows from cluttering the inbox after
-// the realistic response window has closed. Scheduled every 6h in vercel.json.
+// the realistic response window has closed. Scheduled daily (06:00 UTC) in vercel.json.
 export async function GET(request: NextRequest) {
   const authError = checkCronAuth(request);
   if (authError) return authError;

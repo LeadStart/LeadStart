@@ -170,6 +170,23 @@ export interface ParsedGmailMessage {
   bodyText: string;
   bodyHtml: string | null;
   internalDateMs: number | null;
+  /** From a message/delivery-status part when present: "failed" | "delayed" | ... */
+  dsnAction: string | null;
+  /** From the same part: the enhanced status code, e.g. "5.1.1" or "4.4.1". */
+  dsnStatus: string | null;
+}
+
+// Pull Action:/Status: out of a DSN's machine-readable part. Gmail hands the
+// part back base64url-encoded like any other; a bounce with no such part
+// yields nulls and the caller falls back to the human-readable text.
+function parseDeliveryStatus(
+  part: GmailPayloadPart | null,
+): { action: string | null; status: string | null } {
+  if (!part?.body?.data) return { action: null, status: null };
+  const text = decodeB64Url(part.body.data);
+  const action = text.match(/^Action:\s*([a-z-]+)/im)?.[1]?.toLowerCase() ?? null;
+  const status = text.match(/^Status:\s*([245]\.\d{1,3}\.\d{1,3})/im)?.[1] ?? null;
+  return { action, status };
 }
 
 function decodeB64Url(data: string): string {
@@ -236,6 +253,8 @@ export function parseGmailMessage(msg: GmailMessage): ParsedGmailMessage {
     bodyText = decodeB64Url(msg.payload.body.data);
   }
 
+  const dsn = parseDeliveryStatus(findPart(msg.payload, "message/delivery-status"));
+
   return {
     headers,
     from: headers["from"] ?? null,
@@ -247,6 +266,8 @@ export function parseGmailMessage(msg: GmailMessage): ParsedGmailMessage {
     bodyText,
     bodyHtml,
     internalDateMs: msg.internalDate ? Number(msg.internalDate) : null,
+    dsnAction: dsn.action,
+    dsnStatus: dsn.status,
   };
 }
 
@@ -283,6 +304,16 @@ export function isBounce(parsed: ParsedGmailMessage): boolean {
  * Only hard bounces should suppress a contact; soft bounces are ignored.
  */
 export function bounceSeverity(parsed: ParsedGmailMessage): "hard" | "soft" {
+  // The machine-readable part is authoritative when present (SEND-08): a
+  // "delayed" action or a 4.x.x status is transient however the human text
+  // is worded, and Gmail's "Delivery Status Notification (Delay)" notices
+  // used to read as HARD because their text part carries no code.
+  if (parsed.dsnAction === "delayed" || parsed.dsnAction === "relayed" || parsed.dsnAction === "expanded") {
+    return "soft";
+  }
+  if (parsed.dsnStatus?.startsWith("5.")) return "hard";
+  if (parsed.dsnStatus?.startsWith("4.")) return "soft";
+  if (/\bdelay/i.test(parsed.subject ?? "")) return "soft";
   if (/\b5\.\d+\.\d+\b/.test(parsed.bodyText)) return "hard";
   if (/\b4\.\d+\.\d+\b/.test(parsed.bodyText)) return "soft";
   return "hard";
@@ -298,10 +329,22 @@ export function isAutoSubmitted(parsed: ParsedGmailMessage): boolean {
   if (autoSubmitted && autoSubmitted !== "no") return true;
   if (parsed.headers["x-autoreply"]) return true;
   if (parsed.headers["x-autorespond"]) return true;
+  // Exchange / Microsoft 365 out-of-office and auto-acks (RFC 3834 is optional
+  // there). Any value means "this is automated mail".
+  if (parsed.headers["x-auto-response-suppress"]) return true;
   // Precedence is non-standard; different servers write "auto_reply" or
-  // "auto-reply" — normalize the separator so both match.
+  // "auto-reply" — normalize the separator so both match. bulk / junk / list
+  // are the values legacy responders and help-desk auto-acks set; a THREAD-
+  // MATCHED message with them is never a human reply (SEND-03).
   const precedence = (parsed.headers["precedence"] ?? "").toLowerCase().replace(/-/g, "_");
-  if (precedence === "auto_reply") return true;
+  if (precedence === "auto_reply" || precedence === "bulk" || precedence === "junk" || precedence === "list") {
+    return true;
+  }
+  // Last resort for responders that set no header at all: the subject line.
+  const subject = (parsed.subject ?? "").trim().toLowerCase();
+  if (/^(automatic reply|auto(matic|mated)?[ -]?(reply|response)|out of (the )?office|ooo\b|autoreply)/.test(subject)) {
+    return true;
+  }
   return false;
 }
 

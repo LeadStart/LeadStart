@@ -230,16 +230,34 @@ export class GmailClient {
     maxResults = 25,
     includeSpamTrash = false,
   ): Promise<GmailListEntry[]> {
+    const page = await this.listMessagesPage(mailbox, query, maxResults, undefined, includeSpamTrash);
+    return page.messages;
+  }
+
+  /**
+   * One page of a message listing, WITH the continuation token. The reply
+   * poller needs to know whether a listing was truncated (Gmail's docs leave
+   * result ordering unspecified and cap a page at 500), so it can refuse to
+   * advance its watermark past messages it never saw.
+   */
+  async listMessagesPage(
+    mailbox: string,
+    query: string,
+    maxResults = 25,
+    pageToken?: string,
+    includeSpamTrash = false,
+  ): Promise<{ messages: GmailListEntry[]; nextPageToken: string | null }> {
     const params = new URLSearchParams({
       q: query,
       maxResults: String(maxResults),
     });
+    if (pageToken) params.set("pageToken", pageToken);
     if (includeSpamTrash) params.set("includeSpamTrash", "true");
     const data = (await this.gmailFetch(
       mailbox,
       `/messages?${params.toString()}`,
-    )) as { messages?: GmailListEntry[] };
-    return data.messages ?? [];
+    )) as { messages?: GmailListEntry[]; nextPageToken?: string };
+    return { messages: data.messages ?? [], nextPageToken: data.nextPageToken ?? null };
   }
 
   /**

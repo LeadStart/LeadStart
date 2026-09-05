@@ -4,7 +4,7 @@
 // inbox for new mail, matches it back to a native_sends thread, and:
 //   - Bounces (DSNs from mailer-daemon) → flip the contact to 'bounced',
 //     mark the send row bounced, fail the enrollment. No lead_replies row.
-//   - Human replies → upsert a lead_replies row (source_channel=
+//   - Human replies → insert a lead_replies row (source_channel=
 //     'native_email') and run the existing classifier + hot-lead
 //     notification pipeline inline. Stop the sequence (enrollment='replied')
 //     unless the message is an auto-reply (OOO), which must NOT halt it.
@@ -16,6 +16,13 @@
 // arbitrary inbox mail.
 //
 // Not gated by the send window: replies and bounces arrive at any hour.
+//
+// Watermark discipline (SEND_RUNTIME_AUDIT.md SEND-01): a mailbox's
+// last_polled_at only advances when its listing was read COMPLETELY. Gmail's
+// docs leave list ordering unspecified and a page is capped, so a truncated
+// listing (page bound, fetch cap, or the wall-clock guard) leaves the
+// watermark where it was and the next tick re-reads the window; dedup on
+// (organization_id, gmail_message_id) makes the re-read harmless.
 
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -33,10 +40,20 @@ export const maxDuration = 60;
 export const dynamic = "force-dynamic";
 
 const MAILBOXES_PER_TICK = 10;
-// Global budget across all mailboxes this tick. Classification is now
-// deterministic keyword matching (no model call), so each message is cheap;
-// the cap mainly bounds Gmail API calls per run. Runs every minute.
+// Global budget of MATCHED messages (replies + bounces) across all mailboxes
+// this tick. Each reply runs the two-layer classifier inline (deterministic
+// prefilter + one Claude Haiku call, see src/lib/replies/pipeline.ts), so this
+// also bounds model spend per minute. Runs every minute.
 const MAX_MESSAGES_PER_TICK = 40;
+// Global budget of Gmail message FETCHES (matched or not) this tick. The old
+// budget counted only matched mail, so a spam-heavy pool could burn 250
+// sequential Gmail calls and outrun the 60s function (SEND-16).
+const MAX_FETCH_PER_TICK = 150;
+// Stop starting new work after this long so the tick returns cleanly.
+const TICK_DEADLINE_MS = 45_000;
+// Listing: page size and how many pages one mailbox may walk per tick.
+const LIST_PAGE_SIZE = 50;
+const LIST_MAX_PAGES = 4;
 // Re-read window overlap. Dedup on (organization_id, gmail_message_id) makes
 // re-reading the last few minutes of mail harmless.
 const OVERLAP_MS = 5 * 60 * 1000;
@@ -57,6 +74,7 @@ export async function GET(request: NextRequest) {
   if (authError) return authError;
 
   const admin = createAdminClient();
+  const tickDeadline = Date.now() + TICK_DEADLINE_MS;
 
   const { data: mbData, error: mbError } = await admin
     .from("native_mailboxes")
@@ -74,16 +92,45 @@ export async function GET(request: NextRequest) {
   if (mailboxes.length === 0) return NextResponse.json({ status: "idle" });
 
   const gmailByOrg = new Map<string, GmailClient | null>();
-  const clientIdByCampaign = new Map<string, string | null>();
+  // campaign_id -> { client_id, the client's notification inbox }. A reply-all
+  // from the client's own notification address on one of our threads is the
+  // CLIENT talking, not the lead (SEND-09); it must never become a lead reply
+  // or a DNC entry for the client's own address.
+  const clientByCampaign = new Map<string, { clientId: string | null; notificationEmail: string | null }>();
   let processed = 0;
-  const summary = { replies: 0, bounces: 0, softBounces: 0, dropped: 0 };
+  let fetched = 0;
+  const summary = { replies: 0, bounces: 0, softBounces: 0, dropped: 0, duplicates: 0, errors: 0, truncated: 0 };
   // Domains that took a HARD bounce this tick — evaluated once each, after the
   // loop, by the bounce circuit breaker (fast burn-prevention: a burst of hard
   // bounces tires the domain within a minute, ahead of the hourly health rollup).
   const bouncedDomains = new Set<string>();
 
+  const resolveClient = async (campaignId: string) => {
+    let entry = clientByCampaign.get(campaignId);
+    if (entry) return entry;
+    const { data: camp } = await admin
+      .from("campaigns")
+      .select("client_id")
+      .eq("id", campaignId)
+      .maybeSingle();
+    const clientId = (camp as { client_id: string | null } | null)?.client_id ?? null;
+    let notificationEmail: string | null = null;
+    if (clientId) {
+      const { data: cl } = await admin
+        .from("clients")
+        .select("notification_email")
+        .eq("id", clientId)
+        .maybeSingle();
+      notificationEmail =
+        (cl as { notification_email: string | null } | null)?.notification_email?.trim().toLowerCase() || null;
+    }
+    entry = { clientId, notificationEmail };
+    clientByCampaign.set(campaignId, entry);
+    return entry;
+  };
+
   for (const mailbox of mailboxes) {
-    if (processed >= MAX_MESSAGES_PER_TICK) break;
+    if (processed >= MAX_MESSAGES_PER_TICK || fetched >= MAX_FETCH_PER_TICK || Date.now() > tickDeadline) break;
 
     // Per-mailbox try/catch: one broken delegation must not stall the pool.
     try {
@@ -108,214 +155,283 @@ export async function GET(request: NextRequest) {
 
       // Search inbox AND spam: bounce notices (mailer-daemon DSNs) are
       // sometimes filtered to spam, and an uncounted bounce is exactly the gap
-      // we're closing. Spam-foldered messages that are NOT bounces are dropped
-      // below (never ingested as replies) so this can't turn spam into leads.
-      const listed = await gmail.listMessages(
-        mailbox.email_address,
-        `(in:inbox OR in:spam) after:${afterSec}`,
-        25,
-      );
+      // we're closing. Unmatched spam-foldered messages are dropped below;
+      // a spam-foldered message that answers OUR thread is still a reply.
+      // includeSpamTrash is passed explicitly rather than relying on `in:spam`
+      // alone (Gmail's docs do not promise that; SEND-07). TRASH stays
+      // excluded by the label filter in the query.
+      const query = `(in:inbox OR in:spam) after:${afterSec}`;
+      let truncated = false;
+      const listed: { id: string; threadId: string }[] = [];
+      let pageToken: string | undefined;
+      for (let page = 0; page < LIST_MAX_PAGES; page++) {
+        const res = await gmail.listMessagesPage(mailbox.email_address, query, LIST_PAGE_SIZE, pageToken, true);
+        listed.push(...res.messages);
+        if (!res.nextPageToken) {
+          pageToken = undefined;
+          break;
+        }
+        pageToken = res.nextPageToken;
+      }
+      if (pageToken) truncated = true; // more pages than we are willing to walk this tick
 
       for (const entry of listed) {
-        if (processed >= MAX_MESSAGES_PER_TICK) break;
+        if (processed >= MAX_MESSAGES_PER_TICK || fetched >= MAX_FETCH_PER_TICK || Date.now() > tickDeadline) {
+          truncated = true;
+          break;
+        }
 
-        const msg = await gmail.getMessage(mailbox.email_address, entry.id, "full");
-        const parsed = parseGmailMessage(msg);
-        const fromEmail = extractEmail(parsed.from);
+        // Per-message isolation: one malformed or vanished message must not
+        // pin the whole mailbox at this watermark forever (CRON-03).
+        try {
+          fetched++;
+          const msg = await gmail.getMessage(mailbox.email_address, entry.id, "full");
+          const parsed = parseGmailMessage(msg);
+          const fromEmail = extractEmail(parsed.from);
 
-        // Skip our own mail (shouldn't appear under in:inbox, but be safe).
-        if (fromEmail && fromEmail === mailbox.email_address.toLowerCase()) continue;
+          // Skip our own mail (shouldn't appear under in:inbox, but be safe).
+          if (fromEmail && fromEmail === mailbox.email_address.toLowerCase()) continue;
 
-        // Match the inbound thread to a send from this mailbox.
-        const { data: sendData } = await admin
-          .from("native_sends")
-          .select("id, organization_id, campaign_id, contact_id, enrollment_id, to_email, status")
-          .eq("mailbox_id", mailbox.id)
-          .eq("gmail_thread_id", msg.threadId)
-          .order("sent_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        const sendRow = sendData as SendRow | null;
+          // Match the inbound thread to a send from this mailbox.
+          const { data: sendData } = await admin
+            .from("native_sends")
+            .select("id, organization_id, campaign_id, contact_id, enrollment_id, to_email, status")
+            .eq("mailbox_id", mailbox.id)
+            .eq("gmail_thread_id", msg.threadId)
+            .order("sent_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          const sendRow = sendData as SendRow | null;
 
-        // ---- Bounce branch ----
-        if (isBounce(parsed)) {
-          // Only permanent (hard) bounces suppress. A soft bounce is a
-          // transient failure Gmail retries on its own; suppressing on it
-          // would wrongly kill a reachable lead. So we don't suppress — but we
-          // DO stamp the send row so inbox-health can surface a rising
-          // soft-bounce rate (an early throttling/greylisting signal). A
-          // persistent failure still arrives later as a hard DSN.
-          if (bounceSeverity(parsed) === "soft") {
-            if (sendRow && sendRow.status !== "bounced") {
-              await admin
-                .from("native_sends")
-                .update({ soft_bounced_at: new Date().toISOString() })
-                .eq("id", sendRow.id);
+          // ---- Bounce branch ----
+          if (isBounce(parsed)) {
+            // Only permanent (hard) bounces suppress. A soft bounce is a
+            // transient failure Gmail retries on its own; suppressing on it
+            // would wrongly kill a reachable lead. So we don't suppress — but we
+            // DO stamp the send row so inbox-health can surface a rising
+            // soft-bounce rate (an early throttling/greylisting signal). A
+            // persistent failure still arrives later as a hard DSN.
+            if (bounceSeverity(parsed) === "soft") {
+              if (sendRow && sendRow.status !== "bounced") {
+                await admin
+                  .from("native_sends")
+                  .update({ soft_bounced_at: new Date().toISOString() })
+                  .eq("id", sendRow.id);
+              }
+              processed++;
+              summary.softBounces++;
+              continue;
             }
-            processed++;
-            summary.softBounces++;
-            continue;
-          }
-          const recipient = sendRow?.to_email ?? extractFailedRecipient(parsed);
-          const reason = (parsed.subject ?? "Delivery failure").slice(0, 300);
-          if (sendRow) {
-            if (sendRow.status !== "bounced") {
-              await admin
-                .from("native_sends")
-                .update({ status: "bounced", bounce_reason: reason, bounced_at: new Date().toISOString() })
-                .eq("id", sendRow.id);
-            }
-            await admin.from("contacts").update({ status: "bounced" }).eq("id", sendRow.contact_id);
-            if (sendRow.enrollment_id) {
-              await admin
-                .from("campaign_enrollments")
-                .update({ status: "failed", last_error: "Hard bounce" })
-                .eq("id", sendRow.enrollment_id);
-            }
-          } else if (recipient) {
-            // No thread match, but the DSN names the failed recipient. This is
-            // the common case where the far end accepts then rejects: the
-            // bounce arrives as a fresh message on its own thread, so the
-            // thread-id lookup missed. Mark the most recent non-bounced send to
-            // that address from this mailbox as bounced so the bounce rate
-            // actually counts it (previously only the contact was suppressed,
-            // undercounting the bounce metric), then suppress the contact.
-            const { data: fallbackSend } = await admin
-              .from("native_sends")
-              .select("id, enrollment_id")
-              .eq("mailbox_id", mailbox.id)
-              .ilike("to_email", escapeLikePattern(recipient))
-              .neq("status", "bounced")
-              .order("sent_at", { ascending: false })
-              .limit(1)
-              .maybeSingle();
-            const fb = fallbackSend as { id: string; enrollment_id: string | null } | null;
-            if (fb) {
-              await admin
-                .from("native_sends")
-                .update({ status: "bounced", bounce_reason: reason, bounced_at: new Date().toISOString() })
-                .eq("id", fb.id);
-              if (fb.enrollment_id) {
+            const recipient = sendRow?.to_email ?? extractFailedRecipient(parsed);
+            const reason = (parsed.subject ?? "Delivery failure").slice(0, 300);
+            if (sendRow) {
+              if (sendRow.status !== "bounced") {
+                await admin
+                  .from("native_sends")
+                  .update({ status: "bounced", bounce_reason: reason, bounced_at: new Date().toISOString() })
+                  .eq("id", sendRow.id);
+              }
+              await admin.from("contacts").update({ status: "bounced" }).eq("id", sendRow.contact_id);
+              if (sendRow.enrollment_id) {
+                // Guarded on active: a replied/completed enrollment keeps its
+                // terminal state (a bounce after a reply is a metric, not a
+                // suppression change; SEND-44).
                 await admin
                   .from("campaign_enrollments")
                   .update({ status: "failed", last_error: "Hard bounce" })
-                  .eq("id", fb.enrollment_id);
+                  .eq("id", sendRow.enrollment_id)
+                  .eq("status", "active");
               }
+            } else if (recipient) {
+              // No thread match, but the DSN names the failed recipient. This is
+              // the common case where the far end accepts then rejects: the
+              // bounce arrives as a fresh message on its own thread, so the
+              // thread-id lookup missed. Mark the MOST RECENT send to that
+              // address from this mailbox as bounced so the bounce rate counts
+              // it. The old query excluded already-bounced rows, so the same
+              // DSN re-read every tick for five minutes walked backwards and
+              // marked one more historical send per pass, inflating the
+              // bounce count until the circuit breaker tired the domain on a
+              // single bounce (SEND-02). Now: latest send only; if it is
+              // already bounced this DSN has been handled.
+              const { data: fallbackSend } = await admin
+                .from("native_sends")
+                .select("id, enrollment_id, status")
+                .eq("mailbox_id", mailbox.id)
+                .ilike("to_email", escapeLikePattern(recipient))
+                .order("sent_at", { ascending: false })
+                .limit(1)
+                .maybeSingle();
+              const fb = fallbackSend as { id: string; enrollment_id: string | null; status: string } | null;
+              if (fb && fb.status !== "bounced") {
+                await admin
+                  .from("native_sends")
+                  .update({ status: "bounced", bounce_reason: reason, bounced_at: new Date().toISOString() })
+                  .eq("id", fb.id);
+                if (fb.enrollment_id) {
+                  await admin
+                    .from("campaign_enrollments")
+                    .update({ status: "failed", last_error: "Hard bounce" })
+                    .eq("id", fb.enrollment_id)
+                    .eq("status", "active");
+                }
+                // Track this domain for the post-loop bounce circuit breaker
+                // only when this DSN actually marked something (not on a re-read).
+                if (mailbox.domain_id) bouncedDomains.add(mailbox.domain_id);
+              } else if (!fb) {
+                if (mailbox.domain_id) bouncedDomains.add(mailbox.domain_id);
+              }
+              await admin
+                .from("contacts")
+                .update({ status: "bounced" })
+                .eq("organization_id", mailbox.organization_id)
+                .ilike("email", escapeLikePattern(recipient));
+              processed++;
+              summary.bounces++;
+              continue;
+            }
+            // Thread-matched hard bounce: feed the breaker.
+            if (mailbox.domain_id) bouncedDomains.add(mailbox.domain_id);
+            processed++;
+            summary.bounces++;
+            continue;
+          }
+
+          // ---- Reply branch ----
+          if (!sendRow) {
+            // Not a reply to any of our campaign sends (spam-foldered or not) — ignore.
+            summary.dropped++;
+            continue;
+          }
+          const inSpam = (msg.labelIds ?? []).includes("SPAM");
+
+          // Resolve the campaign's client (cached). A message from the client's
+          // own notification inbox on our thread is the client, not the lead.
+          const client = await resolveClient(sendRow.campaign_id);
+          if (fromEmail && client.notificationEmail && fromEmail === client.notificationEmail) {
+            summary.dropped++;
+            continue;
+          }
+
+          // Stop-on-reply — but never on an auto-reply (OOO), which would
+          // wrongly halt the sequence. Human reply → halt + mark replied.
+          if (!isAutoSubmitted(parsed)) {
+            if (sendRow.enrollment_id) {
+              await admin
+                .from("campaign_enrollments")
+                .update({ status: "replied" })
+                .eq("id", sendRow.enrollment_id)
+                .eq("status", "active");
             }
             await admin
               .from("contacts")
-              .update({ status: "bounced" })
-              .eq("organization_id", mailbox.organization_id)
-              .ilike("email", escapeLikePattern(recipient));
-          }
-          // Track this domain for the post-loop bounce circuit breaker.
-          if (mailbox.domain_id) bouncedDomains.add(mailbox.domain_id);
-          processed++;
-          summary.bounces++;
-          continue;
-        }
-
-        // Spam-folder guard: we widened the search to include spam only to
-        // catch filtered bounce notices (handled above). A spam-foldered
-        // message that isn't a bounce must never become a "reply" — drop it
-        // before the reply branch regardless of any thread match.
-        if ((msg.labelIds ?? []).includes("SPAM")) {
-          summary.dropped++;
-          continue;
-        }
-
-        // ---- Reply branch ----
-        if (!sendRow) {
-          // Not a reply to any of our campaign sends — ignore.
-          summary.dropped++;
-          continue;
-        }
-
-        // Resolve the campaign's client_id (cached).
-        if (!clientIdByCampaign.has(sendRow.campaign_id)) {
-          const { data: camp } = await admin
-            .from("campaigns")
-            .select("client_id")
-            .eq("id", sendRow.campaign_id)
-            .maybeSingle();
-          clientIdByCampaign.set(sendRow.campaign_id, (camp as { client_id: string | null } | null)?.client_id ?? null);
-        }
-        const clientId = clientIdByCampaign.get(sendRow.campaign_id) ?? null;
-
-        // Stop-on-reply — but never on an auto-reply (OOO), which would
-        // wrongly halt the sequence. Human reply → halt + mark replied.
-        if (!isAutoSubmitted(parsed)) {
-          if (sendRow.enrollment_id) {
-            await admin
-              .from("campaign_enrollments")
               .update({ status: "replied" })
-              .eq("id", sendRow.enrollment_id)
-              .eq("status", "active");
+              .eq("id", sendRow.contact_id)
+              .neq("status", "bounced")
+              .neq("status", "unsubscribed");
           }
-          await admin
-            .from("contacts")
-            .update({ status: "replied" })
-            .eq("id", sendRow.contact_id)
-            .neq("status", "bounced")
-            .neq("status", "unsubscribed");
-        }
 
-        const leadEmail = fromEmail || sendRow.to_email;
-        const row = {
-          organization_id: mailbox.organization_id,
-          client_id: clientId,
-          campaign_id: sendRow.campaign_id,
-          source_channel: "native_email" as const,
-          gmail_message_id: entry.id,
-          gmail_thread_id: msg.threadId,
-          native_mailbox_id: mailbox.id,
-          lead_email: leadEmail,
-          lead_name: extractDisplayName(parsed.from),
-          from_address: fromEmail,
-          to_address: mailbox.email_address,
-          subject: parsed.subject,
-          body_text: parsed.bodyText,
-          body_html: parsed.bodyHtml,
-          received_at: parsed.internalDateMs ? new Date(parsed.internalDateMs).toISOString() : new Date().toISOString(),
-          raw_payload: {
+          const leadEmail = fromEmail || sendRow.to_email;
+          const row = {
+            organization_id: mailbox.organization_id,
+            client_id: client.clientId,
+            campaign_id: sendRow.campaign_id,
+            source_channel: "native_email" as const,
             gmail_message_id: entry.id,
-            thread_id: msg.threadId,
-            snippet: msg.snippet ?? null,
-            from: parsed.from,
+            gmail_thread_id: msg.threadId,
+            native_mailbox_id: mailbox.id,
+            lead_email: leadEmail,
+            lead_name: extractDisplayName(parsed.from),
+            from_address: fromEmail,
+            to_address: mailbox.email_address,
             subject: parsed.subject,
-          } as Record<string, unknown>,
-          status: "new" as const,
-        };
+            // An attachment-only / image-only reply has no text part; the
+            // Gmail snippet keeps it classifiable instead of parking it
+            // unclassified until expiry (SEND-17).
+            body_text: parsed.bodyText || msg.snippet || "",
+            body_html: parsed.bodyHtml,
+            received_at: parsed.internalDateMs ? new Date(parsed.internalDateMs).toISOString() : new Date().toISOString(),
+            raw_payload: {
+              gmail_message_id: entry.id,
+              thread_id: msg.threadId,
+              snippet: msg.snippet ?? null,
+              from: parsed.from,
+              subject: parsed.subject,
+              in_spam: inSpam,
+            } as Record<string, unknown>,
+            status: "new" as const,
+          };
 
-        const { data: upserted, error: upsertError } = await admin
-          .from("lead_replies")
-          .upsert(row, { onConflict: "organization_id,gmail_message_id", ignoreDuplicates: false })
-          .select("id")
-          .single();
-        if (upsertError || !upserted) {
-          console.error("[cron/native-replies] lead_replies upsert failed:", upsertError);
-          continue;
-        }
+          // INSERT-ONLY for an existing row. The old upsert re-applied the whole
+          // payload (status "new" included) on every re-read of the 5-minute
+          // overlap, so a reply the VA had already handled reverted to "new"
+          // and the portal's send claim could pass a second time (SEND-04).
+          const { data: inserted, error: insertError } = await admin
+            .from("lead_replies")
+            .upsert(row, { onConflict: "organization_id,gmail_message_id", ignoreDuplicates: true })
+            .select("id")
+            .maybeSingle();
+          if (insertError) {
+            console.error("[cron/native-replies] lead_replies insert failed:", insertError);
+            summary.errors++;
+            continue;
+          }
+          let replyId = (inserted as { id: string } | null)?.id ?? null;
+          if (!replyId) {
+            // Already ingested on an earlier pass; find it so a classification
+            // that failed then can still be retried (the pipeline early-returns
+            // once final_class is set).
+            summary.duplicates++;
+            const { data: existing } = await admin
+              .from("lead_replies")
+              .select("id")
+              .eq("organization_id", mailbox.organization_id)
+              .eq("gmail_message_id", entry.id)
+              .maybeSingle();
+            replyId = (existing as { id: string } | null)?.id ?? null;
+            if (!replyId) continue;
+          }
 
-        // Classify + notify inline (we're in a cron, not a webhook — no
-        // after() to defer to; the pipeline is idempotent on final_class).
-        try {
-          await runReplyPipeline((upserted as { id: string }).id, admin);
+          // Classify + notify inline (we're in a cron, not a webhook — no
+          // after() to defer to; the pipeline is idempotent on final_class).
+          try {
+            await runReplyPipeline(replyId, admin);
+          } catch (err) {
+            console.error("[cron/native-replies] runReplyPipeline threw:", err);
+          }
+          processed++;
+          summary.replies++;
         } catch (err) {
-          console.error("[cron/native-replies] runReplyPipeline threw:", err);
+          summary.errors++;
+          console.error(
+            `[cron/native-replies] message ${entry.id} in ${mailbox.email_address} failed; skipping it:`,
+            err,
+          );
         }
-        processed++;
-        summary.replies++;
       }
 
-      // Advance the watermark only after the mailbox is fully processed.
+      if (truncated) {
+        // Leave last_polled_at alone: the next tick re-reads this window.
+        summary.truncated++;
+        console.warn(
+          `[cron/native-replies] ${mailbox.email_address}: listing truncated (${listed.length} listed); watermark held`,
+        );
+      } else {
+        // Advance the watermark only after the mailbox is fully processed.
+        await admin
+          .from("native_mailboxes")
+          .update({ last_polled_at: new Date(tickStart).toISOString() })
+          .eq("id", mailbox.id);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[cron/native-replies] mailbox ${mailbox.email_address} failed:`, err);
+      // Leave last_polled_at unchanged so the next tick retries this window,
+      // and record the failure where an operator can see it (SEND-10).
       await admin
         .from("native_mailboxes")
-        .update({ last_polled_at: new Date(tickStart).toISOString() })
+        .update({ last_error: `Reply poll failed: ${msg}`.slice(0, 500), last_error_at: new Date().toISOString() })
         .eq("id", mailbox.id);
-    } catch (err) {
-      console.error(`[cron/native-replies] mailbox ${mailbox.email_address} failed:`, err);
-      // Leave last_polled_at unchanged so the next tick retries this window.
     }
   }
 
@@ -323,7 +439,7 @@ export async function GET(request: NextRequest) {
   // this tick (rare, so at most a few one-off queries per affected domain).
   const breaker = await evaluateCircuitBreakers(admin, [...bouncedDomains], Date.now());
 
-  return NextResponse.json({ status: "ok", processed, ...summary, breaker });
+  return NextResponse.json({ status: "ok", processed, fetched, ...summary, breaker });
 }
 
 // ── Bounce circuit breaker ──────────────────────────────────────────────────

@@ -25,9 +25,11 @@ export interface PrefilterResult {
   reason: string | null;
 }
 
-// Classes the prefilter can assert on its own. This is now the primary
-// classifier (the Claude layer is disabled — see pipeline.ts), so it covers
-// the full set of common outcomes. Anything it can't match confidently falls
+// Classes the prefilter can assert on its own. This is Layer 1 of the
+// two-layer classifier (Claude Haiku is Layer 2, see pipeline.ts; decide.ts
+// merges both, and the prefilter stays the sole authority on the compliance
+// overrides). It covers the full set of common outcomes. Anything neither
+// layer can match confidently falls
 // through to needs_review, so the owner triages rather than the client being
 // alerted on a guess.
 export type PrefilterSuggestedClass =
@@ -74,8 +76,10 @@ const REFERRAL_PATTERNS: RegExp[] = [
 
 // Opt-out / unsubscribe language. This is the compliance-critical filter: a
 // match here becomes a HARD override in decide.ts → final_class "unsubscribe"
-// → pipeline.ts flips contacts.status to 'unsubscribed', a permanent,
-// org-wide suppression across every channel (email, LinkedIn, native).
+// → pipeline.ts calls suppressUnsubscribe (src/lib/replies/suppression.ts):
+// a per-client dnc_entries row for native email (the sender checks it every
+// tick), plus the legacy org-wide contacts.status='unsubscribed' flip for the
+// non-native channels.
 //
 // Design goal: catch the real opt-outs — "stop", "no more", "remove me", and
 // their variations — WITHOUT firing on an interested lead who happens to use
