@@ -5,9 +5,18 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+// `translate-y-[2px]` is an optical correction, not a layout fix. Flex
+// `items-center` centres the circle on the title's LINE BOX, which for Poppins
+// puts it exactly on the cap-height band (measured: 0.01px off at 24px/32px).
+// That reads correctly for a title with no descender ("Team", "Tokens"), but
+// sits high for the many that have one ("Tags", "Billing", "Campaigns"), whose
+// ink extends ~3.5px lower. Half that closes most of the gap on descender
+// titles while staying imperceptible on the rest; a per-title correction was
+// rejected because it would make the arrow jump between pages. Transform, so
+// it never affects layout.
 const CIRCLE =
-  "inline-flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full " +
-  "border border-border bg-card text-muted-foreground transition-colors " +
+  "inline-flex h-9 w-9 shrink-0 translate-y-[2px] cursor-pointer items-center justify-center " +
+  "rounded-full border border-border bg-card text-muted-foreground transition-colors " +
   "hover:bg-muted hover:text-foreground focus-visible:outline-none " +
   "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
 
