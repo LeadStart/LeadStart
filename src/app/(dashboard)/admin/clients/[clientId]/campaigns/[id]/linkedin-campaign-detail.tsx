@@ -23,7 +23,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ArrowLeft, Layers, Users } from "lucide-react";
+import { Layers, Users } from "lucide-react";
 import type {
   Campaign,
   CampaignEnrollment,
@@ -154,41 +154,33 @@ export function LinkedinCampaignDetail({
 
   return (
     <div className="space-y-6">
-      <div>
-        <Link
-          href={`/admin/clients/${clientId}`}
-          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <ArrowLeft size={14} />
-          Back to Client
-        </Link>
-        <PageHeader
-          className="mt-3"
-          title={campaign.name}
-          actions={
-            <>
-              <Badge
-                variant="secondary"
-                className="bg-[#0A66C2]/10 text-[#0A66C2] border-[#0A66C2]/20"
-              >
-                LinkedIn
-              </Badge>
-              <Badge
-                variant="secondary"
-                className={
-                  campaign.status === "active"
-                    ? "badge-green"
-                    : campaign.status === "paused"
-                      ? "badge-amber"
-                      : "badge-slate"
-                }
-              >
-                {campaign.status}
-              </Badge>
-            </>
-          }
-        />
-      </div>
+      <PageHeader
+        backHref={`/admin/clients/${clientId}`}
+        backLabel="Back to client"
+        title={campaign.name}
+        actions={
+          <>
+            <Badge
+              variant="secondary"
+              className="bg-[#0A66C2]/10 text-[#0A66C2] border-[#0A66C2]/20"
+            >
+              LinkedIn
+            </Badge>
+            <Badge
+              variant="secondary"
+              className={
+                campaign.status === "active"
+                  ? "badge-green"
+                  : campaign.status === "paused"
+                    ? "badge-amber"
+                    : "badge-slate"
+              }
+            >
+              {campaign.status}
+            </Badge>
+          </>
+        }
+      />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <KPICard label="Active enrollments" value={counts.active} unit="count" />

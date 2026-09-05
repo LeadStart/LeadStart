@@ -2,14 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { appUrl } from "@/lib/api-url";
 import { useClientData } from "../../client-data-context";
 import { PREVIEW_READONLY_MESSAGE } from "@/lib/auth/view-as";
 import { Card, CardContent } from "@/components/ui/card";
+import { BackButton } from "@/components/layout/back-button";
 import {
-  ChevronLeft,
   ExternalLink,
   AlertCircle,
   Clock,
@@ -227,12 +226,7 @@ export default function ReplyDossierPage() {
   if (notFound || !reply) {
     return (
       <div className="space-y-4">
-        <Link
-          href="/client/inbox"
-          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-        >
-          <ChevronLeft size={14} /> Back to inbox
-        </Link>
+        <BackButton href="/client/inbox" label="Back to inbox" />
         <Card className="border-border/50">
           <CardContent className="py-12 text-center">
             <p className="text-muted-foreground">Reply not found or you don&apos;t have access.</p>
@@ -261,12 +255,7 @@ export default function ReplyDossierPage() {
   return (
     <div className="space-y-4 max-w-2xl mx-auto">
       {/* Back */}
-      <Link
-        href="/client/inbox"
-        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-      >
-        <ChevronLeft size={14} /> Back to inbox
-      </Link>
+      <BackButton href="/client/inbox" label="Back to inbox" />
 
       {/* Urgency */}
       {isReplyActionable(reply) && (

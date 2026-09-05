@@ -469,7 +469,12 @@ export default function ProspectsPage() {
 
   return (
     <div className="space-y-6">
+      {/* Orphan route: nothing in the nav links here any more, the live
+          surface is /admin/contacts. Back arrow points there so a
+          bookmark or stale deep link isn't a dead end. */}
       <PageHeader
+        backHref="/admin/contacts"
+        backLabel="Back to contacts"
         title="Prospects"
         actions={
           <Button onClick={() => setShowAdd(true)}>

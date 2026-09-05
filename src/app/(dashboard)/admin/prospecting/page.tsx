@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Sparkles, MapPin, Users, Upload, ArrowRight, ChevronLeft } from "lucide-react";
+import { Sparkles, MapPin, Users, Upload, ArrowRight } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
 import { LinkedInSearchPanel } from "./linkedin-search-panel";
 import { MapsDiyPanel } from "./maps-diy-panel";
@@ -13,7 +13,8 @@ import { MapsDiyPanel } from "./maps-diy-panel";
 //   • People by role   — harvestapi profile search, by ICP (LinkedInSearchPanel)
 // A third door, "Enrich a list" (bring-your-own-list, no sourcing), is shown as
 // a not-yet-active option — the enrich-only lane isn't built. Once a vein is
-// chosen the list collapses to a compact bar and the panel renders below.
+// chosen the page title becomes that vein and a circular back arrow (left of
+// the title) returns to this decision list.
 type SourceMode = "linkedin" | "business";
 
 export default function ProspectingPage() {
@@ -25,16 +26,31 @@ export default function ProspectingPage() {
       <PageHeader
         title={
           <span className="inline-flex items-center gap-2">
-            <Sparkles size={20} /> Prospecting
+            {sourceMode === null ? (
+              <>
+                <Sparkles size={20} /> Prospecting
+              </>
+            ) : (
+              <>
+                {sourceMode === "business" ? <MapPin size={20} /> : <Users size={20} />}
+                {sourceMode === "business" ? "Local businesses" : "People by role"}
+                {/* Source provenance, kept next to the title (not in `actions`,
+                    where a full-width header strands it at the far right). */}
+                <span className="rounded-md bg-muted px-1.5 py-0.5 text-[11px] font-semibold text-muted-foreground">
+                  {sourceMode === "business" ? "Google Maps" : "LinkedIn"}
+                </span>
+              </>
+            )}
           </span>
         }
+        onBack={sourceMode === null ? undefined : () => setSourceMode(null)}
+        backLabel="Back to prospecting sources"
       />
 
       {sourceMode === null ? (
         <DecisionList onSelect={setSourceMode} />
       ) : (
         <>
-          <SelectedBar mode={sourceMode} onChange={() => setSourceMode(null)} />
           {sourceMode === "linkedin" && <LinkedInSearchPanel />}
           {sourceMode === "business" && <MapsDiyPanel />}
         </>
@@ -143,37 +159,5 @@ function SearchRow({
         className="shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5"
       />
     </button>
-  );
-}
-
-// ── Selected bar ───────────────────────────────────────────────────────────
-// Compact header once a vein is chosen; the panel renders below it.
-function SelectedBar({ mode, onChange }: { mode: SourceMode; onChange: () => void }) {
-  const isBiz = mode === "business";
-  return (
-    <div className="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3">
-      <div
-        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
-          isBiz ? "bg-brand-50 text-primary" : "bg-violet-50 text-violet-600"
-        }`}
-      >
-        {isBiz ? <MapPin size={18} /> : <Users size={18} />}
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold">{isBiz ? "Local businesses" : "People by role"}</span>
-          <span className="rounded-md bg-muted px-1.5 py-0.5 text-[11px] font-semibold text-muted-foreground">
-            {isBiz ? "Google Maps" : "LinkedIn"}
-          </span>
-        </div>
-      </div>
-      <button
-        type="button"
-        onClick={onChange}
-        className="inline-flex items-center gap-1 rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-secondary-foreground transition-colors hover:bg-muted"
-      >
-        <ChevronLeft size={15} /> Change source
-      </button>
-    </div>
   );
 }

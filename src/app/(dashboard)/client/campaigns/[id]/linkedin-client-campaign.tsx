@@ -14,7 +14,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { KPICard } from "@/components/charts/kpi-card";
-import { ArrowLeft, Layers } from "lucide-react";
+import { Layers } from "lucide-react";
 import type {
   Campaign,
   CampaignEnrollment,
@@ -101,41 +101,33 @@ export function LinkedinClientCampaign({
 
   return (
     <div className="space-y-6">
-      <div>
-        <Link
-          href="/client"
-          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <ArrowLeft size={14} />
-          Back to Dashboard
-        </Link>
-        <PageHeader
-          className="mt-3"
-          title={campaign.name}
-          actions={
-            <>
-              <Badge
-                variant="secondary"
-                className="bg-[#0A66C2]/10 text-[#0A66C2] border-[#0A66C2]/20"
-              >
-                LinkedIn
-              </Badge>
-              <Badge
-                variant="secondary"
-                className={
-                  campaign.status === "active"
-                    ? "badge-green"
-                    : campaign.status === "paused"
-                      ? "badge-amber"
-                      : "badge-slate"
-                }
-              >
-                {campaign.status}
-              </Badge>
-            </>
-          }
-        />
-      </div>
+      <PageHeader
+        backHref="/client"
+        backLabel="Back to dashboard"
+        title={campaign.name}
+        actions={
+          <>
+            <Badge
+              variant="secondary"
+              className="bg-[#0A66C2]/10 text-[#0A66C2] border-[#0A66C2]/20"
+            >
+              LinkedIn
+            </Badge>
+            <Badge
+              variant="secondary"
+              className={
+                campaign.status === "active"
+                  ? "badge-green"
+                  : campaign.status === "paused"
+                    ? "badge-amber"
+                    : "badge-slate"
+              }
+            >
+              {campaign.status}
+            </Badge>
+          </>
+        }
+      />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <KPICard label="In progress" value={counts.active} unit="count" />

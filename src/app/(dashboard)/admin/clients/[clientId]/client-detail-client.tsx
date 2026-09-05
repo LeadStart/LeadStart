@@ -23,7 +23,6 @@ import { ReplyRoutingSection } from "./reply-routing-section";
 import { LinkedinSection } from "./linkedin-section";
 import { DncSection } from "./dnc-section";
 import {
-  ArrowLeft,
   ArrowRight,
   Mail,
   MessageSquare,
@@ -116,33 +115,28 @@ export function ClientDetailClient({
 
   return (
     <div className="space-y-6">
-      <div>
-        <Link
-          href="/admin"
-          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <ArrowLeft size={14} />
-          Back to Overview
-        </Link>
-        <PageHeader
-          className="mt-3"
-          title={
-            <span className="inline-flex items-center gap-2">
-              {client.name}
-              <Badge
-                variant="secondary"
-                className={
-                  (client.status ?? "active") === "active"
-                    ? "badge-green"
-                    : "badge-amber"
-                }
-              >
-                {(client.status ?? "active") === "active" ? "Active" : "Former"}
-              </Badge>
-            </span>
-          }
-          actions={
-            <>
+      {/* Master's circular back arrow (the single back affordance app-wide)
+          keeps the header; the portal-preview action joins Archive in actions. */}
+      <PageHeader
+        backHref="/admin/clients"
+        backLabel="Back to clients"
+        title={
+          <span className="inline-flex items-center gap-2">
+            {client.name}
+            <Badge
+              variant="secondary"
+              className={
+                (client.status ?? "active") === "active"
+                  ? "badge-green"
+                  : "badge-amber"
+              }
+            >
+              {(client.status ?? "active") === "active" ? "Active" : "Former"}
+            </Badge>
+          </span>
+        }
+        actions={
+          <>
             <ViewAsClientButton clientId={client.id} clientName={client.name} />
             <Button
               variant="outline"
@@ -163,10 +157,9 @@ export function ClientDetailClient({
                 </>
               )}
             </Button>
-            </>
-          }
-        />
-      </div>
+          </>
+        }
+      />
 
       <ContactSection client={client} onSaved={refresh} />
 

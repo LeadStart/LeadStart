@@ -10,6 +10,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
+import { BackButton } from "@/components/layout/back-button";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -20,7 +21,6 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
-  ArrowLeft,
   Save,
   Workflow,
   Users,
@@ -29,7 +29,6 @@ import {
   ShieldCheck,
   BarChart3,
 } from "lucide-react";
-import Link from "next/link";
 import { appUrl } from "@/lib/api-url";
 import { useUser } from "@/hooks/use-user";
 import { CampaignProbeCard } from "@/components/campaigns/campaign-probe-card";
@@ -129,13 +128,8 @@ export default function NewNativeCampaignPage() {
     <div className="flex h-[calc(100vh-8.5rem)] min-h-0 flex-col">
       {/* header */}
       <div className="flex items-center justify-between gap-4 pb-2">
-        <div className="min-w-0">
-          <Link
-            href="/admin/campaigns"
-            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-          >
-            <ArrowLeft size={13} /> Campaigns
-          </Link>
+        <div className="flex min-w-0 items-center gap-3">
+          <BackButton href="/admin/campaigns" label="Back to campaigns" />
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}

@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, TrendingUp } from "lucide-react";
+import { TrendingUp } from "lucide-react";
 import { LinkedinClientCampaign } from "./linkedin-client-campaign";
 import { NativeImportPanel } from "@/components/campaigns/native-import-panel";
 import type { Campaign, CampaignSnapshot } from "@/types/app";
@@ -126,30 +126,25 @@ export default function ClientCampaignPage({
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <Link href="/client" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors">
-          <ArrowLeft size={14} />
-          Back to Dashboard
-        </Link>
-        <PageHeader
-          className="mt-3"
-          title={typedCampaign.name}
-          actions={
-            <Badge
-              variant="secondary"
-              className={
-                typedCampaign.status === "active"
-                  ? "badge-green"
-                  : typedCampaign.status === "paused"
-                    ? "badge-amber"
-                    : "badge-slate"
-              }
-            >
-              {typedCampaign.status}
-            </Badge>
-          }
-        />
-      </div>
+      <PageHeader
+        backHref="/client"
+        backLabel="Back to dashboard"
+        title={typedCampaign.name}
+        actions={
+          <Badge
+            variant="secondary"
+            className={
+              typedCampaign.status === "active"
+                ? "badge-green"
+                : typedCampaign.status === "paused"
+                  ? "badge-amber"
+                  : "badge-slate"
+            }
+          >
+            {typedCampaign.status}
+          </Badge>
+        }
+      />
 
       {/* Self-service CSV import — active native email campaigns only */}
       {typedCampaign.source_channel === "native_email" &&
