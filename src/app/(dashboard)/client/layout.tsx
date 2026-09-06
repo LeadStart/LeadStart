@@ -1,5 +1,6 @@
 import { headers } from "next/headers";
 import { ClientDataProvider } from "./client-data-context";
+import { OnboardingGate } from "./onboarding-modal";
 import { isAdminRole } from "@/lib/auth/roles";
 import { VIEW_AS_HEADER } from "@/lib/auth/view-as";
 import type { AppRole } from "@/types/app";
@@ -19,6 +20,7 @@ export default async function ClientLayout({
 
   return (
     <ClientDataProvider previewClientId={previewClientId}>
+      <OnboardingGate />
       {children}
     </ClientDataProvider>
   );

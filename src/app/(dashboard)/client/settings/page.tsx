@@ -9,8 +9,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { EmailTagInput } from "@/components/ui/email-tag-input";
 import {
   User,
   Mail,
@@ -19,10 +19,8 @@ import {
   Phone,
   Users,
   FileText,
-  PenLine,
   Save,
   CheckCircle2,
-  X,
   AlertCircle,
 } from "lucide-react";
 import type { Client } from "@/types/app";
@@ -77,103 +75,8 @@ function SaveStatus({ status }: { status: SectionStatus }) {
   return null;
 }
 
-// Small tag-style multi-email input. Accepts comma, semicolon, Enter, or
-// blur to commit the current buffer. Renders committed addresses as pills
-// with an X button.
-function EmailTagInput({
-  value,
-  onChange,
-  placeholder,
-  max,
-  disabled,
-}: {
-  value: string[];
-  onChange: (next: string[]) => void;
-  placeholder?: string;
-  max: number;
-  disabled?: boolean;
-}) {
-  const [buffer, setBuffer] = useState("");
-  const [error, setError] = useState<string | null>(null);
-
-  function commit(raw: string) {
-    const trimmed = raw.trim().toLowerCase().replace(/[,;]\s*$/, "");
-    if (!trimmed) {
-      setBuffer("");
-      return;
-    }
-    if (!EMAIL_SHAPE.test(trimmed)) {
-      setError(`"${raw.trim()}" isn't a valid email.`);
-      return;
-    }
-    if (value.includes(trimmed)) {
-      setError("Already added.");
-      return;
-    }
-    if (value.length >= max) {
-      setError(`Max ${max} addresses.`);
-      return;
-    }
-    onChange([...value, trimmed]);
-    setBuffer("");
-    setError(null);
-  }
-
-  function remove(email: string) {
-    onChange(value.filter((e) => e !== email));
-  }
-
-  return (
-    <div className="space-y-1.5">
-      <div
-        className={`flex flex-wrap gap-1.5 rounded-lg border border-border/60 bg-card px-2.5 py-2 min-h-[42px] ${
-          disabled ? "opacity-60" : ""
-        }`}
-      >
-        {value.map((email) => (
-          <span
-            key={email}
-            className="inline-flex items-center gap-1 rounded-full bg-[#2E37FE]/10 px-2.5 py-0.5 text-xs text-[#2E37FE]"
-          >
-            {email}
-            <button
-              type="button"
-              onClick={() => !disabled && remove(email)}
-              disabled={disabled}
-              className="rounded-full hover:bg-[#2E37FE]/20 p-0.5 cursor-pointer disabled:cursor-not-allowed"
-              aria-label={`Remove ${email}`}
-            >
-              <X size={10} />
-            </button>
-          </span>
-        ))}
-        <input
-          type="email"
-          value={buffer}
-          onChange={(e) => {
-            setBuffer(e.target.value);
-            setError(null);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === "," || e.key === ";") {
-              e.preventDefault();
-              commit(buffer);
-            } else if (e.key === "Backspace" && buffer === "" && value.length > 0) {
-              remove(value[value.length - 1]);
-            }
-          }}
-          onBlur={() => buffer && commit(buffer)}
-          placeholder={value.length === 0 ? placeholder : ""}
-          disabled={disabled}
-          className="flex-1 min-w-[140px] bg-transparent text-sm outline-none disabled:cursor-not-allowed"
-        />
-      </div>
-      {error && (
-        <p className="text-[11px] text-red-600">{error}</p>
-      )}
-    </div>
-  );
-}
+// EmailTagInput lives in a shared component now:
+// src/components/ui/email-tag-input.tsx (reused by the onboarding modal).
 
 export default function ClientSettingsPage() {
   const { client: contextClient, userId, loading: contextLoading, noClient, previewing } = useClientData();
@@ -206,14 +109,11 @@ export default function ClientSettingsPage() {
     report_recipients: [] as string[],
   });
 
-  const [signatureForm, setSignatureForm] = useState({ signature_block: "" });
-
   // --- Save state per section ---
   const [accountStatus, setAccountStatus] = useState<SectionStatus>({ state: "idle" });
   const [passwordStatus, setPasswordStatus] = useState<SectionStatus>({ state: "idle" });
   const [notifyStatus, setNotifyStatus] = useState<SectionStatus>({ state: "idle" });
   const [reportsStatus, setReportsStatus] = useState<SectionStatus>({ state: "idle" });
-  const [signatureStatus, setSignatureStatus] = useState<SectionStatus>({ state: "idle" });
 
   useEffect(() => {
     if (contextLoading) return;
@@ -246,7 +146,6 @@ export default function ClientSettingsPage() {
           report_timezone: c.report_timezone ?? browserTimezone(),
           report_recipients: c.report_recipients ?? [],
         });
-        setSignatureForm({ signature_block: c.signature_block ?? "" });
       }
       const p = profileRes.data as { full_name: string | null; email: string } | null;
       const name = p?.full_name ?? "";
@@ -419,19 +318,6 @@ export default function ClientSettingsPage() {
     );
     setReportsStatus({ state: "saved" });
     setTimeout(() => setReportsStatus({ state: "idle" }), 2500);
-  }
-
-  async function handleSaveSignature() {
-    setSignatureStatus({ state: "saving" });
-    const result = await patchClient({
-      signature_block: signatureForm.signature_block.trim() || null,
-    });
-    if (!result.ok) {
-      setSignatureStatus({ state: "error", message: result.error });
-      return;
-    }
-    setSignatureStatus({ state: "saved" });
-    setTimeout(() => setSignatureStatus({ state: "idle" }), 2500);
   }
 
   // Live plain-language description of the schedule the client is editing,
@@ -837,46 +723,12 @@ export default function ClientSettingsPage() {
         </CardContent>
       </Card>
 
-      {/* ===== Signature ===== */}
-      <Card className="border-border/50 shadow-sm">
-        <CardHeader className="flex flex-row items-center gap-2 pb-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]">
-            <PenLine size={16} className="text-white" />
-          </div>
-          <CardTitle className="text-base">Email signature</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="signature_block">Signature block</Label>
-            <Textarea
-              id="signature_block"
-              rows={5}
-              placeholder={`Jane Doe\nHead of Partnerships, Acme\nacme.com`}
-              value={signatureForm.signature_block}
-              onChange={(e) =>
-                setSignatureForm({ signature_block: e.target.value })
-              }
-              disabled={signatureStatus.state === "saving"}
-            />
-            <p className="text-[11px] text-muted-foreground">
-              Shown at the bottom of replies you send from the portal.
-            </p>
-          </div>
-
-          <div className="flex items-center gap-3 pt-3 border-t border-border/30">
-            <Button
-              onClick={handleSaveSignature}
-              disabled={signatureStatus.state === "saving" || previewing}
-              className="gap-1.5"
-              style={{ background: "#2E37FE" }}
-            >
-              <Save size={14} />
-              {signatureStatus.state === "saving" ? "Saving…" : "Save"}
-            </Button>
-            <SaveStatus status={signatureStatus} />
-          </div>
-        </CardContent>
-      </Card>
+      {/* Email signature is intentionally NOT client-editable while clients
+          are not self-serving: the admin sets it from the Reply-routing panel
+          on the client detail page. SELF-SERVICE TODO: when clients self-serve,
+          re-add an "Email signature" section here (Textarea + handleSaveSignature
+          + signatureForm/signatureStatus state) and restore "signature_block"
+          to CLIENT_EDITABLE in src/app/api/clients/[clientId]/route.ts. */}
     </div>
   );
 }

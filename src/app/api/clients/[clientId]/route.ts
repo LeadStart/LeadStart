@@ -4,9 +4,9 @@
 // reports cadence/recipients).
 //
 // Clients (linked via client_users): a safe subset, their own notification
-// routing + signature + report cadence. They cannot touch persona/brand
-// fields or auto_notify_classes (those are operational levers admins hold
-// for oversight).
+// routing + report cadence. They cannot touch persona/brand/signature fields
+// or auto_notify_classes (those are operational levers admins hold for
+// oversight). Signature is admin-set until clients self-serve.
 //
 // The whitelist is enforced server-side, not via RLS, so the UI can't
 // privilege-escalate by sending extra fields.
@@ -74,7 +74,6 @@ const CLIENT_EDITABLE: (keyof PatchBody)[] = [
   "notification_email",
   "notification_cc_emails",
   "phone_number",
-  "signature_block",
   "report_interval_days",
   "report_recipients",
   "report_frequency",
@@ -96,6 +95,12 @@ const OWNER_ONLY: (keyof PatchBody)[] = [
   "persona_linkedin_url",
   "persona_photo_url",
   "brand_voice",
+  // Admin-set while clients are not self-serving: the signature is configured
+  // from the admin Reply-routing panel, not the client portal.
+  // SELF-SERVICE TODO: when clients self-serve, move "signature_block" back to
+  // CLIENT_EDITABLE and re-add the "Email signature" section to the client
+  // settings page (src/app/(dashboard)/client/settings/page.tsx).
+  "signature_block",
 ];
 
 // Owner + VA (admin-side) editable, but NOT the client themselves: the on-file
