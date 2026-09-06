@@ -41,6 +41,7 @@ import {
   decideFromResult,
   ORG_ERROR_SUPPRESS_MS,
   shouldAlertAccountError,
+  type ContactVerificationPatch,
 } from "@/lib/millionverifier/policy";
 import { enqueueOwnerAlert } from "@/lib/notifications/owner-alerts";
 import { runPatternMv, type PatternMvItem, type PatternMvOutcome } from "@/lib/enrichment/pattern-mv";
@@ -886,7 +887,10 @@ async function runPatternMvBatch(
         confidence: outcome.confidence,
         extra: { waterfall_status: outcome.mvResult },
       };
-      const r = await writeEmail(admin, cols, item, res, contact, "pattern_mv", share, "pattern_mv");
+      // pattern_mv's verdict is a real MV result: persist it to the contact's
+      // 30-day cache so the verify phase + pre-send gate reuse it, no re-verify.
+      const { patch } = decideFromResult(outcome.mvResponse, 0, new Date());
+      const r = await writeEmail(admin, cols, item, res, contact, "pattern_mv", share, "pattern_mv", patch);
       if (r === "found") found++;
       else if (r === "skipped") skipped++;
       else notFound++;
@@ -924,7 +928,10 @@ async function runPatternMvBatch(
         confidence: outcome.confidence,
         extra: { waterfall_status: outcome.mvResult },
       };
-      const r = await writeEmail(admin, cols, item, res, contact, "pattern_mv", share, "pattern_mv");
+      // pattern_mv's verdict is a real MV result: persist it to the contact's
+      // 30-day cache so the verify phase + pre-send gate reuse it, no re-verify.
+      const { patch } = decideFromResult(outcome.mvResponse, 0, new Date());
+      const r = await writeEmail(admin, cols, item, res, contact, "pattern_mv", share, "pattern_mv", patch);
       if (r === "found") found++;
       else if (r === "skipped") skipped++;
       else notFound++;
@@ -2095,6 +2102,13 @@ async function writeEmail(
   // Contact tag recording the source; Apify providers stay "apify", the direct
   // methods get their own tag so provenance isn't mislabeled.
   sourceTag = "apify",
+  // A genuine Million Verifier verdict to persist onto the contact's 30-day
+  // verification cache, written in the SAME statement that fills the email.
+  // Supplied ONLY by pattern_mv (whose provider verdict IS an MV result). The
+  // other caller, Findymail catch-all recovery, passes nothing — its address is
+  // not an MV result, so it stays unverified until the verify phase / send gate.
+  // MV thus remains the single source of truth for these columns.
+  verificationPatch?: ContactVerificationPatch,
 ): Promise<"found" | "not_found" | "skipped"> {
   const now = new Date().toISOString();
   const extraPatch = (res.extra ?? {}) as Record<string, unknown>;
@@ -2136,9 +2150,12 @@ async function writeEmail(
   // authority, applied later at its pre-send gate.
   const providerStatus = (extraPatch.waterfall_status as string | null | undefined) ?? null;
 
-  // Fill-only write of the email onto the contact. This worker NEVER writes
-  // email_verification_*: those columns are Million Verifier's (single source
-  // of truth). We only fill the address + record provenance in enrichment_data.
+  // Fill-only write of the email onto the contact. email_verification_* stays
+  // Million Verifier's (single source of truth): those columns are written ONLY
+  // when handed a genuine MV verdict (verificationPatch, from pattern_mv), and
+  // then in this SAME statement — so a verdict is never stamped for an address
+  // that didn't actually land (a skip/conflict below writes nothing). Non-MV
+  // providers pass no patch and only fill the address + provenance.
   if (contact) {
     const ed = mergeEnrichment(contact.enrichment_data, {
       email: { provider: providerId, email: san.email, confidence: res.confidence ?? null, provider_status: providerStatus, found_at: now },
@@ -2151,6 +2168,7 @@ async function writeEmail(
         email: san.email,
         tags,
         enrichment_data: ed,
+        ...(verificationPatch ?? {}),
       })
       .eq("id", contact.id)
       .is("email", null)

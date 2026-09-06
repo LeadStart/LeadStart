@@ -81,8 +81,14 @@ export interface PatternMvItem {
 // sawCatchAll marks that at least one candidate came back catch_all on this
 // domain: the signal the cron uses to route an item to Findymail catch-all
 // recovery. Optional: only set where a catch-all was actually seen.
+//
+// mvResponse is the RAW Million Verifier response for the winning candidate. It
+// is a genuine, paid MV verdict, so the cron persists it onto the contact's
+// verification cache (via decideFromResult) — that plugs pattern_mv into the
+// shared 30-day cache so the end-of-run verify phase and the pre-send gate reuse
+// the verdict instead of paying to verify the same address again.
 export type PatternMvOutcome =
-  | { kind: "found"; email: string; confidence: number; mvResult: "ok" | "catch_all"; credits: number; candidatesTried: number; sawCatchAll?: boolean }
+  | { kind: "found"; email: string; confidence: number; mvResult: "ok" | "catch_all"; mvResponse: MillionVerifierResponse; credits: number; candidatesTried: number; sawCatchAll?: boolean }
   | { kind: "not_found"; credits: number; candidatesTried: number; note: string; sawCatchAll?: boolean }
   | { kind: "inconclusive"; credits: number; candidatesTried: number; note: string; sawCatchAll?: boolean };
 
@@ -118,7 +124,10 @@ async function processItem(
 
   let credits = 0;
   let tried = 0;
-  let catchAll: string | null = null;
+  // Hold the winning candidate's email AND its raw MV response: the response is
+  // persisted to the contact's verification cache when a catch-all guess is the
+  // accepted outcome (same as an `ok` win below).
+  let catchAll: { email: string; res: MillionVerifierResponse } | null = null;
   let sawIndeterminate = false;
 
   for (const candidate of candidates) {
@@ -136,10 +145,10 @@ async function processItem(
     }
     if (isCharged(res.result)) credits++;
     if (res.result === "ok") {
-      return { kind: "found", email: candidate, confidence: 85, mvResult: "ok", credits, candidatesTried: tried };
+      return { kind: "found", email: candidate, confidence: 85, mvResult: "ok", mvResponse: res, credits, candidatesTried: tried };
     }
     if (res.result === "catch_all") {
-      if (!catchAll) catchAll = candidate;
+      if (!catchAll) catchAll = { email: candidate, res };
       continue;
     }
     if (res.result === "unknown" || res.result === "error") {
@@ -150,7 +159,7 @@ async function processItem(
   }
 
   if (catchAll && opts.acceptCatchAll) {
-    return { kind: "found", email: catchAll, confidence: 40, mvResult: "catch_all", credits, candidatesTried: tried, sawCatchAll: true };
+    return { kind: "found", email: catchAll.email, confidence: 40, mvResult: "catch_all", mvResponse: catchAll.res, credits, candidatesTried: tried, sawCatchAll: true };
   }
   if (sawIndeterminate) {
     return {
