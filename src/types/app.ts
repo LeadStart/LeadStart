@@ -801,6 +801,13 @@ export interface LeadReply {
   outcome_logged_at: string | null;
   outcome_logged_by: string | null;
 
+  // Free-text note the client leaves on this lead from the inbox dossier.
+  // Standalone (not gated behind an outcome) and rendered on BOTH the client
+  // portal and the internal admin inbox — the client and their LeadStart team
+  // share one running note per lead. Client-authored via
+  // POST /api/replies/[id]/note (migration 00127).
+  client_note: string | null;
+
   // Reclassify audit (populated by POST /api/replies/[id]/reclassify, migration 00028)
   reclassified_by: string | null;
   reclassified_at: string | null;

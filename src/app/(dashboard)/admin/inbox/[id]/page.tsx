@@ -28,7 +28,7 @@ const REPLY_DETAIL_COLUMNS =
   "subject, body_text, " +
   "claude_class, claude_confidence, claude_reason, " +
   "keyword_flags, referral_contact, " +
-  "outcome, outcome_notes, outcome_logged_at, " +
+  "outcome, outcome_notes, outcome_logged_at, client_note, " +
   "reclassified_from, reclassified_at, excluded_from_stats, " +
   "client:client_id(name, notification_email)";
 
@@ -55,6 +55,7 @@ type DetailReply = Pick<
   | "outcome"
   | "outcome_notes"
   | "outcome_logged_at"
+  | "client_note"
   | "reclassified_from"
   | "reclassified_at"
   | "excluded_from_stats"
@@ -100,7 +101,7 @@ export default async function AdminReplyDetailPage({
         <Eye size={14} />
         <span>
           Admin view: the client sees this reply in their own inbox with phone
-          CTA + outcome capture.
+          CTA, a shared notes field, and outcome capture.
         </span>
       </div>
 
@@ -283,6 +284,24 @@ export default async function AdminReplyDetailPage({
             replyId={reply.id}
             initialExcluded={reply.excluded_from_stats}
           />
+        </CardContent>
+      </Card>
+
+      {/* Client notes (read-only mirror of the client's inbox note) */}
+      <Card className="border-border/50 shadow-sm">
+        <CardContent className="px-5 py-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+            Client notes
+          </p>
+          {reply.client_note ? (
+            <p className="text-sm text-foreground whitespace-pre-wrap">
+              {reply.client_note}
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground italic">
+              No notes from the client yet.
+            </p>
+          )}
         </CardContent>
       </Card>
 

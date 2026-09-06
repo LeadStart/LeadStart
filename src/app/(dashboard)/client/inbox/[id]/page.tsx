@@ -76,6 +76,11 @@ export default function ReplyDossierPage() {
   const [savingOutcome, setSavingOutcome] = useState(false);
   const [outcomeSaved, setOutcomeSaved] = useState(false);
 
+  // Shared lead note (visible to the client AND their LeadStart team).
+  const [noteText, setNoteText] = useState("");
+  const [savingNote, setSavingNote] = useState(false);
+  const [noteSaved, setNoteSaved] = useState(false);
+
   // Portal-reply composer state (open by default, because the hot-lead email's
   // "Reply" button lands the client here to respond).
   const [composerSubject, setComposerSubject] = useState("");
@@ -100,6 +105,7 @@ export default function ReplyDossierPage() {
           setReply(r);
           if (r.outcome) setOutcomeValue(r.outcome);
           if (r.outcome_notes) setOutcomeNotes(r.outcome_notes);
+          if (r.client_note) setNoteText(r.client_note);
           // Prefill the subject as "Re: <original>" so the client doesn't
           // have to type it. Send-path would do the same if subject is empty,
           // but seeing it up front is clearer.
@@ -179,6 +185,29 @@ export default function ReplyDossierPage() {
       }
     } finally {
       setSavingOutcome(false);
+    }
+  }
+
+  async function handleSaveNote() {
+    if (!reply || previewing) return;
+    setSavingNote(true);
+    setNoteSaved(false);
+    try {
+      const res = await fetch(appUrl(`/api/replies/${reply.id}/note`), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ note: noteText }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setNoteSaved(true);
+        setReply((prev) => prev && { ...prev, client_note: data.client_note ?? null });
+        setTimeout(() => setNoteSaved(false), 2000);
+      } else {
+        console.error("[note] save failed:", data);
+      }
+    } finally {
+      setSavingNote(false);
     }
   }
 
@@ -486,6 +515,45 @@ export default function ReplyDossierPage() {
           </CardContent>
         </Card>
       ) : null}
+
+      {/* Shared lead note: the client jots it; their LeadStart team sees it too */}
+      <Card className="border-border/50 shadow-sm">
+        <CardContent className="px-5 py-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Notes
+            </p>
+            {noteSaved && (
+              <span className="flex items-center gap-1 text-xs text-emerald-600 font-medium">
+                <CheckCircle2 size={14} /> Saved
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground -mt-1">
+            Jot anything you want to remember about this lead. Your LeadStart team can see these notes too.
+          </p>
+          <textarea
+            placeholder="Add a note…"
+            value={noteText}
+            onChange={(e) => setNoteText(e.target.value)}
+            rows={3}
+            disabled={savingNote || previewing}
+            className="w-full rounded-lg border border-border/60 bg-card px-3 py-2 text-sm resize-y focus:outline-none focus:ring-2 focus:ring-[#2E37FE]/30 disabled:opacity-60"
+          />
+          <div className="flex items-center justify-end gap-3">
+            <button
+              onClick={handleSaveNote}
+              disabled={savingNote || previewing || noteText === (reply.client_note ?? "")}
+              className="btn-blue px-5 py-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {savingNote ? "Saving..." : "Save note"}
+            </button>
+          </div>
+          {previewing && (
+            <p className="text-xs text-muted-foreground">{PREVIEW_READONLY_MESSAGE}</p>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Outcome capture */}
       <Card className="border-border/50 shadow-sm">
