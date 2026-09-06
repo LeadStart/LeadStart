@@ -14,11 +14,15 @@ import type { CampaignSnapshot } from "@/types/app";
 
 type SeriesKey = "Sent" | "Replies" | "Bounces" | "Positive";
 
+// Canonical metric colors for this chart (single source: the <Area> strokes
+// below reference these rather than re-hardcoding hexes). Positive Responses
+// is green (the good outcome) and Bounces is amber (caution); Replies uses
+// teal so it stays distinct from the positive green.
 const SERIES_CONFIG: Record<SeriesKey, { color: string; label: string }> = {
   Sent: { color: "#6B72FF", label: "Sent" },
-  Replies: { color: "#10b981", label: "Replies" },
-  Bounces: { color: "#ef4444", label: "Bounces" },
-  Positive: { color: "#f59e0b", label: "Positive Responses" },
+  Replies: { color: "#14b8a6", label: "Replies" },
+  Bounces: { color: "#f59e0b", label: "Bounces" },
+  Positive: { color: "#10b981", label: "Positive Responses" },
 };
 
 interface DailyChartProps {
@@ -57,7 +61,10 @@ export function DailyChart({
           <div className="flex items-center gap-4 text-xs text-muted-foreground">
             {activeSeries.map((key) => (
               <span key={key} className="flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: SERIES_CONFIG[key].color }} />
+                <span
+                  className="h-2 w-2 rounded-full"
+                  style={{ backgroundColor: SERIES_CONFIG[key].color }}
+                />
                 {SERIES_CONFIG[key].label}
               </span>
             ))}
@@ -68,8 +75,19 @@ export function DailyChart({
         <ResponsiveContainer width="100%" height={height}>
           <AreaChart data={data}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-            <XAxis dataKey="date" fontSize={11} tick={{ fill: "#64748b" }} axisLine={{ stroke: "#e2e8f0" }} tickLine={false} />
-            <YAxis fontSize={11} tick={{ fill: "#64748b" }} axisLine={false} tickLine={false} />
+            <XAxis
+              dataKey="date"
+              fontSize={11}
+              tick={{ fill: "#64748b" }}
+              axisLine={{ stroke: "#e2e8f0" }}
+              tickLine={false}
+            />
+            <YAxis
+              fontSize={11}
+              tick={{ fill: "#64748b" }}
+              axisLine={false}
+              tickLine={false}
+            />
             <Tooltip
               contentStyle={{
                 background: "#ffffff",
@@ -81,16 +99,55 @@ export function DailyChart({
               }}
             />
             {activeSeries.includes("Sent") && (
-              <Area type="monotone" dataKey="Sent" stroke="#6B72FF" strokeWidth={2} fill="#6B72FF" fillOpacity={0.08} dot={false} isAnimationActive={false} />
+              <Area
+                type="monotone"
+                dataKey="Sent"
+                stroke={SERIES_CONFIG.Sent.color}
+                strokeWidth={2}
+                fill={SERIES_CONFIG.Sent.color}
+                fillOpacity={0.08}
+                dot={false}
+                isAnimationActive={false}
+              />
             )}
             {activeSeries.includes("Replies") && (
-              <Area type="monotone" dataKey="Replies" stroke="#10b981" strokeWidth={2} fill="#10b981" fillOpacity={0.08} dot={false} isAnimationActive={false} />
+              <Area
+                type="monotone"
+                dataKey="Replies"
+                stroke={SERIES_CONFIG.Replies.color}
+                strokeWidth={2}
+                fill={SERIES_CONFIG.Replies.color}
+                fillOpacity={0.08}
+                dot={false}
+                isAnimationActive={false}
+              />
             )}
             {activeSeries.includes("Bounces") && (
-              <Area type="monotone" dataKey="Bounces" stroke="#ef4444" strokeWidth={1.5} fill="transparent" dot={false} strokeDasharray="4 2" isAnimationActive={false} />
+              <Area
+                type="monotone"
+                dataKey="Bounces"
+                stroke={SERIES_CONFIG.Bounces.color}
+                strokeWidth={1.5}
+                fill="transparent"
+                dot={false}
+                strokeDasharray="4 2"
+                isAnimationActive={false}
+              />
             )}
             {activeSeries.includes("Positive") && (
-              <Area type="monotone" dataKey="Positive" stroke="#f59e0b" strokeWidth={2} fill="transparent" dot={{ r: 3, fill: "#f59e0b", stroke: "#f59e0b" }} isAnimationActive={false} />
+              <Area
+                type="monotone"
+                dataKey="Positive"
+                stroke={SERIES_CONFIG.Positive.color}
+                strokeWidth={2}
+                fill="transparent"
+                dot={{
+                  r: 3,
+                  fill: SERIES_CONFIG.Positive.color,
+                  stroke: SERIES_CONFIG.Positive.color,
+                }}
+                isAnimationActive={false}
+              />
             )}
           </AreaChart>
         </ResponsiveContainer>

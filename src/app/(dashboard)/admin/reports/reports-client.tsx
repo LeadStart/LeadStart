@@ -1041,8 +1041,8 @@ export function ReportsClient({
                   <p className="text-xl font-bold text-emerald-700">{selectedReport.report_data.totals.reply_rate}%</p>
                   <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Reply Rate</p>
                 </div>
-                <div className="text-center p-3 rounded-lg bg-amber-50/50 border border-amber-100">
-                  <p className="text-xl font-bold">{selectedReport.report_data.totals.meetings_booked}</p>
+                <div className="text-center p-3 rounded-lg bg-emerald-50/50 border border-emerald-100">
+                  <p className="text-xl font-bold text-emerald-700">{selectedReport.report_data.totals.meetings_booked}</p>
                   <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Positive Responses</p>
                 </div>
                 <div className="text-center p-3 rounded-lg bg-blue-50/50 border border-blue-100">
