@@ -8,21 +8,22 @@ export interface ReplyClassMeta {
   label: string;
   badge: string; // Tailwind class suffix: badge-green / badge-blue / badge-amber / ...
   urgent: boolean; // "waiting for client action" surface
+  when: string;  // one-line "use this when…" hint for the admin reclassify picker
 }
 
 export const CLASS_META: Record<ReplyClass, ReplyClassMeta> = {
-  true_interest:            { label: "Interested",        badge: "badge-green",  urgent: true },
-  meeting_booked:           { label: "Meeting Booked",    badge: "badge-green",  urgent: true },
-  qualifying_question:      { label: "Has Question",      badge: "badge-blue",   urgent: true },
+  true_interest:            { label: "Interested",        badge: "badge-green",  urgent: true,  when: "Prospect personally wants to continue." },
+  meeting_booked:           { label: "Meeting Booked",    badge: "badge-green",  urgent: true,  when: "A specific time is locked in." },
+  qualifying_question:      { label: "Has Question",      badge: "badge-blue",   urgent: true,  when: "Substantive pre-meeting question (pricing, security)." },
   // Referral is owner-facing, not a "call now" client signal → urgent:false.
-  referral_forward:         { label: "Referral",          badge: "badge-purple", urgent: false },
-  objection_price:          { label: "Price Concern",     badge: "badge-amber",  urgent: false },
-  objection_timing:         { label: "Timing Concern",    badge: "badge-amber",  urgent: false },
-  wrong_person_no_referral: { label: "Wrong Person",      badge: "badge-slate",  urgent: false },
-  ooo:                      { label: "Out of Office",     badge: "badge-slate",  urgent: false },
-  not_interested:           { label: "Not Interested",    badge: "badge-red",    urgent: false },
-  unsubscribe:              { label: "Unsubscribed",      badge: "badge-red",    urgent: false },
-  needs_review:             { label: "Needs Review",      badge: "badge-amber",  urgent: false },
+  referral_forward:         { label: "Referral",          badge: "badge-purple", urgent: false, when: "Handed off to a named or CC'd new contact." },
+  objection_price:          { label: "Price Concern",     badge: "badge-amber",  urgent: false, when: "Price is the stated blocker, not just a question." },
+  objection_timing:         { label: "Timing Concern",    badge: "badge-amber",  urgent: false, when: "Not now, but the door is left open." },
+  wrong_person_no_referral: { label: "Wrong Person",      badge: "badge-slate",  urgent: false, when: "Wrong contact, no forwarding address given." },
+  ooo:                      { label: "Out of Office",     badge: "badge-slate",  urgent: false, when: "Automated out-of-office auto-reply." },
+  not_interested:           { label: "Not Interested",    badge: "badge-red",    urgent: false, when: "A soft no; they stay mailable. NOT a stop request." },
+  unsubscribe:              { label: "Unsubscribed",      badge: "badge-red",    urgent: false, when: "Asked to stop or be removed ('no more', 'stop', 'remove me'). Suppresses them; use for ANY opt-out." },
+  needs_review:             { label: "Needs Review",      badge: "badge-amber",  urgent: false, when: "Genuinely ambiguous; park for a human." },
 };
 
 // ===== Category segmentation =====
@@ -97,7 +98,7 @@ export interface OutcomeOption {
 export const OUTCOME_OPTIONS: OutcomeOption[] = [
   { value: "called",     label: "Called",          badge: "badge-green" },
   { value: "emailed",    label: "Emailed instead", badge: "badge-blue"  },
-  { value: "no_contact", label: "No contact",      badge: "badge-slate" },
+  { value: "no_contact", label: "No follow-up",    badge: "badge-slate" },
 ];
 
 export const OUTCOME_META: Record<ReplyOutcome, OutcomeOption> = OUTCOME_OPTIONS.reduce(

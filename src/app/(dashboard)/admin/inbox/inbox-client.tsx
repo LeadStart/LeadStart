@@ -237,7 +237,7 @@ export function InboxClient({ replies }: { replies: InboxRowReply[] }) {
                           )}
                           {r.outcome && (
                             <Badge variant="secondary" className="badge-slate text-[9px]">
-                              {r.outcome.replace(/_/g, " ")}
+                              ✓ {OUTCOME_META[r.outcome].label}
                             </Badge>
                           )}
                         </>

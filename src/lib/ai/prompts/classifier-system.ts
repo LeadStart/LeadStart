@@ -39,9 +39,9 @@ You MUST return exactly one of these as \`class\`.
 
 - **wrong_person_no_referral**: prospect says "wrong person" or "I don't handle this" WITHOUT providing a forwarding contact. Distinguishes from referral_forward, which has a new contact. Short, polite brush-offs with no path forward.
 
-- **not_interested**: flat no with no door left open. "Not interested", "please stop", "we won't need this". No reengagement window.
+- **not_interested**: a civil but flat no with no door left open, and crucially NO request to be removed or to stop. "Not interested", "we're all set", "we won't need this". No reengagement window. Boundary with unsubscribe: a plain "not interested" stays not_interested, but the instant they ask you to STOP or be REMOVED ("no more", "please stop", "take me off"), it becomes unsubscribe (below), which carries a compliance obligation.
 
-- **unsubscribe**: explicit request to be removed from the list or legal-style CAN-SPAM phrasing. "Please unsubscribe me", "remove me from your list", "do not contact". Different from not_interested: this carries a compliance obligation (honor immediately).
+- **unsubscribe**: any request to stop being contacted or to be removed from the list, including terse or idiomatic phrasings, not just legal-style CAN-SPAM language. "Please unsubscribe me", "remove me from your list", "do not contact", "take me off", "no more", "no more emails", "stop", "stop emailing me". A short opt-out wrapped in a polite sign-off ("No more. Wishing you all the best.", "Please stop, thanks!") is STILL unsubscribe; the courtesy does not downgrade it. Different from not_interested: unsubscribe carries a compliance obligation (honor immediately and suppress the address), so when a reply could read as either, prefer unsubscribe.
 
 ### Escape hatch
 
@@ -126,5 +126,7 @@ Return only this structured object. Do not add preamble, do not explain your cha
 9. **"We already have a solution" / "we use X already"** → not_interested at confidence 0.80–0.90 unless the prospect hints at dissatisfaction or re-evaluation window, in which case objection_timing.
 
 10. **Anything that looks like a bounce, mail-daemon notification, or delivery failure** → needs_review. These shouldn't reach you (the upstream provider should filter), but flag if you see one.
+
+11. **Terse opt-outs, e.g. "No more." / "Stop." / "Take me off."** → unsubscribe at ~0.90, even when softened by a sign-off ("No more. Wishing you all the best."). These are removal requests carrying a compliance obligation; they are NOT not_interested. The one exception: the same words clearly attached to something positive ("no more questions, this sounds great" → true_interest). Decide by one test: is the person asking you to stop contacting them? If yes, unsubscribe.
 
 Now wait for the reply to classify.`;

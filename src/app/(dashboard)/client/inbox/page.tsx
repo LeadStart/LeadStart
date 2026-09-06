@@ -177,7 +177,10 @@ export default function ClientInboxPage() {
               ) : (
                 filtered.map((r) => {
                   const meta = r.final_class ? CLASS_META[r.final_class] : null;
-                  const replied = r.status === "sent" || !!r.outcome;
+                  const done = r.status === "sent" || !!r.outcome;
+                  // "no_contact" = client closed the reply without following up.
+                  // That's "Handled" (neutral), not "Replied" — no reply was sent.
+                  const handled = r.outcome === "no_contact" && r.status !== "sent";
                   return (
                     <ReplyListRow
                       key={r.id}
@@ -198,9 +201,9 @@ export default function ClientInboxPage() {
                               {meta.label}
                             </Badge>
                           )}
-                          {replied && (
-                            <Badge variant="secondary" className="badge-green text-[9px] inline-flex items-center gap-1">
-                              <CheckCircle2 size={9} /> Replied
+                          {done && (
+                            <Badge variant="secondary" className={`${handled ? "badge-slate" : "badge-green"} text-[9px] inline-flex items-center gap-1`}>
+                              <CheckCircle2 size={9} /> {handled ? "Handled" : "Replied"}
                             </Badge>
                           )}
                         </>

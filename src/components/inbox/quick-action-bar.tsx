@@ -20,6 +20,7 @@ export interface QuickAction {
 export interface QuickActionGroup {
   label: string;
   hint?: ReactNode; // optional trailing node (e.g. a "More…" dropdown)
+  caption?: ReactNode; // optional muted line under the buttons (e.g. a tagging-convention reminder)
   actions: QuickAction[];
 }
 
@@ -57,6 +58,9 @@ export function QuickActionBar({ groups }: { groups: QuickActionGroup[] }) {
             ))}
             {group.hint}
           </div>
+          {group.caption && (
+            <p className="text-[11px] leading-snug text-muted-foreground">{group.caption}</p>
+          )}
         </div>
       ))}
     </div>

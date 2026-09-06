@@ -88,6 +88,14 @@ export function useReclassifyGroup({
 
   const group: QuickActionGroup = {
     label: "Tag this reply (reclassify)",
+    caption: (
+      <>
+        <strong className="font-semibold text-foreground">
+          &apos;No more&apos; / &apos;stop&apos; / &apos;remove me&apos; = Unsubscribe
+        </strong>{" "}
+        (it suppresses them from future sends). &apos;Not Interested&apos; is only a soft no; they stay mailable.
+      </>
+    ),
     actions: QUICK_CLASSES.map((cls) => ({
       key: cls,
       label: CLASS_META[cls].label,
@@ -104,19 +112,26 @@ export function useReclassifyGroup({
         >
           More… <ChevronDown size={12} />
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="w-56">
+        <DropdownMenuContent align="start" className="w-72">
           {ALL_CLASSES.map((cls) => (
             <DropdownMenuItem
               key={cls}
               onClick={() => apply(cls)}
-              className="flex items-center gap-2.5 cursor-pointer"
+              className="flex items-start gap-2.5 cursor-pointer py-1.5"
             >
               <span
-                className="h-2.5 w-2.5 shrink-0 rounded-[3px]"
+                className="mt-0.5 h-2.5 w-2.5 shrink-0 rounded-[3px]"
                 style={{ background: classAccent(cls) }}
               />
-              <span className="flex-1">{CLASS_META[cls].label}</span>
-              {currentClass === cls && <Check size={14} className="text-[#2E37FE]" />}
+              <span className="flex-1">
+                <span className="flex items-center gap-1.5 font-medium">
+                  {CLASS_META[cls].label}
+                  {currentClass === cls && <Check size={13} className="text-[#2E37FE]" />}
+                </span>
+                <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground">
+                  {CLASS_META[cls].when}
+                </span>
+              </span>
             </DropdownMenuItem>
           ))}
         </DropdownMenuContent>
