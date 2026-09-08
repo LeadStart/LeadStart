@@ -5,8 +5,8 @@ import { createClient as createServerClient } from "@/lib/supabase/server";
 export async function POST(req: NextRequest) {
   // Verify the user is authenticated
   const supabase = await createServerClient();
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session?.user) {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -33,8 +33,8 @@ export async function POST(req: NextRequest) {
   }
 
   // Only allow deletion if the user submitted it or is an admin
-  const role = session.user.app_metadata?.role;
-  if (note.submitted_by !== session.user.id && role !== "owner" && role !== "va") {
+  const role = user.app_metadata?.role;
+  if (note.submitted_by !== user.id && role !== "owner" && role !== "va") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

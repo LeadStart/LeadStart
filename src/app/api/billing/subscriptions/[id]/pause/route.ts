@@ -37,12 +37,12 @@ export async function POST(
 
   const supabase = await createClient();
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (!session?.user) {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const role = (session.user as { app_metadata?: { role?: string } })
+  const role = (user as { app_metadata?: { role?: string } })
     .app_metadata?.role;
   if (role !== "owner") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });

@@ -1,7 +1,59 @@
 import { createServerClient } from "@supabase/ssr";
+import type { JWK } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
 import { roleHomePath } from "@/lib/auth/roles";
 import { VIEW_AS_COOKIE, VIEW_AS_HEADER, isValidClientId } from "@/lib/auth/view-as";
+
+// Module-scoped JWKS cache. auth-js caches the JWKS per client instance, but the
+// middleware builds a fresh Supabase client on every request, so without this we
+// would hit the JWKS endpoint on each request. We fetch once, cache for a short
+// TTL, and hand it to getClaims() so ES256 signature verification stays a local,
+// zero-network operation on the hot path.
+let jwksCache: { keys: JWK[] } | null = null;
+let jwksCachedAt = 0;
+const JWKS_TTL_MS = 10 * 60 * 1000;
+
+async function getVerifiedJwks(): Promise<{ keys: JWK[] } | null> {
+  const now = Date.now();
+  if (jwksCache && now - jwksCachedAt < JWKS_TTL_MS) return jwksCache;
+  try {
+    const res = await fetch(
+      `${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1/.well-known/jwks.json`,
+      { headers: { apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY! } },
+    );
+    if (!res.ok) return jwksCache; // keep any stale copy on a transient failure
+    const data = (await res.json()) as { keys?: JWK[] };
+    if (data?.keys?.length) {
+      jwksCache = { keys: data.keys };
+      jwksCachedAt = now;
+    }
+    return jwksCache;
+  } catch {
+    return jwksCache; // network blip: fall back to auth-js's own fetch/getUser path
+  }
+}
+
+interface ResolvedUser {
+  id: string;
+  email: string | null;
+  app_metadata: { role?: string; organization_id?: string };
+}
+
+// Maps VERIFIED JWT claims to the minimal user shape the rest of this file uses.
+function buildUserFromClaims(
+  claims: { sub?: unknown; email?: unknown; app_metadata?: unknown } | null,
+): ResolvedUser | null {
+  if (!claims || typeof claims.sub !== "string") return null;
+  const appMeta = (claims.app_metadata ?? {}) as {
+    role?: string;
+    organization_id?: string;
+  };
+  return {
+    id: claims.sub,
+    email: typeof claims.email === "string" ? claims.email : null,
+    app_metadata: appMeta,
+  };
+}
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
@@ -48,25 +100,40 @@ export async function updateSession(request: NextRequest) {
     }
   }
 
-  // PERFORMANCE: Read session from cookie (instant, no network call).
-  // Only call getUser() (network round-trip) when the token needs refreshing.
-  // This eliminates a ~1-2s Supabase API call on every tab switch.
-  const { data: { session } } = await supabase.auth.getSession();
-  let user = session?.user ?? null;
+  // SECURITY: authorization must rest on a cryptographically VERIFIED identity,
+  // never on getSession() (which only reads the cookie and does NOT check the JWT
+  // signature, so its role/org are forgeable by anyone who crafts a cookie).
+  // getClaims() verifies the ES256 signature locally against the cached JWKS --
+  // no network hop on the hot path -- and only falls back to a network getUser()
+  // for legacy HS256 tokens. The forwarded x-user-* headers set below are only as
+  // trustworthy as this check, so it must stay verified.
+  const jwks = await getVerifiedJwks();
+  const readClaims = async () => {
+    const { data } = await supabase.auth.getClaims(
+      undefined,
+      jwks ? { jwks } : {},
+    );
+    return data?.claims ?? null;
+  };
 
-  if (session && session.expires_at) {
-    const expiresAt = session.expires_at * 1000; // convert to ms
-    const REFRESH_THRESHOLD = 5 * 60 * 1000; // 5 minutes before expiry
-    if (Date.now() > expiresAt - REFRESH_THRESHOLD) {
-      // Token expired or expiring soon, refresh via network call
-      const { data } = await supabase.auth.getUser();
-      user = data.user;
+  let claims = await readClaims();
+
+  const REFRESH_THRESHOLD = 5 * 60 * 1000; // refresh within 5 min of expiry
+  if (claims && typeof claims.exp === "number") {
+    if (Date.now() > claims.exp * 1000 - REFRESH_THRESHOLD) {
+      // Near expiry: getUser() network-verifies and triggers the SSR cookie
+      // refresh, then we re-read the freshly minted (still verified) claims.
+      await supabase.auth.getUser();
+      claims = await readClaims();
     }
-  } else if (!session) {
-    // No session at all, try getUser() to recover from refresh token
-    const { data } = await supabase.auth.getUser();
-    user = data.user;
+  } else if (!claims) {
+    // No / expired / forged access token: try to recover a real session from the
+    // refresh token (getUser also rejects a forged token), then re-verify.
+    await supabase.auth.getUser();
+    claims = await readClaims();
   }
+
+  const user = buildUserFromClaims(claims);
 
   const pathname = request.nextUrl.pathname;
 

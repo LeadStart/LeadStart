@@ -66,18 +66,18 @@ export async function POST(req: NextRequest) {
   const supabase = await createClient();
 
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (!session?.user) {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const role = (session.user as { app_metadata?: { role?: string } })
+  const role = (user as { app_metadata?: { role?: string } })
     .app_metadata?.role;
   if (role !== "owner" && role !== "va") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   const organizationId = (
-    session.user as { app_metadata?: { organization_id?: string } }
+    user as { app_metadata?: { organization_id?: string } }
   ).app_metadata?.organization_id;
   if (!organizationId) {
     return NextResponse.json(
@@ -140,7 +140,7 @@ export async function POST(req: NextRequest) {
     accepted_at: null,
     declined_at: null,
     sent_to_email: sendNow ? body.sent_to_email : null,
-    sent_by: sendNow ? session.user.id : null,
+    sent_by: sendNow ? user.id : null,
     accepted_by_email: null,
     accepted_ip: null,
     accepted_user_agent: null,

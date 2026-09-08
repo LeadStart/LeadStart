@@ -50,12 +50,12 @@ export async function PATCH(
   const supabase = await createClient();
 
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (!session?.user) {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const role = (session.user as { app_metadata?: { role?: string } })
+  const role = (user as { app_metadata?: { role?: string } })
     .app_metadata?.role;
   if (role !== "owner" && role !== "va") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -110,7 +110,7 @@ export async function PATCH(
     updates.status = "sent";
     updates.sent_at = now;
     updates.sent_to_email = body.sent_to_email;
-    updates.sent_by = session.user.id;
+    updates.sent_by = user.id;
   }
 
   const admin = createAdminClient();
