@@ -9,8 +9,7 @@ import {
 } from "@/lib/email/quote-proposal";
 import {
   DEFAULT_WARMING_DAYS,
-  computeLaunchDate,
-  nextBusinessDay,
+  resolveQuoteSchedule,
 } from "@/lib/billing/schedule";
 import type { Quote, Client } from "@/types/app";
 import { htmlToPlainText } from "@/lib/email/html-to-text";
@@ -35,7 +34,9 @@ interface UpdateQuoteBody {
 
 /**
  * Edit an existing DRAFT quote. Owner/va only. Recomputes the frozen launch date
- * and clamps expiry exactly like create. Optionally sends (draft → sent + email).
+ * and resolves expiry exactly like create (via resolveQuoteSchedule: launch is
+ * pushed out past an over-long expiry, never the other way around). Optionally
+ * sends (draft → sent + email).
  *
  * The read goes through the user client so RLS confirms the quote is in the
  * caller's org (authorization); the write uses the service-role client because
@@ -80,18 +81,15 @@ export async function PATCH(
   const sendNow = body.send_now === true;
   const now = new Date().toISOString();
 
-  const warmingDays = body.warming_days ?? DEFAULT_WARMING_DAYS;
   const launchMode: "derived" | "fixed" =
     body.launch_date_mode === "fixed" ? "fixed" : "derived";
-  const launch =
-    launchMode === "fixed" && body.launch_date
-      ? nextBusinessDay(new Date(body.launch_date))
-      : computeLaunchDate(new Date(), warmingDays);
-
-  let expiresAt = body.expires_at;
-  if (expiresAt && new Date(expiresAt).getTime() >= launch.getTime()) {
-    expiresAt = new Date(launch.getTime() - 24 * 60 * 60 * 1000).toISOString();
-  }
+  const { launch, warmingDays, expiresAt } = resolveQuoteSchedule({
+    from: new Date(),
+    warmingDays: body.warming_days ?? DEFAULT_WARMING_DAYS,
+    launchMode,
+    fixedLaunchDate: body.launch_date,
+    expiresAt: body.expires_at,
+  });
 
   const updates: Record<string, unknown> = {
     client_id: body.client_id,

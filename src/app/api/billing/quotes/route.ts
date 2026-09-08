@@ -10,8 +10,7 @@ import {
 } from "@/lib/email/quote-proposal";
 import {
   DEFAULT_WARMING_DAYS,
-  computeLaunchDate,
-  nextBusinessDay,
+  resolveQuoteSchedule,
 } from "@/lib/billing/schedule";
 import type { Quote, Client } from "@/types/app";
 import { htmlToPlainText } from "@/lib/email/html-to-text";
@@ -100,26 +99,21 @@ export async function POST(req: NextRequest) {
   const quoteNumber = await nextQuoteNumber(supabase, organizationId);
   const signedUrlHash = randomBytes(24).toString("hex");
 
-  const warmingDays = body.warming_days ?? DEFAULT_WARMING_DAYS;
   const launchMode: "derived" | "fixed" =
     body.launch_date_mode === "fixed" ? "fixed" : "derived";
-  // Freeze the launch (first-charge) date now so every surface reads one stable
-  // value instead of recomputing from "now". 'fixed' rolls the admin's pinned
-  // date to the next sending day; the default derives it from the warming
-  // window off today. (No send-later flow exists yet, so "now" == send.)
-  const launch =
-    launchMode === "fixed" && body.launch_date
-      ? nextBusinessDay(new Date(body.launch_date))
-      : computeLaunchDate(new Date(), warmingDays);
+  // Freeze the launch (first-charge) date, warm-up length, and expiry now so
+  // every surface reads one stable set of values instead of recomputing from
+  // "now". The shared resolver pushes launch out past an over-long expiry rather
+  // than shrinking the client's acceptance window. (No send-later flow exists
+  // yet, so "now" == send.)
+  const { launch, warmingDays, expiresAt } = resolveQuoteSchedule({
+    from: new Date(),
+    warmingDays: body.warming_days ?? DEFAULT_WARMING_DAYS,
+    launchMode,
+    fixedLaunchDate: body.launch_date,
+    expiresAt: body.expires_at,
+  });
   const launchIso = launch.toISOString();
-
-  // Keep the quote's validity window safely before launch: a client accepting
-  // after the frozen launch day would have no warm-up runway (and Stripe rejects
-  // a trial_end in the past). Clamp an over-long expiry to the day before launch.
-  let expiresAt = body.expires_at;
-  if (expiresAt && new Date(expiresAt).getTime() >= launch.getTime()) {
-    expiresAt = new Date(launch.getTime() - 24 * 60 * 60 * 1000).toISOString();
-  }
 
   const newQuote: Quote = {
     id: randomUUID(),
