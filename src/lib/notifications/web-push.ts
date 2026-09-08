@@ -83,12 +83,18 @@ export async function sendHotLeadPush(args: {
 
     const name = args.leadName || "A lead";
     const where = args.leadCompany ? ` (${args.leadCompany})` : "";
+    const isReview = args.kind === "review";
+    // A confirmed hot lead (the default) gets a deliberately minimal push: the
+    // brand icon plus one line, no name or reply snippet. The vaguer line is on
+    // purpose, it reads cleanly at the smallest notification height and the
+    // curiosity gap pulls the tap. The needs-review triage push keeps its
+    // descriptive title so the owner can tell the two apart. (Owner call
+    // 2026-09-08.)
     const payload: PushPayload = {
-      title:
-        args.kind === "review"
-          ? `👀 Needs a look: ${name}${where} replied`
-          : `🔥 ${name}${where} replied`,
-      body: buildSnippet(args.replySubject, args.replyBodyText),
+      title: isReview
+        ? `👀 Needs a look: ${name}${where} replied`
+        : "You have a new sales opportunity",
+      body: isReview ? buildSnippet(args.replySubject, args.replyBodyText) : "",
       url: `/app/admin/inbox/${args.replyId}`,
       tag: `reply-${args.replyId}`,
     };
