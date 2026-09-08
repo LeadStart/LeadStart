@@ -57,10 +57,11 @@ export function DashboardShell({
           viewingAsClient={viewingAsClient}
           onMenuClick={() => setSidebarOpen(true)}
         />
-        {/* `.app-main` (globals.css, desktop) zeroes the left padding so pages
-            share the floating topbar's left gridline. Extra bottom padding on
-            mobile clears the fixed MobileTabBar; reset at `lg` where the bar hides. */}
-        <main className="app-main flex-1 p-4 sm:p-6 pb-24 lg:pb-6">
+        {/* `.app-main` (globals.css) zeroes the left padding on desktop so pages
+            share the floating topbar's left gridline, and adds bottom padding on
+            mobile to clear the floating MobileTabBar pill (reset at `lg` where the
+            pill hides). */}
+        <main className="app-main flex-1 p-4 sm:p-6">
           {children}
         </main>
       </div>
