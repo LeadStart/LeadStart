@@ -52,6 +52,7 @@ import { createClient } from "@/lib/supabase/client";
 import { classifyEmailTier, EMAIL_TIER_RANK, type EmailTier } from "@/lib/enrichment/email-tier";
 import type { MapsPlace, MapsSearchStatus } from "@/types/app";
 import type { MapsArea } from "@/lib/apify/sourcing/maps-search";
+import { MapsExportDialog } from "./maps-export-dialog";
 import {
   MAPS_PLACE_COST_USD,
   MAPS_FILTER_COST_USD,
@@ -1112,6 +1113,7 @@ export function MapsDiyPanel() {
                       </option>
                     ))}
                   </select>
+                  <MapsExportDialog results={results} selectedIds={selected} />
                   {saveMsg && (
                     <span className="inline-flex items-center gap-1 text-xs text-emerald-700">
                       <CheckCircle2 size={13} /> {saveMsg}
