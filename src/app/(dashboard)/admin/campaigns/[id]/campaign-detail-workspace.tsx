@@ -488,16 +488,16 @@ export function CampaignDetailWorkspace({
           />
         </TabsContent>
 
-        {/* Leads */}
+        {/* Contacts: who's in the campaign first, then the tools to add more. */}
         <TabsContent value="leads" className="min-h-0 space-y-4 overflow-y-auto pt-4">
-          <NativeImportPanel campaignId={campaignId} />
-          <CrmPullPanel campaignId={campaignId} />
           <CampaignContactsCard
             campaignId={campaignId}
             contacts={contacts}
             truncated={contactsTruncated}
             canEnroll
           />
+          <NativeImportPanel campaignId={campaignId} />
+          <CrmPullPanel campaignId={campaignId} />
         </TabsContent>
 
         {/* Schedule + strategy */}

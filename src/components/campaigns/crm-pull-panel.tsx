@@ -15,6 +15,7 @@ import {
   CheckCircle2,
   Loader2,
   UserPlus,
+  ChevronDown,
 } from "lucide-react";
 import { appUrl } from "@/lib/api-url";
 import { normalizeVarKey } from "@/lib/native/tokens";
@@ -57,6 +58,10 @@ const STANDARD_FIELD_ACCESSOR: Record<string, (c: Candidate) => string | null> =
 };
 
 export function CrmPullPanel({ campaignId }: { campaignId: string }) {
+  // Collapsed by default: this panel auto-loads the client's whole contact list
+  // when it opens, which is far too heavy for the Contacts tab's landing view.
+  // Nothing fetches until the owner expands it.
+  const [open, setOpen] = useState(false);
   const [tokens, setTokens] = useState<CampaignTokens | null>(null);
   const [clientAssigned, setClientAssigned] = useState<boolean | null>(null);
 
@@ -72,7 +77,11 @@ export function CrmPullPanel({ campaignId }: { campaignId: string }) {
   const [result, setResult] = useState<EnrollResult | null>(null);
 
   // Registry/token bootstrap (shared with the CSV panel): for coverage warnings.
+  // Deferred until the panel is first opened so a collapsed panel costs nothing.
+  const didBootstrap = useRef(false);
   useEffect(() => {
+    if (!open || didBootstrap.current) return;
+    didBootstrap.current = true;
     let cancelled = false;
     (async () => {
       try {
@@ -87,7 +96,7 @@ export function CrmPullPanel({ campaignId }: { campaignId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [campaignId]);
+  }, [open, campaignId]);
 
   const search = useCallback(
     async (query: string, tagFilter: string) => {
@@ -120,13 +129,13 @@ export function CrmPullPanel({ campaignId }: { campaignId: string }) {
     [campaignId],
   );
 
-  // Initial load (recent contacts) once.
+  // Initial load (recent contacts), once, and only after the panel is opened.
   const didInit = useRef(false);
   useEffect(() => {
-    if (didInit.current) return;
+    if (!open || didInit.current) return;
     didInit.current = true;
     search("", "");
-  }, [search]);
+  }, [open, search]);
 
   // Selectable = not already enrolled.
   const selectable = useMemo(() => candidates.filter((c) => !c.enrolled), [candidates]);
@@ -208,22 +217,54 @@ export function CrmPullPanel({ campaignId }: { campaignId: string }) {
   const name = (c: Candidate) =>
     [c.first_name, c.last_name].filter(Boolean).join(" ") || "—";
 
+  // Collapsed: a single button, so the Contacts tab lands clean.
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-expanded={false}
+        className="inline-flex items-center gap-2 rounded-lg border border-border/60 bg-background px-3 py-2 text-sm font-medium text-secondary-foreground transition-colors hover:border-[#2E37FE]/50"
+      >
+        <Users size={15} /> Add from existing contacts
+        <ChevronDown size={13} className="text-muted-foreground" />
+      </button>
+    );
+  }
+
+  // Expanded header, doubling as the collapse control; shared by both open states.
+  const header = (
+    <button
+      type="button"
+      onClick={() => setOpen(false)}
+      aria-expanded
+      className="flex w-full items-center gap-2 text-sm font-medium"
+    >
+      <Users size={15} /> Add from existing contacts
+      <ChevronDown
+        size={13}
+        className="ml-auto rotate-180 text-muted-foreground transition-transform"
+      />
+    </button>
+  );
+
   if (clientAssigned === false) {
     return (
-      <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
-        <AlertCircle size={16} className="mt-0.5 shrink-0 text-amber-500" />
-        <p className="text-sm text-amber-800">
-          Assign a client to this campaign to pull existing contacts from the CRM.
-        </p>
+      <div className="space-y-3 rounded-lg border border-border/60 p-4">
+        {header}
+        <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
+          <AlertCircle size={16} className="mt-0.5 shrink-0 text-amber-500" />
+          <p className="text-sm text-amber-800">
+            Assign a client to this campaign to pull existing contacts from the CRM.
+          </p>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="space-y-3 rounded-lg border border-border/60 p-4">
-      <div className="flex items-center gap-2 text-sm font-medium">
-        <Users size={15} /> Add from existing contacts
-      </div>
+      {header}
       <p className="text-xs text-muted-foreground">
         Pull already-imported or enriched contacts into this campaign. They keep their
         stored values; anything a variable needs but a contact lacks sends blank (or its{" "}

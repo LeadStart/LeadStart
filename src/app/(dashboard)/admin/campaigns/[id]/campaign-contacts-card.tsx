@@ -159,7 +159,7 @@ export function CampaignContactsCard({
       <CardContent>
         {contacts.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            No contacts assigned yet. Import a CSV above, or save sourced people
+            No contacts assigned yet. Import a CSV, or save sourced people
             from Prospecting with this campaign selected.
           </p>
         ) : (
