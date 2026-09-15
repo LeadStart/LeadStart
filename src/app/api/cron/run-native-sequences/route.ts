@@ -97,6 +97,13 @@ type CampaignRow = {
   send_weekdays_only: boolean | null;
   daily_new_leads_cap: number | null;
   sending_strategy: string | null;
+  // Per-campaign pre-send verification gate (migration 00129). false opts this
+  // campaign out of the just-in-time Million Verifier gate: its sends go out
+  // unverified. NOT NULL default true, so legacy rows keep verifying.
+  verify_before_send: boolean | null;
+  // Scope for the gate (migration 00130). true = verify the first touch only;
+  // follow-ups skip re-verification. Ignored when verify_before_send is false.
+  verify_first_send_only: boolean | null;
   // Visual Flow builder graph (migration 00086). NULL = legacy/linear campaign,
   // the sender walks campaign_steps by current_step_index exactly as before.
   // Present = the graph runtime (migration 00089) walks the tree from the
@@ -151,7 +158,7 @@ export async function GET(request: NextRequest) {
   // and fetching per campaign removes that whole class.
   const { data: campaignsData, error: campaignsErr } = await admin
     .from("campaigns")
-    .select("id, organization_id, client_id, status, source_channel, name, send_timezone, send_start_hour, send_end_hour, send_weekdays_only, daily_new_leads_cap, sending_strategy, flow_graph")
+    .select("id, organization_id, client_id, status, source_channel, name, send_timezone, send_start_hour, send_end_hour, send_weekdays_only, daily_new_leads_cap, sending_strategy, verify_before_send, verify_first_send_only, flow_graph")
     .eq("source_channel", "native_email")
     .eq("status", "active");
   if (campaignsErr) return prefetchFailed("campaigns", campaignsErr);
@@ -828,9 +835,20 @@ export async function GET(request: NextRequest) {
     // Just-in-time email verification (Million Verifier). A hold leaves the
     // enrollment active (retried next tick) and never consumes the mailbox slot;
     // a skip fails it terminally. gate.result is snapshotted on the send row.
+    // Per-campaign scope (migrations 00129/00130): verify_before_send=false opts
+    // out entirely; verify_first_send_only=true limits the gate to the first
+    // touch (step 0) so follow-ups never re-verify. When the gate doesn't apply
+    // we pass a null state, which the gate treats exactly like the no-key
+    // disarmed case — the contact sends through unverified (result null).
+    const gateApplies =
+      campaign.verify_before_send !== false &&
+      !(campaign.verify_first_send_only === true && stepIndex > 0);
+    const verifierState = gateApplies
+      ? verifierByOrg.get(campaign.organization_id) ?? null
+      : null;
     const gate = await gateContactVerification({
       admin,
-      state: verifierByOrg.get(campaign.organization_id) ?? null,
+      state: verifierState,
       contact,
       now: tickNow,
     });

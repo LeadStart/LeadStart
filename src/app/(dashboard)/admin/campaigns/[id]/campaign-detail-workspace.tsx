@@ -56,6 +56,7 @@ import { CampaignLifecycleButton } from "./campaign-lifecycle-button";
 import { CampaignContactsCard, type CampaignContactRow } from "./campaign-contacts-card";
 import { StageFlowCard, type StageRow } from "./stage-flow-card";
 import { DeliverabilityCard, type DeliverabilityResult } from "./deliverability-card";
+import { DeliverabilityGateCard } from "./deliverability-gate-card";
 
 const TIMEZONES = [
   { value: "America/Los_Angeles", label: "Pacific" },
@@ -109,6 +110,8 @@ export function CampaignDetailWorkspace({
   initialNewLeadsCap,
   initialStrategy,
   initialAbAutoPauseDefault,
+  initialVerifyBeforeSend,
+  initialVerifyFirstSendOnly,
   nativeStats,
   flowProgress,
   abStats,
@@ -140,6 +143,8 @@ export function CampaignDetailWorkspace({
   initialNewLeadsCap: number;
   initialStrategy: SendingStrategy;
   initialAbAutoPauseDefault: boolean;
+  initialVerifyBeforeSend: boolean;
+  initialVerifyFirstSendOnly: boolean;
   nativeStats: NativeStatsView;
   flowProgress: FlowProgressData | null;
   abStats: AbNodeStats[];
@@ -719,6 +724,11 @@ export function CampaignDetailWorkspace({
 
         {/* Deliverability */}
         <TabsContent value="deliverability" className="min-h-0 space-y-4 overflow-y-auto pt-4">
+          <DeliverabilityGateCard
+            campaignId={campaignId}
+            initialVerifyBeforeSend={initialVerifyBeforeSend}
+            initialVerifyFirstSendOnly={initialVerifyFirstSendOnly}
+          />
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={runCheck} disabled={checkLoading} className="gap-1.5">
               {checkLoading ? <Loader2 size={14} className="animate-spin" /> : <ShieldCheck size={14} />}

@@ -347,6 +347,8 @@ export default async function AdminCampaignDetailPage({
         initialNewLeadsCap={resolveDailyNewLeadsCap(campaign)}
         initialStrategy={sendingStrategy}
         initialAbAutoPauseDefault={campaign.ab_auto_pause_default ?? false}
+        initialVerifyBeforeSend={campaign.verify_before_send ?? true}
+        initialVerifyFirstSendOnly={campaign.verify_first_send_only ?? false}
         nativeStats={{
           sent: nativeStats.sent,
           replied: nativeStats.replied,

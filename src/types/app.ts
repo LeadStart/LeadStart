@@ -191,6 +191,16 @@ export interface Campaign {
   // Campaign-level default for the A/B auto-winner (migration 00091). A flow
   // email node inherits this unless its ab_config.autoPause overrides. Off by default.
   ab_auto_pause_default: boolean;
+  // Per-campaign pre-send verification gate (migration 00129). true (default)
+  // runs the just-in-time Million Verifier gate before the first send; false
+  // skips it for this campaign (sends go out unverified). Effective only while a
+  // Million Verifier key is configured. Read by the native send path.
+  verify_before_send: boolean;
+  // Scope for the gate above (migration 00130). When verify_before_send is true
+  // AND this is true, the gate runs on the first touch (step 0) only; follow-ups
+  // send without re-verifying. Ignored when verify_before_send is false. Off by
+  // default (= verify every send).
+  verify_first_send_only: boolean;
   // Per-campaign Unipile account binding (migration 00046). Defaults to
   // clients.unipile_account_id but lives on the campaign so accounts can
   // rotate without invalidating campaign history.
