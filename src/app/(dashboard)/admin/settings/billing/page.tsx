@@ -910,6 +910,7 @@ export default function BillingPage() {
   const [newQuoteOpen, setNewQuoteOpen] = useState(false);
   const [viewingQuote, setViewingQuote] = useState<Quote | null>(null);
   const [editingQuote, setEditingQuote] = useState<Quote | null>(null);
+  const [reissuingId, setReissuingId] = useState<string | null>(null);
   const [cancelingSub, setCancelingSub] = useState<ClientSubscription | null>(
     null,
   );
@@ -1214,6 +1215,49 @@ export default function BillingPage() {
       await updateQuote(editingQuote.id, draft, sendNow);
     } else {
       await createQuote(draft, sendNow);
+    }
+  }
+
+  // Reissue a sent/expired/declined quote: the server clones it into a fresh
+  // draft (new number + link + expiry) and cancels the source. We then open the
+  // pre-filled edit dialog on the new draft so the admin can tweak and send.
+  async function handleReissue(q: Quote) {
+    setReissuingId(q.id);
+    try {
+      const res = await fetch(appUrl(`/api/billing/quotes/${q.id}/reissue`), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+      const payload = (await res.json().catch(() => ({}))) as {
+        quote?: Quote;
+        source_cancel_failed?: boolean;
+        error?: string;
+      };
+      if (!res.ok || !payload.quote) {
+        toast.error(payload.error || "Could not reissue quote.");
+        return;
+      }
+      const newQuote = payload.quote;
+      setQuotes((prev) => {
+        const base = payload.source_cancel_failed
+          ? prev
+          : prev.map((x) =>
+              x.id === q.id
+                ? { ...x, status: "canceled" as QuoteStatus }
+                : x,
+            );
+        return [newQuote, ...base];
+      });
+      setSelectedTab("quotes");
+      setEditingQuote(newQuote);
+      toast.success(
+        payload.source_cancel_failed
+          ? `Reissued as ${newQuote.quote_number}. Couldn't cancel the old quote; cancel it manually.`
+          : `Reissued as ${newQuote.quote_number}. Previous quote canceled.`,
+      );
+    } finally {
+      setReissuingId(null);
     }
   }
 
@@ -1529,14 +1573,29 @@ export default function BillingPage() {
                             Edit
                           </Button>
                         ) : (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setViewingQuote(q)}
-                            className="text-xs"
-                          >
-                            View
-                          </Button>
+                          <div className="flex items-center justify-end gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setViewingQuote(q)}
+                              className="text-xs"
+                            >
+                              View
+                            </Button>
+                            {q.status !== "accepted" && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleReissue(q)}
+                                disabled={reissuingId === q.id}
+                                className="text-xs"
+                                title="Clone into a fresh draft with a new link and expiry; cancels this one"
+                              >
+                                <RotateCcw size={12} className="mr-1" />
+                                {reissuingId === q.id ? "Reissuing…" : "Reissue"}
+                              </Button>
+                            )}
+                          </div>
                         )}
                       </TableCell>
                     </TableRow>

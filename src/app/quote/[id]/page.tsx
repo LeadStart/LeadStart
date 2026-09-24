@@ -44,8 +44,11 @@ export default async function HostedQuotePage({ params, searchParams }: Props) {
     quote.status === "expired" ||
     (!!quote.expires_at && new Date(quote.expires_at).getTime() < now);
   const isAccepted = quote.status === "accepted";
-  const isDeclined = quote.status === "declined" || quote.status === "canceled";
-  const canAccept = !isExpired && !isAccepted && !isDeclined;
+  const isDeclined = quote.status === "declined";
+  // Canceled = superseded (a reissue replaced it). Kept distinct from declined
+  // so the recipient gets neutral "no longer active" copy, not a rejection.
+  const isCanceled = quote.status === "canceled";
+  const canAccept = !isExpired && !isAccepted && !isDeclined && !isCanceled;
 
   return (
     <div className="min-h-screen bg-slate-50 text-[#0f172a]">
@@ -80,6 +83,12 @@ export default async function HostedQuotePage({ params, searchParams }: Props) {
             tone="red"
             title="Proposal declined"
             body="This quote is no longer active."
+          />
+        ) : isCanceled ? (
+          <StatusBanner
+            tone="slate"
+            title="This quote is no longer active"
+            body="A newer proposal may have been sent. Check your inbox for the most recent link, or reach out to your LeadStart contact."
           />
         ) : isExpired ? (
           <StatusBanner

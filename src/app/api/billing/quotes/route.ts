@@ -12,6 +12,7 @@ import {
   DEFAULT_WARMING_DAYS,
   resolveQuoteSchedule,
 } from "@/lib/billing/schedule";
+import { nextQuoteNumber } from "@/lib/billing/quote-number";
 import type { Quote, Client } from "@/types/app";
 import { htmlToPlainText } from "@/lib/email/html-to-text";
 
@@ -34,32 +35,6 @@ interface CreateQuoteBody {
   sent_to_email: string | null;
   expires_at: string | null;
   send_now: boolean;
-}
-
-/**
- * Allocate the next quote number for an organization (Q-YYYY-NNNN).
- * In real Supabase this should use `quote_number_counters` via an RPC for
- * atomicity under concurrency; for now we scan existing rows, which is
- * fine for the demo and single-threaded test-mode flows.
- */
-async function nextQuoteNumber(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  organizationId: string,
-): Promise<string> {
-  const year = new Date().getFullYear();
-  const prefix = `Q-${year}-`;
-  const { data } = await supabase
-    .from("quotes")
-    .select("quote_number")
-    .eq("organization_id", organizationId);
-  const rows = (data as Array<{ quote_number: string }> | null) ?? [];
-  const nums = rows
-    .map((r) => r.quote_number)
-    .filter((n) => n && n.startsWith(prefix))
-    .map((n) => parseInt(n.slice(prefix.length), 10))
-    .filter((n) => Number.isFinite(n));
-  const next = nums.length ? Math.max(...nums) + 1 : 1;
-  return `${prefix}${String(next).padStart(4, "0")}`;
 }
 
 export async function POST(req: NextRequest) {
