@@ -5,6 +5,22 @@
 
 ---
 
+## 2026-09-24: David Cabrera — deleted 57 no-first-name contacts (data-op, prod) + card shows true totals (pushed to master)
+
+**Delete:** the CSV had 57 rows with blank first AND last name (blank at source, verified: `David_Cabrera_Agent_Recruiting_consolidated_deduped.csv` has exactly 57 blank-first-name rows; 0 blank email/address). Per owner, removed rather than emailed with a fallback. Ran `scripts/delete-david-noname-contacts.mjs --apply` (backup-first, dry-run default, cascades to campaign_enrollments; verified 0 sends/replies on the 57 so no history lost). Result RECONCILED: 57 contacts removed, campaign 2652 → **2595 assigned / 2595 enrolled**. Reversible backup: `C:\Users\danie\Documents\Clients\David Cabrera\noname-contacts-delete-backup-2026-09-24T18-39-51-719Z.json`.
+
+**Card true totals:** extended the display-fix so the Contacts card headline shows exact campaign-wide counts (assigned = exact count query, in-sequence = paged enrollment count) instead of the row-capped "1000+". Threaded `assignedTotal`/`enrolledTotal` through `page.tsx` → `campaign-detail-workspace.tsx` → `campaign-contacts-card.tsx`. tsc clean. Pushed to master 2026-09-24.
+
+## 2026-09-24: Campaign detail page — 1000-row PostgREST cap fix (pushed to master 2026-09-24)
+
+**Symptom:** after a large CSV import, David's campaign Contacts tab read "1000+ assigned · 8 in the sequence · 992 not enrolled" although all 2,652 contacts were enrolled and sending. The page's "Active/Completed" stat line, funnel, verification breakdown, flow-progress and A/B numbers were undercounted the same way.
+
+**Root cause:** several `.from(...).select(...).eq("campaign_id", ...)` fetches on the campaign detail page pull "all rows" with no `.range()`, and PostgREST caps un-ranged responses at 1000 rows (`Content-Range: 0-999/2652`). Anything computed from the truncated set (enrollment map, sent/enrolled tallies, per-step buckets) was wrong once a campaign crossed 1000 enrollments/sends. David's is the first campaign past 1000.
+
+**Fix:** new helper `src/lib/supabase/fetch-all.ts` (`fetchAllRows`, pages via `.range(from, from+999)`, mirrors the cron routes' existing idiom). Applied in `src/app/(dashboard)/admin/campaigns/[id]/page.tsx` to: the card enrollment map, `nativeStatsFor` (sends + enrollments + per-mailbox sends), flow-progress (enrollments + replies), and A/B sends. `campaign-contacts-card.tsx` subtitle now flags the enrolled count as truncated ("1000+ in the sequence") to match the assigned "+".
+
+**Verified:** tsc clean on the changed files; paginated fetch returns all 2,652 enrollments; card-logic simulation flips from capped (wrong) to paged = 1000 enrolled / 0 not-enrolled. Pushed to master 2026-09-24 (prod auto-deploys).
+
 ## 2026-09-24: David Cabrera campaign "0 contacts" — campaign_id backfill (data-op, LOCAL script, prod data write)
 
 **Symptom:** David Cabrera — Buyer Agent Outreach (campaign `f9c179e6-799d-44f4-8753-806fcc1c2b83`, native_email, active) showed "0 assigned · 0 in the sequence" on the Contacts tab while actively sending (2,712 native_sends, last send that day).
