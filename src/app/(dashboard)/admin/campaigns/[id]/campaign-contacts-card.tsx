@@ -70,11 +70,18 @@ export function CampaignContactsCard({
   campaignId,
   contacts,
   truncated,
+  assignedTotal,
+  enrolledTotal,
   canEnroll,
 }: {
   campaignId: string;
   contacts: CampaignContactRow[];
   truncated: boolean;
+  // True campaign-wide counts for the headline, independent of the row cap: the
+  // table below shows at most `contacts.length` rows, but the subtitle must
+  // report the real totals, never "1000+".
+  assignedTotal: number;
+  enrolledTotal: number;
   // True for channels whose sequences run off campaign_enrollments
   // (native email + LinkedIn): the only ones the enroll endpoint accepts.
   canEnroll: boolean;
@@ -83,7 +90,10 @@ export function CampaignContactsCard({
   const [page, setPage] = useState(1);
   const [enrolling, setEnrolling] = useState(false);
 
-  const enrolledCount = contacts.filter((c) => c.enrollment).length;
+  // Campaign-wide "not enrolled" (assigned minus in-sequence), floored at 0.
+  const notEnrolledTotal = Math.max(0, assignedTotal - enrolledTotal);
+  // Displayed-set enrollment state still drives the Enroll button, which can
+  // only act on the contacts currently loaded in the table.
   const notEnrolled = contacts.filter((c) => !c.enrollment);
 
   const totalPages = Math.max(1, Math.ceil(contacts.length / PAGE_SIZE));
@@ -138,9 +148,8 @@ export function CampaignContactsCard({
         <div className="flex-1">
           <CardTitle className="text-base">Contacts in this campaign</CardTitle>
           <p className="text-xs text-muted-foreground mt-0.5">
-            {contacts.length}
-            {truncated ? "+" : ""} assigned · {enrolledCount} in the sequence
-            {notEnrolled.length > 0 ? ` · ${notEnrolled.length} not enrolled yet` : ""}
+            {assignedTotal.toLocaleString()} assigned · {enrolledTotal.toLocaleString()} in the sequence
+            {notEnrolledTotal > 0 ? ` · ${notEnrolledTotal.toLocaleString()} not enrolled yet` : ""}
           </p>
         </div>
         {canEnroll && notEnrolled.length > 0 && (

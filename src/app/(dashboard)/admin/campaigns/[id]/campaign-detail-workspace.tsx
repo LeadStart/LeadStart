@@ -120,6 +120,8 @@ export function CampaignDetailWorkspace({
   strategyLabel,
   contacts,
   contactsTruncated,
+  contactsAssignedTotal,
+  contactsEnrolledTotal,
 }: {
   campaignId: string;
   campaignName: string;
@@ -153,6 +155,9 @@ export function CampaignDetailWorkspace({
   strategyLabel: string;
   contacts: CampaignContactRow[];
   contactsTruncated: boolean;
+  // True campaign-wide totals for the Contacts card headline (not row-capped).
+  contactsAssignedTotal: number;
+  contactsEnrolledTotal: number;
 }) {
   const router = useRouter();
   const [tab, setTab] = useState("sequence");
@@ -499,6 +504,8 @@ export function CampaignDetailWorkspace({
             campaignId={campaignId}
             contacts={contacts}
             truncated={contactsTruncated}
+            assignedTotal={contactsAssignedTotal}
+            enrolledTotal={contactsEnrolledTotal}
             canEnroll
           />
           <NativeImportPanel campaignId={campaignId} />

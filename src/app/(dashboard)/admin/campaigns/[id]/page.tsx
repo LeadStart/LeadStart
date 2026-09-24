@@ -6,6 +6,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { fetchAllRows } from "@/lib/supabase/fetch-all";
 import { KPICard } from "@/components/charts/kpi-card";
 import { DailyChart } from "@/components/charts/daily-chart";
 import { calculateMetrics } from "@/lib/kpi/calculator";
@@ -138,7 +139,7 @@ export default async function AdminCampaignDetailPage({
   // dispatcher works exclusively off campaign_enrollments, so the card shows
   // both facts per contact. Capped at the newest 1000 rows.
   const CONTACTS_CAP = 1000;
-  const [assignedRes, campEnrollRes] = await Promise.all([
+  const [assignedRes, campEnrollRows, assignedCountRes] = await Promise.all([
     admin
       .from("contacts")
       .select(
@@ -147,19 +148,29 @@ export default async function AdminCampaignDetailPage({
       .eq("campaign_id", campaignId)
       .order("created_at", { ascending: false })
       .limit(CONTACTS_CAP),
+    // Page past PostgREST's 1000-row cap: a campaign with >1000 enrollments
+    // otherwise returns only the first 1000, so contacts whose enrollment falls
+    // outside that window get mislabeled "not enrolled" in the card.
+    fetchAllRows<{
+      contact_id: string;
+      status: string;
+      current_step_index: number | null;
+    }>(() =>
+      admin
+        .from("campaign_enrollments")
+        .select("contact_id, status, current_step_index")
+        .eq("campaign_id", campaignId),
+    ),
+    // Exact campaign-wide assigned count for the card subtitle: the table below
+    // is capped at CONTACTS_CAP, but the headline count must be the true total,
+    // not "1000+".
     admin
-      .from("campaign_enrollments")
-      .select("contact_id, status, current_step_index")
+      .from("contacts")
+      .select("id", { count: "exact", head: true })
       .eq("campaign_id", campaignId),
   ]);
   const enrollmentByContact = new Map(
-    (
-      (campEnrollRes.data ?? []) as {
-        contact_id: string;
-        status: string;
-        current_step_index: number | null;
-      }[]
-    ).map((e) => [
+    campEnrollRows.map((e) => [
       e.contact_id,
       { status: e.status, current_step_index: e.current_step_index },
     ]),
@@ -168,6 +179,11 @@ export default async function AdminCampaignDetailPage({
     (assignedRes.data ?? []) as Omit<CampaignContactRow, "enrollment">[]
   ).map((c) => ({ ...c, enrollment: enrollmentByContact.get(c.id) ?? null }));
   const contactsTruncated = campaignContacts.length === CONTACTS_CAP;
+  // True campaign-wide totals for the card headline (independent of the 1000-row
+  // table cap): assigned = every contact on this campaign; inSequence = every
+  // enrollment (paged above). notEnrolled derived, floored at 0.
+  const assignedTotal = assignedCountRes.count ?? campaignContacts.length;
+  const enrolledTotal = campEnrollRows.length;
 
   // Stage-flow view model + completion projection for the "Contacts by sending
   // stage" panel. Resolve each step's display subject (later steps thread as
@@ -235,37 +251,42 @@ export default async function AdminCampaignDetailPage({
     let flowProgress: FlowProgressData | null = null;
     let abStats: AbNodeStats[] = [];
     if (isFlowCampaign) {
-      const [progEnrRes, progReplyRes] = await Promise.all([
-        admin
-          .from("campaign_enrollments")
-          .select("current_node_id, current_step_index, status, contacts(email)")
-          .eq("campaign_id", campaignId),
-        admin
-          .from("lead_replies")
-          .select("lead_email, final_class, received_at")
-          .eq("campaign_id", campaignId)
-          // Excluded leads don't count toward stats. Match sync-analytics, which
-          // already filters these, so the live flow-progress + A/B numbers agree
-          // with the snapshot rollup instead of counting excluded replies.
-          .eq("excluded_from_stats", false)
-          .order("received_at", { ascending: false }),
-      ]);
-      const replyByEmail = new Map<string, ReplyClass | null>();
-      for (const row of (progReplyRes.data ?? []) as {
-        lead_email: string | null;
-        final_class: ReplyClass | null;
-      }[]) {
-        const em = row.lead_email?.trim().toLowerCase();
-        if (em && !replyByEmail.has(em)) replyByEmail.set(em, row.final_class ?? null);
-      }
-      const progEnrollments: ProgressEnrollment[] = (
-        (progEnrRes.data ?? []) as {
+      // Both paged past the 1000-row cap so flow-progress occupancy + A/B
+      // reply rollups stay correct for campaigns with >1000 enrollments/replies.
+      const [progEnrRows, progReplyRows] = await Promise.all([
+        fetchAllRows<{
           current_node_id: string | null;
           current_step_index: number | null;
           status: string;
           contacts: { email: string | null } | { email: string | null }[] | null;
-        }[]
-      ).map((e) => {
+        }>(() =>
+          admin
+            .from("campaign_enrollments")
+            .select("current_node_id, current_step_index, status, contacts(email)")
+            .eq("campaign_id", campaignId),
+        ),
+        fetchAllRows<{
+          lead_email: string | null;
+          final_class: ReplyClass | null;
+          received_at: string | null;
+        }>(() =>
+          admin
+            .from("lead_replies")
+            .select("lead_email, final_class, received_at")
+            .eq("campaign_id", campaignId)
+            // Excluded leads don't count toward stats. Match sync-analytics, which
+            // already filters these, so the live flow-progress + A/B numbers agree
+            // with the snapshot rollup instead of counting excluded replies.
+            .eq("excluded_from_stats", false)
+            .order("received_at", { ascending: false }),
+        ),
+      ]);
+      const replyByEmail = new Map<string, ReplyClass | null>();
+      for (const row of progReplyRows) {
+        const em = row.lead_email?.trim().toLowerCase();
+        if (em && !replyByEmail.has(em)) replyByEmail.set(em, row.final_class ?? null);
+      }
+      const progEnrollments: ProgressEnrollment[] = progEnrRows.map((e) => {
         const c = Array.isArray(e.contacts) ? e.contacts[0] : e.contacts;
         return {
           current_node_id: e.current_node_id,
@@ -282,14 +303,19 @@ export default async function AdminCampaignDetailPage({
         if (n.kind === "email" && isAbTest(n)) hasAb = true;
       });
       if (hasAb) {
-        const { data: sendRows } = await admin
-          .from("native_sends")
-          .select("variant_id, to_email")
-          .eq("campaign_id", campaignId)
-          .not("variant_id", "is", null);
+        const sendRows = await fetchAllRows<{
+          variant_id: string | null;
+          to_email: string | null;
+        }>(() =>
+          admin
+            .from("native_sends")
+            .select("variant_id, to_email")
+            .eq("campaign_id", campaignId)
+            .not("variant_id", "is", null),
+        );
         abStats = computeVariantStats(
           initialGraph,
-          (sendRows ?? []) as { variant_id: string | null; to_email: string | null }[],
+          sendRows,
           replyByEmail,
           campaign.ab_auto_pause_default ?? false,
         );
@@ -366,6 +392,8 @@ export default async function AdminCampaignDetailPage({
         strategyLabel={strategyLabel}
         contacts={campaignContacts}
         contactsTruncated={contactsTruncated}
+        contactsAssignedTotal={assignedTotal}
+        contactsEnrolledTotal={enrolledTotal}
       />
     );
   }
@@ -570,6 +598,8 @@ export default async function AdminCampaignDetailPage({
         campaignId={campaign.id}
         contacts={campaignContacts}
         truncated={contactsTruncated}
+        assignedTotal={assignedTotal}
+        enrolledTotal={enrolledTotal}
         canEnroll={
           campaign.source_channel === "native_email" ||
           campaign.source_channel === "linkedin"
@@ -721,21 +751,31 @@ async function nativeStatsFor(
   // down: sent, bounced, and sent-per-step are all tallied from these rows.
   // native_sends is a narrow log; pulling two columns for one campaign is far
   // cheaper on this instance than a fan-out of count-only queries.
-  const [campaignSendsRes, repliedRes, stepsRes, poolRes, enrRes] = await Promise.all([
-    admin.from("native_sends").select("step_index, status").eq("campaign_id", campaignId),
+  const [campaignSends, repliedRes, stepsRes, poolRes, enrRows] = await Promise.all([
+    // Paged past the 1000-row cap: sent/bounced totals and per-step buckets are
+    // all tallied from these rows, so a campaign with >1000 sends must not truncate.
+    fetchAllRows<{ step_index: number | null; status: string | null }>(() =>
+      admin.from("native_sends").select("step_index, status").eq("campaign_id", campaignId),
+    ),
     admin.from("lead_replies").select("id", { count: "exact", head: true }).eq("campaign_id", campaignId).eq("source_channel", "native_email").eq("excluded_from_stats", false),
     admin.from("campaign_steps").select("step_index, subject_template, body_template, wait_days").eq("campaign_id", campaignId).order("step_index", { ascending: true }),
     admin.from("campaign_mailboxes").select("mailbox_id").eq("campaign_id", campaignId),
-    admin
-      .from("campaign_enrollments")
-      .select("status, current_step_index, contacts(email_verification_status)")
-      .eq("campaign_id", campaignId),
+    // Paged too: enrollment status tallies, active-by-step buckets, and the
+    // verification breakdown are all counted from these rows.
+    fetchAllRows<{
+      status: string;
+      current_step_index: number | null;
+      contacts:
+        | { email_verification_status: string | null }
+        | { email_verification_status: string | null }[]
+        | null;
+    }>(() =>
+      admin
+        .from("campaign_enrollments")
+        .select("status, current_step_index, contacts(email_verification_status)")
+        .eq("campaign_id", campaignId),
+    ),
   ]);
-
-  const campaignSends = (campaignSendsRes.data ?? []) as {
-    step_index: number | null;
-    status: string | null;
-  }[];
   const sentCount = campaignSends.length;
   const bouncedCount = campaignSends.filter((s) => s.status === "bounced").length;
 
@@ -753,14 +793,7 @@ async function nativeStatsFor(
   const enrollments = { active: 0, completed: 0, replied: 0, failed: 0 };
   const verification = { verified: 0, risky: 0, undeliverable: 0, unverified: 0 };
   const waitingByStep = new Array(nSteps).fill(0) as number[];
-  for (const row of (enrRes.data ?? []) as {
-    status: string;
-    current_step_index: number | null;
-    contacts:
-      | { email_verification_status: string | null }
-      | { email_verification_status: string | null }[]
-      | null;
-  }[]) {
+  for (const row of enrRows) {
     if (row.status in enrollments) {
       enrollments[row.status as keyof typeof enrollments]++;
     }
@@ -814,14 +847,18 @@ async function nativeStatsFor(
     // count query (was one round-trip per active inbox).
     const sendCountByMailbox = new Map<string, number>();
     if (activeMbs.length > 0) {
-      const { data: mbSendRows } = await admin
-        .from("native_sends")
-        .select("mailbox_id")
-        .in(
-          "mailbox_id",
-          activeMbs.map((m) => m.id),
-        );
-      for (const row of (mbSendRows ?? []) as { mailbox_id: string | null }[]) {
+      // Paged: all-time send count per active inbox drives its warmup cap, so a
+      // pool that has sent >1000 total must not truncate here.
+      const mbSendRows = await fetchAllRows<{ mailbox_id: string | null }>(() =>
+        admin
+          .from("native_sends")
+          .select("mailbox_id")
+          .in(
+            "mailbox_id",
+            activeMbs.map((m) => m.id),
+          ),
+      );
+      for (const row of mbSendRows) {
         if (row.mailbox_id) {
           sendCountByMailbox.set(
             row.mailbox_id,
