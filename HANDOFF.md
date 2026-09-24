@@ -5,6 +5,19 @@
 
 ---
 
+## 2026-09-24: David Cabrera campaign "0 contacts" — campaign_id backfill (data-op, LOCAL script, prod data write)
+
+**Symptom:** David Cabrera — Buyer Agent Outreach (campaign `f9c179e6-799d-44f4-8753-806fcc1c2b83`, native_email, active) showed "0 assigned · 0 in the sequence" on the Contacts tab while actively sending (2,712 native_sends, last send that day).
+
+**Root cause (verified):** the campaign was built by `scripts/build-david-cabrera-campaign.mjs`, which inserts contacts with `campaign_id: null` (line 408) and enrolls them directly into `campaign_enrollments` (lines 485-495). The Contacts tab counts `contacts.campaign_id` (assignment); the dispatcher sends off `campaign_enrollments` (enrollment). The two are separate, so sending worked while the tab read 0. NOT a bug in the in-app CSV importer (`/api/campaigns/[id]/client-import` sets campaign_id on both insert and link).
+
+**Fix:** backfilled `contacts.campaign_id` = campaign for the 752 enrolled-but-unassigned contacts via `scripts/backfill-david-campaign-id.mjs --apply` (Management API). Display-only; verified read-only that neither run-native-sequences nor poll-native-replies reads `contacts.campaign_id`.
+- Backup (pre-op, 752 rows): `C:\Users\danie\Documents\Clients\David Cabrera\campaign-id-backfill-backup-2026-09-24T18-00-49-058Z.json`. Rollback = set campaign_id=null for those ids.
+- Result RECONCILED: assigned 0 → 752, enrollments unchanged 752, target remaining 0.
+- Script is LOCAL/uncommitted (per no-commit policy). Idempotent; re-run touches 0 rows.
+
+**Still open (not actioned):** David's client holds only 752 contacts, all from the 2026-07-05 build. The 2026-09-23 weekly pull of 2,653 unique agents (in `C:\Users\danie\Documents\Clients\David Cabrera\`) was never imported. Importing via the in-app importer (not the script) would refill the campaign AND avoid recreating the campaign_id-null gap.
+
 ## 2026-09-05: Native send + cron runtime audit (Tier 1 + Tier 2) — 9 commits PUSHED to master 09:43Z (deployed)
 
 `/cto-audit` run over the native email send runtime (run-native-sequences,
