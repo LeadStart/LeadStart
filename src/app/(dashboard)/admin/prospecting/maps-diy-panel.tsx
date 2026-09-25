@@ -53,6 +53,7 @@ import { classifyEmailTier, EMAIL_TIER_RANK, type EmailTier } from "@/lib/enrich
 import type { MapsPlace, MapsSearchStatus } from "@/types/app";
 import type { MapsArea } from "@/lib/apify/sourcing/maps-search";
 import { MapsExportDialog } from "./maps-export-dialog";
+import { TubeExportDialog } from "./tube-export-dialog";
 import {
   MAPS_PLACE_COST_USD,
   MAPS_FILTER_COST_USD,
@@ -1114,6 +1115,7 @@ export function MapsDiyPanel() {
                     ))}
                   </select>
                   <MapsExportDialog results={results} selectedIds={selected} />
+                  <TubeExportDialog results={results} selectedIds={selected} />
                   {saveMsg && (
                     <span className="inline-flex items-center gap-1 text-xs text-emerald-700">
                       <CheckCircle2 size={13} /> {saveMsg}
