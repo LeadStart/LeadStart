@@ -2,9 +2,9 @@
 //
 // Scores every native (Gmail) sending mailbox 0–100 from free signals: live
 // SPF/DKIM/DMARC/MX DNS, the Spamhaus domain blocklist, the 7-day hard/soft
-// bounce rates from native_sends, the 14-day reply signal (judged against the
-// org's own trailing reply rate, so a zero only counts when it's unlikely by
-// chance), and the latest
+// bounce rates from native_sends, the per-contact reply-rate and opt-out
+// signals (the app's own reply-rate definition, judged per sending domain:
+// see src/lib/deliverability/engagement.ts), and the latest
 // seed placement test (migration 00068; the one direct measurement): then:
 //   - writes the denormalized score onto native_mailboxes (always),
 //   - inserts a mailbox_health_checks snapshot ONLY when the score changed or
@@ -28,7 +28,14 @@ import { checkDomainAuth, checkMx, domainOf } from "@/lib/deliverability/check";
 import type { AuthCheck, DomainAuth } from "@/lib/deliverability/check";
 import { checkDbl } from "@/lib/deliverability/dnsbl";
 import type { DblResult } from "@/lib/deliverability/dnsbl";
-import { computeInboxHealth, resolveReplyBaseline, summarizeIssues } from "@/lib/deliverability/inbox-health";
+import { computeInboxHealth, summarizeIssues } from "@/lib/deliverability/inbox-health";
+import {
+  ENGAGEMENT_LOOKBACK_DAYS,
+  computeContactEngagement,
+  type ContactEngagement,
+  type EngagementReplyRow,
+  type FirstTouchRow,
+} from "@/lib/deliverability/engagement";
 import {
   latestCompletePlacementTests,
   placementSignalFromTest,
@@ -128,30 +135,26 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // 3) Send stats per mailbox from ONE 14-day sweep of native_sends: the 7-day
-  // hard+soft bounce counts (bounce components) and the 14-day send volume (the
-  // reply signal's denominator). Same reasoning as above: a read error here
-  // would silently zero every mailbox, so fail the run rather than score on bad
-  // data. PAGED: PostgREST silently truncates an un-ranged select at 1,000 rows
-  // on this project. At 20/day an inbox sends ~200 in 14 days, so five inboxes
-  // filled the window (800 rows on 2026-09-25) and a sixth would have dropped
-  // rows without an error, scoring bounce rates on partial data (the same bug
-  // class as SEND-68). The strict pager throws rather than return a partial set.
+  // 3) Send stats per mailbox from ONE 7-day sweep of native_sends: the hard +
+  // soft bounce counts. Same reasoning as above: a read error here would
+  // silently zero every mailbox, so fail the run rather than score on bad data.
+  // PAGED: PostgREST silently truncates an un-ranged select at 1,000 rows on
+  // this project; at 20/day a busy fleet passes that, and the dropped rows
+  // would score bounce rates on partial data without an error (the SEND-68 bug
+  // class). The strict pager throws rather than return a partial set.
   const now = Date.now();
-  const sevenDaysAgoMs = now - 7 * 86_400_000;
-  const fourteenDaysAgo = new Date(now - 14 * 86_400_000).toISOString();
+  const sevenDaysAgo = new Date(now - 7 * 86_400_000).toISOString();
   let sendRows: {
     mailbox_id: string;
     status: string;
-    sent_at: string;
     soft_bounced_at: string | null;
   }[];
   try {
     sendRows = await fetchAllRowsStrict(() =>
       admin
         .from("native_sends")
-        .select("mailbox_id, status, sent_at, soft_bounced_at")
-        .gte("sent_at", fourteenDaysAgo)
+        .select("mailbox_id, status, soft_bounced_at")
+        .gte("sent_at", sevenDaysAgo)
         .order("id", { ascending: true }),
     );
   } catch (err) {
@@ -161,82 +164,76 @@ export async function GET(request: NextRequest) {
     sent7d: number;
     bounced7d: number;
     softBounced7d: number;
-    sent14d: number;
   }
   const statsByMailbox = new Map<string, SendStats>();
   for (const s of sendRows) {
-    const cur =
-      statsByMailbox.get(s.mailbox_id) ??
-      { sent7d: 0, bounced7d: 0, softBounced7d: 0, sent14d: 0 };
-    cur.sent14d += 1;
-    if (Date.parse(s.sent_at) >= sevenDaysAgoMs) {
-      cur.sent7d += 1;
-      if (s.status === "bounced") cur.bounced7d += 1;
-      if (s.soft_bounced_at) cur.softBounced7d += 1;
-    }
+    const cur = statsByMailbox.get(s.mailbox_id) ?? { sent7d: 0, bounced7d: 0, softBounced7d: 0 };
+    cur.sent7d += 1;
+    if (s.status === "bounced") cur.bounced7d += 1;
+    if (s.soft_bounced_at) cur.softBounced7d += 1;
     statsByMailbox.set(s.mailbox_id, cur);
   }
 
-  // 3b) 14-day native-email reply counts per mailbox, for the reply signal.
-  // Unlike the sweeps above, a read error here does NOT fail the run: the reply
-  // signal is advisory, and (critically) on error we must treat it as
-  // "unchecked", never "zero replies" (which would fire a false placement
-  // warning). replyReadOk gates that: false → pass replies:null (unchecked).
-  // Paged like the sends sweep (a partial read would undercount replies).
-  const repliesByMailbox = new Map<string, number>();
-  let replyReadOk = true;
+  // 3b) Per-contact engagement (reply-rate + opt-out signals) on the app's own
+  // reply-rate definition (./engagement.ts): each org's first emails (step-0
+  // sends) and native replies within the lookback, judged per sending domain.
+  // Advisory: a read error leaves both signals unchecked, never a false "no
+  // replies". Replies flagged excluded_from_stats are left out, as the app's
+  // reply-rate metrics do (sync-analytics).
+  const engagementByOrg = new Map<string, (domain: string) => ContactEngagement>();
   try {
-    const replyRows = await fetchAllRowsStrict<{ native_mailbox_id: string | null }>(() =>
-      admin
-        .from("lead_replies")
-        .select("native_mailbox_id")
-        .eq("source_channel", "native_email")
-        .gte("received_at", fourteenDaysAgo)
-        .order("id", { ascending: true }),
-    );
+    const lookback = new Date(now - ENGAGEMENT_LOOKBACK_DAYS * 86_400_000).toISOString();
+    const [touchRows, replyRows] = await Promise.all([
+      fetchAllRowsStrict<{ mailbox_id: string; to_email: string | null; sent_at: string | null }>(() =>
+        admin
+          .from("native_sends")
+          .select("mailbox_id, to_email, sent_at")
+          .eq("step_index", 0)
+          .gte("sent_at", lookback)
+          .order("id", { ascending: true }),
+      ),
+      fetchAllRowsStrict<{
+        organization_id: string;
+        lead_email: string | null;
+        received_at: string | null;
+        final_class: string | null;
+      }>(() =>
+        admin
+          .from("lead_replies")
+          .select("organization_id, lead_email, received_at, final_class")
+          .eq("source_channel", "native_email")
+          .eq("excluded_from_stats", false)
+          .gte("received_at", lookback)
+          .order("id", { ascending: true }),
+      ),
+    ]);
+    const mailboxById = new Map(mailboxes.map((m) => [m.id, m]));
+    const touchesByOrg = new Map<string, FirstTouchRow[]>();
+    for (const s of touchRows) {
+      const mb = mailboxById.get(s.mailbox_id);
+      if (!mb) continue; // a deleted mailbox's sends can't be tied to a domain
+      const list = touchesByOrg.get(mb.organization_id) ?? [];
+      list.push({ to_email: s.to_email, sent_at: s.sent_at, domain: domainOf(mb.email_address) });
+      touchesByOrg.set(mb.organization_id, list);
+    }
+    const repliesByOrg = new Map<string, EngagementReplyRow[]>();
     for (const r of replyRows) {
-      if (!r.native_mailbox_id) continue;
-      repliesByMailbox.set(
-        r.native_mailbox_id,
-        (repliesByMailbox.get(r.native_mailbox_id) ?? 0) + 1,
+      const list = repliesByOrg.get(r.organization_id) ?? [];
+      list.push(r);
+      repliesByOrg.set(r.organization_id, list);
+    }
+    for (const orgId of orgIds) {
+      engagementByOrg.set(
+        orgId,
+        computeContactEngagement(touchesByOrg.get(orgId) ?? [], repliesByOrg.get(orgId) ?? [], now),
       );
     }
   } catch (err) {
-    replyReadOk = false;
     console.error(
-      "[cron/check-inbox-health] reply count read failed:",
+      "[cron/check-inbox-health] engagement read failed (reply + opt-out signals unchecked):",
       err instanceof Error ? err.message : err,
     );
   }
-
-  // 3b') Each org's trailing-90-day reply rate (native replies / native sends),
-  // the baseline that decides when a zero-reply run is meaningful (see
-  // replySignalMinSends). Count-only queries, so the row cap can't truncate
-  // them. A read error → null: the scorer then assumes its default rate,
-  // never a crash and never a false "zero replies".
-  const ninetyDaysAgo = new Date(now - 90 * 86_400_000).toISOString();
-  const replyBaselineByOrg = new Map<string, number | null>();
-  await Promise.all(
-    orgIds.map(async (orgId) => {
-      const [sends90, replies90] = await Promise.all([
-        admin
-          .from("native_sends")
-          .select("id", { count: "exact", head: true })
-          .eq("organization_id", orgId)
-          .gte("sent_at", ninetyDaysAgo),
-        admin
-          .from("lead_replies")
-          .select("id", { count: "exact", head: true })
-          .eq("organization_id", orgId)
-          .eq("source_channel", "native_email")
-          .gte("received_at", ninetyDaysAgo),
-      ]);
-      replyBaselineByOrg.set(
-        orgId,
-        sends90.error || replies90.error ? null : resolveReplyBaseline(sends90.count ?? 0, replies90.count ?? 0),
-      );
-    }),
-  );
 
   // 3c) Latest COMPLETE seed placement test per mailbox, no older than
   // PLACEMENT_FRESHNESS_DAYS, for the seed_placement component. Advisory like
@@ -293,15 +290,9 @@ export async function GET(request: NextRequest) {
         bounces: stats
           ? { sent7d: stats.sent7d, bounced7d: stats.bounced7d, softBounced7d: stats.softBounced7d }
           : null,
-        // replyReadOk === false → unchecked (never a false "zero replies").
-        replies:
-          replyReadOk && stats
-            ? {
-                sent14d: stats.sent14d,
-                replied14d: repliesByMailbox.get(mb.id) ?? 0,
-                baselineRate: replyBaselineByOrg.get(mb.organization_id) ?? null,
-              }
-            : null,
+        // Domain-level, like DNS: every mailbox on the domain gets the same
+        // verdict. A failed read → null → unchecked (never a false "no replies").
+        engagement: engagementByOrg.get(mb.organization_id)?.(domain) ?? null,
         placement: (() => {
           const pt = placementRead.byMailbox.get(mb.id);
           return pt ? placementSignalFromTest(pt) : null;

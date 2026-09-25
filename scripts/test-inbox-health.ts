@@ -11,9 +11,10 @@
  *   - 3% bounce on 100 sends     → 85  / healthy
  *   - 19 sends                   → bounce unchecked, no deduction
  *   - 30% soft bounce on 100     → 85  / healthy (warn -15, never critical)
- *   - 0 replies, 300 sends @ 1%  → 90  / healthy (warn -10)
- *   - 0 replies, 200 sends @0.37%→ unchecked (a zero is ~48% likely by chance)
- *   - any reply above the floor  → reply signal ok, no deduction
+ *   - reply rate per contact, Aug vs Jul (real numbers):
+ *       davidcabrera 1/316 vs 7/120 → bad -25 (75 / watch alone)
+ *       getinicio    5/316 vs 7/120 → warn -10
+ *   - opt-outs 5 of 120 (4.2%)   → warn -10; 6 of 632 → ok
  *   - 2 of 3 seeds in spam       → 55  / watch   (bad -45; never critical alone)
  *   - 1 of 4 seeds in spam       → 75  / watch   (bad -25)
  *   - 1 of 3 seeds missing       → 90  / healthy (warn -10)
@@ -30,8 +31,6 @@
 import {
   computeInboxHealth,
   bandForScore,
-  replySignalMinSends,
-  resolveReplyBaseline,
 } from "../src/lib/deliverability/inbox-health.ts";
 
 let pass = 0;
@@ -64,7 +63,7 @@ console.log("\n■ perfect signals → 100 / healthy");
   });
   assert(r.score === 100, `score is 100 (got ${r.score})`);
   assert(r.band === "healthy", `band is healthy (got ${r.band})`);
-  assert(r.components.length === 9, `all 9 components present (got ${r.components.length})`);
+  assert(r.components.length === 10, `all 10 components present (got ${r.components.length})`);
 }
 
 // ---------- 2. DBL-listed alone ----------
@@ -144,11 +143,11 @@ console.log("\n■ DNS resolver outage (every lookup 'unknown') → 100, all fou
   const r = computeInboxHealth({
     domainAuth: { domain: "x.com", spf: unknown("SPF"), dkim: unknown("DKIM"), dmarc: unknown("DMARC") },
     mx: unknown("MX"),
-    replies: { sent14d: 900, replied14d: 0, baselineRate: 0.0037 },
+    bounces: { sent7d: 100, bounced7d: 3 },
   });
   const dns = r.components.filter((c) => ["spf", "dkim", "dmarc", "mx"].includes(c.key));
   assert(dns.every((c) => c.status === "unchecked" && c.deduction === 0), "SPF/DKIM/DMARC/MX all unchecked, zero deduction");
-  assert(r.score === 90, `only the (real) reply signal counts: 90 (got ${r.score})`);
+  assert(r.score === 85, `only the (real) 3% bounce counts: 85 (got ${r.score})`);
   assert(r.band === "healthy", `never critical from an outage (got ${r.band})`);
 }
 
@@ -186,70 +185,70 @@ console.log("\n■ soft bounce unchecked when softBounced7d omitted");
   assert(soft?.status === "unchecked" && soft.deduction === 0, "soft bounce unchecked, no deduction");
 }
 
-// ---------- 7b. Reply signal (baseline-aware) ----------
-console.log("\n■ min-sends math: 1% → 299, 0.37% → ~808, 5% → 59, 10% → floor 40");
+// ---------- 7b. Reply rate + opt-outs per contact (domain-level) ----------
+// [contacts, replied, optedOut] for the domain's recent contacts and the org's
+// earlier ones. The first two cases are the real August 2026 numbers (same
+// Jul 5 list: July cohort as the baseline, August cohort per domain).
+const eng = (recent: [number, number, number], baseline: [number, number, number]) => ({
+  domain: "example.com",
+  cohortFrom: "2026-08-14",
+  cohortTo: "2026-09-10",
+  recent: { contacts: recent[0], replied: recent[1], optedOut: recent[2] },
+  baseline: { contacts: baseline[0], replied: baseline[1], optedOut: baseline[2] },
+});
+const replyOf = (r: ReturnType<typeof computeInboxHealth>) => r.components.find((c) => c.key === "reply_signal");
+const optOf = (r: ReturnType<typeof computeInboxHealth>) => r.components.find((c) => c.key === "optout_rate");
+
+console.log("\n■ davidcabreraproperties.com, Aug vs Jul: 1 of 316 vs 7 of 120 → bad -25, 'opt-outs fell too'");
 {
-  assert(replySignalMinSends(0.01) === 299, `1% → 299 (got ${replySignalMinSends(0.01)})`);
-  assert(replySignalMinSends(null) === 299, "no baseline → assumes 1%");
-  const lead = replySignalMinSends(0.0037);
-  assert(lead >= 800 && lead <= 812, `0.37% → ~808 (got ${lead})`);
-  assert(replySignalMinSends(0.05) === 59, `5% → 59 (got ${replySignalMinSends(0.05)})`);
-  assert(replySignalMinSends(0.2) === 40, "a high rate never drops below the 40-send floor");
-  assert(resolveReplyBaseline(499, 5) === null, "under 500 org sends → baseline not trusted");
-  assert(resolveReplyBaseline(1000, 4) === 0.004, "enough history → the org's own rate");
+  const r = computeInboxHealth({ engagement: eng([316, 1, 1], [120, 7, 5]) });
+  const rep = replyOf(r);
+  assert(rep?.status === "bad" && rep.deduction === 25, `reply rate bad, -25 (got ${rep?.status} -${rep?.deduction})`);
+  assert(rep?.detail.includes("1 of 316") === true && rep.detail.includes("5.8%") === true, `detail gives both rates (got: ${rep?.detail})`);
+  assert(rep?.detail.includes("less than 0.1%") === true, "detail says how unlikely by chance");
+  assert(rep?.detail.includes("Opt-outs fell too") === true, "opt-outs fell with replies → 'not being seen'");
+  assert(r.score === 75 && r.band === "watch", `alone → 75 / watch (got ${r.score} / ${r.band})`);
 }
 
-console.log("\n■ LeadStart today: 0 replies on 200 sends at a 0.37% rate → unchecked (was a false warn)");
+console.log("\n■ getiniciopropertysolutions.com, Aug vs Jul: 5 of 316 vs 7 of 120 → warn -10");
 {
-  const r = computeInboxHealth({ replies: { sent14d: 200, replied14d: 0, baselineRate: 0.0037 } });
-  const rep = r.components.find((c) => c.key === "reply_signal");
-  assert(rep?.status === "unchecked" && rep.deduction === 0, "unchecked, no deduction");
-  assert(
-    rep?.detail.includes("0.37%") === true && rep.detail.includes(String(replySignalMinSends(0.0037))) === true,
-    `detail explains the rate + floor (got: ${rep?.detail})`,
-  );
-  assert(r.score === 100, `score is 100 (got ${r.score})`);
+  const r = computeInboxHealth({ engagement: eng([316, 5, 5], [120, 7, 5]) });
+  const rep = replyOf(r);
+  assert(rep?.status === "warn" && rep.deduction === 10, `reply rate warn, -10 (got ${rep?.status} -${rep?.deduction})`);
 }
 
-console.log("\n■ 0 replies on 300 sends at the default 1% → warn -10 → 90 / healthy");
+console.log("\n■ opt-outs held up while replies fell → the note points at targeting/copy");
 {
-  const r = computeInboxHealth({
-    dbl: { status: "clean", detail: "not listed" },
-    domainAuth: goodDns,
-    mx: ok(),
-    bounces: { sent7d: 100, bounced7d: 1 },
-    replies: { sent14d: 300, replied14d: 0 },
-  });
-  const rep = r.components.find((c) => c.key === "reply_signal");
-  assert(rep?.status === "warn" && rep.deduction === 10, "reply signal is warn, -10");
-  assert(rep?.detail.includes("by chance only 5%") === true, `detail gives the chance (got: ${rep?.detail})`);
-  assert(r.score === 90, `score is 90 (got ${r.score})`);
-  assert(r.band === "healthy", `band is healthy (got ${r.band})`);
+  const r = computeInboxHealth({ engagement: eng([316, 6, 6], [120, 7, 2]) });
+  const rep = replyOf(r);
+  assert(rep?.status === "warn", `warn (got ${rep?.status})`);
+  assert(rep?.detail.includes("Opt-outs held up") === true, `detail says targeting/copy (got: ${rep?.detail})`);
 }
 
-console.log("\n■ 0 replies on 100 sends at a 5% org rate → warn (a zero is unusual there)");
+console.log("\n■ no drop → ok; a small dip → ok; a big dip on a tiny sample → ok (chance)");
 {
-  const r = computeInboxHealth({ replies: { sent14d: 100, replied14d: 0, baselineRate: 0.05 } });
-  const rep = r.components.find((c) => c.key === "reply_signal");
-  assert(rep?.status === "warn" && rep.deduction === 10, "warn, -10");
+  assert(replyOf(computeInboxHealth({ engagement: eng([200, 10, 2], [400, 20, 5]) }))?.status === "ok", "5% vs 5% → ok");
+  assert(replyOf(computeInboxHealth({ engagement: eng([100, 3, 0], [400, 20, 5]) }))?.status === "ok", "3% vs 5% (60% of it) → ok");
+  const tiny = replyOf(computeInboxHealth({ engagement: eng([50, 0, 0], [100, 2, 0]) }));
+  assert(tiny?.status === "ok", `0 of 50 vs 2% (37% likely by chance) → ok (got ${tiny?.status})`);
 }
 
-console.log("\n■ any reply on 100 sends/14d → reply signal unchecked below its floor, ok above it");
+console.log("\n■ below the sample floors / no earlier replies → unchecked, zero deduction");
 {
-  const low = computeInboxHealth({ replies: { sent14d: 100, replied14d: 3 } });
-  assert(low.components.find((c) => c.key === "reply_signal")?.status === "unchecked", "100 sends at 1% → unchecked");
-  const r = computeInboxHealth({ replies: { sent14d: 400, replied14d: 3 } });
-  const rep = r.components.find((c) => c.key === "reply_signal");
-  assert(rep?.status === "ok" && rep.deduction === 0, "400 sends, 3 replies → ok, no deduction");
-  assert(r.score === 100, `score is 100 (got ${r.score})`);
+  const few = computeInboxHealth({ engagement: eng([49, 0, 0], [400, 20, 5]) });
+  assert(replyOf(few)?.status === "unchecked" && optOf(few)?.status === "unchecked", "49 recent contacts → both unchecked");
+  assert(replyOf(computeInboxHealth({ engagement: eng([200, 0, 0], [99, 5, 0]) }))?.status === "unchecked", "99 earlier contacts → unchecked");
+  assert(replyOf(computeInboxHealth({ engagement: eng([200, 0, 0], [300, 0, 0]) }))?.status === "unchecked", "no earlier replies → unchecked");
+  assert(computeInboxHealth({ engagement: null }).score === 100, "engagement unreadable → 100, never a false 'no replies'");
 }
 
-console.log("\n■ 39 sends/14d → reply signal unchecked (below the absolute floor)");
+console.log("\n■ opt-out rate: July's 5 of 120 (4.2%) → warn -10; August's 6 of 632 → ok; 2 of 60 → ok (count floor)");
 {
-  const r = computeInboxHealth({ replies: { sent14d: 39, replied14d: 0, baselineRate: 0.2 } });
-  const rep = r.components.find((c) => c.key === "reply_signal");
-  assert(rep?.status === "unchecked" && rep.deduction === 0, "reply signal unchecked below 40 sends");
-  assert(r.score === 100, `score is 100 (got ${r.score})`);
+  const july = computeInboxHealth({ engagement: eng([120, 7, 5], [120, 7, 5]) });
+  assert(optOf(july)?.status === "warn" && optOf(july)?.deduction === 10, `4.2% → warn -10 (got ${optOf(july)?.status})`);
+  assert(optOf(july)?.detail.includes("spam complaints") === true, "detail explains the complaint proxy");
+  assert(optOf(computeInboxHealth({ engagement: eng([632, 6, 6], [120, 7, 5]) }))?.status === "ok", "0.9% → ok");
+  assert(optOf(computeInboxHealth({ engagement: eng([60, 2, 2], [120, 7, 5]) }))?.status === "ok", "3.3% but only 2 opt-outs → ok");
 }
 
 // ---------- 7c. Seed placement ----------

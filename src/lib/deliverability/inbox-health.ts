@@ -27,16 +27,21 @@
 //   bounce 7d      >10% -60 / 5–10% -40 / 2–5% -15   (only when >= 20 sends)
 //   soft bounce 7d >25% -15 / 10–25% -8   (warn-only; transient, never critical
 //                                          on its own; only when >= 20 sends)
-//   reply signal   0 replies over 14d  -10  (warn-only), ONLY once the send
-//                  count makes a zero unlikely by chance (< 5%) at the org's
-//                  own trailing reply rate; below that, unchecked. At a 0.4%
-//                  reply rate a healthy inbox sees zero replies in 200 sends
-//                  about half the time, so a fixed floor was a coin flip.
+//   reply rate (per contact, the app's definition; see ./engagement.ts) for
+//                  the mailbox's DOMAIN: its contacts first emailed 14–42 days
+//                  ago vs. the org's contacts first emailed before that, each
+//                  judged on replies within 14 days of the first email. A drop
+//                  to <= 50% of the earlier rate that's < 5% likely by chance
+//                  -10 (warn); to <= 25% and < 0.1% likely -25 (bad).
+//                  Unchecked below 50 recent / 100 earlier contacts.
+//   opt-out rate   same recent contacts: > 2% asked to be removed within 14
+//                  days (and >= 3 of them) -10 (warn-only). The closest visible
+//                  proxy for spam complaints.
 //   seed placement spam >= 50% of seeds -45 / any spam -25 / any missing -10 /
 //                  Promotions majority -5   (latest COMPLETE placement test no
 //                  older than PLACEMENT_FRESHNESS_DAYS; older or none = unchecked)
 //
-// Bounce/soft-bounce/reply are *behavioral* signals: everything above them is
+// Bounce/soft-bounce/reply/opt-out are *behavioral* signals: everything above them is
 // a config/DNS check that only moves when you edit DNS or get blacklisted, which
 // is why a correctly-configured mailbox otherwise sits at 100 indefinitely.
 // Seed placement is the one DIRECT measurement: a probe sent to inboxes we
@@ -54,44 +59,27 @@ import type { HealthBand, HealthComponent, PlacementAuthSummary } from "@/types/
 import type { AuthCheck, DomainAuth } from "./check";
 import type { DblResult } from "./dnsbl";
 import { PLACEMENT_FRESHNESS_DAYS, describeAuthFailures, describeCounts } from "./placement";
+import { ENGAGEMENT_EXPOSURE_DAYS, poissonCdf, type ContactEngagement } from "./engagement";
 
 export const HEALTHY_MIN = 80;
 export const CRITICAL_MAX = 49; // score <= 49 is critical (i.e. below 50)
 export const MIN_SENT_FOR_BOUNCE_SCORE = 20; // mirrors kpi/step-health MIN_SENT_FOR_ALERT
-// Reply signal. A run of zero replies means something only when it would be
-// unlikely for a healthy inbox, and that depends on how often this org's
-// prospects reply at all: at a 1% reply rate ~300 sends make a zero unusual;
-// at 0.4% it takes ~800. So the floor is derived from the org's own trailing
-// reply rate (resolveReplyBaseline, computed by the health cron) as the send
-// count at which P(0 replies | healthy) drops below REPLY_SIGNAL_FALSE_ALARM.
-// Never below MIN_SENT_FOR_REPLY_SIGNAL. Without enough history to trust the
-// org's own rate, DEFAULT_REPLY_BASELINE is assumed.
-export const MIN_SENT_FOR_REPLY_SIGNAL = 40;
-export const REPLY_SIGNAL_FALSE_ALARM = 0.05;
-export const DEFAULT_REPLY_BASELINE = 0.01;
-// Org sends (trailing 90 days) before the org's own reply rate is trusted.
-export const MIN_BASELINE_SENDS = 500;
-// Clamp so a freak rate can't make the floor absurd either way.
-const REPLY_BASELINE_MIN = 0.002;
-const REPLY_BASELINE_MAX = 0.1;
 
-/** The org's trailing reply rate, or null when there's too little history to trust it. */
-export function resolveReplyBaseline(sends: number, replies: number): number | null {
-  return sends >= MIN_BASELINE_SENDS ? replies / sends : null;
-}
-
-function effectiveReplyBaseline(rate: number | null | undefined): number {
-  return Math.min(REPLY_BASELINE_MAX, Math.max(REPLY_BASELINE_MIN, rate ?? DEFAULT_REPLY_BASELINE));
-}
-
-/** Sends needed before zero replies would happen by chance < REPLY_SIGNAL_FALSE_ALARM of the time. */
-export function replySignalMinSends(baselineRate: number | null | undefined): number {
-  const p = effectiveReplyBaseline(baselineRate);
-  return Math.max(
-    MIN_SENT_FOR_REPLY_SIGNAL,
-    Math.ceil(Math.log(REPLY_SIGNAL_FALSE_ALARM) / Math.log(1 - p)),
-  );
-}
+// Reply + opt-out signals (per contact; see ./engagement.ts for the windows).
+// Sample floors: below these a rate says nothing either way.
+export const MIN_RECENT_CONTACTS = 50;
+export const MIN_BASELINE_CONTACTS = 100;
+// A reply-rate drop is flagged only when it is BOTH large (the recent rate is
+// at most this share of the earlier one) and unlikely to be chance (Poisson
+// lower tail below this probability): a small dip on a big sample, or a big
+// dip on a tiny one, stays ok.
+export const REPLY_DROP_WARN = { maxShare: 0.5, maxChance: 0.05 } as const;
+export const REPLY_DROP_BAD = { maxShare: 0.25, maxChance: 0.001 } as const;
+// Opt-out replies are the closest visible proxy for spam complaints (Gmail
+// reports no complaints at this volume). A heuristic line, not a published
+// threshold: > 2% of new contacts asking to be removed within 14 days.
+export const OPTOUT_WARN_RATE = 0.02;
+export const OPTOUT_MIN_COUNT = 3;
 
 export interface InboxHealthInputs {
   /** Spamhaus DBL result. null/undefined → blacklist via DBL not checked. */
@@ -107,12 +95,11 @@ export interface InboxHealthInputs {
    */
   bounces?: { sent7d: number; bounced7d: number; softBounced7d?: number } | null;
   /**
-   * 14-day send + reply counts for this mailbox. sent14d from native_sends,
-   * replied14d from lead_replies (native_email). baselineRate is the org's
-   * trailing reply rate (resolveReplyBaseline); null/absent → the scorer
-   * assumes DEFAULT_REPLY_BASELINE. null → reply signal unchecked.
+   * Per-contact engagement for this mailbox's DOMAIN (computeContactEngagement
+   * in ./engagement.ts): its recent contacts vs. the org's earlier ones.
+   * null → reply-rate and opt-out signals unchecked (never "no replies").
    */
-  replies?: { sent14d: number; replied14d: number; baselineRate?: number | null } | null;
+  engagement?: ContactEngagement | null;
   /**
    * Latest COMPLETE seed placement test for this mailbox, already filtered to
    * <= PLACEMENT_FRESHNESS_DAYS old by the caller. null → seed placement
@@ -138,11 +125,11 @@ export interface PlacementSignal {
 export interface InboxHealthResult {
   score: number; // clamped 0–100
   band: HealthBand;
-  components: HealthComponent[]; // all 9, always, in fixed order
+  components: HealthComponent[]; // all 10, always, in fixed order
 }
 
 export function computeInboxHealth(inputs: InboxHealthInputs): InboxHealthResult {
-  const { dbl, domainAuth, mx, bounces, replies, placement } = inputs;
+  const { dbl, domainAuth, mx, bounces, engagement, placement } = inputs;
 
   const components: HealthComponent[] = [
     blacklistComponent(dbl),
@@ -152,7 +139,8 @@ export function computeInboxHealth(inputs: InboxHealthInputs): InboxHealthResult
     authComponent("mx", "MX records", mx, { fail: 20, warn: 10 }, "MX not checked."),
     bounceComponent(bounces),
     softBounceComponent(bounces),
-    replySignalComponent(replies),
+    replyRateComponent(engagement),
+    optOutComponent(engagement),
     seedPlacementComponent(placement),
   ];
 
@@ -299,58 +287,129 @@ function softBounceComponent(
   return { key, label, status: "ok", deduction: 0, detail };
 }
 
+const pct = (x: number) => `${(x * 100).toFixed(x > 0 && x < 0.01 ? 2 : 1)}%`;
+const chanceText = (p: number) =>
+  p < 0.001 ? "less than 0.1%" : p < 0.01 ? `${(p * 100).toFixed(1)}%` : `${Math.round(p * 100)}%`;
+function cohortPhrase(e: ContactEngagement): string {
+  const d = (iso: string) =>
+    new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+  return `contacts first emailed from ${e.domain} ${d(e.cohortFrom)}–${d(e.cohortTo)}`;
+}
+
 /**
- * Reply signal over the last 14 days: the first component that reflects how
- * recipients *respond*, not how the domain is configured. Rationale: at steady
- * sending volume, a reply rate that collapses to zero is the cheapest available
- * proxy for landing in spam (mail that reaches a real inbox eventually draws
- * replies, OOO auto-responders included; mail that spam-folders draws none).
+ * Reply rate per contact (the app's definition) for the mailbox's DOMAIN: the
+ * behavioral signal for "is our mail still being seen". Reputation is judged
+ * per domain, and a single inbox's contacts are too few to read, so every
+ * mailbox on the domain carries the same verdict (like DNS and the blacklist).
  *
- * Deliberately conservative to avoid false alarms: warn-only, never critical;
- * unchecked until the send count makes a zero unlikely by chance at the org's
- * own reply rate (replySignalMinSends); and it only fires on an *absolute
- * zero*: any reply at all reads ok. It does not score reply-rate deltas, which
- * are too noisy at these volumes. A relative baseline cannot see a placement
- * problem that hits EVERY inbox at once (the baseline collapses with it); seed
- * placement is the measurement for that.
+ * Compares the domain's recent contacts with the org's earlier ones on the
+ * same 14-day exposure, and flags a drop only when it is both large and
+ * unlikely to be chance. The detail pairs it with opt-outs: when opt-outs fall
+ * along with replies, people most likely aren't seeing the emails; when they
+ * hold or rise, targeting or copy is the likelier cause. A relative baseline
+ * can't see a problem that was already there in the baseline period; seed
+ * placement is the direct measurement for that.
  */
-function replySignalComponent(
-  replies: { sent14d: number; replied14d: number; baselineRate?: number | null } | null | undefined,
-): HealthComponent {
+function replyRateComponent(e: ContactEngagement | null | undefined): HealthComponent {
   const key: HealthComponent["key"] = "reply_signal";
-  const label = "Reply signal (14 days)";
-  const sent = replies?.sent14d ?? 0;
-  const p = effectiveReplyBaseline(replies?.baselineRate);
-  const minSends = replySignalMinSends(replies?.baselineRate);
-  const rateLabel = `${(p * 100).toFixed(p < 0.01 ? 2 : 1)}%`;
-  const basis = replies?.baselineRate != null ? `this org's ${rateLabel} reply rate` : `an assumed ${rateLabel} reply rate`;
-  if (!replies || sent < minSends) {
+  const label = `Reply rate per contact (${ENGAGEMENT_EXPOSURE_DAYS} days)`;
+  if (!e) {
+    return { key, label, status: "unchecked", deduction: 0, detail: "Reply rate not measured." };
+  }
+  const { recent, baseline } = e;
+  const who = cohortPhrase(e);
+  if (recent.contacts < MIN_RECENT_CONTACTS) {
     return {
       key,
       label,
       status: "unchecked",
       deduction: 0,
-      detail: `${sent} send${sent === 1 ? "" : "s"} in the last 14 days. At ${basis}, zero replies only means something after about ${minSends} sends (before that it happens by chance more than ${REPLY_SIGNAL_FALSE_ALARM * 100}% of the time).`,
+      detail: `${recent.contacts} ${who}; need ${MIN_RECENT_CONTACTS} to judge the reply rate.`,
     };
   }
-  if (replies.replied14d === 0) {
-    const chance = Math.pow(1 - p, sent) * 100;
+  const rate = recent.replied / recent.contacts;
+  const summary = `${recent.replied} of ${recent.contacts} ${who} replied within ${ENGAGEMENT_EXPOSURE_DAYS} days (${pct(rate)})`;
+  if (baseline.contacts < MIN_BASELINE_CONTACTS || baseline.replied === 0) {
+    return {
+      key,
+      label,
+      status: "unchecked",
+      deduction: 0,
+      detail: `${summary}. Not enough earlier contacts${baseline.contacts >= MIN_BASELINE_CONTACTS ? " with replies" : ""} to compare against yet.`,
+    };
+  }
+  const p0 = baseline.replied / baseline.contacts;
+  const chance = poissonCdf(recent.replied, recent.contacts * p0);
+  const share = rate / p0;
+  const vs = `${summary}, vs ${pct(p0)} for the org's contacts emailed before that`;
+
+  const q0 = baseline.optedOut / baseline.contacts;
+  const q = recent.optedOut / recent.contacts;
+  const optOutNote =
+    q0 > 0 && q <= q0 / 2
+      ? ` Opt-outs fell too (${pct(q0)} → ${pct(q)}), which usually means people aren't seeing the emails rather than losing interest.`
+      : q >= q0 && recent.optedOut > 0
+        ? ` Opt-outs held up (${pct(q0)} → ${pct(q)}), which points more to targeting or copy than to the spam folder.`
+        : "";
+
+  if (share <= REPLY_DROP_BAD.maxShare && chance < REPLY_DROP_BAD.maxChance) {
+    return {
+      key,
+      label,
+      status: "bad",
+      deduction: 25,
+      detail: `${vs}. A drop this large happens by chance ${chanceText(chance)} of the time.${optOutNote} Consider resting this domain before it burns.`,
+    };
+  }
+  if (share <= REPLY_DROP_WARN.maxShare && chance < REPLY_DROP_WARN.maxChance) {
     return {
       key,
       label,
       status: "warn",
       deduction: 10,
-      detail: `No replies across ${sent} sends in 14 days; at ${basis} that happens by chance only ${chance < 1 ? chance.toFixed(1) : Math.round(chance)}% of the time. Possible inbox-placement issue (check seed placement before scaling this mailbox).`,
+      detail: `${vs}. A drop this large happens by chance ${chanceText(chance)} of the time.${optOutNote}`,
     };
   }
-  const rate = replies.replied14d / replies.sent14d;
-  return {
-    key,
-    label,
-    status: "ok",
-    deduction: 0,
-    detail: `${replies.replied14d} repl${replies.replied14d === 1 ? "y" : "ies"} across ${sent} sends in 14 days (${(rate * 100).toFixed(1)}%).`,
-  };
+  return { key, label, status: "ok", deduction: 0, detail: `${vs}.` };
+}
+
+/**
+ * Opt-out rate per contact for the mailbox's DOMAIN: people who replied asking
+ * to be removed within 14 days of their first email. Gmail reports no spam
+ * complaints at this volume, and complaints are what drag a domain's
+ * reputation down; opt-out replies are the closest visible proxy. Warn-only:
+ * the link between the two is real but unmeasured, so this nudges rather than
+ * pauses.
+ */
+function optOutComponent(e: ContactEngagement | null | undefined): HealthComponent {
+  const key: HealthComponent["key"] = "optout_rate";
+  const label = `Opt-out rate per contact (${ENGAGEMENT_EXPOSURE_DAYS} days)`;
+  if (!e) {
+    return { key, label, status: "unchecked", deduction: 0, detail: "Opt-out rate not measured." };
+  }
+  const { recent } = e;
+  const who = cohortPhrase(e);
+  if (recent.contacts < MIN_RECENT_CONTACTS) {
+    return {
+      key,
+      label,
+      status: "unchecked",
+      deduction: 0,
+      detail: `${recent.contacts} ${who}; need ${MIN_RECENT_CONTACTS} to judge the opt-out rate.`,
+    };
+  }
+  const q = recent.optedOut / recent.contacts;
+  const summary = `${recent.optedOut} of ${recent.contacts} ${who} asked to be removed within ${ENGAGEMENT_EXPOSURE_DAYS} days (${pct(q)})`;
+  if (recent.optedOut >= OPTOUT_MIN_COUNT && q > OPTOUT_WARN_RATE) {
+    return {
+      key,
+      label,
+      status: "warn",
+      deduction: 10,
+      detail: `${summary}. That's high: opt-out replies are the closest visible sign of spam complaints, which are what drag a domain's reputation down. Check the targeting and the first two steps' copy.`,
+    };
+  }
+  return { key, label, status: "ok", deduction: 0, detail: `${summary}.` };
 }
 
 /**

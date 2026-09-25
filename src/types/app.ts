@@ -1087,6 +1087,7 @@ export interface HealthComponent {
     | "bounce_rate"
     | "soft_bounce_rate"
     | "reply_signal"
+    | "optout_rate"
     | "seed_placement"
     | "heat_score"
     | "warmup_placement";

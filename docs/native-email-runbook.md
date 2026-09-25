@@ -91,8 +91,8 @@ advances the domain to warming automatically.
 
 ## 4. Seed inboxes + placement tests (where mail actually lands)
 
-Every other health signal (DNS, blacklist, bounce rate, the zero-reply proxy)
-is an *inference*. A **placement test** measures placement directly: it sends
+Every other health signal (DNS, blacklist, bounce rate, the per-contact reply
+and opt-out rates from `src/lib/deliverability/engagement.ts`) is an *inference*. A **placement test** measures placement directly: it sends
 one probe from a sending mailbox to each **seed inbox** on a different domain,
 waits a minute, then reads each seed through the Gmail API (the same
 `gmail.readonly` delegation) to see which folder the probe landed in — Inbox,
