@@ -15,6 +15,7 @@
 // Pure module: no I/O. Tested by scripts/test-tube-handoff.ts.
 
 import { classifyEmailTier, type EmailTierInput } from "@/lib/enrichment/email-tier";
+import { emailMatchesOwner, emailOnFirmDomain, isPublishedEmailProvider } from "@/lib/enrichment/published-email";
 
 /** Upload columns, in order. TuBe maps them by header name: `markets` must come
  *  before `city` (its market matcher takes the first header containing "city"). */
@@ -39,6 +40,9 @@ export interface TubeContactInput extends EmailTierInput {
   last_name: string | null;
   company_name: string | null;
   email_verification_status: string | null;
+  /** enrichment_data.enrichment.email.provider: where the address came from
+   *  (read off the firm's site vs guessed). */
+  email_provider?: string | null;
 }
 
 export interface TubeFirmInput {
@@ -212,6 +216,11 @@ const PUBLIC_NAME =
 const PUBLIC_CATEGORY =
   /non-profit|nonprofit|public defender|government office|courthouse|legal affairs bureau|lawyers association|veterans affairs|patent office|charity/i;
 const FOR_PROFIT_SUFFIX = /\b(pllc|p\.?\s?s\.?|p\.?\s?c\.?|llp|llc|inc\.?|ltd\.?)(\b|$)/i;
+// A name that shows a private practice. Google gives some private firms odd
+// categories ("Government office", "Lawyers association", "Public defenders
+// office": common on immigration firms), so a category alone never excludes one.
+const PRIVATE_FIRM_NAME =
+  /\b(pllc|p\.?\s?s\.?|p\.?\s?c\.?|llp|llc|inc\.?|ltd\.?)(\b|$)|law firm|law offices?|attorneys? at law|& associates|\blawyers?\b|legal group|law group/i;
 
 export function icpExclusion(
   name: string | null,
@@ -221,8 +230,34 @@ export function icpExclusion(
   const n = name ?? "";
   const d = (domain ?? "").toLowerCase();
   if (LARGE_FIRM.test(`${n} ${d}`)) return "large_firm";
-  if (PUBLIC_NAME.test(n) || (categories ?? []).some((c) => PUBLIC_CATEGORY.test(c))) return "public_or_nonprofit";
+  const commercial = Boolean(d) && !/\.(org|gov|edu|us)$/.test(d);
+  const privateFirm = PRIVATE_FIRM_NAME.test(n) || (/\blaw\b|\blegal\b/i.test(n) && commercial);
+  // "… Law Center" on a commercial domain is a private practice (NW Injury Law
+  // Center); the nonprofit law centers run on .org, which the rules below catch.
+  const publicName = PUBLIC_NAME.test(commercial ? n.replace(/law center/gi, "") : n);
+  if (publicName || (!privateFirm && (categories ?? []).some((c) => PUBLIC_CATEGORY.test(c)))) return "public_or_nonprofit";
   if ((d.endsWith(".org") || d.endsWith(".gov")) && !FOR_PROFIT_SUFFIX.test(n)) return "public_or_nonprofit";
+  return null;
+}
+
+/** Whether a contact's email can go to TuBe: "verified" = a personal email
+ *  Million Verifier confirmed; "published" = the owner's own address as
+ *  published on the firm's site, on a catch-all domain the verifier can't
+ *  confirm (a published mailbox is real, unlike a guess: owner ruling
+ *  2026-09-25); null = not sendable. */
+export function tubeEmailStatus(c: TubeContactInput, firmDomain: string | null): "verified" | "published" | null {
+  if (!(c.email ?? "").trim()) return null;
+  if (classifyEmailTier(c) === "person" && c.email_verification_status === "ok") return "verified";
+  const email = (c.email as string).trim().toLowerCase();
+  if (
+    c.email_kind !== "company_generic" &&
+    c.email_verification_status === "catch_all" &&
+    isPublishedEmailProvider(c.email_provider) &&
+    emailOnFirmDomain(email, firmDomain) &&
+    emailMatchesOwner(email, c.first_name, c.last_name)
+  ) {
+    return "published";
+  }
   return null;
 }
 
@@ -275,6 +310,9 @@ export interface TubeHandoffResult {
   skipped: TubeSkip[];
   /** Firms left out only for lacking a specific practice (opt-in to include). */
   genericCount: number;
+  /** Rows whose email is the owner's published address on a catch-all domain
+   *  (sendable, but the verifier can't confirm it: worth watching bounces). */
+  published: number;
 }
 
 /** One upload row per emailable firm (deduped by website), plus why every other
@@ -285,6 +323,7 @@ export function buildTubeHandoff(firms: TubeFirmInput[], opts: { includeGeneric?
   const skipped: TubeSkip[] = [];
   const seen = new Set<string>();
   let genericCount = 0;
+  let published = 0;
   // A law search still returns the odd accountant or machine shop (the 2026-09-02
   // WA "attorney" search had 4). When the list is mostly law firms, anything that
   // isn't one is off-target and never gets a "best <its category>" question.
@@ -306,7 +345,8 @@ export function buildTubeHandoff(firms: TubeFirmInput[], opts: { includeGeneric?
     const c = f.contact;
     if (!c) { skip("not_in_contacts"); continue; }
     if (!(c.first_name ?? "").trim()) { skip("no_owner_name"); continue; }
-    if (classifyEmailTier(c) !== "person" || c.email_verification_status !== "ok") {
+    const emailStatus = tubeEmailStatus(c, domain);
+    if (!emailStatus) {
       skip("email_not_verified");
       continue;
     }
@@ -320,6 +360,7 @@ export function buildTubeHandoff(firms: TubeFirmInput[], opts: { includeGeneric?
       if (!opts.includeGeneric || !practice.phrase) { skip("no_specific_practice"); continue; }
     }
     seen.add(domain);
+    if (emailStatus === "published") published++;
     rows.push({
       domain,
       business_type: practice.phrase,
@@ -336,7 +377,7 @@ export function buildTubeHandoff(firms: TubeFirmInput[], opts: { includeGeneric?
       aliases: firmAliases(f.placeName, c).join("; "),
     });
   }
-  return { rows, skipped, genericCount };
+  return { rows, skipped, genericCount, published };
 }
 
 /** Header + string rows for toCsv(). */

@@ -18,12 +18,12 @@ import type { MapsPlace } from "@/types/app";
 import {
   TUBE_SKIP_LABEL,
   buildTubeHandoff,
+  tubeEmailStatus,
   tubeUploadTable,
   type TubeContactInput,
   type TubeFirmInput,
   type TubeSkipReason,
 } from "@/lib/tube/handoff";
-import { classifyEmailTier } from "@/lib/enrichment/email-tier";
 import { toCsv, downloadCsv } from "@/lib/csv/to-csv";
 
 type ContactRow = TubeContactInput & { google_place_id: string | null };
@@ -67,14 +67,17 @@ export function TubeExportDialog({
       try {
         const supabase = createClient();
         const ids = results.map((r) => r.google_place_id);
+        const domainOf = new Map(results.map((r) => [r.google_place_id, r.company_domain || r.website]));
         const byPlace = new Map<string, ContactRow>();
-        const score = (c: ContactRow) =>
-          (classifyEmailTier(c) === "person" && c.email_verification_status === "ok" ? 2 : 0) + (c.first_name ? 1 : 0);
+        const score = (c: ContactRow) => {
+          const s = tubeEmailStatus(c, domainOf.get(c.google_place_id ?? "") ?? null);
+          return (s === "verified" ? 3 : s === "published" ? 2 : 0) + (c.first_name ? 1 : 0);
+        };
         for (let i = 0; i < ids.length; i += 300) {
           const { data, error: qErr } = await supabase
             .from("contacts")
             .select(
-              "google_place_id, first_name, last_name, email, company_email, company_name, email_verification_status, email_verification_subresult, email_kind:enrichment_data->enrichment->email->>kind, email_provider_status:enrichment_data->enrichment->email->>provider_status",
+              "google_place_id, first_name, last_name, email, company_email, company_name, email_verification_status, email_verification_subresult, email_kind:enrichment_data->enrichment->email->>kind, email_provider_status:enrichment_data->enrichment->email->>provider_status, email_provider:enrichment_data->enrichment->email->>provider",
             )
             .in("google_place_id", ids.slice(i, i + 300));
           if (qErr) throw new Error(qErr.message);
@@ -141,7 +144,8 @@ export function TubeExportDialog({
         <DialogHeader>
           <DialogTitle>TuBe upload</DialogTitle>
           <DialogDescription>
-            The sheet for TuBe&apos;s AI-visibility scan: one row per firm with a verified owner email, the exact
+            The sheet for TuBe&apos;s AI-visibility scan: one row per firm whose owner we can email (a verified
+            address, or the one the firm publishes on its own site), the exact
             question to ask (&ldquo;Who are the best personal injury lawyers in Tacoma, WA?&rdquo;) and every name the
             firm goes by. Upload it in TuBe → Admin → Prospecting.
           </DialogDescription>
@@ -162,6 +166,13 @@ export function TubeExportDialog({
                 of {places.length} {places.length === 1 ? "firm" : "firms"} ready for TuBe (about $
                 {(handoff.rows.length * 0.034).toFixed(2)} to scan, Google only)
               </div>
+              {handoff.published > 0 && (
+                <div className="mt-1.5 text-xs text-muted-foreground">
+                  Includes {handoff.published} {handoff.published === 1 ? "firm" : "firms"} emailed at the owner&apos;s
+                  address as published on their own site. Their domain accepts all mail, so the verifier can&apos;t
+                  confirm it: watch bounces on these.
+                </div>
+              )}
             </div>
 
             {skipCounts.length > 0 && (

@@ -15,6 +15,7 @@ import {
   seedQuery,
   shortCompany,
   stateAbbrev,
+  tubeEmailStatus,
   tubeUploadTable,
   type TubeContactInput,
   type TubeFirmInput,
@@ -68,6 +69,15 @@ eq(icpExclusion("Smith Law", "smithlaw.org", ["Attorney"]), "public_or_nonprofit
 eq(icpExclusion("Smith Law, PLLC", "smithlaw.org", ["Attorney"]), null, ".org with PLLC stays in");
 eq(icpExclusion("Some Clinic", "someclinic.com", ["Non-profit organization"]), "public_or_nonprofit", "nonprofit category");
 eq(icpExclusion("Tamaki Law", "tamakilaw.com", ["Personal injury attorney"]), null, "ordinary firm stays in");
+// Google tags some private firms "Government office" / "Lawyers association" /
+// "Public defenders office" (2026-09-25 WA pull: 13 private firms were dropped).
+eq(icpExclusion("Law Office of Tanya Fekri, PLLC", "fekrilaw.com", ["Immigration attorney", "Government office"]), null, "private PLLC with a 'Government office' category stays in");
+eq(icpExclusion("Global Law Advocates PLLC", "globallawadvocates.com", ["Attorney", "Lawyers association"]), null, "private PLLC with a 'Lawyers association' category stays in");
+eq(icpExclusion("DBL Business & Immigration Law", "dblps.law", ["Immigration attorney", "Government office"]), null, "'… Law' on a commercial domain is a private firm");
+eq(icpExclusion("NW Injury Law Center", "nwinjurylawcenter.com", ["Personal injury attorney"]), null, "'Law Center' on a .com is a private practice");
+eq(icpExclusion("Social Media Victims Law Center", "socialmediavictims.org", ["Law firm"]), "public_or_nonprofit", "'Law Center' on a .org still excluded");
+eq(icpExclusion("King County Prosecuting Atty", "kingcounty.gov", ["County government office"]), "public_or_nonprofit", "prosecutor's office excluded");
+eq(icpExclusion("Sound Immigration", "soundimmigration.com", ["Immigration attorney", "Government office"]), "public_or_nonprofit", "no private-firm marker: the category still excludes");
 
 console.log("shortCompany (subject-line name)");
 eq(shortCompany("McNeese & Trotsky - Accident Attorneys"), "McNeese & Trotsky", "drops listing tail");
@@ -136,6 +146,32 @@ const firm = (over: Partial<TubeFirmInput> = {}): TubeFirmInput => ({
   eq([rows.length, skipped.map((s) => s.reason)], [2, ["off_vertical"]], "a mostly-law list drops the accountant the search returned");
   const cleaning = buildTubeHandoff([firm({ placeName: "Sparkle Co", domain: "sparkle.com", categories: ["Commercial cleaning service"] })]);
   eq(cleaning.rows[0]?.business_type, "commercial cleaning services", "a non-law list keeps its own vertical");
+}
+
+{
+  const accountant = firm({ placeName: "Smith CPA", domain: "smithcpa.com", categories: ["Certified public accountant"] });
+  const law = [firm(), firm({ placeName: "Tamaki Law", domain: "tamakilaw.com" }), accountant];
+  const { rows, skipped } = buildTubeHandoff(law);
+  eq([rows.length, skipped.map((s) => s.reason)], [2, ["off_vertical"]], "a mostly-law list drops the accountant the search returned");
+  const cleaning = buildTubeHandoff([firm({ placeName: "Sparkle Co", domain: "sparkle.com", categories: ["Commercial cleaning service"] })]);
+  eq(cleaning.rows[0]?.business_type, "commercial cleaning services", "a non-law list keeps its own vertical");
+}
+
+console.log("tubeEmailStatus (published owner address on a catch-all domain)");
+{
+  const pub = (over: Partial<TubeContactInput> = {}) =>
+    owner({ email: "bryan@olyinjurylaw.com", email_verification_status: "catch_all", email_provider: "site_scrape", ...over });
+  eq(tubeEmailStatus(owner(), "olyinjurylaw.com"), "verified", "MV-verified personal email");
+  eq(tubeEmailStatus(pub(), "olyinjurylaw.com"), "published", "owner's address read off the firm's site, catch-all → sendable");
+  eq(tubeEmailStatus(pub({ email_provider: "decision_maker" }), "olyinjurylaw.com"), "published", "found by the owner-name site read");
+  eq(tubeEmailStatus(pub({ email_provider: "site_published" }), "olyinjurylaw.com"), "published", "swapped in from the site crawl");
+  eq(tubeEmailStatus(pub({ email_provider: "pattern_mv" }), "olyinjurylaw.com"), null, "a GUESS on a catch-all domain stays out");
+  eq(tubeEmailStatus(pub({ email: "sarah@olyinjurylaw.com" }), "olyinjurylaw.com"), null, "someone else's published address stays out");
+  eq(tubeEmailStatus(pub({ email: "bryan@gmail.com" }), "olyinjurylaw.com"), null, "not on the firm's own domain");
+  eq(tubeEmailStatus(pub({ email_kind: "company_generic" }), "olyinjurylaw.com"), null, "generic inbox stays out");
+  eq(tubeEmailStatus(pub({ email_verification_status: "invalid" }), "olyinjurylaw.com"), null, "verifier said invalid");
+  const { rows, published } = buildTubeHandoff([firm({ contact: pub() })]);
+  eq([rows.length, published], [1, 1], "a published-address firm is exported and counted");
 }
 
 console.log("TuBe upload contract (mirrors AdminDashboard.jsx parseCsv header matching)");
