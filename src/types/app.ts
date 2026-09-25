@@ -1042,6 +1042,20 @@ export interface ProvisioningState {
 
 export type NativeSendStatus = "sent" | "bounced";
 
+// What a hard bounce means (migration 00131), classified from the DSN's
+// machine-readable fields by classifyBounce (src/lib/gmail/mime.ts).
+// spam_block / auth_failure are receiver-side verdicts on OUR mail (reputation
+// or authentication), not on the address: the strongest full-volume
+// deliverability signal the channel gets.
+export type NativeBounceClass =
+  | "invalid_address"
+  | "mailbox_unavailable"
+  | "spam_block"
+  | "auth_failure"
+  | "policy_block"
+  | "unreachable"
+  | "other";
+
 // One inbox-health snapshot (migration 00061). Inserted only when a mailbox's
 // score changes or an action is taken, so the table is a transition timeline.
 // `components` is the per-signal breakdown the admin UI renders.
@@ -1225,6 +1239,10 @@ export interface NativeSend {
   gmail_thread_id: string | null;
   status: NativeSendStatus;
   bounce_reason: string | null;
+  // Hard-bounce detail (migration 00131). Null = not bounced / not classified.
+  bounce_code: string | null;
+  bounce_class: NativeBounceClass | null;
+  bounce_diagnostic: string | null;
   sent_at: string;
   bounced_at: string | null;
   // Soft (4.x.x, transient) bounce timestamp (migration 00067). Does NOT change

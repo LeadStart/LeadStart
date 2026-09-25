@@ -22,6 +22,7 @@
 
 import { randomUUID } from "node:crypto";
 import type { GmailMessage, GmailPayloadPart, GmailHeader } from "./client";
+import type { NativeBounceClass } from "@/types/app";
 
 export interface BuildEmailParams {
   fromEmail: string;
@@ -190,23 +191,161 @@ export interface ParsedGmailMessage {
   bodyText: string;
   bodyHtml: string | null;
   internalDateMs: number | null;
-  /** From a message/delivery-status part when present: "failed" | "delayed" | ... */
-  dsnAction: string | null;
-  /** From the same part: the enhanced status code, e.g. "5.1.1" or "4.4.1". */
-  dsnStatus: string | null;
+  /** Machine-readable bounce fields (all null / empty on ordinary mail). */
+  dsn: DsnDetails;
 }
 
-// Pull Action:/Status: out of a DSN's machine-readable part. Gmail hands the
-// part back base64url-encoded like any other; a bounce with no such part
-// yields nulls and the caller falls back to the human-readable text.
-function parseDeliveryStatus(
-  part: GmailPayloadPart | null,
-): { action: string | null; status: string | null } {
-  if (!part?.body?.data) return { action: null, status: null };
-  const text = decodeB64Url(part.body.data);
-  const action = text.match(/^Action:\s*([a-z-]+)/im)?.[1]?.toLowerCase() ?? null;
-  const status = text.match(/^Status:\s*([245]\.\d{1,3}\.\d{1,3})/im)?.[1] ?? null;
-  return { action, status };
+/**
+ * The machine-readable half of a bounce notice (RFC 3464), plus the ids of the
+ * message that bounced.
+ *
+ * WHERE GMAIL PUTS IT (verified against the real notices in our sending
+ * mailboxes, 2026-09-25): the Gmail API never returns a message/delivery-status
+ * part with a body of its own. It splits that part into child parts and hands
+ * the DSN fields back as the CHILDREN'S HEADERS and/or the children's body
+ * text:
+ *   Gmail "(Failure)" / "(Delay)": per-message fields (Reporting-MTA,
+ *     X-Original-Message-ID) as child headers; per-recipient fields
+ *     (Final-Recipient, Action, Status, Diagnostic-Code) as child body text.
+ *   Mimecast / Microsoft 365 "Your message couldn't be delivered": every field
+ *     as a child header, no body, and "Final-Recipient: rfc/822;..." (sic).
+ * The old parser read only the part's own body, so it found nothing on every
+ * real notice and each one fell through to subject/body guessing, which
+ * misread final "(Failure)" notices that quote a 4.x.x code as soft.
+ */
+export interface DsnDetails {
+  /** failed | delayed | delivered | relayed | expanded */
+  action: string | null;
+  /** Enhanced status code: the Status field, or the Diagnostic-Code's own code
+   *  when Status is a generic x.0.0 (Mimecast: 5.0.0 hiding a 5.4.1). */
+  status: string | null;
+  /** The receiving server's explanation (Diagnostic-Code, unfolded). */
+  diagnostic: string | null;
+  finalRecipient: string | null;
+  originalRecipient: string | null;
+  /**
+   * Message-IDs naming the message that bounced, case preserved, most exact
+   * first: X-Original-Message-ID and the returned original headers
+   * (text/rfc822-headers, or an attached message/rfc822), then the notice's
+   * own In-Reply-To, then its References. Attributes a bounce to the exact
+   * send (and step) even when the notice lands on a thread of its own.
+   */
+  originalMessageIds: string[];
+}
+
+const ENHANCED_CODE_RE = /\b([245])\.(\d{1,3})\.(\d{1,3})\b/;
+const MESSAGE_ID_RE = /<[^<>\s]+@[^<>\s]+>/g;
+
+// "Name: value" lines, with RFC 5322 folded continuation lines joined first.
+function fieldLines(text: string): [string, string][] {
+  const out: [string, string][] = [];
+  for (const line of text.replace(/\r?\n[ \t]+/g, " ").split(/\r?\n/)) {
+    const m = line.match(/^([A-Za-z][A-Za-z0-9-]*)\s*:\s*(.*)$/);
+    if (m) out.push([m[1].toLowerCase(), m[2].trim()]);
+  }
+  return out;
+}
+
+// First part of a given type anywhere in the tree, with or without a body.
+function findPartByType(
+  part: GmailPayloadPart | undefined,
+  mimeType: string,
+): GmailPayloadPart | null {
+  if (!part) return null;
+  if (part.mimeType === mimeType) return part;
+  for (const child of part.parts ?? []) {
+    const found = findPartByType(child, mimeType);
+    if (found) return found;
+  }
+  return null;
+}
+
+// "rfc822; a@b.com", "rfc822;<a@b.com>", "rfc/822;a@b.com" (Mimecast) or bare.
+function dsnAddress(value: string | undefined): string | null {
+  if (!value) return null;
+  const v = value
+    .replace(/^[a-z0-9/.-]+\s*;\s*/i, "")
+    .replace(/[<>]/g, "")
+    .trim()
+    .toLowerCase();
+  return /^[^@\s]+@[^@\s]+$/.test(v) ? v : null;
+}
+
+function readDsn(
+  payload: GmailPayloadPart | undefined,
+  headers: Record<string, string>,
+): DsnDetails {
+  // Every DSN field under the message/delivery-status subtree: the children's
+  // headers (minus MIME plumbing) and the children's decoded body lines.
+  const fields: [string, string][] = [];
+  const ds = findPartByType(payload, "message/delivery-status");
+  if (ds) {
+    const walk = (p: GmailPayloadPart, isRoot: boolean) => {
+      if (!isRoot) {
+        for (const h of (p.headers ?? []) as GmailHeader[]) {
+          const name = h.name.toLowerCase();
+          if (!name.startsWith("content-")) fields.push([name, h.value.trim()]);
+        }
+      }
+      if (p.body?.data) fields.push(...fieldLines(decodeB64Url(p.body.data)));
+      for (const c of p.parts ?? []) walk(c, false);
+    };
+    walk(ds, true);
+  }
+  const first = (name: string) => fields.find(([k]) => k === name)?.[1];
+
+  const diagnostic = first("diagnostic-code")?.replace(/^smtp\s*;\s*/i, "").trim() || null;
+  const statusField = first("status")?.match(ENHANCED_CODE_RE)?.[0] ?? null;
+  const diagnosticCode = diagnostic?.match(ENHANCED_CODE_RE)?.[0] ?? null;
+  const status =
+    statusField && /\.0\.0$/.test(statusField) && diagnosticCode && diagnosticCode[0] === statusField[0]
+      ? diagnosticCode
+      : statusField ?? diagnosticCode;
+
+  const ids: string[] = [];
+  const addIds = (v: string | undefined | null) => {
+    for (const id of v?.match(MESSAGE_ID_RE) ?? []) if (!ids.includes(id)) ids.push(id);
+  };
+  for (const [k, v] of fields) {
+    if (k === "x-original-message-id" || k === "original-message-id") addIds(v);
+  }
+  // Returned original headers: Gmail attaches text/rfc822-headers; Exchange
+  // attaches the whole message/rfc822, whose headers Gmail puts on its child.
+  // Only the original's own Message-ID: its In-Reply-To/References would point
+  // at the previous step, not the one that bounced.
+  const walkReturned = (p: GmailPayloadPart | undefined) => {
+    if (!p) return;
+    if (p.mimeType === "text/rfc822-headers" && p.body?.data) {
+      for (const [k, v] of fieldLines(decodeB64Url(p.body.data))) if (k === "message-id") addIds(v);
+    }
+    if (p.mimeType === "message/rfc822") {
+      for (const c of p.parts ?? []) {
+        for (const h of (c.headers ?? []) as GmailHeader[]) {
+          if (h.name.toLowerCase() === "message-id") addIds(h.value);
+        }
+      }
+      if (p.body?.data) {
+        for (const [k, v] of fieldLines(decodeB64Url(p.body.data))) if (k === "message-id") addIds(v);
+      }
+    }
+    for (const c of p.parts ?? []) walkReturned(c);
+  };
+  walkReturned(payload);
+  addIds(headers["in-reply-to"]);
+  // References lists the oldest message first; newest first here so the direct
+  // parent (the message that bounced) outranks earlier steps of the thread.
+  for (const id of [...(headers["references"]?.match(MESSAGE_ID_RE) ?? [])].reverse()) {
+    if (!ids.includes(id)) ids.push(id);
+  }
+
+  return {
+    action: first("action")?.toLowerCase() ?? null,
+    status,
+    diagnostic,
+    finalRecipient: dsnAddress(first("final-recipient")),
+    originalRecipient: dsnAddress(first("original-recipient")),
+    originalMessageIds: ids,
+  };
 }
 
 function decodeB64Url(data: string): string {
@@ -273,8 +412,6 @@ export function parseGmailMessage(msg: GmailMessage): ParsedGmailMessage {
     bodyText = decodeB64Url(msg.payload.body.data);
   }
 
-  const dsn = parseDeliveryStatus(findPart(msg.payload, "message/delivery-status"));
-
   return {
     headers,
     from: headers["from"] ?? null,
@@ -286,8 +423,7 @@ export function parseGmailMessage(msg: GmailMessage): ParsedGmailMessage {
     bodyText,
     bodyHtml,
     internalDateMs: msg.internalDate ? Number(msg.internalDate) : null,
-    dsnAction: dsn.action,
-    dsnStatus: dsn.status,
+    dsn: readDsn(msg.payload, headers),
   };
 }
 
@@ -303,40 +439,117 @@ export function isBounce(parsed: ParsedGmailMessage): boolean {
   const from = (parsed.from ?? "").toLowerCase();
   if (/mailer-daemon|postmaster/.test(from)) return true;
   if (parsed.headers["x-failed-recipients"]) return true;
+  // Exchange / Microsoft 365 stamps every non-delivery report it generates.
+  if ("x-ms-exchange-message-is-ndr" in parsed.headers) return true;
   const contentType = (parsed.headers["content-type"] ?? "").toLowerCase();
   if (contentType.includes("multipart/report")) return true;
   const subject = (parsed.subject ?? "").toLowerCase();
-  if (
-    /^(mail delivery (failed|subsystem)|undeliverable|delivery status notification|returned mail|failure notice|address not found)/.test(
-      subject,
-    )
-  ) {
-    return true;
-  }
+  if (FAILURE_SUBJECT_RE.test(subject) || DELAY_SUBJECT_RE.test(subject)) return true;
   return false;
 }
 
+// Subject wording, used only when a notice carries no Action field. Anchored
+// at the start: Exchange-style subjects append OUR subject after the status
+// word ("Undeliverable: <our subject>"), so an unanchored match could read a
+// word from our own copy.
+const DELAY_SUBJECT_RE =
+  /^\s*(delivery status notification \(delay\)|delivery delayed|warning: message delayed|message delayed|delayed mail)/i;
+const FAILURE_SUBJECT_RE =
+  /^\s*(delivery status notification \(failure\)|undeliverable|undelivered mail|(your )?message( to \S+)? (couldn['’]?t|could not|can['’]?t|cannot|wasn['’]?t|was not) (be )?delivered|delivery (has )?failed|mail delivery failed|mail delivery subsystem|returned mail|failure notice|address not found|message not delivered|message blocked)/i;
+
+export type BounceSeverity = "hard" | "soft" | "none";
+
+export interface BounceVerdict {
+  /** hard = final, suppress; soft = transient, retrying; none = not a failure. */
+  severity: BounceSeverity;
+  /** Enhanced status code from the DSN fields (or, failing that, the notice text). */
+  code: string | null;
+  /** What a hard bounce means. Null unless severity is "hard". */
+  bounceClass: NativeBounceClass | null;
+  /** The receiving server's own explanation, trimmed. Null unless hard. */
+  diagnostic: string | null;
+}
+
 /**
- * Bounce severity from the DSN status code in the body. 5.x.x = permanent
- * (hard), 4.x.x = transient (soft). Gmail retries soft failures itself and
- * only surfaces a persistent one as a later hard DSN, so an unparseable
- * in-thread DSN is treated as hard (conservative, it's usually final).
- * Only hard bounces should suppress a contact; soft bounces are ignored.
+ * Classify a bounce notice. The machine-readable Action field decides when
+ * present: "failed" is FINAL even when the last error was a 4.x.x (the sender
+ * ran out of retries: a Gmail "(Failure)" notice after days of "(Delay)"
+ * notices carries the last transient code, and reading that code as soft kept
+ * mailing an unreachable address for its whole sequence). Without an Action:
+ * the subject wording, then the status code, then hard (an unparseable
+ * in-thread notice is usually final). Only hard bounces suppress a contact.
  */
-export function bounceSeverity(parsed: ParsedGmailMessage): "hard" | "soft" {
-  // The machine-readable part is authoritative when present (SEND-08): a
-  // "delayed" action or a 4.x.x status is transient however the human text
-  // is worded, and Gmail's "Delivery Status Notification (Delay)" notices
-  // used to read as HARD because their text part carries no code.
-  if (parsed.dsnAction === "delayed" || parsed.dsnAction === "relayed" || parsed.dsnAction === "expanded") {
-    return "soft";
+export function classifyBounce(parsed: ParsedGmailMessage): BounceVerdict {
+  const { dsn } = parsed;
+  const subject = parsed.subject ?? "";
+  // Without a Diagnostic-Code, fall back to the notice's lines that carry an
+  // SMTP / enhanced status code. Never the whole body: an attached copy of our
+  // own email would put our copy's words into the classifier.
+  const reason =
+    dsn.diagnostic ??
+    (parsed.bodyText
+      .split(/\r?\n/)
+      .filter((l) => ENHANCED_CODE_RE.test(l) || /\b[45]\d\d[ -]/.test(l))
+      .join(" ")
+      .slice(0, 2000) || null);
+  const code = dsn.status ?? reason?.match(ENHANCED_CODE_RE)?.[0] ?? null;
+
+  let severity: BounceSeverity;
+  if (dsn.action === "delayed") severity = "soft";
+  else if (dsn.action === "failed") severity = "hard";
+  else if (dsn.action === "delivered" || dsn.action === "relayed" || dsn.action === "expanded") severity = "none";
+  else if (DELAY_SUBJECT_RE.test(subject)) severity = "soft";
+  else if (FAILURE_SUBJECT_RE.test(subject)) severity = "hard";
+  else if (code?.startsWith("4.")) severity = "soft";
+  else severity = "hard";
+
+  if (severity !== "hard") return { severity, code, bounceClass: null, diagnostic: null };
+  const diagnostic = (reason ?? subject).replace(/\s+/g, " ").trim().slice(0, 500) || null;
+  return { severity, code, bounceClass: bounceClassFor(code, reason ?? ""), diagnostic };
+}
+
+/**
+ * What a hard bounce means, from its status code + the server's explanation.
+ * Order matters: the specific explanations are tested before the broad code
+ * families (Microsoft's "5.4.1 Recipient address rejected" is a dead address;
+ * its "unauthenticated ... no mail-enabled subscriptions" is a recipient
+ * domain with no mail service, not an authentication failure; a Gmail 5.7.26
+ * mentions "spam" but is an authentication rejection).
+ */
+export function bounceClassFor(code: string | null, reasonText: string): NativeBounceClass {
+  const r = reasonText.toLowerCase();
+  const family = code?.split(".")[1];
+  if (/no mail-enabled subscriptions|hosted tenant/.test(r)) return "unreachable";
+  if (
+    family === "1" ||
+    /recipient ?not ?found|recipient address rejected|user unknown|unknown user|no such (user|recipient|mailbox)|does ?n['’]?o?t exist|address not found|invalid recipient|mailbox not found|not found by smtp address lookup/.test(r)
+  ) {
+    return "invalid_address";
   }
-  if (parsed.dsnStatus?.startsWith("5.")) return "hard";
-  if (parsed.dsnStatus?.startsWith("4.")) return "soft";
-  if (/\bdelay/i.test(parsed.subject ?? "")) return "soft";
-  if (/\b5\.\d+\.\d+\b/.test(parsed.bodyText)) return "hard";
-  if (/\b4\.\d+\.\d+\b/.test(parsed.bodyText)) return "soft";
-  return "hard";
+  if (family === "2" || /mailbox (is )?full|over quota|quota exceeded|insufficient storage|(mailbox|account) (is |has been )?(disabled|inactive|suspended)/.test(r)) {
+    return "mailbox_unavailable";
+  }
+  if (
+    /^5\.7\.(2[3-7]|509|515)$/.test(code ?? "") ||
+    /unauthenticated|authentication (fail|check|required|information)|\b(spf|dkim|dmarc)\b[^.;]{0,40}\b(fail|failed|failure|reject|rejected)\b|dmarc policy/.test(r)
+  ) {
+    return "auth_failure";
+  }
+  if (
+    code === "5.7.350" ||
+    /spam|suspicious|reputation|unsolicited|block ?list|black ?list|dnsbl|\brbl\b|spamhaus|spamcop|phish|malicious|banned sending|bulk mail|content (was )?rejected/.test(r)
+  ) {
+    return "spam_block";
+  }
+  if (code?.startsWith("5.7")) return "policy_block";
+  if (
+    code?.startsWith("4.") ||
+    family === "4" ||
+    /timed out|did not accept our requests|connection (refused|timed out|reset)|no mx|dns (error|failure|lookup)|domain (not found|does not exist)|host (not found|unknown)|unrout(e)?able/.test(r)
+  ) {
+    return "unreachable";
+  }
+  return "other";
 }
 
 /**
@@ -369,15 +582,21 @@ export function isAutoSubmitted(parsed: ParsedGmailMessage): boolean {
 }
 
 /**
- * Best-effort failed-recipient extraction from a DSN. Tries the
- * X-Failed-Recipients header, then a Final-Recipient line in the body.
- * Returns null when neither is present (caller falls back to thread match).
+ * Best-effort failed-recipient extraction from a DSN. Original-Recipient
+ * first: on a forwarding failure Final-Recipient is the forward target, while
+ * Original-Recipient is the address WE sent to. Then X-Failed-Recipients (set
+ * by Gmail's own notices), then Final-Recipient, then a Final-Recipient line
+ * in the body text. Null when none is present: the caller then relies on the
+ * original Message-ID or the thread.
  */
 export function extractFailedRecipient(parsed: ParsedGmailMessage): string | null {
+  if (parsed.dsn.originalRecipient) return parsed.dsn.originalRecipient;
   const header = parsed.headers["x-failed-recipients"];
-  if (header) return header.split(",")[0].trim().toLowerCase() || null;
+  const fromHeader = header?.split(",")[0].trim().toLowerCase();
+  if (fromHeader) return fromHeader;
+  if (parsed.dsn.finalRecipient) return parsed.dsn.finalRecipient;
   const finalRecipient = parsed.bodyText.match(
-    /Final-Recipient:\s*rfc822;\s*([^\s<>]+@[^\s<>]+)/i,
+    /Final-Recipient:\s*rfc\/?822\s*;\s*<?([^\s<>;]+@[^\s<>;]+)>?/i,
   );
   if (finalRecipient) return finalRecipient[1].trim().toLowerCase();
   return null;

@@ -195,6 +195,42 @@ group by 1, 2 order by 1, 2;
 
 If catch-all rows bounce materially more than `ok` rows, revisit the policy.
 
+## 6. Bounces: how they're read and what they mean
+
+The reply poller classifies every bounce notice from its machine-readable DSN
+fields (`classifyBounce` in `src/lib/gmail/mime.ts`). **Gmail never returns the
+`message/delivery-status` part with a body of its own**: it splits it into
+child parts and hands the fields back as the children's headers and/or body
+text. Code that reads only the part's own body finds nothing on any real
+notice (that was the pre-2026-09-25 parser; SEND-08's fix never took effect).
+
+- **Hard vs soft:** `Action: failed` is final even when the last error was a
+  4.x.x (Gmail ran out of retries: a "(Failure)" notice after "(Delay)"s).
+  `Action: delayed` is soft. Only hard bounces suppress the contact.
+- **Attribution:** the original Message-ID the notice carries (exact send and
+  step), then the thread, then the failed recipient's latest send before the
+  notice. Microsoft 365 / Mimecast reports carry no original message, so they
+  rely on `Original-Recipient` / `Final-Recipient` (written `rfc/822;` by
+  Mimecast).
+- **Class** (`native_sends.bounce_class`, migration 00131): `invalid_address`,
+  `mailbox_unavailable`, `unreachable` (retries exhausted / no mail service)
+  are list quality. **`spam_block` and `auth_failure` are verdicts on OUR
+  mail** (e.g. Gmail's "very low reputation of the sending domain") and raise
+  a `mail_rejected_as_spam` owner alert on every occurrence.
+
+```sql
+select bounce_class, bounce_code, count(*)
+from native_sends where status = 'bounced'
+group by 1, 2 order by 3 desc;
+```
+
+**Tests + history.** `npx tsx scripts/test-bounce-parsing.ts` holds fixtures
+copied from the real part trees Gmail returned; add the real shape of any new
+notice type there before changing the parser.
+`npx tsx scripts/backfill-native-bounces.ts` re-reads every mailbox's notices
+with the current parser and prints what it would correct (dry run); `--apply`
+writes it. Idempotent.
+
 ## Notes
 
 - **One service account serves every domain** that authorizes its client ID.

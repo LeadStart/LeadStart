@@ -2,16 +2,21 @@
 //
 // Inbound tick for the native email channel. Polls each Google mailbox's
 // inbox for new mail, matches it back to a native_sends thread, and:
-//   - Bounces (DSNs from mailer-daemon) → flip the contact to 'bounced',
-//     mark the send row bounced, fail the enrollment. No lead_replies row.
+//   - Bounces (DSNs) → classified from their machine-readable fields
+//     (classifyBounce): a HARD bounce flips the contact to 'bounced', marks
+//     the exact send bounced with its code/class, fails the enrollment, and
+//     alerts the owner when a receiver refused our mail as spam or for failed
+//     authentication; a soft one only stamps soft_bounced_at. A bounce is
+//     attributed by the original Message-ID it carries, then the thread, then
+//     the failed recipient (findBouncedSend). No lead_replies row.
 //   - Human replies → insert a lead_replies row (source_channel=
 //     'native_email') and run the existing classifier + hot-lead
 //     notification pipeline inline. Stop the sequence (enrollment='replied')
 //     unless the message is an auto-reply (OOO), which must NOT halt it.
 //
-// Matching is by Gmail threadId only: a reply to our email carries the same
-// threadId as the original send, so we look up native_sends by
-// (mailbox_id, gmail_thread_id). Anything without a thread match is
+// Reply matching is by Gmail threadId only: a reply to our email carries the
+// same threadId as the original send, so we look up native_sends by
+// (mailbox_id, gmail_thread_id). A non-bounce without a thread match is
 // non-campaign mail and is dropped silently: the poller never ingests
 // arbitrary inbox mail.
 //
@@ -30,7 +35,15 @@ import { checkCronAuth } from "@/lib/security/cron-auth";
 import { runReplyPipeline } from "@/lib/replies/pipeline";
 import { GmailClient, GmailConfigError } from "@/lib/gmail/client";
 import { loadGmailClientForOrg } from "@/lib/gmail/org";
-import { parseGmailMessage, isBounce, bounceSeverity, isAutoSubmitted, extractFailedRecipient } from "@/lib/gmail/mime";
+import {
+  parseGmailMessage,
+  isBounce,
+  classifyBounce,
+  isAutoSubmitted,
+  extractFailedRecipient,
+  type BounceVerdict,
+} from "@/lib/gmail/mime";
+import { findBouncedSend, bounceReasonText } from "@/lib/native/bounce-attribution";
 import { escapeLikePattern } from "@/lib/utils";
 import { shouldTripCircuitBreaker, enterTimers, CB_RATE_SAMPLE } from "@/lib/deliverability/lifecycle";
 import { enqueueOwnerAlert } from "@/lib/notifications/owner-alerts";
@@ -205,93 +218,87 @@ export async function GET(request: NextRequest) {
 
           // ---- Bounce branch ----
           if (isBounce(parsed)) {
+            const verdict = classifyBounce(parsed);
+            if (verdict.severity === "none") {
+              // A delivery / relay report (Action: delivered/relayed/expanded):
+              // not a failure, nothing to record.
+              processed++;
+              continue;
+            }
+            // Pin the notice on the exact send it reports on: the original
+            // Message-ID it carries (right step even on a thread of its own),
+            // then the thread, then the failed recipient's latest send.
+            const { send: target } = await findBouncedSend(admin, mailbox.id, parsed, sendRow);
+
             // Only permanent (hard) bounces suppress. A soft bounce is a
             // transient failure Gmail retries on its own; suppressing on it
             // would wrongly kill a reachable lead. So we don't suppress, but we
             // DO stamp the send row so inbox-health can surface a rising
-            // soft-bounce rate (an early throttling/greylisting signal). A
-            // persistent failure still arrives later as a hard DSN.
-            if (bounceSeverity(parsed) === "soft") {
-              if (sendRow && sendRow.status !== "bounced") {
+            // soft-bounce rate (an early throttling/greylisting signal). When
+            // the retries run out, Gmail sends a final "(Failure)" notice
+            // (Action: failed), which classifyBounce reads as hard.
+            if (verdict.severity === "soft") {
+              if (target && target.status !== "bounced") {
                 await admin
                   .from("native_sends")
                   .update({ soft_bounced_at: new Date().toISOString() })
-                  .eq("id", sendRow.id);
+                  .eq("id", target.id);
               }
               processed++;
               summary.softBounces++;
               continue;
             }
-            const recipient = sendRow?.to_email ?? extractFailedRecipient(parsed);
-            const reason = (parsed.subject ?? "Delivery failure").slice(0, 300);
-            if (sendRow) {
-              if (sendRow.status !== "bounced") {
+
+            const recipient = target?.to_email ?? extractFailedRecipient(parsed);
+            if (target) {
+              // Latest-send guard (SEND-02): a re-read of this notice inside the
+              // 5-minute overlap finds the row already bounced and changes
+              // nothing, so one bounce is never counted twice.
+              if (target.status !== "bounced") {
                 await admin
                   .from("native_sends")
-                  .update({ status: "bounced", bounce_reason: reason, bounced_at: new Date().toISOString() })
-                  .eq("id", sendRow.id);
+                  .update({
+                    status: "bounced",
+                    bounce_reason: bounceReasonText(verdict, parsed.subject),
+                    bounced_at: new Date().toISOString(),
+                  })
+                  .eq("id", target.id);
+                await saveBounceDetail(admin, target.id, verdict);
+                // Feed the post-loop breaker only when this notice marked a row.
+                if (mailbox.domain_id) bouncedDomains.add(mailbox.domain_id);
+                if (verdict.bounceClass === "spam_block" || verdict.bounceClass === "auth_failure") {
+                  await alertRejectedAsSpam(admin, mailbox.email_address, recipient, verdict);
+                }
               }
-              await admin.from("contacts").update({ status: "bounced" }).eq("id", sendRow.contact_id);
-              if (sendRow.enrollment_id) {
+              await admin.from("contacts").update({ status: "bounced" }).eq("id", target.contact_id);
+              if (target.enrollment_id) {
                 // Guarded on active: a replied/completed enrollment keeps its
                 // terminal state (a bounce after a reply is a metric, not a
                 // suppression change; SEND-44).
                 await admin
                   .from("campaign_enrollments")
                   .update({ status: "failed", last_error: "Hard bounce" })
-                  .eq("id", sendRow.enrollment_id)
+                  .eq("id", target.enrollment_id)
                   .eq("status", "active");
               }
             } else if (recipient) {
-              // No thread match, but the DSN names the failed recipient. This is
-              // the common case where the far end accepts then rejects: the
-              // bounce arrives as a fresh message on its own thread, so the
-              // thread-id lookup missed. Mark the MOST RECENT send to that
-              // address from this mailbox as bounced so the bounce rate counts
-              // it. The old query excluded already-bounced rows, so the same
-              // DSN re-read every tick for five minutes walked backwards and
-              // marked one more historical send per pass, inflating the
-              // bounce count until the circuit breaker tired the domain on a
-              // single bounce (SEND-02). Now: latest send only; if it is
-              // already bounced this DSN has been handled.
-              const { data: fallbackSend } = await admin
-                .from("native_sends")
-                .select("id, enrollment_id, status")
-                .eq("mailbox_id", mailbox.id)
-                .ilike("to_email", escapeLikePattern(recipient))
-                .order("sent_at", { ascending: false })
-                .limit(1)
-                .maybeSingle();
-              const fb = fallbackSend as { id: string; enrollment_id: string | null; status: string } | null;
-              if (fb && fb.status !== "bounced") {
-                await admin
-                  .from("native_sends")
-                  .update({ status: "bounced", bounce_reason: reason, bounced_at: new Date().toISOString() })
-                  .eq("id", fb.id);
-                if (fb.enrollment_id) {
-                  await admin
-                    .from("campaign_enrollments")
-                    .update({ status: "failed", last_error: "Hard bounce" })
-                    .eq("id", fb.enrollment_id)
-                    .eq("status", "active");
-                }
-                // Track this domain for the post-loop bounce circuit breaker
-                // only when this DSN actually marked something (not on a re-read).
-                if (mailbox.domain_id) bouncedDomains.add(mailbox.domain_id);
-              } else if (!fb) {
-                if (mailbox.domain_id) bouncedDomains.add(mailbox.domain_id);
-              }
+              // A failed address this mailbox never sent to (or whose sends were
+              // deleted): nothing to count, but still suppress the address.
               await admin
                 .from("contacts")
                 .update({ status: "bounced" })
                 .eq("organization_id", mailbox.organization_id)
                 .ilike("email", escapeLikePattern(recipient));
-              processed++;
-              summary.bounces++;
-              continue;
+              console.warn(
+                `[cron/native-replies] bounce ${entry.id} in ${mailbox.email_address} names no send from this mailbox; contact suppressed only`,
+              );
+            } else {
+              // Loud rather than silent: this is how bounces used to vanish.
+              console.warn(
+                `[cron/native-replies] UNATTRIBUTABLE bounce ${entry.id} in ${mailbox.email_address}: ` +
+                  `"${parsed.subject ?? ""}" (${verdict.code ?? "no code"})`,
+              );
             }
-            // Thread-matched hard bounce: feed the breaker.
-            if (mailbox.domain_id) bouncedDomains.add(mailbox.domain_id);
             processed++;
             summary.bounces++;
             continue;
@@ -579,6 +586,52 @@ async function evaluateCircuitBreakers(
   }
 
   return result;
+}
+
+// ── Bounce recording ────────────────────────────────────────────────────────
+// (Attribution, findBouncedSend, lives in src/lib/native/bounce-attribution.ts,
+// shared with the history backfill.)
+
+// Written separately from the status flip so a deploy that lands before
+// migration 00131 still records the bounce itself (this write just logs).
+async function saveBounceDetail(
+  admin: ReturnType<typeof createAdminClient>,
+  sendId: string,
+  v: BounceVerdict,
+): Promise<void> {
+  const { error } = await admin
+    .from("native_sends")
+    .update({ bounce_code: v.code, bounce_class: v.bounceClass, bounce_diagnostic: v.diagnostic })
+    .eq("id", sendId);
+  if (error) {
+    console.warn(
+      `[cron/native-replies] bounce detail not saved for send ${sendId} (migration 00131 applied?): ${error.message}`,
+    );
+  }
+}
+
+// A receiving server refused our mail as spam / low reputation, or for failed
+// authentication: a verdict on the SENDING domain, not on the address. Rare,
+// and the most direct reputation evidence this channel gets (Gmail names "the
+// very low reputation of the sending domain" in these), so every one reaches
+// the owner instead of being filed as an ordinary bounce.
+async function alertRejectedAsSpam(
+  admin: ReturnType<typeof createAdminClient>,
+  mailboxEmail: string,
+  recipient: string | null,
+  v: BounceVerdict,
+): Promise<void> {
+  const recipientDomain = recipient?.split("@")[1] ?? "unknown";
+  const auth = v.bounceClass === "auth_failure";
+  await enqueueOwnerAlert({
+    admin,
+    kind: "mail_rejected_as_spam",
+    subject: `Mail from ${mailboxEmail} was rejected (${auth ? "failed authentication" : "spam / sender reputation"})`,
+    summary:
+      `A message from ${mailboxEmail} to a ${recipientDomain} recipient was refused by the receiving server` +
+      `${auth ? " for failed SPF/DKIM/DMARC" : " as spam"}: ${v.code ? `${v.code} ` : ""}${v.diagnostic ?? ""}`.trim(),
+    context: { mailbox: mailboxEmail, recipient_domain: recipientDomain, code: v.code, bounce_class: v.bounceClass },
+  });
 }
 
 // Pull the bare email out of a "Name <email>" header (or a raw address).
