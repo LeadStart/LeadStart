@@ -11,6 +11,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { POOL_TAG } from "@/lib/enrichment/pool";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -78,6 +79,8 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     )
     .eq("organization_id", campaign.organization_id)
     .eq("client_id", campaign.client_id)
+    // The weak-email-host pool is never offered for a campaign until released.
+    .or(`tags.is.null,tags.not.cs.{${POOL_TAG}}`)
     .order("created_at", { ascending: false })
     .limit(limit);
 

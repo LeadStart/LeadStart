@@ -10,6 +10,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { isPooled } from "@/lib/enrichment/pool";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -82,14 +83,16 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   // contacts from a different tenant.
   const { data: validContacts } = await admin
     .from("contacts")
-    .select("id, email_verification_status")
+    .select("id, email_verification_status, tags")
     .in("id", contactIds)
     .eq("organization_id", c.organization_id);
   // A cached invalid/disposable verdict would be failed by the pre-send
-  // verification gate anyway: don't enroll those.
+  // verification gate anyway: don't enroll those. The weak-email-host pool is
+  // never enrolled until released (lib/enrichment/pool).
   const UNDELIVERABLE = new Set(["invalid", "disposable"]);
-  const orgContacts =
-    (validContacts as { id: string; email_verification_status: string | null }[] | null) ?? [];
+  const orgContacts = (
+    (validContacts as { id: string; email_verification_status: string | null; tags: string[] | null }[] | null) ?? []
+  ).filter((r) => !isPooled(r.tags));
   const validIds = new Set(
     orgContacts
       .filter((r) => !UNDELIVERABLE.has(r.email_verification_status ?? ""))

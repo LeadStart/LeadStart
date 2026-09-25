@@ -35,6 +35,7 @@ vs name-less-business). This IS the "veins meet at enrichment" design, already b
 - Returns: place_id, name, categories, website, phone, address parts, lat/lng, rating, review count, claimed, open/closed. **No email** ([`maps-search.ts:11-18`](../src/lib/apify/sourcing/maps-search.ts)).
 - We keep the actor's OWN add-ons OFF BY DEFAULT (`scrapeContacts:false`, `scrapePlaceDetailPage:false`, and `maximumLeadsEnrichmentRecords:0` unless the `linkedinLeads` lever opts in): we enrich ourselves, cheaper ([`baseInput` in maps-search.ts](../src/lib/apify/sourcing/maps-search.ts)). ⚠️ `maximumLeadsEnrichmentRecords` is a cap **PER PLACE**, not per run, so we always send ≤`MAPS_LEADS_PER_PLACE` (3); an uncapped value dumps whole chain rosters (the 2026-08-30 $14.17 incident). Full semantics in [`docs/APIFY_ACTOR_COSTS.md`](APIFY_ACTOR_COSTS.md).
 - Flow: `maps-search` route → `maps_searches` row → `run-maps-searches` cron (multi-area fan-out, one actor run per structured area, merge/dedupe by `google_place_id`) → `importMapsPlaces` → `contacts` with `company_domain`, `company_phone`, `google_place_id`, **`email:null`** ([`import-maps-places.ts:73-105`](../src/lib/apify/import-maps-places.ts)).
+- **Mail host stamped at import (free).** `importMapsPlaces` looks up each firm domain's MX records and stamps `enrichment_data.mail_host` = `{host, mx, checked_at}` ([`import-maps-places.ts:80`](../src/lib/apify/import-maps-places.ts), classifier [`mail-host.ts:40`](../src/lib/enrichment/mail-host.ts)): `microsoft365` · `google` · `gateway` (Proofpoint/Mimecast/…) · `godaddy` · `other` · `none` (no mail server). 8 s budget; a domain not answered in time is looked up again at enqueue. Why: the host predicts whether Million Verifier can confirm a guessed address. On 873 enriched WA law firms (2026-09-25), 44% of Microsoft 365 firms became TuBe-ready vs 29% Google, 22% gateways, 18% other hosts, 9% no MX, 0% GoDaddy.
 - **Cost:** ~$0.004/place on our tier (~$4/1k; Free $0.005 → Business/GOLD $0.0021, verified). Optional add-on events (off by default): company-contacts $0.003/place, **business-leads $0.0075 per PERSON found** (pay-on-hit, but the `maximumLeadsEnrichmentRecords` cap is PER PLACE, so always send ≤3; the 2026-08-30 $14.17 incident was an uncapped 400/place dumping chain rosters), email-verify $0.004/decisive.
 
 ### 2b. LinkedIn sourcing
@@ -57,8 +58,17 @@ profiles → domains → naming → waterfall → activity → verify → comple
 Each phase is gated by a per-run flag (`run_*`) AND by whether any items qualify;
 if none qualify it falls straight through to the next phase. `run_profiles` and
 `run_domains` are always true; the rest come from settings/add-ons
-([`enqueue-enrichment.ts:210-215`](../src/lib/apify/enqueue-enrichment.ts)).
-A run always starts at `phase:"profiles"` ([`enqueue-enrichment.ts:216`](../src/lib/apify/enqueue-enrichment.ts)).
+([`enqueue-enrichment.ts`](../src/lib/apify/enqueue-enrichment.ts), the run insert).
+A run always starts at `phase:"profiles"`.
+
+**Weak-email-host pool (2026-09-25).** A Maps firm whose email runs on a host where
+guesses rarely verify (`gateway` / `godaddy` / `other` / `none`,
+[`WEAK_MAIL_HOSTS`](../src/lib/enrichment/mail-host.ts); 17% became TuBe-ready vs 44% on
+Microsoft 365 / Google) is **set aside instead of enriched** ([`pool.ts`](../src/lib/enrichment/pool.ts)):
+- **Import** tags it `pooled-weak-host` and never attaches it to the import's campaign, even when one was picked ([`import-maps-places.ts:94`](../src/lib/apify/import-maps-places.ts)).
+- **`enqueueEnrichment`** never enriches or queues a pooled contact ([`enqueue-enrichment.ts:165`](../src/lib/apify/enqueue-enrichment.ts)), and pools any Maps-style firm whose host was only resolved there (tag + detach from campaign, [`:218`](../src/lib/apify/enqueue-enrichment.ts), [`poolContacts :322`](../src/lib/apify/enqueue-enrichment.ts); lookup for unstamped contacts in `resolveMailHosts` [`:343`](../src/lib/apify/enqueue-enrichment.ts)). Microsoft 365, Google, an unclassified host (no domain / failed lookup: never pooled on a guess) and every lead with a LinkedIn profile URL (its email comes from the profile) are enriched as normal.
+- **Every campaign path refuses pooled contacts**: Contacts → Push to campaign, the campaign's Add-existing picker (`candidate-contacts`) and its enroll (`enroll-existing`), and the admin enroll route; each reports `skipped_pooled`. **Backstop:** `run-native-sequences` fails any enrollment whose contact is pooled ([`route.ts:1018`, `:1334`](../src/app/api/cron/run-native-sequences/route.ts)). A pooled contact also has no email, so nothing could send anyway.
+- **Release** = Contacts → select the tagged contacts → **Enrich** (`contacts/enrich/start`), which swaps the tag for `pool-released` ([`route.ts:383`](../src/app/api/admin/contacts/enrich/start/route.ts)); from then on they flow like any lead.
 
 | Phase | Actor / method | Item qualifies when… | Produces | Cost (verified) |
 |---|---|---|---|---|
@@ -75,6 +85,10 @@ Because phases self-skip when no item qualifies, the lead's DATA decides the pat
 
 - **LinkedIn lead** (has `linkedin_url`): **profiles** (primary email source — scrapes the profile by URL), domains (company domain), waterfall (**fallback** for profiles that returned no email), activity (post recency), verify.
 - **Maps lead** (name-less business, no `linkedin_url`): profiles → **skips** (no URL); **domains** → web-lookup discovery (name → domain); **naming** → owner-name discovery (if the add-on is on); **waterfall** → `site_scrape` (generic info@) + `pattern_mv` for items naming just named; activity → **skips** (no URL); verify.
+
+**Two `pattern_mv` guards (2026-09-25), both in `runPatternMvBatch`:**
+- **No mail server → no guessing.** When the item's domain has no MX record (or doesn't exist), every guess would come back `invalid`, which MV charges for, so the item ends `not_found` ("domain has no mail server") with no MV call ([`route.ts:863`](../src/app/api/cron/run-apify-enrichment/route.ts)). Only a definitive `none` skips; a failed lookup still guesses. Checked on 688 found emails: none was a guess on such a domain (those firms' real addresses live on another domain).
+- **Catch-all → the owner's published address first.** On a catch-all outcome, if an address the firm publishes on its own site (our site scrape's `company_emails`, or Scrap.io's crawl in `source_row.scrapio_emails`) is on the firm's domain and identifies the named owner, it replaces the guess, free, before any Findymail recovery ([`route.ts:961`](../src/app/api/cron/run-apify-enrichment/route.ts), matcher [`published-email.ts`](../src/lib/enrichment/published-email.ts)). Written as provider **`site_published`**, confidence 70. If it IS the guess, the guess's MV verdict is kept; otherwise the verify phase checks it (catch-all answers are free).
 
 **Catch-all recovery (Findymail, add-on — migration 00099).** When a run opts into
 "validate catch-all emails" (per-search toggle OR the org
@@ -99,6 +113,7 @@ client [`src/lib/findymail/client.ts`](../src/lib/findymail/client.ts).
 - **Maps personal email:** **naming** finds the owner → **`pattern_mv`** guesses `first.last@domain` and Million Verifier confirms the deliverable one ([`pattern-mv.ts:40-66,106-166`](../src/lib/enrichment/pattern-mv.ts)). That MV verdict is a genuine, paid result, so it is **stamped straight onto the contact's verification cache** (`email_verified_at`, built via `decideFromResult`) in the SAME statement that fills `contacts.email` ([`writeEmail` in run-apify-enrichment/route.ts](../src/app/api/cron/run-apify-enrichment/route.ts)).
 - **One verdict, one 30-day cache — no double-verify.** `pattern_mv` (in the waterfall), the end-of-run **verify** phase, and the **pre-send gate** all read the same cache through `decideFromCached`/`isFresh` (`VERIFICATION_TTL_DAYS = 30`, [`policy.ts:28`](../src/lib/millionverifier/policy.ts)). Because `pattern_mv` now caches its verdict, the verify phase finds it fresh and short-circuits with **no second MV call** (a Maps lead used to be verified twice in one run — the pattern pass, then again at the end). Only email sources that are NOT themselves MV results — `site_scrape` generic inboxes, LinkedIn-profile emails, Findymail catch-all recoveries — still reach the verify phase unverified and earn their first MV verdict there.
 - **Million Verifier is verify-only, never a finder.** It also runs as the pre-send gate in `run-native-sequences`.
+- **Published owner address on a catch-all domain (`site_published`, or a `site_scrape` / `decision_maker` address).** MV can only answer `catch_all` there, but an address the firm publishes is a real mailbox (a guess may not be). The TuBe upload accepts it when it is on the firm's domain and identifies the named owner (`tubeEmailStatus`, [`handoff.ts:248`](../src/lib/tube/handoff.ts)); the dialog counts these separately so their bounces can be watched. The send gate already sends catch-all addresses, flagged risky.
 - **Findymail catch-all recovery (add-on):** the ONE finder that returns deliverable emails on catch-all domains (its own catch-all recovery classifies deliverable vs risky and returns only the deliverable ones). Fed name+domain from the deferred pattern_mv catch-all items; pay-on-hit, so misses/risky catch-alls cost nothing. See §5's routing note.
 
 ---
@@ -125,6 +140,8 @@ client [`src/lib/findymail/client.ts`](../src/lib/findymail/client.ts).
 | `site-contact-scraper` (`indispensable_nonagon`) | enrich: waterfall (site_scrape) | per site (compute) | ~$0.003 |
 | pattern_mv + Million Verifier | enrich: waterfall / verify | per decisive verification | ~$0.0037 (catch-all/unknown free) |
 | Findymail (`app.findymail.com`) | enrich: waterfall catch-all recovery (add-on) | per verified email FOUND | ~$0.049/hit ($49/1k entry; $249/15k ≈ $0.017); misses/risky catch-alls free |
+| DNS MX lookup (`mail-host.ts`) | import + enqueue: mail-host stamp / weak-host pool; pattern_mv no-MX skip | — | free (node DNS, DNS-over-HTTPS fallback) |
+| Published owner address (`published-email.ts`) | enrich: pattern_mv catch-all pass | — | free (reads addresses already scraped) |
 
 ---
 

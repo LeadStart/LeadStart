@@ -584,8 +584,13 @@ export function MapsDiyPanel() {
             : data.enrichment?.status === "queued"
               ? " · enrichment queued"
               : "";
+        // Weak-email-host firms are set aside (not enriched, kept out of campaigns)
+        // until released from Contacts (tag pooled-weak-host).
+        const pool = data.pooled
+          ? ` · ${data.pooled} on harder-to-verify email hosts set aside (tag pooled-weak-host)`
+          : "";
         setSaveMsg(
-          `Imported ${data.inserted}${data.skipped_duplicates ? ` · ${data.skipped_duplicates} already in CRM` : ""}${enr}`,
+          `Imported ${data.inserted}${data.skipped_duplicates ? ` · ${data.skipped_duplicates} already in CRM` : ""}${enr}${pool}`,
         );
         setSelected(new Set());
         loadPriorRuns();

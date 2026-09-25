@@ -12,6 +12,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { isPooled } from "@/lib/enrichment/pool";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -85,10 +86,10 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   }
 
   // Client-scoped: only this campaign's client's contacts, and drop cached
-  // undeliverables.
+  // undeliverables and the weak-email-host pool (never enrolled until released).
   const { data: validRows, error: valErr } = await admin
     .from("contacts")
-    .select("id, email_verification_status")
+    .select("id, email_verification_status, tags")
     .in("id", contactIds)
     .eq("organization_id", campaign.organization_id)
     .eq("client_id", campaign.client_id);
@@ -96,16 +97,23 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     console.error("[enroll-existing] contact validation failed:", valErr);
     return NextResponse.json({ error: "Could not load contacts" }, { status: 500 });
   }
-  const rows = (validRows ?? []) as { id: string; email_verification_status: string | null }[];
-  const eligible = rows
+  const rows = (validRows ?? []) as { id: string; email_verification_status: string | null; tags: string[] | null }[];
+  const unpooled = rows.filter((r) => !isPooled(r.tags));
+  const skippedPooled = rows.length - unpooled.length;
+  const eligible = unpooled
     .filter((r) => !UNDELIVERABLE.has(r.email_verification_status ?? ""))
     .map((r) => r.id);
-  const skippedUndeliverable = rows.length - eligible.length;
+  const skippedUndeliverable = unpooled.length - eligible.length;
   const skippedNotFound = contactIds.length - rows.length;
 
   if (eligible.length === 0) {
     return NextResponse.json(
-      { error: "None of the selected contacts belong to this campaign's client" },
+      {
+        error:
+          skippedPooled > 0 && skippedPooled === rows.length
+            ? "The selected contacts are set aside in the weak-email-host pool. Release them first (Contacts → Enrich)."
+            : "None of the selected contacts belong to this campaign's client",
+      },
       { status: 400 },
     );
   }
@@ -149,5 +157,6 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     already_enrolled: eligible.length - enrolled,
     skipped_undeliverable: skippedUndeliverable,
     skipped_not_in_client: skippedNotFound,
+    skipped_pooled: skippedPooled,
   });
 }

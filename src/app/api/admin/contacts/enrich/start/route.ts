@@ -8,6 +8,7 @@ import {
   resolveWaterfallActor,
 } from "@/lib/apify/providers";
 import { hasUsableName, methodForItem } from "@/lib/enrichment/waterfall-routing";
+import { isPooled, withPoolReleased } from "@/lib/enrichment/pool";
 
 // POST /api/admin/contacts/enrich/start
 //
@@ -45,6 +46,7 @@ type ContactRow = {
   linkedin_url: string | null;
   company_linkedin_url: string | null;
   company_domain: string | null;
+  tags: string[] | null;
 };
 
 function chunk<T>(arr: T[], size: number): T[][] {
@@ -174,7 +176,7 @@ export async function POST(request: NextRequest) {
   for (const part of chunk(contactIds, CHUNK)) {
     const { data, error } = await admin
       .from("contacts")
-      .select("id, first_name, last_name, email, company_name, linkedin_url, company_linkedin_url, company_domain")
+      .select("id, first_name, last_name, email, company_name, linkedin_url, company_linkedin_url, company_domain, tags")
       .eq("organization_id", organizationId)
       .in("id", part);
     if (error) {
@@ -376,5 +378,16 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  return NextResponse.json({ run_id: runId, total: itemRows.length, skipped });
+  // Enriching a pooled contact IS its release from the weak-email-host pool
+  // (lib/enrichment/pool): swap the tag so it can join campaigns like any lead.
+  const released = contacts.filter((c) => isPooled(c.tags));
+  for (let i = 0; i < released.length; i += 10) {
+    await Promise.all(
+      released
+        .slice(i, i + 10)
+        .map((c) => admin.from("contacts").update({ tags: withPoolReleased(c.tags) }).eq("id", c.id)),
+    );
+  }
+
+  return NextResponse.json({ run_id: runId, total: itemRows.length, skipped, released_from_pool: released.length });
 }

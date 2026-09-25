@@ -10,6 +10,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { isPooled } from "@/lib/enrichment/pool";
 
 interface PushBody {
   contact_ids?: string[];
@@ -100,11 +101,11 @@ export async function POST(req: NextRequest) {
   const { data: contactRows } = await admin
     .from("contacts")
     .select(
-      "id, email, first_name, last_name, company_name, phone, title, linkedin_url",
+      "id, email, first_name, last_name, company_name, phone, title, linkedin_url, tags",
     )
     .in("id", contactIds)
     .eq("organization_id", organizationId);
-  const contacts = (contactRows ?? []) as {
+  const found = (contactRows ?? []) as {
     id: string;
     email: string | null;
     first_name: string | null;
@@ -113,16 +114,25 @@ export async function POST(req: NextRequest) {
     phone: string | null;
     title: string | null;
     linkedin_url: string | null;
+    tags: string[] | null;
   }[];
+  // The weak-email-host pool stays out of every campaign until released.
+  const contacts = found.filter((c) => !isPooled(c.tags));
+  const skippedPooled = found.length - contacts.length;
 
   if (contacts.length === 0) {
     return NextResponse.json(
-      { error: "No matching contacts in this organization" },
+      {
+        error:
+          skippedPooled > 0
+            ? `All ${skippedPooled} selected contacts are set aside in the weak-email-host pool. Release them first (Contacts → Enrich).`
+            : "No matching contacts in this organization",
+      },
       { status: 400 },
     );
   }
 
-  const skippedInvalid = contactIds.length - contacts.length;
+  const skippedInvalid = contactIds.length - found.length;
 
   const { error: updateError } = await admin
     .from("contacts")
@@ -147,6 +157,7 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({
     assigned: contacts.length,
     skipped_invalid: skippedInvalid,
+    skipped_pooled: skippedPooled,
     campaign_name: campaign.name,
   });
 }

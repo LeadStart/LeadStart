@@ -113,8 +113,12 @@ async function autoImportAndEnrich(
         ? "enrichment started"
         : enq.status === "queued"
           ? "enrichment queued"
-          : `enrichment skipped (${enq.reason})`;
-    return `Imported ${imported.inserted} to Contacts · ${tail}`;
+          : enq.status === "pooled"
+            ? "all set aside (weak email hosts)"
+            : `enrichment skipped (${enq.reason})`;
+    // Weak-email-host firms are set aside, not enriched (lib/enrichment/pool).
+    const pool = imported.pooled > 0 ? ` · ${imported.pooled} on weak email hosts set aside` : "";
+    return `Imported ${imported.inserted} to Contacts · ${tail}${pool}`;
   } catch (err) {
     console.error("[run-maps-searches] auto-import failed:", err);
     return "auto-import failed: import manually from the results table";

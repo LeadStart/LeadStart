@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
     (p) => p.google_place_id && wantIds.has(p.google_place_id),
   );
 
-  let result: { inserted: number; insertedIds: string[]; skippedDuplicates: number };
+  let result: { inserted: number; insertedIds: string[]; skippedDuplicates: number; pooled: number };
   try {
     result = await importMapsPlaces(admin, {
       organizationId,
@@ -91,10 +91,20 @@ export async function POST(request: NextRequest) {
     });
   }
 
+  // Pooled = set aside in the weak-email-host pool (not enriched, not attached to
+  // the campaign): the import's own count plus any pooled at enqueue.
+  const pooled =
+    enrichment.status === "pooled"
+      ? enrichment.count
+      : enrichment.status === "started"
+        ? (enrichment.pooled ?? 0)
+        : result.pooled;
+
   return NextResponse.json({
     requested: wantIds.size,
     inserted: result.inserted,
     skipped_duplicates: result.skippedDuplicates,
+    pooled,
     campaign_id: campaignId,
     enrichment,
   });

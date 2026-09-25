@@ -2,12 +2,20 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { extractProfileId, extractCompanyId, extractCompanySlug } from "./domain";
 import { PROFILE_ACTOR, DOMAIN_ACTOR, ACTIVITY_ACTOR, resolveWaterfallActor } from "./providers";
 import { loadEnrichmentSettings, normalizeAddons } from "./auth";
+import { lookupMailHosts, readMailHost, isWeakMailHost, type MailHost } from "@/lib/enrichment/mail-host";
+import { isPooled, withPoolTag } from "@/lib/enrichment/pool";
 
 // Auto-enrichment enqueue: the "queue-behind" heart of the Prospecting →
 // Contacts handoff. Given a set of contact ids, it either starts an enrichment
 // run immediately (org is free) or stamps them enrich_queued_at (a run is
 // already active: one-active-run-per-org) so the drain cron picks them up when
 // the org frees. Mirrors the run/item shape built by contacts/enrich/start.
+//
+// Weak-email-host pool (2026-09-25): a Maps firm whose email runs on a host where
+// guesses rarely verify (security gateways, GoDaddy, other hosts, no mail server)
+// is set aside instead of enriched: tagged, detached from any campaign, never
+// queued (lib/enrichment/pool). Import tags most of them; any whose host is only
+// resolved here are pooled here. Released later via Contacts → Enrich.
 
 type ContactRow = {
   id: string;
@@ -19,11 +27,14 @@ type ContactRow = {
   company_linkedin_url: string | null;
   company_domain: string | null;
   enrichment_data: Record<string, unknown> | null;
+  tags: string[] | null;
 };
 
 export type EnqueueResult =
-  | { status: "started"; runId: string; total: number }
+  // pooled: contacts set aside in the weak-email-host pool instead of enriched.
+  | { status: "started"; runId: string; total: number; pooled?: number }
   | { status: "queued"; count: number }
+  | { status: "pooled"; count: number }
   | { status: "skipped"; reason: string };
 
 const CHUNK = 500;
@@ -142,12 +153,22 @@ export async function enqueueEnrichment(
   for (const part of chunk(contactIds, CHUNK)) {
     const { data, error } = await admin
       .from("contacts")
-      .select("id, first_name, last_name, email, company_name, linkedin_url, company_linkedin_url, company_domain, enrichment_data")
+      .select("id, first_name, last_name, email, company_name, linkedin_url, company_linkedin_url, company_domain, enrichment_data, tags")
       .eq("organization_id", organizationId)
       .in("id", part);
     if (error) return { status: "skipped", reason: error.message };
     contacts.push(...((data as ContactRow[] | null) ?? []));
   }
+
+  // Pooled contacts (weak email host) are set aside: never enriched by this
+  // automatic path. Clear any queue stamp so the drain lets go of them.
+  const alreadyPooled = contacts.filter((c) => isPooled(c.tags));
+  if (alreadyPooled.length > 0) {
+    for (const part of chunk(alreadyPooled.map((c) => c.id), CHUNK)) {
+      await admin.from("contacts").update({ enrich_queued_at: null }).in("id", part);
+    }
+  }
+  const workable = contacts.filter((c) => !isPooled(c.tags));
 
   // Load the org's enrichment config up front: its domain_discovery_enabled flag
   // decides whether name-only companies become eligible (they gain a domain-
@@ -157,7 +178,7 @@ export async function enqueueEnrichment(
 
   const now = new Date().toISOString();
   const { rows, eligibleContactIds } = buildItemRows(
-    contacts,
+    workable,
     organizationId,
     now,
     settings.domain_discovery_enabled,
@@ -165,36 +186,16 @@ export async function enqueueEnrichment(
   if (rows.length === 0) {
     // Nothing to enrich: clear any stale queue stamp so the drain lets go.
     await admin.from("contacts").update({ enrich_queued_at: null }).in("id", contactIds);
-    return { status: "skipped", reason: "nothing_eligible" };
+    return alreadyPooled.length > 0
+      ? { status: "pooled", count: alreadyPooled.length }
+      : { status: "skipped", reason: "nothing_eligible" };
   }
 
-  // Add-on gating (migration 00077). Activity + verify default OFF; a contact
-  // opts in via the `addons` stamped on its enrichment_data at import time
-  // (import-prospects). The run-level flags are an OR-merge: a phase is ENABLED
-  // if any eligible contact opted in. Each item is then pre-stamped per its
-  // own opt-in (buildItemRows), so the cron seeders run each paid add-on phase
-  // ONLY over the contacts that opted in, not the whole drain-merged batch
-  // (SPEND-36). Activity additionally honors the per-contact "already active on
-  // LinkedIn" skip so we don't re-measure what the search already filtered on.
   const eligibleSet = new Set(eligibleContactIds);
-  const eligible = contacts.filter((c) => eligibleSet.has(c.id));
-  const addonsFor = (c: ContactRow) =>
-    normalizeAddons((c.enrichment_data as { addons?: unknown } | null)?.addons);
-  const skipActivityFor = (c: ContactRow) =>
-    (c.enrichment_data as { skip_activity?: boolean } | null)?.skip_activity === true;
-  const runActivity = eligible.some((c) => addonsFor(c).activity && !skipActivityFor(c));
-  const runVerify = eligible.some((c) => addonsFor(c).verify);
-  const runNaming = eligible.some((c) => addonsFor(c).naming);
-  // Per-search catch-all opt-in ORs over the org-level setting: the run's config
-  // snapshot flips accept_catch_all_guesses on so pattern_mv keeps the best
-  // catch-all guess (confidence 40, flagged) instead of discarding it.
-  const includeCatchAll = eligible.some((c) => addonsFor(c).include_catch_all);
-  // Per-search Findymail catch-all validation opt-in ORs over the org default:
-  // the run's config snapshot flips validate_catch_all on so the cron hands
-  // catch-all misses to Findymail's finder to recover a deliverable address.
-  const validateCatchAll = eligible.some((c) => addonsFor(c).validate_catch_all);
+  const eligible = workable.filter((c) => eligibleSet.has(c.id));
 
-  // One active run per org → if busy, stamp the eligible contacts and bail.
+  // One active run per org → if busy, stamp the eligible contacts and bail. (The
+  // drain re-enters here later, and late pooling happens then.)
   const { data: activeRows } = await admin
     .from("enrichment_runs")
     .select("id")
@@ -207,6 +208,45 @@ export async function enqueueEnrichment(
     }
     return { status: "queued", count: eligibleContactIds.length };
   }
+
+  // Mail host per eligible contact: stamped at import (Maps vein), looked up here
+  // when missing (other veins, or an import-time lookup that ran out of time).
+  // A Maps-style firm on a weak host found only now is pooled now. A LinkedIn
+  // lead is never pooled: its email comes from its profile, not a guess on the
+  // company domain, so the mail host doesn't predict its yield.
+  const hostOf = await resolveMailHosts(admin, eligible);
+  const toPool = eligible.filter((c) => !extractProfileId(c.linkedin_url) && isWeakMailHost(hostOf.get(c.id)));
+  await poolContacts(admin, toPool);
+  const poolIds = new Set(toPool.map((c) => c.id));
+  const pooledCount = alreadyPooled.length + toPool.length;
+  const runContacts = eligible.filter((c) => !poolIds.has(c.id));
+  const runRows = rows.filter((r) => !poolIds.has(r.contact_id as string));
+  const runContactIds = runContacts.map((c) => c.id);
+  if (runRows.length === 0) return { status: "pooled", count: pooledCount };
+
+  // Add-on gating (migration 00077). Activity + verify default OFF; a contact
+  // opts in via the `addons` stamped on its enrichment_data at import time
+  // (import-prospects). The run-level flags are an OR-merge: a phase is ENABLED
+  // if any contact in THIS run opted in. Each item is then pre-stamped per its
+  // own opt-in (buildItemRows), so the cron seeders run each paid add-on phase
+  // ONLY over the contacts that opted in, not the whole drain-merged batch
+  // (SPEND-36). Activity additionally honors the per-contact "already active on
+  // LinkedIn" skip so we don't re-measure what the search already filtered on.
+  const addonsFor = (c: ContactRow) =>
+    normalizeAddons((c.enrichment_data as { addons?: unknown } | null)?.addons);
+  const skipActivityFor = (c: ContactRow) =>
+    (c.enrichment_data as { skip_activity?: boolean } | null)?.skip_activity === true;
+  const runActivity = runContacts.some((c) => addonsFor(c).activity && !skipActivityFor(c));
+  const runVerify = runContacts.some((c) => addonsFor(c).verify);
+  const runNaming = runContacts.some((c) => addonsFor(c).naming);
+  // Per-search catch-all opt-in ORs over the org-level setting: the run's config
+  // snapshot flips accept_catch_all_guesses on so pattern_mv keeps the best
+  // catch-all guess (confidence 40, flagged) instead of discarding it.
+  const includeCatchAll = runContacts.some((c) => addonsFor(c).include_catch_all);
+  // Per-search Findymail catch-all validation opt-in ORs over the org default:
+  // the run's config snapshot flips validate_catch_all on so the cron hands
+  // catch-all misses to Findymail's finder to recover a deliverable address.
+  const validateCatchAll = runContacts.some((c) => addonsFor(c).validate_catch_all);
 
   // Snapshot the org's waterfall config (migration 00075) onto the run, same as
   // contacts/enrich/start, so an auto-enqueued run honors the configured method
@@ -239,7 +279,7 @@ export async function enqueueEnrichment(
       run_naming: runNaming,
       phase: "profiles",
       status: "pending",
-      total_count: rows.length,
+      total_count: runRows.length,
     })
     .select("id")
     .single();
@@ -256,7 +296,7 @@ export async function enqueueEnrichment(
   }
 
   const runId = (runRow as { id: string }).id;
-  for (const part of chunk(rows, CHUNK)) {
+  for (const part of chunk(runRows, CHUNK)) {
     const { error: itemsError } = await admin
       .from("enrichment_run_items")
       .insert(part.map((r) => ({ ...r, run_id: runId })));
@@ -267,9 +307,59 @@ export async function enqueueEnrichment(
   }
 
   // Enrolled → clear the queue stamp so the drain doesn't re-pick them.
-  for (const part of chunk(eligibleContactIds, CHUNK)) {
+  for (const part of chunk(runContactIds, CHUNK)) {
     await admin.from("contacts").update({ enrich_queued_at: null }).in("id", part);
   }
 
-  return { status: "started", runId, total: rows.length };
+  return pooledCount > 0
+    ? { status: "started", runId, total: runRows.length, pooled: pooledCount }
+    : { status: "started", runId, total: runRows.length };
+}
+
+// Set contacts aside in the weak-email-host pool: tag them, detach them from any
+// campaign an import attached them to, and drop any queue stamp. Tags differ per
+// contact, so one update each (bounded concurrency).
+async function poolContacts(admin: SupabaseClient, contacts: ContactRow[]): Promise<void> {
+  const writes: Promise<unknown>[] = [];
+  for (const c of contacts) {
+    const tags = withPoolTag(c.tags);
+    c.tags = tags;
+    writes.push(
+      Promise.resolve(
+        admin.from("contacts").update({ tags, campaign_id: null, enrich_queued_at: null }).eq("id", c.id),
+      ),
+    );
+    if (writes.length >= 10) await Promise.all(writes.splice(0));
+  }
+  await Promise.all(writes);
+}
+
+const domainKey = (d: string | null | undefined) => (d ?? "").trim().toLowerCase().replace(/^www\./, "");
+
+// Each contact's mail host: the import-time stamp when present, else a bounded
+// live lookup (stamped back onto the contact so later phases can read it).
+// Contacts with no domain, or whose lookup didn't answer in time, map to null
+// and are treated like Microsoft 365/Google (never delayed on a guess).
+async function resolveMailHosts(admin: SupabaseClient, contacts: ContactRow[]): Promise<Map<string, MailHost | null>> {
+  const out = new Map<string, MailHost | null>();
+  const unstamped: ContactRow[] = [];
+  for (const c of contacts) {
+    const h = readMailHost(c.enrichment_data);
+    out.set(c.id, h);
+    if (!h && domainKey(c.company_domain)) unstamped.push(c);
+  }
+  if (unstamped.length === 0) return out;
+  const found = await lookupMailHosts(unstamped.map((c) => domainKey(c.company_domain)), { budgetMs: 5000 });
+  const writes: Promise<unknown>[] = [];
+  for (const c of unstamped) {
+    const stamp = found.get(domainKey(c.company_domain));
+    if (!stamp) continue;
+    out.set(c.id, stamp.host);
+    const ed = { ...((c.enrichment_data as Record<string, unknown> | null) ?? {}), mail_host: stamp };
+    c.enrichment_data = ed;
+    writes.push(Promise.resolve(admin.from("contacts").update({ enrichment_data: ed }).eq("id", c.id)));
+    if (writes.length >= 10) await Promise.all(writes.splice(0));
+  }
+  await Promise.all(writes);
+  return out;
 }

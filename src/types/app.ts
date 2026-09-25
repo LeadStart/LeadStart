@@ -453,7 +453,10 @@ export type EmailProviderId =
   | "decision_maker"
   // A deliverable email recovered by Findymail's catch-all validation step,
   // the one source that can crack catch-all domains pattern_mv is blind to.
-  | "findymail";
+  | "findymail"
+  // The owner's own address as published on the firm's website (site scrape or
+  // Scrap.io crawl), swapped in for a pattern_mv guess on a catch-all domain.
+  | "site_published";
 
 export interface Contact {
   id: string;

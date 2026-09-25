@@ -106,7 +106,9 @@ async function autoImportAndEnrich(
         ? "enrichment started"
         : enq.status === "queued"
           ? "enrichment queued"
-          : `enrichment skipped (${enq.reason})`;
+          : enq.status === "pooled"
+            ? "set aside (weak email hosts)"
+            : `enrichment skipped (${enq.reason})`;
     return `Imported ${imported.inserted} to Contacts · ${tail}`;
   } catch (err) {
     console.error("[run-linkedin-searches] auto-import failed:", err);

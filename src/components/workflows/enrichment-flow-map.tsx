@@ -188,7 +188,7 @@ export function EnrichmentFlowMap() {
           </div>
           <div className={styles.col}>
             <p className={`${styles.cap} ${styles.maps}`}>Maps vein: business-first</p>
-            <Diagram id="maps" w={580} h={968} nodes={MAPS_NODES} edges={MAPS_EDGES} />
+            <Diagram id="maps" w={580} h={1000} nodes={MAPS_NODES} edges={MAPS_EDGES} />
           </div>
         </div>
       </div>

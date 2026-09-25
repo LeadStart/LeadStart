@@ -61,6 +61,7 @@ import { isAbTest, emailVariants, type FlowGraph } from "@/lib/flow/graph";
 import { pickVariant } from "@/lib/flow/variants";
 import { createManualTask, manualTaskKindForLinkedIn } from "@/lib/manual-tasks/create";
 import { runInternalNode } from "@/lib/notifications/internal-automations";
+import { isPooled, POOL_SKIP_REASON } from "@/lib/enrichment/pool";
 import type {
   CampaignEnrollment,
   CampaignStep,
@@ -1012,6 +1013,12 @@ export async function GET(request: NextRequest) {
       await markEnrollmentFailed(admin, enrollment.id, "Contact no longer exists.");
       return { result: "failed_no_contact" };
     }
+    // Backstop for the weak-email-host pool: a pooled contact that slipped into a
+    // campaign (a script, a hand edit) is never sent to until it's released.
+    if (isPooled(contact.tags)) {
+      await markEnrollmentFailed(admin, enrollment.id, POOL_SKIP_REASON);
+      return { result: "failed_pooled" };
+    }
 
     // Condition signals (per campaign+contact). hasReplied is the HUMAN-reply halt
     // signal: contact.status==='replied', which the reply poller sets ONLY for
@@ -1321,6 +1328,12 @@ export async function GET(request: NextRequest) {
     if (!contact) {
       await markEnrollmentFailed(admin, enrollment.id, "Contact no longer exists.");
       results.push({ enrollment_id: enrollment.id, result: "failed_no_contact" });
+      continue;
+    }
+    // Backstop for the weak-email-host pool (see the flow path above).
+    if (isPooled(contact.tags)) {
+      await markEnrollmentFailed(admin, enrollment.id, POOL_SKIP_REASON);
+      results.push({ enrollment_id: enrollment.id, result: "failed_pooled" });
       continue;
     }
     if (!contact.email) {

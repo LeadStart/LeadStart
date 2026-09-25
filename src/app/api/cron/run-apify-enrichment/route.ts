@@ -47,6 +47,8 @@ import { enqueueOwnerAlert } from "@/lib/notifications/owner-alerts";
 import { runPatternMv, type PatternMvItem, type PatternMvOutcome } from "@/lib/enrichment/pattern-mv";
 import { FindymailClient, FindymailError, type FindymailResult } from "@/lib/findymail/client";
 import { hasUsableName, methodForItem } from "@/lib/enrichment/waterfall-routing";
+import { lookupMailHosts, readMailHost } from "@/lib/enrichment/mail-host";
+import { pickPublishedOwnerEmail, publishedEmailsOf } from "@/lib/enrichment/published-email";
 import { classifyContactOutcome, addOutcome, ALL_COUNT_KEYS } from "@/lib/enrichment/outcomes";
 import { callPerplexity } from "@/lib/perplexity/client";
 import { fetchPage } from "@/lib/decision-maker/fetcher";
@@ -824,12 +826,57 @@ async function runPatternMvBatch(
   };
   const client = new MillionVerifierClient(key);
   const deadlineMs = tickStart + PATTERN_MV_DEADLINE_SEC * 1000;
-  const mvItems: PatternMvItem[] = batch.map((b) => ({
-    id: b.id,
-    first_name: b.first_name,
-    last_name: b.last_name,
-    company_domain: b.company_domain,
-  }));
+
+  // Fetch the batch's contacts up front: fill-only writes, their mail-host stamp
+  // (no-mail-server skip below) and the addresses published on their site
+  // (catch-all swap below).
+  const contactIds = Array.from(new Set(batch.map((b) => b.contact_id)));
+  const contactMap = new Map<string, Contact>();
+  for (let i = 0; i < contactIds.length; i += 300) {
+    const part = contactIds.slice(i, i + 300);
+    const { data } = await admin
+      .from("contacts")
+      .select("id, email, enrichment_data, tags, status")
+      .eq("organization_id", run.organization_id)
+      .in("id", part);
+    for (const c of (data as Contact[] | null) ?? []) contactMap.set(c.id, c);
+  }
+
+  // A domain with no mail server (no MX record, or the domain doesn't exist) can't
+  // receive any guessed address: every guess would come back "invalid", which MV
+  // charges for. Skip guessing there. Only a definitive "none" skips; a failed or
+  // slow lookup still guesses. (Across 688 found emails, none was a guess on such
+  // a domain: those firms' real addresses live on another domain.)
+  const domainKeyOf = (d: string | null) => (d ?? "").trim().toLowerCase().replace(/^www\./, "");
+  const hostByDomain = new Map<string, string>();
+  const unstamped: string[] = [];
+  for (const b of batch) {
+    const d = domainKeyOf(b.company_domain);
+    if (!d) continue;
+    const stamped = readMailHost(contactMap.get(b.contact_id)?.enrichment_data);
+    if (stamped) hostByDomain.set(d, stamped);
+    else unstamped.push(d);
+  }
+  if (unstamped.length > 0) {
+    for (const [d, s] of await lookupMailHosts(unstamped, { budgetMs: 4000 })) hostByDomain.set(d, s.host);
+  }
+  const noMailServer = new Set(batch.filter((b) => hostByDomain.get(domainKeyOf(b.company_domain)) === "none").map((b) => b.id));
+  if (noMailServer.size > 0) {
+    await admin
+      .from("enrichment_run_items")
+      .update({ waterfall_status: "not_found", waterfall_notes: "domain has no mail server (no MX): skipped address guessing" })
+      .eq("run_id", run.id)
+      .in("id", Array.from(noMailServer));
+  }
+
+  const mvItems: PatternMvItem[] = batch
+    .filter((b) => !noMailServer.has(b.id))
+    .map((b) => ({
+      id: b.id,
+      first_name: b.first_name,
+      last_name: b.last_name,
+      company_domain: b.company_domain,
+    }));
 
   let outcomes;
   try {
@@ -851,24 +898,12 @@ async function runPatternMvBatch(
     throw err; // unexpected: the tick's outer try/catch handles it
   }
 
-  // Fetch the batch's contacts for fill-only writes.
-  const contactIds = Array.from(new Set(batch.map((b) => b.contact_id)));
-  const contactMap = new Map<string, Contact>();
-  for (let i = 0; i < contactIds.length; i += 300) {
-    const part = contactIds.slice(i, i + 300);
-    const { data } = await admin
-      .from("contacts")
-      .select("id, email, enrichment_data, tags, status")
-      .eq("organization_id", run.organization_id)
-      .in("id", part);
-    for (const c of (data as Contact[] | null) ?? []) contactMap.set(c.id, c);
-  }
-
   let found = 0;
   let notFound = 0;
   let skipped = 0;
   let inconclusive = 0;
   let totalCredits = 0;
+  let publishedUsed = 0;
   // Catch-all items held back for the Findymail recovery pass (a found-catch_all
   // guess, or a catch-all miss). Deferring their write keeps the fill-only
   // contacts.email slot free so a clean Findymail hit can take it instead of a
@@ -915,6 +950,39 @@ async function runPatternMvBatch(
     const isCatchAll =
       (outcome.kind === "found" && outcome.mvResult === "catch_all") ||
       (outcome.kind === "not_found" && outcome.sawCatchAll === true);
+
+    // Catch-all domain: a guess can't be confirmed, but the owner's own address as
+    // PUBLISHED on the firm's site (our site scrape, or Scrap.io's crawl) is a real
+    // mailbox, so it replaces the guess, free, before any paid Findymail recovery.
+    // When it IS the guess, the guess's MV verdict is kept (no second MV call);
+    // otherwise the verify phase checks it (catch-all answers are free).
+    if (isCatchAll) {
+      const contact = contactMap.get(item.contact_id);
+      const published = pickPublishedOwnerEmail(publishedEmailsOf(contact?.enrichment_data), {
+        first: item.first_name,
+        last: item.last_name,
+        domain: item.company_domain,
+      });
+      if (published) {
+        const sameAsGuess = outcome.kind === "found" && outcome.email.toLowerCase() === published;
+        const res: PhaseResult = {
+          status: "found",
+          email: published,
+          confidence: 70,
+          extra: { waterfall_status: "published_on_site" },
+        };
+        const patch =
+          sameAsGuess && outcome.kind === "found" ? decideFromResult(outcome.mvResponse, 0, new Date()).patch : undefined;
+        const r = await writeEmail(admin, cols, item, res, contact, "site_published", share, "site_published", patch);
+        if (r === "found") {
+          found++;
+          publishedUsed++;
+        } else if (r === "skipped") skipped++;
+        else notFound++;
+        continue;
+      }
+    }
+
     if (doRecovery && isCatchAll && itemWantsValidate(contactMap.get(item.contact_id))) {
       deferred.push({ item, outcome, share });
       continue;
@@ -1025,15 +1093,27 @@ async function runPatternMvBatch(
   }
 
   const recoverNote = recovered > 0 ? ` · ${recovered} catch-all recovered (Findymail)` : "";
+  const publishedNote = publishedUsed > 0 ? ` · ${publishedUsed} published owner address used` : "";
+  const noMxNote = noMailServer.size > 0 ? ` · ${noMailServer.size} skipped (no mail server)` : "";
   await admin
     .from("enrichment_runs")
     .update({
-      progress_message: `Pattern+verify: ${found} found · ${notFound} miss · ${inconclusive} retrying (${totalCredits} MV credits)${recoverNote}`,
+      progress_message: `Pattern+verify: ${found} found · ${notFound} miss · ${inconclusive} retrying (${totalCredits} MV credits)${recoverNote}${publishedNote}${noMxNote}`,
       locked_at: null,
     })
     .eq("id", run.id);
 
-  return { status: "pattern_mv", found, not_found: notFound, skipped, inconclusive, credits: totalCredits, recovered };
+  return {
+    status: "pattern_mv",
+    found,
+    not_found: notFound,
+    skipped,
+    inconclusive,
+    credits: totalCredits,
+    recovered,
+    published: publishedUsed,
+    no_mail_server: noMailServer.size,
+  };
 }
 
 // Process one domain-discovery batch inline (no Apify run): the domains-phase
