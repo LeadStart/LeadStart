@@ -61,6 +61,8 @@ const NEW_VAR_SENTINEL = "__new_variable__";
 interface ImportResult {
   inserted: number;
   linked: number;
+  /** Of `linked`: LeadStart CRM contacts an owner/VA import moved to this client. */
+  adopted: number;
   enrolled: number;
   already_enrolled: number;
   skipped_invalid_email: number;
@@ -312,6 +314,7 @@ export function NativeImportPanel({ campaignId }: { campaignId: string }) {
       const agg: ImportResult = {
         inserted: 0,
         linked: 0,
+        adopted: 0,
         enrolled: 0,
         already_enrolled: 0,
         skipped_invalid_email: 0,
@@ -722,7 +725,11 @@ export function NativeImportPanel({ campaignId }: { campaignId: string }) {
                   <strong>{result.inserted}</strong> new contact
                   {result.inserted === 1 ? "" : "s"} added,{" "}
                   <strong>{result.linked}</strong> already existed and were
-                  added to this campaign, <strong>{result.enrolled}</strong>{" "}
+                  added to this campaign
+                  {result.adopted > 0 && (
+                    <> ({result.adopted} moved over from LeadStart&apos;s own contacts)</>
+                  )}
+                  , <strong>{result.enrolled}</strong>{" "}
                   enrolled for sending
                   {result.already_enrolled > 0 && (
                     <> ({result.already_enrolled} were already enrolled)</>

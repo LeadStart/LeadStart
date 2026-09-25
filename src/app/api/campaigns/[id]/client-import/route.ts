@@ -17,11 +17,13 @@
 //     the server-loaded campaign row: never from the request body.
 //   - Dedup is CLIENT-scoped. The org-wide unique index
 //     idx_contacts_org_email_unique means an email can exist at most once per
-//     org; if it already belongs to a different client (or LeadStart's own
-//     CRM, client_id NULL), the row is SKIPPED: never reassigned, never
-//     duplicated. A client can technically probe whether an email exists
-//     somewhere in the org via the skipped count; accepted for trusted
-//     paying clients.
+//     org; if it already belongs to a different client, the row is SKIPPED:
+//     never reassigned, never duplicated. LeadStart's own unassigned CRM
+//     contacts (client_id NULL) are skipped for CLIENT users too; an owner/VA
+//     import ADOPTS them into the campaign's client (e.g. Maps prospects sourced
+//     for that client's campaign), which is the one reassignment allowed. A
+//     client can technically probe whether an email exists somewhere in the org
+//     via the skipped count; accepted for trusted paying clients.
 //   - Emails are validated strictly (single @, no whitespace/control chars,
 //     ≤254) because contact.email flows raw into the Gmail To: header, this
 //     is the import-side half of the header-injection fix (the sink half is
@@ -472,7 +474,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   }
 
   const toInsert: SanitizedRow[] = [];
-  const toLink: { row: SanitizedRow; existing: ExistingContact }[] = [];
+  const toLink: { row: SanitizedRow; existing: ExistingContact; adopt: boolean }[] = [];
   let skippedExistingElsewhere = 0;
   let skippedSuppressed = 0;
   let skippedUndeliverable = 0;
@@ -486,17 +488,22 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     const existing = existingByEmail.get(email);
     if (!existing) {
       toInsert.push(row);
-    } else if (existing.client_id === clientId) {
+      continue;
+    }
+    // Owner/VA only: LeadStart's own unassigned CRM contact joins this client.
+    const adopt = existing.client_id === null && isAdmin;
+    if (existing.client_id === clientId || adopt) {
       if (SUPPRESSED_STATUSES.has(existing.status)) {
         // Would never send (cron suppression): keep counts truthful.
         skippedSuppressed++;
       } else if (UNDELIVERABLE.has(existing.email_verification_status ?? "")) {
         skippedUndeliverable++;
       } else {
-        toLink.push({ row, existing });
+        toLink.push({ row, existing, adopt });
       }
     } else {
-      // Belongs to another client or LeadStart's own CRM: never reassign.
+      // Belongs to another client (or, for a client user, LeadStart's own CRM):
+      // never reassign.
       skippedExistingElsewhere++;
     }
   }
@@ -573,28 +580,36 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   }
 
   // ── Link existing same-client contacts (merge custom_fields) ────────────
+  // Adopted contacts (owner/VA, previously unassigned) also take the client.
   let linked = 0;
+  let adopted = 0;
   for (const part of chunk(toLink, 25)) {
     const results = await Promise.all(
-      part.map(({ row, existing }) =>
-        admin
+      part.map(({ row, existing, adopt }) => {
+        let q = admin
           .from("contacts")
           .update({
             campaign_id: campaign.id,
+            ...(adopt ? { client_id: clientId } : {}),
             custom_fields: {
               ...((existing.custom_fields as Record<string, unknown>) ?? {}),
               ...row.custom_fields,
             },
             updated_at: new Date().toISOString(),
           })
-          .eq("id", existing.id)
-          .then(({ error }) => (error ? null : existing.id)),
-      ),
+          .eq("id", existing.id);
+        // Adopt only if still unassigned (a concurrent import can't double-claim).
+        if (adopt) q = q.is("client_id", null);
+        return q.select("id").then(({ data, error }) =>
+          error || !data || data.length === 0 ? null : { id: existing.id, adopt },
+        );
+      }),
     );
-    for (const idOk of results) {
-      if (idOk) {
+    for (const ok of results) {
+      if (ok) {
         linked++;
-        enrollIds.push(idOk);
+        if (ok.adopt) adopted++;
+        enrollIds.push(ok.id);
       }
     }
   }
@@ -712,6 +727,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
         filename,
         inserted,
         linked,
+        adopted,
         enrolled,
         already_enrolled: alreadyEnrolled,
         skipped_invalid_email: skippedInvalidEmail,
@@ -727,6 +743,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   return NextResponse.json({
     inserted,
     linked,
+    adopted,
     enrolled,
     already_enrolled: alreadyEnrolled,
     skipped_invalid_email: skippedInvalidEmail,
