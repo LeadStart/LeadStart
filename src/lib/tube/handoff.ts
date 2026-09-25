@@ -55,6 +55,7 @@ export interface TubeFirmInput {
 }
 
 export type TubeSkipReason =
+  | "off_vertical"
   | "not_in_contacts"
   | "no_owner_name"
   | "email_not_verified"
@@ -66,6 +67,7 @@ export type TubeSkipReason =
   | "duplicate_website";
 
 export const TUBE_SKIP_LABEL: Record<TubeSkipReason, string> = {
+  off_vertical: "Not a law firm (the search returned it anyway)",
   not_in_contacts: "Not imported to Contacts yet",
   no_owner_name: "No owner name found",
   email_not_verified: "No verified personal email",
@@ -283,11 +285,22 @@ export function buildTubeHandoff(firms: TubeFirmInput[], opts: { includeGeneric?
   const skipped: TubeSkip[] = [];
   const seen = new Set<string>();
   let genericCount = 0;
+  // A law search still returns the odd accountant or machine shop (the 2026-09-02
+  // WA "attorney" search had 4). When the list is mostly law firms, anything that
+  // isn't one is off-target and never gets a "best <its category>" question.
+  const categorised = firms.filter((f) => (f.categories ?? []).length > 0);
+  const lawList =
+    categorised.length > 0 &&
+    categorised.filter((f) => f.categories.some(isLawCategory)).length / categorised.length >= 0.6;
   for (const f of firms) {
     const name = (f.placeName ?? f.contact?.company_name ?? "").trim();
     const domain = normDomain(f.domain);
     const skip = (reason: TubeSkipReason) => skipped.push({ name, domain, reason });
     if (!domain) { skip("no_website"); continue; }
+    if (lawList && (f.categories ?? []).length > 0 && !f.categories.some(isLawCategory)) {
+      skip("off_vertical");
+      continue;
+    }
     const excl = icpExclusion(name, domain, f.categories);
     if (excl) { skip(excl); continue; }
     const c = f.contact;

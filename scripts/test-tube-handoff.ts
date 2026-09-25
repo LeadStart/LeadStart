@@ -129,6 +129,14 @@ const firm = (over: Partial<TubeFirmInput> = {}): TubeFirmInput => ({
   const { rows, skipped } = buildTubeHandoff([firm(), firm({ placeName: "Olympia Injury Law (Lacey)", city: "Lacey" })]);
   eq([rows.length, skipped[0]?.reason], [1, "duplicate_website"], "one row per website (multi-office firms scan once)");
 }
+{
+  const accountant = firm({ placeName: "Smith CPA", domain: "smithcpa.com", categories: ["Certified public accountant"] });
+  const law = [firm(), firm({ placeName: "Tamaki Law", domain: "tamakilaw.com" }), accountant];
+  const { rows, skipped } = buildTubeHandoff(law);
+  eq([rows.length, skipped.map((s) => s.reason)], [2, ["off_vertical"]], "a mostly-law list drops the accountant the search returned");
+  const cleaning = buildTubeHandoff([firm({ placeName: "Sparkle Co", domain: "sparkle.com", categories: ["Commercial cleaning service"] })]);
+  eq(cleaning.rows[0]?.business_type, "commercial cleaning services", "a non-law list keeps its own vertical");
+}
 
 console.log("TuBe upload contract (mirrors AdminDashboard.jsx parseCsv header matching)");
 const { headers } = tubeUploadTable([]);
