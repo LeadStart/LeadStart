@@ -30,7 +30,13 @@ import {
 import { TagChipInput } from "@/components/mailboxes/tag-chip-input";
 import { appUrl } from "@/lib/api-url";
 import { useUser } from "@/hooks/use-user";
-import { bandBadgeClass, bandLabel } from "@/lib/deliverability/inbox-health";
+import {
+  HEALTH_RUBRIC,
+  HEALTH_SCALE,
+  bandBadgeClass,
+  bandLabel,
+  scoreMath,
+} from "@/lib/deliverability/inbox-health";
 import { describeCounts, placementStatusLabel } from "@/lib/deliverability/placement";
 import type {
   DomainLifecycle,
@@ -1122,7 +1128,15 @@ export default function MailboxesPage() {
                                     <span className="font-medium text-[#0f172a] w-44 shrink-0">
                                       {c.label}
                                     </span>
-                                    <span className="text-muted-foreground">{c.detail}</span>
+                                    <span className="text-muted-foreground flex-1 min-w-0">{c.detail}</span>
+                                    {/* What this finding costs: the score is 100 minus these. */}
+                                    <span
+                                      className={`w-8 shrink-0 text-right font-semibold tabular-nums ${
+                                        c.status === "bad" ? "text-red-600" : "text-amber-600"
+                                      }`}
+                                    >
+                                      {c.deduction > 0 ? `−${c.deduction}` : ""}
+                                    </span>
                                   </div>
                                 ))
                               ) : (
@@ -1130,11 +1144,42 @@ export default function MailboxesPage() {
                                   First health check runs within the hour.
                                 </p>
                               )}
+                              {mb.health_components && (
+                                <p className="text-xs pt-1">
+                                  <span className="font-semibold text-[#0f172a]">Score: </span>
+                                  <span className="text-muted-foreground tabular-nums">
+                                    {scoreMath(mb.health_components)}
+                                  </span>
+                                </p>
+                              )}
                               {mb.health_checked_at && (
                                 <p className="text-[11px] text-muted-foreground pt-1">
                                   Last checked {new Date(mb.health_checked_at).toLocaleString()}.
                                 </p>
                               )}
+                              <details className="pt-1 text-xs">
+                                <summary className="cursor-pointer select-none font-medium text-[#0f172a] hover:underline">
+                                  How the score works
+                                </summary>
+                                <div className="mt-2 space-y-2 rounded-md border bg-white p-3">
+                                  <ul className="space-y-1 text-muted-foreground">
+                                    {HEALTH_SCALE.map((line) => (
+                                      <li key={line}>{line}</li>
+                                    ))}
+                                  </ul>
+                                  <dl className="space-y-1.5 pt-1">
+                                    {HEALTH_RUBRIC.map((r) => (
+                                      <div
+                                        key={r.key}
+                                        className="grid grid-cols-1 gap-0.5 sm:grid-cols-[11rem_1fr] sm:gap-2"
+                                      >
+                                        <dt className="font-medium text-[#0f172a]">{r.label}</dt>
+                                        <dd className="text-muted-foreground">{r.rule}</dd>
+                                      </div>
+                                    ))}
+                                  </dl>
+                                </div>
+                              </details>
                             </div>
                             <PlacementPanel
                               mailbox={mb}

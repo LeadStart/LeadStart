@@ -31,6 +31,10 @@
 import {
   computeInboxHealth,
   bandForScore,
+  scoreMath,
+  HEALTH_RUBRIC,
+  HEALTH_SCALE,
+  PENALTY,
 } from "../src/lib/deliverability/inbox-health.ts";
 
 let pass = 0;
@@ -347,6 +351,34 @@ console.log("\n■ band boundaries");
   assert(bandForScore(50) === "watch", "50 → watch");
   assert(bandForScore(49) === "critical", "49 → critical");
   assert(bandForScore(0) === "critical", "0 → critical");
+}
+
+// ---------- 9. In-app rubric + score math ----------
+// The Mailboxes page renders HEALTH_RUBRIC and scoreMath(); these keep what
+// users are shown locked to what the scorer actually does.
+console.log("\n■ rubric: one row per scored component, in the scorer's order");
+{
+  const keys = computeInboxHealth({}).components.map((c) => c.key);
+  const rubricKeys = HEALTH_RUBRIC.map((r) => r.key);
+  assert(JSON.stringify(rubricKeys) === JSON.stringify(keys), `rubric keys match components (${rubricKeys.join(",")})`);
+  assert(HEALTH_RUBRIC.every((r) => r.rule.length > 20 && r.short.length > 0), "every row has a rule and a short name");
+  assert(HEALTH_RUBRIC.find((r) => r.key === "blacklist")?.rule.includes(`−${PENALTY.blacklist}`) === true, "blacklist rule quotes PENALTY.blacklist");
+  assert(HEALTH_RUBRIC.find((r) => r.key === "reply_signal")?.rule.includes(`−${PENALTY.replyDrop.bad}`) === true, "reply rule quotes PENALTY.replyDrop.bad");
+  assert(HEALTH_SCALE.some((l) => l.includes("Healthy 80–100") && l.includes("Critical below 50")), "scale line matches the band cut-offs");
+}
+
+console.log("\n■ scoreMath: the score as arithmetic, equal to the stored score");
+{
+  const r = computeInboxHealth({
+    dbl: { status: "clean", detail: "not listed" },
+    domainAuth: { domain: "x.com", spf: ok(), dkim: ok(), dmarc: warn("p=none") },
+    mx: ok(),
+    engagement: eng([316, 1, 1], [120, 7, 5]),
+  });
+  const math = scoreMath(r.components);
+  assert(math === `100 − ${PENALTY.dmarc.warn} DMARC − ${PENALTY.replyDrop.bad} reply rate = ${r.score}`, `math reads left to right (got "${math}")`);
+  assert(r.score === 70, `and totals the stored score, 70 (got ${r.score})`);
+  assert(scoreMath(computeInboxHealth({}).components) === "100 (nothing is costing points)", "clean mailbox → says nothing costs points");
 }
 
 // ---------- Summary ----------

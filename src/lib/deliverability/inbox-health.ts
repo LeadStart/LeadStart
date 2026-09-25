@@ -59,7 +59,12 @@ import type { HealthBand, HealthComponent, PlacementAuthSummary } from "@/types/
 import type { AuthCheck, DomainAuth } from "./check";
 import type { DblResult } from "./dnsbl";
 import { PLACEMENT_FRESHNESS_DAYS, describeAuthFailures, describeCounts } from "./placement";
-import { ENGAGEMENT_EXPOSURE_DAYS, poissonCdf, type ContactEngagement } from "./engagement";
+import {
+  ENGAGEMENT_COHORT_DAYS,
+  ENGAGEMENT_EXPOSURE_DAYS,
+  poissonCdf,
+  type ContactEngagement,
+} from "./engagement";
 
 export const HEALTHY_MIN = 80;
 export const CRITICAL_MAX = 49; // score <= 49 is critical (i.e. below 50)
@@ -80,6 +85,22 @@ export const REPLY_DROP_BAD = { maxShare: 0.25, maxChance: 0.001 } as const;
 // threshold: > 2% of new contacts asking to be removed within 14 days.
 export const OPTOUT_WARN_RATE = 0.02;
 export const OPTOUT_MIN_COUNT = 3;
+
+// Points each finding costs: the ONE table both the scorer (below) and the
+// in-app rubric (HEALTH_RUBRIC, rendered on the Mailboxes page) read, so what
+// users are told can't drift from what's actually scored.
+export const PENALTY = {
+  blacklist: 60,
+  spf: { fail: 15, warn: 5 },
+  dkim: { fail: 15, warn: 5 },
+  dmarc: { fail: 10, warn: 5 },
+  mx: { fail: 20, warn: 10 },
+  bounce: { over10: 60, over5: 40, over2: 15 },
+  softBounce: { over25: 15, over10: 8 },
+  replyDrop: { warn: 10, bad: 25 },
+  optOut: 10,
+  placement: { majoritySpam: 45, anySpam: 25, missing: 10, promotions: 5 },
+} as const;
 
 export interface InboxHealthInputs {
   /** Spamhaus DBL result. null/undefined → blacklist via DBL not checked. */
@@ -133,10 +154,10 @@ export function computeInboxHealth(inputs: InboxHealthInputs): InboxHealthResult
 
   const components: HealthComponent[] = [
     blacklistComponent(dbl),
-    authComponent("spf", "SPF", domainAuth?.spf, { fail: 15, warn: 5 }, "SPF not checked."),
-    authComponent("dkim", "DKIM", domainAuth?.dkim, { fail: 15, warn: 5 }, "DKIM not checked."),
-    authComponent("dmarc", "DMARC", domainAuth?.dmarc, { fail: 10, warn: 5 }, "DMARC not checked."),
-    authComponent("mx", "MX records", mx, { fail: 20, warn: 10 }, "MX not checked."),
+    authComponent("spf", "SPF", domainAuth?.spf, PENALTY.spf, "SPF not checked."),
+    authComponent("dkim", "DKIM", domainAuth?.dkim, PENALTY.dkim, "DKIM not checked."),
+    authComponent("dmarc", "DMARC", domainAuth?.dmarc, PENALTY.dmarc, "DMARC not checked."),
+    authComponent("mx", "MX records", mx, PENALTY.mx, "MX not checked."),
     bounceComponent(bounces),
     softBounceComponent(bounces),
     replyRateComponent(engagement),
@@ -213,7 +234,7 @@ function blacklistComponent(dbl: DblResult | null | undefined): HealthComponent 
   const label = "Domain blacklist";
 
   if (dbl?.status === "listed") {
-    return { key, label, status: "bad", deduction: 60, detail: dbl.detail };
+    return { key, label, status: "bad", deduction: PENALTY.blacklist, detail: dbl.detail };
   }
 
   // Affirmatively clean only if the DBL check actually cleared it.
@@ -246,9 +267,9 @@ function bounceComponent(
   }
   const rate = bounces.bounced7d / bounces.sent7d;
   const detail = `${bounces.bounced7d} of ${bounces.sent7d} sends bounced this week (${(rate * 100).toFixed(1)}%).`;
-  if (rate > 0.1) return { key, label, status: "bad", deduction: 60, detail };
-  if (rate > 0.05) return { key, label, status: "bad", deduction: 40, detail };
-  if (rate > 0.02) return { key, label, status: "warn", deduction: 15, detail };
+  if (rate > 0.1) return { key, label, status: "bad", deduction: PENALTY.bounce.over10, detail };
+  if (rate > 0.05) return { key, label, status: "bad", deduction: PENALTY.bounce.over5, detail };
+  if (rate > 0.02) return { key, label, status: "warn", deduction: PENALTY.bounce.over2, detail };
   return { key, label, status: "ok", deduction: 0, detail };
 }
 
@@ -282,8 +303,8 @@ function softBounceComponent(
   }
   const rate = soft / sent;
   const detail = `${soft} of ${sent} sends soft-bounced this week (${(rate * 100).toFixed(1)}%): transient, not suppressed.`;
-  if (rate > 0.25) return { key, label, status: "warn", deduction: 15, detail };
-  if (rate > 0.1) return { key, label, status: "warn", deduction: 8, detail };
+  if (rate > 0.25) return { key, label, status: "warn", deduction: PENALTY.softBounce.over25, detail };
+  if (rate > 0.1) return { key, label, status: "warn", deduction: PENALTY.softBounce.over10, detail };
   return { key, label, status: "ok", deduction: 0, detail };
 }
 
@@ -357,7 +378,7 @@ function replyRateComponent(e: ContactEngagement | null | undefined): HealthComp
       key,
       label,
       status: "bad",
-      deduction: 25,
+      deduction: PENALTY.replyDrop.bad,
       detail: `${vs}. A drop this large happens by chance ${chanceText(chance)} of the time.${optOutNote} Consider resting this domain before it burns.`,
     };
   }
@@ -366,7 +387,7 @@ function replyRateComponent(e: ContactEngagement | null | undefined): HealthComp
       key,
       label,
       status: "warn",
-      deduction: 10,
+      deduction: PENALTY.replyDrop.warn,
       detail: `${vs}. A drop this large happens by chance ${chanceText(chance)} of the time.${optOutNote}`,
     };
   }
@@ -405,7 +426,7 @@ function optOutComponent(e: ContactEngagement | null | undefined): HealthCompone
       key,
       label,
       status: "warn",
-      deduction: 10,
+      deduction: PENALTY.optOut,
       detail: `${summary}. That's high: opt-out replies are the closest visible sign of spam complaints, which are what drag a domain's reputation down. Check the targeting and the first two steps' copy.`,
     };
   }
@@ -461,17 +482,17 @@ function seedPlacementComponent(p: PlacementSignal | null | undefined): HealthCo
       : "";
 
   if (p.spam > 0 && p.spam / total >= 0.5) {
-    return { key, label, status: "bad", deduction: 45, detail: `${summary}${authNote}` };
+    return { key, label, status: "bad", deduction: PENALTY.placement.majoritySpam, detail: `${summary}${authNote}` };
   }
   if (p.spam > 0) {
-    return { key, label, status: "bad", deduction: 25, detail: `${summary}${authNote}` };
+    return { key, label, status: "bad", deduction: PENALTY.placement.anySpam, detail: `${summary}${authNote}` };
   }
   if (p.missing > 0) {
     return {
       key,
       label,
       status: "warn",
-      deduction: 10,
+      deduction: PENALTY.placement.missing,
       detail: `${summary} A missing probe usually means a gateway rejection or a delay, re-run before acting on it.${authNote}`,
     };
   }
@@ -480,9 +501,116 @@ function seedPlacementComponent(p: PlacementSignal | null | undefined): HealthCo
       key,
       label,
       status: "warn",
-      deduction: 5,
+      deduction: PENALTY.placement.promotions,
       detail: `${summary} Most seeds filed it under Promotions, Gmail reads the message as marketing; try a plainer, more personal first line.`,
     };
   }
   return { key, label, status: "ok", deduction: 0, detail: `${summary}${authNote}` };
+}
+
+// ── In-app rubric (Mailboxes → expand a mailbox → "How the score works") ──
+// Generated from PENALTY and the thresholds above, so the page can never
+// describe a rule the scorer doesn't apply. One row per component, in the
+// scorer's order (scripts/test-inbox-health.ts asserts both).
+
+export interface HealthRubricRow {
+  key: HealthComponent["key"];
+  label: string;
+  /** Short name for the score math line ("100 − 25 reply rate − 5 DMARC"). */
+  short: string;
+  rule: string;
+}
+
+const minus = (n: number) => `−${n}`;
+const asPct = (x: number) => `${Math.round(x * 1000) / 10}%`;
+const fromDays = ENGAGEMENT_EXPOSURE_DAYS;
+const toDays = ENGAGEMENT_EXPOSURE_DAYS + ENGAGEMENT_COHORT_DAYS;
+
+export const HEALTH_RUBRIC: HealthRubricRow[] = [
+  {
+    key: "blacklist",
+    label: "Domain blacklist",
+    short: "blacklist",
+    rule: `Domain listed on the Spamhaus domain blocklist: ${minus(PENALTY.blacklist)}.`,
+  },
+  {
+    key: "spf",
+    label: "SPF",
+    short: "SPF",
+    rule: `No SPF record: ${minus(PENALTY.spf.fail)}. A record that doesn't authorize Google: ${minus(PENALTY.spf.warn)}.`,
+  },
+  {
+    key: "dkim",
+    label: "DKIM",
+    short: "DKIM",
+    rule: `No DKIM key published on the "google" selector: ${minus(PENALTY.dkim.warn)}.`,
+  },
+  {
+    key: "dmarc",
+    label: "DMARC",
+    short: "DMARC",
+    rule: `No DMARC record: ${minus(PENALTY.dmarc.fail)}. Policy p=none (monitoring only): ${minus(PENALTY.dmarc.warn)}.`,
+  },
+  {
+    key: "mx",
+    label: "MX records",
+    short: "MX",
+    rule: `No MX records (replies and bounce notices can't arrive): ${minus(PENALTY.mx.fail)}.`,
+  },
+  {
+    key: "bounce_rate",
+    label: "Bounce rate (7 days)",
+    short: "bounces",
+    rule: `Hard bounces over 10% of sends: ${minus(PENALTY.bounce.over10)}; 5–10%: ${minus(PENALTY.bounce.over5)}; 2–5%: ${minus(PENALTY.bounce.over2)}. Needs ${MIN_SENT_FOR_BOUNCE_SCORE}+ sends in the week.`,
+  },
+  {
+    key: "soft_bounce_rate",
+    label: "Soft-bounce rate (7 days)",
+    short: "soft bounces",
+    rule: `Temporary delivery failures over 25% of sends: ${minus(PENALTY.softBounce.over25)}; 10–25%: ${minus(PENALTY.softBounce.over10)}. Never critical on its own.`,
+  },
+  {
+    key: "reply_signal",
+    label: "Reply rate per contact",
+    short: "reply rate",
+    rule:
+      `The domain's contacts first emailed ${fromDays}–${toDays} days ago vs. the organization's earlier contacts, each given ${ENGAGEMENT_EXPOSURE_DAYS} days to reply. ` +
+      `Falls to ${asPct(REPLY_DROP_WARN.maxShare)} of the earlier rate or less, with under a ${asPct(REPLY_DROP_WARN.maxChance)} chance of being luck: ${minus(PENALTY.replyDrop.warn)}. ` +
+      `Falls to ${asPct(REPLY_DROP_BAD.maxShare)} or less, under ${asPct(REPLY_DROP_BAD.maxChance)}: ${minus(PENALTY.replyDrop.bad)}. ` +
+      `Needs ${MIN_RECENT_CONTACTS}+ recent and ${MIN_BASELINE_CONTACTS}+ earlier contacts.`,
+  },
+  {
+    key: "optout_rate",
+    label: "Opt-out rate per contact",
+    short: "opt-outs",
+    rule: `More than ${asPct(OPTOUT_WARN_RATE)} of the domain's new contacts (and at least ${OPTOUT_MIN_COUNT}) asking to be removed within ${ENGAGEMENT_EXPOSURE_DAYS} days: ${minus(PENALTY.optOut)}. The closest visible sign of spam complaints.`,
+  },
+  {
+    key: "seed_placement",
+    label: "Seed placement",
+    short: "seed test",
+    rule: `From the latest seed test in the last ${PLACEMENT_FRESHNESS_DAYS} days: half or more seeds in spam ${minus(PENALTY.placement.majoritySpam)}; any in spam ${minus(PENALTY.placement.anySpam)}; any missing ${minus(PENALTY.placement.missing)}; mostly in Promotions ${minus(PENALTY.placement.promotions)}.`,
+  },
+];
+
+/** The scale + the rules that apply to every signal, for the rubric's header. */
+export const HEALTH_SCALE: string[] = [
+  "Every mailbox starts at 100 and loses the points below for each problem found.",
+  `Healthy ${HEALTHY_MIN}–100 · Watch ${CRITICAL_MAX + 1}–${HEALTHY_MIN - 1} · Critical below ${CRITICAL_MAX + 1}.`,
+  "A signal that couldn't be measured (too little data yet, a DNS lookup that failed, no recent test) costs nothing and shows a grey dot.",
+  "Blacklist, DNS, reply rate and opt-out rate are judged per sending domain, so every mailbox on a domain shares them.",
+  "If an offline threshold is set (Settings → Integrations → Inbox health), a mailbox scoring below it on two checks in a row is paused automatically.",
+];
+
+/**
+ * The score as arithmetic, e.g. "100 − 25 reply rate − 5 DMARC = 70", so the
+ * number is never a black box. "100 (nothing is costing points)" when clean.
+ */
+export function scoreMath(components: HealthComponent[]): string {
+  const costs = components.filter((c) => c.deduction > 0);
+  const total = Math.max(0, 100 - costs.reduce((s, c) => s + c.deduction, 0));
+  if (costs.length === 0) return "100 (nothing is costing points)";
+  const shortOf = (key: HealthComponent["key"]) =>
+    HEALTH_RUBRIC.find((r) => r.key === key)?.short ?? key.replace(/_/g, " ");
+  return `100 ${costs.map((c) => `− ${c.deduction} ${shortOf(c.key)}`).join(" ")} = ${total}`;
 }
