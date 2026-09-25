@@ -7,7 +7,7 @@
 // live so early sends don't land in spam. Sending routes through Google's IPs,
 // so authentication + list hygiene + copy are the levers that actually matter.
 
-import { resolveTxt, resolveMx } from "node:dns/promises";
+import { resolveTxt, resolveMx, Resolver } from "node:dns/promises";
 
 // The copy scorer lives in a client-safe sibling (no node: imports) so the
 // builder UI can import it without pulling node:dns into the client bundle.
@@ -16,7 +16,9 @@ import { resolveTxt, resolveMx } from "node:dns/promises";
 export { scoreCopy, findSpamMatches } from "./copy";
 export type { CopyIssue, CopyScore, StepCopyResult, SpamMatch } from "./copy";
 
-export type AuthStatus = "pass" | "warn" | "fail";
+// "unknown" = the lookup itself failed (timeout / SERVFAIL / refused), so we
+// don't know whether the record exists. Never graded as missing: see lookup().
+export type AuthStatus = "pass" | "warn" | "fail" | "unknown";
 export interface AuthCheck {
   status: AuthStatus;
   detail: string;
@@ -28,42 +30,115 @@ export interface DomainAuth {
   dmarc: AuthCheck;
 }
 
-async function txt(name: string): Promise<string[]> {
-  try {
-    // Each TXT record can be split into chunks; join them back.
-    return (await resolveTxt(name)).map((chunks) => chunks.join(""));
-  } catch {
-    return []; // NXDOMAIN / ENODATA / timeout → treated as "not found"
+// ── Lookups: an answer vs. a failure to get one ─────────────────────────────
+// NXDOMAIN / NODATA is the DNS saying "no such record": a real answer, graded
+// as missing. A timeout, SERVFAIL or refusal is NOT an answer. This used to be
+// swallowed as "no record", so one resolver hiccup read as "no SPF, no DMARC,
+// no MX" and knocked 50 points off every inbox on the domain in one hourly
+// check: with any other deduction, a false "critical" (owner alert; auto-pause
+// if it lasted two checks). Now a failed lookup is retried once through public
+// resolvers and, if that fails too, reported "unknown" (scored as unchecked).
+// Same stance as the Spamhaus check in ./dnsbl.ts.
+const ABSENT_CODES = new Set(["ENOTFOUND", "ENODATA"]);
+
+export class DnsLookupError extends Error {
+  constructor(public readonly code: string) {
+    super(`DNS lookup failed (${code})`);
+    this.name = "DnsLookupError";
   }
+}
+
+/** One resolver's TXT + MX lookups (injectable so tests can simulate failures). */
+export interface DnsLookups {
+  txt: (name: string) => Promise<string[][]>;
+  mx: (name: string) => Promise<{ exchange: string; priority: number }[]>;
+}
+
+let publicResolver: Resolver | null = null;
+function fallbackResolver(): Resolver {
+  if (!publicResolver) {
+    publicResolver = new Resolver({ timeout: 2500, tries: 2 });
+    publicResolver.setServers(["1.1.1.1", "8.8.8.8"]);
+  }
+  return publicResolver;
+}
+
+/** The runtime's resolver first, then public resolvers as a second opinion. */
+export const DEFAULT_DNS: DnsLookups[] = [
+  { txt: (n) => resolveTxt(n), mx: (n) => resolveMx(n) },
+  { txt: (n) => fallbackResolver().resolveTxt(n), mx: (n) => fallbackResolver().resolveMx(n) },
+];
+
+/**
+ * Records, [] for an authoritative "no such record", or DnsLookupError when no
+ * resolver could answer at all.
+ */
+async function lookup<T>(run: (d: DnsLookups) => Promise<T[]>, resolvers: DnsLookups[]): Promise<T[]> {
+  let lastCode = "EUNKNOWN";
+  for (const r of resolvers) {
+    try {
+      return await run(r);
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException)?.code ?? "EUNKNOWN";
+      if (ABSENT_CODES.has(code)) return [];
+      lastCode = code;
+    }
+  }
+  throw new DnsLookupError(lastCode);
+}
+
+function unknownCheck(label: string, err: unknown): AuthCheck {
+  const code = err instanceof DnsLookupError ? err.code : "error";
+  return {
+    status: "unknown",
+    detail: `Couldn't check ${label} right now (DNS lookup failed: ${code}); not scored, retried next run.`,
+  };
 }
 
 /**
  * Live SPF / DKIM / DMARC check for one sending domain. Google Workspace uses
- * the `google` DKIM selector by default, so we probe that.
+ * the `google` DKIM selector by default, so we probe that. A record whose
+ * lookup failed reads "unknown", never "fail".
  */
-export async function checkDomainAuth(domain: string): Promise<DomainAuth> {
-  const [root, dkimSel, dmarc] = await Promise.all([
+export async function checkDomainAuth(
+  domain: string,
+  resolvers: DnsLookups[] = DEFAULT_DNS,
+): Promise<DomainAuth> {
+  // Each TXT record can be split into chunks; join them back.
+  const txt = (name: string) =>
+    lookup((r) => r.txt(name), resolvers).then(
+      (rows) => ({ ok: true as const, records: rows.map((chunks) => chunks.join("")) }),
+      (err: unknown) => ({ ok: false as const, err }),
+    );
+  const [rootRes, dkimRes, dmarcRes] = await Promise.all([
     txt(domain),
     txt(`google._domainkey.${domain}`),
     txt(`_dmarc.${domain}`),
   ]);
 
-  const spfRec = root.find((r) => /^v=spf1/i.test(r.trim()));
   let spf: AuthCheck;
-  if (!spfRec) {
-    spf = { status: "fail", detail: "No SPF record found." };
-  } else if (/include:_spf\.google\.com/i.test(spfRec)) {
-    spf = { status: "pass", detail: "SPF present and authorizes Google." };
+  if (!rootRes.ok) {
+    spf = unknownCheck("SPF", rootRes.err);
   } else {
-    spf = { status: "warn", detail: "SPF present but missing include:_spf.google.com (required for Gmail sending)." };
+    const spfRec = rootRes.records.find((r) => /^v=spf1/i.test(r.trim()));
+    if (!spfRec) {
+      spf = { status: "fail", detail: "No SPF record found." };
+    } else if (/include:_spf\.google\.com/i.test(spfRec)) {
+      spf = { status: "pass", detail: "SPF present and authorizes Google." };
+    } else {
+      spf = { status: "warn", detail: "SPF present but missing include:_spf.google.com (required for Gmail sending)." };
+    }
   }
 
-  const dkimRec = dkimSel.find((r) => /v=DKIM1/i.test(r));
-  const dkim: AuthCheck = dkimRec
-    ? { status: "pass", detail: "DKIM published on the google selector." }
-    : { status: "warn", detail: "No DKIM on the 'google' selector, enable it in Google Admin → Gmail → Authenticate email (or a custom selector is in use)." };
+  const dkimRec = dkimRes.ok ? dkimRes.records.find((r) => /v=DKIM1/i.test(r)) : undefined;
+  const dkim: AuthCheck = !dkimRes.ok
+    ? unknownCheck("DKIM", dkimRes.err)
+    : dkimRec
+      ? { status: "pass", detail: "DKIM published on the google selector." }
+      : { status: "warn", detail: "No DKIM on the 'google' selector, enable it in Google Admin → Gmail → Authenticate email (or a custom selector is in use)." };
 
-  const dmarcRec = dmarc.find((r) => /^v=DMARC1/i.test(r.trim()));
+  if (!dmarcRes.ok) return { domain, spf, dkim, dmarc: unknownCheck("DMARC", dmarcRes.err) };
+  const dmarcRec = dmarcRes.records.find((r) => /^v=DMARC1/i.test(r.trim()));
   let dmarcCheck: AuthCheck;
   if (!dmarcRec) {
     dmarcCheck = { status: "fail", detail: "No DMARC record found." };
@@ -95,17 +170,22 @@ export async function checkDomainAuth(domain: string): Promise<DomainAuth> {
  * (not folded into checkDomainAuth) so the campaign deliverability card, which
  * consumes DomainAuth, is unaffected: only the inbox-health cron calls this.
  */
-export async function checkMx(domain: string): Promise<AuthCheck> {
+export async function checkMx(
+  domain: string,
+  resolvers: DnsLookups[] = DEFAULT_DNS,
+): Promise<AuthCheck> {
+  let rows: { exchange: string; priority: number }[];
   try {
-    const rows = await resolveMx(domain);
-    if (rows.length > 0) {
-      return {
-        status: "pass",
-        detail: `MX present (${rows.length} record${rows.length === 1 ? "" : "s"}).`,
-      };
-    }
-  } catch {
-    // NXDOMAIN / ENODATA / timeout: treat as missing, same stance as txt().
+    rows = await lookup((r) => r.mx(domain), resolvers);
+  } catch (err) {
+    // The lookup failed; that says nothing about whether MX exists.
+    return unknownCheck("MX", err);
+  }
+  if (rows.length > 0) {
+    return {
+      status: "pass",
+      detail: `MX present (${rows.length} record${rows.length === 1 ? "" : "s"}).`,
+    };
   }
   return {
     status: "fail",

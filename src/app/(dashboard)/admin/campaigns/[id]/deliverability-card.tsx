@@ -5,9 +5,11 @@
 // spam-score, so the owner can fix issues before activating.
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ShieldCheck, CheckCircle2, AlertTriangle, XCircle, Loader2 } from "lucide-react";
+import { ShieldCheck, CheckCircle2, AlertTriangle, XCircle, HelpCircle, Loader2 } from "lucide-react";
 
-type AuthStatus = "pass" | "warn" | "fail";
+// Mirrors AuthStatus in src/lib/deliverability/check.ts ("unknown" = the DNS
+// lookup itself failed, so the record's existence is not known).
+type AuthStatus = "pass" | "warn" | "fail" | "unknown";
 interface AuthCheck { status: AuthStatus; detail: string; }
 interface DomainAuth { domain: string; spf: AuthCheck; dkim: AuthCheck; dmarc: AuthCheck; }
 interface CopyIssue { severity: "warn" | "info"; message: string; }
@@ -67,6 +69,7 @@ function MatchChip({ m }: { m: SpamMatch }) {
 function StatusIcon({ status }: { status: AuthStatus }) {
   if (status === "pass") return <CheckCircle2 size={14} className="text-emerald-600 shrink-0" />;
   if (status === "warn") return <AlertTriangle size={14} className="text-amber-600 shrink-0" />;
+  if (status === "unknown") return <HelpCircle size={14} className="text-muted-foreground shrink-0" />;
   return <XCircle size={14} className="text-red-600 shrink-0" />;
 }
 

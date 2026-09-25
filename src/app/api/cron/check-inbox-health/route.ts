@@ -2,7 +2,9 @@
 //
 // Scores every native (Gmail) sending mailbox 0–100 from free signals: live
 // SPF/DKIM/DMARC/MX DNS, the Spamhaus domain blocklist, the 7-day hard/soft
-// bounce rates from native_sends, the 14-day reply signal, and the latest
+// bounce rates from native_sends, the 14-day reply signal (judged against the
+// org's own trailing reply rate, so a zero only counts when it's unlikely by
+// chance), and the latest
 // seed placement test (migration 00068; the one direct measurement): then:
 //   - writes the denormalized score onto native_mailboxes (always),
 //   - inserts a mailbox_health_checks snapshot ONLY when the score changed or
@@ -26,13 +28,14 @@ import { checkDomainAuth, checkMx, domainOf } from "@/lib/deliverability/check";
 import type { AuthCheck, DomainAuth } from "@/lib/deliverability/check";
 import { checkDbl } from "@/lib/deliverability/dnsbl";
 import type { DblResult } from "@/lib/deliverability/dnsbl";
-import { computeInboxHealth, summarizeIssues } from "@/lib/deliverability/inbox-health";
+import { computeInboxHealth, resolveReplyBaseline, summarizeIssues } from "@/lib/deliverability/inbox-health";
 import {
   latestCompletePlacementTests,
   placementSignalFromTest,
 } from "@/lib/deliverability/placement-runner";
 import { PLACEMENT_FRESHNESS_DAYS } from "@/lib/deliverability/placement";
-import { nextWatchStreak } from "@/lib/deliverability/lifecycle";
+import { nextCriticalStreak, nextWatchStreak } from "@/lib/deliverability/lifecycle";
+import { fetchAllRowsStrict } from "@/lib/supabase/fetch-all";
 import { enqueueOwnerAlert } from "@/lib/notifications/owner-alerts";
 import type { HealthBand, HealthComponent, NativeMailbox } from "@/types/app";
 
@@ -93,11 +96,18 @@ export async function GET(request: NextRequest) {
   const domainIds = Array.from(
     new Set(mailboxes.map((m) => m.domain_id).filter((id): id is string => !!id)),
   );
-  const priorDomain = new Map<string, { watch_streak: number; health_checked_at: string | null }>();
+  const priorDomain = new Map<
+    string,
+    { watch_streak: number; critical_streak: number; health_checked_at: string | null }
+  >();
+  // critical_streak arrives with migration 00132. select("*") (not a named
+  // column list) so this read keeps working before that migration is applied;
+  // the rollup write below includes critical_streak only once the column exists.
+  let hasCriticalStreak = false;
   if (domainIds.length > 0) {
     const { data: domRows, error: domErr } = await admin
       .from("sending_domains")
-      .select("id, watch_streak, health_checked_at")
+      .select("*")
       .in("id", domainIds);
     if (domErr) {
       console.error("[cron/check-inbox-health] prior domain-rollup read failed:", domErr.message);
@@ -105,9 +115,15 @@ export async function GET(request: NextRequest) {
       for (const d of (domRows ?? []) as {
         id: string;
         watch_streak: number | null;
+        critical_streak?: number | null;
         health_checked_at: string | null;
       }[]) {
-        priorDomain.set(d.id, { watch_streak: d.watch_streak ?? 0, health_checked_at: d.health_checked_at });
+        if ("critical_streak" in d) hasCriticalStreak = true;
+        priorDomain.set(d.id, {
+          watch_streak: d.watch_streak ?? 0,
+          critical_streak: d.critical_streak ?? 0,
+          health_checked_at: d.health_checked_at,
+        });
       }
     }
   }
@@ -116,16 +132,30 @@ export async function GET(request: NextRequest) {
   // hard+soft bounce counts (bounce components) and the 14-day send volume (the
   // reply signal's denominator). Same reasoning as above: a read error here
   // would silently zero every mailbox, so fail the run rather than score on bad
-  // data.
+  // data. PAGED: PostgREST silently truncates an un-ranged select at 1,000 rows
+  // on this project. At 20/day an inbox sends ~200 in 14 days, so five inboxes
+  // filled the window (800 rows on 2026-09-25) and a sixth would have dropped
+  // rows without an error, scoring bounce rates on partial data (the same bug
+  // class as SEND-68). The strict pager throws rather than return a partial set.
   const now = Date.now();
   const sevenDaysAgoMs = now - 7 * 86_400_000;
   const fourteenDaysAgo = new Date(now - 14 * 86_400_000).toISOString();
-  const { data: sendRows, error: sendError } = await admin
-    .from("native_sends")
-    .select("mailbox_id, status, sent_at, soft_bounced_at")
-    .gte("sent_at", fourteenDaysAgo);
-  if (sendError) {
-    return NextResponse.json({ error: sendError.message }, { status: 500 });
+  let sendRows: {
+    mailbox_id: string;
+    status: string;
+    sent_at: string;
+    soft_bounced_at: string | null;
+  }[];
+  try {
+    sendRows = await fetchAllRowsStrict(() =>
+      admin
+        .from("native_sends")
+        .select("mailbox_id, status, sent_at, soft_bounced_at")
+        .gte("sent_at", fourteenDaysAgo)
+        .order("id", { ascending: true }),
+    );
+  } catch (err) {
+    return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });
   }
   interface SendStats {
     sent7d: number;
@@ -134,12 +164,7 @@ export async function GET(request: NextRequest) {
     sent14d: number;
   }
   const statsByMailbox = new Map<string, SendStats>();
-  for (const s of (sendRows ?? []) as {
-    mailbox_id: string;
-    status: string;
-    sent_at: string;
-    soft_bounced_at: string | null;
-  }[]) {
+  for (const s of sendRows) {
     const cur =
       statsByMailbox.get(s.mailbox_id) ??
       { sent7d: 0, bounced7d: 0, softBounced7d: 0, sent14d: 0 };
@@ -157,25 +182,61 @@ export async function GET(request: NextRequest) {
   // signal is advisory, and (critically) on error we must treat it as
   // "unchecked", never "zero replies" (which would fire a false placement
   // warning). replyReadOk gates that: false → pass replies:null (unchecked).
+  // Paged like the sends sweep (a partial read would undercount replies).
   const repliesByMailbox = new Map<string, number>();
   let replyReadOk = true;
-  const { data: replyRows, error: replyError } = await admin
-    .from("lead_replies")
-    .select("native_mailbox_id")
-    .eq("source_channel", "native_email")
-    .gte("received_at", fourteenDaysAgo);
-  if (replyError) {
-    replyReadOk = false;
-    console.error("[cron/check-inbox-health] reply count read failed:", replyError.message);
-  } else {
-    for (const r of (replyRows ?? []) as { native_mailbox_id: string | null }[]) {
+  try {
+    const replyRows = await fetchAllRowsStrict<{ native_mailbox_id: string | null }>(() =>
+      admin
+        .from("lead_replies")
+        .select("native_mailbox_id")
+        .eq("source_channel", "native_email")
+        .gte("received_at", fourteenDaysAgo)
+        .order("id", { ascending: true }),
+    );
+    for (const r of replyRows) {
       if (!r.native_mailbox_id) continue;
       repliesByMailbox.set(
         r.native_mailbox_id,
         (repliesByMailbox.get(r.native_mailbox_id) ?? 0) + 1,
       );
     }
+  } catch (err) {
+    replyReadOk = false;
+    console.error(
+      "[cron/check-inbox-health] reply count read failed:",
+      err instanceof Error ? err.message : err,
+    );
   }
+
+  // 3b') Each org's trailing-90-day reply rate (native replies / native sends),
+  // the baseline that decides when a zero-reply run is meaningful (see
+  // replySignalMinSends). Count-only queries, so the row cap can't truncate
+  // them. A read error → null: the scorer then assumes its default rate,
+  // never a crash and never a false "zero replies".
+  const ninetyDaysAgo = new Date(now - 90 * 86_400_000).toISOString();
+  const replyBaselineByOrg = new Map<string, number | null>();
+  await Promise.all(
+    orgIds.map(async (orgId) => {
+      const [sends90, replies90] = await Promise.all([
+        admin
+          .from("native_sends")
+          .select("id", { count: "exact", head: true })
+          .eq("organization_id", orgId)
+          .gte("sent_at", ninetyDaysAgo),
+        admin
+          .from("lead_replies")
+          .select("id", { count: "exact", head: true })
+          .eq("organization_id", orgId)
+          .eq("source_channel", "native_email")
+          .gte("received_at", ninetyDaysAgo),
+      ]);
+      replyBaselineByOrg.set(
+        orgId,
+        sends90.error || replies90.error ? null : resolveReplyBaseline(sends90.count ?? 0, replies90.count ?? 0),
+      );
+    }),
+  );
 
   // 3c) Latest COMPLETE seed placement test per mailbox, no older than
   // PLACEMENT_FRESHNESS_DAYS, for the seed_placement component. Advisory like
@@ -235,7 +296,11 @@ export async function GET(request: NextRequest) {
         // replyReadOk === false → unchecked (never a false "zero replies").
         replies:
           replyReadOk && stats
-            ? { sent14d: stats.sent14d, replied14d: repliesByMailbox.get(mb.id) ?? 0 }
+            ? {
+                sent14d: stats.sent14d,
+                replied14d: repliesByMailbox.get(mb.id) ?? 0,
+                baselineRate: replyBaselineByOrg.get(mb.organization_id) ?? null,
+              }
             : null,
         placement: (() => {
           const pt = placementRead.byMailbox.get(mb.id);
@@ -351,11 +416,12 @@ export async function GET(request: NextRequest) {
   }
 
   // Persist the per-domain health rollups (migration 00081). watch_streak counts
-  // CONSECUTIVE DAYS in the 'watch' band (the future lifecycle cron tires a
-  // domain at WATCH_STREAK_FOR_TIRED consecutive days): it advances at most once
-  // per UTC day, and resets to 0 the moment the domain leaves 'watch': a
-  // 'critical' domain tires via the band directly, not via the streak. Purely
-  // additive: nothing reads these columns yet except the (future) lifecycle cron.
+  // CONSECUTIVE DAYS in the 'watch' band (the lifecycle cron tires a domain at
+  // WATCH_STREAK_FOR_TIRED consecutive days): it advances at most once per UTC
+  // day, and resets to 0 the moment the domain leaves 'watch'. critical_streak
+  // (migration 00132) counts consecutive HOURLY rollups in 'critical': the
+  // lifecycle acts on a critical band only at CRITICAL_STREAK_FOR_TIRED, so a
+  // one-hour blip never tires a domain. Written only once that column exists.
   const rollupIso = new Date(now).toISOString();
   for (const [domainId, roll] of domainRollup) {
     const prior = priorDomain.get(domainId);
@@ -373,6 +439,9 @@ export async function GET(request: NextRequest) {
         health_components: roll.components,
         health_checked_at: rollupIso,
         watch_streak: watchStreak,
+        ...(hasCriticalStreak
+          ? { critical_streak: nextCriticalStreak(roll.band, prior?.critical_streak ?? 0) }
+          : {}),
       })
       .eq("id", domainId);
     if (rollErr) {

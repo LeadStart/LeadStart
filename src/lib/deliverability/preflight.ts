@@ -114,7 +114,8 @@ export async function runActivationPreflight(
         for (const a of auths) {
           const checks = [a.spf, a.dkim, a.dmarc];
           const failed = checks.filter((c) => c.status === "fail");
-          const warned = checks.filter((c) => c.status === "warn");
+          // A failed DNS lookup ("unknown") is surfaced, never silently passed.
+          const warned = checks.filter((c) => c.status === "warn" || c.status === "unknown");
           if (failed.length > 0) {
             warnings.push({
               kind: "domain_auth",

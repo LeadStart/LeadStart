@@ -27,8 +27,11 @@
 //   bounce 7d      >10% -60 / 5–10% -40 / 2–5% -15   (only when >= 20 sends)
 //   soft bounce 7d >25% -15 / 10–25% -8   (warn-only; transient, never critical
 //                                          on its own; only when >= 20 sends)
-//   reply signal   0 replies over >= 40 sends/14d  -10  (warn-only; a dead reply
-//                  rate at real volume is the cheapest inbox-placement proxy)
+//   reply signal   0 replies over 14d  -10  (warn-only), ONLY once the send
+//                  count makes a zero unlikely by chance (< 5%) at the org's
+//                  own trailing reply rate; below that, unchecked. At a 0.4%
+//                  reply rate a healthy inbox sees zero replies in 200 sends
+//                  about half the time, so a fixed floor was a coin flip.
 //   seed placement spam >= 50% of seeds -45 / any spam -25 / any missing -10 /
 //                  Promotions majority -5   (latest COMPLETE placement test no
 //                  older than PLACEMENT_FRESHNESS_DAYS; older or none = unchecked)
@@ -42,10 +45,10 @@
 // "the score dipped" into "why": auth failure vs. reputation/content.
 //
 // Sanity anchors (used by scripts/test-inbox-health.ts): perfect = 100/healthy;
-// DBL-listed alone = 40/critical; >10% bounces alone = 40/critical; a total DNS
-// resolver outage (SPF fail + DKIM warn + DMARC fail + MX fail) = exactly
-// 50/watch; 2 of 3 seeds in spam alone = 55/watch; empty inputs = 100/healthy
-// with every component "unchecked".
+// DBL-listed alone = 40/critical; >10% bounces alone = 40/critical; SPF, DMARC
+// and MX genuinely missing (+ DKIM warn) = exactly 50/watch; a DNS resolver
+// OUTAGE (every lookup "unknown") = 100, all four unchecked; 2 of 3 seeds in
+// spam alone = 55/watch; empty inputs = 100/healthy, every component unchecked.
 
 import type { HealthBand, HealthComponent, PlacementAuthSummary } from "@/types/app";
 import type { AuthCheck, DomainAuth } from "./check";
@@ -55,11 +58,40 @@ import { PLACEMENT_FRESHNESS_DAYS, describeAuthFailures, describeCounts } from "
 export const HEALTHY_MIN = 80;
 export const CRITICAL_MAX = 49; // score <= 49 is critical (i.e. below 50)
 export const MIN_SENT_FOR_BOUNCE_SCORE = 20; // mirrors kpi/step-health MIN_SENT_FOR_ALERT
-// Reply signal needs more volume than bounce rate before a zero-reply run is
-// meaningful: cold-email reply rates are low (~1–5%), so at small samples a
-// zero is just noise. 40 sends over 14 days is the floor below which we say
-// nothing (component reads "unchecked").
+// Reply signal. A run of zero replies means something only when it would be
+// unlikely for a healthy inbox, and that depends on how often this org's
+// prospects reply at all: at a 1% reply rate ~300 sends make a zero unusual;
+// at 0.4% it takes ~800. So the floor is derived from the org's own trailing
+// reply rate (resolveReplyBaseline, computed by the health cron) as the send
+// count at which P(0 replies | healthy) drops below REPLY_SIGNAL_FALSE_ALARM.
+// Never below MIN_SENT_FOR_REPLY_SIGNAL. Without enough history to trust the
+// org's own rate, DEFAULT_REPLY_BASELINE is assumed.
 export const MIN_SENT_FOR_REPLY_SIGNAL = 40;
+export const REPLY_SIGNAL_FALSE_ALARM = 0.05;
+export const DEFAULT_REPLY_BASELINE = 0.01;
+// Org sends (trailing 90 days) before the org's own reply rate is trusted.
+export const MIN_BASELINE_SENDS = 500;
+// Clamp so a freak rate can't make the floor absurd either way.
+const REPLY_BASELINE_MIN = 0.002;
+const REPLY_BASELINE_MAX = 0.1;
+
+/** The org's trailing reply rate, or null when there's too little history to trust it. */
+export function resolveReplyBaseline(sends: number, replies: number): number | null {
+  return sends >= MIN_BASELINE_SENDS ? replies / sends : null;
+}
+
+function effectiveReplyBaseline(rate: number | null | undefined): number {
+  return Math.min(REPLY_BASELINE_MAX, Math.max(REPLY_BASELINE_MIN, rate ?? DEFAULT_REPLY_BASELINE));
+}
+
+/** Sends needed before zero replies would happen by chance < REPLY_SIGNAL_FALSE_ALARM of the time. */
+export function replySignalMinSends(baselineRate: number | null | undefined): number {
+  const p = effectiveReplyBaseline(baselineRate);
+  return Math.max(
+    MIN_SENT_FOR_REPLY_SIGNAL,
+    Math.ceil(Math.log(REPLY_SIGNAL_FALSE_ALARM) / Math.log(1 - p)),
+  );
+}
 
 export interface InboxHealthInputs {
   /** Spamhaus DBL result. null/undefined → blacklist via DBL not checked. */
@@ -76,9 +108,11 @@ export interface InboxHealthInputs {
   bounces?: { sent7d: number; bounced7d: number; softBounced7d?: number } | null;
   /**
    * 14-day send + reply counts for this mailbox. sent14d from native_sends,
-   * replied14d from lead_replies (native_email). null → reply signal unchecked.
+   * replied14d from lead_replies (native_email). baselineRate is the org's
+   * trailing reply rate (resolveReplyBaseline); null/absent → the scorer
+   * assumes DEFAULT_REPLY_BASELINE. null → reply signal unchecked.
    */
-  replies?: { sent14d: number; replied14d: number } | null;
+  replies?: { sent14d: number; replied14d: number; baselineRate?: number | null } | null;
   /**
    * Latest COMPLETE seed placement test for this mailbox, already filtered to
    * <= PLACEMENT_FRESHNESS_DAYS old by the caller. null → seed placement
@@ -176,6 +210,9 @@ function authComponent(
   uncheckedDetail: string,
 ): HealthComponent {
   if (!check) return { key, label, status: "unchecked", deduction: 0, detail: uncheckedDetail };
+  // The lookup failed (timeout / SERVFAIL), so existence is unknown: a DNS
+  // hiccup must never read as a missing record (see lookup() in ./check.ts).
+  if (check.status === "unknown") return { key, label, status: "unchecked", deduction: 0, detail: check.detail };
   if (check.status === "fail")
     return { key, label, status: "bad", deduction: weights.fail, detail: check.detail };
   if (check.status === "warn")
@@ -270,32 +307,40 @@ function softBounceComponent(
  * replies, OOO auto-responders included; mail that spam-folders draws none).
  *
  * Deliberately conservative to avoid false alarms: warn-only, never critical;
- * unchecked below MIN_SENT_FOR_REPLY_SIGNAL sends (a zero at low volume is
- * noise); and it only fires on an *absolute zero*: any reply at all reads ok.
- * It does not score reply-rate deltas, which are too noisy at these volumes.
+ * unchecked until the send count makes a zero unlikely by chance at the org's
+ * own reply rate (replySignalMinSends); and it only fires on an *absolute
+ * zero*: any reply at all reads ok. It does not score reply-rate deltas, which
+ * are too noisy at these volumes. A relative baseline cannot see a placement
+ * problem that hits EVERY inbox at once (the baseline collapses with it); seed
+ * placement is the measurement for that.
  */
 function replySignalComponent(
-  replies: { sent14d: number; replied14d: number } | null | undefined,
+  replies: { sent14d: number; replied14d: number; baselineRate?: number | null } | null | undefined,
 ): HealthComponent {
   const key: HealthComponent["key"] = "reply_signal";
   const label = "Reply signal (14 days)";
   const sent = replies?.sent14d ?? 0;
-  if (!replies || sent < MIN_SENT_FOR_REPLY_SIGNAL) {
+  const p = effectiveReplyBaseline(replies?.baselineRate);
+  const minSends = replySignalMinSends(replies?.baselineRate);
+  const rateLabel = `${(p * 100).toFixed(p < 0.01 ? 2 : 1)}%`;
+  const basis = replies?.baselineRate != null ? `this org's ${rateLabel} reply rate` : `an assumed ${rateLabel} reply rate`;
+  if (!replies || sent < minSends) {
     return {
       key,
       label,
       status: "unchecked",
       deduction: 0,
-      detail: `Only ${sent} send${sent === 1 ? "" : "s"} in the last 14 days, need ${MIN_SENT_FOR_REPLY_SIGNAL} to read the reply signal.`,
+      detail: `${sent} send${sent === 1 ? "" : "s"} in the last 14 days. At ${basis}, zero replies only means something after about ${minSends} sends (before that it happens by chance more than ${REPLY_SIGNAL_FALSE_ALARM * 100}% of the time).`,
     };
   }
   if (replies.replied14d === 0) {
+    const chance = Math.pow(1 - p, sent) * 100;
     return {
       key,
       label,
       status: "warn",
       deduction: 10,
-      detail: `No replies across ${sent} sends in 14 days, possible inbox-placement issue (check seed/placement before scaling this mailbox).`,
+      detail: `No replies across ${sent} sends in 14 days; at ${basis} that happens by chance only ${chance < 1 ? chance.toFixed(1) : Math.round(chance)}% of the time. Possible inbox-placement issue (check seed placement before scaling this mailbox).`,
     };
   }
   const rate = replies.replied14d / replies.sent14d;

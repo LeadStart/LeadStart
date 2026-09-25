@@ -11,14 +11,16 @@
  *   - 3% bounce on 100 sends     → 85  / healthy
  *   - 19 sends                   → bounce unchecked, no deduction
  *   - 30% soft bounce on 100     → 85  / healthy (warn -15, never critical)
- *   - 0 replies on 100 sends/14d → 90  / healthy (warn -10)
- *   - any reply on 100 sends/14d → reply signal ok, no deduction
+ *   - 0 replies, 300 sends @ 1%  → 90  / healthy (warn -10)
+ *   - 0 replies, 200 sends @0.37%→ unchecked (a zero is ~48% likely by chance)
+ *   - any reply above the floor  → reply signal ok, no deduction
  *   - 2 of 3 seeds in spam       → 55  / watch   (bad -45; never critical alone)
  *   - 1 of 4 seeds in spam       → 75  / watch   (bad -25)
  *   - 1 of 3 seeds missing       → 90  / healthy (warn -10)
  *   - Promotions majority        → 95  / healthy (warn -5)
  *   - all seeds in inbox         → ok, detail names receiver auth
- *   - total DNS resolver outage  → exactly 50 / watch
+ *   - SPF/DMARC/MX truly missing → exactly 50 / watch
+ *   - DNS resolver outage        → DNS components unchecked, never critical
  *   - empty inputs               → 100 / healthy, every component unchecked
  *
  * Usage:
@@ -28,6 +30,8 @@
 import {
   computeInboxHealth,
   bandForScore,
+  replySignalMinSends,
+  resolveReplyBaseline,
 } from "../src/lib/deliverability/inbox-health.ts";
 
 let pass = 0;
@@ -118,8 +122,8 @@ console.log("\n■ 19 sends → bounce unchecked, no deduction");
   assert(r.score === 100, `score is 100 (got ${r.score})`);
 }
 
-// ---------- 6. Total DNS outage ----------
-console.log("\n■ total DNS resolver outage → exactly 50 / watch");
+// ---------- 6. Records genuinely missing ----------
+console.log("\n■ SPF, DMARC and MX genuinely missing (+ DKIM warn) → exactly 50 / watch");
 {
   const r = computeInboxHealth({
     dbl: { status: "unchecked", detail: "no key" },
@@ -129,6 +133,23 @@ console.log("\n■ total DNS resolver outage → exactly 50 / watch");
   });
   assert(r.score === 50, `score is exactly 50 (got ${r.score})`);
   assert(r.band === "watch", `band is watch (got ${r.band})`);
+}
+
+// ---------- 6b. DNS resolver outage ----------
+// Before 2026-09-25 a timed-out lookup read as a missing record, so an outage
+// scored exactly like case 6 (50), and with the zero-reply -10 → 40 critical.
+console.log("\n■ DNS resolver outage (every lookup 'unknown') → 100, all four unchecked");
+{
+  const unknown = (label: string) => ({ status: "unknown" as const, detail: `Couldn't check ${label} right now` });
+  const r = computeInboxHealth({
+    domainAuth: { domain: "x.com", spf: unknown("SPF"), dkim: unknown("DKIM"), dmarc: unknown("DMARC") },
+    mx: unknown("MX"),
+    replies: { sent14d: 900, replied14d: 0, baselineRate: 0.0037 },
+  });
+  const dns = r.components.filter((c) => ["spf", "dkim", "dmarc", "mx"].includes(c.key));
+  assert(dns.every((c) => c.status === "unchecked" && c.deduction === 0), "SPF/DKIM/DMARC/MX all unchecked, zero deduction");
+  assert(r.score === 90, `only the (real) reply signal counts: 90 (got ${r.score})`);
+  assert(r.band === "healthy", `never critical from an outage (got ${r.band})`);
 }
 
 // ---------- 7. Empty inputs ----------
@@ -165,33 +186,67 @@ console.log("\n■ soft bounce unchecked when softBounced7d omitted");
   assert(soft?.status === "unchecked" && soft.deduction === 0, "soft bounce unchecked, no deduction");
 }
 
-// ---------- 7b. Reply signal ----------
-console.log("\n■ 0 replies on 100 sends/14d → warn -10 → 90 / healthy");
+// ---------- 7b. Reply signal (baseline-aware) ----------
+console.log("\n■ min-sends math: 1% → 299, 0.37% → ~808, 5% → 59, 10% → floor 40");
+{
+  assert(replySignalMinSends(0.01) === 299, `1% → 299 (got ${replySignalMinSends(0.01)})`);
+  assert(replySignalMinSends(null) === 299, "no baseline → assumes 1%");
+  const lead = replySignalMinSends(0.0037);
+  assert(lead >= 800 && lead <= 812, `0.37% → ~808 (got ${lead})`);
+  assert(replySignalMinSends(0.05) === 59, `5% → 59 (got ${replySignalMinSends(0.05)})`);
+  assert(replySignalMinSends(0.2) === 40, "a high rate never drops below the 40-send floor");
+  assert(resolveReplyBaseline(499, 5) === null, "under 500 org sends → baseline not trusted");
+  assert(resolveReplyBaseline(1000, 4) === 0.004, "enough history → the org's own rate");
+}
+
+console.log("\n■ LeadStart today: 0 replies on 200 sends at a 0.37% rate → unchecked (was a false warn)");
+{
+  const r = computeInboxHealth({ replies: { sent14d: 200, replied14d: 0, baselineRate: 0.0037 } });
+  const rep = r.components.find((c) => c.key === "reply_signal");
+  assert(rep?.status === "unchecked" && rep.deduction === 0, "unchecked, no deduction");
+  assert(
+    rep?.detail.includes("0.37%") === true && rep.detail.includes(String(replySignalMinSends(0.0037))) === true,
+    `detail explains the rate + floor (got: ${rep?.detail})`,
+  );
+  assert(r.score === 100, `score is 100 (got ${r.score})`);
+}
+
+console.log("\n■ 0 replies on 300 sends at the default 1% → warn -10 → 90 / healthy");
 {
   const r = computeInboxHealth({
     dbl: { status: "clean", detail: "not listed" },
     domainAuth: goodDns,
     mx: ok(),
     bounces: { sent7d: 100, bounced7d: 1 },
-    replies: { sent14d: 100, replied14d: 0 },
+    replies: { sent14d: 300, replied14d: 0 },
   });
   const rep = r.components.find((c) => c.key === "reply_signal");
   assert(rep?.status === "warn" && rep.deduction === 10, "reply signal is warn, -10");
+  assert(rep?.detail.includes("by chance only 5%") === true, `detail gives the chance (got: ${rep?.detail})`);
   assert(r.score === 90, `score is 90 (got ${r.score})`);
   assert(r.band === "healthy", `band is healthy (got ${r.band})`);
 }
 
-console.log("\n■ any reply on 100 sends/14d → reply signal ok, no deduction");
+console.log("\n■ 0 replies on 100 sends at a 5% org rate → warn (a zero is unusual there)");
 {
-  const r = computeInboxHealth({ replies: { sent14d: 100, replied14d: 3 } });
+  const r = computeInboxHealth({ replies: { sent14d: 100, replied14d: 0, baselineRate: 0.05 } });
   const rep = r.components.find((c) => c.key === "reply_signal");
-  assert(rep?.status === "ok" && rep.deduction === 0, "reply signal ok, no deduction");
+  assert(rep?.status === "warn" && rep.deduction === 10, "warn, -10");
+}
+
+console.log("\n■ any reply on 100 sends/14d → reply signal unchecked below its floor, ok above it");
+{
+  const low = computeInboxHealth({ replies: { sent14d: 100, replied14d: 3 } });
+  assert(low.components.find((c) => c.key === "reply_signal")?.status === "unchecked", "100 sends at 1% → unchecked");
+  const r = computeInboxHealth({ replies: { sent14d: 400, replied14d: 3 } });
+  const rep = r.components.find((c) => c.key === "reply_signal");
+  assert(rep?.status === "ok" && rep.deduction === 0, "400 sends, 3 replies → ok, no deduction");
   assert(r.score === 100, `score is 100 (got ${r.score})`);
 }
 
-console.log("\n■ 39 sends/14d → reply signal unchecked (below floor)");
+console.log("\n■ 39 sends/14d → reply signal unchecked (below the absolute floor)");
 {
-  const r = computeInboxHealth({ replies: { sent14d: 39, replied14d: 0 } });
+  const r = computeInboxHealth({ replies: { sent14d: 39, replied14d: 0, baselineRate: 0.2 } });
   const rep = r.components.find((c) => c.key === "reply_signal");
   assert(rep?.status === "unchecked" && rep.deduction === 0, "reply signal unchecked below 40 sends");
   assert(r.score === 100, `score is 100 (got ${r.score})`);

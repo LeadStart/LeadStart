@@ -25,6 +25,7 @@ import {
 } from "@/lib/gmail/ramp";
 import { latestPlacementTests } from "@/lib/deliverability/placement-runner";
 import { mailboxUsageMap } from "@/lib/campaigns/mailbox-usage";
+import { fetchAllRows } from "@/lib/supabase/fetch-all";
 import type { NativeMailbox, SendingDomain } from "@/types/app";
 
 async function requireOwner() {
@@ -106,19 +107,24 @@ export async function GET() {
   }
   const mailboxes = (mailboxRows ?? []) as NativeMailbox[];
 
-  // Usage: one pass over the last 7 days of sends for the whole org.
+  // Usage: one pass over the last 7 days of sends for the whole org. Paged:
+  // PostgREST truncates an un-ranged select at 1,000 rows, which ten inboxes at
+  // full volume reach in a week, and the page's sent-today / bounced-7d
+  // columns would then silently undercount.
   const sevenDaysAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();
   const dayStart = startOfLocalDay();
-  const { data: sendRows } = await admin
-    .from("native_sends")
-    .select("mailbox_id, status, sent_at")
-    .eq("organization_id", organizationId)
-    .gte("sent_at", sevenDaysAgo);
-  const sends = (sendRows ?? []) as {
+  const sends = await fetchAllRows<{
     mailbox_id: string;
     status: string;
     sent_at: string;
-  }[];
+  }>(() =>
+    admin
+      .from("native_sends")
+      .select("mailbox_id, status, sent_at")
+      .eq("organization_id", organizationId)
+      .gte("sent_at", sevenDaysAgo)
+      .order("id", { ascending: true }),
+  );
 
   const sentToday: Record<string, number> = {};
   const bounced7d: Record<string, number> = {};

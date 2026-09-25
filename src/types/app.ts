@@ -958,6 +958,9 @@ export interface SendingDomain {
   health_components: HealthComponent[] | null;
   health_checked_at: string | null;
   watch_streak: number; // consecutive daily rollups in 'watch'
+  // Consecutive hourly rollups in 'critical' (migration 00132). Optional: the
+  // column is absent until that migration is applied; readers treat it as 0.
+  critical_streak?: number;
   notes: string | null;
   // Multi-step Google Workspace provisioning state (migration 00097); null for
   // domains not going through the workspace flow (backfilled / manual mailboxes).

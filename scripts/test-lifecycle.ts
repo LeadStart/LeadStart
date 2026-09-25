@@ -10,11 +10,13 @@ import {
   shouldTripCircuitBreaker,
   enterTimers,
   nextWatchStreak,
+  nextCriticalStreak,
   gatherDomainSignals,
   DRAIN_DAYS,
   REST_DAYS,
   MIN_DOMAIN_AGE_DAYS,
   WATCH_STREAK_FOR_TIRED,
+  CRITICAL_STREAK_FOR_TIRED,
   type DomainSignals,
   type LifecycleTimers,
 } from "../src/lib/deliverability/lifecycle.ts";
@@ -54,6 +56,7 @@ const clean: DomainSignals = {
   dblListed: false,
   healthBand: "healthy",
   watchStreak: 0,
+  criticalStreak: 0,
   restedButStillBad: false,
 };
 const sig = (over: Partial<DomainSignals>): DomainSignals => ({ ...clean, ...over });
@@ -113,7 +116,9 @@ eq(decide("active", {}).next, "active", "healthy → stay active");
 eq(decide("active", {}).changed, false, "healthy active is not a change");
 eq(decide("active", { dblListed: true }).next, "tired", "DBL → tired");
 eq(decide("active", { placementMajoritySpam: true }).next, "resting", "majority-spam → resting immediately");
-eq(decide("active", { healthBand: "critical" }).next, "tired", "health critical → tired");
+eq(decide("active", { healthBand: "critical", criticalStreak: CRITICAL_STREAK_FOR_TIRED }).next, "tired", "health critical on 2 consecutive checks → tired");
+eq(decide("active", { healthBand: "critical", criticalStreak: 1 }).next, "active", "health critical on ONE check → stay active (a blip must not cost ~2 months)");
+eq(decide("active", { healthBand: "critical", criticalStreak: 0 }).next, "active", "critical with no streak recorded (pre-00132) → stay active");
 eq(decide("active", { watchStreak: WATCH_STREAK_FOR_TIRED }).next, "tired", "watch streak at threshold → tired");
 eq(decide("active", { watchStreak: WATCH_STREAK_FOR_TIRED - 1 }).next, "active", "watch streak below threshold → stay active");
 eq(decide("active", { healthBand: "watch", watchStreak: 1 }).next, "active", "single watch day → stay active (noise)");
@@ -147,6 +152,13 @@ eq(enterTimers("resting", NOW).rest_until, new Date(NOW + REST_DAYS * DAY).toISO
 eq(enterTimers("resting", NOW).drain_until, undefined, "resting sets no drain_until");
 eq(Object.keys(enterTimers("active", NOW)).length, 0, "active sets no timers");
 eq(Object.keys(enterTimers("warming", NOW)).length, 0, "warming sets no timers");
+
+// ── nextCriticalStreak (hourly accounting) ──────────────────────────────────
+console.log("nextCriticalStreak, counts consecutive hourly rollups in 'critical'");
+eq(nextCriticalStreak("critical", 0), 1, "first critical rollup → 1");
+eq(nextCriticalStreak("critical", 1), 2, "second consecutive → 2 (reaches the tire threshold)");
+eq(nextCriticalStreak("watch", 5), 0, "leaving critical resets to 0");
+eq(nextCriticalStreak("healthy", 1), 0, "healthy resets to 0");
 
 // ── nextWatchStreak (daily accounting) ──────────────────────────────────────
 console.log("nextWatchStreak, counts consecutive UTC days in 'watch'");
@@ -209,7 +221,10 @@ eq(gatherDomainSignals(dom({}), [mbx("m1", "active"), mbx("m2", "active")], sent
 eq(gatherDomainSignals(dom({}), [mbx("m1", "active")], sent([]), place([]), NOW).latestPlacementClean, null, "no fresh test → clean is null (unknown)");
 
 // restedButStillBad + passthroughs
-eq(gatherDomainSignals(dom({ health_band: "critical" }), [], sent([]), place([]), NOW).restedButStillBad, true, "critical band → still bad");
+eq(gatherDomainSignals(dom({ health_band: "critical", critical_streak: 2 }), [], sent([]), place([]), NOW).restedButStillBad, true, "sustained critical band → still bad");
+eq(gatherDomainSignals(dom({ health_band: "critical", critical_streak: 1 }), [], sent([]), place([]), NOW).restedButStillBad, false, "one critical reading at rest end → NOT still bad (never burn on a blip)");
+eq(gatherDomainSignals(dom({ critical_streak: 3 }), [], sent([]), place([]), NOW).criticalStreak, 3, "critical_streak passthrough");
+eq(gatherDomainSignals(dom({}), [], sent([]), place([]), NOW).criticalStreak, 0, "critical_streak absent (pre-00132) → 0");
 eq(gatherDomainSignals(dom({ health_components: [comp("blacklist", "bad")] }), [], sent([]), place([]), NOW).restedButStillBad, true, "DBL → still bad");
 eq(gatherDomainSignals(dom({ health_band: "healthy" }), [], sent([]), place([]), NOW).restedButStillBad, false, "healthy, clean → not still bad");
 eq(gatherDomainSignals(dom({ watch_streak: 4 }), [], sent([]), place([]), NOW).watchStreak, 4, "watch_streak passthrough");

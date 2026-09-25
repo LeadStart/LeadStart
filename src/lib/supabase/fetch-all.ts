@@ -22,10 +22,32 @@ export async function fetchAllRows<T>(
   build: () => Rangeable<T>,
   pageSize = 1000,
 ): Promise<T[]> {
+  return pageThrough(build, pageSize, false);
+}
+
+/**
+ * fetchAllRows for callers that must NOT act on a partial row set (e.g. the
+ * inbox-health cron, which scores deliverability from these rows and would
+ * rather fail the run than score on half the data): throws on a page error
+ * instead of returning what it had.
+ */
+export async function fetchAllRowsStrict<T>(
+  build: () => Rangeable<T>,
+  pageSize = 1000,
+): Promise<T[]> {
+  return pageThrough(build, pageSize, true);
+}
+
+async function pageThrough<T>(
+  build: () => Rangeable<T>,
+  pageSize: number,
+  strict: boolean,
+): Promise<T[]> {
   const rows: T[] = [];
   for (let from = 0; ; from += pageSize) {
     const { data, error } = await build().range(from, from + pageSize - 1);
     if (error) {
+      if (strict) throw new Error(`page fetch failed: ${error.message ?? String(error)}`);
       console.error("[fetchAllRows] page fetch failed:", error.message ?? error);
       break;
     }

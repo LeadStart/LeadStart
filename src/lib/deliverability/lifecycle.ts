@@ -48,6 +48,12 @@ export const MIN_DOMAIN_AGE_DAYS = 21;
 // domain. One bad day is noise; a sustained slide is a real reputation drift.
 export const WATCH_STREAK_FOR_TIRED = 3;
 
+// Consecutive HOURLY rollups in the `critical` band before a critical reading
+// may tire an `active` domain (or burn a rested one). One critical reading can
+// be a blip; tiring costs the domain ~2 months (drain + rest + re-warm), so it
+// takes two in a row, the same guard the per-mailbox auto-pause uses.
+export const CRITICAL_STREAK_FOR_TIRED = 2;
+
 // ── Fast bounce circuit breaker ─────────────────────────────────────────────
 // Reacts faster than the hourly/daily health rollup: a burst of hard bounces
 // means a poisoned list segment is actively torching the domain right now.
@@ -129,6 +135,8 @@ export interface DomainSignals {
   healthBand: HealthBand | null;
   /** Consecutive daily rollups in the `watch` band. */
   watchStreak: number;
+  /** Consecutive hourly rollups in the `critical` band (0 when not critical). */
+  criticalStreak: number;
   /**
    * Set by the cron when a rest has elapsed but a fresh probe still shows the
    * domain failing (spam/DBL): it burns instead of re-warming.
@@ -192,7 +200,12 @@ export function decideLifecycle(
     case "active":
       if (s.dblListed) return decide("tired", "DBL listing, close intake and drain.");
       if (s.placementMajoritySpam) return decide("resting", "Majority-spam placement, rest now.");
-      if (s.healthBand === "critical") return decide("tired", "Health critical, close intake and drain.");
+      if (s.healthBand === "critical") {
+        if (s.criticalStreak >= CRITICAL_STREAK_FOR_TIRED) {
+          return decide("tired", `Health critical on ${s.criticalStreak} consecutive checks, close intake and drain.`);
+        }
+        return decide("active", "Health critical on one check, waiting for a second consecutive check before tiring.");
+      }
       if (s.watchStreak >= WATCH_STREAK_FOR_TIRED) {
         return decide("tired", `Health in 'watch' for ${s.watchStreak} consecutive rollups, tire before it burns.`);
       }
@@ -248,6 +261,15 @@ export function enterTimers(next: DomainLifecycle, now: number): {
  * streak. `priorCheckedAt` is the domain's last health_checked_at (ISO) or null
  * on its first-ever rollup.
  */
+/**
+ * Hourly critical-streak accounting for a domain's health rollup (written by
+ * check-inbox-health, read by decideLifecycle's CRITICAL_STREAK_FOR_TIRED
+ * gate): +1 for every rollup in 'critical', reset to 0 by any other band.
+ */
+export function nextCriticalStreak(band: HealthBand, priorStreak: number): number {
+  return band === "critical" ? priorStreak + 1 : 0;
+}
+
 export function nextWatchStreak(
   band: HealthBand,
   priorStreak: number,
@@ -317,8 +339,16 @@ export function gatherDomainSignals(
     freshTests.length > 0 ? freshTests.every((t) => t.spam_count === 0) : null;
 
   const healthBand = (domain.health_band as HealthBand | null) ?? null;
-  // After a rest, "still bad" = any hard reputation signal still firing.
-  const restedButStillBad = dblListed || placementMajoritySpam || healthBand === "critical";
+  // Absent until migration 00132 is applied → 0 (a critical reading then never
+  // tires or burns on its own, the safe direction).
+  const criticalStreak = domain.critical_streak ?? 0;
+  // After a rest, "still bad" = any hard reputation signal still firing. A
+  // critical band counts only when sustained: one blip at the moment a rest
+  // ends must not burn the domain for good.
+  const restedButStillBad =
+    dblListed ||
+    placementMajoritySpam ||
+    (healthBand === "critical" && criticalStreak >= CRITICAL_STREAK_FOR_TIRED);
 
   return {
     dkimVerified,
@@ -329,6 +359,7 @@ export function gatherDomainSignals(
     dblListed,
     healthBand,
     watchStreak: domain.watch_streak ?? 0,
+    criticalStreak,
     restedButStillBad,
   };
 }
