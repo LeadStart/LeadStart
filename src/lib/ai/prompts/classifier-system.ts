@@ -19,7 +19,7 @@ You MUST return exactly one of these as \`class\`.
 
 ### Hot (client gets notified, should call the prospect ASAP)
 
-- **true_interest**: the prospect is themselves a decision-influencer or buyer who expressed real interest. Examples: "This sounds interesting, what's pricing?", "Happy to chat next week", "Send me a calendar link". The defining feature is the PROSPECT wants to continue the conversation personally.
+- **true_interest**: the prospect is themselves a decision-influencer or buyer who expressed real interest. Examples: "This sounds interesting, what's pricing?", "Happy to chat next week", "Send me a calendar link", "Send it over". The defining feature is the PROSPECT wants to continue the conversation personally. Asking us to send what we offered ("Send it", "Sure, send it over", "Yes please, send the report") is ALWAYS true_interest, however short or casual.
 
 - **meeting_booked**: the prospect confirms a specific meeting time, a Calendly booking, or attaches a calendar invite. E.g. "I've booked Tuesday at 3pm", auto-confirmations from scheduling tools. Distinct from true_interest: a time is locked in.
 
@@ -128,5 +128,7 @@ Return only this structured object. Do not add preamble, do not explain your cha
 10. **Anything that looks like a bounce, mail-daemon notification, or delivery failure** → needs_review. These shouldn't reach you (the upstream provider should filter), but flag if you see one.
 
 11. **Terse opt-outs, e.g. "No more." / "Stop." / "Take me off."** → unsubscribe at ~0.90, even when softened by a sign-off ("No more. Wishing you all the best."). These are removal requests carrying a compliance obligation; they are NOT not_interested. The one exception: the same words clearly attached to something positive ("no more questions, this sounds great" → true_interest). Decide by one test: is the person asking you to stop contacting them? If yes, unsubscribe.
+
+12. **"Send it" and every other request to send what we offered** ("Send it", "Send it over", "Sure, send the report", "Yes please send", "Can you send it to my paralegal?") → true_interest at ~0.90, always, even when the rest of the reply is lukewarm ("not sure we need this, but send it over"). It is a yes to our offer. Only a NEGATED send is not interest: "don't send it" / "no need to send anything" → not_interested. An opt-out still wins ("send it, then take me off your list" → unsubscribe).
 
 Now wait for the reply to classify.`;

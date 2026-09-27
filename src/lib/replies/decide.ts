@@ -9,7 +9,7 @@
 // Pure function. No network. No side effects.
 
 import type { ReplyClass, ReplyReferralContact } from "@/types/app";
-import type { PrefilterResult } from "./keyword-prefilter";
+import { SEND_IT_FLAG, type PrefilterResult } from "./keyword-prefilter";
 import type { ClassifierOutput } from "@/lib/ai/classifier";
 
 export interface DecideInput {
@@ -55,6 +55,9 @@ const PREFILTER_HARD_OVERRIDES = new Set<ReplyClass>([
  * 1. Prefilter HARD overrides: unsubscribe, ooo. Deterministic regexes that
  *    don't need Claude to arbitrate. Legal / compliance considerations on
  *    unsubscribe make this important.
+ * 1b. "Send it" → true_interest, always (owner rule 2026-09-27). A request to
+ *    send what we offered beats Claude; the prefilter only flags a genuine,
+ *    un-negated request in the reply's own words, never with an opt-out/OOO.
  * 2. Claude classifier output, if present and confident (>= 0.70). The
  *    classifier sees the full taxonomy + persona context; it's the primary
  *    source of truth for nuanced hot/warm distinctions. EXCEPTION: a
@@ -83,6 +86,22 @@ export function decideFinalClass(input: DecideInput): DecideOutput {
         prefilter.reason ||
         `Deterministic prefilter match: ${prefilter.suggested_class}`,
       referral_contact: null,
+    };
+  }
+
+  // --- Precedence 1b: "send it" is always a positive reply ---
+  if (prefilter.flags.includes(SEND_IT_FLAG)) {
+    const overrode = claude && claude.class !== "true_interest";
+    return {
+      final_class: "true_interest",
+      claude_confidence: claude?.confidence ?? null,
+      claude_class: (claude?.class as ReplyClass | undefined) ?? null,
+      reason: overrode
+        ? `Asked us to send it ("send it" is always a positive reply); overrode Claude's ${claude.class} (${claude.confidence.toFixed(2)}): ${claude.reason}`
+        : `Asked us to send it ("send it" is always a positive reply).${claude ? ` ${claude.reason}` : ""}`,
+      // Keep a named hand-off ("send it to jane@…") Claude extracted.
+      referral_contact:
+        claude?.class === "referral_forward" ? claude.referral_contact : null,
     };
   }
 

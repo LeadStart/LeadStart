@@ -17,7 +17,8 @@
 //     NOT a build gate: many misses are acceptable needs_review fallbacks that
 //     Claude corrects in the live path. It tracks accuracy drift for a human.
 
-import { runKeywordPrefilter } from "@/lib/replies/keyword-prefilter";
+import { runKeywordPrefilter, SEND_IT_FLAG } from "@/lib/replies/keyword-prefilter";
+import { decideFinalClass } from "@/lib/replies/decide";
 import type { ReplyClass } from "@/types/app";
 
 // The deterministic final class when Claude is off: the prefilter's suggestion,
@@ -124,6 +125,118 @@ for (const b of [
   "Why are you emailing me?",
   "Is this spam?",
 ]) critNotHot(b, `hostile Q must not be hot: "${b}"`);
+
+// ── CRITICAL: "send it" is ALWAYS a positive reply (owner rule 2026-09-27) ───
+// The send-it flag is a HARD true_interest override that beats Claude (decide.ts
+// precedence 1b), so it must fire on every real request and on nothing else.
+console.log("CRITICAL · \"send it\" always positive (hard override)");
+function sendItFlag(body: string): boolean {
+  return runKeywordPrefilter(body, "prospect@target.com").flags.includes(SEND_IT_FLAG);
+}
+const SIG = "\n\n--\nJohn Smith | Smith Law PLLC\nCONFIDENTIALITY NOTICE: This e-mail is intended only for the named recipient. If you received it in error, do not read, copy or send it; please send it back to the sender and delete it.";
+for (const b of [
+  "Send it",
+  "Send it!",
+  "send it over",
+  "SEND IT",
+  "Sure, send it over.",
+  "Yes please send it",
+  "Yes, please send.",
+  "Send.",
+  "Please send the report.",
+  "Go ahead and send it.",
+  "Send me the report",
+  "Can you send it over?",
+  "Could you send it to my paralegal? jane@smithlaw.com",
+  "Would you mind sending it over?",
+  "Feel free to send it over.",
+  "I'd like you to send it.",
+  "Why not, send it over.",
+  "Shoot it over.",
+  "Email it to me.",
+  "Hi Daniel,\n\nNot sure we need this, but send it over and I'll take a look.\n\nThanks,\nJohn",
+  "We're all set with SEO. But sure, send it.",
+  "I'm not the right person, but send it anyway.",
+  `Sure send it${SIG}`,
+]) {
+  if (sendItFlag(b) && det(b) === "true_interest") { passed++; continue; }
+  failed++;
+  console.log(`  ✗ CRIT send-it missed\n      flag ${sendItFlag(b)}, class ${det(b)}\n      "${b}"`);
+}
+for (const b of [
+  "Don't send it.",
+  "Please don't send anything.",
+  "No need to send it, thanks.",
+  "Not interested. Don't send it.",
+  "I never asked you to send it.",
+  "Who asked you to send this?",
+  "Why did you send this to me?",
+  "Why would you send it to me?",
+  "Send it? No thanks.",
+  "I'll send it to my partner and get back to you.",
+  "You probably send this to every lawyer in Seattle.",
+  "If you send this again, I'm reporting you.",
+  "Send it to someone who cares.",
+  "Not interested.\n\nJohn Smith\nIf you received this in error, please send it back to the sender and delete it.",
+  `Not interested.${SIG}`,
+  "I am out of the office until October 3 with limited access to email. For urgent matters, please email it to jane@firm.com.",
+  "Please remove me from your list. Don't send it.",
+  "Send it, then take me off your list.",
+]) {
+  if (!sendItFlag(b)) { passed++; continue; }
+  failed++;
+  console.log(`  ✗ CRIT send-it false positive\n      "${b}"`);
+}
+crit("Don't send it.", "not_interested", "negated send is a rejection");
+crit("No need to send it, thanks.", "not_interested", "no need to send");
+crit(`Not interested.${SIG}`, "not_interested", "disclaimer's 'send it back' is not a request");
+crit("Send it, then take me off your list.", "unsubscribe", "opt-out beats send-it");
+crit("I'm on vacation until Monday, but send it over and I'll look when I'm back.", "true_interest", "OOO words + send it is not an auto-reply");
+for (const b of ["Please do not send it.", "No. Don't send.", "I don't want you to send it.", "Not necessary to send it.", "You don't need to send it."])
+  crit(b, "not_interested", `negated send: "${b}"`);
+for (const b of ["Why did you send this to me?", "Who asked you to send this?", "Why are you sending me this?", "Did I ask you to send it?", "Who said to send it?"])
+  critNotHot(b, `hostile send question must not be hot: "${b}"`);
+
+// ── CRITICAL: signatures + legal footers are not the prospect talking ─────────
+// Law-firm footers say "If you are not the intended recipient, do not forward
+// this… please contact the sender" and signatures carry info@firm.com: a
+// handoff phrase + an embedded email, i.e. a fake referral_forward (which a
+// flow's reply_interested counts as interested). The referral checks read only
+// the reply's own words; opt-out detection still reads everything.
+console.log("CRITICAL · signatures / legal footers are not referrals");
+const FOOTER = "\n\nSarah Lee\nLee & Associates, PLLC\ninfo@leelaw.com\n\nCONFIDENTIALITY NOTICE: This communication may contain privileged information. If you are not the intended recipient, do not forward this message; please contact the sender and delete it.";
+crit(`Not interested.${FOOTER}`, "not_interested", "not interested + law-firm footer");
+crit(`Please unsubscribe me.${FOOTER}`, "unsubscribe", "footer's 'do not forward this' can't mask an opt-out");
+crit("I'm not the right person, please contact mike@acme.co", "referral_forward", "real referral");
+crit(`I'm not the right person, please contact mike@acme.co.\n\nThanks,${FOOTER}`, "referral_forward", "real referral + signature + footer");
+crit("I'm not the right person for this.\n\nBest,\nJohn Smith\nSmith Law\ninfo@smithlaw.com", "wrong_person_no_referral", "signature email is not a referral target");
+crit("PRIVILEGED & CONFIDENTIAL\n\nI'm not the right person, please contact mike@acme.co.", "referral_forward", "legal banner above the reply is skipped");
+crit("Hi Daniel,\n\nThanks!\n\nUnfortunately I'm not the right person. Please contact mike@acme.co.", "referral_forward", "mid-body 'Thanks!' is not a sign-off");
+crit("I'm not the right person for this.\n\nThanks,\nJohn\n\nP.S. You'll want Mike: mike@acme.co", "referral_forward", "P.S. below the sign-off still counts");
+critNot("Please contact me at 206-555-1212.", "wrong_person_no_referral", "'please contact me' is not wrong-person");
+{
+  const r = runKeywordPrefilter(`I'm not the right person, please contact mike@acme.co.\n\nThanks,${FOOTER}`, "sarah@leelaw.com");
+  if (r.embedded_emails.join(",") === "mike@acme.co") passed++;
+  else { failed++; console.log(`  ✗ CRIT referral target must be mike@acme.co only, got ${JSON.stringify(r.embedded_emails)}`); }
+}
+if (sendItFlag("PRIVILEGED & CONFIDENTIAL\n\nSure, send it over.")) passed++;
+else { failed++; console.log("  ✗ CRIT send-it under a legal banner missed"); }
+
+// decide.ts: the flag beats a confident Claude; without it Claude still rules.
+const claudeSays = (cls: ReplyClass, confidence: number) =>
+  ({ class: cls, confidence, reason: "test", referral_contact: null }) as Parameters<typeof decideFinalClass>[0]["claude"];
+for (const [body, claude, expected, label] of [
+  ["Send it", claudeSays("not_interested", 0.9), "true_interest", "send-it beats Claude not_interested 0.90"],
+  ["Sure, send it over.", claudeSays("needs_review", 0.5), "true_interest", "send-it beats Claude needs_review"],
+  ["Send it", null, "true_interest", "send-it with Claude down"],
+  ["Don't send it.", claudeSays("not_interested", 0.9), "not_interested", "no flag: Claude rules"],
+  ["Send it, then take me off your list.", claudeSays("true_interest", 0.9), "unsubscribe", "opt-out still beats everything"],
+] as const) {
+  const got = decideFinalClass({ prefilter: runKeywordPrefilter(body, "prospect@target.com"), claude }).final_class;
+  if (got === expected) { passed++; continue; }
+  failed++;
+  console.log(`  ✗ CRIT decide: ${label}\n      expected ${expected}, got ${got}`);
+}
 
 console.log(`\nCRITICAL result: ${passed} passed, ${failed} failed\n`);
 

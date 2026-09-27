@@ -59,7 +59,9 @@ const WRONG_PERSON_PATTERNS: RegExp[] = [
   /\bthat['']?s\s+not\s+my\s+(area|department|role)\b/i,
   /\bbetter\s+(to\s+)?reach\s+out\s+to\b/i,
   /\byou\s+may\s+want\s+to\s+(contact|reach\s+out\s+to|speak\s+with)\b/i,
-  /\bplease\s+contact\b/i,
+  // Not "please contact me/us" (a lead asking for a call) or "…the sender"
+  // (legal-footer boilerplate).
+  /\bplease\s+contact\b(?!\s+(me|us|the\s+sender)\b)/i,
   /\bshould\s+be\s+directed\s+to\b/i,
 ];
 
@@ -160,6 +162,9 @@ const NOT_INTERESTED_PATTERNS: RegExp[] = [
   /\b(don'?t|do\s+not)\s+think\s+(this|it|that|we|i|you)\b/i,
   /\b(i'?ll|we'?ll)\s+pass\b(?!\s+(this|it|that|along|by|to|on)\b)/i,
   /(^|\n)[\s>*]*pass[\s.!]*(\r?\n|$)/i, // bare "pass" (the sequence invites "reply pass")
+  // A NEGATED "send it" ("Don't send it", "No need to send anything"): the
+  // mirror of the always-positive send-it rule below.
+  /\b(don['’]?t|do\s+not|no\s+need\s+to|not\s+necessary\s+to|never)\s+(want\s+(you\s+)?to\s+|need\s+to\s+|have\s+to\s+|bother\s+)?send(ing)?\b/i,
 ];
 
 // Strong scheduling signals → a meeting is (near) booked.
@@ -197,8 +202,86 @@ const INTEREST_PATTERNS: RegExp[] = [
   /\bhow\s+much\s+(is|does|would|for)\b/i,
   /\bwhat'?s\s+(the\s+)?(cost|price|pricing|investment|catch)\b/i,
   /\bhow\s+does\s+(it|this)\s+work\b/i,
-  /(^|\n)[\s>*]*(yes|yep|yeah|sure|interested|i'?m\s+in|sounds\s+good|let'?s\s+(talk|chat))[\s.!]*(\r?\n|$)/i,
+  // Yes to an offer to send something ("Want me to send it over?").
+  /\b(i'?d|we'?d|i\s+would|we\s+would|would)\s+(love|like|be\s+happy|be\s+glad)\s+to\s+(see|read|take\s+a\s+look|have\s+a\s+look|look\s+at|check\s+(it|that|this)\s+out)\b/i,
+  /\b(happy|glad|willing|i'?ll|i\s+will|we'?ll)\s+(to\s+)?(take|have)\s+a\s+(look|peek)\b/i,
+  /\blook(ing)?\s+forward\s+to\s+(it|seeing|reading|getting|receiving)\b/i,
+  /(^|\n)[\s>*]*(yes|yep|yeah|sure|interested|i'?m\s+in|sounds\s+good|let'?s\s+(talk|chat)|yes[,!\s]+please|please\s+do|go\s+(ahead|for\s+it)|fire\s+away|absolutely|definitely|by\s+all\s+means|of\s+course)[\s.!]*(\r?\n|$)/i,
 ];
+
+// ── "Send it" is ALWAYS a positive reply (owner rule, 2026-09-27) ───────────
+// A prospect asking us to send what we offered ("Send it", "Sure, send it
+// over", "Yes please, send the report", "Can you send it to my paralegal?") is
+// true_interest in every campaign, for every client, however short or casual.
+// Unlike the suggestion-level patterns above, this is a HARD override
+// (decide.ts precedence 1b): it beats Claude, so a terse "send it" can never be
+// read as anything but interested. Because it beats the model, it fires only on
+// a genuine REQUEST, checked clause by clause in the reply's own words (above
+// the sign-off / signature / disclaimer):
+//   • no negation or hostile "why" before it in the clause ("don't send it",
+//     "no need to send it", "I never asked you to send it", "why would you
+//     send it");
+//   • the words before the verb are only softeners ("Sure,", "yes please",
+//     "just", "go ahead and") or a request aimed at US ("can you", "you can",
+//     "I'd like you to", "feel free to", "if you could"), never another sender
+//     ("I'll send it to my partner", "you probably send this to everyone");
+//   • it isn't an echo ("Send it? No thanks."), a return ("send it back to the
+//     sender": disclaimer boilerplate), a brush-off ("send it to someone who
+//     cares"), or inside a threat / legal-notice sentence.
+// Opt-outs (compliance) and out-of-office auto-replies still win.
+export const SEND_IT_FLAG = "send_it_request";
+
+// The request: a send verb + what we offered ("it", "over", "the report").
+const SEND_IT_RE =
+  /\b(?:send|shoot|e-?mail)\s+(?:it|that|this|them|those|over|along|through|across|me\s+(?:it|that|this|them|over|a\s+copy|a\s+link|(?:the|your)\s+[a-z-]+)|(?:the|your)\s+(?:report|results?|findings|audit|analysis|breakdown|pdf|link|file|doc|document|copy|scan|summary|screenshots?|write-?up|review|info|details)|a\s+(?:copy|link|pdf))\b/gi;
+// "Would you mind sending it over?"
+const MIND_SENDING_RE = /\b(?:would|do|could)\s+(?:you|u)\s+mind\s+sending\s+(?:it|that|this|them|over|me|the|your)\b/gi;
+// "Send." / "Yes, please send." standing alone on its line.
+const BARE_SEND_LINE_RE =
+  /^[\s>*]*(?:(?:yes|yeah|yep|yup|sure|ok|okay|please|pls|plz|kindly|just|go\s+ahead(?:\s+and)?)\b[\s,.!]*)*send(?:\s+(?:please|pls|plz))?[\s.!]*$/i;
+// The words before the verb are read back to the nearest clause boundary.
+const CLAUSE_SPLIT_RE = /[.!?;:\n,()—–]|\s-\s|\b(?:but|and|so|or)\b/i;
+const SOFTENERS_ONLY_RE =
+  /^\s*(?:(?:yes|yeah|yep|yup|ya|yea|sure|ok|okay|k|please|pls|plz|kindly|just|then|now|great|perfect|cool|awesome|fine|alright|absolutely|definitely|certainly|of\s+course|by\s+all\s+means|why\s+not|sounds\s+good|sure\s+thing|go\s+ahead(?:\s+and)?|no\s+(?:worries|problem|rush|pressure)|hi|hey|hello|thanks|thank\s+you|lol|haha|well|oh|do|happily|gladly)\b[\s!]*)*$/i;
+const REQUEST_TAIL_RE =
+  /(?:\b(?:can|could|would|will)\s+(?:you|u)|\b(?:you|u)\s+(?:can|could|may|might|should|are\s+welcome\s+to)|\b(?:want|need|like|love|prefer|asked?)\s+(?:for\s+)?(?:you|u)\s+to|\b(?:happy|glad|fine|free|welcome|okay|ok)\s+(?:for\s+(?:you|u)\s+)?to|\b(?:if|once|when|whenever)\s+(?:you|u)(?:\s+(?:can|could|would|want\s+to|wanna)|['’]d)?)(?:\s+(?:please|kindly|just|go\s+ahead\s+and|also|still))*\s*$/i;
+const SEND_NEGATION_RE =
+  /\b(?:not|never|nothing|no\s+(?:need|reason|point)|don['’]?t|doesn['’]?t|didn['’]?t|won['’]?t|wouldn['’]?t|shouldn['’]?t|can['’]?t|cannot|couldn['’]?t|stop|quit|refuse)\b/i;
+const SEND_HOSTILE_PREFIX_RE = /\b(?:why|how\s+dare|who\s+(?:asked|told|said)|did\s+i\s+ask)\b/i;
+const SEND_NOT_A_REQUEST_AFTER_RE =
+  /^\s+(?:back\b|to\s+(?:someone|somebody|anyone|anybody)\b|to\s+(?:the\s+)?(?:spam|trash|junk|garbage|bin|hell)\b)/i;
+const SEND_BAD_SENTENCE_RE =
+  /\b(?:report(?:ing|ed)?\s+(?:you|this|it)|spam|harass\w*|cease|desist|sue|lawsuit|legal\s+action|block(?:ed|ing)?\s+(?:you|u)|delete\s+(?:it|this|that)|ignore\s+(?:it|this|that)|(?:won['’]?t|will\s+not|never|not\s+going\s+to)\s+(?:read|open)|intended\s+recipient|in\s+error|confidential\w*|privileged|dissemination|unauthori[sz]ed|sender)\b/i;
+// A send-it request only counts in the opening of the reply's own words.
+function replyOpening(text: string): string {
+  return replyOwnWords(text).slice(0, 1500);
+}
+
+function hasSendItRequest(text: string): boolean {
+  const opening = replyOpening(text);
+  if (opening.split("\n").some((line) => BARE_SEND_LINE_RE.test(line))) return true;
+  const hits = [...opening.matchAll(SEND_IT_RE), ...opening.matchAll(MIND_SENDING_RE)];
+  for (const m of hits) {
+    const start = m.index ?? 0;
+    const end = start + m[0].length;
+    const prefix = opening.slice(0, start).split(CLAUSE_SPLIT_RE).pop() ?? "";
+    const plainPrefix = prefix.replace(/\bwhy\s+not\b/gi, "");
+    if (SEND_NEGATION_RE.test(plainPrefix) || SEND_HOSTILE_PREFIX_RE.test(plainPrefix)) continue;
+    const mindForm = /\bmind\s+sending\b/i.test(m[0]);
+    const imperative = !mindForm && SOFTENERS_ONLY_RE.test(prefix);
+    if (!mindForm && !imperative && !REQUEST_TAIL_RE.test(prefix)) continue;
+    const after = opening.slice(end);
+    if (SEND_NOT_A_REQUEST_AFTER_RE.test(after)) continue;
+    // "Send it? No thanks." echoes our question back; it isn't a request.
+    if (imperative && /^(?:\s+(?:over|along|through|my\s+way|our\s+way))?\s*\?/i.test(after)) continue;
+    const sentenceStart = Math.max(...[".", "!", "?", "\n"].map((c) => opening.lastIndexOf(c, start - 1))) + 1;
+    const stop = after.search(/[.!?\n]/);
+    const sentence = opening.slice(sentenceStart, stop === -1 ? opening.length : end + stop);
+    if (SEND_BAD_SENTENCE_RE.test(sentence)) continue;
+    return true;
+  }
+  return false;
+}
 
 // Any other genuine question → qualifying_question (still a hot class).
 const QUESTION_PATTERNS: RegExp[] = [
@@ -223,8 +306,11 @@ const HOSTILE_QUESTION_PATTERNS: RegExp[] = [
   /\b(how|where)\s+did\s+you\s+(get|find)\s+my\b/i,
   /\bhow\s+do\s+you\s+have\s+my\b/i,
   /\bdid\s+i\s+(ever\s+)?sign\s*[\s-]?up\b/i,
-  /\bwhy\s+(are|r)\s+you\s+(e-?mailing|contacting|messaging|texting|reaching|spamming)\b/i,
+  /\bwhy\s+(are|r)\s+you\s+(e-?mailing|contacting|messaging|texting|reaching|spamming|sending)\b/i,
   /\bis\s+this\s+(spam|a\s+scam|legit|real|automated|a\s+bot)\b/i,
+  /\bwhy\s+(did|would|do)\s+(you|u)\s+(send|e-?mail)\b/i,
+  /\bwho\s+(asked|told|said)\s+(you|u|to)\b/i,
+  /\bdid\s+i\s+ask\s+(you|u|for)\b/i,
 ];
 
 // Cut the quoted thread off the bottom of a reply before we classify it. The
@@ -250,6 +336,61 @@ function stripQuotedReply(text: string): string {
   }
   const top = lines.slice(0, cut).join("\n").trim();
   return top.length > 0 ? top : text.trim();
+}
+
+// The reply's OWN words: the fresh text minus the sign-off / signature block and
+// any legal notice. A law firm's footer ("If you are not the intended recipient,
+// do not forward this… please contact the sender", plus an info@ address) is
+// not the prospect talking, yet it reads as a referral: a handoff phrase + an
+// embedded email. So the referral / wrong-person checks, the embedded-email
+// extraction and the send-it rule read only this region. Opt-out detection
+// deliberately does NOT: it keeps scanning the whole fresh text (compliance).
+//   • A legal notice ends the region outright; a legal BANNER above the reply
+//     ("PRIVILEGED & CONFIDENTIAL") is skipped, not treated as its end.
+//   • A sign-off line ("Thanks,", "Very truly yours,") ends it only when a
+//     name-like line (or nothing) follows, so a mid-body "Thanks!" followed by
+//     a real sentence doesn't cut the reply short.
+//   • A "P.S." written below the sign-off is still theirs and is kept.
+const SIGNATURE_RULE_RE = /^\s*(?:--+|__+|sent\s+from\s+my\b|get\s+outlook\b)/i;
+const SIGN_OFF_LINE_RE =
+  /^\s*(?:thanks|thank\s+you|thx|many\s+thanks|thanks\s+(?:again|so\s+much)|thank\s+you\s+(?:again|so\s+much)|best|all\s+(?:the\s+)?best|best\s+wishes|regards|best\s+regards|kind\s+regards|warm\s+regards|warmly|sincerely|sincerely\s+yours|(?:very\s+)?truly\s+yours|yours(?:\s+truly)?|respectfully(?:\s+yours)?|cheers|take\s+care|talk\s+soon|with\s+thanks)[\s,.!]*$/i;
+const LEGAL_NOTICE_RE =
+  /^\s*[*[(]*\s*(?:confidential(?:ity)?\b|privileged\b|disclaimer\b|(?:legal|important)\s+notice\b|notice\s*:|attorney[-\s]client\b|irs\s+circular\b)|\b(?:intended\s+recipient|intended\s+(?:solely|only)\s+for|received\s+this\s+(?:e-?mail\s+|message\s+|communication\s+|transmission\s+)?in\s+error|strictly\s+prohibited|privileged\s+(?:and|&)\s+confidential|confidential\s+(?:and|&)\s+privileged|attorney[-\s]client\s+privilege|circular\s+230|(?:notify|contact)\s+the\s+sender|unauthori[sz]ed\s+(?:use|review|disclosure|dissemination|distribution|copying))\b/i;
+const PS_LINE_RE = /^\s*p\.?\s?(?:p\.?\s?)?s\b/i;
+
+// What follows a sign-off is a signature when it reads like a name, not prose.
+function nameLike(line: string | undefined): boolean {
+  if (line === undefined) return true;
+  const t = line.trim();
+  if (t.length > 60 || /[?!]$/.test(t)) return false;
+  return t.split(/\s+/).filter((w) => /^[a-z]/.test(w)).length <= 1;
+}
+
+function replyOwnWords(text: string): string {
+  const lines = text.split(/\r?\n/);
+  let first = 0;
+  while (first < lines.length && (lines[first].trim() === "" || LEGAL_NOTICE_RE.test(lines[first]))) first++;
+  let legal = lines.length;
+  for (let i = first + 1; i < lines.length; i++) {
+    if (LEGAL_NOTICE_RE.test(lines[i])) {
+      legal = i;
+      break;
+    }
+  }
+  let sig = legal;
+  for (let i = first + 1; i < legal; i++) {
+    const signOff = SIGN_OFF_LINE_RE.test(lines[i]) && nameLike(lines.slice(i + 1, legal).find((l) => l.trim() !== ""));
+    if (signOff || SIGNATURE_RULE_RE.test(lines[i])) {
+      sig = i;
+      break;
+    }
+  }
+  const own = lines.slice(first, sig);
+  for (let i = sig; i < legal; i++) {
+    if (!PS_LINE_RE.test(lines[i])) continue;
+    while (i < legal && lines[i].trim() !== "") own.push(lines[i++]);
+  }
+  return own.join("\n");
 }
 
 function matchAny(text: string, patterns: RegExp[]): RegExp | null {
@@ -296,15 +437,22 @@ export function runKeywordPrefilter(
   }
 
   const flags: string[] = [];
-  const embedded = extractEmbeddedEmails(text, senderEmail ?? null);
+  // Handoff signals come from the reply's own words only: a signature's
+  // info@ address and a legal footer's "do not forward… contact the sender"
+  // are not a referral (and must not mask an opt-out, see below).
+  const own = replyOwnWords(text);
+  const embedded = extractEmbeddedEmails(own, senderEmail ?? null);
 
-  const wrongPersonHit = matchAny(text, WRONG_PERSON_PATTERNS);
-  const referralHit = matchAny(text, REFERRAL_PATTERNS);
+  const wrongPersonHit = matchAny(own, WRONG_PERSON_PATTERNS);
+  const referralHit = matchAny(own, REFERRAL_PATTERNS);
   const unsubscribeHit = matchAny(text, UNSUBSCRIBE_PATTERNS);
   const oooHit = matchAny(text, OOO_PATTERNS);
   const notInterestedHit = matchAny(text, NOT_INTERESTED_PATTERNS);
   const meetingHit = matchAny(text, MEETING_PATTERNS);
-  const interestHit = matchAny(text, INTEREST_PATTERNS);
+  const sendItPhrase = hasSendItRequest(text);
+  // A send-it request is also interest, so words like "on vacation" in a
+  // human's "on vacation, but send it over" can't bury it as an auto-reply.
+  const interestHit = matchAny(text, INTEREST_PATTERNS) !== null || sendItPhrase;
   const questionHit = matchAny(text, QUESTION_PATTERNS);
   const hostileQuestionHit = matchAny(text, HOSTILE_QUESTION_PATTERNS);
 
@@ -327,6 +475,10 @@ export function runKeywordPrefilter(
     if (negatedStop && !hardOptOutWord) unsubscribeActive = false;
   }
 
+  // The hard send-it override yields to an opt-out (compliance) and to an
+  // out-of-office (an auto-reply's "email it to my assistant" isn't a request).
+  const sendItRequest = sendItPhrase && !unsubscribeActive && !oooHit;
+
   if (wrongPersonHit) flags.push("wrong_person_phrase");
   if (referralHit) flags.push("referral_phrase");
   if (embedded.length > 0) flags.push("referral_email_present");
@@ -337,6 +489,7 @@ export function runKeywordPrefilter(
   if (interestHit) flags.push("interest_phrase");
   if (questionHit) flags.push("question_phrase");
   if (hostileQuestionHit) flags.push("hostile_question");
+  if (sendItRequest) flags.push(SEND_IT_FLAG);
 
   // Priority order, most-certain → least; first match wins. Anything that
   // doesn't clearly match stays null → needs_review in decide.ts, so a human
@@ -347,6 +500,9 @@ export function runKeywordPrefilter(
   if (unsubscribeActive && !referralHit) {
     suggested_class = "unsubscribe";
     reason = "Opt-out phrase matched";
+  } else if (sendItRequest) {
+    suggested_class = "true_interest";
+    reason = 'Asked us to send it ("send it" is always a positive reply)';
   } else if (oooHit && !wrongPersonHit && !referralHit && !interestHit && !meetingHit) {
     // Only OOO when there's no competing positive signal: "out until Monday,
     // let's connect then" is a warm lead, not a dead auto-reply.
