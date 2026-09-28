@@ -96,7 +96,7 @@ function slug(s: string): string {
   return (s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 function usd(n: number | null | undefined): string {
-  return n == null ? "—" : `$${n.toFixed(2)}`;
+  return n == null ? "-" : `$${n.toFixed(2)}`;
 }
 function registrarName(id: string): string {
   return REGISTRARS.find((r) => r.id === id)?.label ?? "Manual DNS";
@@ -1140,7 +1140,7 @@ function DomainStep(props: {
                         </span>
                       )}
                     </div>
-                    <div className="mt-1 text-lg font-bold tabular-nums">{selectable ? usd(q?.price_usd) : "—"}</div>
+                    <div className="mt-1 text-lg font-bold tabular-nums">{selectable ? usd(q?.price_usd) : "-"}</div>
                     <div className="text-[11px] text-muted-foreground">{selectable ? "available · first year" : "unavailable"}</div>
                   </button>
                 );

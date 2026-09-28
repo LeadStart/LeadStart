@@ -816,7 +816,7 @@ export interface LeadReply {
 
   // Free-text note the client leaves on this lead from the inbox dossier.
   // Standalone (not gated behind an outcome) and rendered on BOTH the client
-  // portal and the internal admin inbox — the client and their LeadStart team
+  // portal and the internal admin inbox - the client and their LeadStart team
   // share one running note per lead. Client-authored via
   // POST /api/replies/[id]/note (migration 00127).
   client_note: string | null;

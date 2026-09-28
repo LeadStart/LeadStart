@@ -566,7 +566,7 @@ export function NativeImportPanel({ campaignId }: { campaignId: string }) {
                               : "border-border/60 bg-background"
                           }`}
                         >
-                          <option value="">— Skip —</option>
+                          <option value="">Skip</option>
                           <optgroup label="Contact fields">
                             {MAPPING_TARGETS.map((f) => (
                               <option key={f.value} value={f.value}>
@@ -679,12 +679,12 @@ export function NativeImportPanel({ campaignId }: { campaignId: string }) {
                     </td>
                     <td className="px-3 py-2">
                       {[r.first_name, r.last_name].filter(Boolean).join(" ") ||
-                        "—"}
+                        "-"}
                     </td>
-                    <td className="px-3 py-2">{r.company_name || "—"}</td>
+                    <td className="px-3 py-2">{r.company_name || "-"}</td>
                     {previewCustomKeys.map((k) => (
                       <td key={k} className="px-3 py-2">
-                        {r.custom_fields[k] || "—"}
+                        {r.custom_fields[k] || "-"}
                       </td>
                     ))}
                   </tr>

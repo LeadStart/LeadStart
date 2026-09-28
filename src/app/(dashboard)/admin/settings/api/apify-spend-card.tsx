@@ -31,7 +31,7 @@ type Spend = {
 };
 
 function fmtDate(iso: string | null): string {
-  if (!iso) return "—";
+  if (!iso) return "-";
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
@@ -114,7 +114,7 @@ export function ApifySpendCard() {
                     )}
                   </div>
                   <p className="mt-0.5 text-[11px] text-muted-foreground">
-                    Cycle {fmtDate(data.cycleStart)} – {fmtDate(data.cycleEnd)} · {data.runsCounted} run
+                    Cycle {fmtDate(data.cycleStart)} to {fmtDate(data.cycleEnd)} · {data.runsCounted} run
                     {data.runsCounted === 1 ? "" : "s"}
                   </p>
                 </div>

@@ -62,7 +62,7 @@ function formatPeriodRange(
   const endStr = sameYear
     ? formatShortDate(endIso)
     : formatDate(endIso);
-  return `${startStr} – ${endStr}, ${end.getFullYear()}`;
+  return `${startStr} to ${endStr}, ${end.getFullYear()}`;
 }
 
 export function buildInvoiceEmail(data: InvoiceEmailData): string {

@@ -95,7 +95,7 @@ export function BuyerDashboardView({
           <div>
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Token balance</p>
             <p className="text-2xl font-bold tracking-tight text-foreground">
-              {loadingBalance ? "—" : balance.available.toLocaleString()}
+              {loadingBalance ? "-" : balance.available.toLocaleString()}
             </p>
           </div>
           {balance.held > 0 && (

@@ -160,7 +160,7 @@ function Branch({
 }
 
 function Empty() {
-  return <p className="px-1 text-[11px] italic text-muted-foreground">— end —</p>;
+  return <p className="px-1 text-[11px] italic text-muted-foreground">· end ·</p>;
 }
 
 function Roll({ label, value, tone, hint }: { label: string; value: number; tone?: string; hint?: string }) {

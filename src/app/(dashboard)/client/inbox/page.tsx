@@ -42,7 +42,7 @@ import { QuickActionBar, type QuickActionGroup } from "@/components/inbox/quick-
 import { classAccent } from "@/components/inbox/reclassify-control";
 
 // The genuinely hot, call-now classes. The client can reply to ANY not-yet-sent
-// reply from the portal (the send API gates on status, not class — see
+// reply from the portal (the send API gates on status, not class - see
 // /api/replies/[id]/send); this list only decides which classes auto-open the
 // composer vs. surface a "Reply" button first.
 const REPLYABLE_CLASSES: ReplyClass[] = ["true_interest", "meeting_booked", "qualifying_question"];
@@ -179,7 +179,7 @@ export default function ClientInboxPage() {
                   const meta = r.final_class ? CLASS_META[r.final_class] : null;
                   const done = r.status === "sent" || !!r.outcome;
                   // "no_contact" = client closed the reply without following up.
-                  // That's "Handled" (neutral), not "Replied" — no reply was sent.
+                  // That's "Handled" (neutral), not "Replied" - no reply was sent.
                   const handled = r.outcome === "no_contact" && r.status !== "sent";
                   return (
                     <ReplyListRow

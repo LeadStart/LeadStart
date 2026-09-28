@@ -137,7 +137,7 @@ export function DeliverabilityGateCard({
             <AlertTriangle size={13} className="mt-0.5 shrink-0" />
             <span>
               This campaign&apos;s emails send with no pre-send check. Only turn verification off for
-              a list you&apos;ve already verified — sending to bad addresses drives bounces and hurts
+              a list you&apos;ve already verified. Sending to bad addresses drives bounces and hurts
               domain reputation.
             </span>
           </p>

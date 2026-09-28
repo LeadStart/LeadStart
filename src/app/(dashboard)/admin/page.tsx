@@ -70,7 +70,7 @@ function formatCents(cents: number): string {
 }
 
 function formatShortDate(iso: string | null): string {
-  if (!iso) return "—";
+  if (!iso) return "-";
   return new Date(iso).toLocaleDateString(undefined, {
     month: "short",
     day: "numeric",
@@ -199,7 +199,7 @@ function PortfolioPulse({
             Total MRR
           </p>
           <p className="mt-1 text-3xl font-bold tracking-tight tabular-nums text-foreground">
-            {mrrCents > 0 ? formatCents(mrrCents) : "—"}
+            {mrrCents > 0 ? formatCents(mrrCents) : "-"}
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
             {totalClients} active {totalClients === 1 ? "client" : "clients"}
@@ -288,7 +288,7 @@ function ClientRow({
           </span>
           <span className="shrink-0 text-right">
             <span className="block text-sm font-semibold tabular-nums text-foreground">
-              {row.mrrCents != null ? formatCents(row.mrrCents) : "—"}
+              {row.mrrCents != null ? formatCents(row.mrrCents) : "-"}
             </span>
             <span
               className={cn(
@@ -329,7 +329,7 @@ function ClientRow({
                   row.hasData ? replyTone(row.reply_rate) : "text-muted-foreground",
                 )}
               >
-                {row.hasData ? `${row.reply_rate}%` : "—"}
+                {row.hasData ? `${row.reply_rate}%` : "-"}
               </span>
             </span>
             <span className="text-border">·</span>
@@ -341,14 +341,14 @@ function ClientRow({
                   row.hasData ? bounceTone(row.bounce_rate) : "text-muted-foreground",
                 )}
               >
-                {row.hasData ? `${row.bounce_rate}%` : "—"}
+                {row.hasData ? `${row.bounce_rate}%` : "-"}
               </span>
             </span>
             <span className="text-border">·</span>
             <span>
               Positive{" "}
               <span className="font-semibold tabular-nums text-foreground">
-                {row.hasData ? row.positive : "—"}
+                {row.hasData ? row.positive : "-"}
               </span>
             </span>
           </div>
@@ -454,7 +454,7 @@ export default function AdminOverviewPage() {
     const plan = sub?.plan_id ? planById.get(sub.plan_id) : null;
     const mrrCents = plan ? plan.monthly_price_cents : null;
 
-    let renewLabel = "—";
+    let renewLabel = "-";
     let renewTone: "red" | "amber" | "muted" = "muted";
     let renewSort = Number.POSITIVE_INFINITY;
     if (sub?.status === "past_due") {

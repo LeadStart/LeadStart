@@ -291,10 +291,10 @@ export function LinkedinCampaignDetail({
                       <TableCell className="text-xs text-muted-foreground">
                         {e.last_action_at
                           ? new Date(e.last_action_at).toLocaleString()
-                          : "—"}
+                          : "-"}
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground max-w-xs truncate">
-                        {e.last_error ?? "—"}
+                        {e.last_error ?? "-"}
                       </TableCell>
                     </TableRow>
                   );

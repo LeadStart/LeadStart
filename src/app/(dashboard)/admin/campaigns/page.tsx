@@ -114,7 +114,7 @@ export default function AllCampaignsPage() {
                       <div className="min-w-0 flex-1">
                         <Link href={campaignHref} className="block font-medium text-foreground truncate hover:text-[#2E37FE]">{row.name}</Link>
                         <div className="text-xs text-muted-foreground truncate">
-                          {clientHref ? <Link href={clientHref} className="hover:text-foreground">{row.clientName || "—"}</Link> : <span className="text-amber-600">Unlinked</span>}
+                          {clientHref ? <Link href={clientHref} className="hover:text-foreground">{row.clientName || "-"}</Link> : <span className="text-amber-600">Unlinked</span>}
                         </div>
                       </div>
                       <Badge variant="secondary" className={`shrink-0 ${row.status === "active" ? "badge-green" : row.status === "paused" ? "badge-amber" : "badge-slate"}`}>{row.status}</Badge>
@@ -151,7 +151,7 @@ export default function AllCampaignsPage() {
                       <TableCell><div className="flex items-center gap-3"><div className="flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold text-white shrink-0" style={{ background: '#2E37FE' }}><Mail size={14} /></div><Link href={campaignHref} className="font-medium text-foreground hover:text-[#2E37FE] transition-colors">{row.name}</Link></div></TableCell>
                       <TableCell>{clientHref ? (
                         <div className="space-y-1">
-                          <Link href={clientHref} className="text-muted-foreground hover:text-foreground transition-colors">{row.clientName || "—"}</Link>
+                          <Link href={clientHref} className="text-muted-foreground hover:text-foreground transition-colors">{row.clientName || "-"}</Link>
                           <div><ClientEmailInline clientId={row.client_id as string} email={row.clientEmail} onSaved={() => refetch()} /></div>
                         </div>
                       ) : <Badge variant="secondary" className="badge-amber">Unlinked</Badge>}</TableCell>

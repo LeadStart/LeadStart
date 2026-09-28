@@ -166,7 +166,7 @@ export function describeSchedule(client: Pick<Client,
   "report_time_of_day" | "report_timezone"
 >): string | null {
   if (!client.report_frequency) return null;
-  const time = client.report_time_of_day || "—";
+  const time = client.report_time_of_day || "-";
   const tz = client.report_timezone || "UTC";
 
   if (client.report_frequency === "weekly" || client.report_frequency === "biweekly") {

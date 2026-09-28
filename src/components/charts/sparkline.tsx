@@ -18,11 +18,7 @@ export function Sparkline({
   className?: string;
 }) {
   if (!values || values.length < 2) {
-    return (
-      <span className="text-xs text-muted-foreground" aria-hidden>
-       ,
-      </span>
-    );
+    return <span className="text-xs text-muted-foreground">No data</span>;
   }
 
   const max = Math.max(...values);

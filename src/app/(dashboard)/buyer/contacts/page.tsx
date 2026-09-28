@@ -43,7 +43,7 @@ interface ContactRow {
 const PAGE_SIZE = 25;
 
 function fullName(c: ContactRow): string {
-  return [c.first_name, c.last_name].filter(Boolean).join(" ") || "—";
+  return [c.first_name, c.last_name].filter(Boolean).join(" ") || "-";
 }
 
 export default function BuyerContactsPage() {
@@ -213,8 +213,8 @@ export default function BuyerContactsPage() {
                   {rows.map((c) => (
                     <tr key={c.id} className="border-t border-border/60 align-top">
                       <td className="py-2 pr-4 font-medium">{fullName(c)}</td>
-                      <td className="py-2 pr-4">{c.company_name ?? "—"}</td>
-                      <td className="py-2 pr-4 text-muted-foreground">{c.title ?? "—"}</td>
+                      <td className="py-2 pr-4">{c.company_name ?? "-"}</td>
+                      <td className="py-2 pr-4 text-muted-foreground">{c.title ?? "-"}</td>
                       <td className="py-2 pr-4">
                         {c.email ? (
                           <span className="inline-flex items-center gap-1">
@@ -222,10 +222,10 @@ export default function BuyerContactsPage() {
                             {c.email_verification_status === "ok" && <CheckCircle2 size={13} className="text-green-600" />}
                           </span>
                         ) : (
-                          <span className="text-muted-foreground">{c.company_email ?? "—"}</span>
+                          <span className="text-muted-foreground">{c.company_email ?? "-"}</span>
                         )}
                       </td>
-                      <td className="py-2 pr-4 text-muted-foreground">{c.phone ?? c.company_phone ?? "—"}</td>
+                      <td className="py-2 pr-4 text-muted-foreground">{c.phone ?? c.company_phone ?? "-"}</td>
                       <td className="py-2 text-muted-foreground">{new Date(c.created_at).toLocaleDateString()}</td>
                     </tr>
                   ))}

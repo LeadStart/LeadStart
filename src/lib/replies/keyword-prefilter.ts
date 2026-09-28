@@ -113,7 +113,7 @@ const UNSUBSCRIBE_PATTERNS: RegExp[] = [
   /\bno\s+more\s+(e-?mail|message|text|contact|communication|correspondence|outreach|follow[\s-]?ups?|of\s+(these|this|them|those|your))/i,
   // Bare "no more" as a complete statement: alone on its line, OR opening the
   // reply and closed by sentence punctuation even when more text follows
-  // ("No more. Wishing you all the best." — the real opt-out the old
+  // ("No more. Wishing you all the best." - the real opt-out the old
   // end-of-line-only form missed). "no more <word>" ("no more questions", "no
   // more than") is deliberately left for the communication-noun form above / Claude.
   /(^|\n)[\s>*]*no\s+more[ \t]*(?=[.!\r\n]|$)/i,

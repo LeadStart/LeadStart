@@ -493,7 +493,7 @@ export default function TasksPage() {
                           className="w-[150px] text-sm"
                         />
                       ) : (
-                        task.category || "—"
+                        task.category || "-"
                       )}
                     </TableCell>
 
@@ -511,7 +511,7 @@ export default function TasksPage() {
                       ) : task.due_date ? (
                         new Date(task.due_date).toLocaleDateString()
                       ) : (
-                        "—"
+                        "-"
                       )}
                     </TableCell>
 

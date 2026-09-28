@@ -436,7 +436,7 @@ export function OnboardingGate() {
   const [dismissed, setDismissed] = useState(false);
 
   // localStorage is client-only. The portal resolves `client` after hydration
-  // (the context fetches in the browser), so this reads only on the client —
+  // (the context fetches in the browser), so this reads only on the client -
   // the server pass renders null while `client` is still null.
   const seen = useMemo(() => {
     if (!client) return false;

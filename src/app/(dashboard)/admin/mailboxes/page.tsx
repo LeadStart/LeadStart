@@ -1456,7 +1456,7 @@ export default function MailboxesPage() {
                 id="seedLabel"
                 value={seedLabel}
                 onChange={(e) => setSeedLabel(e.target.value)}
-                placeholder="Workspace – davidcabrera"
+                placeholder="Workspace: davidcabrera"
               />
             </div>
           </div>
@@ -1509,7 +1509,7 @@ export default function MailboxesPage() {
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs font-medium">Label (optional)</Label>
-                  <Input value={imapLabel} onChange={(e) => setImapLabel(e.target.value)} placeholder="Consumer Gmail – fresh" />
+                  <Input value={imapLabel} onChange={(e) => setImapLabel(e.target.value)} placeholder="Consumer Gmail: fresh" />
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs font-medium">IMAP host</Label>

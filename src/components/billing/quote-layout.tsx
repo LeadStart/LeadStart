@@ -87,7 +87,7 @@ export function QuoteLayout({
             </p>
             <p>
               Valid until{" "}
-              {expiresAt ? new Date(expiresAt).toLocaleDateString() : "—"}
+              {expiresAt ? new Date(expiresAt).toLocaleDateString() : "-"}
             </p>
           </div>
         </div>

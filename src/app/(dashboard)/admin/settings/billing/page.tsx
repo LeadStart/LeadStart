@@ -1547,7 +1547,7 @@ export default function BillingPage() {
                       <TableCell className="text-right hidden md:table-cell text-sm">
                         {q.setup_fee_cents > 0
                           ? formatCents(q.setup_fee_cents)
-                          : "—"}
+                          : "-"}
                       </TableCell>
                       <TableCell>
                         <QuoteStatusBadge status={q.status} />
@@ -1555,12 +1555,12 @@ export default function BillingPage() {
                       <TableCell className="text-sm text-muted-foreground hidden lg:table-cell">
                         {q.sent_at
                           ? new Date(q.sent_at).toLocaleDateString()
-                          : "—"}
+                          : "-"}
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground hidden lg:table-cell">
                         {q.launch_date
                           ? new Date(q.launch_date).toLocaleDateString()
-                          : "—"}
+                          : "-"}
                       </TableCell>
                       <TableCell>
                         {q.status === "draft" ? (
@@ -1675,7 +1675,7 @@ export default function BillingPage() {
                             ? formatCents(s.monthly_price_cents)
                             : plan
                               ? formatCents(plan.monthly_price_cents)
-                              : "—"}
+                              : "-"}
                         </TableCell>
                         <TableCell>
                           <SubStatusBadge status={s.status} />
@@ -1683,15 +1683,15 @@ export default function BillingPage() {
                         <TableCell className="text-sm text-muted-foreground hidden md:table-cell">
                           {s.current_period_end
                             ? new Date(s.current_period_end).toLocaleDateString()
-                            : "—"}
+                            : "-"}
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground hidden lg:table-cell">
                           {s.status === "trialing" && s.trial_end
                             ? new Date(s.trial_end).toLocaleDateString()
-                            : "—"}
+                            : "-"}
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground font-mono hidden xl:table-cell">
-                          {s.stripe_subscription_id || "—"}
+                          {s.stripe_subscription_id || "-"}
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-1">
@@ -1846,8 +1846,8 @@ export default function BillingPage() {
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground hidden md:table-cell">
                         {inv.period_start
-                          ? `${new Date(inv.period_start).toLocaleDateString()} – ${inv.period_end ? new Date(inv.period_end).toLocaleDateString() : "—"}`
-                          : "—"}
+                          ? `${new Date(inv.period_start).toLocaleDateString()} to ${inv.period_end ? new Date(inv.period_end).toLocaleDateString() : "-"}`
+                          : "-"}
                       </TableCell>
                       <TableCell className="text-right font-medium">
                         {formatCents(inv.amount_cents)}
@@ -1858,7 +1858,7 @@ export default function BillingPage() {
                       <TableCell className="text-sm text-muted-foreground hidden lg:table-cell">
                         {inv.paid_at
                           ? new Date(inv.paid_at).toLocaleDateString()
-                          : "—"}
+                          : "-"}
                       </TableCell>
                       <TableCell>
                         {inv.hosted_invoice_url ? (
@@ -1883,9 +1883,7 @@ export default function BillingPage() {
                             </button>
                           </div>
                         ) : (
-                          <span className="text-xs text-muted-foreground">
-                           ,
-                          </span>
+                          <span className="text-xs text-muted-foreground">No link yet</span>
                         )}
                       </TableCell>
                     </TableRow>

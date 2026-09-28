@@ -654,7 +654,7 @@ export function CampaignDetailWorkspace({
                   onChange={(e) => setClientId(e.target.value)}
                   className="w-full max-w-sm rounded-md border border-border/60 bg-background px-3 py-2 text-sm"
                 >
-                  <option value="">— No client (orphan) —</option>
+                  <option value="">No client (orphan)</option>
                   {clients.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.name}

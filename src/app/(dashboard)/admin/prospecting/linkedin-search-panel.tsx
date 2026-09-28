@@ -2887,7 +2887,7 @@ export function LinkedInSearchPanel() {
                     const name =
                       r.full_name ||
                       [r.first_name, r.last_name].filter(Boolean).join(" ") ||
-                      "—";
+                      "-";
                     const en = url ? enrichByUrl.get(LC(url)) : undefined;
                     const imported = Boolean(en) || Boolean(url && importedUrls.has(LC(url)));
                     const emailVal = en?.email ?? r.email ?? null;
@@ -2925,11 +2925,11 @@ export function LinkedInSearchPanel() {
                             className="hidden truncate text-muted-foreground md:table-cell"
                             title={r.headline ?? undefined}
                           >
-                            {r.headline ?? "—"}
+                            {r.headline ?? "-"}
                           </TableCell>
                         )}
                         <TableCell className="truncate" title={r.company_name ?? undefined}>
-                          {r.company_name ?? "—"}
+                          {r.company_name ?? "-"}
                         </TableCell>
                         {(hasEmails || showEnrichCols) && (
                           <TableCell
@@ -2962,7 +2962,7 @@ export function LinkedInSearchPanel() {
                             className="hidden truncate text-muted-foreground lg:table-cell"
                             title={r.location ?? undefined}
                           >
-                            {r.location ?? "—"}
+                            {r.location ?? "-"}
                           </TableCell>
                         )}
                         <TableCell className="w-9">
@@ -3035,7 +3035,7 @@ function EnrichCell({
   if (value)
     return <span className={plain ? "text-foreground" : "text-foreground"}>{value}</span>;
   if (loading) return <Loader2 size={13} className="animate-spin text-[#2E37FE]" />;
-  return <span className="text-muted-foreground">—</span>;
+  return <span className="text-muted-foreground">-</span>;
 }
 
 // The Email cell, color-coded to match the Email-outcomes radial: a person's
@@ -3083,7 +3083,7 @@ function EmailCell({
       </span>
     );
   if (loading) return <Loader2 size={13} className="animate-spin text-[#2E37FE]" />;
-  return <span className="text-muted-foreground">—</span>;
+  return <span className="text-muted-foreground">-</span>;
 }
 
 // Per-row import/enrichment state pill. Blank until the row is imported, then
@@ -3095,7 +3095,7 @@ function RowStatusBadge({
   en: EnrichLite | undefined;
   imported: boolean;
 }) {
-  if (!imported) return <span className="text-xs text-muted-foreground">—</span>;
+  if (!imported) return <span className="text-xs text-muted-foreground">-</span>;
   if (!en) {
     return (
       <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">

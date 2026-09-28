@@ -298,7 +298,7 @@ export default function LinkedInTasksPage() {
                             <ExternalLink size={11} className="opacity-60" />
                           </a>
                         ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
+                          <span className="text-xs text-muted-foreground">-</span>
                         )}
                       </TableCell>
 

@@ -395,7 +395,7 @@ export function DomainProvisioningDetail({
             <span>SPF: <b>{dns.live.auth.spf.status}</b></span>
             <span>DKIM: <b>{dns.live.auth.dkim.status}</b></span>
             <span>DMARC: <b>{dns.live.auth.dmarc.status}</b></span>
-            <span>MX: <b>{dns.live.mx?.status ?? "—"}</b></span>
+            <span>MX: <b>{dns.live.mx?.status ?? "-"}</b></span>
           </div>
         )}
         {dns && (

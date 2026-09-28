@@ -45,11 +45,11 @@ function delivered(row: SearchRow): number {
 }
 
 // Master-pool coverage: how many of this segment's contacts the buyer owns, and
-// how many more the shared pool holds (the resale hint). "—" until the segment
+// how many more the shared pool holds (the resale hint). "-" until the segment
 // has any pooled data (an empty pool, or an unsegmentable search).
 function CoverageCell({ row, onResale, busy }: { row: SearchRow; onResale: () => void; busy: boolean }) {
   const c = row.coverage;
-  if (!c || c.available === 0) return <span className="text-muted-foreground">—</span>;
+  if (!c || c.available === 0) return <span className="text-muted-foreground">-</span>;
   const more = Math.max(0, c.available - c.owned);
   return (
     <span title={`Segment: ${c.terms.join(", ")} · ${c.area}`} className="inline-flex items-center gap-1.5">

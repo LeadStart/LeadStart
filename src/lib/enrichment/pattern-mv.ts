@@ -84,7 +84,7 @@ export interface PatternMvItem {
 //
 // mvResponse is the RAW Million Verifier response for the winning candidate. It
 // is a genuine, paid MV verdict, so the cron persists it onto the contact's
-// verification cache (via decideFromResult) — that plugs pattern_mv into the
+// verification cache (via decideFromResult) - that plugs pattern_mv into the
 // shared 30-day cache so the end-of-run verify phase and the pre-send gate reuse
 // the verdict instead of paying to verify the same address again.
 export type PatternMvOutcome =

@@ -83,7 +83,7 @@ export function MobileTabBar({ role }: { role: AppRole }) {
 
   // Write the condense state (0 = full pill, 1 = active tab only) directly to the
   // DOM. At rest (p≈0) all inline styles are cleared so the pill/tabs fall back to
-  // their CSS flex layout — that keeps the server-rendered markup correct and
+  // their CSS flex layout - that keeps the server-rendered markup correct and
   // avoids a flash before this runs.
   const apply = useCallback(
     (raw: number) => {

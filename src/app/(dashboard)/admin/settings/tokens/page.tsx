@@ -84,7 +84,7 @@ function PriceCard({
               <span className="text-right font-mono text-xs text-muted-foreground">{meta.cost}</span>
               <div className="text-right">
                 {tier.is_free || tier.is_bundled ? (
-                  <span className="text-sm text-muted-foreground">—</span>
+                  <span className="text-sm text-muted-foreground">-</span>
                 ) : (
                   <div className="flex items-center justify-end gap-1">
                     <Input type="number" min={0} step="0.1" value={numOrEmpty(tier.token_price)} onChange={(e) => onPrice(tier.id, e.target.value)} placeholder="0" className="h-8 w-20 text-right" />

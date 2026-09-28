@@ -711,24 +711,24 @@ export function ImportContactsDialog({
                       {preview.rows.slice(0, 6).map((r, i) => (
                         <tr key={i} className="border-t border-border/40">
                           <td className="px-3 py-1.5">
-                            {[r.first_name, r.last_name].filter(Boolean).join(" ") || "—"}
+                            {[r.first_name, r.last_name].filter(Boolean).join(" ") || "-"}
                           </td>
                           {linkedinMode ? (
                             <>
-                              <td className="px-3 py-1.5 text-muted-foreground">{r.company_name || "—"}</td>
+                              <td className="px-3 py-1.5 text-muted-foreground">{r.company_name || "-"}</td>
                               <td className="px-3 py-1.5 text-muted-foreground max-w-[180px] truncate">
-                                {r.linkedin_url || "—"}
+                                {r.linkedin_url || "-"}
                               </td>
                               <td className="px-3 py-1.5 text-muted-foreground max-w-[180px] truncate">
-                                {r.company_domain || r.company_linkedin_url || "—"}
+                                {r.company_domain || r.company_linkedin_url || "-"}
                               </td>
                             </>
                           ) : (
                             <>
-                              <td className="px-3 py-1.5 text-muted-foreground">{r.email ?? "—"}</td>
-                              <td className="px-3 py-1.5 text-muted-foreground">{r.company_name || "—"}</td>
+                              <td className="px-3 py-1.5 text-muted-foreground">{r.email ?? "-"}</td>
+                              <td className="px-3 py-1.5 text-muted-foreground">{r.company_name || "-"}</td>
                               {ownerView === "leadstart" && (
-                                <td className="px-3 py-1.5 text-muted-foreground">{r.pipeline_stage || "—"}</td>
+                                <td className="px-3 py-1.5 text-muted-foreground">{r.pipeline_stage || "-"}</td>
                               )}
                             </>
                           )}

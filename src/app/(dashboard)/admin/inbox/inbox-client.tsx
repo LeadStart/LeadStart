@@ -225,7 +225,7 @@ export function InboxClient({ replies }: { replies: InboxRowReply[] }) {
                       accent={rowAccent(r.final_class)}
                       monogram={initials(r.lead_name || r.lead_email)}
                       name={r.lead_name || r.lead_email}
-                      sub={`${r.client?.name || "—"}${r.lead_company ? ` · ${r.lead_company}` : ""}`}
+                      sub={`${r.client?.name || "-"}${r.lead_company ? ` · ${r.lead_company}` : ""}`}
                       snippet={replySnippet(r.body_text, r.subject)}
                       time={timeSinceShort(r.received_at)}
                       badges={
@@ -354,7 +354,7 @@ function AdminThread({
                 </span>
               )}
               <span>
-                Client: <span className="font-medium text-foreground/80">{reply.client?.name ?? "—"}</span>
+                Client: <span className="font-medium text-foreground/80">{reply.client?.name ?? "-"}</span>
               </span>
             </div>
             <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px]">
@@ -435,7 +435,7 @@ function TrailFooter({ reply, onExclude }: { reply: InboxRowReply; onExclude: (v
             <div>
               <p className="text-muted-foreground">Claude class</p>
               <p className="font-medium text-foreground">
-                {reply.claude_class ? CLASS_META[reply.claude_class].label : "—"}
+                {reply.claude_class ? CLASS_META[reply.claude_class].label : "-"}
                 {reply.claude_confidence != null && (
                   <span className="text-muted-foreground"> · {Math.round(reply.claude_confidence * 100)}%</span>
                 )}
@@ -444,7 +444,7 @@ function TrailFooter({ reply, onExclude }: { reply: InboxRowReply; onExclude: (v
             <div>
               <p className="text-muted-foreground">Keyword flags</p>
               <p className="font-medium text-foreground">
-                {reply.keyword_flags && reply.keyword_flags.length > 0 ? reply.keyword_flags.join(", ") : "—"}
+                {reply.keyword_flags && reply.keyword_flags.length > 0 ? reply.keyword_flags.join(", ") : "-"}
               </p>
             </div>
           </div>

@@ -243,11 +243,11 @@
 .badge-slate  { background: #475569; color: #fff; border-color: transparent; }
 
 /* ============================================================
-   Mobile nav — floating Liquid-Glass pill (< lg only).
+   Mobile nav - floating Liquid-Glass pill (< lg only).
    The ReciFeast bottom-bar material ported onto LeadStart tokens
    + brand blue, approved by Daniel 2026-09-08. The glass
    (backdrop blur + specular highlight + elevation) is a
-   DELIBERATE, scoped exemption to the flat contract — the mobile
+   DELIBERATE, scoped exemption to the flat contract - the mobile
    analogue of the desktop rail's sanctioned shadow. See
    UI_RULES.md → "What flat forbids" + Mobile nav. Hidden at lg
    via `lg:hidden` on the wrapper; the sidebar rail takes over.
@@ -348,7 +348,7 @@
 
 /* Page content clears the floating pill below lg (pill = 16px inset + 60px tall,
    above the safe-area inset). Scoped to a max-width query so it's mutually
-   exclusive with the lg shell block above — no source-order fight over the
+   exclusive with the lg shell block above - no source-order fight over the
    `p-4 sm:p-6` bottom on the shell `<main>`; at lg the pill is hidden and p-6's
    24px stands. */
 @media (max-width: 1023.98px) {
@@ -357,7 +357,7 @@
   }
   /* Float the mobile topbar as a fully-rounded card that mirrors the bottom
      pill (Daniel, 2026-09-08): inset from the top (+ safe area) and both sides
-     by 16px — the pill's inset — with a full stadium radius and a hairline all
+     by 16px - the pill's inset - with a full stadium radius and a hairline all
      the way round, sitting on the page background so the rounding reads in any
      context. It still scrolls with the page (not pinned). Replaces the flush
      `border-b` strip; the full border supersedes the element's `border-b`. */
@@ -366,7 +366,7 @@
     border: 1px solid var(--border);
     border-radius: 9999px;
   }
-  /* No visible scrollbars on mobile — touch scrolls, so the 8px track from the
+  /* No visible scrollbars on mobile - touch scrolls, so the 8px track from the
      globals base layer is desktop-only. */
   * {
     scrollbar-width: none;

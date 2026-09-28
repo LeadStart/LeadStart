@@ -2185,7 +2185,7 @@ async function writeEmail(
   // A genuine Million Verifier verdict to persist onto the contact's 30-day
   // verification cache, written in the SAME statement that fills the email.
   // Supplied ONLY by pattern_mv (whose provider verdict IS an MV result). The
-  // other caller, Findymail catch-all recovery, passes nothing — its address is
+  // other caller, Findymail catch-all recovery, passes nothing - its address is
   // not an MV result, so it stays unverified until the verify phase / send gate.
   // MV thus remains the single source of truth for these columns.
   verificationPatch?: ContactVerificationPatch,
@@ -2233,7 +2233,7 @@ async function writeEmail(
   // Fill-only write of the email onto the contact. email_verification_* stays
   // Million Verifier's (single source of truth): those columns are written ONLY
   // when handed a genuine MV verdict (verificationPatch, from pattern_mv), and
-  // then in this SAME statement — so a verdict is never stamped for an address
+  // then in this SAME statement - so a verdict is never stamped for an address
   // that didn't actually land (a skip/conflict below writes nothing). Non-MV
   // providers pass no patch and only fill the address + provenance.
   if (contact) {

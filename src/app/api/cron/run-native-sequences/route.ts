@@ -840,7 +840,7 @@ export async function GET(request: NextRequest) {
     // out entirely; verify_first_send_only=true limits the gate to the first
     // touch (step 0) so follow-ups never re-verify. When the gate doesn't apply
     // we pass a null state, which the gate treats exactly like the no-key
-    // disarmed case — the contact sends through unverified (result null).
+    // disarmed case - the contact sends through unverified (result null).
     const gateApplies =
       campaign.verify_before_send !== false &&
       !(campaign.verify_first_send_only === true && stepIndex > 0);

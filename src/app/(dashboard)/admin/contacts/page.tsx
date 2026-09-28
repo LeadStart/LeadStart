@@ -88,9 +88,9 @@ const ENRICH_COST_DISCOVERY = DOMAIN_DISCOVERY_COST_USD;
 
 // Relative "time ago" for the Last posted column.
 function timeAgo(iso: string | null): string {
-  if (!iso) return "—";
+  if (!iso) return "-";
   const then = Date.parse(iso);
-  if (Number.isNaN(then)) return "—";
+  if (Number.isNaN(then)) return "-";
   const days = Math.floor((Date.now() - then) / 86_400_000);
   if (days <= 0) return "today";
   if (days === 1) return "1d ago";
@@ -156,7 +156,7 @@ function TagsCell({ tags }: { tags: string[] }) {
   }, [tags]);
 
   if (!tags || tags.length === 0) {
-    return <span className="text-xs text-muted-foreground">—</span>;
+    return <span className="text-xs text-muted-foreground">-</span>;
   }
 
   return (
@@ -349,8 +349,8 @@ export default function ContactsPage() {
 
   const rows = filtered.map((contact) => ({
     ...contact,
-    fullName: [contact.first_name, contact.last_name].filter(Boolean).join(" ") || "—",
-    clientName: contact.client_id ? clientMap.get(contact.client_id) || "—" : "—",
+    fullName: [contact.first_name, contact.last_name].filter(Boolean).join(" ") || "-",
+    clientName: contact.client_id ? clientMap.get(contact.client_id) || "-" : "-",
     email_tier: classifyEmailTier(contact),
     email_tier_rank: emailTierRank(contact),
   }));
@@ -1100,7 +1100,7 @@ export default function ContactsPage() {
                         </div>
                         {(row.company_name || row.title) && (
                           <p className="mt-0.5 text-xs text-muted-foreground truncate">
-                            {row.company_name || "—"}{row.title ? ` · ${row.title}` : ""}
+                            {row.company_name || "-"}{row.title ? ` · ${row.title}` : ""}
                           </p>
                         )}
                         <div className="mt-1.5 flex items-center gap-1.5 text-xs min-w-0">
@@ -1237,7 +1237,7 @@ export default function ContactsPage() {
                       <TableCell className="text-muted-foreground">
                         <div className="flex flex-col gap-0.5">
                           <span className="inline-flex items-center gap-1.5">
-                            {row.email ?? <span className="text-xs">—</span>}
+                            {row.email ?? <span className="text-xs">-</span>}
                             {row.email && row.email_tier === "catch_all" && (
                               <Badge
                                 variant="secondary"
@@ -1317,7 +1317,7 @@ export default function ContactsPage() {
                             )}
                           </div>
                         ) : (
-                          "—"
+                          "-"
                         )}
                       </TableCell>
                       <TableCell className="w-[80px]">
@@ -1337,14 +1337,14 @@ export default function ContactsPage() {
                             <LinkedinIcon size={14} />
                           </a>
                         ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
+                          <span className="text-xs text-muted-foreground">-</span>
                         )}
                       </TableCell>
                       <TableCell className="text-muted-foreground">
-                        {row.company_name || "—"}
+                        {row.company_name || "-"}
                       </TableCell>
                       <TableCell className="hidden lg:table-cell text-muted-foreground">
-                        {row.company_domain ?? <span className="text-xs">—</span>}
+                        {row.company_domain ?? <span className="text-xs">-</span>}
                       </TableCell>
                       <TableCell className="text-muted-foreground text-xs whitespace-nowrap">
                         {timeAgo(row.last_posted_at)}
@@ -1355,8 +1355,8 @@ export default function ContactsPage() {
                       {ownerView === "client" && (
                         <TableCell className="text-muted-foreground">
                           {row.campaign_id
-                            ? campaignMap.get(row.campaign_id) || "—"
-                            : "—"}
+                            ? campaignMap.get(row.campaign_id) || "-"
+                            : "-"}
                         </TableCell>
                       )}
                       <TableCell className="text-muted-foreground">
@@ -1376,7 +1376,7 @@ export default function ContactsPage() {
                             {pipelineStage}
                           </Badge>
                         ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
+                          <span className="text-xs text-muted-foreground">-</span>
                         )}
                       </TableCell>
                     </TableRow>

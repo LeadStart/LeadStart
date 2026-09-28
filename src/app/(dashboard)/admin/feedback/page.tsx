@@ -66,9 +66,9 @@ export default function FeedbackPage() {
                 {pageRows.map((f) => (
                   <TableRow key={f.id}>
                     <TableCell><p className="font-medium">{f.lead_email}</p>{f.lead_company && <p className="text-xs text-muted-foreground">{f.lead_company}</p>}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{campaignMap.get(f.campaign_id) || "—"}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{campaignMap.get(f.campaign_id) || "-"}</TableCell>
                     <TableCell><Badge variant="secondary" className={["good_lead", "interested"].includes(f.status) ? "badge-green" : ["bad_lead", "wrong_person", "not_interested"].includes(f.status) ? "badge-red" : "badge-slate"}>{f.status.replace(/_/g, " ")}</Badge></TableCell>
-                    <TableCell className="max-w-xs truncate text-sm text-muted-foreground">{f.comment || "—"}</TableCell>
+                    <TableCell className="max-w-xs truncate text-sm text-muted-foreground">{f.comment || "-"}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">{new Date(f.created_at).toLocaleDateString()}</TableCell>
                   </TableRow>
                 ))}

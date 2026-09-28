@@ -1191,7 +1191,7 @@ export function MapsDiyPanel() {
                                 <Globe size={11} /> {r.company_domain}
                               </span>
                             ) : (
-                              <span className="text-muted-foreground">—</span>
+                              <span className="text-muted-foreground">-</span>
                             )}
                           </TableCell>
                           <TableCell className="text-xs">
@@ -1200,7 +1200,7 @@ export function MapsDiyPanel() {
                                 <Phone size={11} /> {r.phone}
                               </span>
                             ) : (
-                              <span className="text-muted-foreground">—</span>
+                              <span className="text-muted-foreground">-</span>
                             )}
                           </TableCell>
                           <TableCell className="text-xs">
@@ -1209,7 +1209,7 @@ export function MapsDiyPanel() {
                                 <Star size={11} className="text-amber-500" /> {r.rating} ({r.reviews_count ?? 0})
                               </span>
                             ) : (
-                              "—"
+                              "-"
                             )}
                           </TableCell>
                         </TableRow>

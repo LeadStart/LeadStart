@@ -403,7 +403,7 @@ async function handleInvoiceEvent(
           : null;
         const periodLabel =
           start && end
-            ? `${new Date(start).toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${new Date(end).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
+            ? `${new Date(start).toLocaleDateString("en-US", { month: "short", day: "numeric" })} to ${new Date(end).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
             : null;
         return {
           description: line.description ?? "Subscription",

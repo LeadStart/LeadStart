@@ -306,7 +306,7 @@ export function StepCopyCheck({
           {analysis.anySpin && (
             <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-muted-foreground">
               <span className="font-medium text-foreground">Spintax</span>
-              <span>— Body: {formatCount(analysis.bodyVariants)} variants</span>
+              <span>· Body: {formatCount(analysis.bodyVariants)} variants</span>
               {analysis.subjectHasSpin && (
                 <span>· Subject: {formatCount(analysis.subjectVariants)} variants</span>
               )}

@@ -99,7 +99,7 @@ export default async function HostedQuotePage({ params, searchParams }: Props) {
         ) : null}
 
         <QuoteLayout
-          contactName={client?.name || "—"}
+          contactName={client?.name || "-"}
           contactEmail={quote.sent_to_email || client?.contact_email || ""}
           monthlyCents={quote.monthly_price_cents}
           setupCents={quote.setup_fee_cents}

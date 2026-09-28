@@ -184,7 +184,7 @@ export function startOfLocalDay(now: number = Date.now()): number {
   return now - msSinceMidnight;
 }
 
-// Human-readable label for a send window, e.g. "Mon–Fri, 8 AM – 5 PM Pacific
+// Human-readable label for a send window, e.g. "Mon-Fri, 8 AM to 5 PM Pacific
 // time". Used on the campaign detail page. endHour is exclusive but reads
 // naturally as the closing time (17 -> "5 PM").
 const TZ_LABELS: Record<string, string> = {
@@ -203,7 +203,7 @@ export function formatSendWindow(w: SendWindowConfig): string {
   };
   const days = w.weekdaysOnly ? "Mon–Fri" : "Every day";
   const tz = TZ_LABELS[w.timezone] ? `${TZ_LABELS[w.timezone]} time` : w.timezone;
-  return `${days}, ${fmtHour(w.startHour)} – ${fmtHour(w.endHour)} ${tz}`;
+  return `${days}, ${fmtHour(w.startHour)} to ${fmtHour(w.endHour)} ${tz}`;
 }
 
 /**

@@ -239,7 +239,7 @@ export default function NewNativeCampaignPage() {
             </div>
             <div className="flex items-center justify-between border-b border-border pb-2">
               <span className="text-muted-foreground">Hours</span>
-              <span className="font-medium">8:00 AM – 5:00 PM</span>
+              <span className="font-medium">8:00 AM to 5:00 PM</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-muted-foreground">Timezone</span>

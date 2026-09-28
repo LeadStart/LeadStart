@@ -215,7 +215,7 @@ export function CrmPullPanel({ campaignId }: { campaignId: string }) {
   }
 
   const name = (c: Candidate) =>
-    [c.first_name, c.last_name].filter(Boolean).join(" ") || "—";
+    [c.first_name, c.last_name].filter(Boolean).join(" ") || "-";
 
   // Collapsed: a single button, so the Contacts tab lands clean.
   if (!open) {
@@ -355,10 +355,10 @@ export function CrmPullPanel({ campaignId }: { campaignId: string }) {
                     {name(c)}
                     {c.enrolled && <span className="ml-1 text-[10px] text-emerald-600">in campaign</span>}
                   </td>
-                  <td className="px-2 py-1.5 font-mono text-[11px]">{c.email || "—"}</td>
-                  <td className="px-2 py-1.5">{c.company_name || "—"}</td>
+                  <td className="px-2 py-1.5 font-mono text-[11px]">{c.email || "-"}</td>
+                  <td className="px-2 py-1.5">{c.company_name || "-"}</td>
                   <td className="px-2 py-1.5 text-muted-foreground">
-                    {c.tags.length > 0 ? c.tags.slice(0, 3).join(", ") : "—"}
+                    {c.tags.length > 0 ? c.tags.slice(0, 3).join(", ") : "-"}
                   </td>
                 </tr>
               ))}

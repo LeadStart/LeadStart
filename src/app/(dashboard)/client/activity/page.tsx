@@ -118,7 +118,7 @@ export default function ClientActivityPage() {
                             <Badge variant="secondary" className={config.badgeClass}>{config.label}</Badge>
                             {campaignName && <span className="text-xs text-muted-foreground truncate hidden sm:inline">{campaignName}</span>}
                           </div>
-                          <p className="text-sm text-foreground mt-0.5 truncate">{event.lead_email || "—"}</p>
+                          <p className="text-sm text-foreground mt-0.5 truncate">{event.lead_email || "-"}</p>
                         </div>
                         <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0">{getRelativeTime(event.received_at)}</span>
                       </div>

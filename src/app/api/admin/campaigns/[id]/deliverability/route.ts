@@ -7,7 +7,7 @@
 // PATCH /api/admin/campaigns/[id]/deliverability
 //
 // Owner-only. Updates this campaign's deliverability settings: the per-campaign
-// Million Verifier send-gate controls — verify_before_send (migration 00129, the
+// Million Verifier send-gate controls - verify_before_send (migration 00129, the
 // master on/off) and verify_first_send_only (migration 00130, restricts the gate
 // to the first touch). Together they express the three modes surfaced in the UI:
 // every send / first send only / off.

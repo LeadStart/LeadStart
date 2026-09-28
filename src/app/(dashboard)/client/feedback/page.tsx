@@ -88,13 +88,13 @@ export default function ClientFeedbackPage() {
                 {pageRows.map((f) => (
                   <TableRow key={f.id}>
                     <TableCell className="font-medium">{f.lead_email}</TableCell>
-                    <TableCell>{f.lead_company || "—"}</TableCell>
+                    <TableCell>{f.lead_company || "-"}</TableCell>
                     <TableCell>
                       <Badge variant="secondary" className={["good_lead", "interested"].includes(f.status) ? "badge-green" : ["bad_lead", "wrong_person", "not_interested"].includes(f.status) ? "badge-red" : "badge-slate"}>
                         {f.status.replace(/_/g, " ")}
                       </Badge>
                     </TableCell>
-                    <TableCell className="max-w-xs truncate text-muted-foreground">{f.comment || "—"}</TableCell>
+                    <TableCell className="max-w-xs truncate text-muted-foreground">{f.comment || "-"}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">{new Date(f.created_at).toLocaleDateString()}</TableCell>
                   </TableRow>
                 ))}

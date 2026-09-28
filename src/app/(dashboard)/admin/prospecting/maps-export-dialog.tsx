@@ -23,7 +23,7 @@ import { toCsv, downloadCsv } from "@/lib/csv/to-csv";
 
 // "Download CSV" for the current Maps results: pick which columns to include
 // (Domain on by default) and export the whole run client-side from what's already
-// on screen — no server round-trip, no spend. When rows are selected in the table
+// on screen - no server round-trip, no spend. When rows are selected in the table
 // the picker offers exporting just those.
 export function MapsExportDialog({
   results,

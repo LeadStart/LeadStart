@@ -184,7 +184,7 @@ export function CampaignContactsCard({
             {/* Mobile: stacked cards, no sideways-scrolling table */}
             <div className="space-y-2.5 lg:hidden">
               {pageRows.map((c) => {
-                const name = [c.first_name, c.last_name].filter(Boolean).join(" ") || "—";
+                const name = [c.first_name, c.last_name].filter(Boolean).join(" ") || "-";
                 const vb = verificationBadge(c.email_verification_status);
                 const eb = enrollmentBadge(c.enrollment);
                 return (
@@ -199,7 +199,7 @@ export function CampaignContactsCard({
                     </div>
                     {(c.company_name || c.title) && (
                       <p className="mt-1 text-xs text-muted-foreground truncate">
-                        {c.company_name || "—"}{c.title ? ` · ${c.title}` : ""}
+                        {c.company_name || "-"}{c.title ? ` · ${c.title}` : ""}
                       </p>
                     )}
                   </div>
@@ -222,7 +222,7 @@ export function CampaignContactsCard({
               <TableBody>
                 {pageRows.map((c) => {
                   const name =
-                    [c.first_name, c.last_name].filter(Boolean).join(" ") || "—";
+                    [c.first_name, c.last_name].filter(Boolean).join(" ") || "-";
                   const vb = verificationBadge(c.email_verification_status);
                   const eb = enrollmentBadge(c.enrollment);
                   return (
@@ -242,10 +242,10 @@ export function CampaignContactsCard({
                         </span>
                       </TableCell>
                       <TableCell className="hidden md:table-cell text-muted-foreground">
-                        {c.company_name || "—"}
+                        {c.company_name || "-"}
                       </TableCell>
                       <TableCell className="hidden lg:table-cell text-muted-foreground max-w-[220px] truncate">
-                        {c.title || "—"}
+                        {c.title || "-"}
                       </TableCell>
                       <TableCell>
                         <Badge variant="secondary" className={`${eb.className} text-[10px]`}>

@@ -228,7 +228,7 @@ export default async function AdminReplyDetailPage({
               <p className="text-muted-foreground">Claude class</p>
               <p className="font-medium text-foreground">
                 {reply.claude_class || (
-                  <span className="text-muted-foreground">—</span>
+                  <span className="text-muted-foreground">-</span>
                 )}
               </p>
             </div>
@@ -237,7 +237,7 @@ export default async function AdminReplyDetailPage({
               <p className="font-medium text-foreground">
                 {reply.keyword_flags && reply.keyword_flags.length > 0
                   ? reply.keyword_flags.join(", ")
-                  : "—"}
+                  : "-"}
               </p>
             </div>
           </div>
