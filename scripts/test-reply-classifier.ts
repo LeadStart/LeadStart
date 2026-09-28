@@ -91,7 +91,7 @@ crit("Automatic reply: I am currently traveling.", "ooo", "OOO auto-reply");
 // ── CRITICAL: clear rejections must NOT read as hot ──────────────────────────
 console.log("CRITICAL · clear not-interested");
 crit("Not interested, thanks.", "not_interested", "not interested");
-crit("No thanks.", "not_interested", "no thanks");
+crit("No thanks.", "unsubscribe", "no thanks is an opt-out (permanent suppression)");
 crit("We're all set.", "not_interested", "all set");
 crit("Not a fit for us.", "not_interested", "not a fit");
 critNotHot("Not interested, thanks.", "not-interested is not hot");
@@ -196,6 +196,19 @@ for (const b of ["Please do not send it.", "No. Don't send.", "I don't want you 
   crit(b, "not_interested", `negated send: "${b}"`);
 for (const b of ["Why did you send this to me?", "Who asked you to send this?", "Why are you sending me this?", "Did I ask you to send it?", "Who said to send it?"])
   critNotHot(b, `hostile send question must not be hot: "${b}"`);
+
+// ── CRITICAL: "no thanks" is an opt-out (owner rule 2026-09-28) ─────────────
+// Our emails say: Reply "no thanks" and that's the last you'll hear from me. So a
+// "no thanks" reply is suppressed permanently like "unsubscribe", but our OWN P.S.
+// quoted back under a reply must never suppress a lead.
+console.log("CRITICAL · \"no thanks\" = opt-out (permanent suppression)");
+for (const b of ["no thanks", "No thanks.", "No, thank you.", "Thanks but no thanks", "No thanks, we already have an agency.", "no thanks!\n\nJohn Smith\nSmith Law"])
+  crit(b, "unsubscribe", `opt-out: "${JSON.stringify(b)}"`);
+const OUR_PS = "\n\nDaniel Tuccillo\nCo-Founder\nTuBe SEO\n\nP.S. Not for you? Reply \"no thanks\" and that's the last you'll hear from me.";
+crit(`Sure, send it over!${OUR_PS}`, "true_interest", "our own quoted P.S. is not their opt-out");
+critNot(`Interested, tell me more.${OUR_PS}`, "unsubscribe", "our P.S. under a positive reply never suppresses");
+critNot(`Who is this?${OUR_PS}`, "unsubscribe", "our P.S. under a question never suppresses");
+crit("No thanks needed, just send it!", "true_interest", "'no thanks needed' is a courtesy, not an opt-out");
 
 // ── CRITICAL: signatures + legal footers are not the prospect talking ─────────
 // Law-firm footers say "If you are not the intended recipient, do not forward

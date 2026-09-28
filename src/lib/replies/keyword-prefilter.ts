@@ -127,6 +127,13 @@ const UNSUBSCRIBE_PATTERNS: RegExp[] = [
   /\btake\s+my\s+(name|e-?mail|number|details|info|contact)\s+off\b/i,
   /\b(report(ed|ing)?|mark(ed|ing)?|flag(ged|ging)?)\s+(this|you|it|these|them|your\s+e-?mails?)?\s*(as\s+)?spam\b/i,
   /\bthis\s+is\s+(clearly\s+|just\s+|pure\s+|literally\s+)?spam\b/i,
+
+  // --- "No thanks" IS an opt-out (owner rule, 2026-09-28). Our emails tell a
+  // prospect to reply "no thanks" and they'll never hear from us again, so that
+  // reply goes on the permanent suppression list exactly like "unsubscribe".
+  // Never our own P.S. quoted back under a reply ('Reply "no thanks"…'), and never
+  // "no thanks needed" (a courtesy, not a refusal). ---
+  /(?<!\breply\s{1,3}["“”']?)\bno[,\s]+(?:thanks?|thank\s+you)\b(?!\s+(?:needed|necessary|required))/i,
 ];
 
 // Out-of-office auto-reply markers. OOO replies tend to mention specific
@@ -151,7 +158,7 @@ const OOO_PATTERNS: RegExp[] = [
 const NOT_INTERESTED_PATTERNS: RegExp[] = [
   /\bnot\s+interested\b/i,
   /\bno\s+interest\b/i,
-  /\bno[,\s]+(thanks?|thank\s+you)\b/i,
+  /(?<!\breply\s{1,3}["“”']?)\bno[,\s]+(thanks?|thank\s+you)\b/i, // (never our own quoted P.S.)
   /\bnot\s+(a\s+)?(good\s+)?fit\b/i,
   /\bnot\s+for\s+(me|us)\b/i,
   /\bnot\s+looking\s+(for|to|at)\b/i,
