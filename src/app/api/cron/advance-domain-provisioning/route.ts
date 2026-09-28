@@ -7,6 +7,9 @@
 //   - provisioning JSONB null (a domain bought via /provision but set up by hand,
 //     or a manually-tracked domain) → DKIM-watch only: stamp dkim_verified_at and
 //     flip to warming when the google._domainkey TXT goes live.
+// Plus any warming / active domain with an unfinished add-inboxes run (more
+// inboxes on a domain that already sends): the same advancer, which for that
+// kind of run only creates, licenses and registers the new users.
 //
 // The provisioning→warming flip is applied HERE, not gated by
 // organizations.domain_lifecycle_enabled: a provisioning run is explicit,
@@ -51,14 +54,26 @@ export async function GET(request: NextRequest) {
   if (authError) return authError;
 
   const admin = createAdminClient();
-  const { data: rows } = await admin
-    .from("sending_domains")
-    .select("*")
-    .eq("lifecycle_status", "provisioning")
-    .order("created_at", { ascending: true })
-    .limit(MAX_PER_TICK);
+  const [{ data: rows }, { data: addRows }] = await Promise.all([
+    admin
+      .from("sending_domains")
+      .select("*")
+      .eq("lifecycle_status", "provisioning")
+      .order("created_at", { ascending: true })
+      .limit(MAX_PER_TICK),
+    // Add-inboxes runs on domains that already send. Every one of them has a
+    // provisioning JSONB, so none falls into the DKIM-watch branch below.
+    admin
+      .from("sending_domains")
+      .select("*")
+      .in("lifecycle_status", ["warming", "active"])
+      .not("provisioning", "is", null)
+      .is("provisioning->>completed_at", null)
+      .order("created_at", { ascending: true })
+      .limit(MAX_PER_TICK),
+  ]);
 
-  const domains = (rows ?? []) as SendingDomain[];
+  const domains = [...(rows ?? []), ...(addRows ?? [])] as SendingDomain[];
   const orgCache = new Map<string, OrgClients | null>();
   const summary = { advanced: 0, dkim_watch: 0, warming: 0, alerted: 0, skipped_config: 0, errors: 0 };
 

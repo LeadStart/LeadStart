@@ -5,9 +5,13 @@
 //   • Sending inboxes: domain (bring-your-own / use-existing / buy) → Workspace
 //     → name inboxes (first/last + handle) → review DNS → provision (kicks off
 //     the state machine, reveals one-time passwords, embeds the live stepper +
-//     DKIM paste from DomainProvisioningDetail).
+//     DKIM paste from DomainProvisioningDetail). "Use existing" covers both a
+//     tracked domain's first setup and adding inboxes to a domain that is
+//     already set up (no DNS changes; the Workspace it lives on is locked in).
 //   • A domain only: track one you own or buy a fresh one (inboxes later).
 //   • Connect an existing inbox: register an address on a Workspace we manage.
+// A domain row's "Set up inboxes" / "Add inboxes" button opens this same
+// wizard on that domain at the Workspace step (initialDomainId).
 // Everything here talks to the real routes; nothing is stubbed.
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
@@ -29,10 +33,16 @@ import {
   KeyRound,
 } from "lucide-react";
 import { appUrl } from "@/lib/api-url";
-import type { SendingDomain } from "@/types/app";
+import {
+  MAX_INBOXES_PER_DOMAIN,
+  inboxSetupEligibility,
+  type InboxSetupEligibility,
+} from "@/lib/deliverability/provisioning";
+import type { DomainLifecycle, SendingDomain } from "@/types/app";
 import { DomainProvisioningDetail } from "./domain-provisioning-detail";
 
 type DomainRow = SendingDomain & { mailbox_count: number };
+type DomainOption = { domain: DomainRow; verdict: InboxSetupEligibility };
 type Door = "chooser" | "inbox" | "domain" | "connect";
 type DomainMode = "track" | "existing" | "buy";
 type RegistrarId = "porkbun" | "spaceship";
@@ -64,6 +74,7 @@ interface QuoteResult {
 interface KickoffResult {
   domain: SendingDomain;
   passwords: { email: string; password: string }[];
+  mode: "setup" | "add_inboxes";
 }
 
 const STEP_TITLES = ["Domain", "Workspace", "Inboxes", "Review", "Provision"];
@@ -71,8 +82,15 @@ const REGISTRARS: { id: RegistrarId; label: string }[] = [
   { id: "porkbun", label: "Porkbun" },
   { id: "spaceship", label: "Spaceship" },
 ];
-const RECOMMENDED_MAX = 3;
-const HARD_MAX = 10;
+const LIFECYCLE_LABEL: Record<DomainLifecycle, string> = {
+  provisioning: "Provisioning",
+  warming: "Warming",
+  active: "Active",
+  tired: "Tired",
+  resting: "Resting",
+  burned: "Burned",
+  retired: "Retired",
+};
 
 function slug(s: string): string {
   return (s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -80,17 +98,33 @@ function slug(s: string): string {
 function usd(n: number | null | undefined): string {
   return n == null ? "—" : `$${n.toFixed(2)}`;
 }
+function registrarName(id: string): string {
+  return REGISTRARS.find((r) => r.id === id)?.label ?? "Manual DNS";
+}
+function inboxCount(n: number): string {
+  return `${n} inbox${n === 1 ? "" : "es"}`;
+}
+// Google seat estimate (the ~$7.50 to $8.40 per seat per month band), in whole
+// dollars; collapses to one figure when the band rounds to it (1 seat = ~$8).
+function seatCost(seats: number, plusDomain: boolean): string {
+  const lo = Math.round(seats * 7.5);
+  const hi = Math.round(seats * 8.4);
+  return `~$${lo === hi ? lo : `${lo}–${hi}`}/mo (Google seats)${plusDomain ? " + domain" : ""}`;
+}
 
 export function AddMailboxWizard({
   open,
   onOpenChange,
   domains,
   onDone,
+  initialDomainId = null,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   domains: DomainRow[];
   onDone: () => void;
+  /** Open straight on this domain at the Workspace step (a domain row's button). */
+  initialDomainId?: string | null;
 }) {
   const [door, setDoor] = useState<Door>("chooser");
   const [step, setStep] = useState(1);
@@ -142,10 +176,13 @@ export function AddMailboxWizard({
   // Domain-only door
   const [doDone, setDoDone] = useState(false);
 
-  // Domains eligible to have inboxes set up: tracked/bought but not yet started.
-  const eligibleDomains = domains.filter(
-    (d) => d.tier === "gmail" && d.lifecycle_status === "provisioning" && !d.provisioning,
-  );
+  // Every Google domain with its verdict: a first setup, adding inboxes to one
+  // that's already set up, or why it can't take inboxes right now (listed
+  // greyed out with the reason, never silently hidden).
+  const domainOptions: DomainOption[] = domains
+    .filter((d) => d.tier === "gmail")
+    .map((d) => ({ domain: d, verdict: inboxSetupEligibility(d, d.mailbox_count) }));
+  const eligibleDomains = domainOptions.filter((o) => o.verdict.ok).map((o) => o.domain);
 
   const loadWorkspaces = useCallback(async () => {
     try {
@@ -182,17 +219,18 @@ export function AddMailboxWizard({
     }
   }, []);
 
-  // Reset everything each time the modal opens.
+  // Reset everything each time the modal opens. Opened from a domain's row, it
+  // starts on that domain at the Workspace step instead of the chooser.
   useEffect(() => {
     if (!open) return;
-    setDoor("chooser");
-    setStep(1);
+    setDoor(initialDomainId ? "inbox" : "chooser");
+    setStep(initialDomainId ? 2 : 1);
     setErr(null);
     setBusy(false);
-    setDomainMode("track");
+    setDomainMode(initialDomainId ? "existing" : "track");
     setTrackDomain("");
     setTrackRegistrar("manual");
-    setExistingId(null);
+    setExistingId(initialDomainId);
     setBuyDomain("");
     setQuote(null);
     setBuyRegistrar(null);
@@ -206,7 +244,7 @@ export function AddMailboxWizard({
     setRegistrarStatus(null);
     void loadWorkspaces();
     void loadRegistrarStatus();
-  }, [open, loadWorkspaces, loadRegistrarStatus]);
+  }, [open, initialDomainId, loadWorkspaces, loadRegistrarStatus]);
 
   // Bring a freshly-set error into view (it renders at the top of the scroll).
   useEffect(() => {
@@ -217,6 +255,23 @@ export function AddMailboxWizard({
 
   // ── derived: the domain name + registrar the flow is targeting ──
   const existingDomain = eligibleDomains.find((d) => d.id === existingId) ?? null;
+  const existingVerdict = existingDomain
+    ? inboxSetupEligibility(existingDomain, existingDomain.mailbox_count)
+    : null;
+  // Adding inboxes to a domain that's already set up (vs. its first setup).
+  const addingToExisting =
+    domainMode === "existing" && existingVerdict?.ok === true && existingVerdict.mode === "add_inboxes";
+  // Inboxes the picked domain already holds: the per-domain cap counts them.
+  const existingInboxCount = domainMode === "existing" ? existingDomain?.mailbox_count ?? 0 : 0;
+  const inboxSlots = MAX_INBOXES_PER_DOMAIN - existingInboxCount;
+  // A domain set up through LeadStart stays on its Workspace: new inboxes go there.
+  const lockedWsId = addingToExisting ? existingDomain?.workspace_id ?? null : null;
+  const effectiveWsId = lockedWsId ?? wsId;
+  // "Bring my own" typed a domain LeadStart already tracks: steer to Use existing.
+  const trackedMatch =
+    domainMode === "track"
+      ? domains.find((d) => d.domain === trackDomain.trim().toLowerCase()) ?? null
+      : null;
   const targetDomainName =
     domainMode === "existing"
       ? existingDomain?.domain ?? ""
@@ -247,13 +302,55 @@ export function AddMailboxWizard({
   // ── step 1 gating ──
   const step1Ready =
     domainMode === "existing"
-      ? !!existingId
+      ? !!existingDomain
       : domainMode === "track"
-        ? /^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(trackDomain.trim().toLowerCase())
+        ? /^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(trackDomain.trim().toLowerCase()) && !trackedMatch
         : !!buyRegistrar && !!buyDomain.trim();
 
   function close() {
     onOpenChange(false);
+  }
+
+  function pickExisting(id: string) {
+    setDomainMode("existing");
+    setExistingId(id);
+    setErr(null);
+  }
+
+  // Next. Leaving the Workspace step on an existing domain runs the server's
+  // preflight (eligibility + a live "is the domain on this Workspace" check),
+  // so a domain that can't take inboxes there fails before any naming.
+  async function goNext() {
+    setErr(null);
+    // Switching to a domain that already has inboxes can leave more names than
+    // it has room for: stop here rather than fail at Create.
+    if (door === "inbox" && step === 3 && namedInboxes.length > inboxSlots) {
+      setErr(
+        `${targetDomainName} can take ${inboxSlots} more inbox${inboxSlots === 1 ? "" : "es"} ` +
+          `(a domain holds at most ${MAX_INBOXES_PER_DOMAIN}). Remove ${namedInboxes.length - inboxSlots}.`,
+      );
+      return;
+    }
+    if (door === "inbox" && step === 2 && domainMode === "existing" && existingDomain) {
+      setBusy(true);
+      try {
+        const qs = effectiveWsId ? `?workspace_id=${encodeURIComponent(effectiveWsId)}` : "";
+        const res = await fetch(appUrl(`/api/admin/domains/${existingDomain.id}/workspace${qs}`), {
+          cache: "no-store",
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.ok) {
+          setErr(data.reason ?? data.error ?? "This domain can't take new inboxes right now.");
+          return;
+        }
+      } catch (e) {
+        setErr(e instanceof Error ? e.message : String(e));
+        return;
+      } finally {
+        setBusy(false);
+      }
+    }
+    setStep(step + 1);
   }
 
   function editInbox(i: number, key: "first" | "last" | "local", v: string) {
@@ -266,8 +363,9 @@ export function AddMailboxWizard({
     });
   }
   function addInbox() {
+    // The hard cap counts the inboxes the domain already has.
     setInboxes((prev) =>
-      prev.length >= HARD_MAX ? prev : [...prev, { first: "", last: "", local: "", touched: false }],
+      prev.length >= inboxSlots ? prev : [...prev, { first: "", last: "", local: "", touched: false }],
     );
   }
   function removeInbox(i: number) {
@@ -354,7 +452,7 @@ export function AddMailboxWizard({
           body: JSON.stringify({
             domain: targetDomainName,
             registrar: trackRegistrar,
-            workspace_id: wsId,
+            workspace_id: effectiveWsId,
           }),
         });
         const data = await res.json();
@@ -386,7 +484,7 @@ export function AddMailboxWizard({
       const res2 = await fetch(appUrl(`/api/admin/domains/${domainRow.id}/workspace`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ users, workspace_id: wsId }),
+        body: JSON.stringify({ users, workspace_id: effectiveWsId }),
       });
       const data2 = await res2.json();
       if (!res2.ok) {
@@ -409,8 +507,13 @@ export function AddMailboxWizard({
       }
 
       setResult({
-        domain: { ...domainRow, provisioning: data2.provisioning, workspace_id: wsId ?? domainRow.workspace_id },
+        domain: {
+          ...domainRow,
+          provisioning: data2.provisioning,
+          workspace_id: effectiveWsId ?? domainRow.workspace_id,
+        },
         passwords: Array.isArray(data2.revealed_passwords) ? data2.revealed_passwords : [],
+        mode: data2.mode === "add_inboxes" ? "add_inboxes" : "setup",
       });
       onDone();
       setStep(5);
@@ -484,11 +587,16 @@ export function AddMailboxWizard({
   // ── header ──
   const headerIcon =
     door === "inbox" ? <Mail size={16} /> : door === "domain" ? <Globe size={16} /> : door === "connect" ? <Link2 size={16} /> : <Plus size={16} />;
+  // Once a run starts, the result decides: the page refresh after Create marks
+  // the domain mid-run, which would otherwise flip this back to "Set up".
+  const addingInboxes = result ? result.mode === "add_inboxes" : addingToExisting;
   const headerTitle =
     door === "chooser"
       ? "Add to Mailboxes"
       : door === "inbox"
-        ? "Set up inboxes"
+        ? addingInboxes
+          ? "Add inboxes"
+          : "Set up inboxes"
         : door === "domain"
           ? "Add a domain"
           : "Connect an inbox";
@@ -566,9 +674,11 @@ export function AddMailboxWizard({
               trackRegistrar={trackRegistrar}
               setTrackRegistrar={setTrackRegistrar}
               registrarStatus={registrarStatus}
-              eligibleDomains={eligibleDomains}
+              domainOptions={domainOptions}
               existingId={existingId}
               setExistingId={setExistingId}
+              trackedMatch={trackedMatch}
+              pickExisting={pickExisting}
               buyDomain={buyDomain}
               setBuyDomain={setBuyDomain}
               quote={quote}
@@ -582,8 +692,9 @@ export function AddMailboxWizard({
           {door === "inbox" && step === 2 && (
             <WorkspaceStep
               workspaces={workspaces}
-              wsId={wsId}
+              wsId={effectiveWsId}
               setWsId={setWsId}
+              lockedFor={lockedWsId ? existingDomain?.domain ?? null : null}
               adding={wsAdding}
               setAdding={setWsAdding}
               label={wsLabel}
@@ -599,6 +710,7 @@ export function AddMailboxWizard({
             <InboxesStep
               inboxes={inboxes}
               domain={targetDomainName || "your-domain.com"}
+              existingCount={existingInboxCount}
               editInbox={editInbox}
               addInbox={addInbox}
               removeInbox={removeInbox}
@@ -614,9 +726,12 @@ export function AddMailboxWizard({
               forwardingSupported={forwardingSupported}
               forwardTo={forwardTo}
               setForwardTo={setForwardTo}
-              workspaceLabel={workspaces.find((w) => w.id === wsId)?.label ?? "default Workspace"}
+              workspaceLabel={workspaces.find((w) => w.id === effectiveWsId)?.label ?? "default Workspace"}
               inboxes={namedInboxes}
               mode={domainMode}
+              addingToExisting={addingToExisting}
+              existingCount={existingInboxCount}
+              awaitingDkim={addingToExisting && existingDomain?.lifecycle_status === "provisioning"}
             />
           )}
 
@@ -677,8 +792,8 @@ export function AddMailboxWizard({
             <span className="flex-1" />
             {onFinalStep && <Button onClick={close}>Done</Button>}
             {door === "inbox" && step < 4 && (
-              <Button onClick={() => { setErr(null); setStep(step + 1); }} disabled={step === 1 && !step1Ready}>
-                Next
+              <Button onClick={goNext} disabled={busy || (step === 1 && !step1Ready)}>
+                {busy && step === 2 ? <Loader2 size={15} className="animate-spin" /> : "Next"}
               </Button>
             )}
             {door === "inbox" && step === 4 && (
@@ -713,7 +828,7 @@ function Chooser({ onPick }: { onPick: (d: Door) => void }) {
       icon: <Inbox size={20} />,
       iconCls: "bg-primary/10 text-primary",
       title: "Sending inboxes",
-      desc: "Buy or use a domain and spin up Google inboxes, ready to warm up. Walks the full setup.",
+      desc: "Spin up Google inboxes on a new domain or one you already have, ready to warm up. Walks the full setup.",
       badge: "Most common",
     },
     {
@@ -849,9 +964,11 @@ function DomainStep(props: {
   trackRegistrar: RegistrarId | "manual";
   setTrackRegistrar: (v: RegistrarId | "manual") => void;
   registrarStatus: RegistrarStatus;
-  eligibleDomains: DomainRow[];
+  domainOptions: DomainOption[];
   existingId: string | null;
   setExistingId: (v: string) => void;
+  trackedMatch: DomainRow | null;
+  pickExisting: (id: string) => void;
   buyDomain: string;
   setBuyDomain: (v: string) => void;
   quote: QuoteResult | null;
@@ -860,6 +977,11 @@ function DomainStep(props: {
   buyRegistrar: RegistrarId | null;
   setBuyRegistrar: (v: RegistrarId) => void;
 }) {
+  const ready = props.domainOptions.filter((o) => o.verdict.ok);
+  const blocked = props.domainOptions.filter((o) => !o.verdict.ok);
+  const matchVerdict = props.trackedMatch
+    ? inboxSetupEligibility(props.trackedMatch, props.trackedMatch.mailbox_count)
+    : null;
   const best = (props.quote?.quotes ?? [])
     .filter((q) => q.available)
     .slice()
@@ -891,44 +1013,84 @@ function DomainStep(props: {
               onChange={(e) => props.setTrackDomain(e.target.value)}
             />
           </div>
-          <RegistrarPicker
-            value={props.trackRegistrar}
-            onChange={props.setTrackRegistrar}
-            status={props.registrarStatus}
-          />
+          {props.trackedMatch ? (
+            <Callout kind="warn">
+              <b>{props.trackedMatch.domain} is already in LeadStart</b> ({inboxCount(props.trackedMatch.mailbox_count)},{" "}
+              {LIFECYCLE_LABEL[props.trackedMatch.lifecycle_status].toLowerCase()}).{" "}
+              {matchVerdict?.ok ? (
+                <button
+                  className="font-semibold underline underline-offset-2"
+                  onClick={() => props.pickExisting(props.trackedMatch!.id)}
+                >
+                  {matchVerdict.mode === "add_inboxes" ? "Add inboxes to it" : "Set up its inboxes"}
+                </button>
+              ) : (
+                matchVerdict?.reason
+              )}
+            </Callout>
+          ) : (
+            <RegistrarPicker
+              value={props.trackRegistrar}
+              onChange={props.setTrackRegistrar}
+              status={props.registrarStatus}
+            />
+          )}
         </div>
       )}
 
       {props.mode === "existing" && (
         <div className="space-y-2">
-          <Label className="text-xs">Pick a domain that&rsquo;s ready for inboxes</Label>
-          {props.eligibleDomains.length === 0 ? (
+          <Label className="text-xs">Pick a domain</Label>
+          {props.domainOptions.length === 0 ? (
             <p className="rounded-lg border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
-              No domains waiting for inbox setup. Bring your own or buy a new one, or a domain you already
-              provisioned is done.
+              No Google domains in LeadStart yet. Bring your own or buy a new one.
             </p>
           ) : (
-            props.eligibleDomains.map((d) => (
-              <button
-                key={d.id}
-                onClick={() => props.setExistingId(d.id)}
-                className={`flex w-full items-center gap-2.5 rounded-lg border p-2.5 text-left ${
-                  props.existingId === d.id ? "border-primary bg-primary/5" : "border-border hover:border-border/70"
-                }`}
-              >
-                <span
-                  className={`h-4 w-4 flex-none rounded-full border-2 ${
-                    props.existingId === d.id ? "border-primary bg-primary ring-2 ring-inset ring-white" : "border-slate-300"
+            <>
+              {ready.length === 0 && (
+                <p className="rounded-lg border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
+                  None of your domains can take new inboxes right now. Each one says why below.
+                </p>
+              )}
+              {ready.map(({ domain: d, verdict }) => (
+                <button
+                  key={d.id}
+                  onClick={() => props.setExistingId(d.id)}
+                  className={`flex w-full items-center gap-2.5 rounded-lg border p-2.5 text-left ${
+                    props.existingId === d.id ? "border-primary bg-primary/5" : "border-border hover:border-border/70"
                   }`}
-                />
-                <span className="min-w-0">
-                  <span className="block font-mono text-[13px] font-medium">{d.domain}</span>
-                  <span className="block text-[11px] text-muted-foreground">
-                    {d.registrar === "manual" ? "Manual DNS" : d.registrar} · awaiting inbox setup
+                >
+                  <span
+                    className={`h-4 w-4 flex-none rounded-full border-2 ${
+                      props.existingId === d.id ? "border-primary bg-primary ring-2 ring-inset ring-white" : "border-slate-300"
+                    }`}
+                  />
+                  <span className="min-w-0">
+                    <span className="block font-mono text-[13px] font-medium">{d.domain}</span>
+                    <span className="block text-[11px] text-muted-foreground">
+                      {registrarName(d.registrar)} ·{" "}
+                      {verdict.ok && verdict.mode === "setup"
+                        ? "awaiting inbox setup"
+                        : `${LIFECYCLE_LABEL[d.lifecycle_status]} · ${inboxCount(d.mailbox_count)} · add more`}
+                    </span>
                   </span>
-                </span>
-              </button>
-            ))
+                </button>
+              ))}
+              {blocked.map(({ domain: d, verdict }) => (
+                <div
+                  key={d.id}
+                  className="flex w-full items-start gap-2.5 rounded-lg border border-dashed border-border p-2.5 opacity-70"
+                >
+                  <span className="mt-0.5 h-4 w-4 flex-none rounded-full border-2 border-slate-200" />
+                  <span className="min-w-0">
+                    <span className="block font-mono text-[13px] font-medium">{d.domain}</span>
+                    <span className="block text-[11px] text-muted-foreground">
+                      {LIFECYCLE_LABEL[d.lifecycle_status]} · {verdict.ok ? "" : verdict.reason}
+                    </span>
+                  </span>
+                </div>
+              ))}
+            </>
           )}
         </div>
       )}
@@ -999,6 +1161,8 @@ function WorkspaceStep(props: {
   workspaces: Workspace[];
   wsId: string | null;
   setWsId: (v: string) => void;
+  /** The domain already lives on wsId: new inboxes must go there too. */
+  lockedFor: string | null;
   adding: boolean;
   setAdding: (v: boolean) => void;
   label: string;
@@ -1008,15 +1172,22 @@ function WorkspaceStep(props: {
   addWorkspace: () => void;
   busy: boolean;
 }) {
+  const shown = props.lockedFor ? props.workspaces.filter((w) => w.id === props.wsId) : props.workspaces;
   return (
     <div>
       <h3 className="text-[15px] font-semibold">Which Google Workspace should host it?</h3>
       <p className="mb-3.5 mt-1 text-xs text-muted-foreground">
-        Every inbox sends through one service account that impersonates the address, so what matters is
-        that the Workspace has authorized that service account.
+        {props.lockedFor ? (
+          <>
+            <span className="font-mono">{props.lockedFor}</span> is already set up on this Workspace, so the new
+            inboxes are created there.
+          </>
+        ) : (
+          "Every inbox sends through one service account that impersonates the address, so what matters is that the Workspace has authorized that service account."
+        )}
       </p>
       <div className="space-y-2">
-        {props.workspaces.map((w) => (
+        {shown.map((w) => (
           <button
             key={w.id}
             onClick={() => props.setWsId(w.id)}
@@ -1040,7 +1211,7 @@ function WorkspaceStep(props: {
             </span>
           </button>
         ))}
-        {props.workspaces.length === 0 && (
+        {props.workspaces.length === 0 && !props.lockedFor && (
           <p className="rounded-lg border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
             No Workspaces yet. Add one below: its admin still needs to authorize the service account&rsquo;s
             client ID in Google Admin before provisioning can run.
@@ -1048,7 +1219,7 @@ function WorkspaceStep(props: {
         )}
       </div>
 
-      {props.adding ? (
+      {props.lockedFor ? null : props.adding ? (
         <div className="mt-3 space-y-2 rounded-lg border border-border p-3">
           <Label className="text-xs">Name it</Label>
           <Input placeholder="e.g. Acme Outreach" value={props.label} onChange={(e) => props.setLabel(e.target.value)} />
@@ -1078,11 +1249,15 @@ function WorkspaceStep(props: {
 function InboxesStep(props: {
   inboxes: InboxSpec[];
   domain: string;
+  /** Inboxes the domain already has (adding to an existing domain), else 0. */
+  existingCount: number;
   editInbox: (i: number, key: "first" | "last" | "local", v: string) => void;
   addInbox: () => void;
   removeInbox: (i: number) => void;
 }) {
   const n = props.inboxes.length;
+  // Deliverability guidance is per domain, so it counts the inboxes already there.
+  const total = n + props.existingCount;
   return (
     <div>
       <h3 className="text-[15px] font-semibold">Name the inboxes</h3>
@@ -1090,6 +1265,12 @@ function InboxesStep(props: {
         Google creates each user with a real first &amp; last name: that&rsquo;s the From name recipients
         see. The mailbox handle is auto-suggested from the first name; edit it freely. Avoid role addresses
         like <span className="font-mono">info@</span>.
+        {props.existingCount > 0 && (
+          <>
+            {" "}
+            <span className="font-mono">{props.domain}</span> already has {inboxCount(props.existingCount)}.
+          </>
+        )}
       </p>
       {props.inboxes.map((ib, i) => (
         <div key={i} className="mb-2.5 rounded-xl border border-border p-3">
@@ -1129,19 +1310,21 @@ function InboxesStep(props: {
           </div>
         </div>
       ))}
-      {n < HARD_MAX && (
+      {total < MAX_INBOXES_PER_DOMAIN && (
         <button className="text-xs font-semibold text-primary hover:underline" onClick={props.addInbox}>
           + Add inbox
         </button>
       )}
-      {n > RECOMMENDED_MAX ? (
+      {total > MAX_INBOXES_PER_DOMAIN ? (
         <Callout kind="warn" className="mt-2.5">
-          <b>{n} inboxes on one domain.</b> {RECOMMENDED_MAX} is the recommended max for deliverability,
-          you can add more, but warm them slowly and watch placement.
+          <b>
+            {total} inboxes on one domain{props.existingCount > 0 ? ` (${props.existingCount} already there)` : ""}.
+          </b>{" "}
+          A domain holds at most {MAX_INBOXES_PER_DOMAIN}: remove {total - MAX_INBOXES_PER_DOMAIN} to continue.
         </Callout>
       ) : (
         <p className="mt-2.5 text-xs text-muted-foreground">
-          Tip: {RECOMMENDED_MAX} inboxes per domain is the deliverability sweet spot, add more only if you need to.
+          A domain holds at most {MAX_INBOXES_PER_DOMAIN} inboxes. Need more? Add another domain.
         </p>
       )}
     </div>
@@ -1159,6 +1342,11 @@ function ReviewStep(props: {
   workspaceLabel: string;
   inboxes: InboxSpec[];
   mode: DomainMode;
+  /** Adding inboxes to a domain that's already set up: no DNS work at all. */
+  addingToExisting: boolean;
+  existingCount: number;
+  /** That domain is still in provisioning, waiting on DKIM before it sends. */
+  awaitingDkim: boolean;
 }) {
   const seats = props.inboxes.length;
   const regLabel = props.registrar === "manual" ? "Manual (you add DNS)" : props.registrar;
@@ -1168,82 +1356,104 @@ function ReviewStep(props: {
       <p className="mb-3.5 mt-1 text-xs text-muted-foreground">Here&rsquo;s exactly what happens when you hit Create.</p>
       <div className="mb-3.5 overflow-hidden rounded-xl border border-border">
         <SumRow k="Domain" v={props.domain} mono />
-        <SumRow k="DNS / registrar" v={regLabel} />
+        {props.addingToExisting ? (
+          <SumRow k="Already on it" v={inboxCount(props.existingCount)} />
+        ) : (
+          <SumRow k="DNS / registrar" v={regLabel} />
+        )}
         <SumRow k="Workspace" v={props.workspaceLabel} />
-        <SumRow k="Inboxes" v={`${seats} · ${props.inboxes.map((i) => `${i.first} ${i.last}`.trim() || i.local).join(", ")}`} />
         <SumRow
-          k="Est. cost"
-          v={`~$${(seats * 7.5).toFixed(0)}–${(seats * 8.4).toFixed(0)}/mo (Google seats)${props.mode === "buy" ? " + domain" : ""}`}
+          k={props.addingToExisting ? "New inboxes" : "Inboxes"}
+          v={`${seats} · ${props.inboxes.map((i) => `${i.first} ${i.last}`.trim() || i.local).join(", ")}`}
         />
+        <SumRow k="Est. cost" v={seatCost(seats, props.mode === "buy")} />
       </div>
 
-      <Label className="text-xs">DNS records for this domain</Label>
-      <div className="mt-1.5 overflow-hidden rounded-xl border border-border">
-        <table className="w-full font-mono text-[11.5px]">
-          <thead>
-            <tr className="text-[10px] uppercase tracking-wide text-muted-foreground">
-              <th className="px-2.5 py-1.5 text-left font-semibold" style={{ width: 56 }}>Type</th>
-              <th className="px-2.5 py-1.5 text-left font-semibold">Host</th>
-              <th className="px-2.5 py-1.5 text-left font-semibold">Value</th>
-            </tr>
-          </thead>
-          <tbody className="[&_td]:border-t [&_td]:border-border/60 [&_td]:px-2.5 [&_td]:py-2 [&_td]:align-top">
-            <tr><td>MX</td><td className="whitespace-nowrap">@</td><td className="[overflow-wrap:anywhere]">smtp.google.com <span className="text-muted-foreground">(priority 1)</span></td></tr>
-            <tr><td>TXT</td><td className="whitespace-nowrap">@</td><td className="[overflow-wrap:anywhere]">v=spf1 include:_spf.google.com ~all</td></tr>
-            <tr><td>TXT</td><td className="whitespace-nowrap">_dmarc</td><td className="[overflow-wrap:anywhere]">v=DMARC1; p=none;</td></tr>
-            <tr><td>TXT</td><td className="whitespace-nowrap">@</td><td className="[overflow-wrap:anywhere]">google-site-verification=… <span className="text-muted-foreground">(added during setup)</span></td></tr>
-            <tr><td>TXT</td><td className="whitespace-nowrap">google._domainkey</td><td className="text-muted-foreground [overflow-wrap:anywhere]">DKIM, generated in Google Admin, pasted at the last step</td></tr>
-          </tbody>
-        </table>
-      </div>
-      <Callout kind={props.autoDns ? "ok" : "warn"} className="mt-3">
-        {props.autoDns ? (
-          <>
-            <b>Written to {regLabel} automatically.</b> This domain is on a connected registrar, so LeadStart
-            lays down the DNS for you.
-          </>
-        ) : props.registrarMissingKey ? (
-          <>
-            <b>{regLabel} isn&rsquo;t connected.</b> This domain points at {regLabel}, but its API key isn&rsquo;t
-            saved, so these records can&rsquo;t be written and setup will stall at &ldquo;Verify domain
-            ownership.&rdquo; Add the key in Settings, API, then use &ldquo;Retry DNS,&rdquo; or switch the domain
-            to Manual and paste them yourself.
-          </>
-        ) : (
-          <>
-            <b>You&rsquo;ll add these by hand.</b> This domain is set to Manual, so copy the records into your DNS
-            host. Setup pauses until they resolve.
-          </>
-        )}
-      </Callout>
-      <p className="mt-2 text-[11px] text-muted-foreground">
-        One DMARC / SPF / DKIM record covers every inbox on the domain: email auth is per-domain, not per-inbox.
-      </p>
-
-      {/* Optional URL forwarding (Porkbun only). */}
-      <div className="mt-3.5 border-t border-border/60 pt-3.5">
-        <Label className="text-xs">URL forwarding (optional)</Label>
-        {props.forwardingSupported ? (
-          <>
-            <p className="mb-1.5 mt-0.5 text-[11px] text-muted-foreground">
-              301-redirect this domain to the client&rsquo;s real site so the bare domain never shows a dead
-              parked page. Leave blank to skip; you can set or change it later from the domain&rsquo;s row.
-            </p>
-            <Input
-              className="font-mono text-sm"
-              placeholder="https://clientsite.com"
-              value={props.forwardTo}
-              onChange={(e) => props.setForwardTo(e.target.value)}
-            />
-          </>
-        ) : (
-          <p className="mt-0.5 text-[11px] text-muted-foreground">
-            {props.registrar === "spaceship"
-              ? "Spaceship has no forwarding API: set the redirect manually in the Spaceship dashboard."
-              : "Available on connected Porkbun domains. You can also set it later from the domain’s row under Mailboxes."}
+      {props.addingToExisting ? (
+        <div className="space-y-2.5">
+          <Callout kind="ok">
+            <b>No DNS changes.</b> {props.domain} is already set up, so this only creates the new Google users
+            on {props.workspaceLabel} and registers them as sending inboxes. Each one starts at 5 sends a day
+            and ramps up from there.
+          </Callout>
+          {props.awaitingDkim && (
+            <Callout kind="warn">
+              <b>{props.domain} is still waiting on DKIM.</b> The new inboxes start sending once DKIM is
+              detected; paste it on the domain&rsquo;s row if you haven&rsquo;t yet.
+            </Callout>
+          )}
+        </div>
+      ) : (
+        <>
+          <Label className="text-xs">DNS records for this domain</Label>
+          <div className="mt-1.5 overflow-hidden rounded-xl border border-border">
+            <table className="w-full font-mono text-[11.5px]">
+              <thead>
+                <tr className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                  <th className="px-2.5 py-1.5 text-left font-semibold" style={{ width: 56 }}>Type</th>
+                  <th className="px-2.5 py-1.5 text-left font-semibold">Host</th>
+                  <th className="px-2.5 py-1.5 text-left font-semibold">Value</th>
+                </tr>
+              </thead>
+              <tbody className="[&_td]:border-t [&_td]:border-border/60 [&_td]:px-2.5 [&_td]:py-2 [&_td]:align-top">
+                <tr><td>MX</td><td className="whitespace-nowrap">@</td><td className="[overflow-wrap:anywhere]">smtp.google.com <span className="text-muted-foreground">(priority 1)</span></td></tr>
+                <tr><td>TXT</td><td className="whitespace-nowrap">@</td><td className="[overflow-wrap:anywhere]">v=spf1 include:_spf.google.com ~all</td></tr>
+                <tr><td>TXT</td><td className="whitespace-nowrap">_dmarc</td><td className="[overflow-wrap:anywhere]">v=DMARC1; p=none;</td></tr>
+                <tr><td>TXT</td><td className="whitespace-nowrap">@</td><td className="[overflow-wrap:anywhere]">google-site-verification=… <span className="text-muted-foreground">(added during setup)</span></td></tr>
+                <tr><td>TXT</td><td className="whitespace-nowrap">google._domainkey</td><td className="text-muted-foreground [overflow-wrap:anywhere]">DKIM, generated in Google Admin, pasted at the last step</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <Callout kind={props.autoDns ? "ok" : "warn"} className="mt-3">
+            {props.autoDns ? (
+              <>
+                <b>Written to {regLabel} automatically.</b> This domain is on a connected registrar, so LeadStart
+                lays down the DNS for you.
+              </>
+            ) : props.registrarMissingKey ? (
+              <>
+                <b>{regLabel} isn&rsquo;t connected.</b> This domain points at {regLabel}, but its API key isn&rsquo;t
+                saved, so these records can&rsquo;t be written and setup will stall at &ldquo;Verify domain
+                ownership.&rdquo; Add the key in Settings, API, then use &ldquo;Retry DNS,&rdquo; or switch the domain
+                to Manual and paste them yourself.
+              </>
+            ) : (
+              <>
+                <b>You&rsquo;ll add these by hand.</b> This domain is set to Manual, so copy the records into your DNS
+                host. Setup pauses until they resolve.
+              </>
+            )}
+          </Callout>
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            One DMARC / SPF / DKIM record covers every inbox on the domain: email auth is per-domain, not per-inbox.
           </p>
-        )}
-      </div>
+
+          {/* Optional URL forwarding (Porkbun only). */}
+          <div className="mt-3.5 border-t border-border/60 pt-3.5">
+            <Label className="text-xs">URL forwarding (optional)</Label>
+            {props.forwardingSupported ? (
+              <>
+                <p className="mb-1.5 mt-0.5 text-[11px] text-muted-foreground">
+                  301-redirect this domain to the client&rsquo;s real site so the bare domain never shows a dead
+                  parked page. Leave blank to skip; you can set or change it later from the domain&rsquo;s row.
+                </p>
+                <Input
+                  className="font-mono text-sm"
+                  placeholder="https://clientsite.com"
+                  value={props.forwardTo}
+                  onChange={(e) => props.setForwardTo(e.target.value)}
+                />
+              </>
+            ) : (
+              <p className="mt-0.5 text-[11px] text-muted-foreground">
+                {props.registrar === "spaceship"
+                  ? "Spaceship has no forwarding API: set the redirect manually in the Spaceship dashboard."
+                  : "Available on connected Porkbun domains. You can also set it later from the domain’s row under Mailboxes."}
+              </p>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -1252,7 +1462,10 @@ function ProvisionStep({ result, onDone }: { result: KickoffResult; onDone: () =
   return (
     <div>
       <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-emerald-700">
-        <Check size={17} /> Setup started for {result.domain.domain}
+        <Check size={17} />{" "}
+        {result.mode === "add_inboxes"
+          ? `Adding inboxes to ${result.domain.domain}`
+          : `Setup started for ${result.domain.domain}`}
       </div>
       {result.passwords.length > 0 && (
         <div className="mb-3 rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs">
@@ -1273,8 +1486,9 @@ function ProvisionStep({ result, onDone }: { result: KickoffResult; onDone: () =
         </div>
       )}
       <p className="mb-2 text-xs text-muted-foreground">
-        Steps run in order and pick up where they left off. Watch progress here, finish DKIM, or close and it
-        continues in the background: the domain now shows this same panel in its row.
+        {result.mode === "add_inboxes"
+          ? "Google can take a few minutes to open each new mailbox before it registers. Watch progress here, or close and it continues in the background: the domain's row shows this same panel."
+          : "Steps run in order and pick up where they left off. Watch progress here, finish DKIM, or close and it continues in the background: the domain now shows this same panel in its row."}
       </p>
       <DomainProvisioningDetail domain={result.domain} onChange={onDone} />
     </div>

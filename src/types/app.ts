@@ -1039,6 +1039,15 @@ export interface ProvisioningUserSpec {
 
 export interface ProvisioningState {
   version: 1;
+  /**
+   * What this run does. "setup" (or absent, as on every run before this field
+   * existed) = a new domain's first inboxes: DNS, Workspace domain add,
+   * verification, users, mailboxes, DKIM. "add_inboxes" = more inboxes on a
+   * domain that is already set up: the domain-level steps were confirmed live
+   * when the run started and are pre-completed, so only users, licenses,
+   * mailboxes (and DKIM, if the domain is still waiting on it) run.
+   */
+  kind?: "setup" | "add_inboxes";
   started_at: string;
   updated_at: string; // bumped on every state write: the CAS token
   steps: Record<ProvisioningStepId, ProvisioningStep>;

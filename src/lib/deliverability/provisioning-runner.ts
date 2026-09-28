@@ -504,19 +504,23 @@ async function dkimStep(
       ),
     };
   }
-  // DKIM is live. Stamp the fact and flip the domain into warming. Both writes
-  // are guarded so they can only advance, never stomp a later state.
-  await deps.admin
-    .from("sending_domains")
-    .update({
-      dkim_verified_at: now,
-      lifecycle_status: "warming",
-      lifecycle_changed_at: now,
-    })
-    .eq("id", domain.id)
-    .eq("lifecycle_status", "provisioning");
+  // DKIM is live. For a domain still in provisioning, stamp the fact and flip it
+  // into warming (guarded so it can only advance, never stomp a later state).
+  // An add-inboxes run on a domain that already sends has nothing to flip.
+  const wasProvisioning = domain.lifecycle_status === "provisioning";
+  if (wasProvisioning) {
+    await deps.admin
+      .from("sending_domains")
+      .update({
+        dkim_verified_at: now,
+        lifecycle_status: "warming",
+        lifecycle_changed_at: now,
+      })
+      .eq("id", domain.id)
+      .eq("lifecycle_status", "provisioning");
+  }
   return {
     state: markStep(state, "dkim", { status: "done", attempts, last_error: null }, now),
-    becameWarming: true,
+    becameWarming: wasProvisioning,
   };
 }

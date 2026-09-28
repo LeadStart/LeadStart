@@ -61,6 +61,19 @@ export class DirectoryClient {
     }
   }
 
+  /** Every domain on the tenant (primary + secondary) with its verified flag.
+   *  The reliable "is this domain on this Workspace" check: domains.get answers
+   *  403 (not 404) for a domain that belongs to another Google account. */
+  async listDomains(): Promise<{ domainName: string; verified: boolean }[]> {
+    const { json } = await this.call<{ domains?: { domainName?: string; verified?: boolean }[] }>(
+      "GET",
+      "/customer/my_customer/domains",
+    );
+    return (json.domains ?? [])
+      .filter((d) => !!d.domainName)
+      .map((d) => ({ domainName: d.domainName!.toLowerCase(), verified: d.verified === true }));
+  }
+
   /** Read a domain's state: the post-verification gate reads `verified`. */
   async getDomain(domain: string): Promise<{ exists: boolean; verified: boolean }> {
     try {

@@ -6,32 +6,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2, KeyRound, RefreshCw, AlertTriangle } from "lucide-react";
 import { appUrl } from "@/lib/api-url";
-import type {
-  ProvisioningState,
-  ProvisioningStepId,
-  SendingDomain,
-} from "@/types/app";
-
-const STEP_LABEL: Record<ProvisioningStepId, string> = {
-  dns_records: "DNS records",
-  workspace_domain: "Add domain to Workspace",
-  site_verification_token: "Get verification token",
-  site_verification: "Verify domain ownership",
-  users: "Create inboxes",
-  licenses: "Assign licenses",
-  mailboxes: "Register mailboxes",
-  dkim: "DKIM authentication",
-};
-const STEP_ORDER: ProvisioningStepId[] = [
-  "dns_records",
-  "workspace_domain",
-  "site_verification_token",
-  "site_verification",
-  "users",
-  "licenses",
-  "mailboxes",
-  "dkim",
-];
+import {
+  PROVISIONING_STEP_LABELS as STEP_LABEL,
+  PROVISIONING_STEP_ORDER as STEP_ORDER,
+  isCompleteStatus,
+} from "@/lib/deliverability/provisioning";
+import type { ProvisioningState, SendingDomain } from "@/types/app";
 
 function dotClass(status: string): string {
   switch (status) {
@@ -111,6 +91,15 @@ export function DomainProvisioningDetail({
     ? STEP_ORDER.find((id) => prov.steps[id].status !== "done" && prov.steps[id].status !== "skipped")
     : undefined;
   const activeStep = prov && activeStepId ? prov.steps[activeStepId] : null;
+  // An add-inboxes run pre-completes the domain-level steps (attempts stay 0);
+  // list only the steps it actually works so it reads as "adding inboxes", not
+  // as a whole domain being set up again.
+  const addingInboxes = prov?.kind === "add_inboxes";
+  const visibleSteps = prov
+    ? STEP_ORDER.filter(
+        (id) => !(addingInboxes && prov.steps[id].attempts === 0 && isCompleteStatus(prov.steps[id].status)),
+      )
+    : [];
   const [busy, setBusy] = useState<string | null>(null);
   const [passwords, setPasswords] = useState<{ email: string; password: string }[]>([]);
   const [note, setNote] = useState<string | null>(null);
@@ -145,9 +134,9 @@ export function DomainProvisioningDetail({
     loadForwarding();
   }, [loadDns, loadForwarding]);
 
-  // Auto-advance while this domain is actively provisioning, so the panel shows
-  // live progress instead of waiting on the 10-min cron. Quiet (no spinner);
-  // stops when the domain leaves provisioning or the active step fails (which
+  // Auto-advance while a setup or add-inboxes run is unfinished, so the panel
+  // shows live progress instead of waiting on the 10-min cron. Quiet (no
+  // spinner); stops when every step is done or the active step fails (which
   // needs owner action). A latest-callback ref keeps the interval stable.
   const pollCbRef = useRef<() => void>(() => {});
   useEffect(() => {
@@ -156,8 +145,7 @@ export function DomainProvisioningDetail({
       loadDns();
     };
   }, [onChange, loadDns]);
-  const autoPolling =
-    domain.lifecycle_status === "provisioning" && !!activeStepId && activeStep?.status !== "failed";
+  const autoPolling = !!activeStepId && activeStep?.status !== "failed";
   useEffect(() => {
     if (!autoPolling) return;
     let cancelled = false;
@@ -296,7 +284,9 @@ export function DomainProvisioningDetail({
       ) : prov ? (
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-muted-foreground">Provisioning progress</span>
+            <span className="text-xs font-medium text-muted-foreground">
+              {addingInboxes ? "Adding inboxes" : "Provisioning progress"}
+            </span>
             <Button
               variant="outline"
               size="sm"
@@ -334,7 +324,7 @@ export function DomainProvisioningDetail({
             </div>
           )}
           <ul className="space-y-1">
-            {STEP_ORDER.map((id) => {
+            {visibleSteps.map((id) => {
               const st = prov.steps[id];
               return (
                 <li key={id} className="flex items-center gap-2">

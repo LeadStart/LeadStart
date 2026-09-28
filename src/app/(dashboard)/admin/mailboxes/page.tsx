@@ -39,6 +39,7 @@ import {
   scoreMath,
 } from "@/lib/deliverability/inbox-health";
 import { describeCounts, placementStatusLabel } from "@/lib/deliverability/placement";
+import { inboxSetupEligibility } from "@/lib/deliverability/provisioning";
 import type {
   DomainLifecycle,
   HealthComponent,
@@ -53,7 +54,6 @@ import type {
 } from "@/types/app";
 import { AddMailboxWizard } from "./add-mailbox-wizard";
 import { DomainProvisioningDetail } from "./domain-provisioning-detail";
-import { DomainSetupModal } from "./domain-setup-modal";
 
 type MailboxRow = NativeMailbox & {
   sent_today: number;
@@ -92,7 +92,8 @@ export default function MailboxesPage() {
   const [mailboxes, setMailboxes] = useState<MailboxRow[]>([]);
   const [domains, setDomains] = useState<DomainRow[]>([]);
   const [expandedDomainId, setExpandedDomainId] = useState<string | null>(null);
-  const [setupDomain, setSetupDomain] = useState<DomainRow | null>(null);
+  // Domain a row's "Set up / Add inboxes" button opened the wizard on (null = the header's Add).
+  const [wizardDomainId, setWizardDomainId] = useState<string | null>(null);
   const [seedCount, setSeedCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [banner, setBanner] = useState<Banner>(null);
@@ -656,7 +657,12 @@ export default function MailboxesPage() {
       <PageHeader
         title="Mailboxes"
         actions={
-          <Button onClick={() => setWizardOpen(true)}>
+          <Button
+            onClick={() => {
+              setWizardDomainId(null);
+              setWizardOpen(true);
+            }}
+          >
             <Plus size={16} className="mr-1" /> Add
           </Button>
         }
@@ -666,6 +672,7 @@ export default function MailboxesPage() {
         onOpenChange={setWizardOpen}
         domains={domains}
         onDone={load}
+        initialDomainId={wizardDomainId}
       />
 
       {banner && (
@@ -1238,6 +1245,10 @@ export default function MailboxesPage() {
             <div className="divide-y divide-border/50">
               {domains.map((d) => {
                 const meta = LIFECYCLE_META[d.lifecycle_status];
+                // First setup for a never-set-up domain, or more inboxes on one
+                // that's already set up (none once it holds the per-domain cap);
+                // both open the wizard on this domain.
+                const inboxSetup = inboxSetupEligibility(d, d.mailbox_count);
                 // Every domain expands to its DNS panel (expected vs live records,
                 // SPF/DKIM/DMARC/MX); provisioning domains also show the setup stepper.
                 const expandable = true;
@@ -1274,16 +1285,21 @@ export default function MailboxesPage() {
                         {d.mailbox_count} inbox{d.mailbox_count === 1 ? "" : "es"}
                         {d.max_daily_sends != null && ` · cap ${d.max_daily_sends}/day`}
                       </span>
-                      {d.lifecycle_status === "provisioning" && !d.provisioning && (
+                      {inboxSetup.ok && (
                         <button
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            setSetupDomain(d);
+                            setWizardDomainId(d.id);
+                            setWizardOpen(true);
                           }}
-                          className="rounded-md bg-primary px-2.5 py-1 text-[11px] font-medium text-white hover:bg-primary/90"
+                          className={
+                            inboxSetup.mode === "setup"
+                              ? "rounded-md bg-primary px-2.5 py-1 text-[11px] font-medium text-white hover:bg-primary/90"
+                              : "rounded-md border border-primary/30 px-2.5 py-1 text-[11px] font-medium text-primary hover:bg-primary/5"
+                          }
                         >
-                          Set up inboxes
+                          {inboxSetup.mode === "setup" ? "Set up inboxes" : "Add inboxes"}
                         </button>
                       )}
                       {expandable && (
@@ -1530,14 +1546,6 @@ export default function MailboxesPage() {
       </Card>
       </div>
       </div>
-
-      {setupDomain && (
-        <DomainSetupModal
-          domain={setupDomain}
-          onClose={() => setSetupDomain(null)}
-          onDone={load}
-        />
-      )}
     </div>
   );
 }

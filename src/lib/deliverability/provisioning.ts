@@ -15,6 +15,7 @@ import type {
   ProvisioningStepId,
   ProvisioningStepStatus,
   ProvisioningUserSpec,
+  SendingDomain,
 } from "@/types/app";
 
 export const PROVISIONING_STEP_ORDER: ProvisioningStepId[] = [
@@ -26,6 +27,31 @@ export const PROVISIONING_STEP_ORDER: ProvisioningStepId[] = [
   "licenses",
   "mailboxes",
   "dkim",
+];
+
+/** Owner-facing step names (the stepper UI and route error messages). */
+export const PROVISIONING_STEP_LABELS: Record<ProvisioningStepId, string> = {
+  dns_records: "DNS records",
+  workspace_domain: "Add domain to Workspace",
+  site_verification_token: "Get verification token",
+  site_verification: "Verify domain ownership",
+  users: "Create inboxes",
+  licenses: "Assign licenses",
+  mailboxes: "Register mailboxes",
+  dkim: "DKIM authentication",
+};
+
+/** Hard cap on inboxes per sending domain (owner rule, 2026-09-27): scale by
+ *  adding domains, never by stacking inboxes on one. Enforced on every path
+ *  that adds an inbox: Workspace provisioning and "Connect an existing inbox". */
+export const MAX_INBOXES_PER_DOMAIN = 3;
+
+/** The steps that set up the DOMAIN itself, as opposed to its inboxes. */
+export const DOMAIN_SETUP_STEPS: ProvisioningStepId[] = [
+  "dns_records",
+  "workspace_domain",
+  "site_verification_token",
+  "site_verification",
 ];
 
 export interface InitProvisioningInput {
@@ -63,6 +89,110 @@ export function initProvisioningState(input: InitProvisioningInput): Provisionin
     last_error: null,
     completed_at: null,
   };
+}
+
+export interface InitAddInboxesInput extends InitProvisioningInput {
+  /** The domain's previous run, if any. Its verification token and DMARC rua
+   *  carry forward so the DNS panel keeps listing the records the domain has. */
+  previous: ProvisioningState | null;
+  /** The Directory reported the domain on this Workspace AND verified, checked
+   *  live when the run starts. When false the verification steps still run. */
+  domainVerified: boolean;
+  /** Keep watching for DKIM (the domain is still in provisioning and only
+   *  starts sending once DKIM lands); otherwise the step is skipped. */
+  watchDkim: boolean;
+}
+
+/**
+ * State for adding inboxes to a domain that is already set up. Same shape and
+ * runner as a first setup, but the domain-level work is pre-completed: DNS is
+ * never rewritten (the domain's row has Rewrite DNS for repairs), the domain is
+ * already on the Workspace (the caller checked live), and verification is done
+ * when the Directory says so. Only users, licenses, mailboxes and, for a domain
+ * still in provisioning, DKIM run. Pre-completed steps keep attempts at 0,
+ * which is how the stepper tells them apart from steps this run worked.
+ */
+export function initAddInboxesState(input: InitAddInboxesInput): ProvisioningState {
+  const base = initProvisioningState({
+    ...input,
+    dmarcRua: input.previous?.dmarc_rua ?? input.dmarcRua,
+  });
+  let state: ProvisioningState = {
+    ...base,
+    kind: "add_inboxes",
+    site_verification_token: input.previous?.site_verification_token ?? null,
+  };
+  state = markStep(state, "dns_records", { status: "skipped" }, input.now);
+  state = markStep(state, "workspace_domain", { status: "done" }, input.now);
+  if (input.domainVerified) {
+    state = markStep(state, "site_verification_token", { status: "done" }, input.now);
+    state = markStep(state, "site_verification", { status: "done" }, input.now);
+  }
+  if (!input.watchDkim) {
+    state = markStep(state, "dkim", { status: "skipped" }, input.now);
+  }
+  return state;
+}
+
+export type InboxSetupEligibility =
+  | { ok: true; mode: "setup" | "add_inboxes" }
+  | { ok: false; reason: string };
+
+/**
+ * Can this domain get new inboxes right now, and through which kind of run?
+ *   setup        a tracked or bought domain whose first setup never started
+ *   add_inboxes  a domain that is already set up: its last run finished (or
+ *                only DKIM is still pending), or a backfilled warming/active
+ *                domain that never went through the flow at all
+ * A run still working (or halted on a failure), a domain rotated out of
+ * service (tired, resting, burned, retired) and a domain already holding
+ * MAX_INBOXES_PER_DOMAIN inboxes are refused with an owner-facing reason. Pure:
+ * the wizard uses it to list domains, the workspace route as the authoritative
+ * check (with the live inbox count).
+ */
+export function inboxSetupEligibility(
+  domain: Pick<SendingDomain, "tier" | "lifecycle_status" | "provisioning">,
+  inboxCount = 0,
+): InboxSetupEligibility {
+  if (domain.tier !== "gmail") {
+    return { ok: false, reason: "Inboxes can only be created on Google (Gmail-tier) domains." };
+  }
+  switch (domain.lifecycle_status) {
+    case "tired":
+      return { ok: false, reason: "This domain is tired: it takes no new leads while it drains, so it doesn't get new inboxes." };
+    case "resting":
+      return { ok: false, reason: "This domain is resting to let its reputation recover. It can get new inboxes once it re-warms." };
+    case "burned":
+      return { ok: false, reason: "This domain is burned and is never reused." };
+    case "retired":
+      return { ok: false, reason: "This domain is retired." };
+  }
+
+  const run = domain.provisioning;
+  let mode: "setup" | "add_inboxes";
+  if (!run) {
+    mode = domain.lifecycle_status === "provisioning" ? "setup" : "add_inboxes";
+  } else {
+    const blocker = firstIncompleteStep(run);
+    if (blocker !== null && blocker !== "dkim") {
+      const label = PROVISIONING_STEP_LABELS[blocker];
+      if (run.steps[blocker].status === "failed") {
+        return {
+          ok: false,
+          reason: `Setup for this domain stopped at "${label}". Fix that and use Check now on the domain's row, then add inboxes.`,
+        };
+      }
+      return { ok: false, reason: `Setup for this domain is still running ("${label}"). Add more inboxes once it finishes.` };
+    }
+    mode = "add_inboxes";
+  }
+  if (inboxCount >= MAX_INBOXES_PER_DOMAIN) {
+    return {
+      ok: false,
+      reason: `Full: ${inboxCount} inboxes, and a domain holds at most ${MAX_INBOXES_PER_DOMAIN}. Add another domain for more sending capacity.`,
+    };
+  }
+  return { ok: true, mode };
 }
 
 /** Immutably patch one step (and bump the state clock + surface its error). */
