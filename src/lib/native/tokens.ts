@@ -40,12 +40,24 @@ export interface TokenContact {
   custom_fields: Record<string, unknown> | null;
 }
 
+// {{signature}}: the client's email signature (Admin → Clients → Email signature,
+// clients.signature_block). A {{your_name}} inside it is filled from the SENDING
+// inbox, so a rotating pool still signs each email with the inbox that sent it.
+// No signature set → the sender's name alone, so a send is never unsigned.
+export function resolveSignature(signature: string | null | undefined, senderName: string): string {
+  const sig = (signature ?? "").replace(/\r\n/g, "\n").trim();
+  if (!sig) return senderName;
+  const sender = { yourname: senderName, sendername: senderName, myname: senderName };
+  return applyTokens(sig, sender, () => "").trim();
+}
+
 // Build the resolved token map for a contact + sending identity. Standard keys
 // are already in normalizeVarKey() form; custom_fields entries are folded the
 // same way. null custom values are skipped; non-strings are String()-coerced.
 export function buildTokenMap(
   contact: TokenContact,
   senderName: string,
+  signature?: string | null,
 ): Record<string, string> {
   const map: Record<string, string> = {
     firstname: contact.first_name ?? "",
@@ -61,6 +73,7 @@ export function buildTokenMap(
     yourname: senderName,
     sendername: senderName,
     myname: senderName,
+    signature: resolveSignature(signature, senderName),
   };
 
   const cf = contact.custom_fields;
@@ -138,6 +151,7 @@ export const SENDER_TOKEN_KEYS: ReadonlySet<string> = new Set([
   "yourname",
   "sendername",
   "myname",
+  "signature",
 ]);
 
 // Which contact columns satisfy each standard token (normalizeVarKey form).
@@ -246,6 +260,7 @@ export const SAMPLE_TOKENS: Record<string, string> = {
   yourname: "Alex Rivera",
   sendername: "Alex Rivera",
   myname: "Alex Rivera",
+  signature: "Alex Rivera\nAcme Growth Co.",
 };
 
 // A few common custom tokens get hand-picked sample values so the preview reads

@@ -372,7 +372,7 @@ export function NativeSequenceCard({
                     <Label className="text-xs">Body</Label>
                     <Textarea
                       rows={8}
-                      placeholder="Placeholders: {{FirstName}} {{PropertyAddress}} {{SoldDate}} {{YourName}}"
+                      placeholder="Placeholders: {{FirstName}} {{PropertyAddress}} {{SoldDate}} {{YourName}} {{Signature}}"
                       value={s.body}
                       onChange={(e) => updateStep(i, { body: e.target.value })}
                     />

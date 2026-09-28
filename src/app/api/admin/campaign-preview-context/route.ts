@@ -128,10 +128,25 @@ export async function GET(req: NextRequest) {
     return nameFromMailbox(active ?? rows[0]);
   }
 
-  const [contact, senderName] = await Promise.all([pickContact(), pickSenderName()]);
+  // {{signature}}: the campaign's client's email signature (clients.signature_block).
+  async function pickSignature(): Promise<string | null> {
+    if (!scopeClientId) return null;
+    const { data } = await admin
+      .from("clients")
+      .select("signature_block")
+      .eq("id", scopeClientId)
+      .eq("organization_id", organizationId)
+      .maybeSingle();
+    return (data as { signature_block: string | null } | null)?.signature_block ?? null;
+  }
+
+  const [contact, senderName, signature] = await Promise.all([pickContact(), pickSenderName(), pickSignature()]);
   if (!contact) return NextResponse.json(empty);
 
-  const tokens = buildTokenMap(contact, senderName);
+  // No sending inbox yet: show a visible stand-in rather than a blank, so the
+  // preview never reads as if the sender's name is missing from the email (a real
+  // send always has an inbox, so this never reaches a recipient).
+  const tokens = buildTokenMap(contact, senderName || "[sender's name]", signature);
 
   const name = [contact.first_name, contact.last_name].filter(Boolean).join(" ");
   let contactLabel: string;

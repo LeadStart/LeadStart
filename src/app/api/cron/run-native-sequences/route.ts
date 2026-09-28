@@ -110,6 +110,9 @@ type CampaignRow = {
   // Present = the graph runtime (migration 00089) walks the tree from the
   // enrollment's current_node_id (branches + linkedin/internal nodes execute).
   flow_graph: FlowGraph | null;
+  // The campaign's client's email signature (clients.signature_block), loaded
+  // once per tick below; fills {{signature}} (see resolveSignature in tokens.ts).
+  client_signature?: string | null;
 };
 
 // Result of the shared email-dispatch step (verify → send → log → count). The
@@ -183,6 +186,19 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ status: "idle", reason: "no active campaign in its send window" });
   }
   const campaignIds = [...campaignMap.keys()];
+
+  // Each campaign's client signature for {{signature}}: one read per tick. A
+  // failed read degrades to the sender's name (resolveSignature), never a blank.
+  const signatureClientIds = [...new Set([...campaignMap.values()].map((c) => c.client_id).filter((x): x is string => !!x))];
+  if (signatureClientIds.length > 0) {
+    const { data: sigRows, error: sigErr } = await admin
+      .from("clients")
+      .select("id, signature_block")
+      .in("id", signatureClientIds);
+    if (sigErr) console.error("[run-native-sequences] client signatures read failed:", sigErr.message);
+    const sigByClient = new Map(((sigRows ?? []) as { id: string; signature_block: string | null }[]).map((r) => [r.id, r.signature_block]));
+    for (const c of campaignMap.values()) c.client_signature = c.client_id ? sigByClient.get(c.client_id) ?? null : null;
+  }
 
   // ---- 2. Steps (needed to compute due-ness in SQL below) ----
   const { data: stepsData, error: stepsErr } = await admin
@@ -1074,7 +1090,7 @@ export async function GET(request: NextRequest) {
 
     // ---- LinkedIn node → a manual VA task, then advance past it. ----
     if (action.type === "linkedin") {
-      const renderedBody = renderTemplate(action.node.body ?? "", contact, null, `${contact.id}:${action.node.id}:li`);
+      const renderedBody = renderTemplate(action.node.body ?? "", contact, null, `${contact.id}:${action.node.id}:li`, campaign.client_signature);
       const task = await createManualTask(admin, {
         organizationId: campaign.organization_id,
         campaignId: campaign.id,
@@ -1166,20 +1182,20 @@ export async function GET(request: NextRequest) {
     const variantId = isAbTest(action.node) ? variant.id : null;
 
     // Render subject + body from the chosen variant.
-    const bodyText = renderTemplate(variant.body ?? "", contact, mailbox, `${contact.id}:${stepIndex}:body`);
+    const bodyText = renderTemplate(variant.body ?? "", contact, mailbox, `${contact.id}:${stepIndex}:body`, campaign.client_signature);
     if (!bodyText) {
       await markEnrollmentFailed(admin, enrollment.id, "Rendered email body is empty.");
       return { result: "failed_empty_body" };
     }
     let subject: string;
     if (isFirst) {
-      subject = renderTemplate(variant.subject ?? "", contact, mailbox, `${contact.id}:0:subject`);
+      subject = renderTemplate(variant.subject ?? "", contact, mailbox, `${contact.id}:0:subject`, campaign.client_signature);
       if (!subject) {
         await markEnrollmentFailed(admin, enrollment.id, "First email has no subject.");
         return { result: "failed_no_subject" };
       }
     } else if ((variant.subject ?? "").trim()) {
-      subject = renderTemplate(variant.subject ?? "", contact, mailbox, `${contact.id}:${stepIndex}:subject`);
+      subject = renderTemplate(variant.subject ?? "", contact, mailbox, `${contact.id}:${stepIndex}:subject`, campaign.client_signature);
     } else {
       // Re: fallback, thread on the first primary-path email's subject as THIS
       // contact received it (their assigned variant), rendered with the step-0
@@ -1196,7 +1212,7 @@ export async function GET(request: NextRequest) {
         }
       }
       const baseSubject =
-        renderTemplate(firstVariant?.subject ?? "", contact, mailbox, `${contact.id}:0:subject`) || "(no subject)";
+        renderTemplate(firstVariant?.subject ?? "", contact, mailbox, `${contact.id}:0:subject`, campaign.client_signature) || "(no subject)";
       subject = baseSubject.toLowerCase().startsWith("re:") ? baseSubject : `Re: ${baseSubject}`;
     }
 
@@ -1435,6 +1451,7 @@ export async function GET(request: NextRequest) {
       contact,
       mailbox,
       `${contact.id}:${enrollment.current_step_index}:body`,
+      campaign.client_signature,
     );
     if (!bodyText) {
       await markEnrollmentFailed(admin, enrollment.id, "Rendered email body is empty.");
@@ -1448,6 +1465,7 @@ export async function GET(request: NextRequest) {
         contact,
         mailbox,
         `${contact.id}:0:subject`,
+        campaign.client_signature,
       );
       if (!subject) {
         await markEnrollmentFailed(admin, enrollment.id, "Step 0 has no subject.");
@@ -1463,6 +1481,7 @@ export async function GET(request: NextRequest) {
         contact,
         mailbox,
         `${contact.id}:${enrollment.current_step_index}:subject`,
+        campaign.client_signature,
       );
     } else {
       const step0 = steps?.get(0);
@@ -1475,6 +1494,7 @@ export async function GET(request: NextRequest) {
           contact,
           mailbox,
           `${contact.id}:0:subject`,
+          campaign.client_signature,
         ) || "(no subject)";
       subject = baseSubject.toLowerCase().startsWith("re:") ? baseSubject : `Re: ${baseSubject}`;
     }
@@ -1567,6 +1587,7 @@ function renderTemplate(
   contact: Contact,
   mailbox: NativeMailbox | null,
   spinKey?: string,
+  signature?: string | null,
 ): string {
   // ORDERING IS LOAD-BEARING: resolve spintax BEFORE token substitution.
   // Token values come from operator-imported contact custom_fields (CSV data)
@@ -1584,7 +1605,7 @@ function renderTemplate(
 
   // buildTokenMap / applyTokens are the shared source of truth (also used by the
   // builder preview), keeping the send and the preview byte-identical.
-  const map = buildTokenMap(contact, senderName);
+  const map = buildTokenMap(contact, senderName, signature);
   // Fail-safe: a LIVE email send (mailbox present) must NEVER emit a raw
   // {{token}} to a recipient: an unresolved variable with no inline |default
   // blanks instead of leaking braces. A VA-facing linkedin/internal task body

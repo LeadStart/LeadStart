@@ -182,6 +182,30 @@ console.log("\n■ SAMPLE_TOKENS + sampleFallback leave no {{...}} behind");
   assert(out.includes("Listing Agent") && out.includes("Policy Number"), "humanized fallbacks land in the render");
 }
 
+// ---------- 5. {{signature}}: the client's signature, signed by the sending inbox ----------
+{
+  console.log("\n{{signature}}");
+  const c: TokenContact = { first_name: "Ana", last_name: null, company_name: null, title: null,
+    intro_line: null, email: null, phone: null, custom_fields: { signature: "FROM A CSV" } };
+  const sig = "{{your_name}}\nTuBe SEO\ngotubeseo.com";
+  const mapM = buildTokenMap(c, "Molly Anderson", sig);
+  const mapJ = buildTokenMap(c, "Jessica Masterson", sig);
+  assert(applyTokens("Thanks,\n{{signature}}", mapM) === "Thanks,\nMolly Anderson\nTuBe SEO\ngotubeseo.com",
+    "{{your_name}} inside the signature is the sending inbox's name");
+  assert(applyTokens("{{Signature}}", mapJ) === "Jessica Masterson\nTuBe SEO\ngotubeseo.com",
+    "a rotating pool: each inbox signs as itself (case-insensitive token)");
+  assert(applyTokens("{{signature}}", buildTokenMap(c, "Molly Anderson", null)) === "Molly Anderson",
+    "no client signature set → the sender's name, never an unsigned email");
+  assert(applyTokens("{{signature}}", buildTokenMap(c, "Molly Anderson", "  \r\n ")) === "Molly Anderson",
+    "a blank/whitespace signature counts as none");
+  assert(applyTokens("{{signature}}", buildTokenMap(c, "Molly", "Molly A.\r\nAcme")) === "Molly A.\nAcme",
+    "Windows line endings in the stored signature are normalized");
+  assert(applyTokens("{{signature}}", buildTokenMap(c, "Molly", "{{sender_name}} | {{bogus}}")) === "Molly |",
+    "only sender tokens resolve inside a signature; anything else blanks (no raw braces)");
+  assert(mapM.signature !== "FROM A CSV", "a CSV column named signature can't override the client's signature");
+  assert(!/\{\{/.test(applyTokens("{{signature}}", SAMPLE_TOKENS, sampleFallback)), "SAMPLE mode fills {{signature}}");
+}
+
 // ---------- Summary ----------
 console.log("\n" + "─".repeat(40));
 if (fail === 0) {
