@@ -26,6 +26,7 @@ import {
   X,
   Tag,
   Filter,
+  Pencil,
 } from "lucide-react";
 import { TagChipInput } from "@/components/mailboxes/tag-chip-input";
 import { MailboxIdentity } from "@/components/mailboxes/mailbox-identity";
@@ -917,6 +918,17 @@ export default function MailboxesPage() {
                           >
                             <Tag size={9} /> {(mb.tags ?? []).length ? "Edit" : "Tag"}
                           </button>
+                          {/* Always-visible door to the identity panel: the Actions
+                              column scrolls off-screen on narrower windows. */}
+                          <button
+                            type="button"
+                            onClick={() => toggleExpanded(mb)}
+                            className="inline-flex cursor-pointer items-center gap-0.5 rounded-full border border-dashed border-border/70 px-1.5 py-0.5 text-[10px] text-muted-foreground hover:border-[#2E37FE]/50 hover:text-[#2E37FE]"
+                            aria-expanded={expandedId === mb.id}
+                            title="Edit name, signature and warmup"
+                          >
+                            <Pencil size={9} /> Signature &amp; warmup
+                          </button>
                         </div>
                       </td>
                       <td className="py-3 px-3">
@@ -983,6 +995,16 @@ export default function MailboxesPage() {
                       </td>
                       <td className="py-3 pl-3">
                         <div className="flex items-center justify-end gap-1">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => toggleExpanded(mb)}
+                            title="Edit name, signature and warmup"
+                            aria-label={`Edit ${mb.email_address}`}
+                            aria-expanded={expandedId === mb.id}
+                          >
+                            <Pencil size={14} />
+                          </Button>
                           <Button
                             variant="outline"
                             size="sm"
