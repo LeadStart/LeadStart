@@ -2,11 +2,19 @@
 import { PageHeader } from "@/components/layout/page-header";
 
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 import {
   Inbox,
   Plus,
@@ -27,6 +35,7 @@ import {
   Tag,
   Filter,
   Pencil,
+  MoreHorizontal,
 } from "lucide-react";
 import { TagChipInput } from "@/components/mailboxes/tag-chip-input";
 import { MailboxIdentity } from "@/components/mailboxes/mailbox-identity";
@@ -88,8 +97,13 @@ type Banner = { kind: "success" | "error"; message: string } | null;
 
 const PLACEMENT_POLL_MS = 10_000;
 
+type TabKey = "inboxes" | "domains" | "seeds";
+
 export default function MailboxesPage() {
   const { user } = useUser();
+  // Which section is shown. Tabs give each one the full page width, so the inbox
+  // table no longer competes for space and scrolls sideways.
+  const [tab, setTab] = useState<TabKey>("inboxes");
   const [mailboxes, setMailboxes] = useState<MailboxRow[]>([]);
   const [domains, setDomains] = useState<DomainRow[]>([]);
   const [expandedDomainId, setExpandedDomainId] = useState<string | null>(null);
@@ -701,21 +715,19 @@ export default function MailboxesPage() {
         </div>
       )}
 
-      {/* Two-column board: inbox management on the left, domains + provisioning
-          on the right, so setting up a domain no longer sits far down the page. */}
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2 xl:items-start">
-      <div className="space-y-6">
-      {/* List */}
+      {/* One section at a time, each full-width: the old side-by-side layout
+          squeezed the inbox table until it scrolled sideways. */}
+      <Tabs value={tab} onValueChange={(v) => setTab(v as TabKey)} className="gap-4">
+        <TabsList variant="line" className="h-auto w-full justify-start gap-6 rounded-none border-b border-border p-0">
+          <MailboxTab value="inboxes" icon={<Inbox size={15} />} label="Sending inboxes" count={mailboxes.length} />
+          <MailboxTab value="domains" icon={<Globe size={15} />} label="Sending domains" count={domains.length} />
+          <MailboxTab value="seeds" icon={<Target size={15} />} label="Seed inboxes" count={seeds.length} />
+        </TabsList>
+
+        {/* ── Sending inboxes ── */}
+        <TabsContent value="inboxes">
       <Card className="border-border/50 shadow-sm">
-        <CardHeader className="flex flex-row items-center gap-2 pb-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-500">
-            <Inbox size={16} className="text-white" />
-          </div>
-          <CardTitle className="text-base">
-            Sending inboxes {mailboxes.length > 0 && <span className="text-muted-foreground font-normal">({mailboxes.length})</span>}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
+        <CardContent className="pt-6">
           {loading ? (
             <p className="text-sm text-muted-foreground py-6 text-center">Loading…</p>
           ) : mailboxes.length === 0 ? (
@@ -835,11 +847,14 @@ export default function MailboxesPage() {
                 </button>
               </p>
             ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+            // @container so the table sizes to its own box: the Deliverability
+            // column drops (and folds into the Mailbox cell) on a narrow window
+            // instead of the whole table scrolling sideways.
+            <div className="@container">
+              <table className="w-full table-fixed text-sm">
                 <thead>
                   <tr className="border-b text-left text-xs text-muted-foreground">
-                    <th className="py-2 pr-2 font-medium">
+                    <th className="w-9 py-2 pr-2 font-medium">
                       <input
                         type="checkbox"
                         checked={allVisibleSelected}
@@ -863,13 +878,10 @@ export default function MailboxesPage() {
                       />
                     </th>
                     <th className="py-2 pr-3 font-medium">Mailbox</th>
-                    <th className="py-2 px-3 font-medium">Status</th>
-                    <th className="py-2 px-3 font-medium">Health</th>
-                    <th className="py-2 px-3 font-medium">Ramp</th>
-                    <th className="py-2 px-3 font-medium">Today</th>
-                    <th className="py-2 px-3 font-medium">Bounces 7d</th>
-                    <th className="py-2 px-3 font-medium">Placement</th>
-                    <th className="py-2 pl-3 font-medium text-right">Actions</th>
+                    <th className="w-[116px] py-2 px-3 font-medium">Health</th>
+                    <th className="w-[184px] py-2 px-3 font-medium">Warmup</th>
+                    <th className="hidden w-[168px] py-2 px-3 font-medium @[860px]:table-cell">Deliverability</th>
+                    <th className="w-[92px] py-2 pl-3 font-medium text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -885,10 +897,13 @@ export default function MailboxesPage() {
                           aria-label={`Select ${mb.email_address}`}
                         />
                       </td>
-                      <td className="py-3 pr-3">
-                        <div className="font-medium text-[#0f172a]">{mb.email_address}</div>
+                      <td className="min-w-0 py-3 pr-3">
+                        <div className="flex items-center gap-2">
+                          <span className="truncate font-medium text-[#0f172a]">{mb.email_address}</span>
+                          {mb.status !== "active" && <StatusBadge status={mb.status} />}
+                        </div>
                         {mb.display_name && (
-                          <div className="text-xs text-muted-foreground">{mb.display_name}</div>
+                          <div className="truncate text-xs text-muted-foreground">{mb.display_name}</div>
                         )}
                         {mb.status === "error" && mb.last_error && (
                           <div className="text-xs text-red-600 flex items-center gap-1 mt-0.5">
@@ -930,9 +945,16 @@ export default function MailboxesPage() {
                             <Pencil size={9} /> Signature &amp; warmup
                           </button>
                         </div>
-                      </td>
-                      <td className="py-3 px-3">
-                        <StatusBadge status={mb.status} />
+                        {/* Bounces + placement fold in here when the Deliverability column drops. */}
+                        <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] @[860px]:hidden">
+                          <span className={mb.bounced_7d > 0 ? "font-medium text-amber-600" : "text-muted-foreground"}>
+                            {mb.bounced_7d} bounce{mb.bounced_7d === 1 ? "" : "s"} 7d
+                          </span>
+                          <span className="text-muted-foreground">·</span>
+                          <span className="text-muted-foreground">
+                            <PlacementCell test={mb.latest_placement} />
+                          </span>
+                        </div>
                       </td>
                       <td className="py-3 px-3">
                         {mb.health_score == null ? (
@@ -966,28 +988,16 @@ export default function MailboxesPage() {
                         )}
                       </td>
                       <td className="py-3 px-3">
-                        {mb.warmed ? (
-                          <span className="text-emerald-600 font-medium">Warmed</span>
-                        ) : (
-                          <span className="text-muted-foreground">
-                            Warming · {mb.total_sent} sent
-                          </span>
-                        )}
+                        <WarmupCell mb={mb} />
                       </td>
-                      <td className="py-3 px-3">
-                        <span className="font-medium">{mb.sent_today}</span>
-                        <span className="text-muted-foreground"> / {mb.effective_daily_cap}</span>
-                      </td>
-                      <td className="py-3 px-3">
-                        <span className={mb.bounced_7d > 0 ? "text-amber-600 font-medium" : "text-muted-foreground"}>
-                          {mb.bounced_7d}
-                        </span>
-                      </td>
-                      <td className="py-3 px-3">
+                      <td className="hidden py-3 px-3 align-middle @[860px]:table-cell">
+                        <div className={`text-xs ${mb.bounced_7d > 0 ? "font-medium text-amber-600" : "text-muted-foreground"}`}>
+                          {mb.bounced_7d} bounce{mb.bounced_7d === 1 ? "" : "s"} · 7 days
+                        </div>
                         <button
                           type="button"
                           onClick={() => toggleExpanded(mb)}
-                          className="cursor-pointer text-left"
+                          className="mt-0.5 cursor-pointer text-left"
                           title="Show placement results"
                         >
                           <PlacementCell test={mb.latest_placement} />
@@ -1005,59 +1015,56 @@ export default function MailboxesPage() {
                           >
                             <Pencil size={14} />
                           </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            disabled={busy[mb.id]}
-                            onClick={() => openTest(mb)}
-                            title="Send a test email from this inbox to an address you choose"
-                            aria-expanded={testOpenId === mb.id}
-                          >
-                            <Send size={14} />
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            disabled={
-                              busy[mb.id] ||
-                              seedCount === 0 ||
-                              mb.status === "error" ||
-                              (mb.latest_placement != null &&
-                                ["sending", "awaiting"].includes(mb.latest_placement.status))
-                            }
-                            onClick={() => handlePlacement(mb, "neutral")}
-                            title={
-                              seedCount === 0
-                                ? "Add a seed inbox below first"
-                                : "Run a placement test (neutral probe to every seed inbox on another domain)"
-                            }
-                          >
-                            <FlaskConical size={14} />
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            disabled={busy[mb.id]}
-                            onClick={() => handleToggleStatus(mb)}
-                            title={mb.status === "active" ? "Pause" : "Resume"}
-                          >
-                            {mb.status === "active" ? <Pause size={14} /> : <Play size={14} />}
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            disabled={busy[mb.id]}
-                            onClick={() => handleDelete(mb)}
-                            title="Delete mailbox and its Google Workspace user (frees the seat)"
-                          >
-                            <Trash2 size={14} className="text-red-500" />
-                          </Button>
+                          {/* Everything else folds into a menu so the row stays 5 columns wide. */}
+                          <DropdownMenu>
+                            <DropdownMenuTrigger
+                              disabled={busy[mb.id]}
+                              aria-label={`More actions for ${mb.email_address}`}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border bg-white text-slate-600 outline-none transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
+                            >
+                              {busy[mb.id] ? <Loader2 size={14} className="animate-spin" /> : <MoreHorizontal size={14} />}
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-52">
+                              <DropdownMenuItem
+                                className="cursor-pointer gap-2"
+                                onClick={() => openTest(mb)}
+                              >
+                                <Send size={14} /> Send a test email
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="cursor-pointer gap-2"
+                                disabled={
+                                  seedCount === 0 ||
+                                  mb.status === "error" ||
+                                  (mb.latest_placement != null &&
+                                    ["sending", "awaiting"].includes(mb.latest_placement.status))
+                                }
+                                onClick={() => handlePlacement(mb, "neutral")}
+                              >
+                                <FlaskConical size={14} />{" "}
+                                {seedCount === 0 ? "Placement test (add a seed first)" : "Run placement test"}
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="cursor-pointer gap-2"
+                                onClick={() => handleToggleStatus(mb)}
+                              >
+                                {mb.status === "active" ? <><Pause size={14} /> Pause</> : <><Play size={14} /> Resume</>}
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                className="cursor-pointer gap-2 text-red-600 focus:text-red-600"
+                                onClick={() => handleDelete(mb)}
+                              >
+                                <Trash2 size={14} /> Delete inbox
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
                       </td>
                     </tr>
                     {tagsOpenId === mb.id && (
                       <tr className="bg-slate-50/60 border-b last:border-0">
-                        <td colSpan={9} className="px-3 py-3">
+                        <td colSpan={6} className="px-3 py-3">
                           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                             <div className="max-w-lg flex-1">
                               <TagChipInput
@@ -1097,7 +1104,7 @@ export default function MailboxesPage() {
                     )}
                     {testOpenId === mb.id && (
                       <tr className="bg-slate-50/60 border-b last:border-0">
-                        <td colSpan={9} className="px-3 py-3">
+                        <td colSpan={6} className="px-3 py-3">
                           <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
                             <div className="space-y-1 flex-1 max-w-md">
                               <Label htmlFor={`test-to-${mb.id}`} className="text-xs font-medium">
@@ -1143,7 +1150,7 @@ export default function MailboxesPage() {
                     )}
                     {expandedId === mb.id && (
                       <tr className="bg-slate-50/60 border-b last:border-0">
-                        <td colSpan={9} className="px-3 py-3">
+                        <td colSpan={6} className="px-3 py-3">
                           <div className="mb-4">
                             <MailboxIdentity mailbox={mb} onSaved={load} />
                           </div>
@@ -1235,30 +1242,17 @@ export default function MailboxesPage() {
           )}
         </CardContent>
       </Card>
-      </div>
+        </TabsContent>
 
-      <div className="space-y-6">
-      {/* Sending domains */}
+        {/* ── Sending domains ── */}
+        <TabsContent value="domains">
       <Card className="border-border/50 shadow-sm">
-        <CardHeader className="flex flex-row items-center gap-2 pb-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600">
-            <Globe size={16} className="text-white" />
-          </div>
-          <div>
-            <CardTitle className="text-base">
-              Sending domains{" "}
-              {domains.length > 0 && (
-                <span className="text-muted-foreground font-normal">({domains.length})</span>
-              )}
-            </CardTitle>
-            <p className="text-xs text-muted-foreground">
-              The domains your mailboxes send from, with their burn-prevention lifecycle and health.
-              A domain warms up, runs active, then rests and re-warms instead of getting burned.
-              Lifecycle automation stays off until it&rsquo;s enabled for your organization.
-            </p>
-          </div>
-        </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4 pt-6">
+          <p className="text-xs text-muted-foreground">
+            The domains your mailboxes send from, with their burn-prevention lifecycle and health.
+            A domain warms up, runs active, then rests and re-warms instead of getting burned.
+            Lifecycle automation stays off until it&rsquo;s enabled for your organization.
+          </p>
           {domains.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               No sending domains yet: add a mailbox and its domain appears here.
@@ -1343,27 +1337,19 @@ export default function MailboxesPage() {
           )}
         </CardContent>
       </Card>
+        </TabsContent>
 
-      {/* Seed inboxes */}
+        {/* ── Seed inboxes ── */}
+        <TabsContent value="seeds">
       <Card className="border-border/50 shadow-sm">
-        <CardHeader className="flex flex-row items-center gap-2 pb-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-600">
-            <Target size={16} className="text-white" />
-          </div>
-          <div>
-            <CardTitle className="text-base">
-              Seed inboxes {seeds.length > 0 && <span className="text-muted-foreground font-normal">({seeds.length})</span>}
-            </CardTitle>
-            <p className="text-xs text-muted-foreground">
-              Inboxes you control that we read to see where your mail lands: Workspace inboxes, or
-              external Yahoo / consumer Gmail accounts by IMAP. A placement test sends a probe from a
-              mailbox to every seed on a different domain, then reads each seed to see where it
-              landed (Inbox, Promotions, or Spam) and what the receiver said about SPF, DKIM, and
-              DMARC. Nothing in a seed is ever modified.
-            </p>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4 pt-6">
+          <p className="text-xs text-muted-foreground">
+            Inboxes you control that we read to see where your mail lands: Workspace inboxes, or
+            external Yahoo / consumer Gmail accounts by IMAP. A placement test sends a probe from a
+            mailbox to every seed on a different domain, then reads each seed to see where it
+            landed (Inbox, Promotions, or Spam) and what the receiver said about SPF, DKIM, and
+            DMARC. Nothing in a seed is ever modified.
+          </p>
           {seeds.length === 0 ? (
             <p className="text-sm text-muted-foreground py-2">
               No seed inboxes yet. The quickest panel is your own sending mailboxes: any two on
@@ -1566,9 +1552,36 @@ export default function MailboxesPage() {
           </p>
         </CardContent>
       </Card>
-      </div>
-      </div>
+        </TabsContent>
+      </Tabs>
     </div>
+  );
+}
+
+// Underline tab with a trailing count pill (Direction 1). Brand-blue active
+// state layered on the shared `line` Tabs variant so it matches the app's tabs.
+function MailboxTab({
+  value,
+  icon,
+  label,
+  count,
+}: {
+  value: TabKey;
+  icon: React.ReactNode;
+  label: string;
+  count: number;
+}) {
+  return (
+    <TabsTrigger
+      value={value}
+      className="gap-2 px-1 pb-2.5 text-[13.5px] text-muted-foreground data-active:text-[#2E37FE] data-active:after:bg-[#2E37FE] data-active:after:opacity-100"
+    >
+      {icon}
+      {label}
+      <span className="rounded-full bg-muted px-1.5 py-0.5 text-[11px] font-semibold text-slate-600 group-data-[variant=line]/tabs-list:data-active:bg-[#2E37FE]/10 data-active:text-[#2E37FE]">
+        {count}
+      </span>
+    </TabsTrigger>
   );
 }
 
@@ -1585,6 +1598,33 @@ function seedProviderMeta(provider: SeedInbox["provider"]): { label: string; cls
 
 function seedAgeDays(createdAt: string): number {
   return Math.max(0, Math.floor((Date.now() - new Date(createdAt).getTime()) / 86_400_000));
+}
+
+// ── Inbox table cells ─────────────────────────────────────────────────────
+
+// Merged Ramp + Today: warmed/warming state, a ramp-progress bar (today's cap
+// against the inbox's ceiling), and today's sends against that cap.
+function WarmupCell({ mb }: { mb: MailboxRow }) {
+  const ceiling = mb.max_daily_cap || 20;
+  const pct = Math.max(6, Math.min(100, Math.round((mb.effective_daily_cap / ceiling) * 100)));
+  return (
+    <div className="max-w-[168px]">
+      <div className="flex items-center justify-between gap-2 text-xs">
+        <span className={mb.warmed ? "font-medium text-emerald-600" : "text-muted-foreground"}>
+          {mb.warmed ? "Warmed" : "Warming"}
+        </span>
+        <span className="tabular-nums text-muted-foreground">
+          {mb.sent_today} / {mb.effective_daily_cap} today
+        </span>
+      </div>
+      <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-200">
+        <div
+          className={`h-full rounded-full ${mb.warmed ? "bg-emerald-500" : "bg-[#2E37FE]"}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    </div>
+  );
 }
 
 // ── Placement rendering ───────────────────────────────────────────────────
