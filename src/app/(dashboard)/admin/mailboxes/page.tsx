@@ -928,7 +928,7 @@ export default function MailboxesPage() {
                             className="text-muted-foreground"
                             title="First health check runs within the hour."
                           >
-                           ,
+                            Pending
                           </span>
                         ) : (
                           <button
