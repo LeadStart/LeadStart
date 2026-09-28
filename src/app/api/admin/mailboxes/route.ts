@@ -5,7 +5,8 @@
 // POST /api/admin/mailboxes: register a new inbox. Verifies domain-wide
 //                             delegation live (getProfile) before inserting,
 //                             so a mis-authorized domain fails loudly here
-//                             instead of silently in the send cron.
+//                             instead of silently in the send cron. Refuses a
+//                             domain that already holds the per-domain cap.
 // Owner only.
 
 import { NextRequest, NextResponse } from "next/server";
@@ -24,6 +25,7 @@ import {
   ABSOLUTE_MAX_DAILY_CAP,
 } from "@/lib/gmail/ramp";
 import { latestPlacementTests } from "@/lib/deliverability/placement-runner";
+import { MAX_INBOXES_PER_DOMAIN } from "@/lib/deliverability/provisioning";
 import { mailboxUsageMap } from "@/lib/campaigns/mailbox-usage";
 import { fetchAllRows } from "@/lib/supabase/fetch-all";
 import type { NativeMailbox, SendingDomain } from "@/types/app";
@@ -254,7 +256,29 @@ export async function POST(req: NextRequest) {
   // rollup, and the drain filter (that gap is what migration 00097 §3 repairs
   // for existing rows). Resolve-or-create mirrors the 00081 backfill: a
   // hand-added mailbox's domain is Gmail-tier and treated as already active.
-  const domainId = await resolveDomainId(admin, organizationId, email.split("@")[1]);
+  const emailDomain = email.split("@")[1];
+  const domainId = await resolveDomainId(admin, organizationId, emailDomain);
+
+  // Hard cap: a domain holds at most MAX_INBOXES_PER_DOMAIN inboxes, on this
+  // path as on Workspace provisioning. The address itself is left out of the
+  // count so re-connecting it still reads "already registered" below.
+  if (domainId) {
+    const { count } = await admin
+      .from("native_mailboxes")
+      .select("id", { count: "exact", head: true })
+      .eq("domain_id", domainId)
+      .neq("email_address", email);
+    if ((count ?? 0) >= MAX_INBOXES_PER_DOMAIN) {
+      return NextResponse.json(
+        {
+          error:
+            `${emailDomain} already has ${count} inboxes, and a domain holds at most ${MAX_INBOXES_PER_DOMAIN}. ` +
+            `Add another domain for more sending capacity.`,
+        },
+        { status: 409 },
+      );
+    }
+  }
 
   const insert = {
     organization_id: organizationId,
