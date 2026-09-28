@@ -272,11 +272,11 @@ async function renderCampaignProbe(
   }
   const { data: campRows } = await admin
     .from("campaigns")
-    .select("id, name, status, created_at, client_id")
+    .select("id, name, status, created_at")
     .in("id", ids)
     .eq("source_channel", "native_email")
     .order("created_at", { ascending: false });
-  const camps = (campRows ?? []) as { id: string; name: string; status: string; client_id: string | null }[];
+  const camps = (campRows ?? []) as { id: string; name: string; status: string }[];
   const campaign = camps.find((c) => c.status === "active") ?? camps[0];
   if (!campaign) {
     throw new PlacementError(
@@ -293,17 +293,8 @@ async function renderCampaignProbe(
   if (!step?.body_template?.trim()) {
     throw new PlacementError(`Campaign "${campaign.name}" has no first-step copy to probe with.`);
   }
-  // The same {{signature}} the send worker uses: the campaign client's signature.
-  let signature: string | null = null;
-  if (campaign.client_id) {
-    const { data: cl } = await admin
-      .from("clients")
-      .select("signature_block")
-      .eq("id", campaign.client_id)
-      .maybeSingle();
-    signature = (cl as { signature_block: string | null } | null)?.signature_block ?? null;
-  }
-  const map = buildTokenMap(SAMPLE_CONTACT, senderName, signature);
+  // {{signature}}: this inbox's own signature, exactly as the send worker resolves it.
+  const map = buildTokenMap(SAMPLE_CONTACT, senderName, mailbox.signature ?? null);
   const render = (template: string, key: string) =>
     applyTokens(renderSpintax(template, key), map, sampleFallback).trim();
   const subject = render(step.subject_template ?? "", `placement:${mailbox.id}:subject`) || "(no subject)";

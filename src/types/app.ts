@@ -862,6 +862,10 @@ export interface NativeMailbox {
   client_id: string | null;
   email_address: string;
   display_name: string | null;
+  // The inbox's own signature for {{signature}} (migration 00133); may contain
+  // {{your_name}}. Null = sign with the inbox name. Part of the inbox identity:
+  // name + signature + its warmup ramp below.
+  signature?: string | null;
   provider: "gmail" | "smtp";     // 'smtp' = self-hosted tier (Phase 4)
   status: NativeMailboxStatus;
   // Link to the sending_domains row for this inbox's domain (migration 00081).

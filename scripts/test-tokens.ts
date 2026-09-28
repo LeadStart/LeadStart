@@ -182,7 +182,7 @@ console.log("\n■ SAMPLE_TOKENS + sampleFallback leave no {{...}} behind");
   assert(out.includes("Listing Agent") && out.includes("Policy Number"), "humanized fallbacks land in the render");
 }
 
-// ---------- 5. {{signature}}: the client's signature, signed by the sending inbox ----------
+// ---------- 5. {{signature}}: the sending inbox's own signature ----------
 {
   console.log("\n{{signature}}");
   const c: TokenContact = { first_name: "Ana", last_name: null, company_name: null, title: null,
@@ -202,7 +202,7 @@ console.log("\n■ SAMPLE_TOKENS + sampleFallback leave no {{...}} behind");
     "Windows line endings in the stored signature are normalized");
   assert(applyTokens("{{signature}}", buildTokenMap(c, "Molly", "{{sender_name}} | {{bogus}}")) === "Molly |",
     "only sender tokens resolve inside a signature; anything else blanks (no raw braces)");
-  assert(mapM.signature !== "FROM A CSV", "a CSV column named signature can't override the client's signature");
+  assert(mapM.signature !== "FROM A CSV", "a CSV column named signature can't override the inbox's signature");
   assert(!/\{\{/.test(applyTokens("{{signature}}", SAMPLE_TOKENS, sampleFallback)), "SAMPLE mode fills {{signature}}");
 }
 

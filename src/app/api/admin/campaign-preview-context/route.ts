@@ -92,10 +92,13 @@ export async function GET(req: NextRequest) {
     return null;
   }
 
-  // Sender name: the campaign's first pooled mailbox, else a mailbox for the
-  // campaign's/selected client, else any org mailbox (active preferred). Empty
-  // string is acceptable: buildTokenMap fills {{YourName}} blank in that case.
-  async function pickSenderName(): Promise<string> {
+  // Sender identity: the campaign's first pooled mailbox, else a mailbox for the
+  // campaign's/selected client, else any org mailbox (active preferred). Its name
+  // fills {{YourName}} and its OWN signature fills {{signature}} (migration 00133),
+  // exactly as the send worker resolves them from the inbox that sends.
+  type SenderRow = { display_name: string | null; email_address: string; status?: string; signature?: string | null };
+  const none = { name: "", signature: null as string | null };
+  async function pickSender(): Promise<{ name: string; signature: string | null }> {
     if (campaignId) {
       const { data: pool } = await admin
         .from("campaign_mailboxes")
@@ -106,11 +109,12 @@ export async function GET(req: NextRequest) {
       if (mailboxId) {
         const { data: mb } = await admin
           .from("native_mailboxes")
-          .select("display_name, email_address")
+          .select("*")
           .eq("id", mailboxId)
           .maybeSingle();
-        const name = nameFromMailbox(mb as { display_name: string | null; email_address: string } | null);
-        if (name) return name;
+        const row = mb as SenderRow | null;
+        const name = nameFromMailbox(row);
+        if (name) return { name, signature: row?.signature ?? null };
       }
     }
 
@@ -118,35 +122,23 @@ export async function GET(req: NextRequest) {
     // for the campaign's/selected client, then any org mailbox.
     let query = admin
       .from("native_mailboxes")
-      .select("display_name, email_address, status")
+      .select("*")
       .eq("organization_id", organizationId);
     if (scopeClientId) query = query.eq("client_id", scopeClientId);
     const { data: mbs } = await query.limit(10);
-    const rows = (mbs ?? []) as { display_name: string | null; email_address: string; status: string }[];
-    if (rows.length === 0) return "";
-    const active = rows.find((r) => r.status === "active");
-    return nameFromMailbox(active ?? rows[0]);
+    const rows = (mbs ?? []) as SenderRow[];
+    if (rows.length === 0) return none;
+    const pick = rows.find((r) => r.status === "active") ?? rows[0];
+    return { name: nameFromMailbox(pick), signature: pick.signature ?? null };
   }
 
-  // {{signature}}: the campaign's client's email signature (clients.signature_block).
-  async function pickSignature(): Promise<string | null> {
-    if (!scopeClientId) return null;
-    const { data } = await admin
-      .from("clients")
-      .select("signature_block")
-      .eq("id", scopeClientId)
-      .eq("organization_id", organizationId)
-      .maybeSingle();
-    return (data as { signature_block: string | null } | null)?.signature_block ?? null;
-  }
-
-  const [contact, senderName, signature] = await Promise.all([pickContact(), pickSenderName(), pickSignature()]);
+  const [contact, sender] = await Promise.all([pickContact(), pickSender()]);
   if (!contact) return NextResponse.json(empty);
 
   // No sending inbox yet: show a visible stand-in rather than a blank, so the
   // preview never reads as if the sender's name is missing from the email (a real
   // send always has an inbox, so this never reaches a recipient).
-  const tokens = buildTokenMap(contact, senderName || "[sender's name]", signature);
+  const tokens = buildTokenMap(contact, sender.name || "[sender's name]", sender.signature);
 
   const name = [contact.first_name, contact.last_name].filter(Boolean).join(" ");
   let contactLabel: string;

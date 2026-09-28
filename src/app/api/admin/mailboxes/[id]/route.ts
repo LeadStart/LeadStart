@@ -1,5 +1,5 @@
-// PATCH  /api/admin/mailboxes/[id]: pause/resume, adjust caps, edit
-//                                    display name / client / ramp start.
+// PATCH  /api/admin/mailboxes/[id]: pause/resume, adjust caps, edit the
+//                                    identity (display name + signature) / client / ramp start.
 // DELETE /api/admin/mailboxes/[id]: delete the mailbox's Google Workspace user
 //                                    (frees the paid seat) and remove our row,
 //                                    cascading its send history / metrics away.
@@ -44,10 +44,15 @@ interface PatchBody {
   max_daily_cap?: number | null;
   daily_cap_override?: number | null;
   display_name?: string | null;
+  // The inbox's own signature for {{signature}} (migration 00133).
+  signature?: string | null;
   client_id?: string | null;
   ramp_started_at?: string;
   tags?: unknown;
 }
+
+// A signature is a few short lines; this bounds a paste accident, not real use.
+const MAX_SIGNATURE_CHARS = 1000;
 
 export async function PATCH(req: NextRequest, { params }: RouteParams) {
   const auth = await requireOwner();
@@ -91,6 +96,13 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
         : Math.min(Math.max(0, Math.floor(body.daily_cap_override)), ABSOLUTE_MAX_DAILY_CAP);
   }
   if (body.display_name !== undefined) update.display_name = body.display_name?.trim() || null;
+  if (body.signature !== undefined) {
+    const sig = (body.signature ?? "").replace(/\r\n/g, "\n").trim();
+    if (sig.length > MAX_SIGNATURE_CHARS) {
+      return NextResponse.json({ error: `Signature is too long (max ${MAX_SIGNATURE_CHARS} characters)` }, { status: 400 });
+    }
+    update.signature = sig || null;
+  }
   if (body.client_id !== undefined) update.client_id = body.client_id || null;
   if (body.ramp_started_at !== undefined) update.ramp_started_at = body.ramp_started_at;
   if (body.tags !== undefined) update.tags = normalizeTags(body.tags);

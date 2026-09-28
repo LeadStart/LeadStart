@@ -246,13 +246,10 @@ export function ReplyRoutingSection({
             <Textarea
               id="signature_block"
               rows={4}
-              placeholder={`{{your_name}}\nHead of Partnerships, Acme\nacme.com`}
+              placeholder={`Sarah Chen\nHead of Partnerships, Acme\nacme.com`}
               value={form.signature_block}
               onChange={(e) => update("signature_block", e.target.value)}
             />
-            <p className="text-[11px] text-muted-foreground">
-              {"Fills {{signature}} in this client's campaign emails. Use {{your_name}} for the sending inbox's name, so every inbox signs as itself. Left blank, {{signature}} is just the inbox's name."}
-            </p>
           </div>
 
           <div className="space-y-2">

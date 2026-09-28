@@ -40,10 +40,11 @@ export interface TokenContact {
   custom_fields: Record<string, unknown> | null;
 }
 
-// {{signature}}: the client's email signature (Admin → Clients → Email signature,
-// clients.signature_block). A {{your_name}} inside it is filled from the SENDING
-// inbox, so a rotating pool still signs each email with the inbox that sent it.
-// No signature set → the sender's name alone, so a send is never unsigned.
+// {{signature}}: the SENDING inbox's own signature (Admin → Mailboxes → the inbox →
+// Identity; native_mailboxes.signature, migration 00133). Each inbox is an identity:
+// its name, its signature, its warmup ramp. A {{your_name}} inside the signature is
+// filled from that inbox's name, so a rotating pool signs each email as the inbox
+// that sent it. No signature set → the inbox's name alone, so a send is never unsigned.
 export function resolveSignature(signature: string | null | undefined, senderName: string): string {
   const sig = (signature ?? "").replace(/\r\n/g, "\n").trim();
   if (!sig) return senderName;

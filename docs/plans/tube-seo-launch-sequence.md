@@ -336,7 +336,7 @@ two (bandit-lite; §9).
 | `{{dr}}` | Domain Rating integer — optional; by default baked into `fix_line` at CSV build (nested tokens inside a field value don't resolve) | 12 |
 | `{{fix_line}}` | bucket-specific sentence (§4 axis 2), **fully pre-rendered text** | full sentence |
 | standard | `{{first_name}}`, `{{company}}`, `{{your_name}}` | resolved by the platform |
-| sender | `{{signature}}` | the client's "Email signature" (Admin → Clients → Reply routing); `{{your_name}}` inside it = the sending inbox; blank → the inbox's name (added 2026-09-27) |
+| sender | `{{signature}}` | the SENDING inbox's own signature (Admin → Mailboxes → the inbox → Identity; migration 00133). `{{your_name}}` inside it = that inbox's name; blank → the inbox's name. Each inbox = name + signature + its warmup ramp (added 2026-09-27) |
 
 **Hard rule: no empty cells.** An unknown/blank token ships literally as
 `{{token}}` in the sent email (the platform leaves unmatched tokens untouched, and a

@@ -28,6 +28,7 @@ import {
   Filter,
 } from "lucide-react";
 import { TagChipInput } from "@/components/mailboxes/tag-chip-input";
+import { MailboxIdentity } from "@/components/mailboxes/mailbox-identity";
 import { appUrl } from "@/lib/api-url";
 import { useUser } from "@/hooks/use-user";
 import {
@@ -1114,6 +1115,9 @@ export default function MailboxesPage() {
                     {expandedId === mb.id && (
                       <tr className="bg-slate-50/60 border-b last:border-0">
                         <td colSpan={9} className="px-3 py-3">
+                          <div className="mb-4">
+                            <MailboxIdentity mailbox={mb} onSaved={load} />
+                          </div>
                           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
                             <div className="space-y-1.5">
                               <p className="text-xs font-semibold text-[#0f172a] uppercase tracking-wide">
