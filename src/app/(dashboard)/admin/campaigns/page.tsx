@@ -31,7 +31,7 @@ export default function AllCampaignsPage() {
     fetchAdminCampaigns,
   );
 
-  const { campaigns, clients, snapshots } = data || { campaigns: [], clients: [], snapshots: [] };
+  const { campaigns, clients, snapshots, liveSent } = data || { campaigns: [], clients: [], snapshots: [], liveSent: {} };
   const clientMap = new Map(clients.map((c) => [c.id, c]));
 
   // KPI time-window lens. Defaults to All-Time: a rolling 30-day reply rate
@@ -43,13 +43,17 @@ export default function AllCampaignsPage() {
 
   const rows = campaigns.map((campaign) => {
     const client = campaign.client_id ? clientMap.get(campaign.client_id) : undefined;
-    const metrics = calculateMetrics(
+    const rolled = calculateMetrics(
       filterSnapshotsByPeriod(
         snapshots.filter((s) => s.campaign_id === campaign.id),
         period,
         now,
       ),
     );
+    // Sent is live from the send log for native campaigns (matches Mailboxes the
+    // moment an email goes out); the rates stay on the hourly roll-up.
+    const live = liveSent[campaign.id]?.[period];
+    const metrics = live != null ? { ...rolled, emails_sent: live } : rolled;
     return {
       ...campaign,
       clientName: client?.name || "",

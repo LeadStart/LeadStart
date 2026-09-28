@@ -10,6 +10,7 @@
 import type { createClient } from "@/lib/supabase/client";
 import { analyzeStepHealth } from "@/lib/kpi/step-health";
 import { calculateMetrics } from "@/lib/kpi/calculator";
+import type { MetricsPeriod } from "@/lib/kpi/period";
 import {
   type Campaign,
   type Client,
@@ -246,11 +247,50 @@ export async function fetchAdminCampaigns(supabase: SupabaseClient) {
     // page derives 7d/30d from this set client-side (no refetch on switch).
     supabase.from("campaign_snapshots").select(SNAPSHOT_COLUMNS),
   ]);
+  const campaigns = (campaignsRes.data || []) as Campaign[];
+  const liveSent = await fetchLiveNativeSent(
+    supabase,
+    campaigns.filter((c) => c.source_channel === "native_email").map((c) => c.id),
+  );
   return {
-    campaigns: (campaignsRes.data || []) as Campaign[],
+    campaigns,
     clients: (clientsRes.data || []) as Client[],
     snapshots: (snapshotsRes.data || []) as unknown as CampaignSnapshot[],
+    liveSent,
   };
+}
+
+// Live "Sent" per native campaign, counted straight from the send log: the same
+// source the Mailboxes page counts from, so the campaign list never lags the
+// hourly campaign_snapshots roll-up (which still drives the reply/bounce/positive
+// rates, keeping the app-wide reply-rate definition in one place). Count-only
+// queries per campaign and period. A campaign whose counts fail is left out, and
+// the list falls back to its snapshot number.
+export type LiveSentCounts = Record<string, Record<MetricsPeriod, number>>;
+
+async function fetchLiveNativeSent(
+  supabase: SupabaseClient,
+  campaignIds: string[],
+  now: number = Date.now(),
+): Promise<LiveSentCounts> {
+  const since = (days: number) => new Date(now - days * 86400000).toISOString();
+  const count = async (id: string, from?: string): Promise<number | null> => {
+    let q = supabase
+      .from("native_sends")
+      .select("id", { count: "exact", head: true })
+      .eq("campaign_id", id);
+    if (from) q = q.gte("sent_at", from);
+    const { count: n, error } = await q;
+    return error ? null : n ?? 0;
+  };
+  const out: LiveSentCounts = {};
+  await Promise.all(
+    campaignIds.map(async (id) => {
+      const [all, d7, d30] = await Promise.all([count(id), count(id, since(7)), count(id, since(30))]);
+      if (all != null && d7 != null && d30 != null) out[id] = { all, "7d": d7, "30d": d30 };
+    }),
+  );
+  return out;
 }
 
 // ---------- Contacts (admin list) ----------
