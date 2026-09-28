@@ -1,6 +1,6 @@
 # LeadStart — Project Status
 
-> Last updated: 2026-08-29
+> Last updated: 2026-09-27
 >
 > **Lean current-state index.** This file is `@`-imported by `CLAUDE.md`, so it loads into every session — keep it short. Full per-initiative write-ups, the "What's Built" tables, the file-structure tree, and the backlog detail live in [`docs/PROJECT_STATUS_ARCHIVE.md`](docs/PROJECT_STATUS_ARCHIVE.md) (read on demand — **not** auto-loaded).
 
@@ -14,7 +14,7 @@
 
 One line each — see the linked RESUME doc (repo root) or the archive for the full write-up.
 
-- **DNS registrar + Google Workspace provisioning** — **LIVE.** Porkbun connected; first domain (tubeforseo.com) provisioned end-to-end 2026-08-31 (only owner-run DKIM remains to flip it to warming). **URL forwarding** shipped (Porkbun via API — apex+www 301; Spaceship dashboard-only): set per-domain from the Mailboxes domain detail or the onboarding wizard's Review step. Reliability hardening (fail-loud DNS on an unconnected registrar, actionable verify-wait, connected-aware wizard picker, half-saved-key warning, current-step status banner) shipped the same day. → [`docs/plans/deliverability-infrastructure-plan.md`](docs/plans/deliverability-infrastructure-plan.md) §5, `HANDOFF.md`, and the [archive](docs/PROJECT_STATUS_ARCHIVE.md).
+- **DNS registrar + Google Workspace provisioning**: **LIVE.** Porkbun connected. tubeforseo.com + gettubeseo.com were provisioned 2026-08-31 and are both warming with DKIM live, but their 6 original inboxes were deleted before ~09-07, so both hold 0 inboxes until re-added. **Add inboxes** to any already-set-up domain works in-app since 2026-09-27, with a hard cap of **3 inboxes per domain** on every path. **URL forwarding** shipped (Porkbun via API: apex+www 301; Spaceship dashboard-only), set per-domain from the Mailboxes domain detail or the onboarding wizard's Review step. Reliability hardening (fail-loud DNS on an unconnected registrar, actionable verify-wait, connected-aware wizard picker, half-saved-key warning, current-step status banner) shipped 2026-08-31. → [`docs/plans/deliverability-infrastructure-plan.md`](docs/plans/deliverability-infrastructure-plan.md) §5, `HANDOFF.md`, and the [archive](docs/PROJECT_STATUS_ARCHIVE.md).
 - **Configurable enrichment waterfall** — code-complete (Phases 0–4; site_scrape actor deployed); live activation **gated on Apify budget + Million Verifier key**. → [`RESUME-WATERFALL-SETTINGS.md`](RESUME-WATERFALL-SETTINGS.md).
 - **LinkedIn channel via Unipile** — code-complete; **NOT live** (gated on 3 migrations + Unipile config + webhook registration). → [`RESUME-LINKEDIN-CHANNEL.md`](RESUME-LINKEDIN-CHANNEL.md).
 - **Onboarding / billing redesign** — **IN DESIGN.** Client-facing quote → email → welcome flow + an on-site Stripe payment modal + an admin alert. Mockup at [`mockups/client-facing-quote-billing.html`](mockups/client-facing-quote-billing.html). The **Workflows → Onboarding live-preview** (Admin → Workflows → Onboarding) is BUILT (local, unpushed) — renders the real proposal-email / hosted-quote / welcome surfaces from live default config, drift-guarded by `scripts/test-onboarding-preview-sync.ts`. Open items still tracked in the in-app **Tasks** list: native Microsoft channel, SMTP channel, and an admin "Quote signed" email.

@@ -17,4 +17,4 @@ Building a **client-facing DIY Google-Maps lead-search flow** — "customers run
 
 **Why:** Maps and LinkedIn veins are deliberately SEPARATE (Maps = businesses/name-less/structured-area; LinkedIn = people/named/ICP+multi-location, no zip/county) and must not be conflated — they meet only at enrichment ([[project_contact_status_source_of_truth]] area). Multi-region for Maps is what aligns it with LinkedIn for an eventual merge.
 
-**How to apply:** the full build spec + acceptance checks + standing rules live in the repo **HANDOFF.md** top entry (2026-08-27). A LinkedIn *client* flow is a separate future initiative, not this build. Respect [[feedback_local_only_dev]] (push = prod deploy) and [[project_apify_cost_model]] ($ cap before live paid runs).
+**How to apply:** the full build spec + acceptance checks + standing rules live in the repo's **HANDOFF_ARCHIVE_2026-08.md** (the 2026-08-27 foundation entry; rolled out of HANDOFF.md 2026-09-27). A LinkedIn *client* flow is a separate future initiative, not this build. Respect [[feedback_local_only_dev]] (push = prod deploy) and [[project_apify_cost_model]] ($ cap before live paid runs).

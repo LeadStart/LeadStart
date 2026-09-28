@@ -45,7 +45,7 @@ live provision run remain.
 monthly spend cap + 6 DWD scopes + 3 Google Cloud APIs + `google_admin_email` (checklist in
 [`docs/plans/deliverability-infrastructure-plan.md`](docs/plans/deliverability-infrastructure-plan.md)
 §6 + [`docs/native-email-runbook.md`](docs/native-email-runbook.md) §2a); then a zero-spend "track an
-owned domain" e2e, then the first live buy on explicit go-ahead. Full session record in HANDOFF.md.
+owned domain" e2e, then the first live buy on explicit go-ahead. Full session record in HANDOFF_ARCHIVE_2026-08.md (the 2026-08-28 entry).
 
 ---
 

@@ -319,6 +319,27 @@ their domains are `active` (the only behavioral change on day one is protection)
 >   Patience-thresholded `domain_provisioning` owner alerts.
 > - **UI**: the per-domain provisioning stepper (setup form, Check now, DKIM paste, password
 >   reveal, DNS panel) on Admin → Mailboxes. NEEDS Daniel visual sign-off.
+> - **Adding inboxes to a domain that is already set up (2026-09-27).** The first-setup run was
+>   one-shot: once a domain's run finished (or it was backfilled as active), nothing in the app
+>   could create another Google user on it, so a domain that lost its inboxes (both TuBe domains)
+>   was a dead end. Now `inboxSetupEligibility` (pure, `provisioning.ts`) decides per domain:
+>   `setup` (never started), `add_inboxes` (last run finished or only DKIM pending, or a
+>   backfilled warming/active domain), or refused with a reason (run still going, halted on a
+>   failure, tired/resting/burned/retired, SMTP tier). An `add_inboxes` run
+>   (`initAddInboxesState`, `kind: "add_inboxes"`) is the same state machine with the domain
+>   steps pre-completed: DNS is never rewritten, the domain is confirmed on the Workspace LIVE
+>   first (Directory domains **list**, because `domains.get` answers 403, not 404, for a domain
+>   owned by another Google account), verification is pre-marked when the Directory says
+>   verified, and DKIM is watched only while the domain is still in provisioning. The route
+>   refuses names that are already inboxes and enforces the HARD cap of 3 inboxes per domain
+>   (`MAX_INBOXES_PER_DOMAIN`, owner rule 2026-09-27) across existing + new; the connect route
+>   (`POST /api/admin/mailboxes`) enforces the same cap, and a full domain is refused with a
+>   reason everywhere. `GET` on the same route is the wizard's preflight. The cron also advances
+>   unfinished add-inboxes runs on warming/active domains. UI: every eligible domain row has
+>   "Set up inboxes" / "Add inboxes", both opening the one wizard on that domain (the older
+>   separate setup modal was removed); the wizard's "Use existing" lists every Google domain,
+>   greying out the ones that can't take inboxes with the reason. `scripts/test-provisioning.ts`
+>   110/110.
 >
 > **DWD scopes Daniel adds to the existing SA client ID (paste ALL — editing REPLACES the list):**
 > ```
