@@ -6,7 +6,9 @@
 // and we append NOTHING to the body. Any opt-out language lives in the
 // sequence copy.
 //
-// We send a SINGLE text/plain part. A cold email should be byte-for-byte the
+// We send a SINGLE text/plain part (the one exception: a reply that carries
+// attachments, e.g. a prospect's PDF report sent on request, is wrapped in
+// multipart/mixed with the same quoted-printable text part first). A cold email should be byte-for-byte the
 // shape of something a human typed in Gmail, and a multipart/alternative
 // carrying an HTML twin is a machine-generated tell that a hand-written note
 // never has.
@@ -36,6 +38,8 @@ export interface BuildEmailParams {
    * delivers to To, Cc and Bcc header recipients.
    */
   bcc?: string[];
+  /** Optional file attachments. Only used on replies; cold sends never attach. */
+  attachments?: EmailAttachment[];
   subject: string;
   bodyText: string;
   /** RFC 5322 Message-ID we mint before sending, e.g. "<uuid@domain>". */
@@ -44,6 +48,12 @@ export interface BuildEmailParams {
   inReplyTo?: string | null;
   /** Full References chain (space-joined Message-IDs) for follow-ups. */
   references?: string | null;
+}
+
+export interface EmailAttachment {
+  filename: string;
+  contentType: string;
+  data: Buffer;
 }
 
 /** Mint a Message-ID scoped to the sending mailbox's domain. */
@@ -176,15 +186,57 @@ export function buildRawEmail(params: BuildEmailParams): string {
     // obsolete obs-zone form (SEND-27).
     `Date: ${new Date().toUTCString().replace(/ GMT$/, " +0000")}`,
     `MIME-Version: 1.0`,
-    `Content-Type: text/plain; charset="UTF-8"`,
-    `Content-Transfer-Encoding: quoted-printable`,
   ];
   if (params.inReplyTo) headers.push(`In-Reply-To: ${sanitizeAddrHeader(params.inReplyTo)}`);
   if (params.references) headers.push(`References: ${sanitizeAddrHeader(params.references)}`);
 
-  return base64url(
-    `${headers.join("\r\n")}\r\n\r\n${toQuotedPrintable(params.bodyText)}`,
-  );
+  const textPartHeaders = [
+    `Content-Type: text/plain; charset="UTF-8"`,
+    `Content-Transfer-Encoding: quoted-printable`,
+  ];
+  const textBody = toQuotedPrintable(params.bodyText);
+
+  if (!params.attachments || params.attachments.length === 0) {
+    return base64url(`${[...headers, ...textPartHeaders].join(CRLF)}${CRLF}${CRLF}${textBody}`);
+  }
+
+  // multipart/mixed: the text part first, then each attachment base64'd in
+  // 76-char lines (RFC 2045).
+  const boundary = `ls_${randomUUID().replace(/-/g, "")}`;
+  const parts: string[] = [`${textPartHeaders.join(CRLF)}${CRLF}${CRLF}${textBody}`];
+  for (const a of params.attachments) {
+    const name = safeFilename(a.filename);
+    const type = sanitizeAddrHeader(a.contentType) || "application/octet-stream";
+    const b64 = (a.data.toString("base64").match(/.{1,76}/g) ?? []).join(CRLF);
+    parts.push(
+      [
+        `Content-Type: ${type}; name="${name}"`,
+        `Content-Disposition: attachment; filename="${name}"`,
+        `Content-Transfer-Encoding: base64`,
+      ].join(CRLF) + `${CRLF}${CRLF}${b64}`,
+    );
+  }
+  const mixed =
+    [...headers, `Content-Type: multipart/mixed; boundary="${boundary}"`].join(CRLF) +
+    CRLF +
+    CRLF +
+    parts.map((part) => `--${boundary}${CRLF}${part}${CRLF}`).join("") +
+    `--${boundary}--${CRLF}`;
+  return base64url(mixed);
+}
+
+const CRLF = "\r\n";
+
+// Attachment filenames go in a quoted header param: keep them ASCII, drop
+// quotes/backslashes/control chars, and cap the length.
+function safeFilename(name: string): string {
+  const cleaned = name
+    .normalize("NFKD")
+    .replace(/[^\x20-\x7E]/g, "")
+    .replace(/["\\]/g, "")
+    .trim()
+    .slice(0, 150);
+  return cleaned || "attachment";
 }
 
 // ---------- Inbound parsing ----------

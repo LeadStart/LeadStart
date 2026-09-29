@@ -22,6 +22,8 @@ import {
   ChevronDown,
   Send,
   CheckCircle2,
+  Paperclip,
+  X,
 } from "lucide-react";
 import type { ReplyClass, ReplyOutcome, ReplyStatus, ReplyReferralContact, SourceChannel } from "@/types/app";
 import { PORTAL_NO_REPLY_CLASSES } from "@/types/app";
@@ -445,6 +447,31 @@ function AdminThread({
 // "Re: <original subject>". The body is prefilled with the sending inbox's
 // signature (same resolver campaign sends use) so the reply signs as the
 // identity the lead has been talking to.
+//
+// Attachments: when the lead's contact carries a report link (TuBe campaigns,
+// see src/lib/replies/report-attachment.ts) the composer pre-attaches that
+// lead's own report PDF; the server fetches it at send time. Hand-picked files
+// can be added too (3 MB total, sent base64 in the request).
+type ReportLookup =
+  | { state: "loading" }
+  | { state: "none" }
+  | { state: "ready"; filename: string; link: string };
+
+const MAX_UPLOAD_BYTES = 3 * 1024 * 1024;
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result).split(",")[1] ?? "");
+    r.onerror = () => reject(r.error ?? new Error("Couldn't read the file."));
+    r.readAsDataURL(file);
+  });
+}
+
+function formatBytes(n: number): string {
+  return n >= 1024 * 1024 ? `${(n / (1024 * 1024)).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`;
+}
+
 function AdminComposer({
   reply,
   onSent,
@@ -458,6 +485,9 @@ function AdminComposer({
   const [bodyText, setBodyText] = useState(signature ? `\n\n${signature}` : "");
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
+  const [report, setReport] = useState<ReportLookup>({ state: "loading" });
+  const [attachReport, setAttachReport] = useState(true);
+  const [uploads, setUploads] = useState<File[]>([]);
 
   const isSent = reply.status === "sent";
   const isSendable = reply.status === "new" || reply.status === "classified";
@@ -473,6 +503,36 @@ function AdminComposer({
     : baseSubject.toLowerCase().startsWith("re:")
       ? baseSubject
       : `Re: ${baseSubject}`;
+  // Look up the lead's report once the reply is answerable.
+  useEffect(() => {
+    if (!canReply) return;
+    let cancelled = false;
+    fetch(appUrl(`/api/replies/${reply.id}/report`))
+      .then((r) => r.json())
+      .then((j) => {
+        if (cancelled) return;
+        setReport(j.available ? { state: "ready", filename: j.filename, link: j.link } : { state: "none" });
+      })
+      .catch(() => {
+        if (!cancelled) setReport({ state: "none" });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [reply.id, canReply]);
+
+  const uploadBytes = uploads.reduce((n, f) => n + f.size, 0);
+  function addFiles(list: FileList | null) {
+    if (!list) return;
+    const next = [...uploads, ...Array.from(list)];
+    if (next.reduce((n, f) => n + f.size, 0) > MAX_UPLOAD_BYTES) {
+      setSendError("Attachments are too large (3 MB total max).");
+      return;
+    }
+    setSendError(null);
+    setUploads(next);
+  }
+
   const bcc = [reply.client?.notification_email, ...(reply.client?.notification_cc_emails ?? [])]
     .filter((a): a is string => !!a && !!a.trim())
     .map((a) => a.trim().toLowerCase())
@@ -483,10 +543,21 @@ function AdminComposer({
     setSending(true);
     setSendError(null);
     try {
+      const attachments = await Promise.all(
+        uploads.map(async (f) => ({
+          filename: f.name,
+          content_type: f.type || "application/octet-stream",
+          data_base64: await fileToBase64(f),
+        })),
+      );
       const res = await fetch(appUrl(`/api/replies/${reply.id}/send`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ body_text: bodyText }),
+        body: JSON.stringify({
+          body_text: bodyText,
+          attach_report: report.state === "ready" && attachReport,
+          attachments,
+        }),
       });
       const data = await res.json();
       if (!res.ok) setSendError(data.error || "Failed to send.");
@@ -527,6 +598,7 @@ function AdminComposer({
         className="inline-flex items-center gap-1.5 rounded-lg bg-[#2E37FE] px-4 py-2 text-sm font-bold text-white cursor-pointer"
       >
         <Send size={14} /> Reply for {reply.client?.name ?? "client"}
+        {report.state === "ready" && <span className="font-medium opacity-80">· report ready</span>}
       </button>
     );
   } else if (canReply) {
@@ -562,11 +634,73 @@ function AdminComposer({
           }}
           value={bodyText}
           onChange={(e) => setBodyText(e.target.value)}
-          rows={7}
+          rows={5}
           placeholder="Write your reply…"
           disabled={sending}
           className="w-full resize-y rounded-lg border border-border/60 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#2E37FE]/30 disabled:opacity-60"
         />
+        <div className="flex flex-wrap items-center gap-1.5">
+          {report.state === "loading" && (
+            <span className="text-[11.5px] text-muted-foreground">Checking for this lead&apos;s report…</span>
+          )}
+          {report.state === "ready" && (
+            <span
+              className={`inline-flex max-w-full items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[11.5px] ${
+                attachReport
+                  ? "border-[#2E37FE]/30 bg-[#2E37FE]/[0.07] text-foreground"
+                  : "border-dashed border-border text-muted-foreground"
+              }`}
+            >
+              <Paperclip size={12} className="shrink-0 text-[#2E37FE]" />
+              <span className="truncate font-medium">{report.filename}</span>
+              <a href={report.link} target="_blank" rel="noreferrer" className="text-[#2E37FE] hover:underline">
+                View
+              </a>
+              <button
+                onClick={() => setAttachReport((v) => !v)}
+                disabled={sending}
+                className="font-semibold text-muted-foreground hover:text-foreground cursor-pointer"
+              >
+                {attachReport ? "Remove" : "Attach"}
+              </button>
+            </span>
+          )}
+          {uploads.map((f, i) => (
+            <span
+              key={`${f.name}-${i}`}
+              className="inline-flex max-w-full items-center gap-1.5 rounded-lg border border-border/60 bg-muted/40 px-2.5 py-1 text-[11.5px]"
+            >
+              <Paperclip size={12} className="shrink-0 text-muted-foreground" />
+              <span className="truncate">{f.name}</span>
+              <span className="text-muted-foreground">{formatBytes(f.size)}</span>
+              <button
+                onClick={() => setUploads((u) => u.filter((_, j) => j !== i))}
+                disabled={sending}
+                aria-label={`Remove ${f.name}`}
+                className="text-muted-foreground hover:text-foreground cursor-pointer"
+              >
+                <X size={12} />
+              </button>
+            </span>
+          ))}
+          <label className="inline-flex cursor-pointer items-center gap-1 rounded-lg px-2 py-1 text-[11.5px] font-semibold text-muted-foreground hover:bg-muted hover:text-foreground">
+            <Paperclip size={12} /> Attach file
+            <input
+              type="file"
+              multiple
+              accept=".pdf,.png,.jpg,.jpeg,.gif,.csv,.txt,.doc,.docx,.xls,.xlsx"
+              className="hidden"
+              disabled={sending}
+              onChange={(e) => {
+                addFiles(e.target.files);
+                e.target.value = "";
+              }}
+            />
+          </label>
+          {uploadBytes > 0 && (
+            <span className="text-[11px] text-muted-foreground">{formatBytes(uploadBytes)} of 3 MB</span>
+          )}
+        </div>
         {sendError && (
           <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-900">{sendError}</div>
         )}
@@ -591,7 +725,11 @@ function AdminComposer({
   }
 
   if (!content) return null;
-  return <div className="flex-none border-t border-border/60 bg-card px-4 py-3 sm:px-5">{content}</div>;
+  // Shrinks and scrolls: the unibox card is a fixed-height, overflow-hidden
+  // column, so a rigid composer pushes Send out of reach on short screens.
+  return (
+    <div className="min-h-[9rem] shrink overflow-y-auto border-t border-border/60 bg-card px-4 py-3 sm:px-5">{content}</div>
+  );
 }
 
 function TrailFooter({ reply, onExclude }: { reply: InboxRowReply; onExclude: (v: boolean) => void }) {

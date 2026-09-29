@@ -13,14 +13,21 @@
 //   4. Channel send. On failure, roll back: set status='classified' and
 //      record the error so the client can retry.
 //
-// Request body: { subject?: string, body_text: string, body_html?: string }
+// Request body: { subject?: string, body_text: string, body_html?: string,
+//                 attach_report?: boolean, attachments?: UploadedAttachment[] }
+//
+// attach_report: fetch the lead's own report PDF (contacts.custom_fields.
+// report_link, see src/lib/replies/report-attachment.ts) and attach it.
+// attachments: small hand-picked files, base64 in the JSON body. Both are
+// resolved BEFORE the atomic claim, so a bad file never marks the reply sent.
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { computeIdempotencyKey } from "@/lib/replies/send";
 import { loadGmailClientForOrg } from "@/lib/gmail/org";
-import { buildRawEmail, generateMessageId } from "@/lib/gmail/mime";
+import { buildRawEmail, generateMessageId, type EmailAttachment } from "@/lib/gmail/mime";
+import { findReplyReport, fetchReportAttachment } from "@/lib/replies/report-attachment";
 import { GmailConfigError, GmailAuthError } from "@/lib/gmail/client";
 import type { LeadReply, SourceChannel } from "@/types/app";
 
@@ -28,10 +35,53 @@ interface RouteParams {
   params: Promise<{ id: string }>;
 }
 
+interface UploadedAttachment {
+  filename?: string;
+  content_type?: string;
+  data_base64?: string;
+}
+
 interface SendBody {
   subject?: string;
   body_text?: string;
   body_html?: string;
+  attach_report?: boolean;
+  attachments?: UploadedAttachment[];
+}
+
+// Hand-picked uploads ride in the JSON request body. Vercel caps a function's
+// request body (4.5 MB per their docs), and base64 inflates by a third, so
+// keep the decoded total well under that.
+const MAX_UPLOAD_BYTES = 3 * 1024 * 1024;
+const MAX_UPLOADS = 5;
+const UPLOAD_TYPES = new Set([
+  "application/pdf",
+  "image/png",
+  "image/jpeg",
+  "image/gif",
+  "text/csv",
+  "text/plain",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+]);
+
+function decodeUploads(list: UploadedAttachment[] | undefined): EmailAttachment[] {
+  if (!list || list.length === 0) return [];
+  if (list.length > MAX_UPLOADS) throw new Error(`Attach at most ${MAX_UPLOADS} files.`);
+  let total = 0;
+  return list.map((a) => {
+    const type = (a.content_type ?? "").toLowerCase();
+    if (!UPLOAD_TYPES.has(type)) {
+      throw new Error(`${a.filename || "A file"} is a type we don't send (PDF, images, Office docs, CSV or text only).`);
+    }
+    const data = Buffer.from(a.data_base64 ?? "", "base64");
+    if (data.length === 0) throw new Error(`${a.filename || "A file"} is empty.`);
+    total += data.length;
+    if (total > MAX_UPLOAD_BYTES) throw new Error("Attachments are too large (3 MB total max).");
+    return { filename: a.filename || "attachment", contentType: type, data };
+  });
 }
 
 const MAX_ERROR_LEN = 500;
@@ -76,7 +126,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   const { data: preRow, error: preLoadErr } = await admin
     .from("lead_replies")
     .select(
-      "id, organization_id, client_id, status, source_channel, gmail_thread_id, gmail_message_id, native_mailbox_id, lead_email, from_address, subject, client:client_id(notification_email, notification_cc_emails)"
+      "id, organization_id, client_id, campaign_id, status, source_channel, gmail_thread_id, gmail_message_id, native_mailbox_id, lead_email, from_address, subject, client:client_id(notification_email, notification_cc_emails)"
     )
     .eq("id", id)
     .maybeSingle();
@@ -91,6 +141,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     id: string;
     organization_id: string;
     client_id: string;
+    campaign_id: string | null;
     status: LeadReply["status"];
     source_channel: SourceChannel;
     gmail_thread_id: string | null;
@@ -143,6 +194,19 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     );
   }
 
+  // ─── Attachments (resolved before the claim) ────────────────────────────
+  let attachments: EmailAttachment[];
+  try {
+    attachments = decodeUploads(body.attachments);
+    if (body.attach_report) {
+      const report = await findReplyReport(admin, pre);
+      if (!report) throw new Error("This lead has no report on file to attach.");
+      attachments.unshift(await fetchReportAttachment(report));
+    }
+  } catch (err) {
+    return NextResponse.json({ error: truncErr(err) }, { status: 400 });
+  }
+
   // ─── Atomic claim: only one send wins ──────────────────────────────────
   const sentAt = new Date().toISOString();
   const idempotencyKey = computeIdempotencyKey(id, body_text);
@@ -185,7 +249,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   // ─── Send back through the native Gmail mailbox that received the reply ─
   let sentExternalId: string | null = null;
   try {
-    sentExternalId = await sendNativeReply(admin, pre, body_text, bcc);
+    sentExternalId = await sendNativeReply(admin, pre, body_text, bcc, attachments);
   } catch (err) {
     console.error("[replies/send] channel send failed:", err);
     await admin
@@ -217,6 +281,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     sent_at: sentAt,
     sent_external_email_id: sentExternalId,
     bcc_addresses: bcc ?? [],
+    attachments: attachments.map((a) => a.filename),
   });
 }
 
@@ -235,6 +300,7 @@ async function sendNativeReply(
   },
   bodyText: string,
   bcc: string[] | undefined,
+  attachments: EmailAttachment[],
 ): Promise<string> {
   const { data: mbRow } = await admin
     .from("native_mailboxes")
@@ -283,6 +349,7 @@ async function sendNativeReply(
     fromName: mailbox.display_name,
     to,
     bcc,
+    attachments,
     subject,
     bodyText,
     messageId: generateMessageId(mailbox.email_address),
