@@ -10,8 +10,9 @@ const INBOX_LIST_COLUMNS =
   "lead_company, lead_title, lead_phone_e164, lead_linkedin_url, " +
   "subject, body_text, outcome, outcome_logged_at, status, " +
   "claude_class, claude_confidence, claude_reason, keyword_flags, referral_contact, " +
-  "excluded_from_stats, " +
-  "client:client_id(name)";
+  "excluded_from_stats, source_channel, sent_at, final_body_text, " +
+  "client:client_id(name, notification_email, notification_cc_emails), " +
+  "mailbox:native_mailbox_id(email_address, display_name, signature)";
 
 export default async function AdminInboxPage() {
   const supabase = await createClient();

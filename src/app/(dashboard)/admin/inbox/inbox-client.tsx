@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import {
   Select,
@@ -20,8 +20,12 @@ import {
   Bot,
   Eye,
   ChevronDown,
+  Send,
+  CheckCircle2,
 } from "lucide-react";
-import type { ReplyClass, ReplyOutcome, ReplyStatus, ReplyReferralContact } from "@/types/app";
+import type { ReplyClass, ReplyOutcome, ReplyStatus, ReplyReferralContact, SourceChannel } from "@/types/app";
+import { PORTAL_NO_REPLY_CLASSES } from "@/types/app";
+import { resolveSignature } from "@/lib/native/tokens";
 import {
   CLASS_META,
   OUTCOME_META,
@@ -71,7 +75,16 @@ export interface InboxRowReply {
   keyword_flags: string[] | null;
   referral_contact: ReplyReferralContact | null;
   excluded_from_stats: boolean;
-  client: { name: string } | null;
+  source_channel: SourceChannel;
+  sent_at: string | null;
+  final_body_text: string | null;
+  client: {
+    name: string;
+    notification_email: string | null;
+    notification_cc_emails: string[] | null;
+  } | null;
+  // The inbox that received the reply; an admin reply goes back out from it.
+  mailbox: { email_address: string; display_name: string | null; signature: string | null } | null;
 }
 
 type FilterClient = "all" | string;
@@ -153,6 +166,13 @@ export function InboxClient({ replies }: { replies: InboxRowReply[] }) {
   }
   function handleExclude(excluded: boolean) {
     setRows((prev) => prev.map((r) => (r.id === selectedId ? { ...r, excluded_from_stats: excluded } : r)));
+  }
+  function handleSent(sentAt: string, bodyText: string) {
+    setRows((prev) =>
+      prev.map((r) =>
+        r.id === selectedId ? { ...r, status: "sent", sent_at: sentAt, final_body_text: bodyText } : r,
+      ),
+    );
   }
 
   return (
@@ -257,6 +277,7 @@ export function InboxClient({ replies }: { replies: InboxRowReply[] }) {
               onBack={() => setSelectedId(null)}
               onRetag={handleRetag}
               onExclude={handleExclude}
+              onSent={handleSent}
             />
           ) : (
             <ThreadEmpty />
@@ -309,12 +330,17 @@ function AdminThread({
   onBack,
   onRetag,
   onExclude,
+  onSent,
 }: {
   reply: InboxRowReply;
   onBack: () => void;
   onRetag: (cls: ReplyClass) => void;
   onExclude: (excluded: boolean) => void;
+  onSent: (sentAt: string, bodyText: string) => void;
 }) {
+  // Bumped after a send so the conversation pane re-pulls the Gmail thread
+  // and shows the message we just sent.
+  const [threadKey, setThreadKey] = useState(0);
   const { group } = useReclassifyGroup({
     replyId: reply.id,
     currentClass: reply.final_class,
@@ -393,12 +419,179 @@ function AdminThread({
       </div>
 
       {/* Conversation */}
-      <Conversation reply={reply} />
+      <Conversation reply={reply} refreshKey={threadKey} />
+
+      {/* Reply on the client's behalf */}
+      <AdminComposer
+        reply={reply}
+        onSent={(sentAt, bodyText) => {
+          onSent(sentAt, bodyText);
+          setThreadKey((k) => k + 1);
+        }}
+      />
 
       {/* Classification trail + exclude (collapsible footer) */}
       <TrailFooter reply={reply} onExclude={onExclude} />
     </div>
   );
+}
+
+// Admin/VA reply on the client's behalf. Same send path as the client portal
+// (/api/replies/[id]/send, which already authorizes owner/VA in the org): the
+// message goes out from the inbox the lead replied to, threaded into the same
+// Gmail conversation, and BCCs the client's notification inbox so they get a
+// copy without the lead seeing a third-party address.
+// The subject is shown, not edited: the send route always threads as
+// "Re: <original subject>". The body is prefilled with the sending inbox's
+// signature (same resolver campaign sends use) so the reply signs as the
+// identity the lead has been talking to.
+function AdminComposer({
+  reply,
+  onSent,
+}: {
+  reply: InboxRowReply;
+  onSent: (sentAt: string, bodyText: string) => void;
+}) {
+  const senderName = reply.mailbox?.display_name?.trim() || reply.mailbox?.email_address || "";
+  const signature = reply.mailbox ? resolveSignature(reply.mailbox.signature, senderName) : "";
+  const [open, setOpen] = useState(false);
+  const [bodyText, setBodyText] = useState(signature ? `\n\n${signature}` : "");
+  const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
+
+  const isSent = reply.status === "sent";
+  const isSendable = reply.status === "new" || reply.status === "classified";
+  const noReply = reply.final_class ? PORTAL_NO_REPLY_CLASSES.includes(reply.final_class) : false;
+  const nativeReady = reply.source_channel === "native_email" && !!reply.mailbox;
+  const canReply = isSendable && !noReply && nativeReady;
+  // The textarea opens prefilled with just the signature; require real text above it.
+  const hasMessage = bodyText.trim() !== "" && bodyText.trim() !== signature.trim();
+
+  const baseSubject = (reply.subject ?? "").trim();
+  const subject = !baseSubject
+    ? "Re: (no subject)"
+    : baseSubject.toLowerCase().startsWith("re:")
+      ? baseSubject
+      : `Re: ${baseSubject}`;
+  const bcc = [reply.client?.notification_email, ...(reply.client?.notification_cc_emails ?? [])]
+    .filter((a): a is string => !!a && !!a.trim())
+    .map((a) => a.trim().toLowerCase())
+    .filter((a, i, all) => all.indexOf(a) === i);
+
+  async function send() {
+    if (!hasMessage || sending) return;
+    setSending(true);
+    setSendError(null);
+    try {
+      const res = await fetch(appUrl(`/api/replies/${reply.id}/send`), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ body_text: bodyText }),
+      });
+      const data = await res.json();
+      if (!res.ok) setSendError(data.error || "Failed to send.");
+      else onSent(data.sent_at, bodyText.trim());
+    } catch (e) {
+      setSendError(e instanceof Error ? e.message : "Network error.");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  let content: ReactNode = null;
+  if (isSent) {
+    content = (
+      <div className="flex items-center gap-2 text-[13px] font-medium text-emerald-700">
+        <CheckCircle2 size={15} /> Reply sent {reply.sent_at ? timeSince(reply.sent_at) : ""}
+        {bcc.length > 0 && <span className="font-normal text-emerald-700/80">· Copy sent to {bcc.join(", ")}</span>}
+      </div>
+    );
+  } else if (noReply) {
+    content = (
+      <p className="text-xs text-muted-foreground">
+        {reply.final_class === "unsubscribe"
+          ? "This person opted out, so there's no reply to send."
+          : "Out-of-office auto-reply. No action needed."}
+      </p>
+    );
+  } else if (isSendable && !nativeReady) {
+    content = (
+      <p className="text-xs text-muted-foreground">
+        This reply didn&apos;t come in through a connected inbox, so it can&apos;t be answered from here.
+      </p>
+    );
+  } else if (canReply && !open) {
+    content = (
+      <button
+        onClick={() => setOpen(true)}
+        className="inline-flex items-center gap-1.5 rounded-lg bg-[#2E37FE] px-4 py-2 text-sm font-bold text-white cursor-pointer"
+      >
+        <Send size={14} /> Reply for {reply.client?.name ?? "client"}
+      </button>
+    );
+  } else if (canReply) {
+    content = (
+      <div className="space-y-2">
+        <div className="space-y-0.5 text-[11.5px] text-muted-foreground">
+          <p className="truncate">
+            <span className="font-semibold text-foreground/80">From:</span>{" "}
+            {senderName && senderName !== reply.mailbox?.email_address ? `${senderName} <${reply.mailbox?.email_address}>` : reply.mailbox?.email_address}
+          </p>
+          <p className="truncate">
+            <span className="font-semibold text-foreground/80">To:</span> {reply.lead_email}
+            {bcc.length > 0 && (
+              <>
+                {" "}
+                <span className="font-semibold text-foreground/80">BCC:</span> {bcc.join(", ")}
+              </>
+            )}
+          </p>
+          <p className="truncate">
+            <span className="font-semibold text-foreground/80">Subject:</span> {subject}
+          </p>
+        </div>
+        <textarea
+          autoFocus
+          ref={(el) => {
+            // Put the cursor above the prefilled signature on first open.
+            if (el && el.dataset.placed !== "1") {
+              el.dataset.placed = "1";
+              el.setSelectionRange(0, 0);
+              el.scrollTop = 0;
+            }
+          }}
+          value={bodyText}
+          onChange={(e) => setBodyText(e.target.value)}
+          rows={7}
+          placeholder="Write your reply…"
+          disabled={sending}
+          className="w-full resize-y rounded-lg border border-border/60 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#2E37FE]/30 disabled:opacity-60"
+        />
+        {sendError && (
+          <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-900">{sendError}</div>
+        )}
+        <div className="flex items-center justify-between gap-3">
+          <button
+            onClick={() => setOpen(false)}
+            disabled={sending}
+            className="text-xs font-semibold text-muted-foreground hover:text-foreground cursor-pointer disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={send}
+            disabled={!hasMessage || sending}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-[#2E37FE] px-4 py-2 text-sm font-bold text-white cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Send size={14} /> {sending ? "Sending…" : "Send reply"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!content) return null;
+  return <div className="flex-none border-t border-border/60 bg-card px-4 py-3 sm:px-5">{content}</div>;
 }
 
 function TrailFooter({ reply, onExclude }: { reply: InboxRowReply; onExclude: (v: boolean) => void }) {

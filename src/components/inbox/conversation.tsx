@@ -22,7 +22,9 @@ interface ThreadData {
   reason?: string;
 }
 
-export function useReplyThread(replyId: string): ThreadData {
+// refreshKey: bump it to re-pull the thread (e.g. right after we send a reply,
+// so the new outbound message shows up in the pane).
+export function useReplyThread(replyId: string, refreshKey = 0): ThreadData {
   const [data, setData] = useState<ThreadData>({ state: "loading", messages: [] });
   useEffect(() => {
     let cancelled = false;
@@ -43,7 +45,7 @@ export function useReplyThread(replyId: string): ThreadData {
     return () => {
       cancelled = true;
     };
-  }, [replyId]);
+  }, [replyId, refreshKey]);
   return data;
 }
 
@@ -98,8 +100,8 @@ function Bubble({
   );
 }
 
-export function Conversation({ reply }: { reply: ConversationReply }) {
-  const thread = useReplyThread(reply.id);
+export function Conversation({ reply, refreshKey = 0 }: { reply: ConversationReply; refreshKey?: number }) {
+  const thread = useReplyThread(reply.id, refreshKey);
   const leadName = reply.lead_name || reply.lead_email;
 
   return (
