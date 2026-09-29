@@ -434,7 +434,7 @@ export default function ReplyDossierPage() {
                   Reply sent {reply.sent_at ? timeSince(reply.sent_at) : ""}
                 </p>
                 <p className="text-xs text-emerald-800 mt-0.5">
-                  CC&apos;d to your inbox so the thread continues there.
+                  A copy went to your inbox (BCC, so the lead only sees the mailbox they wrote to).
                 </p>
                 {reply.final_body_text && (
                   <details className="mt-3">
@@ -490,7 +490,7 @@ export default function ReplyDossierPage() {
 
             <div className="flex items-center justify-between gap-3 pt-1">
               <p className="text-[11px] text-muted-foreground">
-                Sends from the mailbox they replied to and CC&apos;s your inbox, so the whole thread stays in one place.
+                Sends from the mailbox they replied to and BCCs your inbox, so you keep a copy.
               </p>
               <button
                 onClick={handleSend}

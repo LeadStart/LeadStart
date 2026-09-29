@@ -28,8 +28,14 @@ export interface BuildEmailParams {
   fromEmail: string;
   fromName?: string | null;
   to: string;
-  /** Optional CC recipients (e.g. the client's notification inbox on a portal reply). */
+  /** Optional CC recipients. */
   cc?: string[];
+  /**
+   * Optional BCC recipients (e.g. the client's notification inbox on a portal
+   * reply, so the lead never sees who else got a copy). users.messages.send
+   * delivers to To, Cc and Bcc header recipients.
+   */
+  bcc?: string[];
   subject: string;
   bodyText: string;
   /** RFC 5322 Message-ID we mint before sending, e.g. "<uuid@domain>". */
@@ -69,11 +75,11 @@ function formatFrom(email: string, name?: string | null): string {
   return `${encoded} <${email}>`;
 }
 
-// Header values that are NOT RFC 2047-encoded (To/Cc/In-Reply-To/References)
+// Header values that are NOT RFC 2047-encoded (To/Cc/Bcc/In-Reply-To/References)
 // must never contain CR/LF or other control chars: a smuggled CRLF would
 // inject arbitrary headers (e.g. Bcc:) into the raw message. Contact emails
 // are validated at import, but recipients also arrive from other paths
-// (portal reply CC lists, historical rows), so strip at the sink too.
+// (portal reply copy lists, historical rows), so strip at the sink too.
 // Subject and From display-name are already safe: encodeHeaderWord base64-
 // encodes any value containing chars outside \x20-\x7E, which includes CRLF.
 function sanitizeAddrHeader(value: string): string {
@@ -160,6 +166,9 @@ export function buildRawEmail(params: BuildEmailParams): string {
     `To: ${sanitizeAddrHeader(params.to)}`,
     ...(params.cc && params.cc.length > 0
       ? [`Cc: ${params.cc.map(sanitizeAddrHeader).join(", ")}`]
+      : []),
+    ...(params.bcc && params.bcc.length > 0
+      ? [`Bcc: ${params.bcc.map(sanitizeAddrHeader).join(", ")}`]
       : []),
     `Subject: ${encodeHeaderWord(params.subject)}`,
     `Message-ID: ${params.messageId}`,

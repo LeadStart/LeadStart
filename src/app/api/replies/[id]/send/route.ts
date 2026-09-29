@@ -1,6 +1,8 @@
 // POST /api/replies/[id]/send: send the client's edited reply back through the
 // native Gmail mailbox that received it, threaded into the same conversation,
-// and CC the client's notification email so the thread lives in their inbox.
+// and BCC the client's notification email so they get a copy without the lead
+// seeing a third-party address on the thread. The lead's next reply comes back
+// to the sending mailbox, gets ingested, and notifies the client as usual.
 //
 // Flow:
 //   1. Auth + access check (client_users or admin/VA in the org).
@@ -169,21 +171,21 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     );
   }
 
-  // CC the client's primary notification inbox + any teammates they added.
+  // BCC the client's primary notification inbox + any teammates they added.
   // Lowercased + deduped.
-  const ccSet = new Set<string>();
+  const bccSet = new Set<string>();
   if (pre.client?.notification_email) {
-    ccSet.add(pre.client.notification_email.trim().toLowerCase());
+    bccSet.add(pre.client.notification_email.trim().toLowerCase());
   }
   for (const addr of pre.client?.notification_cc_emails ?? []) {
-    if (addr && addr.trim()) ccSet.add(addr.trim().toLowerCase());
+    if (addr && addr.trim()) bccSet.add(addr.trim().toLowerCase());
   }
-  const cc = ccSet.size > 0 ? Array.from(ccSet) : undefined;
+  const bcc = bccSet.size > 0 ? Array.from(bccSet) : undefined;
 
   // ─── Send back through the native Gmail mailbox that received the reply ─
   let sentExternalId: string | null = null;
   try {
-    sentExternalId = await sendNativeReply(admin, pre, body_text, cc);
+    sentExternalId = await sendNativeReply(admin, pre, body_text, bcc);
   } catch (err) {
     console.error("[replies/send] channel send failed:", err);
     await admin
@@ -214,7 +216,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     success: true,
     sent_at: sentAt,
     sent_external_email_id: sentExternalId,
-    cc_addresses: cc ?? [],
+    bcc_addresses: bcc ?? [],
   });
 }
 
@@ -232,7 +234,7 @@ async function sendNativeReply(
     subject: string | null;
   },
   bodyText: string,
-  cc: string[] | undefined,
+  bcc: string[] | undefined,
 ): Promise<string> {
   const { data: mbRow } = await admin
     .from("native_mailboxes")
@@ -280,7 +282,7 @@ async function sendNativeReply(
     fromEmail: mailbox.email_address,
     fromName: mailbox.display_name,
     to,
-    cc,
+    bcc,
     subject,
     bodyText,
     messageId: generateMessageId(mailbox.email_address),

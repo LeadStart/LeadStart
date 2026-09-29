@@ -538,7 +538,7 @@ export default function ClientSettingsPage() {
               disabled={notifyStatus.state === "saving"}
             />
             <p className="text-[11px] text-muted-foreground">
-              CC&apos;d on every hot-lead notification and on replies you send from the portal. Up to 10 addresses.
+              Copied on every hot-lead notification and BCC&apos;d on replies you send from the portal. Up to 10 addresses.
             </p>
           </div>
 

@@ -400,7 +400,7 @@ function ClientThread({
       <div className="flex-none border-t border-border/60 bg-card px-4 py-3 sm:px-5">
         {isSent ? (
           <div className="flex items-center gap-2 text-[13px] font-medium text-emerald-700">
-            <CheckCircle2 size={15} /> Reply sent {reply.sent_at ? timeSince(reply.sent_at) : ""} · CC&apos;d to your inbox.
+            <CheckCircle2 size={15} /> Reply sent {reply.sent_at ? timeSince(reply.sent_at) : ""} · a copy went to your inbox.
           </div>
         ) : canReply && showComposer ? (
           <div className="space-y-2">
@@ -423,7 +423,7 @@ function ClientThread({
               <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-900">{sendError}</div>
             )}
             <div className="flex items-center justify-between gap-3">
-              <p className="text-[11px] text-muted-foreground">{previewing ? PREVIEW_READONLY_MESSAGE : "Sends from the mailbox they replied to and CCs your inbox."}</p>
+              <p className="text-[11px] text-muted-foreground">{previewing ? PREVIEW_READONLY_MESSAGE : "Sends from the mailbox they replied to and BCCs your inbox."}</p>
               <button
                 onClick={send}
                 disabled={!bodyText.trim() || sending || previewing}

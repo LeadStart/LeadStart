@@ -180,7 +180,7 @@ export function ReplyRoutingSection({
               </div>
             )}
             <p className="text-[11px] text-muted-foreground">
-              Managed by the client from their portal. CC&apos;d on hot-lead notifications + portal replies.
+              Managed by the client from their portal. Copied on hot-lead notifications and BCC&apos;d on portal replies.
             </p>
           </div>
 

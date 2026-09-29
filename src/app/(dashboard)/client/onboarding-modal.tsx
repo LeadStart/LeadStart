@@ -255,7 +255,7 @@ function OnboardingModal({
             disabled={saving}
           />
           <p className="text-[11px] text-muted-foreground">
-            Used for hot-lead alerts, and CC&apos;d on every reply thread.
+            Used for hot-lead alerts, and BCC&apos;d on replies you send from the portal.
           </p>
         </div>
         {error && <p className="mt-3 text-xs text-red-600">{error}</p>}
@@ -370,7 +370,7 @@ function OnboardingModal({
           {ccs.length > 0 && (
             <SummaryRow
               icon={<Users size={16} />}
-              label="Also CC'd"
+              label="Also copied"
               value={ccs.join(", ")}
             />
           )}
