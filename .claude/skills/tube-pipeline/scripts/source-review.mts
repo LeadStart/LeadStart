@@ -150,6 +150,6 @@ main(async () => {
     const xs = excluded.filter((e) => e.reason === r);
     if (xs.length) console.log(`\n${r} (${xs.length}): the owner can keep any with --keep <place id or website>\n` + xs.map((e) => `  ✗ ${e.name} · ${e.city} · ${e.domain ?? "no website"} · ${e.detail ?? ""}`).join("\n"));
   }
-  stamp(dir, "source_review", { new_firms: byPlace.size, kept: kept.length, dropped: excluded.length, dropped_by_reason: tally(excluded.map((e) => e.reason)), forced_keep: forceKeep.size, forced_drop: forceDrop.size });
+  stamp(dir, "source_review", { new_firms: byPlace.size, kept: kept.length, dropped: excluded.length, dropped_by_reason: tally(excluded.map((e) => e.reason)), forced_keep: forceKeep.size, forced_drop: forceDrop.size, kept_by_hand: [...forceKeep], dropped_by_hand: [...forceDrop] });
 
 });

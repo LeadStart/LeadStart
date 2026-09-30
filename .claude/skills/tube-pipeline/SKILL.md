@@ -1,6 +1,6 @@
 ---
 name: tube-pipeline
-description: Run a batch of law-firm prospects end to end, from Scrap.io to the live LeadStart campaign. It confirms the batch brief with the owner (area, practice areas, filters, budget, source, enrichment, who gets emailed, campaign, pace, flagged firms), pulls firms from Scrap.io, reviews them, imports and enriches them in LeadStart (owner names + verified emails), checks their integrity, scans them in TuBe SEO for AI visibility (the TuBe "enrichment"), validates TuBe's "Export for outreach" against every firm's own report, loads the sendable firms into the campaign with the fields its copy uses, and renders every email to prove it reads right. Use it whenever the owner talks about a new batch, wave, market or cohort (WA-10, Oregon, California…), pulling firms from Scrap.io, sending leads to TuBe, scanning or re-scanning prospects, TuBe's export, importing TuBe results into the campaign, "the next batch", a batch's budget or area, or asks where a batch stands, even if they never say "pipeline".
+description: Run a batch of law-firm prospects end to end, from Scrap.io to the live LeadStart campaign. It confirms the batch brief with the owner (area, practice areas, filters, budget, source, enrichment, who gets emailed, campaign, pace, flagged firms), pulls firms from Scrap.io, reviews them, imports and enriches them in LeadStart (owner names + verified emails), checks their integrity, scans them in TuBe SEO for AI visibility (the TuBe "enrichment"), validates TuBe's "Export for outreach" against every firm's own report, loads the sendable firms into the campaign with the fields its copy uses, renders every email to prove it reads right, and ends every run with a thorough completion assessment. Use it whenever the owner talks about a new batch, wave, market or cohort (WA-10, Oregon, California…), pulling firms from Scrap.io, sending leads to TuBe, scanning or re-scanning prospects, TuBe's export, importing TuBe results into the campaign, "the next batch", a batch's budget or area, or asks where a batch stands or how a run went (the assessment), even if they never say "pipeline".
 ---
 
 # TuBe pipeline
@@ -22,8 +22,9 @@ Everything below was learned running the first batches (Sept 2026). The scripts 
 | 6 | Export + validate | Chrome download, then `validate-export.mjs` | **yes**: a file download |
 | 7 | Load into the campaign | `import-campaign.mts`: dry run, then `--apply` | **yes**: enrolls real people in a live campaign |
 | 8 | Verify | `verify-campaign.mts` | no |
+| 9 | **Completion assessment** for the owner | `assess.mjs --run <name> --final` (and interim at every pause) | no: it's the report the owner asked for |
 
-`status.mts` shows where any run stands, what it has spent against its budget, and the next step.
+`status.mts` shows where any run stands, what it has spent against its budget, and the next step. `assess.mjs` is the full account (step 9).
 
 When the firms are already in LeadStart and enriched (an in-app Apify search, a tag), skip steps 1–3 and start at step 4 with `--tag` or `--searches`. LeadStart's enrichment comes before TuBe on purpose. It's the big filter: on WA-10, 191 of 565 firms ended with a verified owner email. TuBe's scan leaves about 9 in 10 sendable, so TuBe only scans firms we can actually email.
 
@@ -235,6 +236,31 @@ The dry run prints the plan, the skips, the render check, a rough pace and one s
 
 `verify-campaign.mts --run <name>` renders every email for the run's imported contacts, as they will send. It also re-checks that each is still enrolled, on the right client, not on the do-not-contact list, and not pooled. Without `--run`, it checks the whole campaign; run that after the owner edits copy.
 
+## Step 9: completion assessment (every run)
+
+The owner asked for this on 2026-09-29: "give me a thorough completion assessment when it's done as part of the skill". A run isn't finished until the owner has it.
+
+```bash
+node .claude/skills/tube-pipeline/scripts/assess.mjs --run <name>           # interim: where it stands now
+node .claude/skills/tube-pipeline/scripts/assess.mjs --run <name> --final   # at the end of the run
+```
+
+It writes `<run>/assessment.md` and prints the same report. It reads the run's files and the live database, and changes nothing but the ledger. The report has nine sections:
+1. **Verdict:** the status (in progress, paused on purpose, stopped, complete, complete with problems), the firms at each step, the money, and the next step with its gate.
+2. **The brief against the outcome:** area, filters, budget, credits, searches, enrichment, who gets emailed, campaign, pace and flagged firms, each marked ✓ or ✗.
+3. **Every firm, step by step:** in and out at each step, where every lost firm went and why, and the pull by metro.
+4. **Money and Scrap.io usage:** each spend, total against the budget, a projection for the paid steps still ahead, credits, searches against the ceilings, and the cost per pulled firm and per enrolled lead.
+5. **Quality checks:** each check that ran, with its result.
+6. **Held or open, by name:** review drops, weak hosts set aside, sheet drops, flags, TuBe failures, validation holds, import skips and verify problems. Each comes with what it needs.
+7. **Timing:** the campaign's queue, when this run's firms start, and when a held scan is due.
+8. **Incidents and deviations** from the brief. New ones go in `references/lessons.md`.
+9. **A comparison** with the last finished run.
+
+When to run it:
+- **At every pause:** give the owner the interim assessment whenever a run stops for more than a day, for example a scan held until nearer the send date, or a wait for the owner's go.
+- **At the end:** after step 8, run it with `--final`. Give the owner the verdict, the held list and the timing in the chat, and point to `assessment.md` for the rest.
+- `--final` on an unfinished run saves an interim assessment and says what's missing.
+
 ## After the import
 
 - The campaign sends within its window and caps; there's nothing to press.
@@ -252,6 +278,8 @@ After each step, in plain words and exact counts:
 2. What's held, by name, with each reason, and what you need from the owner.
 3. Spent so far against the budget.
 4. The next step, with its gate.
+
+At every pause and at the end, the report is the completion assessment (step 9).
 
 ## When something goes wrong
 

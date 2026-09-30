@@ -231,6 +231,48 @@ export async function findEnrichmentRun(dir) {
   const items = await getAll(`enrichment_run_items?select=run_id,created_at&contact_id=in.(${ids.join(",")})&order=created_at.desc`);
   return items[0]?.run_id ?? null;
 }
+// ── where a run stands (status.mts and assess.mjs share this) ───────────────
+export const STEPS = ["Brief", "Pull from Scrap.io", "Review the pull", "Import + enrich", "Integrity + sheet",
+  "Upload + scan", "Export + validate", "Into the campaign", "Verify", "Completion assessment"];
+/** The run's next step, from its ledger (run.json) and its brief. */
+export function nextStep(run, brief) {
+  const s = run.stages ?? {};
+  if (!brief?.confirmed_at) return "Step 0: brief.mjs --run <name>, ask the owner the 10 questions, save brief.json";
+  const sourced = s.source_pull || s.source_review || s.source_import;
+  if (!s.upload && !s.source_import) {
+    if (!sourced) return "Step 1: source-pull.mjs --run <name> (the plan) → owner's go → --count --go / --pull --go. Leads already in LeadStart? Go to step 4 with --tag/--searches";
+    if (s.source_pull && !s.source_review) return "Step 2: source-review.mts --run <name>, then show the owner every dropped firm";
+    return "Step 3: source-import.mts --run <name> (dry run → owner's go → --apply)";
+  }
+  if (s.source_import && !s.enrich_start) return "Step 3: enrich.mts --run <name> (the dry run states the cost against the budget → owner's go → --apply)";
+  if (s.enrich_start && !s.enrich_done) return "Step 3: enrichment running: enrich-watch.mjs --run <name> (--follow in the background), then enrich-report.mts";
+  const u = s.upload;
+  if (!u) return "Step 4: build-upload.mts --run <name>";
+  const held = brief.pace?.scan === "hold_until_near_send";
+  if (!u.checked_tube) return `Step 4: run tube-check.js on the TuBe admin page, save its output as tube-scanned.json, re-run build-upload.mts${held ? " (can wait until just before the held scan)" : ""}`;
+  if (u.to_upload > 0 && !s.scan) {
+    if (held) return `Held on purpose (the brief): scan the ${u.to_upload} firms in TuBe about a week before they'd reach Email 1 (assess.mjs shows the date), then step 5 with the owner's go`;
+    return `Step 5: upload tube-upload-<run>.csv (${u.to_upload} firms) in TuBe; needs the owner's go (TuBe's estimate ${(u.to_upload * 0.034).toFixed(2)} dollars)`;
+  }
+  if (u.to_upload > 0 && s.scan) return "Step 5: scan running or done; re-run tube-check.js + build-upload.mts until the upload file is empty, then export";
+  if (!s.validate) return `Step 6: export ${(u.tube_batches ?? []).map((b) => `"${b.label}"`).join(", ") || "the batch"} in TuBe (owner's go to download), then validate-export.mjs --zip <file>`;
+  if (!s.import) return `Step 7: import-campaign.mts dry run → owner's go → --apply (${s.validate.validated} validated, ${s.validate.held} held)`;
+  if (!s.verify) return "Step 8: verify-campaign.mts --run <name>";
+  if (s.verify.with_problems) return `Fix: verify found ${s.verify.with_problems} contacts with problems, then re-run verify-campaign.mts`;
+  if (!s.assess_final) return "Step 9: assess.mjs --run <name> --final, and give the owner the completion assessment";
+  return "Done: the completion assessment is in assessment.md. Held firms (held.csv, TuBe's review list) may be worth a second look.";
+}
+/** A date `n` weekdays after `from` (the campaign starts new people on weekdays). */
+export function addWeekdays(from, n) {
+  const d = new Date(from);
+  let left = Math.max(0, Math.ceil(n));
+  while (left > 0) {
+    d.setDate(d.getDate() + 1);
+    if (d.getDay() !== 0 && d.getDay() !== 6) left--;
+  }
+  return d;
+}
+
 export const writeJson = (file, value) => writeFileSync(file, JSON.stringify(value, null, 1));
 export const readJson = (file) => JSON.parse(readFileSync(file, "utf8"));
 export { existsSync, join, basename, readFileSync, writeFileSync, mkdirSync, readdirSync };

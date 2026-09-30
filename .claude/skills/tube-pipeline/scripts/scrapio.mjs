@@ -25,6 +25,11 @@ export const BLOCKLIST = `leadstart-${ORG_ID}`;
 // ceilings change only through a new migration, with the owner's go.
 export const RUN_LIMIT = 100;
 const SOURCE = `tube-pipeline:${basename(process.argv[1] ?? "script")}`;
+// The run each search belongs to (from --run), so assess.mjs counts exactly this run's searches.
+const RUN = (() => {
+  const i = process.argv.indexOf("--run");
+  return i > 0 ? (process.argv[i + 1] ?? null) : null;
+})();
 let thisRun = 0;
 
 export const fmtBudget = (b) =>
@@ -56,6 +61,7 @@ export async function assertSearchBudget(n, what) {
 async function claimSearch(path, pairs) {
   if (thisRun >= RUN_LIMIT) throw new StopError(`REFUSED: this run already sent ${thisRun} Scrap.io searches (at most ${RUN_LIMIT} per run).`);
   const detail = {
+    run: RUN,
     city: pairs.find(([k]) => k === "city")?.[1] ?? null,
     types: pairs.filter(([k]) => k === "types[]").map(([, v]) => v),
     kind: pairs.some(([k, v]) => k === "skip_data" && v === "1") ? "count" : pairs.some(([k]) => k === "cursor") ? "page+" : "page",

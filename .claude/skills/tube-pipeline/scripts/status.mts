@@ -9,32 +9,11 @@
 // export download) in run.json, so the ledger shows it. --spend logs money
 // actually spent, so the run shows spent vs. the budget in its brief.
 import {
-  RUNS_ROOT, args, assertRepoCwd, existsSync, getIn, join, listRuns, main, ORG_ID, readCsv, readJson, readRun, runDir, saveRun, stamp,
+  RUNS_ROOT, args, assertRepoCwd, existsSync, getIn, join, listRuns, main, nextStep, ORG_ID, readCsv, readJson, readRun, runDir, saveRun, stamp,
 } from "./lib.mjs";
 
 const when = (s: any) => (s?.at ? new Date(s.at).toLocaleString() : "");
-
-function nextStep(run: any, briefOk: boolean): string {
-  const s = run.stages ?? {};
-  if (!briefOk) return "Step 0: brief.mjs --run <name>, ask the owner the 10 questions, save brief.json";
-  const sourced = s.source_pull || s.source_review || s.source_import;
-  if (!s.upload && !s.source_import) {
-    if (!sourced) return "Step 1: source-pull.mjs --run <name> (the plan) → owner's go → --count --go / --pull --go. Leads already in LeadStart? Go to step 4 with --tag/--searches";
-    if (s.source_pull && !s.source_review) return "Step 2: source-review.mts --run <name>, then show the owner every dropped firm";
-    return "Step 3: source-import.mts --run <name> (dry run → owner's go → --apply)";
-  }
-  if (s.source_import && !s.enrich_start) return "Step 3: enrich.mts --run <name> (the dry run states the cost against the budget → owner's go → --apply)";
-  if (s.enrich_start && !s.enrich_done) return "Step 3: enrichment running: enrich-watch.mjs --run <name> (--follow in the background), then enrich-report.mts";
-  const u = s.upload;
-  if (!u) return "Step 4: build-upload.mts --run <name>";
-  if (!u.checked_tube) return "Step 4: run tube-check.js on the TuBe admin page, save its output as tube-scanned.json, re-run build-upload.mts";
-  if (u.to_upload > 0 && !s.scan) return `Step 5: upload tube-upload-<run>.csv (${u.to_upload} firms) in TuBe; needs the owner's go (TuBe's estimate ${(u.to_upload * 0.034).toFixed(2)} dollars)`;
-  if (u.to_upload > 0 && s.scan) return "Step 5: scan running or done; re-run tube-check.js + build-upload.mts until the upload file is empty, then export";
-  if (!s.validate) return `Step 6: export ${(u.tube_batches ?? []).map((b: any) => `"${b.label}"`).join(", ") || "the batch"} in TuBe (owner's go to download), then validate-export.mjs --zip <file>`;
-  if (!s.import) return `Step 7: import-campaign.mts dry run → owner's go → --apply (${s.validate.validated} validated, ${s.validate.held} held)`;
-  if (!s.verify) return "Step 8: verify-campaign.mts --run <name>";
-  return s.verify.with_problems ? `Fix: verify found ${s.verify.with_problems} contacts with problems` : "Done. Check held.csv and TuBe's review list for firms worth a second look.";
-}
+const readBrief = (dir: string) => (existsSync(join(dir, "brief.json")) ? readJson(join(dir, "brief.json")) : null);
 
 main(async () => {
   assertRepoCwd();
@@ -44,8 +23,7 @@ main(async () => {
     if (!runs.length) { console.log(`No runs yet in ${RUNS_ROOT}. Start one with brief.mjs --run <name>.`); return; }
     for (const r of runs) {
       const u = r.run.stages?.upload;
-      const briefOk = existsSync(join(r.dir, "brief.json")) && Boolean(readJson(join(r.dir, "brief.json")).confirmed_at);
-      console.log(`${r.name.padEnd(18)} ${u ? `${u.kept} firms in its sheet` : "new"} · next: ${nextStep(r.run, briefOk)}`);
+      console.log(`${r.name.padEnd(18)} ${u ? `${u.kept} firms in its sheet` : "new"} · next: ${nextStep(r.run, readBrief(r.dir))}`);
     }
     return;
   }
@@ -91,6 +69,8 @@ main(async () => {
   line("7", "Into the campaign", i, i ? `${i.enrolled} enrolled (${i.adopted} adopted), ${i.skipped} skipped` : s.import_plan ? `(dry run only: ${s.import_plan.enroll} planned)` : "");
   const ve = s.verify;
   line("8", "Verify", ve, ve ? `${ve.contacts} contacts, ${ve.emails} emails, ${ve.with_problems} with problems` : "");
+  const as = s.assess_final ?? s.assess;
+  line("9", "Assessment", as, as ? `${s.assess_final ? "final" : "interim"}: ${as.status} (assessment.md)` : "");
 
   // Live: how far the run's firms have got in the campaign (what it imported, else its sheet).
   const resultFile = join(dir, "import-result.json");
@@ -109,5 +89,5 @@ main(async () => {
     const last = sends.map((x: any) => x.sent_at).sort().pop();
     console.log(`  Live: ${enr.length} of this run's firms enrolled · ${emailed.size} emailed so far${last ? ` (last ${new Date(last).toLocaleString()})` : ""} · ${replied} replied`);
   }
-  console.log(`  Next: ${nextStep(run, Boolean(brief?.confirmed_at))}`);
+  console.log(`  Next: ${nextStep(run, brief)}`);
 });
