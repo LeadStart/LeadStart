@@ -205,7 +205,7 @@ export default function ClientCampaignPage({
       {/* KPIs */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <KPICard label="Emails Sent" value={metrics.emails_sent} unit="count" />
-        <KPICard label="Positive Responses" value={metrics.meetings_booked} unit="count" />
+        <KPICard label="Positive Responses" value={metrics.positive_replies} unit="count" />
       </div>
 
       {/* Chart */}

@@ -25,7 +25,7 @@ export function SentVsPositiveChart({ snapshots, height = 220 }: SentVsPositiveC
   for (const s of snapshots) {
     const existing = dateMap.get(s.snapshot_date) || { sent: 0, positive: 0 };
     existing.sent += s.emails_sent;
-    existing.positive += s.meetings_booked;
+    existing.positive += s.positive_replies;
     dateMap.set(s.snapshot_date, existing);
   }
 

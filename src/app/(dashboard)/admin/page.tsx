@@ -488,7 +488,7 @@ export default function AdminOverviewPage() {
       totalCount: card.clientCampaigns.length,
       reply_rate: metrics.reply_rate,
       bounce_rate: metrics.bounce_rate,
-      positive: metrics.meetings_booked,
+      positive: metrics.positive_replies,
       trend: card.trend,
       mrrCents,
       renewLabel,

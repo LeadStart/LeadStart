@@ -1042,7 +1042,7 @@ export function ReportsClient({
                   <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Reply Rate</p>
                 </div>
                 <div className="text-center p-3 rounded-lg bg-emerald-50/50 border border-emerald-100">
-                  <p className="text-xl font-bold text-emerald-700">{selectedReport.report_data.totals.meetings_booked}</p>
+                  <p className="text-xl font-bold text-emerald-700">{selectedReport.report_data.totals.positive_replies}</p>
                   <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Positive Responses</p>
                 </div>
                 <div className="text-center p-3 rounded-lg bg-blue-50/50 border border-blue-100">
@@ -1073,7 +1073,7 @@ export function ReportsClient({
                       <p className="text-[10px] text-muted-foreground uppercase">Bounce</p>
                     </div>
                     <div>
-                      <p className="text-sm font-bold">{camp.metrics.meetings_booked}</p>
+                      <p className="text-sm font-bold">{camp.metrics.positive_replies}</p>
                       <p className="text-[10px] text-muted-foreground uppercase">Positive</p>
                     </div>
                   </div>

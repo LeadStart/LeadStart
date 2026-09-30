@@ -26,7 +26,7 @@ export function MonthlyPositiveChart({ snapshots, height = 220 }: MonthlyPositiv
   for (const s of snapshots) {
     const d = new Date(s.snapshot_date);
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-    monthMap.set(key, (monthMap.get(key) || 0) + s.meetings_booked);
+    monthMap.set(key, (monthMap.get(key) || 0) + s.positive_replies);
   }
 
   const allMonths = Array.from(monthMap.keys()).sort();

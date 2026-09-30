@@ -17,7 +17,7 @@ export function buildWeeklyReportEmail(data: KPIReportData, portalUrl?: string):
             ${c.metrics.emails_sent.toLocaleString()}
           </td>
           <td style="padding: 14px 16px; border-bottom: 1px solid #E2E3ED; text-align: center; font-weight: 600; color: #3D3D5C;">
-            ${c.metrics.meetings_booked}
+            ${c.metrics.positive_replies}
           </td>
         </tr>`;
     })
@@ -93,7 +93,7 @@ export function buildWeeklyReportEmail(data: KPIReportData, portalUrl?: string):
                   <td width="50%" style="padding: 0 6px;">
                     <div style="background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 12px; padding: 20px; text-align: center;">
                       <p style="margin: 0; font-size: 32px; font-weight: 700; color: #10b981;">
-                        ${data.totals.meetings_booked}
+                        ${data.totals.positive_replies}
                       </p>
                       <p style="margin: 6px 0 0; font-size: 11px; color: #6B6E8A; text-transform: uppercase; letter-spacing: 0.5px;">
                         Positive Responses

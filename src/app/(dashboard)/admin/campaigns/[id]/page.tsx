@@ -654,7 +654,7 @@ export default async function AdminCampaignDetailPage({
         />
         <KPICard
           label="Positive Responses"
-          value={metrics.meetings_booked}
+          value={metrics.positive_replies}
           unit="count"
         />
       </div>
@@ -692,7 +692,7 @@ export default async function AdminCampaignDetailPage({
                     <TableCell className="text-right">{s.replies}</TableCell>
                     <TableCell className="text-right">{s.bounces}</TableCell>
                     <TableCell className="text-right">{s.unsubscribes}</TableCell>
-                    <TableCell className="text-right">{s.meetings_booked}</TableCell>
+                    <TableCell className="text-right">{s.positive_replies}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

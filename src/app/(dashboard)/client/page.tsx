@@ -172,7 +172,7 @@ export default function ClientDashboardPage() {
           </div>
           <div className="px-6 py-5 text-center">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">Positive Responses</p>
-            <p className="text-3xl font-bold text-emerald-600">{metrics.meetings_booked}</p>
+            <p className="text-3xl font-bold text-emerald-600">{metrics.positive_replies}</p>
           </div>
         </div>
       </Card>
@@ -211,7 +211,7 @@ export default function ClientDashboardPage() {
                           </div>
                           <div className="min-w-0">
                             <p className="font-medium text-sm text-foreground truncate">{campaign.name}</p>
-                            <p className="text-xs text-muted-foreground">{campMetrics.emails_sent.toLocaleString()} sent · {campMetrics.meetings_booked} positive</p>
+                            <p className="text-xs text-muted-foreground">{campMetrics.emails_sent.toLocaleString()} sent · {campMetrics.positive_replies} positive</p>
                           </div>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">

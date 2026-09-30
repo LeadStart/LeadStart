@@ -90,13 +90,13 @@ export default function ClientReportsPage() {
                 <CardContent className="pt-4">
                   <div className="grid grid-cols-2 gap-4 mb-4">
                     <div className="text-center p-3 rounded-lg bg-[#2E37FE]/5"><p className="text-xl font-bold text-[#6B72FF]">{totals.emails_sent.toLocaleString()}</p><p className="text-xs text-muted-foreground">Emails Sent</p></div>
-                    <div className="text-center p-3 rounded-lg bg-emerald-50/50"><p className="text-xl font-bold text-emerald-700">{totals.meetings_booked}</p><p className="text-xs text-muted-foreground">Positive Responses</p></div>
+                    <div className="text-center p-3 rounded-lg bg-emerald-50/50"><p className="text-xl font-bold text-emerald-700">{totals.positive_replies}</p><p className="text-xs text-muted-foreground">Positive Responses</p></div>
                   </div>
                   {campaigns.map((camp) => (
                     <div key={camp.campaign_id} className="rounded-xl border border-border/50 p-4 mt-3">
                       <p className="text-sm font-semibold mb-2">{camp.campaign_name}</p>
                       <MetricRow label="Emails Sent" value={camp.metrics.emails_sent} unit="count" />
-                      <MetricRow label="Positive Responses" value={camp.metrics.meetings_booked} unit="count" trend="up" />
+                      <MetricRow label="Positive Responses" value={camp.metrics.positive_replies} unit="count" trend="up" />
                     </div>
                   ))}
                 </CardContent>

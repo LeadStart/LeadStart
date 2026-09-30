@@ -233,12 +233,12 @@ export function ClientDetailClient({
             />
             <KPICard
               label="Positive Responses"
-              value={periodMetrics.meetings_booked}
+              value={periodMetrics.positive_replies}
               unit="count"
               kpiKey="meetings_booked"
               subtitle={
                 period !== "lifetime"
-                  ? `${lifetimeMetrics.meetings_booked} lifetime`
+                  ? `${lifetimeMetrics.positive_replies} lifetime`
                   : undefined
               }
             />
@@ -366,7 +366,7 @@ export function ClientDetailClient({
                               </div>
                               <div>
                                 <p className="text-sm font-bold">
-                                  {campPeriodMetrics.meetings_booked}
+                                  {campPeriodMetrics.positive_replies}
                                 </p>
                                 <p className="text-[10px] text-muted-foreground uppercase tracking-wide">
                                   Positive
@@ -402,7 +402,7 @@ export function ClientDetailClient({
                                   </div>
                                   <div>
                                     <p className="text-xs">
-                                      {campLifetimeMetrics.meetings_booked}
+                                      {campLifetimeMetrics.positive_replies}
                                     </p>
                                     <p className="text-[9px] uppercase tracking-wide">
                                       Lifetime

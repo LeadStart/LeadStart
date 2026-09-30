@@ -127,7 +127,7 @@ export default function AllCampaignsPage() {
                       <div className="min-w-0"><p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Sent</p><p className="text-sm font-semibold tabular-nums truncate">{row.metrics.emails_sent.toLocaleString()}</p></div>
                       <div className="min-w-0"><p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Reply</p><p className={`text-sm font-semibold tabular-nums ${row.metrics.reply_rate >= 5 ? "text-emerald-600" : row.metrics.reply_rate >= 2 ? "text-amber-600" : "text-red-600"}`}>{row.metrics.reply_rate}%</p></div>
                       <div className="min-w-0"><p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Bounce</p><p className={`text-sm font-semibold tabular-nums ${row.metrics.bounce_rate <= 2 ? "text-emerald-600" : "text-red-600"}`}>{row.metrics.bounce_rate}%</p></div>
-                      <div className="min-w-0"><p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Positive</p><p className="text-sm font-semibold tabular-nums">{row.metrics.meetings_booked}</p></div>
+                      <div className="min-w-0"><p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Positive</p><p className="text-sm font-semibold tabular-nums">{row.metrics.positive_replies}</p></div>
                     </div>
                     <div className="mt-3 flex items-center gap-1 border-t border-border/60 pt-3">
                       <CampaignRowActions campaignId={row.id} campaignName={row.name} status={row.status as "active" | "paused" | "draft" | "completed" | null} sourceChannel={row.source_channel} onChanged={refetch} />
@@ -140,7 +140,7 @@ export default function AllCampaignsPage() {
             {/* Desktop: full sortable table */}
             <div className="hidden lg:block">
             <Table>
-              <TableHeader><TableRow><SortableHead sortKey="name" sortConfig={sortConfig} onSort={requestSort}>Campaign</SortableHead><SortableHead sortKey="clientName" sortConfig={sortConfig} onSort={requestSort}>Client</SortableHead><SortableHead sortKey="status" sortConfig={sortConfig} onSort={requestSort}>Status</SortableHead><SortableHead sortKey="metrics.emails_sent" sortConfig={sortConfig} onSort={requestSort} className="text-right">Sent{period === "7d" ? " (7d)" : period === "30d" ? " (30d)" : ""}</SortableHead><SortableHead sortKey="metrics.reply_rate" sortConfig={sortConfig} onSort={requestSort} className="text-right">Reply Rate</SortableHead><SortableHead sortKey="metrics.bounce_rate" sortConfig={sortConfig} onSort={requestSort} className="text-right">Bounce Rate</SortableHead><SortableHead sortKey="metrics.meetings_booked" sortConfig={sortConfig} onSort={requestSort} className="text-right">Positive</SortableHead><TableHead></TableHead></TableRow></TableHeader>
+              <TableHeader><TableRow><SortableHead sortKey="name" sortConfig={sortConfig} onSort={requestSort}>Campaign</SortableHead><SortableHead sortKey="clientName" sortConfig={sortConfig} onSort={requestSort}>Client</SortableHead><SortableHead sortKey="status" sortConfig={sortConfig} onSort={requestSort}>Status</SortableHead><SortableHead sortKey="metrics.emails_sent" sortConfig={sortConfig} onSort={requestSort} className="text-right">Sent{period === "7d" ? " (7d)" : period === "30d" ? " (30d)" : ""}</SortableHead><SortableHead sortKey="metrics.reply_rate" sortConfig={sortConfig} onSort={requestSort} className="text-right">Reply Rate</SortableHead><SortableHead sortKey="metrics.bounce_rate" sortConfig={sortConfig} onSort={requestSort} className="text-right">Bounce Rate</SortableHead><SortableHead sortKey="metrics.positive_replies" sortConfig={sortConfig} onSort={requestSort} className="text-right">Positive</SortableHead><TableHead></TableHead></TableRow></TableHeader>
               <TableBody>
                 {pageRows.map((row) => {
                   const isOrphan = row.client_id === null;
@@ -163,7 +163,7 @@ export default function AllCampaignsPage() {
                       <TableCell className="text-right font-medium">{row.metrics.emails_sent.toLocaleString()}</TableCell>
                       <TableCell className="text-right"><span className={row.metrics.reply_rate >= 5 ? "text-emerald-600 font-medium" : row.metrics.reply_rate >= 2 ? "text-amber-600" : "text-red-600"}>{row.metrics.reply_rate}%</span></TableCell>
                       <TableCell className="text-right"><span className={row.metrics.bounce_rate <= 2 ? "text-emerald-600" : "text-red-600 font-medium"}>{row.metrics.bounce_rate}%</span></TableCell>
-                      <TableCell className="text-right font-medium">{row.metrics.meetings_booked}</TableCell>
+                      <TableCell className="text-right font-medium">{row.metrics.positive_replies}</TableCell>
                       <TableCell className="w-[80px]">
                         <div className="flex items-center justify-end gap-1">
                           <Link

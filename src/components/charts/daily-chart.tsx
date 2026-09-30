@@ -48,7 +48,7 @@ export function DailyChart({
       Sent: s.emails_sent,
       Replies: s.replies,
       Bounces: s.bounces,
-      Positive: s.meetings_booked,
+      Positive: s.positive_replies,
     }));
 
   const activeSeries = series.filter((s) => SERIES_CONFIG[s]);
