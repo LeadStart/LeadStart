@@ -1,6 +1,6 @@
 # LeadStart — Project Status
 
-> Last updated: 2026-09-27
+> Last updated: 2026-09-29
 >
 > **Lean current-state index.** This file is `@`-imported by `CLAUDE.md`, so it loads into every session — keep it short. Full per-initiative write-ups, the "What's Built" tables, the file-structure tree, and the backlog detail live in [`docs/PROJECT_STATUS_ARCHIVE.md`](docs/PROJECT_STATUS_ARCHIVE.md) (read on demand — **not** auto-loaded).
 
@@ -21,6 +21,9 @@ One line each — see the linked RESUME doc (repo root) or the archive for the f
 
 ## Recently shipped
 
+- **Scrap.io search ceilings** (2026-09-29) — after ~1,800 searches locked the account on 2026-09-26, every `/gmap/*` call (app + skill) claims a slot in `scrapio_search_log` first: 150/24h, 400/7 days, 1,000/30 days; searches are never retried (migration `00135`, applied). Rule at the top of `CLAUDE.md`.
+- **Saved reply with the TuBe report link** (2026-09-29) — an owner-written reply per campaign (Setup tab) pre-fills the admin inbox with the lead's `{{report_link}}`; the PDF is opt-in, since a PDF reply landed in spam (migration `00134`, applied).
+- **`tube-pipeline` skill** (`.claude/skills/tube-pipeline/`) — the TuBe batch runbook: brief → Scrap.io pull → review → import + enrich → TuBe scan → export check → campaign load → verify.
 - **Contact-list ↔ campaign variable alignment** — CSV/CRM ↔ merge-variable alignment with a persisted per-campaign registry + fail-safe send (migration `00092`, deployed). → [archive](docs/PROJECT_STATUS_ARCHIVE.md).
 - **Google Maps prospecting vein** — second prospecting vein (Apify compass extractor), owner-name "naming" add-on, delivered-outcome ledger (migrations `00078`/`00079`/`00080`, pushed). → [`RESUME-MAPS-VEIN.md`](RESUME-MAPS-VEIN.md).
 - **Catch-all handling + found-first lists** — per-run catch-all-guess add-on + shared email-tier classifier sorting every list found-first. → [`RESUME-MAPS-VEIN.md`](RESUME-MAPS-VEIN.md) / [archive](docs/PROJECT_STATUS_ARCHIVE.md).
