@@ -6,16 +6,72 @@ import type {
   ScrapioSearchResponse,
   ScrapioSubscription,
 } from "./types";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { buildFilterParams } from "./filters";
 
 const BASE_URL = "https://scrap.io/api/v1";
 const DEFAULT_COUNTRY_CODE = "us";
 
+// Every /gmap/* call (search pages, free skip_data counts, location/type
+// lookups) counts against Scrap.io's fair-use search quota. ~1,800 of them in
+// three days locked the account on 2026-09-26 until support unlocked it. So
+// each one first claims a slot in the shared search log (migration 00135,
+// claim_scrapio_search): 150 per 24 hours, 400 per 7 days, 1,000 per 30 days
+// per organization, shared with the TuBe pipeline skill. No claim, no search.
+export type ScrapioSearchGuard = {
+  admin: SupabaseClient;
+  organizationId: string;
+  /** Who is searching, for the log, e.g. "app:cron/run-prospect-searches". */
+  source: string;
+};
+
+export class ScrapioSearchLimitError extends Error {}
+
+type SearchBudget = {
+  ok?: boolean;
+  day: number;
+  week: number;
+  month: number;
+  limits: { day: number; week: number; month: number };
+  left: number;
+};
+
 export class ScrapioClient {
   private apiKey: string;
+  private guard?: ScrapioSearchGuard;
 
-  constructor(apiKey: string) {
+  constructor(apiKey: string, guard?: ScrapioSearchGuard) {
     this.apiKey = apiKey;
+    this.guard = guard;
+  }
+
+  private async claimSearch(
+    endpoint: string,
+    searchParams?: Record<string, string | number>,
+  ): Promise<void> {
+    if (!this.guard) {
+      throw new ScrapioSearchLimitError(
+        `Scrap.io ${endpoint} not sent: this client has no search guard, and every search must be logged.`,
+      );
+    }
+    const { data, error } = await this.guard.admin.rpc("claim_scrapio_search", {
+      p_organization_id: this.guard.organizationId,
+      p_endpoint: endpoint,
+      p_source: this.guard.source,
+      p_detail: searchParams ?? null,
+    });
+    if (error || !data) {
+      throw new ScrapioSearchLimitError(
+        `Scrap.io ${endpoint} not sent: couldn't log it in the search log (${error?.message ?? "no answer"}).`,
+      );
+    }
+    const b = data as SearchBudget;
+    if (!b.ok) {
+      throw new ScrapioSearchLimitError(
+        `Scrap.io search limit reached, nothing sent: ${b.day}/${b.limits.day} in 24 hours, ` +
+          `${b.week}/${b.limits.week} in 7 days, ${b.month}/${b.limits.month} in 30 days.`,
+      );
+    }
   }
 
   private async request<T>(
@@ -31,10 +87,21 @@ export class ScrapioClient {
       : "";
     const url = `${BASE_URL}${endpoint}${qs}`;
 
+    // A search is sent once: a retry is another search against the quota.
+    // Other calls retry only a network failure or a 5xx. A 4xx is final,
+    // above all 403 (the fair-use lock) and 429: never retry into a lock.
+    const isSearch = endpoint.startsWith("/gmap/");
+    const attempts = isSearch ? 1 : 3;
     let lastError: Error | null = null;
-    for (let attempt = 0; attempt < 3; attempt++) {
+    for (let attempt = 0; attempt < attempts; attempt++) {
+      if (attempt > 0) {
+        await new Promise((r) => setTimeout(r, Math.pow(2, attempt - 1) * 1000));
+      }
+      if (isSearch) await this.claimSearch(endpoint, searchParams);
+
+      let response: Response;
       try {
-        const response = await fetch(url, {
+        response = await fetch(url, {
           ...rest,
           headers: {
             Authorization: `Bearer ${this.apiKey}`,
@@ -42,26 +109,16 @@ export class ScrapioClient {
             ...rest.headers,
           },
         });
-
-        if (response.status === 429) {
-          const delay = Math.pow(2, attempt) * 1000;
-          await new Promise((r) => setTimeout(r, delay));
-          continue;
-        }
-
-        if (!response.ok) {
-          const body = await response.text();
-          throw new Error(`Scrap.io API error ${response.status}: ${body}`);
-        }
-
-        return (await response.json()) as T;
       } catch (err) {
         lastError = err as Error;
-        if (attempt < 2) {
-          const delay = Math.pow(2, attempt) * 1000;
-          await new Promise((r) => setTimeout(r, delay));
-        }
+        continue;
       }
+
+      if (response.ok) return (await response.json()) as T;
+
+      const body = await response.text();
+      lastError = new Error(`Scrap.io API error ${response.status}: ${body}`);
+      if (response.status < 500) throw lastError;
     }
     throw lastError ?? new Error("Scrap.io API request failed");
   }

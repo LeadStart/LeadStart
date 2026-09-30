@@ -114,7 +114,11 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  const client = new ScrapioClient(apiKey);
+  const client = new ScrapioClient(apiKey, {
+    admin,
+    organizationId: search.organization_id,
+    source: "app:cron/run-prospect-searches",
+  });
   const blacklistName = `leadstart-${search.organization_id}`;
 
   const query = search.query;

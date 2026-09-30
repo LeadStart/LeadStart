@@ -34,7 +34,11 @@ export async function POST(request: NextRequest) {
       ? body.admin1_code.trim()
       : undefined;
 
-  const client = new ScrapioClient(ctx.apiKey);
+  const client = new ScrapioClient(ctx.apiKey, {
+    admin: ctx.admin,
+    organizationId: ctx.organizationId,
+    source: "app:prospecting/typeahead/location",
+  });
   const types = admin1Code ? TYPES_NARROW : TYPES_FULL;
 
   const settled = await Promise.allSettled(

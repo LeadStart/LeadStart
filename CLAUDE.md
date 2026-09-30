@@ -32,6 +32,17 @@ sourcing actor, a phase/provider, a cost, the default config, or the branch
 structure, update that data module (and re-draw its structure if the topology
 changed) in the SAME change, then run `npx tsx scripts/test-flow-map-sync.ts`.
 
+# CRITICAL: Scrap.io searches go through the guarded clients — never around them
+On 2026-09-26 throwaway scripts sent ~1,800 Scrap.io searches (whole-state "free"
+counts) in three days, and Scrap.io locked the account until support unlocked it.
+Every Scrap.io call goes through `src/lib/scrapio/client.ts` (app) or
+`.claude/skills/tube-pipeline/scripts/scrapio.mjs` (skill). Both log each `/gmap/*`
+search in `scrapio_search_log` via `claim_scrapio_search()` before sending it, and
+refuse past **150 per 24 hours, 400 per 7 days, 1,000 per 30 days** (migration 00135).
+**Never write a script that calls scrap.io directly, never loop over a state's
+cities, and ask the owner with the exact search count before any Scrap.io job.**
+Raising a ceiling = a new migration, only on the owner's explicit go.
+
 # The in-app Onboarding Preview must render the REAL client-facing surfaces
 The **Onboarding Preview** (Admin → Workflows → Onboarding) shows exactly what a
 client sees while coming aboard — the proposal email, the hosted quote page, and

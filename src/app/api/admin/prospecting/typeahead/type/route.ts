@@ -24,7 +24,11 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const client = new ScrapioClient(ctx.apiKey);
+  const client = new ScrapioClient(ctx.apiKey, {
+    admin: ctx.admin,
+    organizationId: ctx.organizationId,
+    source: "app:prospecting/typeahead/type",
+  });
   try {
     const results = await client.searchTypes(searchTerm);
     return NextResponse.json({ results });
