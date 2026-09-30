@@ -57,6 +57,7 @@ import { CampaignContactsCard, type CampaignContactRow } from "./campaign-contac
 import { StageFlowCard, type StageRow } from "./stage-flow-card";
 import { DeliverabilityCard, type DeliverabilityResult } from "./deliverability-card";
 import { DeliverabilityGateCard } from "./deliverability-gate-card";
+import { ReplyTemplateCard } from "./reply-template-card";
 
 const TIMEZONES = [
   { value: "America/Los_Angeles", label: "Pacific" },
@@ -112,6 +113,8 @@ export function CampaignDetailWorkspace({
   initialAbAutoPauseDefault,
   initialVerifyBeforeSend,
   initialVerifyFirstSendOnly,
+  initialReplyTemplate,
+  replyTokens,
   nativeStats,
   flowProgress,
   abStats,
@@ -147,6 +150,10 @@ export function CampaignDetailWorkspace({
   initialAbAutoPauseDefault: boolean;
   initialVerifyBeforeSend: boolean;
   initialVerifyFirstSendOnly: boolean;
+  // Saved reply for hot leads (campaigns.reply_template, migration 00134) and the
+  // tokens the Options tab offers for it.
+  initialReplyTemplate: string | null;
+  replyTokens: string[];
   nativeStats: NativeStatsView;
   flowProgress: FlowProgressData | null;
   abStats: AbNodeStats[];
@@ -709,6 +716,9 @@ export function CampaignDetailWorkspace({
                 </p>
               )}
             </div>
+
+            {/* Saved reply for hot leads: pre-fills the inbox reply box, per lead */}
+            <ReplyTemplateCard campaignId={campaignId} initial={initialReplyTemplate} tokens={replyTokens} />
 
             {/* Danger zone */}
             <div className="space-y-2 rounded-xl border border-red-200 bg-red-50/40 p-4">

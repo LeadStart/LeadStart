@@ -201,6 +201,11 @@ export interface Campaign {
   // send without re-verifying. Ignored when verify_before_send is false. Off by
   // default (= verify every send).
   verify_first_send_only: boolean;
+  // Owner-written saved reply for this campaign's hot leads (migration 00134).
+  // Pre-fills the admin inbox reply box, with {{tokens}} filled per lead (e.g.
+  // {{report_link}}); see src/lib/replies/saved-reply.ts. NULL = none. Optional
+  // until the migration is applied everywhere.
+  reply_template?: string | null;
   // Per-campaign Unipile account binding (migration 00046). Defaults to
   // clients.unipile_account_id but lives on the campaign so accounts can
   // rotate without invalidating campaign history.

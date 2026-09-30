@@ -375,6 +375,14 @@ export default async function AdminCampaignDetailPage({
         initialAbAutoPauseDefault={campaign.ab_auto_pause_default ?? false}
         initialVerifyBeforeSend={campaign.verify_before_send ?? true}
         initialVerifyFirstSendOnly={campaign.verify_first_send_only ?? false}
+        initialReplyTemplate={campaign.reply_template ?? null}
+        replyTokens={[
+          "first_name",
+          ...["report_link", "firm"].filter((t) =>
+            (campaign.variables ?? []).some((v) => v.kind === "custom" && v.token === t),
+          ),
+          "signature",
+        ]}
         nativeStats={{
           sent: nativeStats.sent,
           replied: nativeStats.replied,

@@ -12,3 +12,9 @@ For the LeadStart AI reply-routing pipeline: Claude is used for **classification
 - When building anything touching `/client/inbox/[id]` composer, `/api/replies/[id]/send`, or future reply-routing commits: no `/draft` endpoint, no Sonnet, no "Generate draft" button, no "Regenerate" button, no auto-complete on the textarea.
 - `LeadReply.draft_*` fields are gone from `src/types/app.ts`. The DB columns in migration `00025_create_reply_pipeline.sql` are unused — don't re-adopt them for drafter state; if a `DROP COLUMN` migration is ever run, that's cleanup, not scope reduction.
 - Haiku classifier in [`src/lib/ai/classifier.ts`](../src/lib/ai/classifier.ts) is the only approved Claude usage in this pipeline. Adding a new Claude call anywhere in the reply path requires explicit user approval.
+
+**Owner-written saved replies are allowed (owner request, 2026-09-29).** A campaign can store a saved reply for its hot leads (`campaigns.reply_template`, migration 00134), and the admin inbox reply box opens with it.
+- Its `{{tokens}}` fill per lead through the same `buildTokenMap`/`applyTokens` pass as campaign copy. `{{report_link}}` gives each TuBe prospect their own report link.
+- It is **not** AI drafting: the owner writes the words once, nothing is generated, a person reads the reply before sending, and Send stays blocked while any `{{token}}` is still unfilled.
+- The no-AI rule above stands: no model may write or suggest reply text.
+- See `src/lib/replies/saved-reply.ts`.

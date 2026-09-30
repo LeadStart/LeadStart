@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import {
   Select,
@@ -24,6 +24,7 @@ import {
   CheckCircle2,
   Paperclip,
   X,
+  Link2,
 } from "lucide-react";
 import type { ReplyClass, ReplyOutcome, ReplyStatus, ReplyReferralContact, SourceChannel } from "@/types/app";
 import { PORTAL_NO_REPLY_CLASSES } from "@/types/app";
@@ -448,14 +449,26 @@ function AdminThread({
 // signature (same resolver campaign sends use) so the reply signs as the
 // identity the lead has been talking to.
 //
-// Attachments: when the lead's contact carries a report link (TuBe campaigns,
-// see src/lib/replies/report-attachment.ts) the composer pre-attaches that
-// lead's own report PDF; the server fetches it at send time. Hand-picked files
-// can be added too (3 MB total, sent base64 in the request).
+// The lead's report: when their contact carries a report link (TuBe campaigns,
+// see src/lib/replies/report-attachment.ts) the composer offers the LINK. A
+// report PDF attached to a reply landed in spam (2026-09-29), so the PDF is an
+// opt-in extra, fetched by the server at send time. Hand-picked files can be
+// added too (3 MB total, sent base64 in the request).
+//
+// Saved reply: when the reply's campaign has one (campaigns.reply_template,
+// migration 00134), the box opens with it, filled in for this lead
+// ({{report_link}} → their link). The owner wrote the words; Send stays blocked
+// while any {{token}} is still unfilled.
 type ReportLookup =
   | { state: "loading" }
-  | { state: "none" }
-  | { state: "ready"; filename: string; link: string };
+  | {
+      state: "done";
+      link: string | null;
+      /** PDF filename when the report PDF can be attached, else null. */
+      pdf: string | null;
+      savedReply: { body: string; missing: string[]; signed: boolean } | null;
+    };
+const UNFILLED_TOKEN = /\{\{[^{}]+\}\}/;
 
 const MAX_UPLOAD_BYTES = 3 * 1024 * 1024;
 
@@ -481,13 +494,16 @@ function AdminComposer({
 }) {
   const senderName = reply.mailbox?.display_name?.trim() || reply.mailbox?.email_address || "";
   const signature = reply.mailbox ? resolveSignature(reply.mailbox.signature, senderName) : "";
+  const initialBody = signature ? `\n\n${signature}` : "";
   const [open, setOpen] = useState(false);
-  const [bodyText, setBodyText] = useState(signature ? `\n\n${signature}` : "");
+  const [bodyText, setBodyText] = useState(initialBody);
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [report, setReport] = useState<ReportLookup>({ state: "loading" });
-  const [attachReport, setAttachReport] = useState(true);
+  const [attachReport, setAttachReport] = useState(false);
   const [uploads, setUploads] = useState<File[]>([]);
+  const textRef = useRef<HTMLTextAreaElement | null>(null);
+  const prefilled = useRef(false);
 
   const isSent = reply.status === "sent";
   const isSendable = reply.status === "new" || reply.status === "classified";
@@ -496,6 +512,7 @@ function AdminComposer({
   const canReply = isSendable && !noReply && nativeReady;
   // The textarea opens prefilled with just the signature; require real text above it.
   const hasMessage = bodyText.trim() !== "" && bodyText.trim() !== signature.trim();
+  const unfilled = bodyText.match(UNFILLED_TOKEN)?.[0] ?? null;
 
   const baseSubject = (reply.subject ?? "").trim();
   const subject = !baseSubject
@@ -511,15 +528,46 @@ function AdminComposer({
       .then((r) => r.json())
       .then((j) => {
         if (cancelled) return;
-        setReport(j.available ? { state: "ready", filename: j.filename, link: j.link } : { state: "none" });
+        setReport({
+          state: "done",
+          link: typeof j.link === "string" ? j.link : null,
+          pdf: j.available ? (j.filename ?? "report.pdf") : null,
+          savedReply: j.saved_reply ?? null,
+        });
       })
       .catch(() => {
-        if (!cancelled) setReport({ state: "none" });
+        if (!cancelled) setReport({ state: "done", link: null, pdf: null, savedReply: null });
       });
     return () => {
       cancelled = true;
     };
   }, [reply.id, canReply]);
+
+  // Open with the campaign's saved reply, once, if nothing has been typed yet.
+  useEffect(() => {
+    if (report.state !== "done" || !report.savedReply || prefilled.current) return;
+    prefilled.current = true;
+    const saved = report.savedReply;
+    setBodyText((cur) =>
+      cur !== initialBody ? cur : saved.signed || !signature ? saved.body : `${saved.body}\n\n${signature}`,
+    );
+  }, [report, initialBody, signature]);
+
+  // Put the report link where the cursor is (or at the top, above the signature).
+  function insertLink() {
+    if (report.state !== "done" || !report.link) return;
+    const link = report.link;
+    const el = textRef.current;
+    const at = el && document.activeElement === el ? el.selectionStart : 0;
+    const end = el && document.activeElement === el ? el.selectionEnd : 0;
+    const next = bodyText.slice(0, at) + link + bodyText.slice(end);
+    setBodyText(next);
+    requestAnimationFrame(() => {
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(at + link.length, at + link.length);
+    });
+  }
 
   const uploadBytes = uploads.reduce((n, f) => n + f.size, 0);
   function addFiles(list: FileList | null) {
@@ -539,7 +587,7 @@ function AdminComposer({
     .filter((a, i, all) => all.indexOf(a) === i);
 
   async function send() {
-    if (!hasMessage || sending) return;
+    if (!hasMessage || sending || unfilled) return;
     setSending(true);
     setSendError(null);
     try {
@@ -555,7 +603,7 @@ function AdminComposer({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           body_text: bodyText,
-          attach_report: report.state === "ready" && attachReport,
+          attach_report: report.state === "done" && !!report.pdf && attachReport,
           attachments,
         }),
       });
@@ -598,7 +646,7 @@ function AdminComposer({
         className="inline-flex items-center gap-1.5 rounded-lg bg-[#2E37FE] px-4 py-2 text-sm font-bold text-white cursor-pointer"
       >
         <Send size={14} /> Reply for {reply.client?.name ?? "client"}
-        {report.state === "ready" && <span className="font-medium opacity-80">· report ready</span>}
+        {report.state === "done" && report.link && <span className="font-medium opacity-80">· report link ready</span>}
       </button>
     );
   } else if (canReply) {
@@ -625,6 +673,7 @@ function AdminComposer({
         <textarea
           autoFocus
           ref={(el) => {
+            textRef.current = el;
             // Put the cursor above the prefilled signature on first open.
             if (el && el.dataset.placed !== "1") {
               el.dataset.placed = "1";
@@ -643,27 +692,47 @@ function AdminComposer({
           {report.state === "loading" && (
             <span className="text-[11.5px] text-muted-foreground">Checking for this lead&apos;s report…</span>
           )}
-          {report.state === "ready" && (
-            <span
-              className={`inline-flex max-w-full items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[11.5px] ${
-                attachReport
-                  ? "border-[#2E37FE]/30 bg-[#2E37FE]/[0.07] text-foreground"
-                  : "border-dashed border-border text-muted-foreground"
-              }`}
-            >
-              <Paperclip size={12} className="shrink-0 text-[#2E37FE]" />
-              <span className="truncate font-medium">{report.filename}</span>
+          {report.state === "done" && report.link && (
+            <span className="inline-flex max-w-full items-center gap-1.5 rounded-lg border border-[#2E37FE]/30 bg-[#2E37FE]/[0.07] px-2.5 py-1 text-[11.5px] text-foreground">
+              <Link2 size={12} className="shrink-0 text-[#2E37FE]" />
+              <span className="font-medium">Report link</span>
               <a href={report.link} target="_blank" rel="noreferrer" className="text-[#2E37FE] hover:underline">
                 View
               </a>
-              <button
-                onClick={() => setAttachReport((v) => !v)}
-                disabled={sending}
-                className="font-semibold text-muted-foreground hover:text-foreground cursor-pointer"
-              >
-                {attachReport ? "Remove" : "Attach"}
-              </button>
+              {bodyText.includes(report.link) ? (
+                <span className="font-semibold text-emerald-700">in your reply</span>
+              ) : (
+                <button
+                  onClick={insertLink}
+                  disabled={sending}
+                  className="font-semibold text-[#2E37FE] hover:underline cursor-pointer"
+                >
+                  Insert link
+                </button>
+              )}
             </span>
+          )}
+          {report.state === "done" && report.pdf && (
+            <button
+              onClick={() => setAttachReport((v) => !v)}
+              disabled={sending}
+              title="Attached report PDFs have landed in spam; the link is the safer default."
+              className={`inline-flex max-w-full items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[11.5px] cursor-pointer ${
+                attachReport
+                  ? "border-[#2E37FE]/30 bg-[#2E37FE]/[0.07] text-foreground"
+                  : "border-dashed border-border text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Paperclip size={12} className="shrink-0" />
+              {attachReport ? (
+                <>
+                  <span className="truncate font-medium">{report.pdf}</span>
+                  <span className="font-semibold">Remove</span>
+                </>
+              ) : (
+                <span className="font-semibold">Also attach the PDF</span>
+              )}
+            </button>
           )}
           {uploads.map((f, i) => (
             <span
@@ -701,6 +770,14 @@ function AdminComposer({
             <span className="text-[11px] text-muted-foreground">{formatBytes(uploadBytes)} of 3 MB</span>
           )}
         </div>
+        {unfilled && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+            {report.state === "done" && report.savedReply?.missing.length
+              ? `This lead has no ${report.savedReply.missing.map((t) => `{{${t}}}`).join(", ")}. `
+              : ""}
+            Replace {unfilled} before sending.
+          </div>
+        )}
         {sendError && (
           <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-900">{sendError}</div>
         )}
@@ -714,7 +791,7 @@ function AdminComposer({
           </button>
           <button
             onClick={send}
-            disabled={!hasMessage || sending}
+            disabled={!hasMessage || sending || !!unfilled}
             className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-[#2E37FE] px-4 py-2 text-sm font-bold text-white cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Send size={14} /> {sending ? "Sending…" : "Send reply"}

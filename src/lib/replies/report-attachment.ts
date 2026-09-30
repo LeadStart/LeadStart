@@ -12,6 +12,7 @@
 
 import type { createAdminClient } from "@/lib/supabase/admin";
 import type { EmailAttachment } from "@/lib/gmail/mime";
+import type { TokenContact } from "@/lib/native/tokens";
 
 type Admin = ReturnType<typeof createAdminClient>;
 
@@ -42,9 +43,15 @@ interface ReplyRef {
   lead_email: string | null;
 }
 
+/** The contact behind a reply, with the columns {{tokens}} read. */
+export interface ReplyContact extends TokenContact {
+  id: string;
+}
+const CONTACT_COLS = "id, first_name, last_name, company_name, title, intro_line, email, phone, custom_fields";
+
 // The contact behind a reply: the native send that opened this Gmail thread,
 // else the campaign contact with the lead's email.
-async function findContactFields(admin: Admin, reply: ReplyRef): Promise<Record<string, unknown> | null> {
+export async function findReplyContact(admin: Admin, reply: ReplyRef): Promise<ReplyContact | null> {
   let contactId: string | null = null;
   if (reply.gmail_thread_id) {
     const { data } = await admin
@@ -57,25 +64,30 @@ async function findContactFields(admin: Admin, reply: ReplyRef): Promise<Record<
     contactId = (data as { contact_id: string | null } | null)?.contact_id ?? null;
   }
   if (contactId) {
-    const { data } = await admin.from("contacts").select("custom_fields").eq("id", contactId).maybeSingle();
-    if (data) return ((data as { custom_fields: Record<string, unknown> | null }).custom_fields ?? null);
+    const { data } = await admin.from("contacts").select(CONTACT_COLS).eq("id", contactId).maybeSingle();
+    if (data) return data as ReplyContact;
   }
   if (reply.campaign_id && reply.lead_email) {
     const { data } = await admin
       .from("contacts")
-      .select("custom_fields")
+      .select(CONTACT_COLS)
       .eq("campaign_id", reply.campaign_id)
       .ilike("email", reply.lead_email)
       .limit(1)
       .maybeSingle();
-    if (data) return ((data as { custom_fields: Record<string, unknown> | null }).custom_fields ?? null);
+    if (data) return data as ReplyContact;
   }
   return null;
 }
 
 /** The lead's report, if their contact carries a usable report_link. */
 export async function findReplyReport(admin: Admin, reply: ReplyRef): Promise<ReplyReport | null> {
-  const fields = await findContactFields(admin, reply);
+  const contact = await findReplyContact(admin, reply);
+  return reportFromFields(contact?.custom_fields ?? null);
+}
+
+/** The report behind a contact's custom fields: its link, and the URL of its PDF. */
+export function reportFromFields(fields: Record<string, unknown> | null): ReplyReport | null {
   const raw = fields?.[REPORT_LINK_FIELD];
   if (typeof raw !== "string" || !raw.trim()) return null;
   let url: URL;
