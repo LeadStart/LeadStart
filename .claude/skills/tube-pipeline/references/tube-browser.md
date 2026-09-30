@@ -60,7 +60,7 @@ t ? 'switched' : `no Prospecting tab (signed out?) at ${location.href}`
 
 An `ERROR: …` answer means nothing was checked. Don't save it.
 
-## §3 Upload + scan (only after the owner's go)
+## §3 Upload + scan (after the owner's go on the scan's cost; the upload itself is pre-approved)
 
 **A. Tag the scan's hidden file input.** The "Upload CSV" button opens one of three hidden file inputs. This snippet intercepts its click to learn which one, and labels it:
 
@@ -137,7 +137,11 @@ error ? error.message : JSON.stringify({
 - A scan job marked `dead` after 2 attempts means the worker gave up on it. The two stuck 2026-09-25 jobs ended that way, while their rows sat on "Running" until the worker's clean-up shipped.
 - Only Michael has Render access.
 
-## §5 Export for outreach (only after the owner's go to download)
+## §5 Export for outreach (the download is pre-approved: owner, 2026-09-30)
+
+Two traps (both hit on 2026-09-30):
+- **Reload before exporting.** The export is built from the page's loaded list. A page opened while scans were finishing exported 19 finished firms as "not finished" (UNSCANNED, in the review list). Re-open the page (§1) once `open` is 0, check that the batch line says "N done", then export.
+- **One automatic download per tab.** Chrome blocks a second scripted download from the same tab, silently if the window is minimized. Do each export from a fresh tab: `tabs_create_mcp`, then §1, then the click. Then check `ls -t ~/Downloads/*-outreach*.zip`; a repeat name lands as `… (1).zip`.
 
 ```js
 const LABEL = '9/25/2026, 12:49:59 PM';

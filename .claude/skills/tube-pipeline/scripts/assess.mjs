@@ -7,18 +7,18 @@
 //   4. money and Scrap.io usage against the budget, the credit cap and the search ceilings;
 //   5. the quality checks that ran, and what they found;
 //   6. what's held or open, by name, and what each needs;
-//   7. timing in the campaign: the queue, start dates, when a held scan is due;
+//   7. timing in the campaign: the queue and when this run's firms start;
 //   8. incidents and deviations from the brief;
 //   9. a comparison with the last finished run.
 // It works at any step. Run it at the end of every run (--final), and whenever a
-// run pauses, e.g. a scan held until nearer the send date. Read-only on the
+// run stops to wait for the owner's go. Read-only on the
 // database. It writes <run>/assessment.md and stamps the ledger.
 //
 //   node .claude/skills/tube-pipeline/scripts/assess.mjs --run <name>          where it stands now
 //   node .claude/skills/tube-pipeline/scripts/assess.mjs --run <name> --final  at the end of the run
 import {
   ORG_ID, STEPS, addWeekdays, args, existsSync, findEnrichmentRun, fmtTally, getAll, getIn, join, listRuns, main, nextStep,
-  readJson, readRun, rest, runDir, stamp, tally, writeFileSync,
+  readCsv, readJson, readRun, rest, runDir, stamp, tally, writeFileSync,
 } from "./lib.mjs";
 
 const n = (x) => (x == null || !Number.isFinite(Number(x)) ? "—" : Number(x).toLocaleString("en-US"));
@@ -36,6 +36,15 @@ const label = (k) => REVIEW_LABEL[k] ?? String(k).replace(/_/g, " ");
 /** A held row's issue as a short kind, without names or addresses (for tallies). */
 const issueKind = (t) => /^wrong person\?/i.test(t) ? "wrong person? (the address doesn't look like the owner's)"
   : String(t).replace(/"[^"]*"/g, "…").replace(/[\w.+-]+@[\w.-]+/g, "…").replace(/\s*\(the subject and body print it\)/, "").replace(/\s+/g, " ").trim();
+const FLAG_LABEL = {
+  published_address: "owner's address read off the firm's site, on a catch-all domain (watch its bounces)",
+  keyword_firm_name: "firm name ends like a search listing (validation will hold it)",
+  email_person_mismatch: "the address looks like someone else's, not the owner's (validation will hold it)",
+  email_off_domain: "email on another firm-looking domain than the website (right person?)",
+  caps_listing_name: "Google listing name in ALL CAPS (check it's the real firm name)",
+  generic_listing_name: "Google listing name is only search words ({{firm}} would read like a keyword)",
+  odd_first_name: "odd first name (caps, an initial, digits)",
+};
 // Each list is printed in full up to this many names, then counted.
 const LIST_MAX = 25;
 
@@ -67,7 +76,6 @@ main(async () => {
   const sheetDropped = (upRep?.dropped ?? []).filter((d) => !(rebuilt && d.reason === "in_campaign"));
   const heldRows = (validation?.results ?? []).filter((r) => r.issues?.length);
   const heldKinds = heldRows.length ? tally(heldRows.flatMap((r) => [...new Set(r.issues.map(issueKind))])) : (s.validate?.issue_kinds ?? {});
-  const heldScan = brief?.pace?.scan === "hold_until_near_send";
   const campaignId = run.campaign_id ?? brief?.campaign?.id ?? null;
   const [campaign] = campaignId ? await rest(`campaigns?select=id,name,status,daily_new_leads_cap&id=eq.${campaignId}`) : [];
 
@@ -78,7 +86,7 @@ main(async () => {
     s.source_review ? "done" : bySkill ? "to do" : "outside the skill",
     s.enrich_done ? "done" : s.enrich_start ? "running" : s.source_import ? "imported, not enriched" : bySkill ? "to do" : "outside the skill",
     u ? (u.checked_tube ? "done" : "sheet built, TuBe not checked") : "to do",
-    u?.checked_tube && u.to_upload === 0 ? "done" : s.scan ? "running" : heldScan && (s.enrich_done || u) ? "held on purpose" : "to do",
+    u?.checked_tube && u.to_upload === 0 ? "done" : s.scan ? "running" : "to do",
     s.validate ? "done" : "to do",
     s.import ? "done" : "to do",
     s.verify ? (s.verify.with_problems ? "PROBLEMS" : "done") : "to do",
@@ -87,7 +95,6 @@ main(async () => {
   const status = s.source_pull?.stopped ? "STOPPED"
     : s.verify && !s.verify.with_problems ? "COMPLETE"
     : s.verify ? "COMPLETE WITH PROBLEMS"
-    : state[5] === "held on purpose" && !s.validate ? "PAUSED ON PURPOSE (scan held)"
     : "IN PROGRESS";
   const next = nextStep(run, brief);
 
@@ -151,6 +158,10 @@ main(async () => {
     };
   }
 
+  // Firms the owner kept by hand at review that made it into the sheet.
+  const sheetDomains = existsSync(join(dir, "sheet.csv")) ? new Set(readCsv(join(dir, "sheet.csv")).map((r) => String(r.domain ?? "").toLowerCase())) : new Set();
+  const keptInSheet = (s.source_review?.kept_by_hand ?? []).filter((d) => sheetDomains.has(String(d).toLowerCase()));
+
   // ── the last finished run, for comparison ──
   const prior = listRuns().filter((r) => r.name !== a.run && (r.run.stages?.verify || r.run.stages?.import))
     .map((r) => ({ name: r.name, run: r.run, brief: existsSync(join(r.dir, "brief.json")) ? readJson(join(r.dir, "brief.json")) : null }))[0] ?? null;
@@ -200,7 +211,7 @@ main(async () => {
     rows.push(["Who gets emailed", `${brief.who?.personal_email_only ? "named owner, verified or published personal email" : "any address"}; ${(brief.who?.segments ?? []).join(", ")}`,
       s.validate ? `${n(s.validate.send_rows)} on TuBe's send list, ${n(s.validate.validated)} clean` : "—", "·"]);
     rows.push(["Campaign", brief.campaign?.name ?? "?", campaign ? `${campaign.name} (${campaign.status})${s.import ? `: ${n(s.import.enrolled)} enrolled` : ""}` : "—", ok(campaign ? campaign.id === brief.campaign?.id : null)]);
-    rows.push(["Pace", brief.pace?.start ?? "—", state[5] === "held on purpose" ? "scan held, as planned" : s.import ? `enrolled ${day(s.import.at)}` : "—", "·"]);
+    rows.push(["Pace", brief.pace?.start ?? "—", s.import ? `enrolled ${day(s.import.at)}` : "—", "·"]);
     rows.push(["Flagged firms", brief.flagged === "hold" ? "hold for review" : "skip", s.validate ? `${n(s.validate.held)} held at validation` : u ? `${n((upRep?.flags ?? []).length)} flagged in the sheet` : "—", "·"]);
     T(["", "Brief", "Outcome", ""], rows);
   }
@@ -217,14 +228,17 @@ main(async () => {
   if (s.source_import) row("3", "Imported into LeadStart", s.source_review?.kept, s.source_import.inserted, `${n(s.source_import.skipped_duplicates)} already in Contacts`);
   if (s.source_import) row("3", "…of which set aside (weak email host)", s.source_import.inserted, s.source_import.pooled, "kept out of campaigns until released (Contacts → Enrich)");
   if (s.enrich_done) {
-    row("3", "Enriched", s.enrich_start?.contacts, s.enrich_done.firms, `${n(s.enrich_done.named)} owner named · ${n(s.enrich_done.verified)} verified personal email`);
-    row("3", "TuBe-ready after enrichment", s.enrich_done.firms, s.enrich_done.tube_ready, "the rest: no named owner, or no verified/published personal email");
+    const enriched = s.enrich_start?.contacts ?? s.enrich_done.firms - s.enrich_done.pooled;
+    row("3", "Enriched (owner names + emails)", s.enrich_done.firms, enriched, `${n(s.enrich_done.pooled)} set aside as weak email hosts, not enriched`);
+    row("3", "…owner named", enriched, s.enrich_done.named, "no owner found for the rest");
+    row("3", "…verified personal email", enriched, s.enrich_done.verified, "no verified personal address for the rest");
+    row("3", "TuBe-ready after enrichment", s.enrich_done.firms, s.enrich_done.tube_ready, "the in-app rule: a named owner with a verified personal email (or their own address published on the site) and a specific practice area");
   } else if (enrichLive) row("3", `Enrichment ${enrichLive.status}/${enrichLive.phase}`, enrichLive.total_count, enrichLive.processed_count, `${n(enrichLive.found_names_count)} names · ${n(enrichLive.found_verified_count)} verified so far`);
   else if (!bySkill && outcome.ready_after_enrichment) row("3", "TuBe-ready (outside the skill)", outcome.kept_after_review, outcome.ready_after_enrichment, "");
   if (u) {
     const skipT = tally((upRep?.handoff_skipped ?? []).map((x) => x.label ?? x.reason));
     const dropT = tally(sheetDropped.map((x) => x.label ?? x.reason));
-    row("4", "In the TuBe upload sheet", u.firms, sheetKept, [fmtTally(skipT), Object.keys(dropT).length ? `dropped: ${fmtTally(dropT)}` : ""].filter((x) => x && x !== "none").join(" · ") + (rebuilt ? ` (sheet rebuilt after the import; its ${ownDrops.length} enrolled firms counted in)` : ""));
+    row("4", "In the TuBe upload sheet", u.firms, sheetKept, [fmtTally(skipT), Object.keys(dropT).length ? `dropped: ${fmtTally(dropT)}` : ""].filter((x) => x && x !== "none").join(" · ") + (rebuilt ? ` (sheet rebuilt after the import; its ${ownDrops.length} enrolled firms counted in)` : "") + (keptInSheet.length ? ` · includes ${keptInSheet.length} you kept by hand at review (${keptInSheet.join(", ")})` : ""));
     row("5", "Scanned in TuBe", sheetKept, u.checked_tube ? u.already_scanned + ownDrops.length : null, u.checked_tube ? `${n(u.to_upload)} still to scan${u.tube_check?.errors ? ` · ${u.tube_check.errors} failed` : ""}${u.tube_check?.nopdf ? ` · ${u.tube_check.nopdf} without a PDF` : ""}` : "not checked yet");
   }
   if (s.validate) {
@@ -277,6 +291,7 @@ main(async () => {
   }
   if (s.source_review) q(true, "Review exclusions applied", `${n(s.source_review.dropped)} dropped${s.source_review.forced_keep || s.source_review.forced_drop ? ` (${s.source_review.forced_keep} kept and ${s.source_review.forced_drop} dropped by hand)` : ""}`);
   if (s.source_import) q(true, "Weak email hosts set aside at import", `${n(s.source_import.pooled)} firms`);
+  if (s.enrich_done && s.enrich_start?.estimate_usd != null) q(s.enrich_done.enrichment_usd <= s.enrich_start.estimate_usd * 1.25, "Enrichment cost inside its estimate", `${usd(s.enrich_done.enrichment_usd)} vs ${usd(s.enrich_start.estimate_usd)} estimated, ${n(s.enrich_done.minutes)} minutes`);
   if (u) q(u.checked_tube ? true : null, "Checked which firms TuBe already scanned (no double billing)", u.checked_tube ? `${n(u.already_scanned + ownDrops.length)} of ${n(sheetKept)} scanned` : "not yet");
   if (u) q(true, "Integrity drops (in the campaign, same firm, other campaigns, emailed, DNC, other client, suppressed, undeliverable, pooled)", `${n(sheetDropped.length)} dropped`);
   if (s.validate) q(s.validate.reports_checked, "Every send row checked against our sheet, the export contract and its TuBe report page", `${n(s.validate.held)} held`);
@@ -296,10 +311,18 @@ main(async () => {
       P(`  - ${label(reason)} (${items.length}): ${items.slice(0, LIST_MAX).map((e) => `${e.name}${e.city ? ` (${e.city})` : ""}`).join("; ")}${items.length > LIST_MAX ? `; … ${items.length - LIST_MAX} more` : ""}`);
     }
   }
-  if (s.source_review?.kept_by_hand?.length) { any = true; P(`- **Kept by hand at review (${s.source_review.kept_by_hand.length})**, overruling the rules: ${s.source_review.kept_by_hand.join(", ")}`); }
+  if (s.source_review?.kept_by_hand?.length) { any = true; P(`- **Kept by hand at review (${s.source_review.kept_by_hand.length})**, overruling the rules: ${s.source_review.kept_by_hand.join(", ")}${u ? `. In the sheet: ${keptInSheet.length ? keptInSheet.join(", ") : "none"}; the rest had no named owner or verified personal email` : ""}`); }
   if (s.source_import?.pooled) { any = true; P(`- **Set aside as weak email hosts: ${n(s.source_import.pooled)}.** Not enriched, not emailed. Release them in Contacts → Enrich if you want them worked.`); }
   if (sheetDropped.length) { any = true; P(`- **Dropped from the sheet (${sheetDropped.length}):**`); list(sheetDropped, (d) => `${d.company} (${d.domain}): ${d.label ?? d.reason}`); }
-  if (upRep?.flags?.length && !s.validate) { any = true; P(`- **Flagged in the sheet for a look (${upRep.flags.length}):**`); list(upRep.flags, (f) => `${f.company} (${f.domain}): ${f.flags.join(", ")}`); }
+  if (upRep?.flags?.length && !s.validate) {
+    any = true;
+    P(`- **Flagged in the sheet for a look (${upRep.flags.length} firms):**`);
+    const byFlag = {};
+    for (const x of upRep.flags) for (const fl of x.flags) (byFlag[fl] ??= []).push(x);
+    for (const [fl, xs] of Object.entries(byFlag).sort((p, q) => q[1].length - p[1].length)) {
+      P(`  - ${FLAG_LABEL[fl] ?? fl} (${xs.length}): ${xs.slice(0, LIST_MAX).map((x) => `${x.company} (${x.domain})`).join("; ")}${xs.length > LIST_MAX ? `; … ${xs.length - LIST_MAX} more` : ""}`);
+    }
+  }
   if (u?.tube_check?.errors || u?.tube_check?.nopdf) { any = true; P(`- **TuBe:** ${n(u.tube_check.errors ?? 0)} failed scans (re-run needs your go) · ${n(u.tube_check.nopdf ?? 0)} reports without a PDF (answer their hot leads with the link).`); }
   if (heldRows.length) { any = true; P(`- **Held at validation (${heldRows.length})**, each needs a fix in TuBe, a re-scan you approve, or a skip:`); list(heldRows, (r) => `${r.company} (${r.domain}, ${r.segment}): ${r.issues.join(" | ")}`); }
   if (importPlan?.skipped?.length) { any = true; P(`- **Skipped at the import (${importPlan.skipped.length}):**`); list(importPlan.skipped, (x) => `${x.company} (${x.domain}): ${x.label ?? x.reason}`); }
@@ -313,9 +336,7 @@ main(async () => {
     P(`- **The current queue clears around ${day(timing.clears)}.**`);
     if (timing.mine) P(`- **This run's firms:** ${n(timing.mine)} still waiting · first starts around ${day(timing.firstStart)} · last around ${day(timing.lastStart)}.`);
     else if (!s.import) {
-      const scanBy = new Date(Math.max(Date.now(), timing.clears.getTime() - 7 * 864e5));
       P(`- **This run's firms aren't enrolled yet.** Enrolled now, they'd start after the queue, around ${day(timing.clears)}.`);
-      if (heldScan) P(`- **Held scan is due around ${day(scanBy)}**: scan, export, validate and enroll then, so the AI answers the emails quote are about a week old when they send.`);
     }
     if (live) P(`- **So far:** ${n(live.emailed)} of ${n(live.ids.length)} emailed · ${n(live.replied)} replied · ${n(live.unsubscribed)} unsubscribed · ${n(live.bounced)} bounced · enrollments ${fmtTally(live.byStatus)}.`);
   } else P("- No campaign attached yet.");

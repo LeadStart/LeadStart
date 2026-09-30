@@ -248,14 +248,12 @@ export function nextStep(run, brief) {
   if (s.enrich_start && !s.enrich_done) return "Step 3: enrichment running: enrich-watch.mjs --run <name> (--follow in the background), then enrich-report.mts";
   const u = s.upload;
   if (!u) return "Step 4: build-upload.mts --run <name>";
-  const held = brief.pace?.scan === "hold_until_near_send";
-  if (!u.checked_tube) return `Step 4: run tube-check.js on the TuBe admin page, save its output as tube-scanned.json, re-run build-upload.mts${held ? " (can wait until just before the held scan)" : ""}`;
+  if (!u.checked_tube) return `Step 4: run tube-check.js on the TuBe admin page, save its output as tube-scanned.json, re-run build-upload.mts`;
   if (u.to_upload > 0 && !s.scan) {
-    if (held) return `Held on purpose (the brief): scan the ${u.to_upload} firms in TuBe about a week before they'd reach Email 1 (assess.mjs shows the date), then step 5 with the owner's go`;
-    return `Step 5: upload tube-upload-<run>.csv (${u.to_upload} firms) in TuBe; needs the owner's go (TuBe's estimate ${(u.to_upload * 0.034).toFixed(2)} dollars)`;
+    return `Step 5: upload tube-upload-<run>.csv (${u.to_upload} firms) in TuBe; needs the owner's go on the cost (TuBe's estimate ${(u.to_upload * 0.034).toFixed(2)} dollars)`;
   }
   if (u.to_upload > 0 && s.scan) return "Step 5: scan running or done; re-run tube-check.js + build-upload.mts until the upload file is empty, then export";
-  if (!s.validate) return `Step 6: export ${(u.tube_batches ?? []).map((b) => `"${b.label}"`).join(", ") || "the batch"} in TuBe (owner's go to download), then validate-export.mjs --zip <file>`;
+  if (!s.validate) return `Step 6: export ${(u.tube_batches ?? []).map((b) => `"${b.label}"`).join(", ") || "the batch"} in TuBe (the download is pre-approved), then validate-export.mjs --zip <file>`;
   if (!s.import) return `Step 7: import-campaign.mts dry run → owner's go → --apply (${s.validate.validated} validated, ${s.validate.held} held)`;
   if (!s.verify) return "Step 8: verify-campaign.mts --run <name>";
   if (s.verify.with_problems) return `Fix: verify found ${s.verify.with_problems} contacts with problems, then re-run verify-campaign.mts`;

@@ -18,8 +18,8 @@ Everything below was learned running the first batches (Sept 2026). The scripts 
 | 2 | Review the pull | `source-review.mts` | the owner looks at every dropped firm |
 | 3 | Import + enrich in LeadStart (owner names, verified emails) | `source-import.mts`, `enrich.mts`, `enrich-watch.mjs`, `enrich-report.mts` | **yes**: the import, then the enrichment cost |
 | 4 | Integrity check + TuBe upload sheet | `build-upload.mts` + `tube-check.js` in the TuBe page | no (read-only) |
-| 5 | Upload + scan in TuBe | Claude in Chrome on the TuBe admin page | **yes**: money, and uploads prospect data |
-| 6 | Export + validate | Chrome download, then `validate-export.mjs` | **yes**: a file download |
+| 5 | Upload + scan in TuBe | Claude in Chrome on the TuBe admin page | **yes**: the scan's cost (the upload itself is pre-approved) |
+| 6 | Export + validate | Chrome download, then `validate-export.mjs` | no: the download is pre-approved |
 | 7 | Load into the campaign | `import-campaign.mts`: dry run, then `--apply` | **yes**: enrolls real people in a live campaign |
 | 8 | Verify | `verify-campaign.mts` | no |
 | 9 | **Completion assessment** for the owner | `assess.mjs --run <name> --final` (and interim at every pause) | no: it's the report the owner asked for |
@@ -33,6 +33,8 @@ When the firms are already in LeadStart and enriched (an in-app Apify search, a 
 These are the owner's standing rules, and each one exists because something went wrong without it. Restate them with every brief.
 
 - **Every go is for one batch and one step.** Ask with exact counts and cost. Approval for one step or batch never carries to the next.
+- **Downloads and uploads between LeadStart and TuBe are pre-approved.** Owner, 2026-09-30: "downloading and uploading from leadstart and tuBe is acceptable". That covers the TuBe CSV upload, the TuBe "Export for outreach" zip, and moving files between the two apps. Don't ask for them; name the file in the report instead. Money (enrichment, scans) and enrolling people in a campaign still need the owner's go.
+- **Run straight through.** Do each step as soon as the owner approves it. Never suggest holding a step for timing, e.g. "scan nearer the send date", and never tell the owner a step is "due" later. (Owner, 2026-09-30, after exactly that: "scan it now, why would you tell me when it's due?")
 - **Exact counts, never "some".** Every line a batch will send must be true for every recipient.
 - **Outside services.**
   - Ask before any bulk call to Scrap.io, Apify, DataForSEO or Million Verifier, even a free one, with the number of calls.
@@ -171,9 +173,9 @@ npx tsx .claude/skills/tube-pipeline/scripts/build-upload.mts --run <name> --tag
 
 Read the flags to the owner by name.
 
-## Step 5: upload + scan in TuBe (owner's go)
+## Step 5: upload + scan in TuBe (owner's go on the cost)
 
-Skip this step when the upload file has 0 rows. Otherwise ask, e.g.: *"Ready to scan 186 new firms in TuBe (cold scan, Google only). TuBe estimates about six dollars; the last WA batch cost about half its estimate. I'd upload tube-upload-or1.csv (186 rows with owner names, emails and websites) and press Run. Go?"*
+Skip this step when the upload file has 0 rows. Otherwise ask about the money only (the upload is pre-approved), e.g.: *"Ready to scan 186 new firms in TuBe (cold scan, Google only). TuBe estimates about six dollars; the last WA batch cost about half its estimate. Go?"*
 
 Then follow `references/tube-browser.md` §3:
 1. Upload the file.
@@ -183,9 +185,9 @@ Then follow `references/tube-browser.md` §3:
 
 Re-run `tube-check.js` every few minutes (`open` → 0); a 190-firm batch took about 45 minutes. Unfinished rows: §4. Re-running them costs money, so ask. Never press Stop through Chrome, because its confirm dialog freezes the extension. When `open` is 0, save the check again and re-run `build-upload.mts`. Log the actual cost with `--spend`.
 
-## Step 6: export + validate (owner's go for the download)
+## Step 6: export + validate (download pre-approved)
 
-Ask, e.g.: *"May I click 'Export for outreach' on batch '9/25/2026, 12:49:59 PM'? It downloads one zip from tube-seo.vercel.app to your Downloads folder, tube-upload-wa10-outreach.zip (about 100 KB)."* Then click it (§5). TuBe names the zip after the uploaded file.
+As soon as the scan finishes, click "Export for outreach" on the run's batch (§5). It downloads one zip from tube-seo.vercel.app to Downloads, named after the uploaded file, e.g. `tube-upload-wa10-outreach.zip` (about 100 KB). The owner pre-approved this download, so don't ask; name the file in the report.
 
 ```bash
 node .claude/skills/tube-pipeline/scripts/validate-export.mjs --run <name> --zip "C:/Users/dtucc/Downloads/<file>-outreach.zip"
@@ -246,18 +248,18 @@ node .claude/skills/tube-pipeline/scripts/assess.mjs --run <name> --final   # at
 ```
 
 It writes `<run>/assessment.md` and prints the same report. It reads the run's files and the live database, and changes nothing but the ledger. The report has nine sections:
-1. **Verdict:** the status (in progress, paused on purpose, stopped, complete, complete with problems), the firms at each step, the money, and the next step with its gate.
+1. **Verdict:** the status (in progress, stopped, complete, complete with problems), the firms at each step, the money, and the next step with its gate.
 2. **The brief against the outcome:** area, filters, budget, credits, searches, enrichment, who gets emailed, campaign, pace and flagged firms, each marked ✓ or ✗.
 3. **Every firm, step by step:** in and out at each step, where every lost firm went and why, and the pull by metro.
 4. **Money and Scrap.io usage:** each spend, total against the budget, a projection for the paid steps still ahead, credits, searches against the ceilings, and the cost per pulled firm and per enrolled lead.
 5. **Quality checks:** each check that ran, with its result.
 6. **Held or open, by name:** review drops, weak hosts set aside, sheet drops, flags, TuBe failures, validation holds, import skips and verify problems. Each comes with what it needs.
-7. **Timing:** the campaign's queue, when this run's firms start, and when a held scan is due.
+7. **Timing:** the campaign's queue, and when this run's firms start getting emails.
 8. **Incidents and deviations** from the brief. New ones go in `references/lessons.md`.
 9. **A comparison** with the last finished run.
 
 When to run it:
-- **At every pause:** give the owner the interim assessment whenever a run stops for more than a day, for example a scan held until nearer the send date, or a wait for the owner's go.
+- **At every pause:** give the owner the interim assessment whenever a run stops for more than a day, for example while it waits for the owner's go.
 - **At the end:** after step 8, run it with `--final`. Give the owner the verdict, the held list and the timing in the chat, and point to `assessment.md` for the rest.
 - `--final` on an unfinished run saves an interim assessment and says what's missing.
 
