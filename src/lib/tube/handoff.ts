@@ -317,8 +317,16 @@ export interface TubeHandoffResult {
 
 /** One upload row per emailable firm (deduped by website), plus why every other
  *  firm was left out. `includeGeneric` also exports firms whose practice could
- *  not be narrowed past "lawyers" (they get the broad question). */
-export function buildTubeHandoff(firms: TubeFirmInput[], opts: { includeGeneric?: boolean } = {}): TubeHandoffResult {
+ *  not be narrowed past "lawyers" (they get the broad question). `keepDomains`
+ *  are firms the owner kept by hand after reading them (the TuBe pipeline's
+ *  review step): Google files some private firms as government offices, and
+ *  some practices run on .org. They skip the off-vertical and ICP rules, never
+ *  the owner-name or email checks. */
+export function buildTubeHandoff(
+  firms: TubeFirmInput[],
+  opts: { includeGeneric?: boolean; keepDomains?: Iterable<string> } = {},
+): TubeHandoffResult {
+  const keep = new Set([...(opts.keepDomains ?? [])].map(normDomain).filter(Boolean));
   const rows: TubeUploadRow[] = [];
   const skipped: TubeSkip[] = [];
   const seen = new Set<string>();
@@ -336,11 +344,12 @@ export function buildTubeHandoff(firms: TubeFirmInput[], opts: { includeGeneric?
     const domain = normDomain(f.domain);
     const skip = (reason: TubeSkipReason) => skipped.push({ name, domain, reason });
     if (!domain) { skip("no_website"); continue; }
-    if (lawList && (f.categories ?? []).length > 0 && !f.categories.some(isLawCategory)) {
+    const ownerKept = keep.has(domain);
+    if (!ownerKept && lawList && (f.categories ?? []).length > 0 && !f.categories.some(isLawCategory)) {
       skip("off_vertical");
       continue;
     }
-    const excl = icpExclusion(name, domain, f.categories);
+    const excl = ownerKept ? null : icpExclusion(name, domain, f.categories);
     if (excl) { skip(excl); continue; }
     const c = f.contact;
     if (!c) { skip("not_in_contacts"); continue; }

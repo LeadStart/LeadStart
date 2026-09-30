@@ -136,6 +136,19 @@ const firm = (over: Partial<TubeFirmInput> = {}): TubeFirmInput => ({
   eq(on.rows[0]?.seed_query, "Who are the best lawyers in Olympia, WA?", "opt-in: generic firm gets the broad question");
 }
 {
+  // A private practice on .org reads as a nonprofit; the owner's keep overrules
+  // the ICP rules (the TuBe pipeline's review step), never the email checks.
+  const dana = (over: Partial<TubeFirmInput> = {}) => firm({
+    placeName: "Dana Reed Legal", domain: "danareedlegal.org",
+    contact: owner({ first_name: "Dana", last_name: "Reed", company_name: "Dana Reed Legal", email: "dana@danareedlegal.org" }), ...over,
+  });
+  eq(buildTubeHandoff([dana()]).skipped[0]?.reason, "public_or_nonprofit", "a .org practice is excluded by default");
+  eq(buildTubeHandoff([dana()], { keepDomains: ["https://www.danareedlegal.org/"] }).rows.length, 1, "the owner's keep overrules the ICP rules");
+  const unverified = dana({ contact: owner({ first_name: "Dana", last_name: "Reed", email: "dana@danareedlegal.org", email_verification_status: null }) });
+  eq(buildTubeHandoff([unverified], { keepDomains: ["danareedlegal.org"] }).skipped[0]?.reason, "email_not_verified", "…but never the email checks");
+  eq(buildTubeHandoff([dana()], { keepDomains: ["ChIJplaceIdNotADomain"] }).skipped[0]?.reason, "public_or_nonprofit", "a keep that isn't this firm's website changes nothing");
+}
+{
   const { rows, skipped } = buildTubeHandoff([firm(), firm({ placeName: "Olympia Injury Law (Lacey)", city: "Lacey" })]);
   eq([rows.length, skipped[0]?.reason], [1, "duplicate_website"], "one row per website (multi-office firms scan once)");
 }

@@ -42,7 +42,7 @@ main(async () => {
   const h = buildTubeHandoff((s.results ?? []).map((p: any) => ({
     placeName: p.name, categories: p.categories ?? [], city: p.city, state: p.state,
     domain: p.company_domain || p.website, contact: byPlace.get(p.google_place_id) ?? null,
-  })));
+  })), { keepDomains: readRun(dir).stages?.source_review?.kept_by_hand ?? [] }); // the owner's keeps at review (step 2)
   const enrichUsd = Number(run.cost_usd ?? 0) + pplx * PPLX_FEE;
   const pct = (n: number, of = firms) => `${n} of ${of} (${of ? Math.round((100 * n) / of) : 0}%)`;
   const mins = run.completed_at ? Math.round((+new Date(run.completed_at) - +new Date(run.started_at)) / 60000) : null;

@@ -51,7 +51,10 @@ main(async () => {
   // ── the cohort, through the in-app hand-off rules + the pipeline's integrity checks ──
   const { firms, searches } = await resolveCohort(cohort);
   const includeGeneric = a["include-generic"] !== undefined ? Boolean(a["include-generic"]) : Boolean(brief?.practice?.include_generic);
-  const { handoff, rows, skipLabel } = await buildSheet(firms, campaign, { includeGeneric });
+  // Firms the owner kept by hand at review (step 2) stay kept here too.
+  const keepDomains: string[] = prev.stages?.source_review?.kept_by_hand ?? [];
+  const { handoff, rows, skipLabel } = await buildSheet(firms, campaign, { includeGeneric, keepDomains });
+  if (keepDomains.length) console.log(`Kept by hand at review (they skip the hand-off's ICP rules): ${keepDomains.join(", ")}`);
   const kept = rows.filter((r: any) => !r.drop);
   const dropped = rows.filter((r: any) => r.drop);
 

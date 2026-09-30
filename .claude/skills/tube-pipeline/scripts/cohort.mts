@@ -103,8 +103,9 @@ export const FLAG_LABEL: Record<string, string> = {
 const REQUIRED = ["domain", "business_type", "seed_query", "markets", "company", "first_name", "email", "city", "state"];
 
 /** The upload rows for a cohort + every row's integrity verdict against the campaign. */
-export async function buildSheet(firms: any[], campaign: any, { includeGeneric = false } = {}) {
-  const h = buildTubeHandoff(firms, { includeGeneric });
+/** keepDomains: firms the owner kept by hand at review; they skip the hand-off's ICP and off-vertical rules. */
+export async function buildSheet(firms: any[], campaign: any, { includeGeneric = false, keepDomains = [] as string[] } = {}) {
+  const h = buildTubeHandoff(firms, { includeGeneric, keepDomains });
   const firmFor = (row: any) =>
     firms.find((f) => host(f.domain) === row.domain && (f.contact?.email ?? "").trim() === row.email) ??
     firms.find((f) => host(f.domain) === row.domain);
