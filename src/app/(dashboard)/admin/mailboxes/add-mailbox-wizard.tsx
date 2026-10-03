@@ -38,6 +38,7 @@ import {
   inboxSetupEligibility,
   type InboxSetupEligibility,
 } from "@/lib/deliverability/provisioning";
+import { GOOGLE_SEAT_USD_PER_MONTH } from "@/lib/deliverability/costs";
 import type { DomainLifecycle, SendingDomain } from "@/types/app";
 import { DomainProvisioningDetail } from "./domain-provisioning-detail";
 
@@ -104,12 +105,10 @@ function registrarName(id: string): string {
 function inboxCount(n: number): string {
   return `${n} inbox${n === 1 ? "" : "es"}`;
 }
-// Google seat estimate (the ~$7.50 to $8.40 per seat per month band), in whole
-// dollars; collapses to one figure when the band rounds to it (1 seat = ~$8).
+// Google seat estimate at the owner's cost basis (GOOGLE_SEAT_USD_PER_MONTH,
+// the flexible-plan rate), in whole dollars.
 function seatCost(seats: number, plusDomain: boolean): string {
-  const lo = Math.round(seats * 7.5);
-  const hi = Math.round(seats * 8.4);
-  return `~$${lo === hi ? lo : `${lo}–${hi}`}/mo (Google seats)${plusDomain ? " + domain" : ""}`;
+  return `~$${Math.round(seats * GOOGLE_SEAT_USD_PER_MONTH)}/mo (Google seats)${plusDomain ? " + domain" : ""}`;
 }
 
 export function AddMailboxWizard({
@@ -1149,7 +1148,7 @@ function DomainStep(props: {
           )}
           <Callout kind="warn">
             <b>Spends real money.</b> The purchase is gated behind registrar keys + a monthly spend cap.
-            Plus ~$7–8/mo per Google seat once inboxes are created.
+            Plus ~${GOOGLE_SEAT_USD_PER_MONTH.toFixed(2)}/mo per Google seat once inboxes are created.
           </Callout>
         </div>
       )}

@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsContent } from "@/components/ui/tabs";
+import { UnderlineTab } from "@/components/ui/underline-tab";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -719,9 +720,9 @@ export default function MailboxesPage() {
           squeezed the inbox table until it scrolled sideways. */}
       <Tabs value={tab} onValueChange={(v) => setTab(v as TabKey)} className="gap-4">
         <TabsList variant="line" className="h-auto w-full justify-start gap-6 rounded-none border-b border-border p-0">
-          <MailboxTab value="inboxes" icon={<Inbox size={15} />} label="Sending inboxes" count={mailboxes.length} />
-          <MailboxTab value="domains" icon={<Globe size={15} />} label="Sending domains" count={domains.length} />
-          <MailboxTab value="seeds" icon={<Target size={15} />} label="Seed inboxes" count={seeds.length} />
+          <UnderlineTab value="inboxes" icon={<Inbox size={15} />} label="Sending inboxes" count={mailboxes.length} />
+          <UnderlineTab value="domains" icon={<Globe size={15} />} label="Sending domains" count={domains.length} />
+          <UnderlineTab value="seeds" icon={<Target size={15} />} label="Seed inboxes" count={seeds.length} />
         </TabsList>
 
         {/* ── Sending inboxes ── */}
@@ -1555,33 +1556,6 @@ export default function MailboxesPage() {
         </TabsContent>
       </Tabs>
     </div>
-  );
-}
-
-// Underline tab with a trailing count pill (Direction 1). Brand-blue active
-// state layered on the shared `line` Tabs variant so it matches the app's tabs.
-function MailboxTab({
-  value,
-  icon,
-  label,
-  count,
-}: {
-  value: TabKey;
-  icon: React.ReactNode;
-  label: string;
-  count: number;
-}) {
-  return (
-    <TabsTrigger
-      value={value}
-      className="gap-2 px-1 pb-2.5 text-[13.5px] text-muted-foreground data-active:text-[#2E37FE] data-active:after:bg-[#2E37FE] data-active:after:opacity-100"
-    >
-      {icon}
-      {label}
-      <span className="rounded-full bg-muted px-1.5 py-0.5 text-[11px] font-semibold text-slate-600 group-data-[variant=line]/tabs-list:data-active:bg-[#2E37FE]/10 data-active:text-[#2E37FE]">
-        {count}
-      </span>
-    </TabsTrigger>
   );
 }
 
