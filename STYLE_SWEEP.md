@@ -48,6 +48,7 @@
 | admin feedback | admin/feedback/page.tsx | restyled | tsc+grep |
 | admin tasks | admin/tasks/page.tsx | verified | live |
 | admin mailboxes | admin/mailboxes/page.tsx | restyled | tsc+grep |
+| admin planner (new 2026-10-03) | admin/planner/page.tsx + components/planner/* | verified | live desktop 1024 + mobile 375 (second tab), no sideways overflow; tabs via shared ui/underline-tab.tsx |
 | admin billing | admin/billing/page.tsx | verified | live (Stripe badge → actions) |
 | admin settings (api, team) | admin/settings/{api,team}/page.tsx | restyled | tsc+grep |
 | client dashboard | client/page.tsx | verified | live (prior) |

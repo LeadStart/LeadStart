@@ -22,7 +22,7 @@ If you see a 404 on a non-API route, check (a) whether you're hitting an `/app` 
 
 - **"Multiple lockfiles" warning**: Next.js detects both the main repo's `package-lock.json` and the worktree's. Picks the parent as workspace root. Doesn't break anything; route resolution still works from `cwd`. Silence by running `npm install` inside the worktree.
 - **`middleware` file convention is deprecated**: Repo-wide deprecation notice. Migrating to `proxy.ts` is its own task; ignore for now.
-- **Strict-null-checks errors in `inbox-health/page.tsx` and a few other pages**: pre-existing project-wide pattern issues. The build passes anyway because `next.config.ts` has `typescript.ignoreBuildErrors: true`. Don't try to fix these unless you're in a file you're already editing — they're not blocking.
+- **Type errors fail the production build.** `next.config.ts` sets `typescript.ignoreBuildErrors: false`, and `npx tsc --noEmit` is kept at zero errors across `src/` and `scripts/` (tsconfig includes both). Run it before any push: one type error in a new file breaks the Vercel deploy.
 
 # Email channel — native Gmail API
 
