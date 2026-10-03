@@ -44,6 +44,8 @@ import {
   resolveSendingStrategy,
   minutesUntilWindowClose,
   sendSpacingMinutes,
+  SENDS_PER_TICK,
+  PER_MAILBOX_PER_TICK,
   type SendWindowConfig,
 } from "@/lib/gmail/ramp";
 import { renderSpintax } from "@/lib/spintax";
@@ -75,14 +77,8 @@ export const maxDuration = 60;
 // See run-linkedin-sequences for the edge-cache incident this guards against.
 export const dynamic = "force-dynamic";
 
-// Global per-tick send budget. Each send is ~2 Gmail calls (send + Message-ID
-// read-back) ≈ 1-2s, so 20 sends stays well under the 60s function budget.
-const SENDS_PER_TICK = 20;
-// At most one send per inbox per tick. The cron runs every 5 min (= the minimum
-// send gap), and each inbox is additionally gated on a dynamic spacing interval
-// (sendSpacingMinutes) so its daily allotment is spread across the whole send
-// window instead of fired in a burst.
-const PER_MAILBOX_PER_TICK = 1;
+// SENDS_PER_TICK (global per-tick budget) and PER_MAILBOX_PER_TICK (one send per
+// inbox per tick) live in @/lib/gmail/ramp, shared with the Campaign Planner.
 
 type EnrollmentRow = CampaignEnrollment;
 type CampaignRow = {

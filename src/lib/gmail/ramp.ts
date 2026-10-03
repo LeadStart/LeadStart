@@ -241,6 +241,23 @@ export function isInSendWindow(
 
 export const MIN_SEND_GAP_MINUTES = 5;
 
+// ── Dispatcher pacing (run-native-sequences) ─────────────────────────────
+// Shared here so the cron and the Campaign Planner (src/lib/planner/engine.ts)
+// read the same numbers instead of each keeping a copy.
+
+// Global per-tick send budget, across ALL campaigns. Each send is ~2 Gmail
+// calls (send + Message-ID read-back) ≈ 1-2s, so 20 sends stays well under the
+// 60s function budget.
+export const SENDS_PER_TICK = 20;
+// At most one send per inbox per tick. The cron runs every 5 min (= the minimum
+// send gap), and each inbox is additionally gated on a dynamic spacing interval
+// (sendSpacingMinutes) so its daily allotment is spread across the whole send
+// window instead of fired in a burst.
+export const PER_MAILBOX_PER_TICK = 1;
+// How often the run-native-sequences cron fires, in minutes. Must match its
+// "*/5 * * * *" schedule in vercel.json (scripts/test-planner-math.ts checks).
+export const NATIVE_TICK_MINUTES = 5;
+
 // Minutes from `now` until the send window closes TODAY, in the window's
 // timezone. 0 once at/after the end hour, or on a non-send weekday.
 export function minutesUntilWindowClose(

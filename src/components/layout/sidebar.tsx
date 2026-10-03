@@ -9,6 +9,7 @@ import type { AppRole } from "@/types/app";
 import { roleHomePath } from "@/lib/auth/roles";
 import {
   BarChart3,
+  Calculator,
   Users,
   Mail,
   MessageSquare,
@@ -35,6 +36,7 @@ const adminNav: NavItem[] = [
   { href: "/admin", label: "Overview", icon: <BarChart3 size={18} /> },
   { href: "/admin/clients", label: "Clients", icon: <Users size={18} /> },
   { href: "/admin/campaigns", label: "Campaigns", icon: <Mail size={18} /> },
+  { href: "/admin/planner", label: "Planner", icon: <Calculator size={18} /> },
   { href: "/admin/inbox", label: "Inbox", icon: <Inbox size={18} /> },
   { href: "/admin/contacts", label: "Contacts", icon: <ContactRound size={18} /> },
   { href: "/admin/linkedin-tasks", label: "LinkedIn to-dos", icon: <ListChecks size={18} /> },
