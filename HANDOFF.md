@@ -2,9 +2,35 @@
 
 > Rolling session-continuity log. Newest entry on top. Roll old entries to
 > `HANDOFF_ARCHIVE_<period>.md` once this passes ~60 KB.
-> Rolled so far: [`HANDOFF_ARCHIVE_2026-08.md`](HANDOFF_ARCHIVE_2026-08.md) (entries 2026-08-26 to 2026-08-29).
+> Rolled so far: [`HANDOFF_ARCHIVE_2026-08.md`](HANDOFF_ARCHIVE_2026-08.md) (entries 2026-08-26 to 2026-08-30).
 
 ---
+
+## 2026-10-03: Campaign Planner + finish dates from the send replay (pushed to master)
+
+**Why.** Daniel wanted to plan a campaign before buying anything: what it costs, how long it runs, the margin at a given price, and what each $100 a month buys, under the real warmup rules (5 a day per inbox, +1 per full day sent, 20 ceiling, 3 inboxes per domain, weekdays only). The campaign page's old finish date used a shortcut that ignored the ramp and follow-ups sharing the daily cap, so it ran early.
+
+**What shipped** (`d0a4292`, `b88b298`, `4ec29d3`, docs `177adbc` and this commit):
+- **Admin → Planner** (`/app/admin/planner`, sidebar after Campaigns). Campaign tab: cost lines with their formulas, first and last email dates, margin, breakeven retainer, projected replies (defaults from org history), a "fewest domains to finish by" solver and a new-leads-cap comparison. Budget tab: "Per month" (steady state plus a $100 to $1,000 ladder) and "Over time" (a monthly budget or one total, month by month for 1 to 12 months, plus a 1/2/3/6/12-month spread compare). Plans persist in the URL.
+- **Engine** `src/lib/planner/engine.ts`: a tick-by-tick replay of `run-native-sequences` (5-minute ticks, 20 sends per tick shared, 1 per inbox per tick, the spacing gate, the start-of-day ramp cap, sticky follow-ups, least-loaded pick, the new-leads gate, the flow-graph fetch window). `SENDS_PER_TICK`, `PER_MAILBOX_PER_TICK` and `NATIVE_TICK_MINUTES` now live in `ramp.ts`; the cron imports them (no behavior change).
+- **Finish dates**: the campaign page's "Projected sequence completion" and the heartbeat's "done by" replay the engine from each campaign's live state (`src/lib/planner/live.ts`, reads in `src/lib/campaigns/live-send-state.ts`). `projectSequenceCompletion` is deleted. Built in a separate session ("Fix 2") and merged before the push.
+- **Cost basis**: seat $8.40/mo (owner directive) and domain $11/yr in `src/lib/deliverability/costs.ts`; sourcing $0.08/contact (`PLANNER_DEFAULT_SOURCING_USD`, one measured Dallas run, labeled in the UI) and the Stripe card fee default (2.9% + $0.30) in `src/lib/planner/economics.ts`. The add-mailbox wizard's seat estimate now reads the constant.
+- Shared `src/components/ui/underline-tab.tsx` (Mailboxes uses it; colors identical). `AGENTS.md` corrected: type errors fail the production build.
+
+**Verification.** tsc 0 errors; `scripts/test-planner-math.ts` 136/136, `scripts/test-planner-timeline.ts` 30/30, flow-map 11, onboarding-preview 22, provisioning 117, quote-schedule 21. Backtests against live sends: a fresh plan reproduced TuBe's first 5 days exactly (15/18/20/20/20, split 7/7/6 across inboxes) and David Cabrera's 80 a day since 2026-09-24; the live-state replay matched per-inbox daily totals on 11 of 11 past days. Planner outputs were identical on 93 scenarios before and after the Fix 2 merge. Preview checked at desktop and 375px (no table scrolls sideways). The heartbeat was built locally (not sent) and shows the campaign pages' dates.
+
+**Findings.**
+- One default campaign (finish first, 20 new contacts a day, 3 emails) saturates at 2 domains (6 inboxes), about 440 contacts a month. More money does nothing until the cap rises or campaigns are added.
+- A $1,000 pot (reach first, client's list) reaches about 14,200 contacts spread over 6 months vs about 7,000 spent in 1 month.
+- Finish dates now: TuBe Nov 13, 2026; David Cabrera May 5, 2027 (the old banner said Dec 19, 2026).
+
+**Next pickup:**
+- David Cabrera runs to about May 5, 2027 on 4 inboxes at 99% busy, and weekly batches keep arriving: add inboxes or domains (its domains sit on the client's Google Workspace, see 2026-09-27) or accept the date.
+- Open lead (unverified): native campaigns may never be marked completed, which would keep their inboxes from being reused.
+- HANDOFF rotated in this change: the 2026-08-30 Apify spend audit entry moved verbatim to `HANDOFF_ARCHIVE_2026-08.md`.
+
+---
+
 
 ## 2026-09-27: Add inboxes to already-set-up domains + hard cap of 3 inboxes per domain (pushed to master)
 
@@ -362,34 +388,3 @@ POST `turnstileToken` to /api/contact.
 `role==='buyer' → /buyer` branch, `buyerNav`, `/buyer` route group mirroring
 `client/`. Building locally now; migration apply + push await the owner's word
 (standing local-only rule — the Phase 0 push was an explicit one-time go).
-
----
-
-## 2026-08-30: Apify spend audit COMPLETE (find + adversarial verify). Fix gate OPEN. $4.61 credit left this cycle.
-
-Triggered by the $14.17 per-place-cap incident (a probe sent compass's
-`maximumLeadsEnrichmentRecords: 400` believing per-RUN; schema says per PLACE;
-chains delivered rosters). Full multi-agent audit of the actor/spend subsystem:
-6 finder lanes → 4 adversarial verifiers + 2 direct reproductions.
-**Reconciled: 74 candidates − 16 dupes = 58 unique = 53 CONFIRMED + 1 partial +
-4 REFUTED; +13 verifier-found; ~69 areas clean.** Living record:
-[`APIFY_SPEND_AUDIT.md`](APIFY_SPEND_AUDIT.md); registry:
-[`AUDITS.md`](AUDITS.md); canonical costs (live-pulled):
-[`docs/APIFY_ACTOR_COSTS.md`](docs/APIFY_ACTOR_COSTS.md) +
-`scripts/pull-actor-costs.mjs` (mandatory pre-run protocol).
-
-Top confirmed: no `maxTotalChargeUsd`/app budget anywhere (every run's platform
-cap = entire remaining credit); dead circuit breaker in run-apify-enrichment
-(`:278` reset clobbers the increment, no kill, no alert); start-before-persist
-orphan window in all 3 actor crons (a network blip = orphaned billing run +
-duplicate start); deep-search bills per SEGMENT page (billed 4.5x a real panel
-estimate); search cost recording reads once pre-aggregation (measured 961x
-under); Contacts dialog "up to ~$" omits its own naming/Findymail toggles;
-"live pricing" serves FREE tier on our BRONZE account; add-on OR-merge runs
-paid phases over whole merged runs; the per-place cap trap is documented
-NOWHERE forward-looking (flow doc + unified plan).
-
-**OPERATIONAL: $4.61 of $29 Apify credit left until 9/23 (hard 403 at cap).**
-5 fix batches proposed in the audit doc; NOTHING ships without Daniel's
-explicit go-ahead. Also still parked: leads-toggle keep/scrap (half-built,
-lever currently unreachable), MV-verify the 23 probe emails (≤$0.09).

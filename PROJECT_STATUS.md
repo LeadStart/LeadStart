@@ -1,6 +1,6 @@
 # LeadStart — Project Status
 
-> Last updated: 2026-09-29
+> Last updated: 2026-10-03
 >
 > **Lean current-state index.** This file is `@`-imported by `CLAUDE.md`, so it loads into every session — keep it short. Full per-initiative write-ups, the "What's Built" tables, the file-structure tree, and the backlog detail live in [`docs/PROJECT_STATUS_ARCHIVE.md`](docs/PROJECT_STATUS_ARCHIVE.md) (read on demand — **not** auto-loaded).
 
@@ -21,6 +21,7 @@ One line each — see the linked RESUME doc (repo root) or the archive for the f
 
 ## Recently shipped
 
+- **Campaign Planner + finish dates from the send replay** (2026-10-03, `d0a4292` `b88b298` `4ec29d3`, docs `177adbc`): Admin → Planner. The Campaign tab shows cost, runway, margin and projected replies. The Budget tab has "Per month" (what $X/month buys at steady state) and "Over time" (a monthly budget or one total, month by month for 1-12 months, plus a 1/2/3/6/12-month spread compare). It runs on a tick-by-tick replay of the send dispatcher (`src/lib/planner/engine.ts`, reading `ramp.ts`'s rules), backtested exact against live sends. The campaign page's projected finish date and the heartbeat's "done by" run the same replay from each campaign's live state (`src/lib/planner/live.ts`; `projectSequenceCompletion` is gone): TuBe Nov 13, 2026, David Cabrera May 5, 2027. Cost basis: seat $8.40/mo and domain $11/yr in `src/lib/deliverability/costs.ts`; sourcing $0.08/contact as `PLANNER_DEFAULT_SOURCING_USD` in `src/lib/planner/economics.ts`. Tests: `scripts/test-planner-math.ts`, `scripts/test-planner-timeline.ts`. → `HANDOFF.md` 2026-10-03.
 - **Scrap.io search ceilings** (2026-09-29) — after ~1,800 searches locked the account on 2026-09-26, every `/gmap/*` call (app + skill) claims a slot in `scrapio_search_log` first: 150/24h, 400/7 days, 1,000/30 days; searches are never retried (migration `00135`, applied). Rule at the top of `CLAUDE.md`.
 - **Saved reply with the TuBe report link** (2026-09-29) — an owner-written reply per campaign (Setup tab) pre-fills the admin inbox with the lead's `{{report_link}}`; the PDF is opt-in, since a PDF reply landed in spam (migration `00134`, applied).
 - **`tube-pipeline` skill** (`.claude/skills/tube-pipeline/`) — the TuBe batch runbook: brief → Scrap.io pull → review → import + enrich → TuBe scan → export check → campaign load → verify.
