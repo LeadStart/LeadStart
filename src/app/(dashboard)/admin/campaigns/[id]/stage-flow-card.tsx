@@ -17,7 +17,7 @@ import {
   XCircle,
 } from "lucide-react";
 import type { ReactNode } from "react";
-import type { CompletionProjection } from "@/lib/gmail/ramp";
+import type { CompletionProjection } from "@/lib/planner/live";
 
 // Brand ramp: deepens as contacts progress toward the finish.
 const STEP_COLORS = ["#A3A8FF", "#6B72FF", "#2E37FE", "#1C24B8"];
@@ -207,7 +207,7 @@ function CompletionBanner({
             ≈ {projection.weeks} {projection.weeks === 1 ? "week" : "weeks"}
           </p>
           <p className="text-[11px]" style={{ color: "rgba(255,255,255,0.75)" }}>
-            at current pace
+            at current settings
           </p>
         </div>
       )}

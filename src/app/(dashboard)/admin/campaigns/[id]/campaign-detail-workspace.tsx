@@ -41,7 +41,8 @@ import { DeleteCampaignDialog } from "@/components/campaigns/delete-campaign-dia
 import { MailboxPoolPicker } from "@/components/campaigns/mailbox-pool-picker";
 import { CampaignTagFollow } from "@/components/campaigns/campaign-tag-follow";
 import { appUrl } from "@/lib/api-url";
-import { formatSendWindow, type SendWindowConfig, type CompletionProjection } from "@/lib/gmail/ramp";
+import { formatSendWindow, type SendWindowConfig } from "@/lib/gmail/ramp";
+import type { CompletionProjection } from "@/lib/planner/live";
 import type { SendingStrategy } from "@/types/app";
 import { type FlowGraph, graphToSteps, validateGraph } from "@/lib/flow/graph";
 import { FlowEditor } from "@/components/campaigns/flow/flow-editor";

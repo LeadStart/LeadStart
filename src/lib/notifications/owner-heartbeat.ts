@@ -22,17 +22,15 @@
 
 import type { createAdminClient } from "@/lib/supabase/admin";
 import { isClientDueNow } from "@/lib/kpi/schedule";
+import { resolveSendWindow, minutesUntilWindowClose, startOfLocalDay } from "@/lib/gmail/ramp";
+import { fetchAllRowsStrict } from "@/lib/supabase/fetch-all";
+import { loadLiveSnapshot } from "@/lib/campaigns/live-send-state";
 import {
-  effectiveDailyCap,
-  rampStage,
-  resolveDailyNewLeadsCap,
-  resolveSendingStrategy,
-  resolveSendWindow,
-  minutesUntilWindowClose,
-  startOfLocalDay,
-  projectSequenceCompletion,
+  liveCapacity,
+  projectLiveCampaign,
   type CompletionProjection,
-} from "@/lib/gmail/ramp";
+  type LiveProjection,
+} from "@/lib/planner/live";
 import type { Client, ReplyClass, HealthBand } from "@/types/app";
 import { domainOf } from "@/lib/deliverability/check";
 // Fragment, not a full document: there is no <head> to hang EMAIL_FONT_HEAD on,
@@ -582,9 +580,10 @@ async function queryInboxHealth(
 
 // Morning outreach snapshot: the operational half of the heartbeat: every
 // active native-email campaign with yesterday's sends, today's scheduled
-// capacity, reply outcomes, and its sequence/warmup position. Mirrors the
-// admin campaign detail page's math (nativeStatsFor + projectSequenceCompletion)
-// so the numbers reconcile. Wrapped in try/catch so a failure here degrades to
+// capacity, reply outcomes, and its sequence/warmup position. The finish date
+// and the inbox capacity come from the same live sending state and replay as
+// the admin campaign detail page (loadLiveSnapshot + projectLiveCampaign), so
+// the numbers reconcile. Wrapped in try/catch so a failure here degrades to
 // an inline notice rather than suppressing the whole heartbeat.
 type CampaignMeta = {
   id: string;
@@ -597,6 +596,7 @@ type CampaignMeta = {
   send_weekdays_only: boolean | null;
   daily_new_leads_cap: number | null;
   sending_strategy: string | null;
+  flow_graph: unknown;
 };
 
 async function queryCampaignActivity(
@@ -616,7 +616,7 @@ async function queryCampaignActivity(
     const { data: campRows, error: campErr } = await admin
       .from("campaigns")
       .select(
-        "id, name, client_id, status, send_timezone, send_start_hour, send_end_hour, send_weekdays_only, daily_new_leads_cap, sending_strategy",
+        "id, name, client_id, status, send_timezone, send_start_hour, send_end_hour, send_weekdays_only, daily_new_leads_cap, sending_strategy, flow_graph",
       )
       .eq("source_channel", "native_email")
       .eq("status", "active");
@@ -649,7 +649,7 @@ async function queryCampaignActivity(
       ...new Set(active.map((c) => c.client_id).filter((v): v is string => !!v)),
     ];
 
-    const [clientsRes, stepsRes, enrRes, sentYRes, repliesYRes, poolRes] =
+    const [clientsRes, stepsRes, enrRows, sentYRes, repliesYRes, liveByCampaign] =
       await Promise.all([
         clientIds.length
           ? admin.from("clients").select("id, name").in("id", clientIds)
@@ -659,10 +659,15 @@ async function queryCampaignActivity(
           .select("campaign_id, step_index, wait_days")
           .in("campaign_id", ids)
           .order("step_index", { ascending: true }),
-        admin
-          .from("campaign_enrollments")
-          .select("campaign_id, status, current_step_index")
-          .in("campaign_id", ids),
+        // Paged: an un-ranged select stops at PostgREST's 1,000 rows, and one
+        // big campaign alone has more enrollments than that.
+        fetchAllRowsStrict<{ campaign_id: string; status: string; current_step_index: number | null }>(() =>
+          admin
+            .from("campaign_enrollments")
+            .select("campaign_id, status, current_step_index")
+            .in("campaign_id", ids)
+            .order("id", { ascending: true }),
+        ),
         admin
           .from("native_sends")
           .select("campaign_id")
@@ -676,10 +681,18 @@ async function queryCampaignActivity(
           .eq("source_channel", "native_email")
           .gte("received_at", yStartIso)
           .lt("received_at", todayStartIso),
-        admin
-          .from("campaign_mailboxes")
-          .select("campaign_id, mailbox_id")
-          .in("campaign_id", ids),
+        // Each campaign's live sending state and finish date (the campaign page's
+        // replay). One campaign's failed read leaves only its own line unknown.
+        Promise.all(
+          active.map(async (c): Promise<[string, LiveProjection | null]> => {
+            try {
+              return [c.id, projectLiveCampaign(await loadLiveSnapshot(admin, c, now))];
+            } catch (err) {
+              console.error(`[heartbeat] live sending state failed for campaign ${c.id}:`, err instanceof Error ? err.message : err);
+              return [c.id, null];
+            }
+          }),
+        ).then((pairs) => new Map(pairs)),
       ]);
 
     const clientName = new Map<string, string>();
@@ -723,11 +736,7 @@ async function queryCampaignActivity(
       }
       return e;
     };
-    for (const r of (enrRes.data ?? []) as {
-      campaign_id: string;
-      status: string;
-      current_step_index: number | null;
-    }[]) {
+    for (const r of enrRows) {
       const e = ensureEnr(r.campaign_id);
       if (r.status === "active") {
         e.active++;
@@ -770,62 +779,6 @@ async function queryCampaignActivity(
       repliesByCampaign.set(r.campaign_id, rec);
     }
 
-    // Mailbox pools → capacity. Fetch each distinct mailbox once, then its
-    // all-time send count (drives the warmup ramp cap) and today's count
-    // (already-spent). Count-only queries: no rows transferred.
-    const poolByCampaign = new Map<string, string[]>();
-    const distinctMb = new Set<string>();
-    for (const p of (poolRes.data ?? []) as {
-      campaign_id: string;
-      mailbox_id: string;
-    }[]) {
-      const arr = poolByCampaign.get(p.campaign_id) ?? [];
-      arr.push(p.mailbox_id);
-      poolByCampaign.set(p.campaign_id, arr);
-      distinctMb.add(p.mailbox_id);
-    }
-    const mbMeta = new Map<
-      string,
-      { status: string; max_daily_cap: number; daily_cap_override: number | null }
-    >();
-    if (distinctMb.size > 0) {
-      const { data: mbData } = await admin
-        .from("native_mailboxes")
-        .select("id, status, max_daily_cap, daily_cap_override")
-        .in("id", [...distinctMb]);
-      for (const m of (mbData ?? []) as {
-        id: string;
-        status: string;
-        max_daily_cap: number;
-        daily_cap_override: number | null;
-      }[]) {
-        mbMeta.set(m.id, {
-          status: m.status,
-          max_daily_cap: m.max_daily_cap,
-          daily_cap_override: m.daily_cap_override,
-        });
-      }
-    }
-    const totalSent = new Map<string, number>();
-    const sentToday = new Map<string, number>();
-    await Promise.all(
-      [...distinctMb].map(async (id) => {
-        const [tot, tod] = await Promise.all([
-          admin
-            .from("native_sends")
-            .select("id", { count: "exact", head: true })
-            .eq("mailbox_id", id),
-          admin
-            .from("native_sends")
-            .select("id", { count: "exact", head: true })
-            .eq("mailbox_id", id)
-            .gte("sent_at", todayStartIso),
-        ]);
-        totalSent.set(id, tot.count ?? 0);
-        sentToday.set(id, tod.count ?? 0);
-      }),
-    );
-
     const campaigns: CampaignActivity[] = active.map((c) => {
       const steps = stepsByCampaign.get(c.id) ?? [];
       const e =
@@ -847,44 +800,24 @@ async function queryCampaignActivity(
       // Will this campaign send at all today? 0 on weekends (weekdaysOnly) or
       // once the window has closed, so a Saturday heartbeat honestly shows 0.
       const sendableToday = minutesUntilWindowClose(now, window) > 0;
-      let capacity = 0; // remaining capacity today (drives scheduledToday)
-      let fullCapacity = 0; // full daily cap sum: the reach_first first-touch rate
-      let activeMbCount = 0;
-      let warmingCount = 0;
-      for (const mbId of poolByCampaign.get(c.id) ?? []) {
-        const m = mbMeta.get(mbId);
-        if (!m || m.status !== "active") continue;
-        activeMbCount++;
-        const tot = totalSent.get(mbId) ?? 0;
-        if (!rampStage(tot).warmed) warmingCount++;
-        const cap = effectiveDailyCap(
-          { max_daily_cap: m.max_daily_cap, daily_cap_override: m.daily_cap_override },
-          tot,
-        );
-        fullCapacity += cap;
-        capacity += Math.max(0, cap - (sentToday.get(mbId) ?? 0));
-      }
+      // Pool capacity from the live sending state: each active inbox's cap today
+      // as the dispatcher reads it (ramp_baseline_sent offset, pinned at the
+      // start of the day), less what it already sent today.
+      const live = liveByCampaign.get(c.id) ?? null;
+      const cap = live ? liveCapacity(live.model) : null;
       // Can't send more than we have active contacts, nor more than inbox
       // capacity: the honest ceiling for the day.
       const scheduledToday = sendableToday
-        ? Math.min(capacity, e.active)
+        ? Math.min(cap?.remainingToday ?? 0, e.active)
         : 0;
-
-      // Mirror the campaign detail page: reach_first drains first-touches at full
-      // warmed inbox capacity, finish_first at the new-leads/day cap; 0 pauses.
-      const strategy = resolveSendingStrategy(c);
-      const newLeadsCap = resolveDailyNewLeadsCap(c);
-      const projection = projectSequenceCompletion({
-        firstTouchesRemaining: e.waitingByStep[0] ?? 0,
-        firstTouchesPerDay: strategy === "reach_first" ? fullCapacity : newLeadsCap,
-        newLeadsPaused: newLeadsCap <= 0,
-        stepWaitDays: steps.map((s) => s.wait_days),
-        waitingByStep: e.waitingByStep,
-        weekdaysOnly: window.weekdaysOnly,
-        strategy,
-        mailboxCount: activeMbCount,
-        now,
-      });
+      const warmingCount = cap?.warmingInboxes ?? 0;
+      const projection: CompletionProjection = live?.projection ?? {
+        status: "unknown",
+        dateLabel: null,
+        sendingDays: null,
+        weeks: null,
+        driver: "Couldn't read this campaign's sending state.",
+      };
       const reps = repliesByCampaign.get(c.id) ?? { total: 0, positive: 0 };
 
       return {

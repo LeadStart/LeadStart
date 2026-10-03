@@ -10,7 +10,9 @@ import { fetchAllRows } from "@/lib/supabase/fetch-all";
 import { KPICard } from "@/components/charts/kpi-card";
 import { DailyChart } from "@/components/charts/daily-chart";
 import { calculateMetrics } from "@/lib/kpi/calculator";
-import { resolveSendWindow, formatSendWindow, resolveDailyNewLeadsCap, resolveSendingStrategy, effectiveDailyCap, projectSequenceCompletion, type CompletionProjection } from "@/lib/gmail/ramp";
+import { resolveSendWindow, formatSendWindow, resolveDailyNewLeadsCap, resolveSendingStrategy } from "@/lib/gmail/ramp";
+import { loadLiveSnapshot } from "@/lib/campaigns/live-send-state";
+import { liveCapacity, projectLiveCampaign, type CompletionProjection, type LiveProjection } from "@/lib/planner/live";
 import {
   Card,
   CardContent,
@@ -128,11 +130,23 @@ export default async function AdminCampaignDetailPage({
   const metrics = calculateMetrics(snapshots);
 
   // Native email campaigns pull their stats straight from
-  // native_sends / lead_replies / campaign_enrollments.
-  const nativeStats =
+  // native_sends / lead_replies / campaign_enrollments. Alongside them, the
+  // live sending state the finish date replays from (src/lib/planner/live.ts):
+  // the dispatcher's own view of this campaign's inboxes and contacts.
+  const [baseStats, live] =
     campaign.source_channel === "native_email"
-      ? await nativeStatsFor(admin, campaignId)
-      : null;
+      ? await Promise.all([nativeStatsFor(admin, campaignId), liveProjectionFor(admin, campaign)])
+      : [null, null];
+  // Warmup-aware capacity: each active pool inbox's cap today, read the way the
+  // dispatcher reads it (ramp_baseline_sent offset, pinned at the start of the day).
+  const capacity = live ? liveCapacity(live.model) : null;
+  const nativeStats: NativeStats | null = baseStats
+    ? {
+        ...baseStats,
+        dailyInboxCapacity: capacity?.capacityToday ?? 0,
+        activeMailboxCount: capacity?.activeInboxes ?? 0,
+      }
+    : null;
 
   // Contacts assigned to this campaign (contacts.campaign_id) joined with
   // their sequence-enrollment state. Assignment alone does not send: the
@@ -189,6 +203,7 @@ export default async function AdminCampaignDetailPage({
   // stage" panel. Resolve each step's display subject (later steps thread as
   // "Re: <first subject>" when they carry no own subject, matching the sender)
   // and a human cadence label, then pair with the per-step waiting/sent counts.
+  // The projection is the dispatcher replay from the live state loaded above.
   const stageRows: StageRow[] = [];
   let projection: CompletionProjection | null = null;
   if (nativeStats && nativeStats.steps.length > 0) {
@@ -212,20 +227,13 @@ export default async function AdminCampaignDetailPage({
         sent: nativeStats.sentByStep[i] ?? 0,
       });
     });
-    const newLeadsCap = resolveDailyNewLeadsCap(campaign);
-    projection = projectSequenceCompletion({
-      firstTouchesRemaining: nativeStats.waitingByStep[0] ?? 0,
-      // reach_first drains first-touches at full warmed inbox capacity; finish_first
-      // throttles them to the new-leads/day cap. A cap of 0 pauses either way.
-      firstTouchesPerDay:
-        sendingStrategy === "reach_first" ? nativeStats.dailyInboxCapacity : newLeadsCap,
-      newLeadsPaused: newLeadsCap <= 0,
-      stepWaitDays: nativeStats.steps.map((s) => s.wait_days),
-      waitingByStep: nativeStats.waitingByStep,
-      weekdaysOnly: sendWindow.weekdaysOnly,
-      strategy: sendingStrategy,
-      mailboxCount: nativeStats.activeMailboxCount,
-    });
+    projection = live?.projection ?? {
+      status: "unknown",
+      dateLabel: null,
+      sendingDays: null,
+      weeks: null,
+      driver: "Couldn't read this campaign's sending state just now. Reload to try again.",
+    };
   }
 
   // Native email campaigns render the tabbed Flow workspace (same shell as the
@@ -740,8 +748,7 @@ interface NativeStats {
   waitingByStep: number[];
   sentByStep: number[];
   // Warmup-aware daily send capacity across the ACTIVE inbox pool (sum of each
-  // inbox's current effective cap) + how many inboxes back it. This is the
-  // first-touch rate under reach_first and the honest throughput ceiling.
+  // inbox's cap today, from the live sending state) + how many inboxes back it.
   dailyInboxCapacity: number;
   activeMailboxCount: number;
   // Per-campaign email-verification picture (migration 00069), tallied from
@@ -750,10 +757,35 @@ interface NativeStats {
   verification: { verified: number; risky: number; undeliverable: number; unverified: number };
 }
 
+// The engine-backed finish date. A failed read leaves the banner on "unknown"
+// instead of failing the whole page (the stats above still render).
+async function liveProjectionFor(
+  admin: ReturnType<typeof createAdminClient>,
+  campaign: Campaign,
+): Promise<LiveProjection | null> {
+  try {
+    const row = campaign as Campaign & { flow_graph?: unknown };
+    const snapshot = await loadLiveSnapshot(admin, {
+      id: campaign.id,
+      daily_new_leads_cap: campaign.daily_new_leads_cap ?? null,
+      sending_strategy: campaign.sending_strategy ?? null,
+      send_timezone: campaign.send_timezone ?? null,
+      send_start_hour: campaign.send_start_hour ?? null,
+      send_end_hour: campaign.send_end_hour ?? null,
+      send_weekdays_only: campaign.send_weekdays_only ?? null,
+      flow_graph: row.flow_graph ?? null,
+    });
+    return projectLiveCampaign(snapshot);
+  } catch (err) {
+    console.error("[campaign page] live sending state failed:", err instanceof Error ? err.message : err);
+    return null;
+  }
+}
+
 async function nativeStatsFor(
   admin: ReturnType<typeof createAdminClient>,
   campaignId: string,
-): Promise<NativeStats> {
+): Promise<Omit<NativeStats, "dailyInboxCapacity" | "activeMailboxCount">> {
   // One row-fetch of this campaign's sends (step_index + status) replaces the
   // separate sent/bounced count queries AND the per-step count N+1 further
   // down: sent, bounced, and sent-per-step are all tallied from these rows.
@@ -827,63 +859,19 @@ async function nativeStatsFor(
   }
 
   // Resolve the mailbox pool with a second query rather than a PostgREST
-  // embed (embed typing is array-vs-object ambiguous for a to-one FK). Also
-  // sum each ACTIVE inbox's current effective cap (effectiveDailyCap over its
-  // all-time send count) into the campaign's warmup-aware daily capacity: the
-  // reach_first first-touch rate and the honest ceiling either way.
+  // embed (embed typing is array-vs-object ambiguous for a to-one FK). The
+  // pool's capacity comes from the live sending state (liveProjectionFor).
   const mailboxIds = ((poolRes.data ?? []) as { mailbox_id: string }[]).map((r) => r.mailbox_id);
   let mailboxes: { email: string; status: string }[] = [];
-  let dailyInboxCapacity = 0;
-  let activeMailboxCount = 0;
   if (mailboxIds.length > 0) {
     const { data: mbData } = await admin
       .from("native_mailboxes")
-      .select("id, email_address, status, max_daily_cap, daily_cap_override")
+      .select("email_address, status")
       .in("id", mailboxIds);
-    const mbs = (mbData ?? []) as {
-      id: string;
-      email_address: string;
-      status: string;
-      max_daily_cap: number;
-      daily_cap_override: number | null;
-    }[];
-    mailboxes = mbs.map((m) => ({ email: m.email_address, status: m.status }));
-    const activeMbs = mbs.filter((m) => m.status === "active");
-    activeMailboxCount = activeMbs.length;
-    // Each active inbox's warmup cap keys off its all-time send count. One fetch
-    // of mailbox_id for the active pool, tallied in JS, replaces the per-mailbox
-    // count query (was one round-trip per active inbox).
-    const sendCountByMailbox = new Map<string, number>();
-    if (activeMbs.length > 0) {
-      // Paged: all-time send count per active inbox drives its warmup cap, so a
-      // pool that has sent >1000 total must not truncate here.
-      const mbSendRows = await fetchAllRows<{ mailbox_id: string | null }>(() =>
-        admin
-          .from("native_sends")
-          .select("mailbox_id")
-          .in(
-            "mailbox_id",
-            activeMbs.map((m) => m.id),
-          ),
-      );
-      for (const row of mbSendRows) {
-        if (row.mailbox_id) {
-          sendCountByMailbox.set(
-            row.mailbox_id,
-            (sendCountByMailbox.get(row.mailbox_id) ?? 0) + 1,
-          );
-        }
-      }
-    }
-    dailyInboxCapacity = activeMbs.reduce(
-      (sum, m) =>
-        sum +
-        effectiveDailyCap(
-          { max_daily_cap: m.max_daily_cap, daily_cap_override: m.daily_cap_override },
-          sendCountByMailbox.get(m.id) ?? 0,
-        ),
-      0,
-    );
+    mailboxes = ((mbData ?? []) as { email_address: string; status: string }[]).map((m) => ({
+      email: m.email_address,
+      status: m.status,
+    }));
   }
 
   const steps = stepRows.map((s) => ({
@@ -901,8 +889,6 @@ async function nativeStatsFor(
     steps,
     waitingByStep,
     sentByStep,
-    dailyInboxCapacity,
-    activeMailboxCount,
     verification,
   };
 }
