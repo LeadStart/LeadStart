@@ -1,0 +1,12 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "@/lib/supabase/admin": ["./_stubs/fake-supabase.ts"],
+      "@/lib/supabase/server": ["./_stubs/fake-supabase.ts"],
+      "@/lib/notifications/owner-alerts": ["./_stubs/fake-supabase.ts"],
+      "@/*": ["../src/*"],
+      "server-only": ["./_stubs/server-only.ts"]
+    }
+  }
+}
