@@ -1,9 +1,19 @@
 // POST /api/admin/campaigns/[id]/resume: mark a paused campaign 'active'
-// again so the cron workers pick it back up. Owner or VA.
+// again so the cron workers pick it back up, or reopen a completed one.
+// Owner or VA. A draft launches through /activate instead (lifecycle.ts).
+//
+// Reopening takes the campaign's inboxes back. Completing freed them, so another
+// campaign may hold one by now, and an inbox belongs to one campaign at a time
+// (mailbox-usage.ts): that refuses the reopen with a 409 naming the inboxes.
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import {
+  reopenConflictMessage,
+  reopenConflicts,
+  transitionRefusal,
+} from "@/lib/campaigns/lifecycle";
 import type { SourceChannel } from "@/types/app";
 
 export async function POST(
@@ -61,10 +71,39 @@ export async function POST(
     );
   }
 
-  const { error: updateError } = await admin
+  const refusal = transitionRefusal("resume", c.status);
+  if (refusal) return NextResponse.json({ error: refusal }, { status: 400 });
+  const from = c.status as string;
+
+  if (from === "completed") {
+    const conflicts = await reopenConflicts(admin, c.organization_id, campaignId).catch(
+      (err: unknown) => {
+        console.error(`[admin/campaigns/${campaignId}/resume] inbox check failed:`, err);
+        return null;
+      },
+    );
+    if (conflicts === null) {
+      return NextResponse.json(
+        { error: "Couldn't check this campaign's inboxes. Try again." },
+        { status: 500 },
+      );
+    }
+    if (conflicts.length > 0) {
+      return NextResponse.json(
+        { error: reopenConflictMessage(conflicts), conflicts },
+        { status: 409 },
+      );
+    }
+  }
+
+  // Compare-and-swap on the status just read, so a pause or complete landing in
+  // between is never silently overwritten.
+  const { data: updated, error: updateError } = await admin
     .from("campaigns")
     .update({ status: "active" })
-    .eq("id", campaignId);
+    .eq("id", campaignId)
+    .eq("status", from)
+    .select("id");
   if (updateError) {
     console.error(
       `[admin/campaigns/${campaignId}/resume] status update failed:`,
@@ -72,6 +111,12 @@ export async function POST(
     );
     return NextResponse.json({ error: updateError.message }, { status: 500 });
   }
+  if (!updated || updated.length === 0) {
+    return NextResponse.json(
+      { error: "The campaign's status just changed. Refresh and try again." },
+      { status: 409 },
+    );
+  }
 
-  return NextResponse.json({ success: true, status: "active" });
+  return NextResponse.json({ success: true, status: "active", reopened: from === "completed" });
 }

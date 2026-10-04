@@ -1,6 +1,8 @@
 // Dedicated-inbox policy (one inbox → one campaign). A sending inbox may belong
 // to at most one non-completed campaign's pool: while a campaign is a draft,
 // active, or paused it "owns" its inboxes; a completed campaign frees them.
+// Nothing completes a campaign on its own: the owner does, with Complete in the
+// campaigns ⋯ menu (POST /api/admin/campaigns/[id]/complete, see lifecycle.ts).
 //
 // This helper returns which of the org's inboxes are already claimed by ANOTHER
 // campaign (optionally excluding the campaign being edited), mapped to the owning

@@ -1,10 +1,12 @@
-// POST /api/admin/campaigns/[id]/pause: flip the campaigns row to 'paused'
+// POST /api/admin/campaigns/[id]/pause: flip an active campaign to 'paused'
 // so the cron workers stop dispatching it. Owner or VA. Reversible via the
-// companion /resume route.
+// companion /resume route. Only active campaigns pause (lifecycle.ts): a draft
+// launches through /activate, a completed one reopens through /resume.
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { transitionRefusal } from "@/lib/campaigns/lifecycle";
 import type { SourceChannel } from "@/types/app";
 
 export async function POST(
@@ -62,16 +64,29 @@ export async function POST(
     );
   }
 
-  const { error: updateError } = await admin
+  const refusal = transitionRefusal("pause", c.status);
+  if (refusal) return NextResponse.json({ error: refusal }, { status: 400 });
+
+  // Compare-and-swap on the status just read, so a complete landing in between
+  // is never silently overwritten.
+  const { data: updated, error: updateError } = await admin
     .from("campaigns")
     .update({ status: "paused" })
-    .eq("id", campaignId);
+    .eq("id", campaignId)
+    .eq("status", "active")
+    .select("id");
   if (updateError) {
     console.error(
       `[admin/campaigns/${campaignId}/pause] status update failed:`,
       updateError,
     );
     return NextResponse.json({ error: updateError.message }, { status: 500 });
+  }
+  if (!updated || updated.length === 0) {
+    return NextResponse.json(
+      { error: "The campaign's status just changed. Refresh and try again." },
+      { status: 409 },
+    );
   }
 
   return NextResponse.json({ success: true, status: "paused" });
