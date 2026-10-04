@@ -6,6 +6,29 @@
 
 ---
 
+## 2026-10-04: The CSV import never rewrites a contact already in a sequence (committed locally, awaiting push)
+
+**Why.** `/api/campaigns/[id]/client-import` merged each uploaded row's custom_fields into every matched same-client contact and moved its `campaign_id` before anything checked enrollment. The sender renders every step from the contact's current fields and re-renders step 0's subject for a follow-up with no subject of its own (`run-native-sequences/route.ts` 1179-1196 graph, 1463-1475 linear), so a re-uploaded weekly list (David Cabrera's agents repeat with new closings) would make that contact's next "Re:" name a different property than the email it replies to. The route also enrolled contacts active in another campaign (two sequences at once, SEND-48: the sender has no cross-campaign guard) and counted already-enrolled contacts as "added". The 2026-09-24 in-app import merged into 722 of the 752 July contacts of campaign f9c179e6; realized damage was 0 (all had received step 1 or ended, per the owner's read-only check).
+
+**What shipped** (`3da918a` fix, `47d16d8` test, docs in this commit):
+- **Owner ruling** (SEND-48, for the CSV import): a matched contact already enrolled in the importing campaign (any status), or active or paused in another campaign, is left untouched: no field merge, no `campaign_id` move, no enrollment. The enrollment lookup runs before any write and fails closed (503). Contacts in no campaign, or only finished or failed elsewhere, link as before.
+- **Counts**: `already_enrolled` now means "skipped, already in this campaign"; new `skipped_other_campaign`; `linked` and the owner alert count only contacts actually added, so an identical re-upload shows an amber "0 added" banner with both skip reasons and a one-line explanation.
+- **Harness**: `scripts/test-client-import-guard.ts` runs the real POST handler against an in-memory database (`scripts/_stubs/fake-supabase.ts`, swapped in by `scripts/tsconfig.client-import-harness.json`): `npx tsx --tsconfig scripts/tsconfig.client-import-harness.json scripts/test-client-import-guard.ts`. Reusable for any route that has to be exercised without prod; extend the fake's builder when a route needs more of PostgREST.
+- **Not chosen**: refreshing fields for contacts queued but not yet sent. A sending tick could send step 0 with the old fields while the merge lands, which is the same mismatch.
+
+**Verification.** On the `44fbb77` base: tsc 0 errors (after `npx next typegen`; a fresh worktree has no `next-env.d.ts`, so tsc otherwise reports 9 PNG-import errors); harness 85/85; the same harness against the pre-fix route fails 31 of 85 (the wrong-property "Re:", rewritten rows, second sequences, "added 13 contacts", no 503). No prod reads or writes, no import run. Not rendered in a browser: showing the banner takes a completed import, which writes to prod.
+
+**Interaction with Complete/Reopen (`44fbb77`).** Complete leaves enrollments as they are so Reopen can resume them, so a contact left mid-sequence in a completed campaign still has an `active` enrollment, and the CSV import skips it as "still in another campaign". That keeps a Reopen from double-sequencing it. Flagged to Daniel; change it only together with how Reopen treats those enrollments.
+
+**Next pickup:**
+- Push on Daniel's word: from this worktree with `gh` on the LeadStart account, `git push origin HEAD:master` (the branch is a fast-forward of master).
+- SEND-48 for `enroll-existing` (CRM pull) and admin `enroll`: they never rewrite fields but can put one person in two campaigns; the same enrollment lookup closes it.
+- The durable fix for the "Re:" subject: store the subject actually sent (`native_sends` has no subject column, so a migration) and thread follow-ups on it, so no field edit from any path can change a follow-up's subject.
+- The David Cabrera loader fix is still in worktree `affectionate-knuth-a7ae33` (local); don't run master's `scripts/build-david-cabrera-campaign.mjs` until it lands.
+- HANDOFF rotated in this change: the 2026-08-30 Token product Phase 1 entry moved verbatim to `HANDOFF_ARCHIVE_2026-08.md`.
+
+---
+
 ## 2026-10-04: Campaign Complete / Reopen frees a finished campaign's inboxes (pushed to master)
 
 **Why.** An inbox can belong to only one campaign that isn't completed (`src/lib/campaigns/mailbox-usage.ts`), but nothing ever completed a native campaign: no route, cron, DB trigger, function or Edge Function sets `campaigns.status = 'completed'` (checked in code, full git history, migrations and the live catalog on 2026-10-03). A finished campaign kept its inboxes for good, and a new campaign following the same tag got none. No live campaign was hit yet: David Cabrera and TuBe are both mid-send. This closes the 2026-10-03 "open lead".
@@ -297,53 +320,3 @@ with live status+delivered polling, "Run a search" in buyer nav. Balance + buy o
 **Activation (owner):** set pack + tier prices in Admin → Settings → Tokens (Stripe
 already live → priced packs = working buy flow); then push. Full E2E (buyer buys →
 runs a search → settle) needs a buyer account + priced packs + a real Stripe payment.
-
----
-
-## 2026-08-30: Token product Phase 1 (buyer accounts + signup + portal) DONE. Migrations live. Next = Phase 2.
-
-Buyer self-serve accounts on top of the Phase 0 hardening (plan
-`C:\Users\danie\.claude\plans\ok-we-need-a-gentle-peach.md`, memory
-[[project_token_contact_sourcing]]). D1's double-walled isolation: one org per
-buyer + a new `'buyer'` app_role that fails-closed on every agency RLS policy.
-
-**Migrations APPLIED to prod + verified (Management API):** `00106`
-(`ALTER TYPE app_role ADD VALUE 'buyer'` — its own migration per the enum
-same-txn rule, applied raw) and `00107` (`organizations.kind` default 'agency' /
-`is_self_serve` + kind CHECK + index; every existing org reads 'agency'). Verified
-`app_role = {owner,va,client,buyer}` and the columns/constraint/index live.
-
-**Public signup path:** `POST /api/signup` — the ONLY signup route (Supabase
-public signup stays `disable_signup:true`; this trusted service-role route uses
-`admin.createUser`, which is not gated by it). Flow: guards (Phase 0 rate-limit +
-Turnstile + disposable-email) → create unconfirmed user → create the buyer org →
-promote the trigger-made profile to `role='buyer'` + org (service-role, so the
-enforce trigger permits it) → magic-link confirmation email. Public form at
-`/app/(auth)/signup/page.tsx` (self-contained, TurnstileWidget inert until keys).
-
-**Routing + portal:** `src/lib/auth/roles.ts` (`roleHomePath`/`isAdminRole`)
-DRYs the role→home map. Middleware gains buyer post-login routing + THREE
-complete portal-boundary guards (a buyer can't reach /admin or /client, and
-non-buyers can't reach /buyer; guards bounce only KNOWN foreign roles to avoid
-redirect loops) + `/signup` in the public allowlist. `AppRole` += 'buyer';
-page.tsx, dashboard-shell, sidebar (`buyerNav`), mobile-tab-bar (`buyerTabs`),
-topbar get buyer arms. Portal shell at `/app/(dashboard)/buyer/`
-(layout + `buyer-data-context` + a dashboard page: welcome + token-balance-0 +
-coming-soon tiles for Phase 2/3).
-
-**Verified:** tsc + eslint add 0 new issues (2 lint hits in touched files are
-pre-existing); `/signup` renders in the dev preview (screenshot); the buyer guard
-bounces an admin off /buyer → /admin; no console/server errors. NOT yet done
-(needs a real inbox): the full signup E2E (confirm-email click → land on /buyer).
-
-**Git note:** this session's Phase 0 + Phase 1 landed on master via branch
-`claude/token-phase0-security` (rebased onto origin/master), deliberately
-EXCLUDING 2 parallel-session commits (`63dd28d` spam-word-list CI gate +
-`028aa2c` send-test-email) that add `.github/workflows/ci.yml` the LeadStart gh
-token can't push without `workflow` scope. Those 2 are preserved on local branch
-`parallel-session-wip`; that session re-pushes them (with the scope) when ready.
-
-**Next = Phase 2** (token wallet + Stripe purchase + price-card persistence):
-bring in the admin Tokens config shell from worktree
-`internal-automations-setup-9d84fc` (branch `claude/frosty-edison-b9e42c`) first;
-Stripe products/webhook config is a Daniel-dependency.

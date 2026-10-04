@@ -9,9 +9,10 @@
 // existing LeadStart contact by email; ADOPT it into the campaign's client when
 // it is still an unassigned LeadStart contact, or LINK it when it is already that
 // client's; merge the TuBe values into custom_fields; enroll it at the first
-// email; register the columns in the campaign's variable list. Plus the checks
-// the route doesn't make: active in another campaign, already emailed, the same
-// firm already in this campaign, set aside as a weak email host.
+// email; register the columns in the campaign's variable list. It skips the
+// contacts the route also leaves untouched (already in this campaign, or active
+// or paused in another one), plus the checks the route doesn't make: already
+// emailed, the same firm already in this campaign, set aside as a weak email host.
 //
 // Before anything is written, every email for every planned contact is rendered
 // exactly as the live sender will (render-check.mts); a single problem refuses
