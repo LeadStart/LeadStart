@@ -2,16 +2,18 @@
 
 // Prominent one-click lifecycle control on the campaign detail page. Shows the
 // action that applies to the current status: Activate (draft → active, local
-// channels only), Pause (active), or Resume (paused). Hits the same lifecycle
-// endpoints as the campaigns-list ⋯ menu, then refreshes the page.
+// channels only), Pause (active), Resume (paused), or Reopen (completed, local
+// channels only, through the same confirm dialog as the list). Hits the same
+// lifecycle endpoints as the campaigns-list ⋯ menu, then refreshes the page.
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Rocket, Pause, Play, Loader2 } from "lucide-react";
+import { Rocket, Pause, Play, RotateCcw, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { appUrl } from "@/lib/api-url";
 import { ActivatePreflightDialog } from "@/components/campaigns/activate-preflight-dialog";
+import { CampaignLifecycleDialog } from "@/components/campaigns/campaign-lifecycle-dialog";
 import type { PreflightWarning } from "@/lib/deliverability/preflight";
 import type { ReadinessItem } from "@/lib/campaigns/launch-readiness";
 
@@ -41,20 +43,28 @@ export function CampaignLifecycleButton({
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [preflight, setPreflight] = useState<PreflightWarning[] | null>(null);
+  const [reopenOpen, setReopenOpen] = useState(false);
 
   const isLocal = sourceChannel === "native_email" || sourceChannel === "linkedin";
-  const action: "activate" | "pause" | "resume" | null =
+  const action: "activate" | "pause" | "resume" | "reopen" | null =
     status === "draft" && isLocal
       ? "activate"
       : status === "active"
         ? "pause"
         : status === "paused"
           ? "resume"
-          : null;
+          : status === "completed" && isLocal
+            ? "reopen"
+            : null;
   if (!action) return null;
 
   // acknowledge = true re-submits past the pre-flight warnings.
   async function run(acknowledge = false) {
+    // Reopen confirms first: the dialog shows the inboxes it takes back.
+    if (action === "reopen") {
+      setReopenOpen(true);
+      return;
+    }
     setBusy(true);
     try {
       const res = await fetch(appUrl(`/api/admin/campaigns/${campaignId}/${action}`), {
@@ -95,8 +105,15 @@ export function CampaignLifecycleButton({
   }
 
   const label =
-    action === "activate" ? "Launch campaign" : action === "pause" ? "Pause campaign" : "Resume campaign";
-  const Icon = action === "activate" ? Rocket : action === "pause" ? Pause : Play;
+    action === "activate"
+      ? "Launch campaign"
+      : action === "pause"
+        ? "Pause campaign"
+        : action === "resume"
+          ? "Resume campaign"
+          : "Reopen campaign";
+  const Icon =
+    action === "activate" ? Rocket : action === "pause" ? Pause : action === "resume" ? Play : RotateCcw;
   // Disable Launch while hard blockers remain (the readiness card lists them),
   // or while the caller says so (unsaved workspace changes).
   const notReady = action === "activate" && blockers.length > 0;
@@ -132,6 +149,16 @@ export function CampaignLifecycleButton({
         }}
         onConfirm={() => run(true)}
       />
+      {action === "reopen" && (
+        <CampaignLifecycleDialog
+          mode="reopen"
+          campaignId={campaignId}
+          campaignName={campaignName}
+          open={reopenOpen}
+          onOpenChange={setReopenOpen}
+          onDone={() => router.refresh()}
+        />
+      )}
     </>
   );
 }

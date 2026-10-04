@@ -8,10 +8,20 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, Pause, Play, Rocket, Trash2, Loader2 } from "lucide-react";
+import {
+  CheckCircle2,
+  MoreHorizontal,
+  Pause,
+  Play,
+  Rocket,
+  RotateCcw,
+  Trash2,
+  Loader2,
+} from "lucide-react";
 import { toast } from "sonner";
 import { appUrl } from "@/lib/api-url";
 import { ActivatePreflightDialog } from "@/components/campaigns/activate-preflight-dialog";
+import { CampaignLifecycleDialog } from "@/components/campaigns/campaign-lifecycle-dialog";
 import { DeleteCampaignDialog } from "@/components/campaigns/delete-campaign-dialog";
 import type { PreflightWarning } from "@/lib/deliverability/preflight";
 
@@ -35,6 +45,7 @@ export function CampaignRowActions({
   const [busy, setBusy] = useState<"activate" | "pause" | "resume" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [lifecycleOpen, setLifecycleOpen] = useState(false);
   const [preflight, setPreflight] = useState<PreflightWarning[] | null>(null);
 
   async function callLifecycle(
@@ -88,6 +99,9 @@ export function CampaignRowActions({
   const canActivate = status === "draft" && isLocalChannel;
   const canPause = status === "active";
   const canResume = status === "paused";
+  // Complete frees the campaign's inboxes; Reopen takes them back (lifecycle.ts).
+  const canComplete = (status === "active" || status === "paused") && isLocalChannel;
+  const canReopen = status === "completed" && isLocalChannel;
 
   return (
     <>
@@ -143,7 +157,21 @@ export function CampaignRowActions({
               Resume
             </DropdownMenuItem>
           )}
-          {(canActivate || canPause || canResume) && <DropdownMenuSeparator />}
+          {canComplete && (
+            <DropdownMenuItem onClick={() => setLifecycleOpen(true)} disabled={busy !== null}>
+              <CheckCircle2 size={14} />
+              Complete
+            </DropdownMenuItem>
+          )}
+          {canReopen && (
+            <DropdownMenuItem onClick={() => setLifecycleOpen(true)} disabled={busy !== null}>
+              <RotateCcw size={14} />
+              Reopen
+            </DropdownMenuItem>
+          )}
+          {(canActivate || canPause || canResume || canComplete || canReopen) && (
+            <DropdownMenuSeparator />
+          )}
           <DropdownMenuItem
             onClick={() => setDeleteOpen(true)}
             disabled={busy !== null}
@@ -166,6 +194,17 @@ export function CampaignRowActions({
         onOpenChange={setDeleteOpen}
         onDeleted={onChanged}
       />
+
+      {(canComplete || canReopen) && (
+        <CampaignLifecycleDialog
+          mode={canReopen ? "reopen" : "complete"}
+          campaignId={campaignId}
+          campaignName={campaignName}
+          open={lifecycleOpen}
+          onOpenChange={setLifecycleOpen}
+          onDone={onChanged}
+        />
+      )}
 
       <ActivatePreflightDialog
         campaignName={campaignName}
