@@ -6,6 +6,25 @@
 
 ---
 
+## 2026-10-04: Campaign Complete / Reopen frees a finished campaign's inboxes (pushed to master)
+
+**Why.** An inbox can belong to only one campaign that isn't completed (`src/lib/campaigns/mailbox-usage.ts`), but nothing ever completed a native campaign: no route, cron, DB trigger, function or Edge Function sets `campaigns.status = 'completed'` (checked in code, full git history, migrations and the live catalog on 2026-10-03). A finished campaign kept its inboxes for good, and a new campaign following the same tag got none. No live campaign was hit yet: David Cabrera and TuBe are both mid-send. This closes the 2026-10-03 "open lead".
+
+**What shipped** (`2206d1a` routes, `d2649e6` UI, audit script `d4e752b`, docs in this commit):
+- **Complete** (campaigns ⋯ menu, active or paused): `POST /api/admin/campaigns/[id]/complete` stops sending and frees the campaign's inboxes; enrollments are left as they are. A confirm dialog (`GET` on the same route) lists the inboxes it frees and how many contacts are still mid-sequence.
+- **Reopen** (⋯ menu, and the campaign page for a completed campaign): `POST /resume` puts it back to active and takes its inboxes back, refused with a 409 naming the inboxes while another campaign holds one. Contacts left mid-sequence pick up where they stopped.
+- **Status checks**: Pause only from active, Resume only from paused or completed (both accepted any status before, so a direct API call could pause a draft, or resume one past the launch checks). Each status write is a compare-and-swap on the status it read. Rules in `src/lib/campaigns/lifecycle.ts`.
+- **Manual on purpose**: campaigns are refilled in waves (David Cabrera's weekly CSVs, TuBe batches loaded into the existing campaign), so "nobody mid-sequence" doesn't mean done. An auto-complete would close a campaign between waves; the TuBe import then throws, the in-app import refuses, and the David Cabrera loader would enroll people into a campaign the sender never reads.
+
+**Verification.** tsc 0 errors before and after; eslint clean on all 9 files; `scripts/test-campaign-lifecycle.ts` 55/55. Browser (local, live data, no confirm clicked): TuBe's menu shows Pause, Complete, Delete and its dialog reads "Frees 3 inboxes" and "404 contacts are still mid-sequence"; PolishPoint (completed) shows Reopen; the Test draft shows only Activate and Delete; PolishPoint's page shows "Reopen campaign". The server refused complete, pause and resume on the draft and complete on a completed campaign (400 each). `node scripts/audit-native-campaign-completion.mjs` before and after the build: identical, so no live data changed.
+
+**Next pickup:**
+- Not yet proven live: completing a real campaign and watching its inbox free up. Proposed test, waiting on Daniel's go: a throwaway campaign on the free inbox daniel@workwithdanielt.com with zero contacts; launch, Complete, audit, a second throwaway on the same inbox, Reopen refused, clean up.
+- The David Cabrera loader fix is in its own session (worktree `affectionate-knuth-a7ae33`, local). Don't run any copy of `scripts/build-david-cabrera-campaign.mjs` until it lands on master.
+- HANDOFF rotated in this change: the 2026-08-30 Token product Phase 0 entry moved verbatim to `HANDOFF_ARCHIVE_2026-08.md`.
+
+---
+
 ## 2026-10-03: Campaign Planner + finish dates from the send replay (pushed to master)
 
 **Why.** Daniel wanted to plan a campaign before buying anything: what it costs, how long it runs, the margin at a given price, and what each $100 a month buys, under the real warmup rules (5 a day per inbox, +1 per full day sent, 20 ceiling, 3 inboxes per domain, weekdays only). The campaign page's old finish date used a shortcut that ignored the ramp and follow-ups sharing the daily cap, so it ran early.
@@ -328,63 +347,3 @@ token can't push without `workflow` scope. Those 2 are preserved on local branch
 bring in the admin Tokens config shell from worktree
 `internal-automations-setup-9d84fc` (branch `claude/frosty-edison-b9e42c`) first;
 Stripe products/webhook config is a Daniel-dependency.
-
----
-
-## 2026-08-30: Token product Phase 0 (security HARD GATE) DONE + pushed. Signup disabled. Next = Phase 1.
-
-Phase 0 of the prepaid-token self-serve contact-sourcing product (plan
-`C:\Users\danie\.claude\plans\ok-we-need-a-gentle-peach.md`, memory
-[[project_token_contact_sourcing]]). Two privilege-escalation holes that were
-exploitable independent of the product are now CLOSED on prod, plus the public
-signup-abuse surface is hardened.
-
-**Fixed + APPLIED to prod (Management API, project exedxjrifprqgftyuroc):**
-- **Migration `00104`** — `handle_new_user` no longer trusts caller-supplied
-  `raw_user_meta_data` for role/organization_id/client_id (a public signUp could
-  have minted `role='owner'`); it now inserts only id/email/full_name (role
-  defaults to 'client', org NULL), privileged assignment stays in the
-  service-role invite route which already upserts the profile + client_users. Plus
-  a new `enforce_profile_privileged_columns` BEFORE UPDATE trigger that blocks
-  `authenticated`/`anon` from changing role/organization_id/is_active (RLS alone
-  can't compare NEW vs OLD; the JWT hook reads profiles.role, so a self-write was
-  a real self-promotion). Verified live: handle_new_user body has no metadata
-  role read; trigger present on public.profiles. Backward-compatible with the
-  deployed app (service-role writes are exempt; only anon self-write is full_name).
-- **Migration `00105`** — shared `rate_limits` table + `consume_rate_limit` RPC
-  (fixed-window, atomic, service_role-only, RLS-denied to anon/authenticated).
-  The in-memory Map on /api/site-chat is per-instance; this is the cross-instance
-  store the FAQ route itself named as the upgrade path. Smoke-tested live
-  (rolled back): trips exactly at the limit.
-
-**Behavioral proof:** `scripts/verify-phase0-security.sql` — a rollback-guarded,
-throwaway-schema harness faithful to PostgREST's `SET LOCAL ROLE` model. 5/5 pass
-(signup metadata ignored; client cannot self-promote; client CAN still edit own
-full_name; service_role CAN still set role). Ran non-destructively against prod
-with the owner's OK; left it byte-identical.
-
-**App-level guards (pushed this session, activate on deploy):** `src/lib/security/`
-`rate-limit.ts` (+ `clientIp`, `tooManyRequests`, fails OPEN if the store is
-unreachable), `turnstile.ts` (inert until `TURNSTILE_SECRET_KEY`; fail-closed once
-set), `disposable-email.ts` (bundled blocklist, active immediately); client
-`src/components/security/turnstile-widget.tsx` (inert until
-`NEXT_PUBLIC_TURNSTILE_SITE_KEY`). Wired into `api/contact` (rate-limit IP+email +
-Turnstile + disposable block), `reset-password` (both modes), `accept-invite`
-(token brute-force), `invite` (per-owner limit + role allowlist).
-
-**Dashboard (owner-verified via Management API):** access-token hook ENABLED
-(`custom_access_token_hook`); **public signup DISABLED** (`disable_signup:true`) —
-Phase 1's `/api/signup` uses service-role `auth.admin.createUser`, which is NOT
-gated by that toggle, so this is the permanent posture.
-
-**Still open for the owner (not blocking Phase 1 build):** Turnstile keys
-(`TURNSTILE_SECRET_KEY` + `NEXT_PUBLIC_TURNSTILE_SITE_KEY`) to activate that gate;
-the marketing-site quote form (repo `LeadStart/Website`) needs the widget + to
-POST `turnstileToken` to /api/contact.
-
-**Next = Phase 1** (buyer accounts + auth + portal shell): `'buyer'` app_role,
-`organizations.kind`/`is_self_serve`, buyer-scoped tables + RLS, public
-`/buyer/signup` + `POST /api/signup` service-role provisioning, middleware/layout
-`role==='buyer' → /buyer` branch, `buyerNav`, `/buyer` route group mirroring
-`client/`. Building locally now; migration apply + push await the owner's word
-(standing local-only rule — the Phase 0 push was an explicit one-time go).
