@@ -24,6 +24,9 @@
 //     for that client's campaign), which is the one reassignment allowed. A
 //     client can technically probe whether an email exists somewhere in the org
 //     via the skipped count; accepted for trusted paying clients.
+//   - Contacts already in a sequence are never modified: a matched contact
+//     enrolled in this campaign (any status), or active or paused in another
+//     one, is skipped untouched (see "Leave contacts already in a sequence").
 //   - Emails are validated strictly (single @, no whitespace/control chars,
 //     ≤254) because contact.email flows raw into the Gmail To: header, this
 //     is the import-side half of the header-injection fix (the sink half is
@@ -474,7 +477,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   }
 
   const toInsert: SanitizedRow[] = [];
-  const toLink: { row: SanitizedRow; existing: ExistingContact; adopt: boolean }[] = [];
+  const linkCandidates: { row: SanitizedRow; existing: ExistingContact; adopt: boolean }[] = [];
   let skippedExistingElsewhere = 0;
   let skippedSuppressed = 0;
   let skippedUndeliverable = 0;
@@ -499,12 +502,57 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       } else if (UNDELIVERABLE.has(existing.email_verification_status ?? "")) {
         skippedUndeliverable++;
       } else {
-        toLink.push({ row, existing, adopt });
+        linkCandidates.push({ row, existing, adopt });
       }
     } else {
       // Belongs to another client (or, for a client user, LeadStart's own CRM):
       // never reassign.
       skippedExistingElsewhere++;
+    }
+  }
+
+  // ── Leave contacts already in a sequence exactly as they are ────────────
+  // The sender renders every step from the contact's CURRENT fields, and a
+  // follow-up with no subject of its own re-renders step 0's subject for its
+  // "Re:" line (run-native-sequences/route.ts). Re-uploaded lists repeat
+  // people (a buyer agent who closed again carries a new PropertyAddress), so
+  // merging this file's values into a contact partway through a sequence would
+  // change what its next email says. The sender also has no cross-campaign
+  // guard, so linking a contact that is active or paused in another campaign
+  // would run two sequences to one person. Both are skipped untouched: no
+  // field merge, no campaign_id move, no enrollment. Looked up before any
+  // write, and fail closed: an error must never read as "enrolled nowhere".
+  const toLink: typeof linkCandidates = [];
+  let alreadyInCampaign = 0;
+  let skippedOtherCampaign = 0;
+  if (linkCandidates.length > 0) {
+    const inThisCampaign = new Set<string>();
+    const inAnotherCampaign = new Set<string>();
+    for (const part of chunk(linkCandidates.map((c) => c.existing.id), 100)) {
+      // Only the rows that block: this campaign (any status), or another
+      // campaign that can still send to them. UNIQUE (campaign_id, contact_id)
+      // allows one row per campaign a contact is in, so this stays small.
+      const { data: enrRows, error: enrErr } = await admin
+        .from("campaign_enrollments")
+        .select("contact_id, campaign_id")
+        .in("contact_id", part)
+        .or(`campaign_id.eq.${campaign.id},status.in.(active,paused)`);
+      if (enrErr) {
+        console.error("[client-import] enrollment lookup failed:", enrErr);
+        return NextResponse.json(
+          { error: "Could not check existing enrollments, try again." },
+          { status: 503 },
+        );
+      }
+      for (const e of (enrRows ?? []) as { contact_id: string; campaign_id: string }[]) {
+        if (e.campaign_id === campaign.id) inThisCampaign.add(e.contact_id);
+        else inAnotherCampaign.add(e.contact_id);
+      }
+    }
+    for (const c of linkCandidates) {
+      if (inThisCampaign.has(c.existing.id)) alreadyInCampaign++;
+      else if (inAnotherCampaign.has(c.existing.id)) skippedOtherCampaign++;
+      else toLink.push(c);
     }
   }
 
@@ -580,7 +628,8 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   }
 
   // ── Link existing same-client contacts (merge custom_fields) ────────────
-  // Adopted contacts (owner/VA, previously unassigned) also take the client.
+  // Only contacts in no live sequence reach here (see above). Adopted
+  // contacts (owner/VA, previously unassigned) also take the client.
   let linked = 0;
   let adopted = 0;
   for (const part of chunk(toLink, 25)) {
@@ -639,7 +688,9 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     }
     enrolled = ((enrolledRows as { id: string }[] | null) ?? []).length;
   }
-  const alreadyEnrolled = enrollIds.length - enrolled;
+  // The contacts skipped above as already in this campaign, plus any that a
+  // concurrent import enrolled between that lookup and this upsert.
+  const alreadyEnrolled = alreadyInCampaign + (enrollIds.length - enrolled);
 
   // ── Persist column mapping + reconcile the variable registry ────────────
   // Both land in one campaigns update. The mapping pre-fills next upload; the
@@ -730,6 +781,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
         adopted,
         enrolled,
         already_enrolled: alreadyEnrolled,
+        skipped_other_campaign: skippedOtherCampaign,
         skipped_invalid_email: skippedInvalidEmail,
         skipped_existing_elsewhere: skippedExistingElsewhere,
         skipped_dnc: skippedDnc,
@@ -746,6 +798,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     adopted,
     enrolled,
     already_enrolled: alreadyEnrolled,
+    skipped_other_campaign: skippedOtherCampaign,
     skipped_invalid_email: skippedInvalidEmail,
     skipped_existing_elsewhere: skippedExistingElsewhere,
     skipped_dnc: skippedDnc,

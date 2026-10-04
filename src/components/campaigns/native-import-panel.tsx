@@ -64,7 +64,10 @@ interface ImportResult {
   /** Of `linked`: LeadStart CRM contacts an owner/VA import moved to this client. */
   adopted: number;
   enrolled: number;
+  /** Left untouched: already enrolled in this campaign (any status). */
   already_enrolled: number;
+  /** Left untouched and not enrolled: active or paused in another campaign. */
+  skipped_other_campaign: number;
   skipped_invalid_email: number;
   skipped_existing_elsewhere: number;
   skipped_dnc: number;
@@ -317,6 +320,7 @@ export function NativeImportPanel({ campaignId }: { campaignId: string }) {
         adopted: 0,
         enrolled: 0,
         already_enrolled: 0,
+        skipped_other_campaign: 0,
         skipped_invalid_email: 0,
         skipped_existing_elsewhere: 0,
         skipped_dnc: 0,
@@ -732,7 +736,14 @@ export function NativeImportPanel({ campaignId }: { campaignId: string }) {
                   , <strong>{result.enrolled}</strong>{" "}
                   enrolled for sending
                   {result.already_enrolled > 0 && (
-                    <> ({result.already_enrolled} were already enrolled)</>
+                    <> · {result.already_enrolled} skipped (already in this campaign)</>
+                  )}
+                  {result.skipped_other_campaign > 0 && (
+                    <>
+                      {" "}
+                      · {result.skipped_other_campaign} skipped (still in another
+                      campaign)
+                    </>
                   )}
                   {result.skipped_invalid_email > 0 && (
                     <> · {result.skipped_invalid_email} skipped (invalid email)</>
@@ -766,6 +777,12 @@ export function NativeImportPanel({ campaignId }: { campaignId: string }) {
                   )}
                   .
                 </p>
+                {result.already_enrolled + result.skipped_other_campaign > 0 && (
+                  <p className={`text-xs ${tone.foot} mt-1`}>
+                    Contacts already in a campaign were left unchanged, so the
+                    emails they&apos;re already getting stay consistent.
+                  </p>
+                )}
                 {added > 0 && (
                   <p className={`text-xs ${tone.foot} mt-1`}>
                     Sending starts automatically within a few minutes, during this
