@@ -65,6 +65,15 @@ main(async () => {
     const fits = (n) => (n <= b.left ? "fits" : `does NOT fit: only ${b.left} left, so narrow the metros or wait`);
     console.log(`Run "${a.run}": Scrap.io plan from the brief (nothing sent to Scrap.io)`);
     console.log(`  Area: ${state} · ${metros.length} metros: ${metros.map((m) => (caps[m] ? `${m} (cap ${caps[m]})` : m)).join(", ")}`);
+    // Already worked for this client? (docs/clients/<slug>.md) Firms we have come
+    // back free, but re-searching a city still spends searches.
+    if (brief.campaign?.id) {
+      const { configForCampaign } = await import("./client-ledger.mjs");
+      const led = await configForCampaign(brief.campaign.id).catch(() => null);
+      const done = (led?.config?.runs ?? []).filter((r) => r.state === state).flatMap((r) => (r.metros ?? []).map((m) => ({ m, r })));
+      const again = metros.map((m) => done.find((d) => d.m.toLowerCase() === m.toLowerCase())).filter(Boolean);
+      if (again.length) console.log(`  ALREADY WORKED for this client: ${again.map(({ m, r }) => `${m} (${r.run}, ${r.date})`).join(", ")}. Confirm with the owner before searching them again.`);
+    }
     console.log(`  Practice groups: ${Object.entries(groups).map(([g, t]) => `${g} (${t.length} types)`).join(", ")} · ${minReviews}+ reviews${filters.website ? " · website" : ""}${filters.openOnly ? " · open" : ""}`);
     console.log(`  Search log: ${fmtBudget(b)} → ${b.left} more fit now (at most ${RUN_LIMIT} per run).`);
     console.log(`  Counts (free, fair-use quota): ${searches} searches (${metros.length} metros × ${Object.keys(groups).length} groups), plus 2 credit reads: ${fits(searches)}.`);

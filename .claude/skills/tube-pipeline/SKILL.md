@@ -34,6 +34,7 @@ These are the owner's standing rules, and each one exists because something went
 
 - **Every go is for one batch and one step.** Ask with exact counts and cost. Approval for one step or batch never carries to the next.
 - **Downloads and uploads between LeadStart and TuBe are pre-approved.** Owner, 2026-09-30: "downloading and uploading from leadstart and tuBe is acceptable". That covers the TuBe CSV upload, the TuBe "Export for outreach" zip, and moving files between the two apps. Don't ask for them; name the file in the report instead. Money (enrichment, scans) and enrolling people in a campaign still need the owner's go.
+- **Stop on anything unexpected; never improvise.** Stop and report to the owner, then wait, when you see any of these: a ✗ in the assessment (its verdict then says STOP), an ERROR, REFUSED or STOPPED line from a script, counts that don't reconcile, or a page or toast that disagrees with the database. Never work around it, patch values by hand, or guess a fix. The checks exist because each of these once hid a real mistake.
 - **Run straight through.** Do each step as soon as the owner approves it. Never suggest holding a step for timing, e.g. "scan nearer the send date", and never tell the owner a step is "due" later. (Owner, 2026-09-30, after exactly that: "scan it now, why would you tell me when it's due?")
 - **Exact counts, never "some".** Every line a batch will send must be true for every recipient.
 - **Outside services.**
@@ -64,7 +65,9 @@ npx tsx .claude/skills/tube-pipeline/scripts/status.mts --run <name>
 
 ## Step 0: the brief (every run, before anything else)
 
-Run `node .claude/skills/tube-pipeline/scripts/brief.mjs --run <name>`. It prints the 10 questions, pre-filled with the most recent run's answers.
+Run `node .claude/skills/tube-pipeline/scripts/brief.mjs --run <name>`. It prints two things:
+- **The client's ledger** (`docs/clients/<slug>.md`): every area already worked, and the planned next markets. Propose the next area from that plan; never re-propose a worked city.
+- **The 10 questions**, pre-filled with the most recent run's answers.
 1. Ask the owner all 10 in **one** message. Show the last answers as the default so "same as last time" is one word, but make them see every question.
 2. Write the answers to `<run>/brief.json`, with `confirmed_at`. The schema is in `references/brief.md`, along with why each question matters.
 
@@ -99,6 +102,19 @@ node .claude/skills/tube-pipeline/scripts/source-pull.mjs --run <name> --pull --
   - Raw pages go to `scrapio-raw.jsonl` as they arrive.
 - `--go` means the owner approved exactly what the plan printed. Never pass it on your own.
 
+### Bank pull: grab now, enrich later (any vertical)
+
+Use this when credits are about to expire. `bank-pull.mjs` pulls as many businesses as the searches allow, with no count searches first.
+- **The brief** (`mode: "bank"`) lists the cities in order and the search groups, each with its own review floor.
+- **The pull** walks the cities until something stops it: `source.searches_cap`, the credit cap, the search log, or the 100-per-process limit.
+- **It saves its position after every page**, so the next `--go` resumes on the exact next page.
+- **After the pull:**
+  - `bank-review.mts` applies the cleaning rules and adds the signal tags;
+  - `source-import.mts` is bank-aware: the run name becomes the tag, plus each business's own tags.
+- **Nothing is enriched.**
+
+Run `cleaning-us-2026-10` is the worked example. Before the next bank pull, read lessons #23 on the main-category filter.
+
 ## Step 2: review the pull
 
 ```bash
@@ -113,7 +129,13 @@ It applies the owner's pre-enrichment rules:
 - already in LeadStart (same Google listing or same website);
 - second office of a firm in this pull (the most-reviewed listing is kept).
 
-It prints every judgment call by name. **Show the owner the public/nonprofit, not-a-law-firm and large-firm lists**, and re-run with `--keep` or `--drop` for anything they overrule. On WA-10 it dropped 17 non-law listings (accountants, realtors, mediators), 13 public bodies (prosecutors, public defenders, legal aid) and Miller Nash (large).
+It prints every judgment call by name. **Show the owner the public/nonprofit, not-a-law-firm and large-firm lists**, and re-run with `--keep` or `--drop` for anything they overrule.
+
+It also prints two flag lists that **each need the owner's decision** (lessons #20):
+- **LOOKS PRIVATE, dropped anyway:** a firm or person's name filed under a government category, or a law-firm name on a `.org` site.
+- **LOOKS NATIONAL, kept anyway:** a national brand, or 25+ staff emails on the site.
+
+Re-run with `--keep` or `--drop` for every flagged firm; `--drop` confirms a drop. Until each is decided, `status.mts` stays on step 2 and the assessment shows ✗. On WA-10 it dropped 17 non-law listings (accountants, realtors, mediators), 13 public bodies (prosecutors, public defenders, legal aid) and Miller Nash (large).
 
 ## Step 3: import and enrich in LeadStart
 
@@ -193,7 +215,14 @@ As soon as the scan finishes, click "Export for outreach" on the run's batch (§
 node .claude/skills/tube-pipeline/scripts/validate-export.mjs --run <name> --zip "C:/Users/dtucc/Downloads/<file>-outreach.zip"
 ```
 
-It checks every **send** row three ways, and holds any row with a problem:
+First it checks that the export is **complete**: every firm in the sheet must come back scanned. If any are UNSCANNED or missing, it refuses and says why:
+- TuBe still running: wait.
+- Scans failed: re-running them needs the owner's go.
+- TuBe shows everything finished: the export is **stale**. Reload TuBe and export again from a fresh tab (tube-browser.md §5).
+
+`--allow-incomplete` validates anyway, but only with the owner's OK.
+
+Then it checks every **send** row three ways, and holds any row with a problem:
 - **Against our sheet:** same email, first name, city and question.
 - **Against the export contract:**
   - a sendable segment;
@@ -240,6 +269,9 @@ The dry run prints the plan, the skips, the render check, a rough pace and one s
 
 ## Step 9: completion assessment (every run)
 
+With `--final`, it also records the run in the **client ledger** (`docs/clients/<slug>.json` and `.md`, see `docs/clients/README.md`). That's the central record of every city worked, each run's numbers and costs, and the plan. Commit and push the ledger with the owner's go, so every computer sees it. When the owner changes the plan (next markets, deferred areas), edit the JSON and regenerate: `node .claude/skills/tube-pipeline/scripts/client-ledger.mjs --client <slug> --write`.
+
+
 The owner asked for this on 2026-09-29: "give me a thorough completion assessment when it's done as part of the skill". A run isn't finished until the owner has it.
 
 ```bash
@@ -257,6 +289,18 @@ It writes `<run>/assessment.md` and prints the same report. It reads the run's f
 7. **Timing:** the campaign's queue, and when this run's firms start getting emails.
 8. **Incidents and deviations** from the brief. New ones go in `references/lessons.md`.
 9. **A comparison** with the last finished run.
+
+Section 5 ends with **reconciliation lines**: the numbers must add up from step to step.
+- Review flags all decided.
+- Hand-kept firms not overruled.
+- TuBe-ready = sheet rows, and every sheet firm scanned.
+- The export complete.
+- Every clean row enrolled, skipped with a reason, or held by hand.
+- Verify covering every enrolled firm.
+- Both costs logged.
+- Credits matching Scrap.io's own counter, and spend inside the budget.
+
+Any ✗ turns the verdict into **STOP**: report it to the owner before anything else.
 
 When to run it:
 - **At every pause:** give the owner the interim assessment whenever a run stops for more than a day, for example while it waits for the owner's go.
@@ -300,3 +344,4 @@ At every pause and at the end, the report is the completion assessment (step 9).
 - `references/tube-browser.md`: every TuBe admin-page step, with tested snippets, and the page's limits.
 - `references/field-contract.md`: the upload and export columns, the segments, how each lands in LeadStart, and the import's skip rules.
 - `references/lessons.md`: what went wrong on earlier batches, and which check now catches it. Read it before changing any check.
+- `docs/clients/<slug>.md` (repo root): the client ledger. Areas already worked, runs, costs and the plan.

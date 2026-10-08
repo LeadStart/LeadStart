@@ -60,7 +60,10 @@ main(async () => {
   const file = join(dir, "send-validated.csv");
   if (!existsSync(file)) throw new Error(`${file} not found: run validate-export.mjs first`);
   const only = new Set(csvList(a.only).map(host)), exclude = new Set(csvList(a.exclude).map(host));
-  const rows = readCsv(file).filter((r: any) => (!only.size || only.has(host(r.domain))) && !exclude.has(host(r.domain)));
+  const allRows = readCsv(file);
+  const rows = allRows.filter((r: any) => (!only.size || only.has(host(r.domain))) && !exclude.has(host(r.domain)));
+  // Held out by hand (--only / --exclude): recorded so the assessment can account for every clean row.
+  const heldByHand = allRows.filter((r: any) => !rows.includes(r)).map((r: any) => host(r.domain));
   if (!rows.length) throw new Error("no rows to import");
 
   // ── everything the checks need, in bulk ──
@@ -156,7 +159,7 @@ main(async () => {
 
   if (!APPLY) {
     console.log(`DRY RUN: nothing written (plan saved to import-plan.json). With the owner's go: re-run with --apply.`);
-    stamp(dir, "import_plan", { rows: rows.length, enroll: plan.length, skipped: skipped.length, render_problems: bad.length });
+    stamp(dir, "import_plan", { rows: rows.length, enroll: plan.length, skipped: skipped.length, render_problems: bad.length, held_by_hand: heldByHand });
     return;
   }
   if (bad.length || inboxProblems.length) throw new Error(`refusing --apply: ${bad.length} contacts would send a broken email${inboxProblems.length ? ` and ${inboxProblems.length} inbox problems` : ""}. Fix the data (or hold those firms with --exclude) and re-run.`);
@@ -197,6 +200,6 @@ main(async () => {
   writeJson(join(dir, "import-result.json"), { at: new Date().toISOString(), campaign_id: campaign.id, contact_ids: done, adopted, linked: done.length - adopted, enrolled_now: enrolled, backup: backupFile });
   console.log(`APPLIED: ${done.length} contacts updated (adopted ${adopted}) · ${enrolled} newly enrolled · variables ${newVars.length ? `+${newVars.length}` : "unchanged"}`);
   console.log(`READ BACK: ${ok}/${done.length} on the client + campaign with every field · ${enr.length}/${done.length} enrolled · backup ${backupFile}`);
-  stamp(dir, "import", { enrolled: done.length, adopted, newly_enrolled: enrolled, skipped: skipped.length, read_back_ok: ok, backup: backupFile });
+  stamp(dir, "import", { enrolled: done.length, adopted, newly_enrolled: enrolled, skipped: skipped.length, held_by_hand: heldByHand, read_back_ok: ok, backup: backupFile });
   if (ok !== done.length || enr.length !== done.length || done.length !== plan.length) process.exitCode = 2;
 });

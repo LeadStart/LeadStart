@@ -137,6 +137,37 @@ main(async () => {
   }
   const kept = [...byDomain.values(), ...noDomain];
 
+  // ── judgment calls to put in front of the owner (lessons #20) ──
+  // Google files some private firms as government offices, and some practices
+  // run on .org; some national companies are filed as legal services. These are
+  // hints, not verdicts: the owner decides with --keep / --drop.
+  const PRACTICE = /\b(law|legal|attorneys?|lawyers?|esq|counsel|immigration|injury|divorce|bankruptcy|estate planning|criminal|defen[cs]e|dui|dwi|probate)\b/i;
+  const FIRM_SUFFIX = /\b(pllc|p\.?\s?c\.?|llp|llc|p\.?\s?s\.?|inc\.?)(\b|$)/i;
+  const PUBLIC_WORDS = /\b(aid|clinic|center|centre|services?|counseling|project|society|association|foundation|public|defenders?|county|state|district|courts?|bar|university|school|college|justice|victims|volunteers?|coalition|network|council|commission|department|office of|united states|u\.s\.)\b/i;
+  const PERSON_ATTORNEY = /^[A-Z][a-z]+(?:\s[A-Z]\.?)?\s[A-Z][A-Za-z'-]+[\s,-]+.*\b([Aa]ttorney|[Ll]awyer|[Ee]sq)/;
+  const NATIONAL = /\b(epiq|instant tax|tax (relief|resolution|solutions?)|legalzoom|rocket ?lawyer|legalshield|pre-?paid legal|jackson hewitt|h&r block|liberty tax|optima tax|morgan (&|and) morgan|jacoby (&|and) meyers|sweet james|1-?800|nationwide|national|global)\b/i;
+  const looksPrivate = (e: Row): string | null => {
+    const name = String(e.name ?? ""), d = String(e.domain ?? ""), det = String(e.detail ?? "");
+    if (/\.(gov|edu)$/.test(d)) return null;
+    const commercial = Boolean(d) && !/\.(org|us)$/.test(d);
+    const byCategory = /^(main )?category:/.test(det);
+    if (e.reason === "off_vertical") return byCategory && /government|non-?profit|public|court/i.test(det) && (FIRM_SUFFIX.test(name) || PRACTICE.test(name)) ? `a firm name filed under "${det.replace(/^.*?: /, "")}"` : null;
+    if (e.reason !== "public_or_nonprofit") return null;
+    if (PERSON_ATTORNEY.test(name)) return "a person's name with \"Attorney\"";
+    if (byCategory && commercial && (FIRM_SUFFIX.test(name) || PRACTICE.test(name))) return `a law practice on a .com site, filed under "${det.replace(/^.*?: /, "")}"`;
+    if (d.endsWith(".org") && PRACTICE.test(name) && !PUBLIC_WORDS.test(name)) return "a law-firm name on a .org site";
+    return null;
+  };
+  const looksNational = (k: Kept): string | null => {
+    const hit = `${k.place.name ?? ""} ${k.place.company_domain ?? ""}`.match(NATIONAL);
+    if (hit) return `"${hit[0]}" reads like a national company`;
+    const own = k.place.company_domain ? k.place.scrapio_emails.filter((e) => e.toLowerCase().endsWith(`@${k.place.company_domain}`)).length : 0;
+    if (own >= 25) return `${own} staff emails on its own site (large?)`;
+    return null;
+  };
+  const privateFlags = excluded.map((e) => ({ e, why: looksPrivate(e) })).filter((x) => x.why);
+  const nationalFlags = kept.map((k) => ({ k, why: looksNational(k) })).filter((x) => x.why);
+
   // ── outputs + the owner's review list ──
   writeJson(join(dir, "source-kept.json"), kept.map((k) => ({ ...k.place, _query_city: k.queryCity, _group: k.group })));
   writeJson(join(dir, "source-excluded.json"), excluded);
@@ -146,10 +177,13 @@ main(async () => {
   console.log(`Kept by city: ${fmtTally(tally(kept.map((k) => k.queryCity)))}`);
   console.log(`Kept by main category: ${fmtTally(tally(kept.map((k) => k.place.category_label ?? "?")))}`);
   console.log(`Kept median reviews ${med(kept.map((k) => k.place.reviews_count ?? NaN))} · with emails on their own site ${kept.filter((k) => k.place.scrapio_emails.length).length}/${kept.length}`);
+  if (privateFlags.length) console.log(`\nLOOKS PRIVATE, dropped anyway (${privateFlags.length}): check each; keep with --keep <website>\n` + privateFlags.map(({ e, why }) => `  ? ${e.name} · ${e.city} · ${e.domain ?? "no website"} · ${why}`).join("\n"));
+  if (nationalFlags.length) console.log(`\nLOOKS NATIONAL, kept anyway (${nationalFlags.length}): check each; drop with --drop <website>\n` + nationalFlags.map(({ k, why }) => `  ? ${k.place.name} · ${k.queryCity} · ${k.place.company_domain ?? "no website"} · ${why}`).join("\n"));
   for (const r of ["public_or_nonprofit", "large_firm", "off_vertical", "owner_dropped"]) {
     const xs = excluded.filter((e) => e.reason === r);
     if (xs.length) console.log(`\n${r} (${xs.length}): the owner can keep any with --keep <place id or website>\n` + xs.map((e) => `  ✗ ${e.name} · ${e.city} · ${e.domain ?? "no website"} · ${e.detail ?? ""}`).join("\n"));
   }
-  stamp(dir, "source_review", { new_firms: byPlace.size, kept: kept.length, dropped: excluded.length, dropped_by_reason: tally(excluded.map((e) => e.reason)), forced_keep: forceKeep.size, forced_drop: forceDrop.size, kept_by_hand: [...forceKeep], dropped_by_hand: [...forceDrop] });
+  stamp(dir, "source_review", { new_firms: byPlace.size, kept: kept.length, dropped: excluded.length, dropped_by_reason: tally(excluded.map((e) => e.reason)), forced_keep: forceKeep.size, forced_drop: forceDrop.size, kept_by_hand: [...forceKeep], dropped_by_hand: [...forceDrop],
+    looks_private: privateFlags.map(({ e, why }) => ({ name: e.name, domain: e.domain, why })), looks_national: nationalFlags.map(({ k, why }) => ({ name: k.place.name, domain: k.place.company_domain, why })) });
 
 });

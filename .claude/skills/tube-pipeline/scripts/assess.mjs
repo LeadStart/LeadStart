@@ -17,7 +17,7 @@
 //   node .claude/skills/tube-pipeline/scripts/assess.mjs --run <name>          where it stands now
 //   node .claude/skills/tube-pipeline/scripts/assess.mjs --run <name> --final  at the end of the run
 import {
-  ORG_ID, STEPS, addWeekdays, args, existsSync, findEnrichmentRun, fmtTally, getAll, getIn, join, listRuns, main, nextStep,
+  ORG_ID, STEPS, addWeekdays, unresolvedReviewFlags, args, existsSync, findEnrichmentRun, fmtTally, getAll, getIn, join, listRuns, main, nextStep,
   readCsv, readJson, readRun, rest, runDir, stamp, tally, writeFileSync,
 } from "./lib.mjs";
 
@@ -96,7 +96,8 @@ main(async () => {
     : s.verify && !s.verify.with_problems ? "COMPLETE"
     : s.verify ? "COMPLETE WITH PROBLEMS"
     : "IN PROGRESS";
-  const next = nextStep(run, brief);
+  // A final assessment of a finished run is the last step: nothing is next.
+  const next = a.final && status.startsWith("COMPLETE") ? "Done: this is the final assessment. Held firms (held.csv, TuBe's review list) may be worth a second look." : nextStep(run, brief);
 
   // ── Scrap.io usage ──
   let searches = null, ceilings = null;
@@ -166,6 +167,59 @@ main(async () => {
   const prior = listRuns().filter((r) => r.name !== a.run && (r.run.stages?.verify || r.run.stages?.import))
     .map((r) => ({ name: r.name, run: r.run, brief: existsSync(join(r.dir, "brief.json")) ? readJson(join(r.dir, "brief.json")) : null }))[0] ?? null;
 
+  // ── quality checks (computed before the report, so the verdict can say STOP) ──
+  const Q = [];
+  const q = (res, text, detail) => Q.push(`- ${res === true ? "✓" : res === false ? "✗" : "·"} ${text}${detail ? `: ${detail}` : ""}`);
+  q(Boolean(brief?.confirmed_at), "Brief confirmed by the owner before any search or spend", brief?.confirmed_by ?? brief?.confirmed_at);
+  if (searches) q(searches.used <= 100 && ceilings.left >= 0, "Scrap.io searches inside the per-run limit and the shared ceilings", `${searches.used} used`);
+  if (s.source_pull) {
+    const overcharged = (pull?.tally ?? []).filter((t) => t.credits > t.firms + 2);
+    q(!s.source_pull.stopped, "Pull finished without a stop", s.source_pull.stopped ?? `${s.source_pull.pages} pages`);
+    q(brief?.source?.credits_cap == null ? null : s.source_pull.credits_spent <= brief.source.credits_cap, "Credits inside the cap", `${n(s.source_pull.credits_spent)} of ${n(brief?.source?.credits_cap)}`);
+    q(!overcharged.length, "Never charged for a firm we already had (block list)", overcharged.length ? overcharged.map((t) => `${t.city}/${t.group}`).join(", ") : `${n(pullStubs)} came back free`);
+  }
+  if (s.source_review) q(true, "Review exclusions applied", `${n(s.source_review.dropped)} dropped${s.source_review.forced_keep || s.source_review.forced_drop ? ` (${s.source_review.forced_keep} kept and ${s.source_review.forced_drop} dropped by hand)` : ""}`);
+  if (s.source_import) q(true, "Weak email hosts set aside at import", `${n(s.source_import.pooled)} firms`);
+  if (s.enrich_done && s.enrich_start?.estimate_usd != null) q(s.enrich_done.enrichment_usd <= s.enrich_start.estimate_usd * 1.25, "Enrichment cost inside its estimate", `${usd(s.enrich_done.enrichment_usd)} vs ${usd(s.enrich_start.estimate_usd)} estimated, ${n(s.enrich_done.minutes)} minutes`);
+  if (u) q(u.checked_tube ? true : null, "Checked which firms TuBe already scanned (no double billing)", u.checked_tube ? `${n(u.already_scanned + ownDrops.length)} of ${n(sheetKept)} scanned` : "not yet");
+  if (u) q(true, "Integrity drops (in the campaign, same firm, other campaigns, emailed, DNC, other client, suppressed, undeliverable, pooled)", `${n(sheetDropped.length)} dropped`);
+  if (s.validate) q(s.validate.reports_checked, "Every send row checked against our sheet, the export contract and its TuBe report page", `${n(s.validate.held)} held`);
+  if (s.import_plan) q(s.import_plan.render_problems === 0, "Every email rendered with the live sender logic before the import", `${n(s.import_plan.render_problems)} problems`);
+  if (s.import) q(s.import.read_back_ok === s.import.enrolled, "Import read back from the database and matched", `${n(s.import.read_back_ok)} of ${n(s.import.enrolled)}`);
+  if (s.verify) q(!s.verify.with_problems && !s.verify.inbox_problems, "Verify: every email renders; nobody on the do-not-contact list or pooled", `${n(s.verify.emails)} emails, ${n(s.verify.with_problems)} contacts with problems`);
+  if (live) q(live.bounced === 0 ? true : null, "Bounces so far", `${n(live.bounced)} of ${n(live.sends.length)} sent`);
+
+  // Reconciliation: the numbers must add up from step to step. A ✗ here means
+  // something fell through a crack; the verdict turns into STOP (SKILL.md).
+  const R = [];
+  const rq = (res, text, detail) => R.push(`- ${res === true ? "✓" : res === false ? "✗" : "·"} ${text}${detail ? `: ${detail}` : ""}`);
+  if (s.source_review?.looks_private || s.source_review?.looks_national) {
+    const open = unresolvedReviewFlags(s.source_review);
+    const flagged = (s.source_review.looks_private ?? []).length + (s.source_review.looks_national ?? []).length;
+    rq(open.length === 0, "Every review flag decided by the owner (--keep / --drop)", open.length ? `undecided: ${open.map((f) => f.domain).join(", ")}` : `${flagged} flagged, all decided`);
+  }
+  const keeps = (s.source_review?.kept_by_hand ?? []).map((d) => String(d).toLowerCase());
+  if (keeps.length && upRep) {
+    const overruled = (upRep.handoff_skipped ?? []).filter((x) => keeps.includes(String(x.domain ?? "").toLowerCase()) && ["public_or_nonprofit", "large_firm", "off_vertical"].includes(x.reason));
+    rq(!overruled.length, "Firms kept by hand weren't overruled at step 4", overruled.length ? overruled.map((x) => `${x.domain} (${x.label ?? x.reason})`).join(", ") : `${keeps.length} kept by hand`);
+  }
+  if (s.enrich_done && u && !rebuilt) rq(s.enrich_done.tube_ready === u.handoff_rows, "TuBe-ready after enrichment = rows going into the sheet", `${n(s.enrich_done.tube_ready)} vs ${n(u.handoff_rows)}`);
+  if (s.validate && u && !rebuilt) rq(u.to_upload === 0, "Every sheet firm scanned before the export", `${n(u.to_upload)} still to scan`);
+  if (s.validate?.unscanned != null) rq(s.validate.unscanned === 0 && s.validate.not_in_export === 0 ? true : s.validate.allowed_incomplete ? null : false, "The export covers every sheet firm, scanned", `${n(s.validate.unscanned)} unscanned, ${n(s.validate.not_in_export)} missing${s.validate.allowed_incomplete ? " (allowed by the owner)" : ""}`);
+  if (s.import && s.validate) {
+    const byHand = (s.import.held_by_hand ?? []).length;
+    rq(s.import.enrolled + s.import.skipped + byHand === s.validate.validated, "Every clean row enrolled, skipped with a reason, or held by hand", `${n(s.import.enrolled)} enrolled + ${n(s.import.skipped)} skipped + ${n(byHand)} held by hand${byHand ? ` (${s.import.held_by_hand.join(", ")})` : ""} of ${n(s.validate.validated)}`);
+  }
+  if (s.verify && s.import) rq(s.verify.contacts === s.import.enrolled, "Verify covered every enrolled firm", `${n(s.verify.contacts)} of ${n(s.import.enrolled)}`);
+  if (s.enrich_done && run.spend?.length) {
+    const logged = spend.find((e) => e.what === "LeadStart enrichment");
+    rq(Boolean(logged) && Math.abs(Number(logged.usd) - Number(s.enrich_done.enrichment_usd)) < 0.01, "Enrichment cost logged in the spend", logged ? usd(logged.usd) : "not logged");
+  }
+  if (s.scan) rq(spend.some((e) => /tube/i.test(e.what)), "TuBe scan cost logged in the spend", spend.filter((e) => /tube/i.test(e.what)).map((e) => usd(e.usd)).join(", ") || "not logged: sum cost_cents for the batch in TuBe and log it with status.mts --spend");
+  if (pull?.credits_before && pull?.credits_after) rq(pull.credits_after.consumed - pull.credits_before.consumed === s.source_pull.credits_spent, "Credits used = Scrap.io's own counter", `${n(s.source_pull.credits_spent)} vs ${n(pull.credits_after.consumed - pull.credits_before.consumed)}`);
+  if (brief?.budget?.total_usd != null) rq(spent <= brief.budget.total_usd, "Spend inside the budget", `${usd(spent)} of ${usd(brief.budget.total_usd)}`);
+  const failed = [...Q, ...R].filter((x) => x.startsWith("- ✗"));
+
   // ── the report ──
   const out = [];
   const P = (...lines) => out.push(...lines);
@@ -186,7 +240,8 @@ main(async () => {
   P(`- **Where it stands:** ${status.toLowerCase()}. ${STEPS.map((t, i) => `${i} ${t}: ${state[i]}`).filter((x, i) => i < 9).join(" · ")}.`);
   if (pulled != null) P(`- **Firms:** ${n(pulled)} pulled${s.source_review ? ` → ${n(s.source_review.kept)} kept` : ""}${s.source_import ? ` → ${n(s.source_import.inserted)} imported` : ""}${s.enrich_done ? ` → ${n(s.enrich_done.tube_ready)} TuBe-ready` : ""}${u ? ` → ${n(sheetKept)} in the sheet` : ""}${s.validate ? ` → ${n(s.validate.validated)} clean` : ""}${enrolled != null ? ` → **${n(enrolled)} enrolled** (${pct(enrolled, pulled)} of pulled)` : ""}.`);
   P(`- **Money:** ${usd(spent)} spent${brief?.budget?.total_usd != null ? ` of ${usd(brief.budget.total_usd)}${brief.budget.hard_stop ? " (hard stop)" : ""}` : ""}${s.source_pull ? ` · ${n(s.source_pull.credits_spent)} Scrap.io credits` : ""}${searches ? ` · ${n(searches.used)} Scrap.io searches` : ""}.`);
-  P(`- **Next:** ${next}`);
+  if (failed.length) P(`- **STOP: ${failed.length} check${failed.length > 1 ? "s" : ""} failed** (section 5). Report ${failed.length > 1 ? "them" : "it"} to the owner and decide together before any next step.`);
+  P(`- **Next:** ${failed.length ? "STOP, see above" : next}`);
 
   // 2. brief vs outcome
   if (brief) {
@@ -279,27 +334,8 @@ main(async () => {
 
   // 5. quality checks
   H("5. Quality checks");
-  const Q = [];
-  const q = (res, text, detail) => Q.push(`- ${res === true ? "✓" : res === false ? "✗" : "·"} ${text}${detail ? `: ${detail}` : ""}`);
-  q(Boolean(brief?.confirmed_at), "Brief confirmed by the owner before any search or spend", brief?.confirmed_by ?? brief?.confirmed_at);
-  if (searches) q(searches.used <= 100 && ceilings.left >= 0, "Scrap.io searches inside the per-run limit and the shared ceilings", `${searches.used} used`);
-  if (s.source_pull) {
-    const overcharged = (pull?.tally ?? []).filter((t) => t.credits > t.firms + 2);
-    q(!s.source_pull.stopped, "Pull finished without a stop", s.source_pull.stopped ?? `${s.source_pull.pages} pages`);
-    q(brief?.source?.credits_cap == null ? null : s.source_pull.credits_spent <= brief.source.credits_cap, "Credits inside the cap", `${n(s.source_pull.credits_spent)} of ${n(brief?.source?.credits_cap)}`);
-    q(!overcharged.length, "Never charged for a firm we already had (block list)", overcharged.length ? overcharged.map((t) => `${t.city}/${t.group}`).join(", ") : `${n(pullStubs)} came back free`);
-  }
-  if (s.source_review) q(true, "Review exclusions applied", `${n(s.source_review.dropped)} dropped${s.source_review.forced_keep || s.source_review.forced_drop ? ` (${s.source_review.forced_keep} kept and ${s.source_review.forced_drop} dropped by hand)` : ""}`);
-  if (s.source_import) q(true, "Weak email hosts set aside at import", `${n(s.source_import.pooled)} firms`);
-  if (s.enrich_done && s.enrich_start?.estimate_usd != null) q(s.enrich_done.enrichment_usd <= s.enrich_start.estimate_usd * 1.25, "Enrichment cost inside its estimate", `${usd(s.enrich_done.enrichment_usd)} vs ${usd(s.enrich_start.estimate_usd)} estimated, ${n(s.enrich_done.minutes)} minutes`);
-  if (u) q(u.checked_tube ? true : null, "Checked which firms TuBe already scanned (no double billing)", u.checked_tube ? `${n(u.already_scanned + ownDrops.length)} of ${n(sheetKept)} scanned` : "not yet");
-  if (u) q(true, "Integrity drops (in the campaign, same firm, other campaigns, emailed, DNC, other client, suppressed, undeliverable, pooled)", `${n(sheetDropped.length)} dropped`);
-  if (s.validate) q(s.validate.reports_checked, "Every send row checked against our sheet, the export contract and its TuBe report page", `${n(s.validate.held)} held`);
-  if (s.import_plan) q(s.import_plan.render_problems === 0, "Every email rendered with the live sender logic before the import", `${n(s.import_plan.render_problems)} problems`);
-  if (s.import) q(s.import.read_back_ok === s.import.enrolled, "Import read back from the database and matched", `${n(s.import.read_back_ok)} of ${n(s.import.enrolled)}`);
-  if (s.verify) q(!s.verify.with_problems && !s.verify.inbox_problems, "Verify: every email renders; nobody on the do-not-contact list or pooled", `${n(s.verify.emails)} emails, ${n(s.verify.with_problems)} contacts with problems`);
-  if (live) q(live.bounced === 0 ? true : null, "Bounces so far", `${n(live.bounced)} of ${n(live.sends.length)} sent`);
   P(...Q);
+  if (R.length) P("", "Reconciliation (the numbers must add up from step to step):", ...R);
 
   // 6. held + open
   H("6. Held or open, by name");
@@ -377,9 +413,20 @@ main(async () => {
   const text = out.join("\n") + "\n";
   writeFileSync(join(dir, "assessment.md"), text);
   const final = Boolean(a.final) && status.startsWith("COMPLETE");
-  stamp(dir, final ? "assess_final" : "assess", { status, next, spent: +spent.toFixed(2), enrolled, searches: searches?.used ?? null });
+  stamp(dir, final ? "assess_final" : "assess", { status, next: failed.length ? `STOP: ${failed.length} checks failed` : next, failed: failed.map((x) => x.slice(4)), spent: +spent.toFixed(2), enrolled, searches: searches?.used ?? null });
   console.log(text);
   if (a.final && !final) console.log(`NOT FINAL: the run isn't finished (${status}). Saved as an interim assessment. Next: ${next}`);
+  // A finished run goes into its client's ledger (docs/clients/<slug>.md), the
+  // central record of what each client has covered. Commit + push it after.
+  if (final && campaignId) {
+    const { configForCampaign, addRun, write } = await import("./client-ledger.mjs");
+    const led = await configForCampaign(campaignId);
+    if (led) {
+      addRun(led.config, a.run);
+      await write(led.config, led.file);
+      console.log(`Recorded in the client ledger: ${led.file.replace(/\.json$/, ".md")}. Commit and push it (with the owner's go) so every computer sees it.`);
+    }
+  }
 });
 
 function groupBy(xs, f) {

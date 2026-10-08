@@ -234,6 +234,13 @@ export async function findEnrichmentRun(dir) {
 // ── where a run stands (status.mts and assess.mjs share this) ───────────────
 export const STEPS = ["Brief", "Pull from Scrap.io", "Review the pull", "Import + enrich", "Integrity + sheet",
   "Upload + scan", "Export + validate", "Into the campaign", "Verify", "Completion assessment"];
+/** Review flags (looks private but dropped / looks national but kept) that
+ *  nobody decided: each one needs the owner's --keep or --drop. */
+export function unresolvedReviewFlags(review) {
+  if (!review) return [];
+  const decided = new Set([...(review.kept_by_hand ?? []), ...(review.dropped_by_hand ?? [])].map((d) => String(d).toLowerCase()));
+  return [...(review.looks_private ?? []), ...(review.looks_national ?? [])].filter((f) => !decided.has(String(f.domain ?? "").toLowerCase()));
+}
 /** The run's next step, from its ledger (run.json) and its brief. */
 export function nextStep(run, brief) {
   const s = run.stages ?? {};
@@ -242,6 +249,8 @@ export function nextStep(run, brief) {
   if (!s.upload && !s.source_import) {
     if (!sourced) return "Step 1: source-pull.mjs --run <name> (the plan) → owner's go → --count --go / --pull --go. Leads already in LeadStart? Go to step 4 with --tag/--searches";
     if (s.source_pull && !s.source_review) return "Step 2: source-review.mts --run <name>, then show the owner every dropped firm";
+    const open = unresolvedReviewFlags(s.source_review);
+    if (open.length) return `Step 2: ${open.length} review flags need the owner's decision (${open.map((f) => f.domain).join(", ")}): re-run source-review.mts with --keep or --drop for each`;
     return "Step 3: source-import.mts --run <name> (dry run → owner's go → --apply)";
   }
   if (s.source_import && !s.enrich_start) return "Step 3: enrich.mts --run <name> (the dry run states the cost against the budget → owner's go → --apply)";

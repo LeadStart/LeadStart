@@ -1,0 +1,165 @@
+{
+ "client": {
+  "id": "f7742e94-c23d-41c7-a319-f96760239934",
+  "name": "SaaSassins",
+  "slug": "saasassins"
+ },
+ "vertical": "law firms (TuBe SEO: AI-visibility outreach)",
+ "searches": [
+  {
+   "id": "890a1cab-f548-4db4-9c26-c28ed6f260e3",
+   "vertical": "law firms",
+   "run": "Apify test (2026-09-02)"
+  },
+  {
+   "id": "e255bc15-1529-45af-a201-8b192836cc24",
+   "vertical": "law firms",
+   "run": "Apify WA statewide (2026-09-02)"
+  },
+  {
+   "id": "29684330-e1ef-42a3-b6cb-4fdb4fa5a735",
+   "vertical": "law firms",
+   "run": "Scrap.io trial (2026-09-25)"
+  },
+  {
+   "id": "46e8d346-63f4-46ce-8ed4-ca1815dca4ed",
+   "vertical": "law firms",
+   "run": "wa10"
+  },
+  {
+   "id": "4357f2c2-10e5-40a1-9048-c725976feb94",
+   "vertical": "law firms",
+   "run": "wa10"
+  },
+  {
+   "id": "86a28807-2534-4030-9ff9-3e8f164095c5",
+   "vertical": "law firms",
+   "run": "or-metro-2026-10"
+  },
+  {
+   "id": "3d43fea5-22e7-478c-93c9-4e9be1298e0d",
+   "vertical": "cleaning businesses",
+   "run": "cleaning-us-2026-10 (bank, not enriched)"
+  },
+  {
+   "id": "6315b65f-6fa1-44cf-ba95-2b7d0c50727b",
+   "vertical": "cleaning businesses",
+   "run": "cleaning-us-2026-10b (bank, not enriched)"
+  },
+  {
+   "id": "10ad59d8-c838-4acf-8791-d275a979c5c0",
+   "vertical": "cleaning businesses",
+   "run": "cleaning-us-2026-10c (bank, not enriched)"
+  }
+ ],
+ "runs": [
+  {
+   "run": "wa10",
+   "date": "2026-09-25",
+   "state": "WA",
+   "metros": [
+    "Seattle",
+    "Tacoma",
+    "Spokane",
+    "Vancouver",
+    "Bellevue",
+    "Everett",
+    "Olympia",
+    "Bellingham",
+    "Kennewick",
+    "Yakima"
+   ],
+   "source": "scrapio",
+   "filters": "10+ reviews, website, open; groups A+B+C",
+   "campaign": "TuBe SEO — AI Visibility Launch",
+   "pulled": 599,
+   "kept": 565,
+   "tube_ready": 191,
+   "enrolled": 152,
+   "held": 21,
+   "cash_usd": 12.76,
+   "credits": 599,
+   "searches_used": null,
+   "maps_searches": [
+    "46e8d346-63f4-46ce-8ed4-ca1815dca4ed",
+    "4357f2c2-10e5-40a1-9048-c725976feb94"
+   ]
+  },
+  {
+   "run": "or-metro-2026-10",
+   "date": "2026-09-30",
+   "state": "OR",
+   "metros": [
+    "Portland",
+    "Beaverton",
+    "Hillsboro",
+    "Lake Oswego",
+    "Gresham",
+    "Tigard",
+    "Salem",
+    "Eugene",
+    "Bend",
+    "Medford"
+   ],
+   "source": "scrapio",
+   "filters": "10+ reviews, website, open; groups A+B+C",
+   "campaign": "TuBe SEO — AI Visibility Launch",
+   "pulled": 617,
+   "kept": 584,
+   "tube_ready": 167,
+   "enrolled": 143,
+   "held": 5,
+   "cash_usd": 9.18,
+   "credits": 617,
+   "searches_used": 39,
+   "maps_searches": [
+    "86a28807-2534-4030-9ff9-3e8f164095c5"
+   ]
+  }
+ ],
+ "other_pulls": [],
+ "plan": {
+  "next": [
+   {
+    "market": "Sacramento, CA",
+    "size": "~300 firms",
+    "notes": "state capital, dense with law firms; the first read on California"
+   },
+   {
+    "market": "San Diego, CA",
+    "size": "cap 400",
+    "notes": "big market, lots of consumer law"
+   },
+   {
+    "market": "Los Angeles, CA",
+    "size": "cap 800, 25+ reviews",
+    "notes": "the biggest pool; the higher review floor keeps it to established firms"
+   },
+   {
+    "market": "Bay Area, CA (San Francisco, Oakland, San Jose)",
+    "size": "cap 300 each"
+   },
+   {
+    "market": "Orange County, CA (Irvine, Santa Ana, Newport Beach)",
+    "size": "cap 400"
+   },
+   {
+    "market": "Fresno, CA",
+    "size": "~250 firms"
+   }
+  ],
+  "deferred": [
+   "WA suburbs (~650 firms across 99 cities: Kent, Renton, Edmonds, Lynnwood, Puyallup…): deferred 2026-09-26",
+   "California sizes are estimates: the 2026-09-26 search lock hit before any CA count ran. Confirm with a small count at 10+ reviews first."
+  ]
+ },
+ "notes": [
+  "Sending capacity is the bottleneck, not leads: 3 inboxes (gettubeseo.com) start at most 20 new people a weekday, about 100 a week (2026-09-30).",
+  "Held at validation, not enrolled: WA-10 21 (+1 held by hand), Oregon 5. Weak-email-host firms set aside, not enriched: Oregon 196.",
+  "Scrap.io: the Sept-Oct cycle ended with a cleaning bank pull on 2026-10-08 (148 searches + 2 category lookups = the full 150 in 24 hours; 3,146 credits; 5,557 credits expired unused). The owner is cancelling the plan before the 2026-10-08 renewal.",
+  "Cleaning bank (PolishPoint), run cleaning-us-2026-10: 3,146 pulled from 40 big US cities, 2,547 imported 2026-10-08 (tag cleaning-us-2026-10), NOT enriched, no client, no campaign; 697 on weak email hosts set aside. Signal tags: cleaning-janitorial / -residential / -general / -specialty, booking-<platform> (297 with booking software: Jobber 144, Housecall Pro 73), has-linkedin 531, franchise 49. Filters: janitorial + commercial 5+ reviews, house + generic cleaning 25+ reviews, website, open. Next: enrich on the owner's go; decide the 10+ employee check first.",
+  "Cleaning bank, second pull (cleaning-us-2026-10b, 2026-10-08): the owner OK'd a raise of the 24-hour Scrap.io ceiling to 250 until the renewal (migration 00136, reverts by itself at 21:45 UTC). 92 searches with the main-category filter (verified working) over 46 suburbs and second cities: 601 new, 596 imported (tag cleaning-us-2026-10b), 0 off-target. Suburb pools are tiny under the main-category filter (5-30 per search), so this yielded 6.5 businesses per search.",
+  "Cleaning bank, third pull (cleaning-us-2026-10c, 2026-10-08): the owner OK'd a 24-hour ceiling of 400 until the renewal (migration 00137, reverts by itself). The 40 big cities below the first pull's floors (residential and generic cleaning 10-24 reviews, janitorial 1-4; main category; gmap_reviews_count_lte verified). The yield check stopped it after 8 searches at 19.4 per search: 155 new, 150 imported. The owner stopped there.",
+  "Cleaning bank total (2026-10-08): 3,293 cleaning businesses in LeadStart under tags cleaning-us-2026-10 (2,547), -10b (596) and -10c (150), all with scrap.io; not enriched, no client, no campaign. Scrap.io: 250 searches (2 category lookups + 248 pages) and 3,902 credits used in total; the rest expired with the cancelled plan."
+ ]
+}

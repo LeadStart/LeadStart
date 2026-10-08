@@ -93,6 +93,19 @@ main(async () => {
     : base
       ? `Run "${a.run}" has no brief yet. Last answers, from run "${from}" (the starting point to confirm or change):`
       : `Run "${a.run}" has no brief, and no earlier run has one: start from the defaults in references/brief.md.`);
+  // The client's ledger first: what's already covered and what's planned (docs/clients/<slug>.md).
+  const campaignId = (own ?? base)?.campaign?.id;
+  if (campaignId) {
+    const { configForCampaign } = await import("./client-ledger.mjs");
+    const led = await configForCampaign(campaignId).catch(() => null);
+    if (led?.config) {
+      const runs = led.config.runs ?? [];
+      console.log(`\nFrom the client ledger (docs/clients/${led.config.client.slug}.md):`);
+      for (const r of runs) console.log(`  already worked: ${r.state} (${r.run}, ${r.date}): ${(r.metros ?? []).join(", ")} · ${r.enrolled ?? "?"} enrolled`);
+      for (const x of led.config.plan?.next ?? []) console.log(`  planned next: ${typeof x === "string" ? x : `${x.market}${x.size ? ` (${x.size})` : ""}`}`);
+      for (const x of led.config.plan?.deferred ?? []) console.log(`  deferred: ${x}`);
+    }
+  }
   BRIEF_QUESTIONS.forEach(([k, q], i) => console.log(`\n${i + 1}. ${q}\n   → ${base ? summarize(k, base[k]) : "(see references/brief.md)"}`));
   console.log(`\nStanding rules: ${STANDING_RULES.join(" · ")}.`);
   if (!own || !own.confirmed_at) {

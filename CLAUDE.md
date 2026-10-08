@@ -43,6 +43,15 @@ refuse past **150 per 24 hours, 400 per 7 days, 1,000 per 30 days** (migration 0
 cities, and ask the owner with the exact search count before any Scrap.io job.**
 Raising a ceiling = a new migration, only on the owner's explicit go.
 
+# Client ledgers: check before prospecting for a client
+Every client has a central ledger at [`docs/clients/<client>.md`](docs/clients/README.md):
+- its campaigns and where they stand;
+- every city and region already worked, with counts;
+- each prospecting run's numbers and costs;
+- the plan (next markets, deferred areas).
+
+**Read it before planning or pulling anything for a client.** Don't search a city it lists again without the owner's OK. The TuBe pipeline records each finished run there by itself (step 9). After any other prospecting for a client, regenerate it with `node .claude/skills/tube-pipeline/scripts/client-ledger.mjs --client <slug> --write` and edit the plan and notes in `docs/clients/<slug>.json`.
+
 # The in-app Onboarding Preview must render the REAL client-facing surfaces
 The **Onboarding Preview** (Admin → Workflows → Onboarding) shows exactly what a
 client sees while coming aboard — the proposal email, the hosted quote page, and

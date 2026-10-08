@@ -17,7 +17,7 @@
 // (clean rows), held.csv (rows + reasons) and validation.json; stamps run.json.
 import {
   KEYWORD_TAIL, TITLE_TAIL, StopError, args, basename, csvList, emailPerson, existsSync, fmtTally, host, importTube, join, main, mkdirSync, norm,
-  parseCsv, readCsv, readFileSync, readdirSync, runDir, sleep, stamp, tally, toCsv, unzipToDir, writeFileSync, writeJson,
+  parseCsv, readCsv, readFileSync, readJson, readRun, readdirSync, runDir, sleep, stamp, tally, toCsv, unzipToDir, writeFileSync, writeJson,
 } from "./lib.mjs";
 
 export const OUTREACH_COLS = ["email", "first_name", "company", "firm", "city", "business_type", "competitor_1", "competitors",
@@ -68,6 +68,28 @@ main(async () => {
       if (prev) duplicates++;
       if (!prev || String(r.scanned_at) > String(prev.scanned_at)) send.set(d, r);
     }
+  }
+
+  // ── completeness: every firm in the sheet must come back scanned ──
+  // A stale export (the TuBe page was loaded while scans were finishing) lists
+  // finished firms as UNSCANNED, and an incomplete one misses firms. Either would
+  // silently drop firms from the campaign (2026-09-30: 19 of 167). A firm counts
+  // as scanned if ANY export has it scanned, so an old stale file in the folder
+  // can't mask or block a newer complete one.
+  const scanned = new Set([...send.keys(), ...review.filter((r) => r.segment !== "UNSCANNED").map((r) => host(r.domain))]);
+  const unscanned = [...new Set(review.filter((r) => r.segment === "UNSCANNED").map((r) => host(r.domain)))].filter((d) => !scanned.has(d));
+  const notInExport = [...sheet.keys()].filter((d) => !scanned.has(d) && !unscanned.includes(d));
+  if (unscanned.length || notInExport.length) {
+    // TuBe's last check: build-upload records it in the ledger (and renames the
+    // file it read), so the ledger comes first; a fresh unread file second.
+    const check = readRun(dir).stages?.upload?.tube_check ?? (existsSync(join(dir, "tube-scanned.json")) ? readJson(join(dir, "tube-scanned.json")) : null);
+    const what = [unscanned.length && `${unscanned.length} firms are UNSCANNED in the export`, notInExport.length && `${notInExport.length} firms in the sheet are missing from it`].filter(Boolean).join(" and ");
+    const why = !check ? "No TuBe check is recorded: run tube-check.js after the scan finishes, save it, and re-run build-upload.mts."
+      : check.open > 0 ? `TuBe's last check shows ${check.open} scans still running: wait, then export again.`
+      : check.errors > 0 ? `TuBe's last check shows ${check.errors} failed scans: re-running them needs the owner's go.`
+      : "TuBe's last check shows every scan finished, so the export is STALE: reload the TuBe page and export again (tube-browser.md §5).";
+    if (!a["allow-incomplete"]) throw new StopError(`REFUSED: ${what}. ${why} Only with the owner's OK: --allow-incomplete.`);
+    console.log(`WARNING (--allow-incomplete): ${what}. ${why}`);
   }
 
   // ── row checks ──
@@ -218,5 +240,6 @@ main(async () => {
   stamp(dir, "validate", {
     export_files: csvs, send_rows: send.size, review_rows: review.length, validated: clean.length, held: held.length,
     reports_checked: !a["no-reports"], issue_kinds: issueKinds,
+    unscanned: unscanned.length, not_in_export: notInExport.length, allowed_incomplete: Boolean(a["allow-incomplete"]),
   });
 });
