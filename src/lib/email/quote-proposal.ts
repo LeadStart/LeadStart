@@ -54,12 +54,12 @@ export function buildQuoteProposalEmail(data: QuoteEmailData): string {
     data.setupCents > 0
       ? `
         <tr>
-          <td style="padding: 12px 0; ${contactsRow ? "border-top: 1px solid rgba(46,55,254,0.15);" : ""} color: #3D3D5C; font-size: 14px;">One-time setup fee</td>
-          <td style="padding: 12px 0; ${contactsRow ? "border-top: 1px solid rgba(46,55,254,0.15);" : ""} text-align: right; color: #1A1A2E; font-weight: 600;">${formatCents(data.setupCents)}</td>
+          <td style="padding: 12px 0; ${contactsRow ? "border-top: 1px solid #D1D3FF;" : ""} color: #3D3D5C; font-size: 14px;">One-time setup fee</td>
+          <td style="padding: 12px 0; ${contactsRow ? "border-top: 1px solid #D1D3FF;" : ""} text-align: right; color: #1A1A2E; font-weight: 600;">${formatCents(data.setupCents)}</td>
         </tr>`
       : "";
 
-  const topBorder = contactsRow || setupRow ? "border-top: 1px solid rgba(46,55,254,0.15);" : "";
+  const topBorder = contactsRow || setupRow ? "border-top: 1px solid #D1D3FF;" : "";
 
   return `
 <!DOCTYPE html>
@@ -79,8 +79,8 @@ export function buildQuoteProposalEmail(data: QuoteEmailData): string {
 
           <!-- Header -->
           <tr>
-            <td style="background: linear-gradient(135deg, #6B72FF 0%, #2E37FE 30%, #1C24B8 65%, #0F1880 100%); border-radius: 16px 16px 0 0; padding: 36px 32px;">
-              <p style="margin: 0; color: rgba(255,255,255,0.7); font-size: 13px; text-transform: uppercase; letter-spacing: 1px;">
+            <td style="background: #2E37FE; border-radius: 16px 16px 0 0; padding: 36px 32px;">
+              <p style="margin: 0; color: #C0C3FF; font-size: 13px; text-transform: uppercase; letter-spacing: 1px;">
                 LeadStart Proposal
               </p>
               <h1 style="margin: 6px 0 0; color: #ffffff; font-size: 26px; font-weight: 700; letter-spacing: -0.5px;">
@@ -125,7 +125,7 @@ export function buildQuoteProposalEmail(data: QuoteEmailData): string {
 
               <!-- CTA -->
               <div style="text-align: center; margin: 0 0 20px;">
-                <a href="${data.quoteUrl}" style="display: inline-block; background: linear-gradient(135deg, #6B72FF, #2E37FE); color: #ffffff; text-decoration: none; padding: 14px 36px; border-radius: 10px; font-size: 15px; font-weight: 600; letter-spacing: -0.2px;">
+                <a href="${data.quoteUrl}" style="display: inline-block; background: #2E37FE; color: #ffffff; text-decoration: none; padding: 14px 36px; border-radius: 10px; font-size: 15px; font-weight: 600; letter-spacing: -0.2px;">
                   Review proposal &#8594;
                 </a>
               </div>

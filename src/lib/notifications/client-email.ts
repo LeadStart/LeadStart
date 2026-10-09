@@ -58,11 +58,12 @@ export function classLabelFor(cls: ReplyClass | string | null | undefined): stri
   return cls.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-// ===== Brand tokens (inline, since email clients don't honor <style> vars) =====
-const GRAD = "linear-gradient(135deg, #6B72FF 0%, #2E37FE 30%, #1C24B8 65%, #0F1880 100%)";
-const GREEN = "linear-gradient(135deg, #10b981 0%, #059669 100%)";
-const BLUE = "linear-gradient(135deg, #2AA4E4 0%, #0A66C2 60%, #044A82 100%)";
-const SLATE = "linear-gradient(135deg, #8b93b8 0%, #5b6486 100%)";
+// ===== Brand tokens (inline, since email clients don't honor <style> vars).
+// Flat solid fills only: no gradients, no rgba(), which some mail apps drop. =====
+const BRAND = "#2E37FE";
+const GREEN = "#059669";
+const BLUE = "#0A66C2";
+const SLATE = "#5B6486";
 
 function escapeHtml(s: string): string {
   return s
@@ -176,7 +177,7 @@ export function buildClientNotificationEmail(
             <td style="background:#ffffff; padding:22px 26px 10px;">
               <table role="presentation" cellpadding="0" cellspacing="0" width="100%"><tr>
                 <td width="60" valign="top">
-                  <div style="width:52px; height:52px; border-radius:13px; background:${GRAD}; color:#ffffff; font-size:18px; font-weight:700; text-align:center; line-height:52px;">${escapeHtml(initials(name))}</div>
+                  <div style="width:52px; height:52px; border-radius:13px; background:${BRAND}; color:#ffffff; font-size:18px; font-weight:700; text-align:center; line-height:52px;">${escapeHtml(initials(name))}</div>
                 </td>
                 <td valign="top" style="padding-left:14px;">
                   <div style="font-size:19px; font-weight:700; color:#1A1A2E; letter-spacing:-0.3px;">${escapeHtml(name)}</div>
@@ -247,7 +248,7 @@ export function buildClientNotificationEmail(
     : `${escapeHtml(name)} <span style="color:#9194AD; font-weight:500; font-size:12px;">replied</span>`;
   const bubbleAvatar = isGeneric
     ? `<div style="width:40px; height:40px; border-radius:50%; background:${SLATE}; color:#ffffff; font-size:17px; text-align:center; line-height:40px;">🏢</div>`
-    : `<div style="width:40px; height:40px; border-radius:50%; background:${GRAD}; color:#ffffff; font-size:15px; font-weight:700; text-align:center; line-height:40px;">${escapeHtml(initials(name))}</div>`;
+    : `<div style="width:40px; height:40px; border-radius:50%; background:${BRAND}; color:#ffffff; font-size:15px; font-weight:700; text-align:center; line-height:40px;">${escapeHtml(initials(name))}</div>`;
   const receivedText = formatReceivedAt(data.receivedAt);
   const whenLine = [receivedText, data.replySubject?.trim() ? escapeHtml(data.replySubject.trim()) : ""]
     .filter(Boolean)
@@ -270,7 +271,7 @@ export function buildClientNotificationEmail(
   // ---- Actions (conditional, equal-width) ----
   const buttons: string[] = [];
   if (phone) buttons.push(actionButton(telUri(phone), "📞 Call", GREEN));
-  buttons.push(actionButton(data.replyThreadUrl, "Reply &#8594;", GRAD));
+  buttons.push(actionButton(data.replyThreadUrl, "Reply &#8594;", BRAND));
   if (linkedin) buttons.push(actionButton(escapeHtml(linkedin), "💼 LinkedIn", BLUE));
 
   const note = isGeneric
@@ -302,10 +303,10 @@ export function buildClientNotificationEmail(
 
           <!-- Header -->
           <tr>
-            <td style="background: ${GRAD}; border-radius: 16px 16px 0 0; padding: 16px 26px;">
+            <td style="background: ${BRAND}; border-radius: 16px 16px 0 0; padding: 16px 26px;">
               <table role="presentation" cellpadding="0" cellspacing="0" width="100%"><tr>
                 <td style="color:#ffffff; font-size:12px; font-weight:700; letter-spacing:1.2px; text-transform:uppercase;">🔔 Hot lead</td>
-                <td align="right" style="color:rgba(255,255,255,0.72); font-size:12px;">Replied ${escapeHtml(relativeReceived(data.receivedAt))}</td>
+                <td align="right" style="color:#C4C7FF; font-size:12px;">Replied ${escapeHtml(relativeReceived(data.receivedAt))}</td>
               </tr></table>
             </td>
           </tr>

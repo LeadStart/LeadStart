@@ -154,13 +154,13 @@ export function buildInvoiceEmail(data: InvoiceEmailData): string {
         <table role="presentation" cellpadding="0" cellspacing="0" width="600" style="max-width: 600px; width: 100%;">
 
           <tr>
-            <td style="background: linear-gradient(135deg, #6B72FF 0%, #2E37FE 30%, #1C24B8 65%, #0F1880 100%); border-radius: 16px 16px 0 0; padding: 36px 32px;">
+            <td style="background: #2E37FE; border-radius: 16px 16px 0 0; padding: 36px 32px;">
               <table role="presentation" cellpadding="0" cellspacing="0" width="100%">
                 <tr>
                   <td>
                     <table role="presentation" cellpadding="0" cellspacing="0">
                       <tr>
-                        <td style="background: rgba(255,255,255,0.15); border-radius: 8px; width: 36px; height: 36px; text-align: center; vertical-align: middle;">
+                        <td style="background: #4D55FE; border-radius: 8px; width: 36px; height: 36px; text-align: center; vertical-align: middle;">
                           <span style="color: #ffffff; font-size: 16px;">&#9993;</span>
                         </td>
                         <td style="padding-left: 12px; color: #ffffff; font-size: 18px; font-weight: 700; letter-spacing: -0.3px;">
@@ -172,11 +172,11 @@ export function buildInvoiceEmail(data: InvoiceEmailData): string {
                 </tr>
                 <tr>
                   <td style="padding-top: 24px;">
-                    <p style="margin: 0; color: rgba(255,255,255,0.7); font-size: 13px; text-transform: uppercase; letter-spacing: 1px;">
+                    <p style="margin: 0; color: #C0C3FF; font-size: 13px; text-transform: uppercase; letter-spacing: 1px;">
                       Invoice ${data.invoiceNumber}
                     </p>
                     <h1 style="margin: 6px 0 0; color: #ffffff; font-size: 28px; font-weight: 700; letter-spacing: -0.5px;">
-                      ${fmt(data.amountDueCents)} <span style="color: rgba(255,255,255,0.7); font-weight: 500; font-size: 16px;">${dueLabel}</span>
+                      ${fmt(data.amountDueCents)} <span style="color: #C0C3FF; font-weight: 500; font-size: 16px;">${dueLabel}</span>
                     </h1>
                   </td>
                 </tr>
@@ -233,7 +233,7 @@ export function buildInvoiceEmail(data: InvoiceEmailData): string {
               </table>
 
               <div style="text-align: center; margin: 0 0 16px;">
-                <a href="${data.hostedInvoiceUrl}" style="display: inline-block; background: linear-gradient(135deg, #6B72FF, #2E37FE); color: #ffffff; text-decoration: none; padding: 14px 36px; border-radius: 10px; font-size: 14px; font-weight: 600; letter-spacing: -0.2px;">
+                <a href="${data.hostedInvoiceUrl}" style="display: inline-block; background: #2E37FE; color: #ffffff; text-decoration: none; padding: 14px 36px; border-radius: 10px; font-size: 14px; font-weight: 600; letter-spacing: -0.2px;">
                   Pay invoice &#8594;
                 </a>
               </div>

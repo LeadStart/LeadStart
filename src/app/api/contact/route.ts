@@ -58,7 +58,7 @@ function buildHtml(data: {
   return `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#F4F5F9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
     <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:#F4F5F9;"><tr><td align="center" style="padding:32px 16px;">
       <table role="presentation" cellpadding="0" cellspacing="0" width="640" style="max-width:640px;width:100%;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,0.04);">
-        <tr><td style="background:linear-gradient(135deg,#2E37FE 0%,#0F1880 100%);padding:24px 28px;color:#fff;">
+        <tr><td style="background:#2E37FE;padding:24px 28px;color:#fff;">
           <div style="font-size:13px;letter-spacing:0.08em;text-transform:uppercase;opacity:0.85;">LeadStart · new quote request</div>
           <div style="font-size:20px;font-weight:700;margin-top:6px;">${escapeHtml(data.fullName)} &middot; ${escapeHtml(data.company)}</div>
         </td></tr>

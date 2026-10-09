@@ -1008,8 +1008,8 @@ function campaignCardHtml(c: CampaignActivity): string {
           ? `<span style="color:#059669;">sequence complete</span>`
           : "";
   const barColor = warming
-    ? "linear-gradient(90deg,#f59e0b,#b45309)"
-    : "linear-gradient(90deg,#6B72FF,#2E37FE)";
+    ? "#D97706"
+    : "#2E37FE";
   const pct = Math.max(2, Math.min(100, c.pctComplete));
   const totalActive = c.waitingByStep.reduce((a, b) => a + b, 0);
   const stageLine =
@@ -1291,8 +1291,8 @@ function buildHtml(
 
   return `
 <div style="font-family:${EMAIL_FONT_STACK};background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #E2E3ED;max-width:600px;color:#1A1A2E;">
-  <div style="background:linear-gradient(135deg,#6B72FF 0%,#2E37FE 30%,#1C24B8 65%,#0F1880 100%);padding:26px 28px;">
-    <p style="margin:0;color:rgba(255,255,255,0.7);font-size:12px;text-transform:uppercase;letter-spacing:1px;">${escapeHtml(eyebrow)}</p>
+  <div style="background:#2E37FE;padding:26px 28px;">
+    <p style="margin:0;color:#C0C3FF;font-size:12px;text-transform:uppercase;letter-spacing:1px;">${escapeHtml(eyebrow)}</p>
     <h1 style="margin:5px 0 0;color:#ffffff;font-size:23px;font-weight:700;letter-spacing:-0.4px;">Good morning</h1>
   </div>
   <div style="padding:20px 22px 4px;">
@@ -1311,7 +1311,7 @@ function buildHtml(
     ${systemChecksHtml(s, verdict)}
   </div>
   <div style="padding:8px 22px 26px;text-align:center;">
-    <a href="${dashboardUrl()}" style="display:inline-block;background:linear-gradient(135deg,#6B72FF,#2E37FE);color:#ffffff;text-decoration:none;padding:13px 30px;border-radius:10px;font-size:14px;font-weight:600;">Open your dashboard &#8594;</a>
+    <a href="${dashboardUrl()}" style="display:inline-block;background:#2E37FE;color:#ffffff;text-decoration:none;padding:13px 30px;border-radius:10px;font-size:14px;font-weight:600;">Open your dashboard &#8594;</a>
     <p style="margin:14px 0 0;font-size:11px;color:#9194AD;">Sent every morning by LeadStart. If this email stops arriving, the alert pipeline itself is down, check the <code>owner-heartbeat</code> cron logs.</p>
   </div>
 </div>`.trim();

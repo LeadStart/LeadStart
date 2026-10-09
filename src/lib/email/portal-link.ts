@@ -20,8 +20,8 @@ export function buildPortalLinkEmail(data: PortalLinkEmailData): string {
       <td align="center" style="padding: 40px 16px;">
         <table role="presentation" cellpadding="0" cellspacing="0" width="600" style="max-width: 600px; width: 100%;">
           <tr>
-            <td style="background: linear-gradient(135deg, #6B72FF 0%, #2E37FE 30%, #1C24B8 65%, #0F1880 100%); border-radius: 16px 16px 0 0; padding: 32px;">
-              <p style="margin: 0; color: rgba(255,255,255,0.7); font-size: 13px; text-transform: uppercase; letter-spacing: 1px;">
+            <td style="background: #2E37FE; border-radius: 16px 16px 0 0; padding: 32px;">
+              <p style="margin: 0; color: #C0C3FF; font-size: 13px; text-transform: uppercase; letter-spacing: 1px;">
                 LeadStart Billing
               </p>
               <h1 style="margin: 6px 0 0; color: #ffffff; font-size: 22px; font-weight: 700; letter-spacing: -0.4px;">
@@ -38,7 +38,7 @@ export function buildPortalLinkEmail(data: PortalLinkEmailData): string {
                 Use the secure link below to update your payment method, review past invoices, and download receipts.
               </p>
               <div style="text-align: center; margin: 0 0 24px;">
-                <a href="${data.portalUrl}" style="display: inline-block; background: linear-gradient(135deg, #6B72FF, #2E37FE); color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 10px; font-size: 14px; font-weight: 600; letter-spacing: -0.2px;">
+                <a href="${data.portalUrl}" style="display: inline-block; background: #2E37FE; color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 10px; font-size: 14px; font-weight: 600; letter-spacing: -0.2px;">
                   Open billing portal &#8594;
                 </a>
               </div>

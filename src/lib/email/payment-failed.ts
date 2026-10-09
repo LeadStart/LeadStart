@@ -18,7 +18,7 @@ export function buildPaymentFailedEmail(
   const ctaBlock = data.hostedInvoiceUrl
     ? `
       <div style="text-align: center; margin: 0 0 20px;">
-        <a href="${data.hostedInvoiceUrl}" style="display: inline-block; background: linear-gradient(135deg, #6B72FF, #2E37FE); color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 10px; font-size: 14px; font-weight: 600; letter-spacing: -0.2px;">
+        <a href="${data.hostedInvoiceUrl}" style="display: inline-block; background: #2E37FE; color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 10px; font-size: 14px; font-weight: 600; letter-spacing: -0.2px;">
           Update payment &#8594;
         </a>
       </div>`
@@ -39,8 +39,8 @@ export function buildPaymentFailedEmail(
       <td align="center" style="padding: 40px 16px;">
         <table role="presentation" cellpadding="0" cellspacing="0" width="600" style="max-width: 600px; width: 100%;">
           <tr>
-            <td style="background: linear-gradient(135deg, #ef4444 0%, #b91c1c 60%, #7f1d1d 100%); border-radius: 16px 16px 0 0; padding: 32px;">
-              <p style="margin: 0; color: rgba(255,255,255,0.8); font-size: 13px; text-transform: uppercase; letter-spacing: 1px;">
+            <td style="background: #DC2626; border-radius: 16px 16px 0 0; padding: 32px;">
+              <p style="margin: 0; color: #F8D4D4; font-size: 13px; text-transform: uppercase; letter-spacing: 1px;">
                 Payment issue
               </p>
               <h1 style="margin: 6px 0 0; color: #ffffff; font-size: 22px; font-weight: 700; letter-spacing: -0.4px;">
