@@ -55,7 +55,7 @@ export default function ReportPreviewPage() {
   const [viewport, setViewport] = useState<"desktop" | "mobile">("desktop");
 
   const reportData = SAMPLE_REPORT_DATA;
-  const emailHtml = buildWeeklyReportEmail(reportData, "https://app.leadstart.com/client");
+  const emailHtml = buildWeeklyReportEmail(reportData);
 
   return (
     <div className="space-y-6">
