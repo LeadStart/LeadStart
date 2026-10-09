@@ -16,6 +16,20 @@ function clientPortalUrl(): string {
   return `${base}/client`;
 }
 
+// Cadence word for the header and <title>, from the length of the period the
+// report covers rather than the client's setting, so a stored, resent or
+// manual report is always labelled by what it actually covers. The
+// send-reports cron spans 7 / 14 / 30 days for weekly / biweekly / monthly
+// clients; the ±1 tolerance also fits an end-exclusive window, and 27-31 fits
+// a manual calendar month. Any other range gets no cadence word.
+export function reportCadence(period: { start: string; end: string }): "Weekly" | "Biweekly" | "Monthly" | null {
+  const days = Math.round((Date.parse(period.end) - Date.parse(period.start)) / 86_400_000);
+  if (days === 6 || days === 7) return "Weekly";
+  if (days === 13 || days === 14) return "Biweekly";
+  if (days >= 27 && days <= 31) return "Monthly";
+  return null;
+}
+
 function formatPct(v: number): string {
   return v === 0 ? "0%" : `${v.toFixed(1)}%`;
 }
@@ -66,6 +80,7 @@ const TH = "padding: 12px 8px; text-align: center; font-size: 11px; color: #6B6E
 const TD = "padding: 14px 8px; border-bottom: 1px solid #E2E3ED; text-align: center; color: #3D3D5C;";
 
 export function buildWeeklyReportEmail(data: KPIReportData, portalUrl: string = clientPortalUrl()): string {
+  const cadence = reportCadence(data.period);
   const t = data.totals;
   const kpiRows: KpiRow[] = [
     {
@@ -123,7 +138,7 @@ export function buildWeeklyReportEmail(data: KPIReportData, portalUrl: string = 
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Weekly Campaign Report: ${data.client_name}</title>
+  <title>${cadence ? `${cadence} ` : ""}Campaign Report: ${data.client_name}</title>
   ${EMAIL_FONT_HEAD}
 </head>
 <body style="margin: 0; padding: 0; background-color: #F4F5F9; font-family: ${EMAIL_FONT_STACK}; -webkit-font-smoothing: antialiased;">
@@ -155,7 +170,7 @@ export function buildWeeklyReportEmail(data: KPIReportData, portalUrl: string = 
                 <tr>
                   <td style="padding-top: 20px;">
                     <p style="margin: 0; color: #C0C3FF; font-size: 13px; text-transform: uppercase; letter-spacing: 1px;">
-                      Weekly Performance Report
+                      ${cadence ?? "Campaign"} Performance Report
                     </p>
                     <h1 style="margin: 6px 0 0; color: #ffffff; font-size: 26px; font-weight: 700; letter-spacing: -0.5px;">
                       ${data.client_name}

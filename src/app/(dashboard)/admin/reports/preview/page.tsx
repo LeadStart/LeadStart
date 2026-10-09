@@ -5,7 +5,7 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Eye, Monitor, Smartphone } from "lucide-react";
-import { buildWeeklyReportEmail } from "@/lib/email/weekly-report";
+import { buildWeeklyReportEmail, reportCadence } from "@/lib/email/weekly-report";
 
 // Inline sample data so the preview renders without having to send a real
 // report. Kept minimal: just enough to exercise every section of the email
@@ -113,7 +113,7 @@ export default function ReportPreviewPage() {
             </div>
             <div className="flex-1 text-center">
               <span className="text-xs text-muted-foreground bg-muted rounded px-3 py-1">
-                Weekly Campaign Report: {reportData.client_name}
+                {reportCadence(reportData.period) ?? ""} Campaign Report: {reportData.client_name}
               </span>
             </div>
           </div>
