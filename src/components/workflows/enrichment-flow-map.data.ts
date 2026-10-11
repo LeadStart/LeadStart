@@ -46,6 +46,7 @@ const usd = (n: number) => `$${n}`; // 0.01 → "$0.01", 0.004 → "$0.004", 0.0
 const MV_RANGE = `~$${MV_CREDIT_COST_USD.toFixed(3)}-${(MV_CREDIT_COST_USD * 3).toFixed(3)}`; // ~$0.004-0.011
 const DEFAULT_METHOD = CFG.small_method; // "pattern_mv" while the default bands agree
 const addonTag = (on: boolean) => (on ? "(add-on, on)" : "(add-on, off)");
+const inboxAddon = ADDONS.company_inbox_fallback ? "inbox (add-on, on)" : "inbox (add-on)";
 
 // Declared estimates with no single exported constant (measured / per-unit
 // figures). Low-drift; provenance noted so the sync test / a reader can trace them.
@@ -65,14 +66,14 @@ export const LI_NODES: FlowNode[] = [
     lines: [{ t: "contacts.email set", s: "titleSm" }, { t: "skips the waterfall → Verify", s: "muted" }] },
   { id: "dom", kind: "box", x: 50, y: 342, w: 300, h: 66, tone: "step",
     lines: [{ t: "Phase 2 · Domains", s: "title" }, { t: ACTORS.company, s: "actor" }, { t: `${usd(DOMAIN_COST_USD)} / company · PER QUERY`, s: "pq" }] },
-  { id: "wf", kind: "box", x: 50, y: 450, w: 300, h: 70, tone: "stepV",
-    lines: [{ t: "Phase 3 · Waterfall (fallback)", s: "title" }, { t: `${DEFAULT_METHOD} · first.last@domain + MV`, s: "actor" }, { t: `MV ${MV_RANGE} · ON HIT`, s: "mv" }] },
+  { id: "wf", kind: "box", x: 50, y: 450, w: 300, h: 84, tone: "stepV",
+    lines: [{ t: "Phase 3 · Waterfall (fallback)", s: "title" }, { t: `${DEFAULT_METHOD} · first.last@domain + MV`, s: "actor" }, { t: `MV ${MV_RANGE} · ON HIT`, s: "mv" }, { t: `${inboxAddon}: site scrape first`, s: "opt" }] },
   { id: "d2", kind: "diamond", x: 120, y: 560, w: 160, h: 72, tone: "dia",
     lines: [{ t: "MV verdict?", s: "dia" }] },
   { id: "ca", kind: "box", x: 380, y: 552, w: 240, h: 44, tone: "addon",
     lines: [{ t: "catch-all → site addr / Findymail", s: "titleSm" }, { t: `${ADDONS.validate_catch_all ? "(add-on, on)" : "(add-on)"} · hit conf 75 · miss ${CFG.accept_catch_all_guesses ? "conf 40" : "drop"}`, s: "muted" }] },
-  { id: "none", kind: "box", x: 380, y: 606, w: 240, h: 44, tone: "grey",
-    lines: [{ t: "none → no email", s: "titleSm" }, { t: "keep the LinkedIn URL", s: "muted" }] },
+  { id: "none", kind: "box", x: 380, y: 606, w: 240, h: 60, tone: "grey",
+    lines: [{ t: "none → no email", s: "titleSm" }, { t: `${inboxAddon} → info@ · conf 30`, s: "opt" }, { t: "else keep the LinkedIn URL", s: "muted" }] },
   { id: "ok", kind: "box", x: 50, y: 674, w: 300, h: 46, tone: "good",
     lines: [{ t: "ok → contacts.email · conf 85", s: "titleSm" }] },
   { id: "act", kind: "box", x: 50, y: 762, w: 300, h: 66, tone: "addon",
@@ -88,9 +89,11 @@ export const LI_EDGES: FlowEdge[] = [
   { pts: [[200, 308], [200, 342]], label: "no", at: [200, 325] },
   { pts: [[280, 272], [380, 272]], label: "yes", at: [330, 260] },
   { pts: [[200, 408], [200, 450]], label: "still no email", at: [200, 429] },
-  { pts: [[200, 520], [200, 560]] },
+  { pts: [[200, 534], [200, 560]] },
   { pts: [[280, 596], [380, 574]], label: "catch-all", at: [335, 556] },
-  { pts: [[280, 596], [380, 628]], label: "none", at: [332, 640] },
+  { pts: [[280, 596], [380, 636]], label: "none", at: [330, 646] },
+  // Company-inbox add-on: the generic inbox goes on contacts.email, then Verify.
+  { pts: [[500, 666], [500, 903], [350, 903]], label: "inbox add-on", at: [500, 790], dash: "5 4" },
   { pts: [[200, 632], [200, 674]], label: "ok", at: [200, 653] },
   { pts: [[200, 720], [200, 762]] },
   { pts: [[200, 828], [200, 870]] },
@@ -109,13 +112,13 @@ export const MAPS_NODES: FlowNode[] = [
     lines: [{ t: `Phase 3 · Naming  ${ADDONS.naming ? "(add-on, on)" : "(add-on)"}`, s: "title" }, { t: "decision-maker · Perplexity Sonar", s: "actor" }, { t: `~${usd(NAMING_COST_USD)} / business`, s: "opt" }] },
   { id: "d", kind: "diamond", x: 210, y: 476, w: 160, h: 72, tone: "dia",
     lines: [{ t: "Owner named?", s: "dia" }] },
-  { id: "pm", kind: "box", x: 30, y: 594, w: 220, h: 112, tone: "stepV",
-    lines: [{ t: `Waterfall · ${DEFAULT_METHOD}`, s: "titleSm" }, { t: "guess owner email + MV", s: "actor" }, { t: "ok → conf 85 · no MX → skip", s: "muted" }, { t: "miss → site_scrape", s: "muted" }, { t: "catch-all → owner's site addr", s: "muted" }, { t: `else Findymail ${ADDONS.validate_catch_all ? "(add-on, on)" : "(add-on)"}`, s: "opt" }] },
+  { id: "pm", kind: "box", x: 30, y: 594, w: 220, h: 126, tone: "stepV",
+    lines: [{ t: `Waterfall · ${DEFAULT_METHOD}`, s: "titleSm" }, { t: "guess owner email + MV", s: "actor" }, { t: "ok → conf 85 · no MX → skip", s: "muted" }, { t: "catch-all → owner's site addr", s: "muted" }, { t: `else Findymail ${ADDONS.validate_catch_all ? "(add-on, on)" : "(add-on)"}`, s: "opt" }, { t: `${inboxAddon}: scrape first,`, s: "opt" }, { t: "no email → info@ · conf 30", s: "opt" }] },
   { id: "ss", kind: "box", x: 330, y: 594, w: 220, h: 80, tone: "step",
     lines: [{ t: "Waterfall · site_scrape", s: "titleSm" }, { t: ACTORS.siteScrape, s: "actor" }, { t: `~${usd(SITE_SCRAPE_MEASURED_USD)}/site · PER QUERY`, s: "pq" }, { t: "info@ → contacts.email conf 30", s: "muted" }] },
-  { id: "act", kind: "box", x: 140, y: 732, w: 300, h: 56, tone: "skip",
+  { id: "act", kind: "box", x: 140, y: 746, w: 300, h: 56, tone: "skip",
     lines: [{ t: "Phase 4 · Activity", s: "title" }, { t: "SKIPPED, no LinkedIn URL", s: "muted" }] },
-  { id: "ver", kind: "box", x: 140, y: 828, w: 300, h: 66, tone: "addon",
+  { id: "ver", kind: "box", x: 140, y: 834, w: 300, h: 66, tone: "addon",
     lines: [{ t: `Phase 5 · Verify  ${addonTag(ADDONS.verify)}`, s: "title" }, { t: "Million Verifier · or send-gate", s: "actor" }, { t: `~${usd(MV_CREDIT_COST_USD)} / decisive · ON HIT`, s: "opt" }] },
   { id: "ready", kind: "pill", x: 210, y: 936, w: 160, h: 44, tone: "done",
     lines: [{ t: "Contact ready", s: "done" }] },
@@ -127,8 +130,8 @@ export const MAPS_EDGES: FlowEdge[] = [
   { pts: [[290, 438], [290, 476]] },
   { pts: [[290, 548], [140, 576], [140, 594]], label: "yes", at: [196, 568] },
   { pts: [[290, 548], [440, 576], [440, 594]], label: "no", at: [384, 568] },
-  { pts: [[140, 706], [140, 714], [290, 714], [290, 732]] },
-  { pts: [[440, 674], [440, 714], [290, 714]] },
-  { pts: [[290, 788], [290, 828]] },
-  { pts: [[290, 894], [290, 936]] },
+  { pts: [[140, 720], [140, 730], [290, 730], [290, 746]] },
+  { pts: [[440, 674], [440, 730], [290, 730]] },
+  { pts: [[290, 802], [290, 834]] },
+  { pts: [[290, 900], [290, 936]] },
 ];

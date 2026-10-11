@@ -47,6 +47,12 @@ import { enqueueOwnerAlert } from "@/lib/notifications/owner-alerts";
 import { runPatternMv, type PatternMvItem, type PatternMvOutcome } from "@/lib/enrichment/pattern-mv";
 import { FindymailClient, FindymailError, type FindymailResult } from "@/lib/findymail/client";
 import { hasUsableName, methodForItem } from "@/lib/enrichment/waterfall-routing";
+import {
+  companyInboxFallbackScope,
+  companyInboxProvenance,
+  COMPANY_INBOX_CONFIDENCE,
+  type CompanyInboxFallbackScope,
+} from "@/lib/enrichment/company-inbox";
 import { lookupMailHosts, readMailHost } from "@/lib/enrichment/mail-host";
 import { pickPublishedOwnerEmail, publishedEmailsOf } from "@/lib/enrichment/published-email";
 import { classifyContactOutcome, addOutcome, ALL_COUNT_KEYS } from "@/lib/enrichment/outcomes";
@@ -1835,15 +1841,25 @@ async function seedWaterfallItems(admin: Admin, run: RunRow): Promise<number> {
   const config = (run.waterfall_config ?? DEFAULT_ENRICHMENT_SETTINGS) as EnrichmentSettings;
   const { data } = await admin
     .from("enrichment_run_items")
-    .select("id, employee_count, first_name, last_name")
+    .select("id, contact_id, employee_count, first_name, last_name")
     .eq("run_id", run.id)
     .is("waterfall_status", null)
     .is("email", null)
     .not("company_domain", "is", null);
   const rows =
-    (data as { id: string; employee_count: number | null; first_name: string | null; last_name: string | null }[] | null) ??
-    [];
+    (data as {
+      id: string;
+      contact_id: string;
+      employee_count: number | null;
+      first_name: string | null;
+      last_name: string | null;
+    }[] | null) ?? [];
   if (rows.length === 0) return 0;
+
+  // Company-inbox fallback add-on: an opted-in contact in a pattern-only band
+  // gets a site scrape first (methodForItem), so there is a generic inbox for the
+  // fallback to use if no personal email turns up.
+  const companyInbox = await companyInboxOptIns(admin, run, rows.map((r) => r.contact_id));
 
   // Group by resolved method. Track name-less items (methodForItem routes them to
   // site_scrape) so we can stamp a provenance note: these are the Google-Maps
@@ -1852,7 +1868,7 @@ async function seedWaterfallItems(admin: Admin, run: RunRow): Promise<number> {
   const namelessRouted: string[] = [];
   for (const r of rows) {
     const named = hasUsableName(r.first_name, r.last_name);
-    const method = methodForItem(config, r.employee_count, named);
+    const method = methodForItem(config, r.employee_count, named, { companyInbox: companyInbox(r.contact_id) });
     if (!named && method !== "off") namelessRouted.push(r.id);
     const arr = groups.get(method) ?? [];
     arr.push(r.id);
@@ -1881,6 +1897,169 @@ async function seedWaterfallItems(admin: Admin, run: RunRow): Promise<number> {
       .in("id", namelessRouted.slice(i, i + 200));
   }
   return pending;
+}
+
+// Whether a contact gets the company-inbox fallback in a run with this scope
+// (lib/enrichment/company-inbox): "all" → yes, "opted_in" → only when its own
+// enrichment_data.addons stamp opted in, no scope → no.
+function wantsCompanyInbox(scope: CompanyInboxFallbackScope | null, enrichmentData: unknown): boolean {
+  if (scope === "all") return true;
+  if (scope !== "opted_in") return false;
+  const addonsRaw =
+    enrichmentData && typeof enrichmentData === "object" ? (enrichmentData as { addons?: unknown }).addons : undefined;
+  return normalizeAddons(addonsRaw).company_inbox_fallback;
+}
+
+// The per-contact company-inbox gate for a set of this run's contacts. Reads the
+// contacts' addons stamps only when the run's scope is "opted_in".
+async function companyInboxOptIns(
+  admin: Admin,
+  run: RunRow,
+  contactIds: string[],
+): Promise<(contactId: string) => boolean> {
+  const scope = companyInboxFallbackScope(run.waterfall_config);
+  if (scope !== "opted_in") return () => scope === "all";
+  const opted = new Set<string>();
+  const ids = Array.from(new Set(contactIds));
+  for (let i = 0; i < ids.length; i += 300) {
+    const { data } = await admin
+      .from("contacts")
+      .select("id, enrichment_data")
+      .eq("organization_id", run.organization_id)
+      .in("id", ids.slice(i, i + 300));
+    for (const c of (data as { id: string; enrichment_data: unknown }[] | null) ?? []) {
+      if (wantsCompanyInbox(scope, c.enrichment_data)) opted.add(c.id);
+    }
+  }
+  return (contactId) => opted.has(contactId);
+}
+
+// Company-inbox fallback (add-on, 2026-10-11). Runs when the waterfall has
+// nothing left pending, before activity and verify are seeded. Each contact that
+// gets the fallback, whose waterfall item ended with no address (not_found, or
+// error after its retries) and which holds a scraped generic inbox in
+// contacts.company_email, gets that inbox on contacts.email: fill-only, with the
+// name-less backfill's company_generic provenance (confidence 30), so it stays
+// tiered "company". The item carries the address too, so the verify phase gives
+// it a Million Verifier verdict. Without this a NAMED lead's inbox sat unsendable
+// in company_email (the native sender mails contacts.email only).
+//
+// One pass here covers every way a waterfall ends without a personal email
+// (site_scrape, pattern_mv including a scrape_plus_pattern handoff, bovi, no MX,
+// no MV key, the retry cap) instead of patching each write. Idempotent: a re-run
+// skips contacts that now have an email. Returns done:false when it runs out of
+// time; the caller then stays in the waterfall phase and the next tick resumes.
+const COMPANY_INBOX_BUDGET_MS = 20_000;
+const COMPANY_INBOX_CONCURRENCY = 8;
+
+type InboxCandidate = { id: string; contact_id: string; waterfall_notes: string | null };
+type InboxContact = Contact & { company_email: string };
+
+async function applyCompanyInboxFallback(admin: Admin, run: RunRow): Promise<{ promoted: number; done: boolean }> {
+  const scope = companyInboxFallbackScope(run.waterfall_config);
+  if (!scope || !run.run_waterfall) return { promoted: 0, done: true };
+  const deadline = Date.now() + COMPANY_INBOX_BUDGET_MS;
+
+  // Collect every candidate first (read-only pages), then write: a promoted item
+  // leaves this filter, which would shift a page read between writes.
+  const items: InboxCandidate[] = [];
+  for (let offset = 0; ; offset += 1000) {
+    const { data } = await admin
+      .from("enrichment_run_items")
+      .select("id, contact_id, waterfall_notes")
+      .eq("run_id", run.id)
+      .in("waterfall_status", ["not_found", "error"])
+      .is("email", null)
+      .order("id", { ascending: true })
+      .range(offset, offset + 999);
+    const rows = (data as InboxCandidate[] | null) ?? [];
+    items.push(...rows);
+    if (rows.length < 1000) break;
+  }
+  if (items.length === 0) return { promoted: 0, done: true };
+
+  const contacts = new Map<string, InboxContact>();
+  const ids = Array.from(new Set(items.map((i) => i.contact_id)));
+  for (let i = 0; i < ids.length; i += 300) {
+    const { data } = await admin
+      .from("contacts")
+      .select("id, email, company_email, enrichment_data, tags, status")
+      .eq("organization_id", run.organization_id)
+      .in("id", ids.slice(i, i + 300))
+      .is("email", null)
+      .not("company_email", "is", null);
+    for (const c of (data as InboxContact[] | null) ?? []) {
+      if (c.company_email.trim() && wantsCompanyInbox(scope, c.enrichment_data)) contacts.set(c.id, c);
+    }
+  }
+  const work = items.filter((i) => contacts.has(i.contact_id));
+
+  let promoted = 0;
+  let cursor = 0;
+  const worker = async (): Promise<void> => {
+    for (;;) {
+      if (Date.now() > deadline) return;
+      const item = work[cursor++];
+      if (!item) return;
+      if ((await promoteCompanyInbox(admin, item, contacts.get(item.contact_id)!)) === "found") promoted++;
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(COMPANY_INBOX_CONCURRENCY, work.length) }, () => worker()));
+  return { promoted, done: cursor >= work.length };
+}
+
+// Put one contact's scraped inbox on contacts.email (fill-only) and mark its
+// waterfall item found, keeping the reason the personal-email search missed.
+async function promoteCompanyInbox(
+  admin: Admin,
+  item: InboxCandidate,
+  contact: InboxContact,
+): Promise<"found" | "skipped"> {
+  const email = contact.company_email.trim().toLowerCase();
+  const missed = item.waterfall_notes ? ` (personal email: ${item.waterfall_notes})`.slice(0, 240) : "";
+  const now = new Date().toISOString();
+  const ed = mergeEnrichment(contact.enrichment_data, {
+    email: companyInboxProvenance(email, now, "company_inbox_fallback"),
+  });
+  const tags = Array.from(new Set([...(contact.tags ?? []), "enriched", "site_scrape"]));
+  const { data: updated, error } = await admin
+    .from("contacts")
+    .update({ email, tags, enrichment_data: ed })
+    .eq("id", contact.id)
+    .is("email", null)
+    .select("id");
+  if (error) {
+    if ((error as { code?: string }).code !== "23505") throw error;
+    // The inbox is already another contact's email in this org (say, two people
+    // at the same firm): this one stays without an email.
+    await admin
+      .from("enrichment_run_items")
+      .update({
+        waterfall_status: "skipped",
+        waterfall_notes: `company inbox already belongs to another contact in this org${missed}`,
+      })
+      .eq("id", item.id);
+    return "skipped";
+  }
+  if (!updated || updated.length === 0) {
+    // Gained an email since the read above.
+    await admin
+      .from("enrichment_run_items")
+      .update({ waterfall_status: "skipped", waterfall_notes: "contact already had an email" })
+      .eq("id", item.id);
+    return "skipped";
+  }
+  await admin
+    .from("enrichment_run_items")
+    .update({
+      waterfall_status: "found",
+      email,
+      email_provider: "site_scrape",
+      confidence: COMPANY_INBOX_CONFIDENCE,
+      waterfall_notes: `generic company inbox (company-inbox fallback)${missed}`,
+    })
+    .eq("id", item.id);
+  return "found";
 }
 
 // ---------------------------------------------------------------- ingest
@@ -2118,13 +2297,13 @@ async function finishWaterfallMiss(
   // (fill-only) with the generic at low confidence + provenance so the lead is
   // usable. Deliberate, documented exception to the 00076 person-email reservation,
   // gated on !named so decision-maker rows keep the strict person-only contract.
+  // (A named lead gets the same only with the company_inbox_fallback add-on, at
+  // the end of the waterfall: applyCompanyInboxFallback.)
   const genericEmail =
     typeof extraPatch.company_email === "string" ? extraPatch.company_email.trim().toLowerCase() : "";
   if (!named && genericEmail && contact && !contact.email) {
     const now = new Date().toISOString();
-    const ed = mergeEnrichment(contact.enrichment_data, {
-      email: { provider: "site_scrape", kind: "company_generic", email: genericEmail, confidence: 30, found_at: now },
-    });
+    const ed = mergeEnrichment(contact.enrichment_data, { email: companyInboxProvenance(genericEmail, now) });
     const tags = Array.from(new Set([...(contact.tags ?? []), "enriched", "site_scrape"]));
     const { data: updated, error } = await admin
       .from("contacts")
@@ -2139,7 +2318,7 @@ async function finishWaterfallMiss(
           [cols.status]: "found",
           email: genericEmail,
           email_provider: "site_scrape",
-          confidence: 30,
+          confidence: COMPANY_INBOX_CONFIDENCE,
           [cols.notes]: "generic company inbox (no decision-maker name)",
           cost_usd: share,
         })
@@ -2671,6 +2850,7 @@ async function finalizeOutcomes(admin: Admin, run: RunRow): Promise<void> {
 // Move to the next enabled phase that has work; finalize when none remain.
 async function advancePhase(admin: Admin, client: ApifyClient, run: RunRow): Promise<void> {
   let phase: EnrichmentPhase = run.phase;
+  let inboxNote = "";
 
   for (;;) {
     if (phase === "profiles") {
@@ -2738,6 +2918,22 @@ async function advancePhase(admin: Admin, client: ApifyClient, run: RunRow): Pro
       continue;
     }
     if (phase === "waterfall") {
+      // Company-inbox fallback (opt-in add-on): before leaving the waterfall, give
+      // each opted-in contact that ended with no personal email its scraped company
+      // inbox, so it can be sent to and the verify phase below checks it. Out of
+      // time → stay in the waterfall; the next tick finishes the pass.
+      const inbox = await applyCompanyInboxFallback(admin, run);
+      if (inbox.promoted > 0) {
+        inboxNote = ` · ${inbox.promoted} company inbox${inbox.promoted === 1 ? "" : "es"} filled`;
+      }
+      if (!inbox.done) {
+        await admin
+          .from("enrichment_runs")
+          .update({ phase: "waterfall", progress_message: `Company inbox fallback${inboxNote}, continuing`, locked_at: null })
+          .eq("id", run.id);
+        run.phase = "waterfall";
+        return;
+      }
       phase = "activity";
       if (run.run_activity) {
         // Score posting recency for anyone with a LinkedIn profile URL, but only
@@ -2789,7 +2985,8 @@ async function advancePhase(admin: Admin, client: ApifyClient, run: RunRow): Pro
           `Emails ${counts.found_emails_count} · domains ${counts.found_domains_count}` +
           (run.run_naming ? ` · names ${counts.found_names_count}` : "") +
           (run.run_activity ? ` · activity ${counts.found_activity_count}` : "") +
-          (run.run_verify ? ` · verified ${counts.found_verified_count}` : ""),
+          (run.run_verify ? ` · verified ${counts.found_verified_count}` : "") +
+          inboxNote,
       })
       .eq("id", run.id);
     run.phase = "complete";
@@ -2797,7 +2994,7 @@ async function advancePhase(admin: Admin, client: ApifyClient, run: RunRow): Pro
   } else {
     await admin
       .from("enrichment_runs")
-      .update({ phase, progress_message: `Starting ${phase}`, locked_at: null })
+      .update({ phase, progress_message: `Starting ${phase}${inboxNote}`, locked_at: null })
       .eq("id", run.id);
     run.phase = phase;
   }

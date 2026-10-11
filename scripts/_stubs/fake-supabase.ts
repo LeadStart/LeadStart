@@ -9,10 +9,12 @@
  * makes (select / insert / update / upsert with eq, in, is, gte, or, order,
  * maybeSingle, count+head), plus what enqueueEnrichment and the
  * drain-enrichment-queue cron add (delete, not(col, "is", null), limit,
- * single), the two unique indexes that route relies on
- * (contacts: org + lower(email); campaign_enrollments: campaign + contact),
- * and records every write. Anything else throws, so a route change that
- * outgrows the fake fails loudly instead of passing by accident.
+ * single), what the run-apify-enrichment cron adds (range, an lt term inside
+ * or()), the two unique indexes those routes rely on
+ * (contacts: org + lower(email), checked on insert and on an update that sets
+ * an email; campaign_enrollments: campaign + contact), and records every
+ * write. Anything else throws, so a route change that outgrows the fake fails
+ * loudly instead of passing by accident.
  */
 import { randomUUID } from "node:crypto";
 
@@ -92,10 +94,11 @@ function splitTopLevel(s: string): string[] {
 }
 
 function orTerm(term: string): (r: Row) => boolean {
-  const m = /^([A-Za-z_]+)\.(eq|is|in)\.(.*)$/.exec(term.trim());
+  const m = /^([A-Za-z_]+)\.(eq|is|in|lt)\.(.*)$/.exec(term.trim());
   if (!m) throw new Error(`fake-supabase: unsupported or() term "${term}"`);
   const [, col, op, val] = m;
   if (op === "eq") return (r) => r[col] != null && String(r[col]) === val;
+  if (op === "lt") return (r) => r[col] != null && String(r[col]) < val;
   if (op === "is") {
     if (val !== "null") throw new Error(`fake-supabase: unsupported is.${val}`);
     return (r) => r[col] == null;
@@ -116,6 +119,7 @@ class Query implements PromiseLike<Result> {
   private head = false;
   private orderBy: { col: string; asc: boolean } | null = null;
   private limitTo: number | null = null;
+  private rangeTo: [number, number] | null = null;
 
   constructor(private table: string) {}
 
@@ -185,6 +189,10 @@ class Query implements PromiseLike<Result> {
     this.limitTo = n;
     return this;
   }
+  range(from: number, to: number): this {
+    this.rangeTo = [from, to];
+    return this;
+  }
 
   async maybeSingle(): Promise<Result> {
     const res = await this.run();
@@ -231,6 +239,7 @@ class Query implements PromiseLike<Result> {
         rows = [...rows].sort((a, b) => ((a[col] as number) - (b[col] as number)) * (asc ? 1 : -1));
       }
       if (this.limitTo != null) rows = rows.slice(0, this.limitTo);
+      if (this.rangeTo) rows = rows.slice(this.rangeTo[0], this.rangeTo[1] + 1);
       if (this.head) return { data: null, error: null, count: this.countExact ? rows.length : null };
       return { data: rows.map((r) => project(r, this.cols)), error: null, count: this.countExact ? rows.length : null };
     }
@@ -254,6 +263,18 @@ class Query implements PromiseLike<Result> {
 
     if (this.op === "update") {
       const rows = this.matching();
+      // An update that sets an email must not collide with another row's: one
+      // collision fails the whole statement, as the real unique index does.
+      if (this.table === "contacts" && (this.payload as Row).email != null) {
+        const others = new Set(
+          table.filter((r) => !rows.includes(r) && r.email != null).map((r) => uniqueKey(this.table, r)),
+        );
+        for (const r of rows) {
+          if (others.has(uniqueKey(this.table, { ...r, ...(this.payload as Row) }))) {
+            return { data: null, error: { message: "duplicate key value violates unique constraint", code: "23505" } };
+          }
+        }
+      }
       for (const r of rows) Object.assign(r, clone(this.payload as Row));
       s.writes.push({ table: this.table, op: "update", ids: rows.map((r) => String(r.id)) });
       return { data: this.returning ? rows.map((r) => project(r, this.returning)) : null, error: null };

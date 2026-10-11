@@ -137,6 +137,9 @@ export async function POST(request: NextRequest) {
     // Keep catch-all pattern guesses (flagged, confidence 40) for this search's
     // auto-enrichment instead of discarding them.
     include_catch_all: addonsInput.include_catch_all === true,
+    // A firm whose owner gets named but whose personal email isn't found gets
+    // its scraped company inbox on contacts.email instead of no email.
+    company_inbox_fallback: addonsInput.company_inbox_fallback === true,
   };
 
   // One active search per org (pre-check; the unique index is the real race guard).

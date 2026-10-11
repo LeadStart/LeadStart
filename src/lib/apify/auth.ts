@@ -71,6 +71,7 @@ export function normalizeAddons(input: unknown): EnrichmentAddons {
     naming: o.naming === true,
     include_catch_all: o.include_catch_all === true,
     validate_catch_all: o.validate_catch_all === true,
+    company_inbox_fallback: o.company_inbox_fallback === true,
   };
 }
 

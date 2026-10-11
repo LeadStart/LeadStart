@@ -383,6 +383,7 @@ export default function ContactsPage() {
   const [enrichRunNaming, setEnrichRunNaming] = useState(false);
   const [enrichIncludeCatchAll, setEnrichIncludeCatchAll] = useState(false);
   const [enrichValidateCatchAll, setEnrichValidateCatchAll] = useState(false);
+  const [enrichCompanyInbox, setEnrichCompanyInbox] = useState(false);
   const [enrichStarting, setEnrichStarting] = useState(false);
   const [enrichError, setEnrichError] = useState<string | null>(null);
   // Org waterfall config (migration 00075): fetched when the dialog opens so
@@ -606,7 +607,13 @@ export default function ContactsPage() {
     (enrichRunNaming ? enrichNamelessCount * NAMING_COST_USD : 0) +
     // Validate catch-all (Findymail): pay-on-hit on the catch-all subset (~20%)
     // of the emailed set, so it moves the "up to" ceiling (SPEND-24).
-    (enrichValidateCatchAll ? enrichVerifyCount * FINDYMAIL_CATCHALL_COST_USD * 0.2 : 0);
+    (enrichValidateCatchAll ? enrichVerifyCount * FINDYMAIL_CATCHALL_COST_USD * 0.2 : 0) +
+    // Company-inbox fallback: when the configured bands only guess (pattern), each
+    // company gets a site scrape first so there's an inbox to fall back on. A
+    // config that already scrapes is priced as a scrape above.
+    (enrichRunWaterfall && enrichCompanyInbox && waterfallKind === "pattern"
+      ? estimateScrapeCost(enrichWaterfallDomains)
+      : 0);
   const unverifiedSelected = selectedContacts.filter(
     (c) =>
       !c.email ||
@@ -632,6 +639,7 @@ export default function ContactsPage() {
           run_naming: enrichRunNaming,
           include_catch_all: enrichIncludeCatchAll,
           validate_catch_all: enrichValidateCatchAll,
+          company_inbox_fallback: enrichCompanyInbox,
         }),
       });
       const data = (await res.json()) as {
@@ -1891,6 +1899,23 @@ export default function ContactsPage() {
                   <span className="block text-[11px] text-muted-foreground">
                     {`~$${FINDYMAIL_CATCHALL_COST_USD.toFixed(3)} per hit`} · recover genuinely deliverable emails on catch-all domains via
                     Findymail (charged only when one is found). Needs a Findymail key.
+                  </span>
+                </span>
+              </label>
+              <label className="flex items-start gap-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={enrichCompanyInbox}
+                  onChange={(e) => setEnrichCompanyInbox(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-border accent-[#2E37FE] cursor-pointer"
+                />
+                <span>
+                  Company inbox fallback{" "}
+                  <span className="text-[9px] uppercase tracking-wide text-[#2E37FE]/70">add-on</span>
+                  <span className="block text-[11px] text-muted-foreground">
+                    {`~$${estimateScrapeCost(1).toFixed(3)} per company · `}when no personal email turns up,
+                    use the company&apos;s general inbox (info@, contact@) from its website instead,
+                    labelled Company inbox. Scrapes the site first where the pattern guess wouldn&apos;t
                   </span>
                 </span>
               </label>

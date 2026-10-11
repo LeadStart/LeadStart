@@ -17,10 +17,17 @@ export function hasUsableName(first: string | null, last: string | null): boolea
 // items are forced onto site_scrape: pattern_mv / bovi generate or look up an
 // email FROM a name (impossible without one), and scrape_plus_pattern's pattern
 // stage would too, so all three collapse to a pure site scrape.
+//
+// opts.companyInbox (the item's contact opted into the company-inbox fallback):
+// a named item whose band only guesses (pattern_mv) gets the site scrape first
+// (scrape_plus_pattern), so a generic inbox is captured for the fallback to use;
+// the scrape's misses still go on to pattern_mv. bovi and off bands are left as
+// configured. The org's settings are not changed.
 export function methodForItem(
   config: EnrichmentSettings,
   employeeCount: number | null,
   hasName: boolean,
+  opts: { companyInbox?: boolean } = {},
 ): EnrichmentWaterfallMethod {
   const band =
     employeeCount == null
@@ -31,5 +38,6 @@ export function methodForItem(
   if (!hasName && (band === "pattern_mv" || band === "bovi" || band === "scrape_plus_pattern")) {
     return "site_scrape";
   }
+  if (opts.companyInbox && band === "pattern_mv") return "scrape_plus_pattern";
   return band;
 }

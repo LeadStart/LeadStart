@@ -217,6 +217,7 @@ export function MapsDiyPanel() {
   const [addVerify, setAddVerify] = useState(false);
   const [addCatchAll, setAddCatchAll] = useState(false);
   const [addValidateCatchAll, setAddValidateCatchAll] = useState(false);
+  const [addCompanyInbox, setAddCompanyInbox] = useState(false);
   const [searchName, setSearchName] = useState("");
 
   // Smart Search picker.
@@ -542,7 +543,13 @@ export function MapsDiyPanel() {
           levers: { searchTerms: terms, areas, websiteFilter, minStars },
           max_results: maxResults,
           name: searchName.trim() || undefined,
-          addons: { naming: addNaming, verify: addVerify, include_catch_all: addCatchAll, validate_catch_all: addValidateCatchAll },
+          addons: {
+            naming: addNaming,
+            verify: addVerify,
+            include_catch_all: addCatchAll,
+            validate_catch_all: addValidateCatchAll,
+            company_inbox_fallback: addCompanyInbox,
+          },
           preset_slug: presetSlug || undefined,
         }),
       });
@@ -1012,6 +1019,7 @@ export function MapsDiyPanel() {
                   <ToggleRow checked={addVerify} onChange={setAddVerify} title="Verify emails" sub="Million Verifier every found email" />
                   <ToggleRow checked={addCatchAll} onChange={setAddCatchAll} title="Include catch-all guesses" sub="Keep the best pattern guess, flagged" />
                   <ToggleRow checked={addValidateCatchAll} onChange={setAddValidateCatchAll} title="Validate catch-all emails" sub="Recover deliverable catch-all emails via Findymail (~$0.049/hit, pay-on-hit)" />
+                  <ToggleRow checked={addCompanyInbox} onChange={setAddCompanyInbox} title="Company inbox fallback" sub="Owner named but no personal email: use the site's info@ instead (labelled Company inbox)" />
                 </div>
 
                 {/* How many leads */}

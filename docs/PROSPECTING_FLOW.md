@@ -49,7 +49,7 @@ vs name-less-business). This IS the "veins meet at enrichment" design, already b
 
 ## 3. The shared enrichment engine (`run-apify-enrichment`)
 
-One state machine for BOTH veins. Phase order, `advancePhase` ([`route.ts:2379-2475`](../src/app/api/cron/run-apify-enrichment/route.ts)):
+One state machine for BOTH veins. Phase order, `advancePhase` ([`route.ts:2851-3001`](../src/app/api/cron/run-apify-enrichment/route.ts)):
 
 ```
 profiles → domains → naming → waterfall → activity → verify → complete
@@ -74,9 +74,9 @@ Microsoft 365 / Google) is **set aside instead of enriched** ([`pool.ts`](../src
 |---|---|---|---|---|
 | **profiles** | `harvestapi~linkedin-profile-scraper` (by URL) ([`profile-harvestapi.ts:4,58-63`](../src/lib/apify/providers/profile-harvestapi.ts)) — feeds `urls: [linkedin_url]` | has `linkedin_url` | live profile + email | $0.004/profile, **$0.01 with email** (mode used) |
 | **domains** | `harvestapi~linkedin-company` ([`company-harvestapi.ts:4`](../src/lib/apify/providers/company-harvestapi.ts)) + inline web-lookup discovery for name-only items | has a company LinkedIn ref, OR name-only w/ discovery on | `company_domain` | $0.004/company |
-| **naming** | decision-maker `enrichBusiness` ([`decision-maker/index.ts:68`](../src/lib/decision-maker/index.ts)). **L1 reads the site, then Claude Haiku names the most senior person** ([`layer1.ts:99`](../src/lib/decision-maker/layer1.ts)): the homepage, then up to 4 linked pages **requested together**, people pages first (about / team / owner / founder / our-story / who-we-are / leadership, then staff / management / why-us, then contact, careers last; a page linked with and without a `#fragment` is read once) ([`findContactPages`, `fetcher.ts:205-238`](../src/lib/decision-maker/fetcher.ts)). Whole pages up to 2 MB ([`fetcher.ts:24`](../src/lib/decision-maker/fetcher.ts)), tags of any length stripped ([`htmlToText`, `fetcher.ts:190`](../src/lib/decision-maker/fetcher.ts)). **Each page gets its own share of a 20,000-char prompt budget**; the homepage is trimmed first, down to 3,000 ([`buildPageText`, `layer1.ts:34,74`](../src/lib/decision-maker/layer1.ts)). **Page fetches get the first half of the per-business limit** (15 s of the naming phase's 30 s, [`layer1.ts:43,122`](../src/lib/decision-maker/layer1.ts); limit passed in at [`index.ts:76`](../src/lib/decision-maker/index.ts)); a page still loading then is dropped and Haiku runs on the rest, leaving Haiku + Perplexity the other half. Fetched one after another, the 5 pages could take 50 s and time the whole lookup out. Until 2026-10-11 the pages were joined homepage-first and cut at 12,000 chars, so a long homepage hid the about/team pages. Pages are requested as desktop Chrome (full UA + Accept / Accept-Language, [`fetcher.ts:12`](../src/lib/decision-maker/fetcher.ts)). **L2 web-search = Perplexity Sonar ONLY** (no Claude fallback; skipped without a Perplexity key) ([`layer2.ts`](../src/lib/decision-maker/layer2.ts)). Test: `scripts/test-decision-maker-layer1.ts` | name-less, company-named, no email ([`route.ts:2418-2432`](../src/app/api/cron/run-apify-enrichment/route.ts)) | owner name + title | Perplexity ~$0.015/business |
-| **waterfall** | size-band method: `site_scrape` / `pattern_mv` / `bovi` ([`waterfall-routing.ts:20-35`](../src/lib/enrichment/waterfall-routing.ts)); name-less → forced `site_scrape` | has a domain | generic + personal email | site_scrape ~$0.003 per site (compute); pattern_mv ≈ MV credits |
-| **activity** | `harvestapi~linkedin-profile-posts` ([`activity-harvestapi.ts:7`](../src/lib/apify/providers/activity-harvestapi.ts)) | has `linkedin_url` ([`route.ts:2450-2455`](../src/app/api/cron/run-apify-enrichment/route.ts)) | posting-recency (last-posted date + in-30d flag) | $0.002/profile (samples 1 post only; $0.001 if none) |
+| **naming** | decision-maker `enrichBusiness` ([`decision-maker/index.ts:68`](../src/lib/decision-maker/index.ts)). **L1 reads the site, then Claude Haiku names the most senior person** ([`layer1.ts:99`](../src/lib/decision-maker/layer1.ts)): the homepage, then up to 4 linked pages **requested together**, people pages first (about / team / owner / founder / our-story / who-we-are / leadership, then staff / management / why-us, then contact, careers last; a page linked with and without a `#fragment` is read once) ([`findContactPages`, `fetcher.ts:205-238`](../src/lib/decision-maker/fetcher.ts)). Whole pages up to 2 MB ([`fetcher.ts:24`](../src/lib/decision-maker/fetcher.ts)), tags of any length stripped ([`htmlToText`, `fetcher.ts:190`](../src/lib/decision-maker/fetcher.ts)). **Each page gets its own share of a 20,000-char prompt budget**; the homepage is trimmed first, down to 3,000 ([`buildPageText`, `layer1.ts:34,74`](../src/lib/decision-maker/layer1.ts)). **Page fetches get the first half of the per-business limit** (15 s of the naming phase's 30 s, [`layer1.ts:43,122`](../src/lib/decision-maker/layer1.ts); limit passed in at [`index.ts:76`](../src/lib/decision-maker/index.ts)); a page still loading then is dropped and Haiku runs on the rest, leaving Haiku + Perplexity the other half. Fetched one after another, the 5 pages could take 50 s and time the whole lookup out. Until 2026-10-11 the pages were joined homepage-first and cut at 12,000 chars, so a long homepage hid the about/team pages. Pages are requested as desktop Chrome (full UA + Accept / Accept-Language, [`fetcher.ts:12`](../src/lib/decision-maker/fetcher.ts)). **L2 web-search = Perplexity Sonar ONLY** (no Claude fallback; skipped without a Perplexity key) ([`layer2.ts`](../src/lib/decision-maker/layer2.ts)). Test: `scripts/test-decision-maker-layer1.ts` | name-less, company-named, no email ([`route.ts:2894-2903`](../src/app/api/cron/run-apify-enrichment/route.ts)) | owner name + title | Perplexity ~$0.015/business |
+| **waterfall** | size-band method: `site_scrape` / `scrape_plus_pattern` / `pattern_mv` / `bovi` ([`methodForItem`, `waterfall-routing.ts:26-43`](../src/lib/enrichment/waterfall-routing.ts)); name-less → forced `site_scrape`; a named lead opted into the company-inbox fallback whose band is `pattern_mv` → `scrape_plus_pattern` (below) | has a domain | generic + personal email | site_scrape ~$0.003 per site (compute); pattern_mv ≈ MV credits |
+| **activity** | `harvestapi~linkedin-profile-posts` ([`activity-harvestapi.ts:7`](../src/lib/apify/providers/activity-harvestapi.ts)) | has `linkedin_url` ([`route.ts:2946-2951`](../src/app/api/cron/run-apify-enrichment/route.ts)) | posting-recency (last-posted date + in-30d flag) | $0.002/profile (samples 1 post only; $0.001 if none) |
 | **verify** | Million Verifier | has an email | verified status | ~$0.0037/decisive; catch-all/unknown/error **free** ([`pattern-mv.ts:68-72`](../src/lib/enrichment/pattern-mv.ts)); fresh-cache hits (<30d — including `pattern_mv`'s own verdict) reuse the result with no call (§4) |
 | **complete** | — | — | finalize outcome ledger | — |
 
@@ -87,8 +87,8 @@ Because phases self-skip when no item qualifies, the lead's DATA decides the pat
 - **Maps lead** (name-less business, no `linkedin_url`): profiles → **skips** (no URL); **domains** → web-lookup discovery (name → domain); **naming** → owner-name discovery (if the add-on is on); **waterfall** → `site_scrape` (generic info@) + `pattern_mv` for items naming just named; activity → **skips** (no URL); verify.
 
 **Two `pattern_mv` guards (2026-09-25), both in `runPatternMvBatch`:**
-- **No mail server → no guessing.** When the item's domain has no MX record (or doesn't exist), every guess would come back `invalid`, which MV charges for, so the item ends `not_found` ("domain has no mail server") with no MV call ([`route.ts:863`](../src/app/api/cron/run-apify-enrichment/route.ts)). Only a definitive `none` skips; a failed lookup still guesses. Checked on 688 found emails: none was a guess on such a domain (those firms' real addresses live on another domain).
-- **Catch-all → the owner's published address first.** On a catch-all outcome, if an address the firm publishes on its own site (our site scrape's `company_emails`, or Scrap.io's crawl in `source_row.scrapio_emails`) is on the firm's domain and identifies the named owner, it replaces the guess, free, before any Findymail recovery ([`route.ts:961`](../src/app/api/cron/run-apify-enrichment/route.ts), matcher [`published-email.ts`](../src/lib/enrichment/published-email.ts)). Written as provider **`site_published`**, confidence 70. If it IS the guess, the guess's MV verdict is kept; otherwise the verify phase checks it (catch-all answers are free).
+- **No mail server → no guessing.** When the item's domain has no MX record (or doesn't exist), every guess would come back `invalid`, which MV charges for, so the item ends `not_found` ("domain has no mail server") with no MV call ([`route.ts:873`](../src/app/api/cron/run-apify-enrichment/route.ts)). Only a definitive `none` skips; a failed lookup still guesses. Checked on 688 found emails: none was a guess on such a domain (those firms' real addresses live on another domain).
+- **Catch-all → the owner's published address first.** On a catch-all outcome, if an address the firm publishes on its own site (our site scrape's `company_emails`, or Scrap.io's crawl in `source_row.scrapio_emails`) is on the firm's domain and identifies the named owner, it replaces the guess, free, before any Findymail recovery ([`route.ts:967`](../src/app/api/cron/run-apify-enrichment/route.ts), matcher [`published-email.ts`](../src/lib/enrichment/published-email.ts)). Written as provider **`site_published`**, confidence 70. If it IS the guess, the guess's MV verdict is kept; otherwise the verify phase checks it (catch-all answers are free).
 
 **Catch-all recovery (Findymail, add-on — migration 00099).** When a run opts into
 "validate catch-all emails" (per-search toggle OR the org
@@ -104,12 +104,54 @@ gate — a definitive error just stops calling for the rest of the batch, never 
 the run. Code: `runPatternMvBatch` in [`run-apify-enrichment/route.ts`](../src/app/api/cron/run-apify-enrichment/route.ts),
 client [`src/lib/findymail/client.ts`](../src/lib/findymail/client.ts).
 
+**Company-inbox fallback for NAMED leads (add-on `company_inbox_fallback`, default
+off, 2026-10-11).** By default a lead with a person's name keeps the person-only
+contract: when no personal email is found, the scraped generic inbox stays in
+`contacts.company_email` only, and since the native sender (`run-native-sequences`)
+mails `contacts.email` only, that lead can't be sent to. Measured on the SaaSassins
+cleaning test (run `ac01fd98`, 65 named owners): 27 got no personal email, 6 of them
+had an inbox captured but unsendable, and the 10 in the 50+ band never had their site
+scraped at all (`large_method = pattern_mv`). With the add-on:
+- **Routing.** An opted-in named lead whose size band is `pattern_mv` (it only
+  guesses, so no inbox is ever captured) gets `scrape_plus_pattern` instead: site
+  scrape first, its misses still go on to pattern_mv ([`waterfall-routing.ts:41`](../src/lib/enrichment/waterfall-routing.ts),
+  applied in `seedWaterfallItems` [`route.ts:1840`](../src/app/api/cron/run-apify-enrichment/route.ts)
+  and the Enrich route's seed-at-insert). `bovi` and `off` bands are left as
+  configured; the org's settings are not changed. Cost: ~$0.003 per company scraped.
+- **Promotion.** When the waterfall has nothing left pending, before activity and
+  verify are seeded, `applyCompanyInboxFallback` ([`route.ts:1958`](../src/app/api/cron/run-apify-enrichment/route.ts),
+  called at [`route.ts:2925`](../src/app/api/cron/run-apify-enrichment/route.ts))
+  takes every opted-in contact whose waterfall item ended with no address
+  (`not_found`, or `error` after its retries) and that has `contacts.company_email`,
+  and fills `contacts.email` with it, fill-only, with the same provenance as the
+  name-less backfill: `enrichment.email = {provider: site_scrape, kind:
+  company_generic, confidence: 30, via: "company_inbox_fallback"}`
+  ([`company-inbox.ts`](../src/lib/enrichment/company-inbox.ts)). One pass at the
+  waterfall's end covers every terminal miss (site_scrape, pattern_mv including a
+  `scrape_plus_pattern` handoff, bovi, no MX, no MV key, the retry cap). The item
+  becomes `found` with the address and keeps why the personal search missed in its
+  note, so the verify phase gives it a Million Verifier verdict. It stays tiered
+  **company** (`email-tier.ts`), so TuBe's handoff still excludes it. An inbox that
+  is already another contact's email (two people at one firm) leaves this contact
+  without one (item `skipped`, noted). Runs out of time → stays in the waterfall
+  phase and the next tick finishes (idempotent).
+- **Who gets it.** Stored on the run's `waterfall_config` snapshot as
+  `company_inbox_fallback`: `"opted_in"` from `enqueueEnrichment` when any contact's
+  `enrichment_data.addons` stamp opted in (then only those contacts get it, and the
+  extra scrape), `"all"` from Contacts → Enrich with the box ticked (every selected
+  contact). Absent = off, which is every run before the add-on and the TuBe/law
+  pipeline. Chosen per search (LinkedIn panel, Maps DIY panel; both search routes
+  store it on `query.addons`, and imports stamp it on each contact) or in the
+  Contacts → Enrich dialog. Test: `scripts/test-company-inbox-fallback.ts` (drives
+  the real cron tick, `enqueueEnrichment` and the Enrich route).
+
 ---
 
 ## 4. Where each email actually comes from (the part that was gotten wrong)
 
 - **LinkedIn personal email:** PRIMARY = the **profiles phase** (`linkedin-profile-scraper`, by URL) ([`profile-harvestapi.ts:92,112-119`](../src/lib/apify/providers/profile-harvestapi.ts)). FALLBACK only = `pattern_mv`/`site_scrape` in the waterfall when the profile scrape returned no email.
-- **Maps generic email (info@):** the **`site_scrape`** actor (`site-contact-scraper`) reads the company website; the generic inbox is backfilled onto `contacts.email` ([`run-apify-enrichment/route.ts:1893-1910`](../src/app/api/cron/run-apify-enrichment/route.ts)).
+- **Maps generic email (info@):** the **`site_scrape`** actor (`site-contact-scraper`) reads the company website; for a name-less lead the generic inbox is backfilled onto `contacts.email` (`finishWaterfallMiss`, [`run-apify-enrichment/route.ts:2293-2330`](../src/app/api/cron/run-apify-enrichment/route.ts)). For a named lead it stays in `contacts.company_email` (filled by `writeEmail` from the scrape's extras, the only writer of that column).
+- **Named lead's company inbox (add-on `company_inbox_fallback`):** when the waterfall ends with no personal email, `contacts.company_email` is promoted onto `contacts.email` with the same `company_generic` provenance (confidence 30, tier company), then verified like any scraped inbox. Off by default; §3 has the rules.
 - **Maps personal email:** **naming** finds the owner → **`pattern_mv`** guesses `first.last@domain` and Million Verifier confirms the deliverable one ([`pattern-mv.ts:40-66,106-166`](../src/lib/enrichment/pattern-mv.ts)). That MV verdict is a genuine, paid result, so it is **stamped straight onto the contact's verification cache** (`email_verified_at`, built via `decideFromResult`) in the SAME statement that fills `contacts.email` ([`writeEmail` in run-apify-enrichment/route.ts](../src/app/api/cron/run-apify-enrichment/route.ts)).
 - **One verdict, one 30-day cache — no double-verify.** `pattern_mv` (in the waterfall), the end-of-run **verify** phase, and the **pre-send gate** all read the same cache through `decideFromCached`/`isFresh` (`VERIFICATION_TTL_DAYS = 30`, [`policy.ts:28`](../src/lib/millionverifier/policy.ts)). Because `pattern_mv` now caches its verdict, the verify phase finds it fresh and short-circuits with **no second MV call** (a Maps lead used to be verified twice in one run — the pattern pass, then again at the end). Only email sources that are NOT themselves MV results — `site_scrape` generic inboxes, LinkedIn-profile emails, Findymail catch-all recoveries — still reach the verify phase unverified and earn their first MV verdict there.
 - **Million Verifier is verify-only, never a finder.** It also runs as the pre-send gate in `run-native-sequences`.

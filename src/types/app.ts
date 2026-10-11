@@ -1612,6 +1612,14 @@ export interface EnrichmentAddons {
   // the org-level EnrichmentSettings.validate_catch_all default. Needs a
   // Findymail API key (Settings → Integrations); no key = the step no-ops.
   validate_catch_all: boolean;
+  // Company-inbox fallback for NAMED leads: when the waterfall ends with no
+  // personal email, put the scraped generic company inbox (info@…) on
+  // contacts.email (provenance company_generic, confidence 30, still tiered
+  // "company") so the native sender can mail it. Also gives a pattern-only size
+  // band a site scrape first, so the inbox gets captured at all. Default OFF:
+  // without it a named lead keeps the person-only contract (TuBe relies on it).
+  // Name-less leads get the inbox either way (finishWaterfallMiss).
+  company_inbox_fallback: boolean;
 }
 
 export const DEFAULT_ENRICHMENT_ADDONS: EnrichmentAddons = {
@@ -1620,6 +1628,7 @@ export const DEFAULT_ENRICHMENT_ADDONS: EnrichmentAddons = {
   naming: false,
   include_catch_all: false,
   validate_catch_all: false,
+  company_inbox_fallback: false,
 };
 
 // Org-level enrichment/waterfall config (organizations.enrichment_settings, JSONB).

@@ -4,6 +4,7 @@ import { PROFILE_ACTOR, DOMAIN_ACTOR, ACTIVITY_ACTOR, resolveWaterfallActor } fr
 import { loadEnrichmentSettings, normalizeAddons } from "./auth";
 import { lookupMailHosts, readMailHost, isWeakMailHost, type MailHost } from "@/lib/enrichment/mail-host";
 import { isPooled, isPoolReleased, withPoolTag } from "@/lib/enrichment/pool";
+import type { CompanyInboxFallbackScope } from "@/lib/enrichment/company-inbox";
 
 // Auto-enrichment enqueue: the "queue-behind" heart of the Prospecting →
 // Contacts handoff. Given a set of contact ids, it either starts an enrichment
@@ -251,6 +252,10 @@ export async function enqueueEnrichment(
   // the run's config snapshot flips validate_catch_all on so the cron hands
   // catch-all misses to Findymail's finder to recover a deliverable address.
   const validateCatchAll = runContacts.some((c) => addonsFor(c).validate_catch_all);
+  // Company-inbox fallback: switched on for the run when any contact opted in,
+  // scoped "opted_in" so the cron applies it (and its extra site scrape) only to
+  // the contacts whose own addons stamp says so (lib/enrichment/company-inbox).
+  const companyInbox = runContacts.some((c) => addonsFor(c).company_inbox_fallback);
 
   // Snapshot the org's waterfall config (migration 00075) onto the run, same as
   // contacts/enrich/start, so an auto-enqueued run honors the configured method
@@ -274,6 +279,7 @@ export async function enqueueEnrichment(
         ...settings,
         accept_catch_all_guesses: includeCatchAll ? true : settings.accept_catch_all_guesses,
         validate_catch_all: validateCatchAll ? true : settings.validate_catch_all,
+        ...(companyInbox ? { company_inbox_fallback: "opted_in" satisfies CompanyInboxFallbackScope } : {}),
       },
       run_profiles: true,
       run_domains: true,

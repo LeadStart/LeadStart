@@ -8,6 +8,7 @@ import {
   resolveWaterfallActor,
 } from "@/lib/apify/providers";
 import { hasUsableName, methodForItem } from "@/lib/enrichment/waterfall-routing";
+import type { CompanyInboxFallbackScope } from "@/lib/enrichment/company-inbox";
 import { isPooled, withPoolReleased } from "@/lib/enrichment/pool";
 
 // POST /api/admin/contacts/enrich/start
@@ -35,6 +36,7 @@ type Body = {
   run_naming?: unknown;
   include_catch_all?: unknown;
   validate_catch_all?: unknown;
+  company_inbox_fallback?: unknown;
 };
 
 type ContactRow = {
@@ -87,6 +89,12 @@ export async function POST(request: NextRequest) {
   // hands catch-all misses to Findymail to recover a deliverable address.
   const validateCatchAll =
     body.validate_catch_all === undefined ? false : Boolean(body.validate_catch_all);
+  // Company-inbox fallback add-on (default OFF): a named contact whose waterfall
+  // ends with no personal email gets its scraped generic inbox on contacts.email.
+  // Scoped "all" on the run: the owner picked these contacts and ticked the box,
+  // so it applies to every one of them, whatever their import-time addons stamp.
+  const companyInboxFallback =
+    body.company_inbox_fallback === undefined ? false : Boolean(body.company_inbox_fallback);
 
   if (contactIds.length === 0) {
     return NextResponse.json({ error: "contact_ids is required" }, { status: 400 });
@@ -273,7 +281,9 @@ export async function POST(request: NextRequest) {
     // ahead. employee_count is unknown at insert (null) → unknown-size band.
     const wfMethod =
       seedWaterfallNow && wantWaterfallOnly
-        ? methodForItem(settings, null, hasUsableName(c.first_name, c.last_name))
+        ? methodForItem(settings, null, hasUsableName(c.first_name, c.last_name), {
+            companyInbox: companyInboxFallback,
+          })
         : null;
     const wfSeed =
       wfMethod == null
@@ -336,6 +346,7 @@ export async function POST(request: NextRequest) {
         ...settings,
         accept_catch_all_guesses: includeCatchAll ? true : settings.accept_catch_all_guesses,
         validate_catch_all: validateCatchAll ? true : settings.validate_catch_all,
+        ...(companyInboxFallback ? { company_inbox_fallback: "all" satisfies CompanyInboxFallbackScope } : {}),
       },
       run_profiles: runProfiles,
       run_domains: runDomains,
