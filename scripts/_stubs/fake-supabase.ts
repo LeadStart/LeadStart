@@ -7,7 +7,9 @@
  *
  * It implements only the PostgREST builder calls the client-import route
  * makes (select / insert / update / upsert with eq, in, is, gte, or, order,
- * maybeSingle, count+head), the two unique indexes that route relies on
+ * maybeSingle, count+head), plus what enqueueEnrichment and the
+ * drain-enrichment-queue cron add (delete, not(col, "is", null), limit,
+ * single), the two unique indexes that route relies on
  * (contacts: org + lower(email); campaign_enrollments: campaign + contact),
  * and records every write. Anything else throws, so a route change that
  * outgrows the fake fails loudly instead of passing by accident.
@@ -21,7 +23,7 @@ type Result = { data: unknown; error: DbError | null; count?: number | null };
 export interface FakeState {
   tables: Record<string, Row[]>;
   user: { id: string; email: string; app_metadata: Record<string, unknown> } | null;
-  writes: { table: string; op: "insert" | "update" | "upsert"; ids: string[] }[];
+  writes: { table: string; op: "insert" | "update" | "upsert" | "delete"; ids: string[] }[];
   alerts: Record<string, unknown>[];
   /** "table:op" keys whose next call returns an error, e.g. "campaign_enrollments:select". */
   failOn: Set<string>;
@@ -104,7 +106,7 @@ function orTerm(term: string): (r: Row) => boolean {
 }
 
 class Query implements PromiseLike<Result> {
-  private op: "select" | "insert" | "update" | "upsert" = "select";
+  private op: "select" | "insert" | "update" | "upsert" | "delete" = "select";
   private filters: ((r: Row) => boolean)[] = [];
   private payload: unknown = null;
   private upsertOpts: { onConflict?: string; ignoreDuplicates?: boolean } = {};
@@ -113,6 +115,7 @@ class Query implements PromiseLike<Result> {
   private countExact = false;
   private head = false;
   private orderBy: { col: string; asc: boolean } | null = null;
+  private limitTo: number | null = null;
 
   constructor(private table: string) {}
 
@@ -142,6 +145,10 @@ class Query implements PromiseLike<Result> {
     this.upsertOpts = opts ?? {};
     return this;
   }
+  delete(): this {
+    this.op = "delete";
+    return this;
+  }
   eq(col: string, val: unknown): this {
     this.filters.push((r) => r[col] === val);
     return this;
@@ -154,6 +161,11 @@ class Query implements PromiseLike<Result> {
   is(col: string, val: null): this {
     if (val !== null) throw new Error("fake-supabase: is() only supports null");
     this.filters.push((r) => r[col] == null);
+    return this;
+  }
+  not(col: string, op: string, val: unknown): this {
+    if (op !== "is" || val !== null) throw new Error(`fake-supabase: unsupported not(${col}, ${op}, ${String(val)})`);
+    this.filters.push((r) => r[col] != null);
     return this;
   }
   gte(col: string, val: string | number): this {
@@ -169,6 +181,10 @@ class Query implements PromiseLike<Result> {
     this.orderBy = { col, asc: opts?.ascending !== false };
     return this;
   }
+  limit(n: number): this {
+    this.limitTo = n;
+    return this;
+  }
 
   async maybeSingle(): Promise<Result> {
     const res = await this.run();
@@ -176,6 +192,14 @@ class Query implements PromiseLike<Result> {
     const rows = (res.data as Row[] | null) ?? [];
     if (rows.length > 1) return { data: null, error: { message: "multiple rows for maybeSingle", code: "PGRST116" } };
     return { data: rows[0] ?? null, error: null };
+  }
+
+  async single(): Promise<Result> {
+    const res = await this.run();
+    if (res.error) return res;
+    const rows = (res.data as Row[] | null) ?? [];
+    if (rows.length !== 1) return { data: null, error: { message: `${rows.length} rows for single`, code: "PGRST116" } };
+    return { data: rows[0], error: null };
   }
 
   then<T1 = Result, T2 = never>(
@@ -206,6 +230,7 @@ class Query implements PromiseLike<Result> {
         const { col, asc } = this.orderBy;
         rows = [...rows].sort((a, b) => ((a[col] as number) - (b[col] as number)) * (asc ? 1 : -1));
       }
+      if (this.limitTo != null) rows = rows.slice(0, this.limitTo);
       if (this.head) return { data: null, error: null, count: this.countExact ? rows.length : null };
       return { data: rows.map((r) => project(r, this.cols)), error: null, count: this.countExact ? rows.length : null };
     }
@@ -232,6 +257,13 @@ class Query implements PromiseLike<Result> {
       for (const r of rows) Object.assign(r, clone(this.payload as Row));
       s.writes.push({ table: this.table, op: "update", ids: rows.map((r) => String(r.id)) });
       return { data: this.returning ? rows.map((r) => project(r, this.returning)) : null, error: null };
+    }
+
+    if (this.op === "delete") {
+      const doomed = new Set(this.matching());
+      s.tables[this.table] = table.filter((r) => !doomed.has(r));
+      s.writes.push({ table: this.table, op: "delete", ids: [...doomed].map((r) => String(r.id)) });
+      return { data: null, error: null };
     }
 
     // upsert

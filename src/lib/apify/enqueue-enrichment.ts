@@ -3,7 +3,7 @@ import { extractProfileId, extractCompanyId, extractCompanySlug } from "./domain
 import { PROFILE_ACTOR, DOMAIN_ACTOR, ACTIVITY_ACTOR, resolveWaterfallActor } from "./providers";
 import { loadEnrichmentSettings, normalizeAddons } from "./auth";
 import { lookupMailHosts, readMailHost, isWeakMailHost, type MailHost } from "@/lib/enrichment/mail-host";
-import { isPooled, withPoolTag } from "@/lib/enrichment/pool";
+import { isPooled, isPoolReleased, withPoolTag } from "@/lib/enrichment/pool";
 
 // Auto-enrichment enqueue: the "queue-behind" heart of the Prospecting →
 // Contacts handoff. Given a set of contact ids, it either starts an enrichment
@@ -15,7 +15,8 @@ import { isPooled, withPoolTag } from "@/lib/enrichment/pool";
 // guesses rarely verify (security gateways, GoDaddy, other hosts, no mail server)
 // is set aside instead of enriched: tagged, detached from any campaign, never
 // queued (lib/enrichment/pool). Import tags most of them; any whose host is only
-// resolved here are pooled here. Released later via Contacts → Enrich.
+// resolved here are pooled here. Released later via Contacts → Enrich (or the
+// tube-pipeline enrich step), and a released contact is never pooled here again.
 
 type ContactRow = {
   id: string;
@@ -213,9 +214,12 @@ export async function enqueueEnrichment(
   // when missing (other veins, or an import-time lookup that ran out of time).
   // A Maps-style firm on a weak host found only now is pooled now. A LinkedIn
   // lead is never pooled: its email comes from its profile, not a guess on the
-  // company domain, so the mail host doesn't predict its yield.
+  // company domain, so the mail host doesn't predict its yield. Nor is a firm
+  // already released from the pool: the owner chose to enrich it anyway.
   const hostOf = await resolveMailHosts(admin, eligible);
-  const toPool = eligible.filter((c) => !extractProfileId(c.linkedin_url) && isWeakMailHost(hostOf.get(c.id)));
+  const toPool = eligible.filter(
+    (c) => !extractProfileId(c.linkedin_url) && !isPoolReleased(c.tags) && isWeakMailHost(hostOf.get(c.id)),
+  );
   await poolContacts(admin, toPool);
   const poolIds = new Set(toPool.map((c) => c.id));
   const pooledCount = alreadyPooled.length + toPool.length;

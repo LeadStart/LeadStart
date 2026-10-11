@@ -8,8 +8,10 @@
 //   • refused by every "add to campaign" path, and the native sender fails any
 //     enrollment that still slips through
 //
-// Release = Contacts → select them → Enrich (contacts/enrich/start), which swaps
-// POOL_TAG for POOL_RELEASED_TAG so they flow like any other lead from then on.
+// Release = Contacts → select them → Enrich (contacts/enrich/start), or the
+// tube-pipeline skill's enrich step when the brief says weak_hosts "enrich",
+// which swaps POOL_TAG for POOL_RELEASED_TAG so they flow like any other lead
+// from then on: enqueueEnrichment never pools a released contact again.
 //
 // Pure: no I/O, safe on the client.
 
@@ -20,6 +22,11 @@ export const POOL_SKIP_REASON =
 
 export function isPooled(tags: unknown): boolean {
   return Array.isArray(tags) && tags.includes(POOL_TAG);
+}
+
+/** Released from the pool once: never pooled again on its mail host. */
+export function isPoolReleased(tags: unknown): boolean {
+  return Array.isArray(tags) && tags.includes(POOL_RELEASED_TAG);
 }
 
 /** The contact's tags with the pool tag added (deduped). */
