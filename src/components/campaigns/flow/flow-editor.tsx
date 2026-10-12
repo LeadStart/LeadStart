@@ -5,7 +5,8 @@
 // (email/linkedin/internal), wait chips, and every condition forked into yes/no
 // arms (nested sequences). Clicking a content tile opens a centered compose
 // MODAL (instant, viewport-centered, contained) to edit it: the tiles stay a
-// uniform summary. Controlled: the parent owns the graph and passes value +
+// uniform summary. An email opens as a wide workspace (EmailWorkspace): variant
+// rail, editor, inbox preview. Controlled: the parent owns the graph and passes value +
 // onChange. Email/wait are the executed path today; linkedin/internal/condition
 // are authored + persisted but don't run yet.
 
@@ -18,24 +19,18 @@ import {
   Trash2,
   GitBranch,
   Bell,
-  ChevronDown,
   X,
   CornerDownRight,
   Maximize2,
-  Minimize2,
 } from "lucide-react";
-import { extractCampaignTokens, normalizeVarKey } from "@/lib/native/tokens";
 import {
   type FlowGraph,
   type FlowNode,
   type FlowConditionTrigger,
   type EmailNode,
-  type EmailVariant,
-  type EmailAbConfig,
   type LinkedInNode,
   type InternalNode,
   emailNode,
-  emailVariant,
   waitNode,
   linkedinNode,
   internalNode,
@@ -44,8 +39,8 @@ import {
 } from "@/lib/flow/graph";
 import { updateNode, removeNode, insertAfter, appendToBranch } from "@/lib/flow/edit";
 import { isUntrackedTrigger } from "@/lib/flow/runtime";
-import { StepCopyCheck } from "@/components/campaigns/step-copy-check";
 import { appUrl } from "@/lib/api-url";
+import { EmailWorkspace } from "./email-workspace";
 import styles from "./flow.module.css";
 
 // lucide v1 dropped brand icons; inline the LinkedIn glyph (matches the mockup).
@@ -171,139 +166,6 @@ const INTERNAL_ACTION_LABEL: Record<string, string> = {
 
 const INSERT_TOKENS = ["{{first_name}}", "{{company}}", "{{title}}", "{{intro_line}}"];
 
-// A/B/C… variant editor for an email node, as a compact ACCORDION. Variant A is
-// the node's own subject/body (the fields above in the modal); this manages the
-// extra variants (B, C…): each collapses to a one-line row and springs open to
-// edit. Leads split evenly across all variants and we measure reply/positive-
-// reply rate per one.
-function EmailVariants({
-  node,
-  onChange,
-  onAbConfigChange,
-  isFirst,
-  abAutoPauseDefault,
-}: {
-  node: EmailNode;
-  onChange: (variants: EmailVariant[]) => void;
-  onAbConfigChange: (cfg: EmailAbConfig | undefined) => void;
-  isFirst: boolean;
-  abAutoPauseDefault: boolean;
-}) {
-  const variants = node.variants ?? [];
-  const [openVar, setOpenVar] = useState<string | null>(null);
-
-  // Seed a new variant from A (same body; the common case is a subject-line test).
-  const add = () => {
-    const v = emailVariant(isFirst ? node.subject : "", node.body);
-    onChange([...variants, v]);
-    setOpenVar(v.id); // spring the new one open to fill it in
-  };
-  const update = (id: string, patch: Partial<EmailVariant>) =>
-    onChange(variants.map((v) => (v.id === id ? { ...v, ...patch } : v)));
-  const remove = (id: string) => {
-    onChange(variants.filter((v) => v.id !== id));
-    if (openVar === id) setOpenVar(null);
-  };
-
-  // Per-node auto-winner override: undefined = inherit the campaign default,
-  // true/false = force on/off for THIS A/B step.
-  const autoPause = node.ab_config?.autoPause;
-  const autoPauseValue = autoPause === undefined ? "inherit" : autoPause ? "on" : "off";
-  const setAutoPause = (v: string) => {
-    const next: EmailAbConfig = { ...(node.ab_config ?? {}) };
-    if (v === "inherit") delete next.autoPause;
-    else next.autoPause = v === "on";
-    onAbConfigChange(Object.keys(next).length > 0 ? next : undefined);
-  };
-
-  return (
-    <div className={styles.field}>
-      <div className={styles.abHead}>
-        <label className={styles.label} style={{ margin: 0 }}>
-          <GitBranch size={13} style={{ verticalAlign: "-2px", marginRight: 5 }} />
-          A/B test{variants.length > 0 ? ` · ${variants.length + 1} variants` : ""}
-        </label>
-        <button type="button" className={styles.addDashedSm} onClick={add}>
-          <Plus size={13} /> Add variant
-        </button>
-      </div>
-      {variants.length > 0 && (
-        <p className={styles.hint} style={{ marginTop: 2 }}>
-          Variant A is the email above. Leads split evenly across every variant; we
-          measure reply &amp; positive-reply rate per variant.{" "}
-          {isFirst ? "Each variant needs its own subject." : "A blank subject threads as “Re:”."}
-        </p>
-      )}
-      {variants.length > 0 && (
-        <div style={{ marginTop: 8 }}>
-          <label className={styles.label} style={{ margin: "0 0 3px" }}>
-            Auto-winner
-          </label>
-          <select className={styles.select} value={autoPauseValue} onChange={(e) => setAutoPause(e.target.value)}>
-            <option value="inherit">Use campaign default ({abAutoPauseDefault ? "auto-pause on" : "off"})</option>
-            <option value="on">Auto-pause losers on</option>
-            <option value="off">Off: decide manually</option>
-          </select>
-          <p className={styles.hint} style={{ marginTop: 2 }}>
-            When on, once this test has the volume it pauses the losing variants (95% significance
-            + a ≥1&nbsp;pt lead on positive-reply rate) so new leads route to the winner. Sticky:
-            a lead already in a variant’s thread stays there.
-          </p>
-        </div>
-      )}
-      {variants.length > 0 && (
-        <div className={styles.abAcc}>
-          {variants.map((v, i) => {
-            const label = String.fromCharCode(66 + i); // B, C, D…
-            const open = openVar === v.id;
-            const preview =
-              v.subject.trim() || (isFirst ? "(add a subject)" : "Re: (threads on the first subject)");
-            return (
-              <div key={v.id} className={`${styles.abItem} ${open ? styles.abOpen : ""}`}>
-                <div className={styles.abIRow} onClick={() => setOpenVar(open ? null : v.id)}>
-                  <span className={styles.abK}>{label}</span>
-                  <span className={styles.abIS}>{preview}</span>
-                  <button
-                    type="button"
-                    className={`${styles.iconbtn} ${styles.danger}`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      remove(v.id);
-                    }}
-                    aria-label="Remove variant"
-                  >
-                    <Trash2 size={13} />
-                  </button>
-                  <ChevronDown size={15} className={`${styles.abChev} ${open ? styles.abChevOpen : ""}`} />
-                </div>
-                <div className={styles.abBW}>
-                  <div className={styles.abBI}>
-                    <div className={styles.abBody}>
-                      <input
-                        className={styles.input}
-                        value={v.subject}
-                        placeholder={isFirst ? "Subject for this variant" : "Subject (optional, blank threads as “Re:”)"}
-                        onChange={(e) => update(v.id, { subject: e.target.value })}
-                      />
-                      <textarea
-                        className={styles.textarea}
-                        rows={5}
-                        value={v.body}
-                        placeholder="Body for this variant. {{first_name}} {{company}} …"
-                        onChange={(e) => update(v.id, { body: e.target.value })}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
 export function FlowEditor({
   value,
   onChange,
@@ -323,9 +185,6 @@ export function FlowEditor({
   // click handler, so the portal below is only rendered client-side (openId is
   // null through SSR + hydration): no document/SSR guard needed.
   const [openId, setOpenId] = useState<string | null>(null);
-  // Email modal "expand" toggle: a wider, taller focused view. Sticky across
-  // opens; only widens the email modal (the button lives only in its header).
-  const [expanded, setExpanded] = useState(false);
 
   const primaryPath = flattenPrimaryPath(value.nodes);
   const firstEmail = primaryPath.find((n) => n.kind === "email") as EmailNode | undefined;
@@ -335,12 +194,9 @@ export function FlowEditor({
   // ---- variable picker (Insert: chips) --------------------------------------
   // Custom variables this campaign defines (from the persisted registry), so an
   // author inserts only variables the list can actually fill. Standard chips are
-  // always available. Refs + last-focused let a chip insert {{token}} at the
-  // caret of whichever field (subject/body) the author last touched.
+  // always available. The email workspace drops a chip at the caret of the
+  // field the author last touched, and flags copy tokens outside this list.
   const [customChips, setCustomChips] = useState<string[]>([]);
-  const subjectRef = useRef<HTMLInputElement>(null);
-  const bodyRef = useRef<HTMLTextAreaElement>(null);
-  const lastFocused = useRef<"subject" | "body">("body");
 
   useEffect(() => {
     if (!campaignId) return;
@@ -366,29 +222,6 @@ export function FlowEditor({
       cancelled = true;
     };
   }, [campaignId]);
-
-  function insertToken(token: string) {
-    if (!openId) return;
-    let field: "subject" | "body" = lastFocused.current;
-    let el: HTMLInputElement | HTMLTextAreaElement | null =
-      field === "subject" ? subjectRef.current : bodyRef.current;
-    if (!el) {
-      field = "body";
-      el = bodyRef.current;
-    }
-    if (!el) return;
-    const cur = el.value;
-    const start = el.selectionStart ?? cur.length;
-    const end = el.selectionEnd ?? cur.length;
-    patch(openId, { [field]: cur.slice(0, start) + token + cur.slice(end) });
-    const caret = start + token.length;
-    const target = el;
-    // Restore focus + caret after the controlled re-render commits.
-    setTimeout(() => {
-      target.focus();
-      target.setSelectionRange(caret, caret);
-    }, 0);
-  }
 
   const insertChips = [...new Set([...INSERT_TOKENS, ...customChips])];
 
@@ -734,7 +567,7 @@ export function FlowEditor({
 
     if (n.kind === "email") {
       const isFirst = n.id === firstEmailId;
-      const hasSubject = n.subject.trim().length > 0;
+      const variantCount = (n.variants?.length ?? 0) + 1;
       const titleText = isFirst
         ? n.subject.trim() || "Email · first touch"
         : n.subject.trim() || `Re: ${firstEmailSubject || "the first email"}`;
@@ -747,129 +580,29 @@ export function FlowEditor({
             <div className={`${styles.mEyebrow} ${styles.kEmail}`}>{isFirst ? "Email · first touch" : "Email · follow-up"}</div>
             <div className={styles.mTitle}>{titleText}</div>
           </div>
-          <button
-            type="button"
-            className={styles.mClose}
-            onClick={() => setExpanded((v) => !v)}
-            aria-label={expanded ? "Shrink email editor" : "Expand email editor"}
-            title={expanded ? "Shrink" : "Expand"}
-          >
-            {expanded ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
-          </button>
+          {variantCount > 1 && (
+            <span className={styles.mPill}>
+              <GitBranch size={12} /> A/B test · {variantCount} variants
+            </span>
+          )}
           <button type="button" className={styles.mClose} onClick={() => setOpenId(null)} aria-label="Close">
             <X size={16} />
           </button>
         </div>
       );
       body = (
-        <div className={styles.mBody}>
-          <div className={styles.field}>
-            <label className={styles.label}>{isFirst ? "Subject line" : "Subject (optional)"}</label>
-            <div className={styles.subjWrap}>
-              <input
-                ref={subjectRef}
-                className={`${styles.input} ${!isFirst ? styles.ghostable : ""}`}
-                value={n.subject}
-                placeholder={
-                  isFirst ? "Quick question, {{first_name}}" : `Re: ${firstEmailSubject || "the first email’s subject"}`
-                }
-                onFocus={() => (lastFocused.current = "subject")}
-                onChange={(e) => patch(n.id, { subject: e.target.value })}
-              />
-              {!isFirst && (
-                <span className={`${styles.threadTag} ${hasSubject ? styles.threadNew : styles.threadSame}`}>
-                  <CornerDownRight size={13} /> {hasSubject ? "new thread" : "same thread"}
-                </span>
-              )}
-            </div>
-            {!isFirst && (
-              <p className={styles.threadHelp}>
-                {hasSubject ? (
-                  <>
-                    Custom subject: this email starts a <b>new thread</b>. Clear it to fall back to the
-                    first email’s thread.
-                  </>
-                ) : (
-                  <>
-                    Leave blank to stay on the <b>first email’s thread</b>: the recipient sees it as a
-                    reply, no new subject line.
-                  </>
-                )}
-              </p>
-            )}
-          </div>
-          <div className={styles.varRow}>
-            <span className={styles.varLbl}>Insert:</span>
-            {insertChips.map((v) => (
-              <button
-                key={v}
-                type="button"
-                className={styles.varChip}
-                // preventDefault keeps the field's focus + caret, so the token
-                // lands at the cursor instead of appending after a blur.
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => insertToken(v)}
-                title={`Insert ${v} at the cursor`}
-              >
-                {v}
-              </button>
-            ))}
-          </div>
-          {(() => {
-            // Flag copy tokens with no mapped contact column: under the
-            // columns-drive-variables model they never register a variable and
-            // send blank. Mirrors the import panel's warning, at authoring time.
-            const mapped = new Set(customChips.map((c) => normalizeVarKey(c.replace(/[{}]/g, ""))));
-            const unmapped = extractCampaignTokens([n.subject, n.body]).custom.filter((t) => !mapped.has(t.key));
-            if (unmapped.length === 0) return null;
-            return (
-              <p
-                style={{
-                  margin: "0 0 2px", fontSize: "11.5px", lineHeight: 1.45,
-                  color: "#8a5a0b", background: "#f6eddc",
-                  border: "1px solid #e6d3a3", borderRadius: 7, padding: "6px 10px",
-                }}
-              >
-                Not mapped to a contact column:{" "}
-                <b>{unmapped.map((t) => `{{${t.token}}}`).join(", ")}</b>: map a column when you
-                import contacts, or these send blank.
-              </p>
-            );
-          })()}
-          <div className={styles.field}>
-            <label className={styles.label}>Body</label>
-            <textarea
-              ref={bodyRef}
-              className={styles.textarea}
-              rows={9}
-              style={expanded ? { minHeight: 360 } : undefined}
-              value={n.body}
-              placeholder="Plain text. Placeholders: {{first_name}} {{company}} {{title}} {{intro_line}}"
-              onFocus={() => (lastFocused.current = "body")}
-              onChange={(e) => patch(n.id, { body: e.target.value })}
-            />
-            <StepCopyCheck
-              subject={isFirst ? n.subject : ""}
-              body={n.body}
-              clientId={clientId}
-              campaignId={campaignId}
-              isFirstStep={isFirst}
-              onApplySpintax={(nv) =>
-                patch(n.id, {
-                  ...(isFirst && nv.subject !== null ? { subject: nv.subject } : {}),
-                  body: nv.body,
-                })
-              }
-            />
-          </div>
-          <EmailVariants
-            node={n}
-            isFirst={isFirst}
-            abAutoPauseDefault={abAutoPauseDefault}
-            onChange={(variants) => patch(n.id, { variants })}
-            onAbConfigChange={(ab_config) => patch(n.id, { ab_config })}
-          />
-        </div>
+        <EmailWorkspace
+          key={n.id}
+          node={n}
+          isFirst={isFirst}
+          firstEmailSubject={firstEmailSubject}
+          insertChips={insertChips}
+          customChips={customChips}
+          clientId={clientId}
+          campaignId={campaignId}
+          abAutoPauseDefault={abAutoPauseDefault}
+          onPatch={(p) => patch(n.id, p)}
+        />
       );
     } else if (n.kind === "linkedin") {
       head = (
@@ -951,7 +684,7 @@ export function FlowEditor({
       <>
         <div className={styles.backdrop} onClick={() => setOpenId(null)} />
         <div
-          className={`${styles.modal} ${expanded && n.kind === "email" ? styles.modalWide : ""}`}
+          className={`${styles.modal} ${n.kind === "email" ? styles.modalWorkspace : ""}`}
           role="dialog"
           aria-modal="true"
         >
