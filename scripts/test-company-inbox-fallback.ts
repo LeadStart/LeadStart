@@ -218,13 +218,27 @@ async function main() {
     const twin = lead("twin", { company_inbox_fallback: true, verify: true }, { company_email: "office@twin.test" });
     // Not in the run: already holds twin's inbox as its own email.
     const holder = lead("holder", {}, { email: "office@twin.test", linkedin_url: null });
+    // Opted in, inbox captured, but the domain has no mail server (the firm
+    // runs on Gmail): info@ there can only bounce, so it must not be promoted.
+    const gmailFirm = lead(
+      "nomx",
+      { company_inbox_fallback: true, verify: true },
+      {
+        company_email: "info@nomx.test",
+        enrichment_data: {
+          addons: { company_inbox_fallback: true, verify: true },
+          mail_host: { host: "none", mx: null, checked_at: STAMPED_AT },
+          linkedin_search_id: "search-1",
+        },
+      },
+    );
     const R = "run-opted";
     resetFake(
       {
         organizations: [org],
-        contacts: [opted, notOpted, noInbox, twin, holder],
+        contacts: [opted, notOpted, noInbox, twin, holder, gmailFirm],
         enrichment_runs: [run(R, "waterfall", { ...SAAS_CONFIG, company_inbox_fallback: "opted_in" })],
-        enrichment_run_items: [item(R, opted), item(R, notOpted), item(R, noInbox), item(R, twin)],
+        enrichment_run_items: [item(R, opted), item(R, notOpted), item(R, noInbox), item(R, twin), item(R, gmailFirm)],
       },
       null,
     );
@@ -268,6 +282,17 @@ async function main() {
       "opted in, inbox taken: the note says why",
     );
     eq(contact("holder").email, "office@twin.test", "the contact holding that inbox is untouched");
+
+    eq(contact("nomx").email, null, "opted in, domain has no mail server: the inbox is NOT promoted");
+    eq(emailBlock("nomx"), null, "no mail server: no email provenance written");
+    eq(contact("nomx").company_email, "info@nomx.test", "no mail server: the inbox stays in company_email only");
+    eq(itemOf("nomx").waterfall_status, "skipped", "no mail server: item skipped, not found");
+    eq(
+      String(itemOf("nomx").waterfall_notes).startsWith("company inbox not promoted: domain has no mail server"),
+      true,
+      "no mail server: the note says why",
+    );
+    eq(itemOf("nomx").verify_status, null, "no mail server: nothing sent to Million Verifier");
   }
 
   // ── 2 ──

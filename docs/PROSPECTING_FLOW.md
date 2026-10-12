@@ -202,7 +202,13 @@ scraped at all (`large_method = pattern_mv`). With the add-on:
   note, so the verify phase gives it a Million Verifier verdict. It stays tiered
   **company** (`email-tier.ts`), so TuBe's handoff still excludes it. An inbox that
   is already another contact's email (two people at one firm) leaves this contact
-  without one (item `skipped`, noted). Runs out of time → stays in the waterfall
+  without one (item `skipped`, noted). **A firm whose domain has no mail server**
+  (mail-host stamp `none`, the same definitive answer that stops address guessing)
+  is skipped too (item `skipped`, "company inbox not promoted: domain has no mail
+  server"): `info@` there can only verify invalid, one Million Verifier credit spent
+  on a dead address, and the firm's real inbox is a free-mail address the scrape
+  does not keep (2026-10-12; 227 of the national cleaning import's 3,234 leads).
+  An unstamped or strong host promotes. Runs out of time → stays in the waterfall
   phase and the next tick finishes (idempotent).
 - **Who gets it.** Stored on the run's `waterfall_config` snapshot as
   `company_inbox_fallback`: `"opted_in"` from `enqueueEnrichment` when any contact's

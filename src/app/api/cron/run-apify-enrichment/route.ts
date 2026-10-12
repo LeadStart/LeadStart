@@ -1968,6 +1968,7 @@ async function applyCompanyInboxFallback(admin: Admin, run: RunRow): Promise<{ p
   if (items.length === 0) return { promoted: 0, done: true };
 
   const contacts = new Map<string, InboxContact>();
+  const noMailServer: string[] = [];
   const ids = Array.from(new Set(items.map((i) => i.contact_id)));
   for (let i = 0; i < ids.length; i += 300) {
     const { data } = await admin
@@ -1978,8 +1979,29 @@ async function applyCompanyInboxFallback(admin: Admin, run: RunRow): Promise<{ p
       .is("email", null)
       .not("company_email", "is", null);
     for (const c of (data as InboxContact[] | null) ?? []) {
-      if (c.company_email.trim() && wantsCompanyInbox(scope, c.enrichment_data)) contacts.set(c.id, c);
+      if (!c.company_email.trim() || !wantsCompanyInbox(scope, c.enrichment_data)) continue;
+      // A firm whose domain has no mail server (mail-host stamp "none", the
+      // same definitive answer that stops address guessing) has no inbox to
+      // promote: info@ there can only verify invalid, a Million Verifier
+      // credit spent on a dead address. Its real inbox is a free-mail address
+      // the site scrape does not keep. Only a definitive "none" skips; an
+      // unstamped or strong host promotes as before.
+      if (readMailHost(c.enrichment_data) === "none") {
+        noMailServer.push(c.id);
+        continue;
+      }
+      contacts.set(c.id, c);
     }
+  }
+  for (const it of items.filter((i) => noMailServer.includes(i.contact_id))) {
+    const missed = it.waterfall_notes ? ` (personal email: ${it.waterfall_notes})`.slice(0, 240) : "";
+    await admin
+      .from("enrichment_run_items")
+      .update({
+        waterfall_status: "skipped",
+        waterfall_notes: `company inbox not promoted: domain has no mail server${missed}`,
+      })
+      .eq("id", it.id);
   }
   const work = items.filter((i) => contacts.has(i.contact_id));
 
