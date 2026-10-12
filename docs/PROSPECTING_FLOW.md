@@ -292,6 +292,9 @@ Perplexity's billing page against these counts before relying on the 0.5¢.
 | `site-contact-scraper` (`indispensable_nonagon`) | enrich: waterfall (site_scrape) | per site (compute) | ~$0.003 |
 | pattern_mv + Million Verifier | enrich: waterfall / verify | per decisive verification | ~$0.0037 (catch-all/unknown free); pattern_mv ≤ `pattern_max_credits` per person (default 3) |
 | Findymail (`app.findymail.com`) | enrich: waterfall catch-all recovery (add-on) | per verified email FOUND | ~$0.049/hit ($49/1k entry; $249/15k ≈ $0.017); misses/risky catch-alls free |
+| Enrow (`api.enrow.io`, [`finders/enrow.ts`](../src/lib/finders/enrow.ts)) | **test only, not in the waterfall** (migration 00139; `scripts/finder-test.mts`) | per email found (LinkedIn-URL miss 0.25) | ~$0.017/hit ($17/1k pay-as-you-go, never expires); name+domain misses free; resolves catch-alls itself |
+| Icypeas (`app.icypeas.com`, [`finders/icypeas.ts`](../src/lib/finders/icypeas.ts)) | **test only, not in the waterfall** | per email found | ~$0.019/hit ($19/1k, credits never expire); misses free except DEBITED_NOT_FOUND; Google/M365 catch-alls resolved; no LinkedIn-URL input |
+| Datagma (`gateway.datagma.net`, [`finders/datagma.ts`](../src/lib/finders/datagma.ts)) | **test only, not in the waterfall** | per verified email | ~$0.016/hit ($49/3k; 100/month free); misses and "Most Probable" catch-alls free; the `status` vocabulary is pinned on the first live run |
 | DNS MX lookup (`mail-host.ts`) | import + enqueue: mail-host stamp / weak-host pool; pattern_mv no-MX skip | — | free (node DNS, DNS-over-HTTPS fallback) |
 | Published owner address (`published-email.ts`) | enrich: pattern_mv catch-all pass | — | free (reads addresses already scraped) |
 

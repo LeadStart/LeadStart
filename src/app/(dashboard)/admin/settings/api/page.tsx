@@ -120,6 +120,7 @@ const PROVIDERS: Record<string, Provider> = {
   scrapio:     { title: "Scrap.io", blurb: "Lead enrichment for the Prospecting tab.", icon: Search, tile: "bg-violet-500", iconClass: "text-white" },
   emailVerify: { title: "Email verification", blurb: "Pre-send check on every recipient.", icon: MailCheck, tile: "bg-teal-600", iconClass: "text-white" },
   findymail:   { title: "Catch-all validation", blurb: "Recovers emails on catch-all domains.", icon: MailCheck, tile: "bg-indigo-600", iconClass: "text-white" },
+  finders:     { title: "Email finders (test)", blurb: "Enrow, Icypeas, Datagma keys for the finder test.", icon: Search, tile: "bg-indigo-600", iconClass: "text-white" },
   unipile:     { title: "Unipile (LinkedIn)", blurb: "LinkedIn sequences and reply ingestion.", icon: LinkedinIcon, tile: "bg-[#0A66C2]", iconClass: "text-white" },
 
   anthropic:   { title: "Anthropic", blurb: "Finds owner names: site read, then web search.", icon: Sparkles, tile: "bg-amber-500", iconClass: "text-white" },
@@ -133,7 +134,7 @@ const PROVIDERS: Record<string, Provider> = {
 
 const PROVIDER_GROUPS: { label: string; ids: string[] }[] = [
   { label: "Sending", ids: ["nativeEmail", "msOauth", "registrars", "resend", "inboxHealth"] },
-  { label: "Finding contacts", ids: ["apify", "apifySpend", "waterfall", "scrapio", "emailVerify", "findymail", "unipile"] },
+  { label: "Finding contacts", ids: ["apify", "apifySpend", "waterfall", "scrapio", "emailVerify", "findymail", "finders", "unipile"] },
   { label: "AI", ids: ["anthropic", "perplexity"] },
   { label: "Money", ids: ["stripe"] },
   { label: "System", ids: ["automations", "dataSync"] },
@@ -254,6 +255,22 @@ export default function IntegrationsPage() {
     { kind: "success"; credits: number } | { kind: "fail"; message: string } | null
   >(null);
 
+  // Email finders under test: Enrow, Icypeas, Datagma (migration 00139). Read
+  // only by the finder test harness and the Test-connection buttons; no cron.
+  type FinderKeyId = "enrow" | "icypeas" | "datagma";
+  const [finderKeys, setFinderKeys] = useState<Record<FinderKeyId, string>>({ enrow: "", icypeas: "", datagma: "" });
+  const [finderMeta, setFinderMeta] = useState<Record<FinderKeyId, { credits: number | null; checkedAt: string | null }>>({
+    enrow: { credits: null, checkedAt: null },
+    icypeas: { credits: null, checkedAt: null },
+    datagma: { credits: null, checkedAt: null },
+  });
+  const [finderBusy, setFinderBusy] = useState<Record<FinderKeyId, "saving" | "testing" | null>>({ enrow: null, icypeas: null, datagma: null });
+  const [finderNote, setFinderNote] = useState<Record<FinderKeyId, { kind: "saved" | "ok" | "fail"; message: string } | null>>({
+    enrow: null,
+    icypeas: null,
+    datagma: null,
+  });
+
   // Apify (Contacts → Enrich: profile→email, company→domain, waterfall, migration 00070)
   const [apifyKey, setApifyKey] = useState("");
   const [savingApify, setSavingApify] = useState(false);
@@ -359,6 +376,19 @@ export default function IntegrationsPage() {
           setFindymailMeta({
             credits: fmOrg.findymail_credits ?? null,
             checkedAt: fmOrg.findymail_credits_checked_at ?? null,
+          });
+          // Email finders under test (migration 00139). Same stale-type cast.
+          const fkOrg = data as Record<string, string | number | null | undefined>;
+          const num = (v: unknown) => (typeof v === "number" ? v : typeof v === "string" && v.trim() ? Number(v) : null);
+          setFinderKeys({
+            enrow: (fkOrg.enrow_api_key as string | null | undefined) ?? "",
+            icypeas: (fkOrg.icypeas_api_key as string | null | undefined) ?? "",
+            datagma: (fkOrg.datagma_api_key as string | null | undefined) ?? "",
+          });
+          setFinderMeta({
+            enrow: { credits: num(fkOrg.enrow_credits), checkedAt: (fkOrg.enrow_credits_checked_at as string | null | undefined) ?? null },
+            icypeas: { credits: null, checkedAt: (fkOrg.icypeas_checked_at as string | null | undefined) ?? null },
+            datagma: { credits: num(fkOrg.datagma_credits), checkedAt: (fkOrg.datagma_credits_checked_at as string | null | undefined) ?? null },
           });
         }
       });
@@ -802,6 +832,53 @@ export default function IntegrationsPage() {
     }
   }
 
+  // Email finders under test: save one key, then check it with a free read.
+  async function handleTestFinder(id: FinderKeyId) {
+    setFinderBusy((b) => ({ ...b, [id]: "testing" }));
+    setFinderNote((n) => ({ ...n, [id]: null }));
+    try {
+      const res = await fetch(appUrl("/api/admin/finders/test"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider: id, api_key: finderKeys[id] }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        const credits = typeof data.credits === "number" ? data.credits : null;
+        setFinderMeta((m) => ({ ...m, [id]: { credits, checkedAt: new Date().toISOString() } }));
+        setFinderNote((n) => ({
+          ...n,
+          [id]: { kind: "ok", message: credits === null ? "Connected." : `Connected · ${credits.toLocaleString()} credits remaining.` },
+        }));
+      } else {
+        setFinderNote((n) => ({ ...n, [id]: { kind: "fail", message: data.error ?? "Key check failed" } }));
+      }
+    } catch (err) {
+      setFinderNote((n) => ({ ...n, [id]: { kind: "fail", message: err instanceof Error ? err.message : "Key check failed" } }));
+    } finally {
+      setFinderBusy((b) => ({ ...b, [id]: null }));
+    }
+  }
+
+  async function handleSaveFinder(id: FinderKeyId) {
+    if (!organizationId) return;
+    setFinderBusy((b) => ({ ...b, [id]: "saving" }));
+    setFinderNote((n) => ({ ...n, [id]: null }));
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("organizations")
+      .update({ [`${id}_api_key`]: finderKeys[id].trim() || null })
+      .eq("id", organizationId);
+    setFinderBusy((b) => ({ ...b, [id]: null }));
+    if (error) {
+      // e.g. migration 00139 not applied yet (unknown column).
+      setFinderNote((n) => ({ ...n, [id]: { kind: "fail", message: `Save failed: ${error.message}` } }));
+      return;
+    }
+    setFinderNote((n) => ({ ...n, [id]: { kind: "saved", message: "Saved" } }));
+    if (finderKeys[id].trim()) void handleTestFinder(id);
+  }
+
   async function handleSaveFindymail() {
     if (!organizationId) return;
     setSavingFindymail(true);
@@ -841,6 +918,7 @@ export default function IntegrationsPage() {
       case "scrapio": return set(scrapioKey) ? "connected" : "notset";
       case "emailVerify": return set(millionVerifierKey) ? "connected" : "notset";
       case "findymail": return set(findymailKey) ? "connected" : "notset";
+      case "finders": return set(finderKeys.enrow) || set(finderKeys.icypeas) || set(finderKeys.datagma) ? "connected" : "optional";
       case "unipile": return set(unipileKey) ? "connected" : "notset";
       case "anthropic": return set(anthropicKey) ? "connected" : "notset";
       case "perplexity": return set(perplexityKey) ? "connected" : "optional";
@@ -1221,6 +1299,88 @@ export default function IntegrationsPage() {
                   <span className="text-sm font-medium text-red-700">{findymailTestResult.message}</span>
                 </div>
               )}
+            </CardContent>
+          </Card>
+        );
+      // Email finders under test (migration 00139): keys only, read by the
+      // finder test harness (scripts/finder-test.mts). Nothing in the
+      // enrichment cron reads them until the test picks a provider.
+      case "finders":
+        return (
+          <Card className="border-0 py-0 shadow-none">
+            <CardHeader className="flex flex-row items-center gap-2 pb-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600">
+                <Search size={16} className="text-white" />
+              </div>
+              <div>
+                <CardTitle className="text-base">Email finders (test)</CardTitle>
+                <p className="text-xs text-muted-foreground">
+                  Pay-per-hit finders being tested on the same 200 owners: Enrow, Icypeas and
+                  Datagma. Each charges only when it returns an email. Nothing here runs inside
+                  enrichment until the test picks a provider.
+                </p>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              {(
+                [
+                  { id: "enrow" as const, label: "Enrow", where: "app.enrow.io (pay-as-you-go pack: credits never expire)" },
+                  { id: "icypeas" as const, label: "Icypeas", where: "app.icypeas.com (credits never expire)" },
+                  { id: "datagma" as const, label: "Datagma", where: "app.datagma.com (free tier: 100 credits a month)" },
+                ] as const
+              ).map((p) => {
+                const meta = finderMeta[p.id];
+                const note = finderNote[p.id];
+                const busy = finderBusy[p.id];
+                return (
+                  <div key={p.id} className="space-y-2">
+                    <div className="space-y-1">
+                      <Label htmlFor={`finder-${p.id}`} className="text-sm font-medium">
+                        {p.label} API key
+                      </Label>
+                      <Input
+                        id={`finder-${p.id}`}
+                        type="password"
+                        value={finderKeys[p.id]}
+                        onChange={(e) => setFinderKeys((k) => ({ ...k, [p.id]: e.target.value }))}
+                        placeholder={`Enter your ${p.label} API key`}
+                      />
+                      <p className="text-[11px] text-muted-foreground">Find your key at <span className="font-mono">{p.where}</span>.</p>
+                    </div>
+                    {(meta.credits !== null || meta.checkedAt) && (
+                      <p className="text-[11px] text-muted-foreground">
+                        {meta.credits !== null ? `${meta.credits.toLocaleString()} credits remaining` : "Key checked"}
+                        {meta.checkedAt ? ` · ${new Date(meta.checkedAt).toLocaleString()}` : ""}
+                      </p>
+                    )}
+                    <div className="flex items-center gap-2">
+                      <Button onClick={() => handleSaveFinder(p.id)} disabled={busy !== null} style={{ background: "#2E37FE" }}>
+                        {busy === "saving" ? "Saving..." : "Save"}
+                      </Button>
+                      <Button variant="outline" onClick={() => handleTestFinder(p.id)} disabled={busy !== null || !finderKeys[p.id]}>
+                        {busy === "testing" ? "Testing..." : "Test connection"}
+                      </Button>
+                      {note?.kind === "saved" && (
+                        <span className="text-sm text-emerald-600 flex items-center gap-1">
+                          <CheckCircle size={14} /> Saved
+                        </span>
+                      )}
+                    </div>
+                    {note?.kind === "ok" && (
+                      <div className="flex items-center gap-2 rounded-lg bg-emerald-50 border border-emerald-200 p-3">
+                        <CheckCircle size={16} className="text-emerald-500" />
+                        <span className="text-sm font-medium text-emerald-700">{note.message}</span>
+                      </div>
+                    )}
+                    {note?.kind === "fail" && (
+                      <div className="flex items-center gap-2 rounded-lg bg-red-50 border border-red-200 p-3">
+                        <XCircle size={16} className="text-red-500" />
+                        <span className="text-sm font-medium text-red-700">{note.message}</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </CardContent>
           </Card>
         );
