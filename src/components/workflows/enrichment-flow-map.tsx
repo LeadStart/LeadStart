@@ -184,7 +184,7 @@ export function EnrichmentFlowMap() {
         <div className={styles.inner}>
           <div className={styles.col}>
             <p className={`${styles.cap} ${styles.li}`}>LinkedIn vein: people-first</p>
-            <Diagram id="li" w={640} h={1032} nodes={LI_NODES} edges={LI_EDGES} />
+            <Diagram id="li" w={640} h={1050} nodes={LI_NODES} edges={LI_EDGES} />
           </div>
           <div className={styles.col}>
             <p className={`${styles.cap} ${styles.maps}`}>Maps vein: business-first</p>

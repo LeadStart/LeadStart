@@ -12,6 +12,16 @@ export const LAYER2_MODEL_ID = "claude-haiku-5-5";
 export const PERPLEXITY_MODEL = "sonar";
 // Claude's web search tool: $10 per 1,000 searches, billed on top of tokens.
 export const WEB_SEARCH_COST_USD = 0.01;
+// Perplexity's per-request fee, billed on top of tokens, at the "low" search
+// context size: the API default, and callPerplexity never sets another. Per
+// 1,000 requests: Sonar $5, Sonar Pro and Sonar Reasoning Pro $6
+// (docs.perplexity.ai pricing, read 2026-10-12). Recorded run costs left it out
+// until 2026-10-12.
+export const PERPLEXITY_REQUEST_FEE_USD: Record<string, number> = {
+  sonar: 0.005,
+  "sonar-pro": 0.006,
+  "sonar-reasoning-pro": 0.006,
+};
 
 export const MODEL_PRICING: Record<string, { input: number; output: number }> = {
   [HAIKU_MODEL_ID]: { input: 1.0 / 1_000_000, output: 5.0 / 1_000_000 },
@@ -29,6 +39,14 @@ export function calculateCost(
 ): number {
   const pricing = MODEL_PRICING[model] || MODEL_PRICING[HAIKU_MODEL_ID];
   return usage.input_tokens * pricing.input + usage.output_tokens * pricing.output;
+}
+
+// One Perplexity call: its tokens plus the per-request fee.
+export function perplexityCallCost(
+  usage: { input_tokens: number; output_tokens: number },
+  model: string,
+): number {
+  return calculateCost(usage, model) + (PERPLEXITY_REQUEST_FEE_USD[model] ?? 0);
 }
 
 export function isPerplexityModel(model: string): boolean {

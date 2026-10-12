@@ -3,6 +3,7 @@
 // usageTotalUsd on completion; these are only estimates. Verified 2026-08-22.
 
 import { DEFAULT_ENRICHMENT_SETTINGS, PATTERN_MAX_CREDITS_LIMIT } from "@/types/app";
+import { PERPLEXITY_MODEL, PERPLEXITY_REQUEST_FEE_USD } from "../decision-maker/pricing";
 
 export const PROFILE_EMAIL_COST_USD = 0.01;   // harvestapi profile + email search
 export const DOMAIN_COST_USD = 0.004;         // harvestapi company (paid-tier)
@@ -61,11 +62,11 @@ export function estimateBoviCost(domains: number): number {
 
 // Name-to-domain discovery (web lookup for companies with no LinkedIn page).
 // Perplexity Sonar ONLY since 2026-08-28 (the Claude web_search fallback was
-// removed). Honest ceiling: ~$0.0005 in tokens plus Perplexity's per-request
-// search fee; the homepage-confirmation fetch is free. NOTE: the cost accrued
-// onto the run is token-only (calculateCost), so it undercounts the per-request
-// search fee.
-export const DOMAIN_DISCOVERY_COST_USD = 0.005;
+// removed). Per lookup: Perplexity's per-request fee (0.5¢) plus ~$0.0003 of
+// tokens (median of 1,197 recorded lookups, 2026-10-12); the homepage-
+// confirmation fetch is free. The cost recorded on the run includes the fee
+// from 2026-10-12 (callPerplexity); before that it held the tokens only.
+export const DOMAIN_DISCOVERY_COST_USD = PERPLEXITY_REQUEST_FEE_USD[PERPLEXITY_MODEL] + 0.0003;
 export function estimateDomainDiscoveryCost(companies: number): number {
   return companies * DOMAIN_DISCOVERY_COST_USD;
 }

@@ -108,7 +108,7 @@ a stale over-estimate). Bounds: `maxPerDomain` (default 3), `maxAlternatives`
 | Service | Our price | Charged per | Notes |
 |---|---|---|---|
 | Million Verifier | ~$0.0037 | decisive verdict (ok/invalid/disposable) | catch-all/unknown/error FREE; 10K-bundle basis, tiered ~8× down to $0.00055 at 1M (owner call: quote the 10K rate) |
-| Perplexity (naming L2) | ~$0.015 | business looked up | ceiling incl. per-request search fee |
+| Perplexity Sonar (website lookup) | ~$0.0053 | lookup (request) | $0.005 request fee + ~$0.0003 tokens (median, 1,197 lookups); in the run's cost_usd from 2026-10-12, tokens only before. Naming's web lookup used it until 2026-10-11 (now Claude Haiku 5.5, ~1.2¢ incl. the 1¢ search fee) |
 | Findymail | $0.049 | email FOUND (pay-on-hit) | entry tier $49/1k; bulk $249/15k ≈ $0.017; misses free, bounces refunded |
 | TuBe scan | $0.034 | lead scanned | app-side AI-visibility scan; the biggest single per-lead line item, scan only qualified+contactable leads |
 

@@ -1801,6 +1801,10 @@ export interface EnrichmentRun {
   // Delivered-outcome ledger, classified at completion (migration 00079 / Phase 5).
   outcome_counts: Record<string, number>;
   cost_usd: number | string;
+  // cost_usd split by provider, USD (migration 00138): apify, millionverifier,
+  // findymail, perplexity, anthropic. {} on runs from before the split. Read it
+  // with readCostBreakdown (src/lib/enrichment/run-cost.ts).
+  cost_breakdown: Record<string, number> | null;
   active_apify_run_id: string | null;
   active_apify_dataset_id: string | null;
   active_batch_started_at: string | null;

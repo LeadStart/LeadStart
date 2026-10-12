@@ -57,14 +57,16 @@ import { lookupMailHosts, readMailHost } from "@/lib/enrichment/mail-host";
 import { emailDomainOf, isOtherEmployerEmail, setAsideOtherEmployerEmail } from "@/lib/enrichment/other-employer-email";
 import { pickPublishedOwnerEmail, publishedEmailsOf } from "@/lib/enrichment/published-email";
 import { classifyContactOutcome, addOutcome, ALL_COUNT_KEYS } from "@/lib/enrichment/outcomes";
+import { addCosts, reconcileApifyCost, type CostBreakdown } from "@/lib/enrichment/run-cost";
 import { callPerplexity } from "@/lib/perplexity/client";
 import { fetchPage } from "@/lib/decision-maker/fetcher";
 import { isSafeUrl } from "@/lib/decision-maker/validation";
 import { enrichBusiness, type EnrichmentInput, type EnrichmentResult } from "@/lib/decision-maker";
 import { layer2CanYieldContact } from "@/lib/decision-maker/layer2";
 import {
+  DISCOVERY_BATCH,
   runDomainDiscovery,
-  extractContactLocation,
+  discoveryLocation,
   type DiscoveryItem,
   type LlmSearchFn,
 } from "@/lib/enrichment/domain-discovery";
@@ -104,8 +106,8 @@ const PATTERN_MV_DEADLINE_SEC = 40;
 
 // Domain-discovery (inline web lookup for companies with no LinkedIn page).
 // Smaller batch + pool than pattern_mv: each item is an LLM web search (slower)
-// plus an optional homepage fetch.
-const DISCOVERY_BATCH = 10;
+// plus an optional homepage fetch. The batch size (DISCOVERY_BATCH) lives in
+// domain-discovery.ts, which replays these batches to count past calls.
 const DISCOVERY_CONCURRENCY = 3;
 const DISCOVERY_DEADLINE_SEC = 40;
 
@@ -160,6 +162,8 @@ interface RunRow {
   active_batch_attempt: number;
   consecutive_failures: number;
   cost_usd: number | string;
+  // Spend by provider (migration 00138); '{}' on runs from before it.
+  cost_breakdown?: unknown;
   started_at: string | null;
   total_count: number;
 }
@@ -211,6 +215,17 @@ function estimatePerItem(phase: EnrichmentPhase): number {
   }
 }
 
+// Add charges to the run's total (cost_usd) and to each provider's share
+// (cost_breakdown, migration 00138) in one write, and keep the in-memory row in
+// step so a later charge in the same tick builds on it.
+async function addRunCost(admin: Admin, run: RunRow, add: CostBreakdown): Promise<void> {
+  const next = addCosts(run, add);
+  if (!next) return;
+  await admin.from("enrichment_runs").update(next).eq("id", run.id);
+  run.cost_usd = next.cost_usd;
+  run.cost_breakdown = next.cost_breakdown;
+}
+
 // Add a failed/aborted run's real Apify charge to the enrichment run total.
 // Pay-per-event billing charges as events happen, so a run that never SUCCEEDED
 // still cost money; only the success path recorded it before, which silently
@@ -224,9 +239,7 @@ async function recordBadRunCost(
 ): Promise<void> {
   const usd = typeof apRun.usageTotalUsd === "number" ? apRun.usageTotalUsd : 0;
   if (usd <= 0) return;
-  const next = (Number(run.cost_usd) || 0) + usd;
-  await admin.from("enrichment_runs").update({ cost_usd: next }).eq("id", run.id);
-  run.cost_usd = next;
+  await addRunCost(admin, run, { apify: usd });
 }
 
 function mergeEnrichment(ed: unknown, patch: Record<string, unknown>): Record<string, unknown> {
@@ -403,11 +416,7 @@ async function runPhase(
       const harvested = await ingest(admin, run, phase, provider, inFlight, items);
       const actualCost = typeof apRun.usageTotalUsd === "number" ? apRun.usageTotalUsd : null;
       const batchCost = actualCost ?? inFlight.length * estimatePerItem(phase);
-      await admin
-        .from("enrichment_runs")
-        .update({ cost_usd: (Number(run.cost_usd) || 0) + batchCost })
-        .eq("id", run.id);
-      run.cost_usd = (Number(run.cost_usd) || 0) + batchCost;
+      await addRunCost(admin, run, { apify: batchCost });
       // Per-method result line for the run banner (pattern_mv sets its own).
       if (phase === "waterfall") {
         const h = harvested as { found: number; not_found: number; skipped: number };
@@ -586,10 +595,7 @@ async function startNextBatch(
     const harvested = await ingest(admin, run, phase, provider, inFlight, items);
     const actualCost = typeof apRun.usageTotalUsd === "number" ? apRun.usageTotalUsd : null;
     const batchCost = actualCost ?? inFlight.length * estimatePerItem(phase);
-    await admin
-      .from("enrichment_runs")
-      .update({ cost_usd: (Number(run.cost_usd) || 0) + batchCost })
-      .eq("id", run.id);
+    await addRunCost(admin, run, { apify: batchCost });
     await clearActive(admin, run.id);
     return { status: "harvested", harvested, note: "sync" };
   }
@@ -1097,14 +1103,7 @@ async function runPatternMvBatch(
     }
   }
 
-  const totalCost = totalCredits * MV_CREDIT_COST_USD + findymailCost;
-  if (totalCost > 0) {
-    await admin
-      .from("enrichment_runs")
-      .update({ cost_usd: (Number(run.cost_usd) || 0) + totalCost })
-      .eq("id", run.id);
-    run.cost_usd = (Number(run.cost_usd) || 0) + totalCost;
-  }
+  await addRunCost(admin, run, { millionverifier: totalCredits * MV_CREDIT_COST_USD, findymail: findymailCost });
 
   const recoverNote = recovered > 0 ? ` · ${recovered} catch-all recovered (Findymail)` : "";
   const publishedNote = publishedUsed > 0 ? ` · ${publishedUsed} published owner address used` : "";
@@ -1227,14 +1226,11 @@ async function runDomainDiscoveryBatch(
   const guardedFetch = (url: string): Promise<string> =>
     isSafeUrl(url) ? fetchPage(url) : Promise.resolve("");
 
-  const items: DiscoveryItem[] = batch.map((b) => {
-    const contact = contactMap.get(b.contact_id);
-    return {
-      id: b.id,
-      companyName: b.company_name ?? "",
-      location: contact?.location?.trim() || extractContactLocation(contact?.enrichment_data),
-    };
-  });
+  const items: DiscoveryItem[] = batch.map((b) => ({
+    id: b.id,
+    companyName: b.company_name ?? "",
+    location: discoveryLocation(contactMap.get(b.contact_id)),
+  }));
 
   const outcomes = await runDomainDiscovery(items, llm, guardedFetch, {
     deadlineMs: tickStart + DISCOVERY_DEADLINE_SEC * 1000,
@@ -1299,13 +1295,8 @@ async function runDomainDiscoveryBatch(
     }
   }
 
-  if (totalCost > 0) {
-    await admin
-      .from("enrichment_runs")
-      .update({ cost_usd: (Number(run.cost_usd) || 0) + totalCost })
-      .eq("id", run.id);
-    run.cost_usd = (Number(run.cost_usd) || 0) + totalCost;
-  }
+  // Tokens plus Perplexity's per-request fee (callPerplexity's cost).
+  await addRunCost(admin, run, { perplexity: totalCost });
 
   await admin
     .from("enrichment_runs")
@@ -1584,13 +1575,8 @@ async function runNamingBatch(
     }
   }
 
-  if (totalCost > 0) {
-    await admin
-      .from("enrichment_runs")
-      .update({ cost_usd: (Number(run.cost_usd) || 0) + totalCost })
-      .eq("id", run.id);
-    run.cost_usd = (Number(run.cost_usd) || 0) + totalCost;
-  }
+  // Both layers run on the Anthropic key: tokens plus the web search fee.
+  await addRunCost(admin, run, { anthropic: totalCost });
 
   await admin
     .from("enrichment_runs")
@@ -1824,14 +1810,7 @@ async function runVerifyPhase(
     return { status: "mv_error", kind: errBox.e.kind, processed };
   }
 
-  if (credits > 0) {
-    const add = credits * MV_CREDIT_COST_USD;
-    await admin
-      .from("enrichment_runs")
-      .update({ cost_usd: (Number(run.cost_usd) || 0) + add })
-      .eq("id", run.id);
-    run.cost_usd = (Number(run.cost_usd) || 0) + add;
-  }
+  await addRunCost(admin, run, { millionverifier: credits * MV_CREDIT_COST_USD });
 
   await admin
     .from("enrichment_runs")
@@ -2763,12 +2742,11 @@ async function seedVerifyItems(admin: Admin, run: RunRow): Promise<number> {
 // asynchronously: a fast same-tick batch records ~$0 (compute only), so
 // cost_usd can badly undercount (observed: $0.00005 recorded vs $0.028 billed).
 // By completion every batch's charges have long settled, so re-read each
-// distinct Apify run's FINAL usage and floor cost_usd with the sum. max() keeps
-// the accrued figure when it's already higher (it also contains the non-Apify
-// MV-credit + discovery-LLM shares); when the Apify sum alone exceeds it, the
-// accrual provably under-captured and the reconciled figure is far closer to
-// truth (short only by those small non-Apify shares). Best-effort: never fails
-// the run.
+// distinct Apify run's FINAL usage and floor the run's Apify share with the sum
+// (reconcileApifyCost): the accrued share stays when it's already higher; when
+// the Apify sum exceeds it, the difference is added to the share and the total.
+// The Million Verifier, Findymail and LLM shares are kept (the old whole-total
+// floor dropped them whenever it fired). Best-effort: never fails the run.
 async function reconcileRunCost(admin: Admin, client: ApifyClient, run: RunRow): Promise<void> {
   try {
     const RUN_ID_COLS = [
@@ -2822,10 +2800,11 @@ async function reconcileRunCost(admin: Admin, client: ApifyClient, run: RunRow):
     await Promise.all(
       Array.from({ length: Math.min(RECONCILE_CONCURRENCY, idList.length) }, () => reconcileWorker()),
     );
-    const accrued = Number(run.cost_usd) || 0;
-    if (apifyFinal > accrued) {
-      await admin.from("enrichment_runs").update({ cost_usd: apifyFinal }).eq("id", run.id);
-      run.cost_usd = apifyFinal;
+    const next = reconcileApifyCost(run, apifyFinal);
+    if (next) {
+      await admin.from("enrichment_runs").update(next).eq("id", run.id);
+      run.cost_usd = next.cost_usd;
+      run.cost_breakdown = next.cost_breakdown;
     }
   } catch {
     // reconciliation must never break completion

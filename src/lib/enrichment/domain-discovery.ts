@@ -117,6 +117,14 @@ export function extractContactLocation(enrichmentData: unknown): string | null {
   return null;
 }
 
+// The location a website lookup searches (and groups firms) by: the contact's
+// location column (migration 00078), else the enrichment_data fallbacks above.
+export function discoveryLocation(
+  contact: { location?: string | null; enrichment_data?: unknown } | null | undefined,
+): string | null {
+  return contact?.location?.trim() || extractContactLocation(contact?.enrichment_data);
+}
+
 export function buildDomainDiscoveryPrompt(companyName: string, location: string | null): string {
   const locLine = location ? `\nLocation: ${location}` : "";
   return `Find the official website of this business.
@@ -288,6 +296,11 @@ async function discoverOne(
     ? { kind: "found", domain: pre.domain, note: `discovered via ${providerLabel}: ${conf.note}`, cost }
     : { kind: "not_found", note: `rejected: ${conf.reason}`, cost };
 }
+
+// Name-only items the cron claims per tick for website lookups
+// (runDomainDiscoveryBatch). perplexity-calls.ts replays these batches to count
+// the calls a past run made.
+export const DISCOVERY_BATCH = 10;
 
 export interface RunDomainDiscoveryOpts {
   deadlineMs: number;

@@ -68,6 +68,8 @@ console.log("auto-sync wiring (costs + defaults are live imports)");
 ok(/from ["']@\/lib\/apify\/pricing["']/.test(dataText), "imports pricing constants");
 ok(/from ["']@\/types\/app["']/.test(dataText), "imports DEFAULT_ENRICHMENT_SETTINGS / ADDONS");
 ok(/PROFILE_EMAIL_COST_USD/.test(dataText) && /MV_CREDIT_COST_USD/.test(dataText), "derives profile + MV cost from constants");
+// The Perplexity web lookup (fee + tokens) shows on BOTH veins' Domains phase.
+ok((dataText.match(/usd\(DOMAIN_DISCOVERY_COST_USD\)/g) ?? []).length >= 2, "derives the web-lookup cost (both veins) from DOMAIN_DISCOVERY_COST_USD");
 ok(/DEFAULT_ENRICHMENT_ADDONS/.test(dataText) || /ADDONS\./.test(dataText), "derives add-on default labels from config");
 ok(/CFG\.pattern_max_credits/.test(dataText), "derives pattern_mv's paid-guess limit from the default config");
 ok(
