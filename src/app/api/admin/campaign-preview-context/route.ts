@@ -2,10 +2,13 @@
 //
 // Owner/VA-only. Returns a REAL contact's resolved {{token}} map plus a display
 // label, so the campaign builder preview can render the outgoing email against
-// real data instead of sample values. Falls back to any contact in the org when
-// the campaign/client scope has none; returns { contactLabel: null, tokens: null }
-// (200, not an error) when the org has no contacts at all. Sender name is
-// resolved from the campaign's mailbox pool (or the client's/org's mailboxes).
+// real data instead of sample values. `contacts` carries up to PREVIEW_CONTACTS
+// of them (the first is the same one as contactLabel/tokens) so the flow
+// editor's inbox preview can switch between real contacts. Falls back to any
+// contact in the org when the campaign/client scope has none; returns
+// { contactLabel: null, tokens: null, contacts: [] } (200, not an error) when the
+// org has no contacts at all. Sender name is resolved from the campaign's mailbox
+// pool (or the client's/org's mailboxes).
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
@@ -15,8 +18,11 @@ import { buildTokenMap, type TokenContact } from "@/lib/native/tokens";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+const PREVIEW_CONTACTS = 5;
+
 // The contact columns we need for the token map + label.
 type ContactRow = TokenContact & {
+  id: string;
   first_name: string | null;
   last_name: string | null;
   company_name: string | null;
@@ -50,10 +56,10 @@ export async function GET(req: NextRequest) {
   }
 
   const admin = createAdminClient();
-  const empty = { contactLabel: null, tokens: null };
+  const empty = { contactLabel: null, tokens: null, contacts: [] };
   if (!organizationId) return NextResponse.json(empty);
 
-  const contactCols = "first_name, last_name, company_name, title, intro_line, email, phone, custom_fields";
+  const contactCols = "id, first_name, last_name, company_name, title, intro_line, email, phone, custom_fields";
 
   // Native campaigns attach contacts through campaign_enrollments (contacts.campaign_id
   // is not reliably set), so resolve the campaign's contacts via enrollments and also
@@ -72,10 +78,10 @@ export async function GET(req: NextRequest) {
   }
   const scopeClientId = clientId ?? campaignClientId;
 
-  // Prefer a contact with a real first_name so the preview reads naturally. Try the
-  // narrowest real scope first (enrolled in this campaign), then the campaign's/selected
-  // client, then anywhere in the org.
-  async function pickContact(): Promise<ContactRow | null> {
+  // Prefer contacts with a real first_name so the preview reads naturally. Take
+  // them from the narrowest real scope that has any (enrolled in this campaign),
+  // then the campaign's/selected client, then anywhere in the org.
+  async function pickContacts(): Promise<ContactRow[]> {
     const base = () => admin.from("contacts").select(contactCols).eq("organization_id", organizationId);
     const scopes: (() => ReturnType<typeof base>)[] = [];
     if (enrolledIds.length > 0) scopes.push(() => base().in("id", enrolledIds));
@@ -84,12 +90,15 @@ export async function GET(req: NextRequest) {
     scopes.push(() => base()); // org-wide last resort
 
     for (const scope of scopes) {
-      const withName = await scope().not("first_name", "is", null).limit(1).maybeSingle();
-      if (withName.data) return withName.data as ContactRow;
-      const any = await scope().limit(1).maybeSingle();
-      if (any.data) return any.data as ContactRow;
+      const named = ((await scope().not("first_name", "is", null).limit(PREVIEW_CONTACTS)).data ??
+        []) as ContactRow[];
+      if (named.length >= PREVIEW_CONTACTS) return named;
+      const any = ((await scope().limit(PREVIEW_CONTACTS)).data ?? []) as ContactRow[];
+      const seen = new Set(named.map((c) => c.id));
+      const merged = [...named, ...any.filter((c) => !seen.has(c.id))].slice(0, PREVIEW_CONTACTS);
+      if (merged.length > 0) return merged;
     }
-    return null;
+    return [];
   }
 
   // Sender identity: the campaign's first pooled mailbox, else a mailbox for the
@@ -132,21 +141,22 @@ export async function GET(req: NextRequest) {
     return { name: nameFromMailbox(pick), signature: pick.signature ?? null };
   }
 
-  const [contact, sender] = await Promise.all([pickContact(), pickSender()]);
-  if (!contact) return NextResponse.json(empty);
+  const [rows, sender] = await Promise.all([pickContacts(), pickSender()]);
+  if (rows.length === 0) return NextResponse.json(empty);
 
   // No sending inbox yet: show a visible stand-in rather than a blank, so the
   // preview never reads as if the sender's name is missing from the email (a real
   // send always has an inbox, so this never reaches a recipient).
-  const tokens = buildTokenMap(contact, sender.name || "[sender's name]", sender.signature);
+  const senderName = sender.name || "[sender's name]";
+  const contacts = rows.map((contact) => {
+    const name = [contact.first_name, contact.last_name].filter(Boolean).join(" ");
+    const label = name
+      ? contact.company_name
+        ? `${name} · ${contact.company_name}`
+        : name
+      : (contact.email ?? "Sample contact");
+    return { label, tokens: buildTokenMap(contact, senderName, sender.signature) };
+  });
 
-  const name = [contact.first_name, contact.last_name].filter(Boolean).join(" ");
-  let contactLabel: string;
-  if (name) {
-    contactLabel = contact.company_name ? `${name} · ${contact.company_name}` : name;
-  } else {
-    contactLabel = contact.email ?? "Sample contact";
-  }
-
-  return NextResponse.json({ contactLabel, tokens });
+  return NextResponse.json({ contactLabel: contacts[0].label, tokens: contacts[0].tokens, contacts });
 }

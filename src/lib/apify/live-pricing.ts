@@ -58,7 +58,7 @@ export interface LivePricing {
     site_scrape: number;
     // Web-lookup domain discovery (not an Apify actor, token-based, static).
     domain_discovery: number;
-    // Owner-name (decision-maker) discovery: token-based (Anthropic/Perplexity),
+    // Owner-name (decision-maker) discovery: Anthropic tokens + web search fee,
     // static ceiling; not an Apify actor.
     naming: number;
   };

@@ -17,10 +17,12 @@ export interface EnrichmentInput {
 export interface EnrichmentOptions {
   serviceType: ServiceType;
   useLayer2: boolean;
+  // Both layers run on it: Layer 1 reads the site with Haiku 4.5, Layer 2 web
+  // searches with Haiku 5.5 (the org's Anthropic account needs web search on).
   anthropicKey: string;
-  perplexityKey?: string;
   // Per-business hard timeout to keep one slow site from starving a tick.
-  // Default 60s, mirroring server/enricher.ts:484 in the original.
+  // Default 60s, mirroring server/enricher.ts:484 in the original. Layer 1
+  // spends at most the first half of it fetching pages.
   perBusinessTimeoutMs?: number;
 }
 

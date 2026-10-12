@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Loader2, CheckCircle2, XCircle, X } from "lucide-react";
 import { appUrl } from "@/lib/api-url";
+import { costShares, unsplitCost } from "@/lib/enrichment/run-cost";
 import type { EnrichmentRun, EnrichmentRunItem } from "@/types/app";
 
 export const ENRICH_POLL_INTERVAL_MS = 3000;
@@ -112,6 +113,9 @@ export function EnrichmentRunBanner({
         : "border-blue-200 bg-blue-50 text-blue-800";
 
   const cost = Number(run.cost_usd || 0);
+  // Per-provider split (migration 00138); none on runs from before it.
+  const shares = costShares(run);
+  const unsplit = shares.length > 0 ? unsplitCost(run) : 0;
   const foundEmails = run.found_emails_profiles_count + run.found_emails_waterfall_count;
   const noEmail = Math.max(0, run.total_count - foundEmails);
 
@@ -137,6 +141,12 @@ export function EnrichmentRunBanner({
             {cost.toFixed(3)}
             {run.progress_message ? ` · ${run.progress_message}` : ""}
           </p>
+          {shares.length > 0 && (
+            <p className="text-[11px] opacity-80">
+              Cost by provider: {shares.map((s) => `${s.label} $${s.usd.toFixed(3)}`).join(" · ")}
+              {unsplit >= 0.0005 ? ` · not split by provider $${unsplit.toFixed(3)}` : ""}
+            </p>
+          )}
           {run.status === "complete" && noEmail > 0 && (
             <p className="text-[11px] font-medium">
               {foundEmails} got an email · {noEmail} have none: filter &ldquo;Needs enrichment&rdquo; below to route them to a LinkedIn campaign or park them.

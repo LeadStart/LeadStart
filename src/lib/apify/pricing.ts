@@ -2,6 +2,9 @@
 // usageTotalUsd isn't available yet. Actual cost is read from the Apify run's
 // usageTotalUsd on completion; these are only estimates. Verified 2026-08-22.
 
+import { DEFAULT_ENRICHMENT_SETTINGS, PATTERN_MAX_CREDITS_LIMIT } from "@/types/app";
+import { PERPLEXITY_MODEL, PERPLEXITY_REQUEST_FEE_USD } from "../decision-maker/pricing";
+
 export const PROFILE_EMAIL_COST_USD = 0.01;   // harvestapi profile + email search
 export const DOMAIN_COST_USD = 0.004;         // harvestapi company (paid-tier)
 export const WATERFALL_LEAD_COST_USD = 0.005; // generic apify-waterfall per-item fallback (paid tier)
@@ -21,16 +24,22 @@ export const SOURCING_FULL_EMAIL_USD = 0.014;
 // Cost of ONE Million Verifier credit at the org's purchase tier. MV is a
 // prepaid tiered pool ($37/10K ≈ $0.0037 … $549/1M ≈ $0.00055, verified
 // against MV pricing 2026-08-25); owner call 2026-08-25: assume the 10K
-// pay-as-you-go bundle until purchasing changes. Pattern_mv typically resolves
-// in 1–3 charged credits (~$0.004–0.011/contact; ≤6 worst case ≈ $0.022;
-// catch-all + unknown verdicts are free).
+// pay-as-you-go bundle until purchasing changes. Pattern_mv costs at most its
+// paid-guess limit per contact (pattern_max_credits, default 3 ≈ $0.011; a find
+// usually costs less; catch-all + unknown verdicts are free).
 export const MV_CREDIT_COST_USD = 0.0037;
 
-// Estimate for the pattern_mv method (the default): contacts × ~6 candidate
-// checks × unit price, an honest upper bound (most resolve in far fewer).
-export const PATTERN_MV_MAX_CREDITS_PER_CONTACT = 6;
-export function estimatePatternMvCost(contacts: number): number {
-  return contacts * PATTERN_MV_MAX_CREDITS_PER_CONTACT * MV_CREDIT_COST_USD;
+// Estimate for the pattern_mv method (the default): contacts × the paid-guess
+// limit × unit price, an honest upper bound. Pass the org's pattern_max_credits
+// where it's loaded; otherwise the default limit applies.
+export const PATTERN_MV_MAX_CREDITS_PER_CONTACT = PATTERN_MAX_CREDITS_LIMIT;
+export function estimatePatternMvCost(
+  contacts: number,
+  maxCredits: number = DEFAULT_ENRICHMENT_SETTINGS.pattern_max_credits,
+): number {
+  const limit = Number.isFinite(maxCredits) ? Math.round(maxCredits) : DEFAULT_ENRICHMENT_SETTINGS.pattern_max_credits;
+  const perContact = Math.min(PATTERN_MV_MAX_CREDITS_PER_CONTACT, Math.max(1, limit));
+  return contacts * perContact * MV_CREDIT_COST_USD;
 }
 
 // site_scrape (our own actor) bills raw Apify COMPUTE per site, not per-lead
@@ -53,21 +62,21 @@ export function estimateBoviCost(domains: number): number {
 
 // Name-to-domain discovery (web lookup for companies with no LinkedIn page).
 // Perplexity Sonar ONLY since 2026-08-28 (the Claude web_search fallback was
-// removed). Honest ceiling: ~$0.0005 in tokens plus Perplexity's per-request
-// search fee; the homepage-confirmation fetch is free. NOTE: the cost accrued
-// onto the run is token-only (calculateCost), so it undercounts the per-request
-// search fee, the same known simplification as the decision-maker layer.
-export const DOMAIN_DISCOVERY_COST_USD = 0.005;
+// removed). Per lookup: Perplexity's per-request fee (0.5¢) plus ~$0.0003 of
+// tokens (median of 1,197 recorded lookups, 2026-10-12); the homepage-
+// confirmation fetch is free. The cost recorded on the run includes the fee
+// from 2026-10-12 (callPerplexity); before that it held the tokens only.
+export const DOMAIN_DISCOVERY_COST_USD = PERPLEXITY_REQUEST_FEE_USD[PERPLEXITY_MODEL] + 0.0003;
 export function estimateDomainDiscoveryCost(companies: number): number {
   return companies * DOMAIN_DISCOVERY_COST_USD;
 }
 
-// Owner-name (naming) discovery: decision-maker Layer 1 (Haiku site scrape) plus
-// optional Layer 2 (Perplexity Sonar web search ONLY since 2026-08-28; no Claude
-// fallback, so no key = Layer 2 no-ops) per business. Honest ceiling: Layer 1 is
-// ~$0.003-0.01 in tokens, Layer 2 adds ~$0.005-0.015 when it fires; the site
-// fetch is free. Token-only accrual undercounts per-request search fees, so this
-// is the estimate ceiling.
+// Owner-name (naming) discovery per business: decision-maker Layer 1 (Haiku 4.5
+// reads the site) plus, when the site names nobody and the firm has a domain with
+// a mail server, Layer 2 (one Claude Haiku 5.5 web search; replaced Perplexity
+// 2026-10-11). Measured 2026-10-11 on 147 cleaning firms: Layer 1 ~0.33¢ per site
+// read, Layer 2 ~1.16¢ per lookup (1¢ search fee + ~13K tokens). Both layers ≈
+// 1.5¢, so this is the ceiling. Recorded cost now includes the search fee.
 export const NAMING_COST_USD = 0.015;
 export function estimateNamingCost(businesses: number): number {
   return businesses * NAMING_COST_USD;

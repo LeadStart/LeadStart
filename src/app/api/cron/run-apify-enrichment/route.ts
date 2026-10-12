@@ -47,16 +47,26 @@ import { enqueueOwnerAlert } from "@/lib/notifications/owner-alerts";
 import { runPatternMv, type PatternMvItem, type PatternMvOutcome } from "@/lib/enrichment/pattern-mv";
 import { FindymailClient, FindymailError, type FindymailResult } from "@/lib/findymail/client";
 import { hasUsableName, methodForItem } from "@/lib/enrichment/waterfall-routing";
+import {
+  companyInboxFallbackScope,
+  companyInboxProvenance,
+  COMPANY_INBOX_CONFIDENCE,
+  type CompanyInboxFallbackScope,
+} from "@/lib/enrichment/company-inbox";
 import { lookupMailHosts, readMailHost } from "@/lib/enrichment/mail-host";
+import { emailDomainOf, isOtherEmployerEmail, setAsideOtherEmployerEmail } from "@/lib/enrichment/other-employer-email";
 import { pickPublishedOwnerEmail, publishedEmailsOf } from "@/lib/enrichment/published-email";
 import { classifyContactOutcome, addOutcome, ALL_COUNT_KEYS } from "@/lib/enrichment/outcomes";
+import { addCosts, reconcileApifyCost, type CostBreakdown } from "@/lib/enrichment/run-cost";
 import { callPerplexity } from "@/lib/perplexity/client";
 import { fetchPage } from "@/lib/decision-maker/fetcher";
 import { isSafeUrl } from "@/lib/decision-maker/validation";
 import { enrichBusiness, type EnrichmentInput, type EnrichmentResult } from "@/lib/decision-maker";
+import { layer2CanYieldContact } from "@/lib/decision-maker/layer2";
 import {
+  DISCOVERY_BATCH,
   runDomainDiscovery,
-  extractContactLocation,
+  discoveryLocation,
   type DiscoveryItem,
   type LlmSearchFn,
 } from "@/lib/enrichment/domain-discovery";
@@ -96,8 +106,8 @@ const PATTERN_MV_DEADLINE_SEC = 40;
 
 // Domain-discovery (inline web lookup for companies with no LinkedIn page).
 // Smaller batch + pool than pattern_mv: each item is an LLM web search (slower)
-// plus an optional homepage fetch.
-const DISCOVERY_BATCH = 10;
+// plus an optional homepage fetch. The batch size (DISCOVERY_BATCH) lives in
+// domain-discovery.ts, which replays these batches to count past calls.
 const DISCOVERY_CONCURRENCY = 3;
 const DISCOVERY_DEADLINE_SEC = 40;
 
@@ -152,6 +162,8 @@ interface RunRow {
   active_batch_attempt: number;
   consecutive_failures: number;
   cost_usd: number | string;
+  // Spend by provider (migration 00138); '{}' on runs from before it.
+  cost_breakdown?: unknown;
   started_at: string | null;
   total_count: number;
 }
@@ -203,6 +215,17 @@ function estimatePerItem(phase: EnrichmentPhase): number {
   }
 }
 
+// Add charges to the run's total (cost_usd) and to each provider's share
+// (cost_breakdown, migration 00138) in one write, and keep the in-memory row in
+// step so a later charge in the same tick builds on it.
+async function addRunCost(admin: Admin, run: RunRow, add: CostBreakdown): Promise<void> {
+  const next = addCosts(run, add);
+  if (!next) return;
+  await admin.from("enrichment_runs").update(next).eq("id", run.id);
+  run.cost_usd = next.cost_usd;
+  run.cost_breakdown = next.cost_breakdown;
+}
+
 // Add a failed/aborted run's real Apify charge to the enrichment run total.
 // Pay-per-event billing charges as events happen, so a run that never SUCCEEDED
 // still cost money; only the success path recorded it before, which silently
@@ -216,9 +239,7 @@ async function recordBadRunCost(
 ): Promise<void> {
   const usd = typeof apRun.usageTotalUsd === "number" ? apRun.usageTotalUsd : 0;
   if (usd <= 0) return;
-  const next = (Number(run.cost_usd) || 0) + usd;
-  await admin.from("enrichment_runs").update({ cost_usd: next }).eq("id", run.id);
-  run.cost_usd = next;
+  await addRunCost(admin, run, { apify: usd });
 }
 
 function mergeEnrichment(ed: unknown, patch: Record<string, unknown>): Record<string, unknown> {
@@ -395,11 +416,7 @@ async function runPhase(
       const harvested = await ingest(admin, run, phase, provider, inFlight, items);
       const actualCost = typeof apRun.usageTotalUsd === "number" ? apRun.usageTotalUsd : null;
       const batchCost = actualCost ?? inFlight.length * estimatePerItem(phase);
-      await admin
-        .from("enrichment_runs")
-        .update({ cost_usd: (Number(run.cost_usd) || 0) + batchCost })
-        .eq("id", run.id);
-      run.cost_usd = (Number(run.cost_usd) || 0) + batchCost;
+      await addRunCost(admin, run, { apify: batchCost });
       // Per-method result line for the run banner (pattern_mv sets its own).
       if (phase === "waterfall") {
         const h = harvested as { found: number; not_found: number; skipped: number };
@@ -578,10 +595,7 @@ async function startNextBatch(
     const harvested = await ingest(admin, run, phase, provider, inFlight, items);
     const actualCost = typeof apRun.usageTotalUsd === "number" ? apRun.usageTotalUsd : null;
     const batchCost = actualCost ?? inFlight.length * estimatePerItem(phase);
-    await admin
-      .from("enrichment_runs")
-      .update({ cost_usd: (Number(run.cost_usd) || 0) + batchCost })
-      .eq("id", run.id);
+    await addRunCost(admin, run, { apify: batchCost });
     await clearActive(admin, run.id);
     return { status: "harvested", harvested, note: "sync" };
   }
@@ -803,6 +817,9 @@ async function runPatternMvBatch(
   }
 
   const config = run.waterfall_config ?? DEFAULT_ENRICHMENT_SETTINGS;
+  // Paid-guess limit, read through the normalizer: a run snapshotted before the
+  // setting existed gets the default, and an out-of-range value is clamped.
+  const maxCredits = normalizeEnrichmentSettings(run.waterfall_config ?? undefined).pattern_max_credits;
   // Findymail catch-all recovery opt-in: when the run's config asks for it AND a
   // Findymail key is present, catch-all items pattern_mv can't verify are deferred
   // past the normal write and handed to Findymail for a deliverable address.
@@ -882,6 +899,7 @@ async function runPatternMvBatch(
   try {
     outcomes = await runPatternMv(client, mvItems, {
       acceptCatchAll: config.accept_catch_all_guesses,
+      maxCredits,
       timeoutSec: PATTERN_MV_VERIFY_TIMEOUT_SEC,
       deadlineMs,
       concurrency: PATTERN_MV_CONCURRENCY,
@@ -904,6 +922,7 @@ async function runPatternMvBatch(
   let inconclusive = 0;
   let totalCredits = 0;
   let publishedUsed = 0;
+  let capped = 0;
   // Catch-all items held back for the Findymail recovery pass (a found-catch_all
   // guess, or a catch-all miss). Deferring their write keeps the fill-only
   // contacts.email slot free so a clean Findymail hit can take it instead of a
@@ -942,6 +961,7 @@ async function runPatternMvBatch(
     const outcome = outcomes.get(item.id);
     if (!outcome) continue; // hit the deadline: stays pending for the next tick
     totalCredits += outcome.credits;
+    if (outcome.kind === "not_found" && outcome.capped) capped++;
     const share = outcome.credits * MV_CREDIT_COST_USD;
 
     // A catch-all outcome (an accepted confidence-40 guess, or a catch-all miss)
@@ -1083,22 +1103,16 @@ async function runPatternMvBatch(
     }
   }
 
-  const totalCost = totalCredits * MV_CREDIT_COST_USD + findymailCost;
-  if (totalCost > 0) {
-    await admin
-      .from("enrichment_runs")
-      .update({ cost_usd: (Number(run.cost_usd) || 0) + totalCost })
-      .eq("id", run.id);
-    run.cost_usd = (Number(run.cost_usd) || 0) + totalCost;
-  }
+  await addRunCost(admin, run, { millionverifier: totalCredits * MV_CREDIT_COST_USD, findymail: findymailCost });
 
   const recoverNote = recovered > 0 ? ` · ${recovered} catch-all recovered (Findymail)` : "";
   const publishedNote = publishedUsed > 0 ? ` · ${publishedUsed} published owner address used` : "";
   const noMxNote = noMailServer.size > 0 ? ` · ${noMailServer.size} skipped (no mail server)` : "";
+  const cappedNote = capped > 0 ? ` · ${capped} stopped at the ${maxCredits}-guess limit` : "";
   await admin
     .from("enrichment_runs")
     .update({
-      progress_message: `Pattern+verify: ${found} found · ${notFound} miss · ${inconclusive} retrying (${totalCredits} MV credits)${recoverNote}${publishedNote}${noMxNote}`,
+      progress_message: `Pattern+verify: ${found} found · ${notFound} miss · ${inconclusive} retrying (${totalCredits} MV credits)${recoverNote}${publishedNote}${noMxNote}${cappedNote}`,
       locked_at: null,
     })
     .eq("id", run.id);
@@ -1113,6 +1127,7 @@ async function runPatternMvBatch(
     recovered,
     published: publishedUsed,
     no_mail_server: noMailServer.size,
+    capped,
   };
 }
 
@@ -1211,14 +1226,11 @@ async function runDomainDiscoveryBatch(
   const guardedFetch = (url: string): Promise<string> =>
     isSafeUrl(url) ? fetchPage(url) : Promise.resolve("");
 
-  const items: DiscoveryItem[] = batch.map((b) => {
-    const contact = contactMap.get(b.contact_id);
-    return {
-      id: b.id,
-      companyName: b.company_name ?? "",
-      location: contact?.location?.trim() || extractContactLocation(contact?.enrichment_data),
-    };
-  });
+  const items: DiscoveryItem[] = batch.map((b) => ({
+    id: b.id,
+    companyName: b.company_name ?? "",
+    location: discoveryLocation(contactMap.get(b.contact_id)),
+  }));
 
   const outcomes = await runDomainDiscovery(items, llm, guardedFetch, {
     deadlineMs: tickStart + DISCOVERY_DEADLINE_SEC * 1000,
@@ -1283,13 +1295,8 @@ async function runDomainDiscoveryBatch(
     }
   }
 
-  if (totalCost > 0) {
-    await admin
-      .from("enrichment_runs")
-      .update({ cost_usd: (Number(run.cost_usd) || 0) + totalCost })
-      .eq("id", run.id);
-    run.cost_usd = (Number(run.cost_usd) || 0) + totalCost;
-  }
+  // Tokens plus Perplexity's per-request fee (callPerplexity's cost).
+  await addRunCost(admin, run, { perplexity: totalCost });
 
   await admin
     .from("enrichment_runs")
@@ -1333,16 +1340,15 @@ async function runNamingBatch(
 ): Promise<Record<string, unknown>> {
   const cols = PHASE_COLS.naming;
 
-  // Org keys: Anthropic is mandatory (Layer 1 is Haiku); Perplexity required
-  // for Layer 2 web-search (no Claude fallback; Layer 2 is skipped without it).
+  // Org key: Anthropic runs both layers (Layer 1 reads the site with Haiku 4.5,
+  // Layer 2 web searches with Haiku 5.5; Perplexity is no longer used here).
   const { data: orgRow } = await admin
     .from("organizations")
-    .select("anthropic_api_key, perplexity_api_key")
+    .select("anthropic_api_key")
     .eq("id", run.organization_id)
     .maybeSingle();
-  const org = orgRow as { anthropic_api_key: string | null; perplexity_api_key: string | null } | null;
+  const org = orgRow as { anthropic_api_key: string | null } | null;
   const anthropicKey = org?.anthropic_api_key?.trim() || process.env.ANTHROPIC_API_KEY?.trim() || null;
-  const perplexityKey = org?.perplexity_api_key?.trim() || process.env.PERPLEXITY_API_KEY?.trim() || null;
 
   // No Anthropic key → naming can't run. Mark ALL pending naming items not_found
   // with a config note and complete the phase (mirrors verify's no-key path).
@@ -1420,9 +1426,10 @@ async function runNamingBatch(
       try {
         const res = await enrichBusiness(input, {
           serviceType: "operations",
-          useLayer2: true, // Perplexity only; skipped if no Perplexity key
+          // The web lookup (~1.2¢) only where a found name could become a
+          // contact we can confirm: a domain with a mail server.
+          useLayer2: layer2CanYieldContact(item.company_domain, readMailHost(contact?.enrichment_data)),
           anthropicKey: anthropicKey as string,
-          perplexityKey: perplexityKey ?? undefined,
           perBusinessTimeoutMs: NAMING_PER_BUSINESS_TIMEOUT_MS,
         });
         outcomes.set(item.id, res);
@@ -1568,13 +1575,8 @@ async function runNamingBatch(
     }
   }
 
-  if (totalCost > 0) {
-    await admin
-      .from("enrichment_runs")
-      .update({ cost_usd: (Number(run.cost_usd) || 0) + totalCost })
-      .eq("id", run.id);
-    run.cost_usd = (Number(run.cost_usd) || 0) + totalCost;
-  }
+  // Both layers run on the Anthropic key: tokens plus the web search fee.
+  await addRunCost(admin, run, { anthropic: totalCost });
 
   await admin
     .from("enrichment_runs")
@@ -1808,14 +1810,7 @@ async function runVerifyPhase(
     return { status: "mv_error", kind: errBox.e.kind, processed };
   }
 
-  if (credits > 0) {
-    const add = credits * MV_CREDIT_COST_USD;
-    await admin
-      .from("enrichment_runs")
-      .update({ cost_usd: (Number(run.cost_usd) || 0) + add })
-      .eq("id", run.id);
-    run.cost_usd = (Number(run.cost_usd) || 0) + add;
-  }
+  await addRunCost(admin, run, { millionverifier: credits * MV_CREDIT_COST_USD });
 
   await admin
     .from("enrichment_runs")
@@ -1835,15 +1830,25 @@ async function seedWaterfallItems(admin: Admin, run: RunRow): Promise<number> {
   const config = (run.waterfall_config ?? DEFAULT_ENRICHMENT_SETTINGS) as EnrichmentSettings;
   const { data } = await admin
     .from("enrichment_run_items")
-    .select("id, employee_count, first_name, last_name")
+    .select("id, contact_id, employee_count, first_name, last_name")
     .eq("run_id", run.id)
     .is("waterfall_status", null)
     .is("email", null)
     .not("company_domain", "is", null);
   const rows =
-    (data as { id: string; employee_count: number | null; first_name: string | null; last_name: string | null }[] | null) ??
-    [];
+    (data as {
+      id: string;
+      contact_id: string;
+      employee_count: number | null;
+      first_name: string | null;
+      last_name: string | null;
+    }[] | null) ?? [];
   if (rows.length === 0) return 0;
+
+  // Company-inbox fallback add-on: an opted-in contact in a pattern-only band
+  // gets a site scrape first (methodForItem), so there is a generic inbox for the
+  // fallback to use if no personal email turns up.
+  const companyInbox = await companyInboxOptIns(admin, run, rows.map((r) => r.contact_id));
 
   // Group by resolved method. Track name-less items (methodForItem routes them to
   // site_scrape) so we can stamp a provenance note: these are the Google-Maps
@@ -1852,7 +1857,7 @@ async function seedWaterfallItems(admin: Admin, run: RunRow): Promise<number> {
   const namelessRouted: string[] = [];
   for (const r of rows) {
     const named = hasUsableName(r.first_name, r.last_name);
-    const method = methodForItem(config, r.employee_count, named);
+    const method = methodForItem(config, r.employee_count, named, { companyInbox: companyInbox(r.contact_id) });
     if (!named && method !== "off") namelessRouted.push(r.id);
     const arr = groups.get(method) ?? [];
     arr.push(r.id);
@@ -1881,6 +1886,169 @@ async function seedWaterfallItems(admin: Admin, run: RunRow): Promise<number> {
       .in("id", namelessRouted.slice(i, i + 200));
   }
   return pending;
+}
+
+// Whether a contact gets the company-inbox fallback in a run with this scope
+// (lib/enrichment/company-inbox): "all" → yes, "opted_in" → only when its own
+// enrichment_data.addons stamp opted in, no scope → no.
+function wantsCompanyInbox(scope: CompanyInboxFallbackScope | null, enrichmentData: unknown): boolean {
+  if (scope === "all") return true;
+  if (scope !== "opted_in") return false;
+  const addonsRaw =
+    enrichmentData && typeof enrichmentData === "object" ? (enrichmentData as { addons?: unknown }).addons : undefined;
+  return normalizeAddons(addonsRaw).company_inbox_fallback;
+}
+
+// The per-contact company-inbox gate for a set of this run's contacts. Reads the
+// contacts' addons stamps only when the run's scope is "opted_in".
+async function companyInboxOptIns(
+  admin: Admin,
+  run: RunRow,
+  contactIds: string[],
+): Promise<(contactId: string) => boolean> {
+  const scope = companyInboxFallbackScope(run.waterfall_config);
+  if (scope !== "opted_in") return () => scope === "all";
+  const opted = new Set<string>();
+  const ids = Array.from(new Set(contactIds));
+  for (let i = 0; i < ids.length; i += 300) {
+    const { data } = await admin
+      .from("contacts")
+      .select("id, enrichment_data")
+      .eq("organization_id", run.organization_id)
+      .in("id", ids.slice(i, i + 300));
+    for (const c of (data as { id: string; enrichment_data: unknown }[] | null) ?? []) {
+      if (wantsCompanyInbox(scope, c.enrichment_data)) opted.add(c.id);
+    }
+  }
+  return (contactId) => opted.has(contactId);
+}
+
+// Company-inbox fallback (add-on, 2026-10-11). Runs when the waterfall has
+// nothing left pending, before activity and verify are seeded. Each contact that
+// gets the fallback, whose waterfall item ended with no address (not_found, or
+// error after its retries) and which holds a scraped generic inbox in
+// contacts.company_email, gets that inbox on contacts.email: fill-only, with the
+// name-less backfill's company_generic provenance (confidence 30), so it stays
+// tiered "company". The item carries the address too, so the verify phase gives
+// it a Million Verifier verdict. Without this a NAMED lead's inbox sat unsendable
+// in company_email (the native sender mails contacts.email only).
+//
+// One pass here covers every way a waterfall ends without a personal email
+// (site_scrape, pattern_mv including a scrape_plus_pattern handoff, bovi, no MX,
+// no MV key, the retry cap) instead of patching each write. Idempotent: a re-run
+// skips contacts that now have an email. Returns done:false when it runs out of
+// time; the caller then stays in the waterfall phase and the next tick resumes.
+const COMPANY_INBOX_BUDGET_MS = 20_000;
+const COMPANY_INBOX_CONCURRENCY = 8;
+
+type InboxCandidate = { id: string; contact_id: string; waterfall_notes: string | null };
+type InboxContact = Contact & { company_email: string };
+
+async function applyCompanyInboxFallback(admin: Admin, run: RunRow): Promise<{ promoted: number; done: boolean }> {
+  const scope = companyInboxFallbackScope(run.waterfall_config);
+  if (!scope || !run.run_waterfall) return { promoted: 0, done: true };
+  const deadline = Date.now() + COMPANY_INBOX_BUDGET_MS;
+
+  // Collect every candidate first (read-only pages), then write: a promoted item
+  // leaves this filter, which would shift a page read between writes.
+  const items: InboxCandidate[] = [];
+  for (let offset = 0; ; offset += 1000) {
+    const { data } = await admin
+      .from("enrichment_run_items")
+      .select("id, contact_id, waterfall_notes")
+      .eq("run_id", run.id)
+      .in("waterfall_status", ["not_found", "error"])
+      .is("email", null)
+      .order("id", { ascending: true })
+      .range(offset, offset + 999);
+    const rows = (data as InboxCandidate[] | null) ?? [];
+    items.push(...rows);
+    if (rows.length < 1000) break;
+  }
+  if (items.length === 0) return { promoted: 0, done: true };
+
+  const contacts = new Map<string, InboxContact>();
+  const ids = Array.from(new Set(items.map((i) => i.contact_id)));
+  for (let i = 0; i < ids.length; i += 300) {
+    const { data } = await admin
+      .from("contacts")
+      .select("id, email, company_email, enrichment_data, tags, status")
+      .eq("organization_id", run.organization_id)
+      .in("id", ids.slice(i, i + 300))
+      .is("email", null)
+      .not("company_email", "is", null);
+    for (const c of (data as InboxContact[] | null) ?? []) {
+      if (c.company_email.trim() && wantsCompanyInbox(scope, c.enrichment_data)) contacts.set(c.id, c);
+    }
+  }
+  const work = items.filter((i) => contacts.has(i.contact_id));
+
+  let promoted = 0;
+  let cursor = 0;
+  const worker = async (): Promise<void> => {
+    for (;;) {
+      if (Date.now() > deadline) return;
+      const item = work[cursor++];
+      if (!item) return;
+      if ((await promoteCompanyInbox(admin, item, contacts.get(item.contact_id)!)) === "found") promoted++;
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(COMPANY_INBOX_CONCURRENCY, work.length) }, () => worker()));
+  return { promoted, done: cursor >= work.length };
+}
+
+// Put one contact's scraped inbox on contacts.email (fill-only) and mark its
+// waterfall item found, keeping the reason the personal-email search missed.
+async function promoteCompanyInbox(
+  admin: Admin,
+  item: InboxCandidate,
+  contact: InboxContact,
+): Promise<"found" | "skipped"> {
+  const email = contact.company_email.trim().toLowerCase();
+  const missed = item.waterfall_notes ? ` (personal email: ${item.waterfall_notes})`.slice(0, 240) : "";
+  const now = new Date().toISOString();
+  const ed = mergeEnrichment(contact.enrichment_data, {
+    email: companyInboxProvenance(email, now, "company_inbox_fallback"),
+  });
+  const tags = Array.from(new Set([...(contact.tags ?? []), "enriched", "site_scrape"]));
+  const { data: updated, error } = await admin
+    .from("contacts")
+    .update({ email, tags, enrichment_data: ed })
+    .eq("id", contact.id)
+    .is("email", null)
+    .select("id");
+  if (error) {
+    if ((error as { code?: string }).code !== "23505") throw error;
+    // The inbox is already another contact's email in this org (say, two people
+    // at the same firm): this one stays without an email.
+    await admin
+      .from("enrichment_run_items")
+      .update({
+        waterfall_status: "skipped",
+        waterfall_notes: `company inbox already belongs to another contact in this org${missed}`,
+      })
+      .eq("id", item.id);
+    return "skipped";
+  }
+  if (!updated || updated.length === 0) {
+    // Gained an email since the read above.
+    await admin
+      .from("enrichment_run_items")
+      .update({ waterfall_status: "skipped", waterfall_notes: "contact already had an email" })
+      .eq("id", item.id);
+    return "skipped";
+  }
+  await admin
+    .from("enrichment_run_items")
+    .update({
+      waterfall_status: "found",
+      email,
+      email_provider: "site_scrape",
+      confidence: COMPANY_INBOX_CONFIDENCE,
+      waterfall_notes: `generic company inbox (company-inbox fallback)${missed}`,
+    })
+    .eq("id", item.id);
+  return "found";
 }
 
 // ---------------------------------------------------------------- ingest
@@ -2057,9 +2225,119 @@ async function writePhaseResult(
         .is("company_linkedin_url", null);
     }
   }
+  if (phase === "profiles") await writeProfileTitle(admin, item, res, contact);
 
   const providerId: EmailProviderId = phase === "profiles" ? "harvestapi" : waterfallProviderId(run);
   return writeEmail(admin, cols, item, res, contact, providerId, share);
+}
+
+// The profiles phase's job title: the current role at the contact's own company
+// (a Short-mode LinkedIn search returns none, and naming only covers name-less
+// Maps firms). Fill-only on contacts.title and the item's title, whether or not
+// the profile had an email. The profile block (headline, and which role the
+// title came from) lands in enrichment.profile either way.
+async function writeProfileTitle(
+  admin: Admin,
+  item: ItemRow,
+  res: PhaseResult,
+  contact: Contact | undefined,
+): Promise<void> {
+  const profile = res.extra?.profile;
+  if (!profile || typeof profile !== "object") return; // no profile came back
+  if (res.title) {
+    await admin.from("enrichment_run_items").update({ title: res.title }).eq("id", item.id).is("title", null);
+  }
+  if (!contact) return;
+  const ed = mergeEnrichment(contact.enrichment_data, { profile });
+  // writeEmail merges onto this snapshot next: carry the block forward.
+  contact.enrichment_data = ed;
+  if (res.title) {
+    const { data: updated } = await admin
+      .from("contacts")
+      .update({ title: res.title, enrichment_data: ed })
+      .eq("id", contact.id)
+      .is("title", null)
+      .select("id");
+    if (updated && updated.length > 0) return;
+  }
+  // Title already set (never overwritten): still record the provenance.
+  await admin.from("contacts").update({ enrichment_data: ed }).eq("id", contact.id);
+}
+
+// Profile emails at another employer (other-employer-email.ts). Once the domains
+// phase has resolved each company's domain, every email this run's profiles phase
+// wrote is checked against it; one on another business domain is set aside in
+// enrichment_data, the contact goes back to no email, and its item drops to
+// not_found, so the waterfall (seeded next) looks for an address at the company's
+// own domain. Out of time → done:false; the caller stays in the domains phase and
+// the next tick resumes (a set-aside item no longer matches the query).
+const OTHER_EMPLOYER_BUDGET_MS = 20_000;
+
+type ProfileEmailItem = { id: string; contact_id: string; email: string; company_domain: string | null };
+type ProfileEmailContact = { id: string; email: string | null; company_domain: string | null; enrichment_data: unknown };
+
+async function demoteOtherEmployerEmails(admin: Admin, run: RunRow): Promise<{ moved: number; done: boolean }> {
+  const deadline = Date.now() + OTHER_EMPLOYER_BUDGET_MS;
+  const items: ProfileEmailItem[] = [];
+  for (let offset = 0; ; offset += 1000) {
+    const { data } = await admin
+      .from("enrichment_run_items")
+      .select("id, contact_id, email, company_domain")
+      .eq("run_id", run.id)
+      .eq("profile_status", "found")
+      .eq("email_provider", "harvestapi")
+      .not("email", "is", null)
+      .order("id", { ascending: true })
+      .range(offset, offset + 999);
+    const rows = (data as ProfileEmailItem[] | null) ?? [];
+    items.push(...rows);
+    if (rows.length < 1000) break;
+  }
+  if (items.length === 0) return { moved: 0, done: true };
+
+  const contacts = new Map<string, ProfileEmailContact>();
+  const ids = Array.from(new Set(items.map((i) => i.contact_id)));
+  for (let i = 0; i < ids.length; i += 300) {
+    const { data } = await admin
+      .from("contacts")
+      .select("id, email, company_domain, enrichment_data")
+      .eq("organization_id", run.organization_id)
+      .in("id", ids.slice(i, i + 300));
+    for (const c of (data as ProfileEmailContact[] | null) ?? []) contacts.set(c.id, c);
+  }
+
+  let moved = 0;
+  for (const item of items) {
+    if (Date.now() > deadline) return { moved, done: false };
+    const c = contacts.get(item.contact_id);
+    // Only the address this run wrote, if it is still the contact's.
+    if (!c?.email || c.email.toLowerCase() !== item.email.toLowerCase()) continue;
+    const companyDomain = c.company_domain ?? item.company_domain;
+    const profile = (c.enrichment_data as { enrichment?: { profile?: { email_free?: unknown } } } | null)?.enrichment?.profile;
+    const free = typeof profile?.email_free === "boolean" ? profile.email_free : null;
+    if (!companyDomain || !isOtherEmployerEmail(c.email, companyDomain, { free })) continue;
+
+    const ed = setAsideOtherEmployerEmail(c.enrichment_data, c.email, companyDomain, new Date().toISOString());
+    const { data: updated } = await admin
+      .from("contacts")
+      .update({ email: null, enrichment_data: ed })
+      .eq("id", c.id)
+      .eq("email", c.email)
+      .select("id");
+    if (!updated || updated.length === 0) continue; // changed since the read
+    await admin
+      .from("enrichment_run_items")
+      .update({
+        email: null,
+        email_provider: null,
+        confidence: null,
+        profile_status: "not_found",
+        profile_notes: `email at another employer (${emailDomainOf(c.email)}, not ${companyDomain}): set aside, not used`,
+      })
+      .eq("id", item.id);
+    moved++;
+  }
+  return { moved, done: true };
 }
 
 function waterfallProviderId(run: RunRow): EmailProviderId {
@@ -2118,13 +2396,13 @@ async function finishWaterfallMiss(
   // (fill-only) with the generic at low confidence + provenance so the lead is
   // usable. Deliberate, documented exception to the 00076 person-email reservation,
   // gated on !named so decision-maker rows keep the strict person-only contract.
+  // (A named lead gets the same only with the company_inbox_fallback add-on, at
+  // the end of the waterfall: applyCompanyInboxFallback.)
   const genericEmail =
     typeof extraPatch.company_email === "string" ? extraPatch.company_email.trim().toLowerCase() : "";
   if (!named && genericEmail && contact && !contact.email) {
     const now = new Date().toISOString();
-    const ed = mergeEnrichment(contact.enrichment_data, {
-      email: { provider: "site_scrape", kind: "company_generic", email: genericEmail, confidence: 30, found_at: now },
-    });
+    const ed = mergeEnrichment(contact.enrichment_data, { email: companyInboxProvenance(genericEmail, now) });
     const tags = Array.from(new Set([...(contact.tags ?? []), "enriched", "site_scrape"]));
     const { data: updated, error } = await admin
       .from("contacts")
@@ -2139,7 +2417,7 @@ async function finishWaterfallMiss(
           [cols.status]: "found",
           email: genericEmail,
           email_provider: "site_scrape",
-          confidence: 30,
+          confidence: COMPANY_INBOX_CONFIDENCE,
           [cols.notes]: "generic company inbox (no decision-maker name)",
           cost_usd: share,
         })
@@ -2464,12 +2742,11 @@ async function seedVerifyItems(admin: Admin, run: RunRow): Promise<number> {
 // asynchronously: a fast same-tick batch records ~$0 (compute only), so
 // cost_usd can badly undercount (observed: $0.00005 recorded vs $0.028 billed).
 // By completion every batch's charges have long settled, so re-read each
-// distinct Apify run's FINAL usage and floor cost_usd with the sum. max() keeps
-// the accrued figure when it's already higher (it also contains the non-Apify
-// MV-credit + discovery-LLM shares); when the Apify sum alone exceeds it, the
-// accrual provably under-captured and the reconciled figure is far closer to
-// truth (short only by those small non-Apify shares). Best-effort: never fails
-// the run.
+// distinct Apify run's FINAL usage and floor the run's Apify share with the sum
+// (reconcileApifyCost): the accrued share stays when it's already higher; when
+// the Apify sum exceeds it, the difference is added to the share and the total.
+// The Million Verifier, Findymail and LLM shares are kept (the old whole-total
+// floor dropped them whenever it fired). Best-effort: never fails the run.
 async function reconcileRunCost(admin: Admin, client: ApifyClient, run: RunRow): Promise<void> {
   try {
     const RUN_ID_COLS = [
@@ -2523,10 +2800,11 @@ async function reconcileRunCost(admin: Admin, client: ApifyClient, run: RunRow):
     await Promise.all(
       Array.from({ length: Math.min(RECONCILE_CONCURRENCY, idList.length) }, () => reconcileWorker()),
     );
-    const accrued = Number(run.cost_usd) || 0;
-    if (apifyFinal > accrued) {
-      await admin.from("enrichment_runs").update({ cost_usd: apifyFinal }).eq("id", run.id);
-      run.cost_usd = apifyFinal;
+    const next = reconcileApifyCost(run, apifyFinal);
+    if (next) {
+      await admin.from("enrichment_runs").update(next).eq("id", run.id);
+      run.cost_usd = next.cost_usd;
+      run.cost_breakdown = next.cost_breakdown;
     }
   } catch {
     // reconciliation must never break completion
@@ -2671,6 +2949,7 @@ async function finalizeOutcomes(admin: Admin, run: RunRow): Promise<void> {
 // Move to the next enabled phase that has work; finalize when none remain.
 async function advancePhase(admin: Admin, client: ApifyClient, run: RunRow): Promise<void> {
   let phase: EnrichmentPhase = run.phase;
+  let passNote = "";
 
   for (;;) {
     if (phase === "profiles") {
@@ -2707,6 +2986,22 @@ async function advancePhase(admin: Admin, client: ApifyClient, run: RunRow): Pro
       continue;
     }
     if (phase === "domains") {
+      // Every company domain is known now: set aside profile emails at another
+      // employer before naming and the waterfall run, so the waterfall looks for
+      // those contacts' own addresses. Out of time → stay in domains; the next
+      // tick finishes the pass.
+      const aside = await demoteOtherEmployerEmails(admin, run);
+      if (aside.moved > 0) {
+        passNote += ` · ${aside.moved} profile email${aside.moved === 1 ? "" : "s"} at another employer set aside`;
+      }
+      if (!aside.done) {
+        await admin
+          .from("enrichment_runs")
+          .update({ phase: "domains", progress_message: `Checking profile emails${passNote}, continuing`, locked_at: null })
+          .eq("id", run.id);
+        run.phase = "domains";
+        return;
+      }
       phase = "naming";
       if (run.run_naming) {
         // Seed name-less, company-named items for owner-name discovery. Runs
@@ -2738,6 +3033,22 @@ async function advancePhase(admin: Admin, client: ApifyClient, run: RunRow): Pro
       continue;
     }
     if (phase === "waterfall") {
+      // Company-inbox fallback (opt-in add-on): before leaving the waterfall, give
+      // each opted-in contact that ended with no personal email its scraped company
+      // inbox, so it can be sent to and the verify phase below checks it. Out of
+      // time → stay in the waterfall; the next tick finishes the pass.
+      const inbox = await applyCompanyInboxFallback(admin, run);
+      if (inbox.promoted > 0) {
+        passNote += ` · ${inbox.promoted} company inbox${inbox.promoted === 1 ? "" : "es"} filled`;
+      }
+      if (!inbox.done) {
+        await admin
+          .from("enrichment_runs")
+          .update({ phase: "waterfall", progress_message: `Company inbox fallback${passNote}, continuing`, locked_at: null })
+          .eq("id", run.id);
+        run.phase = "waterfall";
+        return;
+      }
       phase = "activity";
       if (run.run_activity) {
         // Score posting recency for anyone with a LinkedIn profile URL, but only
@@ -2789,7 +3100,8 @@ async function advancePhase(admin: Admin, client: ApifyClient, run: RunRow): Pro
           `Emails ${counts.found_emails_count} · domains ${counts.found_domains_count}` +
           (run.run_naming ? ` · names ${counts.found_names_count}` : "") +
           (run.run_activity ? ` · activity ${counts.found_activity_count}` : "") +
-          (run.run_verify ? ` · verified ${counts.found_verified_count}` : ""),
+          (run.run_verify ? ` · verified ${counts.found_verified_count}` : "") +
+          passNote,
       })
       .eq("id", run.id);
     run.phase = "complete";
@@ -2797,7 +3109,7 @@ async function advancePhase(admin: Admin, client: ApifyClient, run: RunRow): Pro
   } else {
     await admin
       .from("enrichment_runs")
-      .update({ phase, progress_message: `Starting ${phase}`, locked_at: null })
+      .update({ phase, progress_message: `Starting ${phase}${passNote}`, locked_at: null })
       .eq("id", run.id);
     run.phase = phase;
   }

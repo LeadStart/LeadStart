@@ -39,12 +39,8 @@ import {
 } from "@/lib/spintax";
 import { findSpamMatches, quickStepAdvisories, type SpamMatch } from "@/lib/deliverability/copy";
 import type { CopyIssue } from "@/lib/deliverability/copy";
-import {
-  applyTokens,
-  extractCampaignTokens,
-  SAMPLE_TOKENS,
-  sampleFallback,
-} from "@/lib/native/tokens";
+import { SAMPLE_TOKENS } from "@/lib/native/tokens";
+import { renderEmailPreview } from "@/lib/native/preview";
 
 interface Props {
   subject: string;
@@ -56,6 +52,9 @@ interface Props {
   clientId?: string;
   // Step 0 gets the fake-reply ("Re:"/"Fwd:") advisory; later steps thread.
   isFirstStep?: boolean;
+  // Hide the Preview toggle when the host renders its own live preview (the
+  // flow editor's email workspace has an inbox-preview pane).
+  hidePreview?: boolean;
 }
 
 // GET /api/admin/campaign-preview-context response shape.
@@ -114,6 +113,7 @@ export function StepCopyCheck({
   campaignId,
   clientId,
   isFirstStep = false,
+  hidePreview = false,
 }: Props) {
   const dSubject = useDebounced(subject, 300);
   const dBody = useDebounced(body, 300);
@@ -198,26 +198,7 @@ export function StepCopyCheck({
   // literal, exactly like the real send.
   const preview = useMemo(() => {
     if (!dBody.trim()) return null;
-    const seed = `preview:${nonce}`;
-    const subjSpun = dSubject.trim() ? renderSpintax(dSubject, seed) : "";
-    const bodySpun = renderSpintax(dBody, seed);
-    const fill = (t: string) => applyTokens(t, tokenMap, isSample ? sampleFallback : undefined);
-    // Real-data mode only: which tokens in THIS render have no value and no
-    // inline {{token|default}}, so they'll send blank for this contact. Computed
-    // on the spintax-resolved text so an unchosen branch's tokens aren't flagged.
-    // Sample mode fills everything, so there's nothing to warn about.
-    let unresolved: { token: string; key: string }[] = [];
-    if (!isSample) {
-      const info = extractCampaignTokens([subjSpun, bodySpun]);
-      unresolved = [...info.standard, ...info.custom].filter(
-        (t) => !t.hasFallback && !(tokenMap[t.key] ?? "").trim(),
-      );
-    }
-    return {
-      subject: subjSpun ? fill(subjSpun) : "",
-      body: fill(bodySpun),
-      unresolved,
-    };
+    return renderEmailPreview(dSubject, dBody, tokenMap, { sample: isSample, seed: `preview:${nonce}` });
   }, [dSubject, dBody, nonce, tokenMap, isSample]);
 
   // Regenerate: advance to the next seed whose spintax render actually differs
@@ -292,7 +273,7 @@ export function StepCopyCheck({
     toast.success("Spintax applied, remember to save");
   }
 
-  const canPreview = dBody.trim().length > 0;
+  const canPreview = !hidePreview && dBody.trim().length > 0;
 
   // Render nothing only when the step is clean, there's no generator to offer,
   // and there's no body to preview.

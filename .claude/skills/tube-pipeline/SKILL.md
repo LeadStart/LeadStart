@@ -161,7 +161,7 @@ npx tsx .claude/skills/tube-pipeline/scripts/enrich-report.mts --run <name>
 - **3c `enrich-watch`** prints one status line. Use `--follow` in the background: it reports phase changes, and exits on trouble or 45 minutes without progress. Enrichment takes about 2–3 hours for 300 firms.
 - **3d `enrich-report`** runs once enrichment is done. It reports:
   - named %, verified-email %, TuBe-ready count;
-  - the full cost: cost_usd plus Perplexity's per-call fee.
+  - the full cost: cost_usd, which includes Perplexity's per-call fee from 2026-10-12; for an older run the report adds the fee for each Perplexity call its notes show.
 
   It then logs the spend and points to step 4. Tell the owner the yield and cost per TuBe-ready firm. WA-10's wave 1: 43% verified personal email, 113 TuBe-ready, 5.40 dollars.
 

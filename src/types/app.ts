@@ -27,9 +27,10 @@ export interface Organization {
   scrapio_api_key: string | null;
   scrapio_credits_balance: number | null;
   scrapio_last_credit_check_at: string | null;
-  // Decision-maker enrichment (migration 00044). Anthropic powers Layer 1
-  // (website scrape via Haiku); Perplexity is the optional Layer 2
-  // fallback (web search). Either may fall back to env vars at runtime.
+  // Decision-maker enrichment (migration 00044). Anthropic runs both owner-name
+  // layers (Layer 1 site read with Haiku 4.5, Layer 2 web search with Haiku 5.5,
+  // since 2026-10-11); Perplexity now only finds a company's website from its
+  // name (domain discovery). Either may fall back to env vars at runtime.
   anthropic_api_key: string | null;
   perplexity_api_key: string | null;
   // Unipile (LinkedIn channel, migration 00046). DSN is the per-workspace
@@ -1612,6 +1613,14 @@ export interface EnrichmentAddons {
   // the org-level EnrichmentSettings.validate_catch_all default. Needs a
   // Findymail API key (Settings → Integrations); no key = the step no-ops.
   validate_catch_all: boolean;
+  // Company-inbox fallback for NAMED leads: when the waterfall ends with no
+  // personal email, put the scraped generic company inbox (info@…) on
+  // contacts.email (provenance company_generic, confidence 30, still tiered
+  // "company") so the native sender can mail it. Also gives a pattern-only size
+  // band a site scrape first, so the inbox gets captured at all. Default OFF:
+  // without it a named lead keeps the person-only contract (TuBe relies on it).
+  // Name-less leads get the inbox either way (finishWaterfallMiss).
+  company_inbox_fallback: boolean;
 }
 
 export const DEFAULT_ENRICHMENT_ADDONS: EnrichmentAddons = {
@@ -1620,6 +1629,7 @@ export const DEFAULT_ENRICHMENT_ADDONS: EnrichmentAddons = {
   naming: false,
   include_catch_all: false,
   validate_catch_all: false,
+  company_inbox_fallback: false,
 };
 
 // Org-level enrichment/waterfall config (organizations.enrichment_settings, JSONB).
@@ -1636,6 +1646,11 @@ export interface EnrichmentSettings {
   unknown_method: EnrichmentWaterfallMethod;
   // Whether pattern_mv may auto-write a catch-all guess (Phase 2 gate).
   accept_catch_all_guesses: boolean;
+  // Paid-guess limit for pattern_mv: the most Million Verifier credits one
+  // person may cost per attempt. The guesses stop after this many paid answers
+  // (invalid / disposable) without a hit; catch-all and unknown answers are free
+  // and don't count. 1 to PATTERN_MAX_CREDITS_LIMIT (one per pattern).
+  pattern_max_credits: number;
   // Org-level default for Findymail catch-all validation (the per-run
   // EnrichmentAddons.validate_catch_all toggle ORs over this). When on, catch-all
   // leads pattern_mv can't verify are handed to Findymail to recover a genuinely
@@ -1654,6 +1669,10 @@ export interface EnrichmentSettings {
   domain_discovery_enabled: boolean;
 }
 
+// Upper bound for EnrichmentSettings.pattern_max_credits: pattern_mv knows six
+// email patterns, so six paid answers already means every pattern was tried.
+export const PATTERN_MAX_CREDITS_LIMIT = 6;
+
 // Defaults route every band to pattern_mv (pattern-permutation + Million
 // Verifier): ~$0.004/contact, surgical, no Apify. site_scrape / scrape_plus_pattern
 // and the bovi fallback are opt-in per band.
@@ -1664,6 +1683,12 @@ export const DEFAULT_ENRICHMENT_SETTINGS: EnrichmentSettings = {
   large_method: "pattern_mv",
   unknown_method: "pattern_mv",
   accept_catch_all_guesses: false,
+  // 3: measured 2026-10-12 on all 635 Million Verifier-confirmed pattern_mv
+  // finds, the first three patterns held 599 (94%), while 697 people whose
+  // guesses all came back invalid cost 4,126 credits. On the SaaSassins
+  // national LinkedIn import, 3 keeps 130 of 142 finds for ~46% fewer credits;
+  // 4 keeps 140 for ~30% fewer (docs/PROSPECTING_FLOW.md §3).
+  pattern_max_credits: 3,
   // Off by default: Findymail catch-all recovery is opt-in per search and needs
   // a Findymail key, same posture as accept_catch_all_guesses.
   validate_catch_all: false,
@@ -1776,6 +1801,10 @@ export interface EnrichmentRun {
   // Delivered-outcome ledger, classified at completion (migration 00079 / Phase 5).
   outcome_counts: Record<string, number>;
   cost_usd: number | string;
+  // cost_usd split by provider, USD (migration 00138): apify, millionverifier,
+  // findymail, perplexity, anthropic. {} on runs from before the split. Read it
+  // with readCostBreakdown (src/lib/enrichment/run-cost.ts).
+  cost_breakdown: Record<string, number> | null;
   active_apify_run_id: string | null;
   active_apify_dataset_id: string | null;
   active_batch_started_at: string | null;

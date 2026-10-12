@@ -25,24 +25,25 @@ function eq(actual: unknown, expected: unknown, msg: string): void {
   }
 }
 
-// Canonical order: first.last → first → flast → f.last → last → firstlast
+// Measured order (2026-10-12, 635 verified finds): first → flast → first.last →
+// firstlast → last → f.last
 eq(
   generateEmailCandidates("Jane", "Doe", "acme.com"),
-  ["jane.doe@acme.com", "jane@acme.com", "jdoe@acme.com", "j.doe@acme.com", "doe@acme.com", "janedoe@acme.com"],
+  ["jane@acme.com", "jdoe@acme.com", "jane.doe@acme.com", "janedoe@acme.com", "doe@acme.com", "j.doe@acme.com"],
   "full name, clean domain → all six patterns in order",
 );
 
 // Diacritics stripped, casing normalized.
 eq(
   generateEmailCandidates("José", "O'Brien", "Acme.com"),
-  ["jose.obrien@acme.com", "jose@acme.com", "jobrien@acme.com", "j.obrien@acme.com", "obrien@acme.com", "joseobrien@acme.com"],
+  ["jose@acme.com", "jobrien@acme.com", "jose.obrien@acme.com", "joseobrien@acme.com", "obrien@acme.com", "j.obrien@acme.com"],
   "diacritics + apostrophe + uppercase normalized",
 );
 
 // Domain normalization: strips scheme, www, and any path.
 eq(
   generateEmailCandidates("Jane", "Doe", "https://www.acme.com/contact"),
-  ["jane.doe@acme.com", "jane@acme.com", "jdoe@acme.com", "j.doe@acme.com", "doe@acme.com", "janedoe@acme.com"],
+  ["jane@acme.com", "jdoe@acme.com", "jane.doe@acme.com", "janedoe@acme.com", "doe@acme.com", "j.doe@acme.com"],
   "url-shaped domain normalized to bare host",
 );
 
@@ -66,11 +67,11 @@ eq(generateEmailCandidates("", "", "acme.com"), [], "no name → no candidates")
 eq(generateEmailCandidates("Jane", "Doe", ""), [], "no domain → no candidates");
 eq(generateEmailCandidates("Jane", "Doe", null), [], "null domain → no candidates");
 
-// Single-letter first: flast (jdoe) === firstlast (jdoe), and f.last (j.doe) ===
+// Single-letter first: firstlast (jdoe) === flast (jdoe), and f.last (j.doe) ===
 // first.last (j.doe): the duplicates dedupe out, preserving first occurrence.
 eq(
   generateEmailCandidates("J", "Doe", "acme.com"),
-  ["j.doe@acme.com", "j@acme.com", "jdoe@acme.com", "doe@acme.com"],
+  ["j@acme.com", "jdoe@acme.com", "j.doe@acme.com", "doe@acme.com"],
   "single-letter first: duplicate patterns dedupe",
 );
 

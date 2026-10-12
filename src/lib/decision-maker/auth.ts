@@ -4,21 +4,19 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 // Shared gate for every Decision-Maker enrichment API route. Validates the
-// request is from a logged-in owner/VA, resolves the org's Anthropic +
-// (optional) Perplexity keys with env-var fallback, and hands back a
-// ready-to-use admin DB client.
+// request is from a logged-in owner/VA, resolves the org's Anthropic key with
+// env-var fallback, and hands back a ready-to-use admin DB client.
 //
 // Mirrors requireProspectingContext (src/lib/scrapio/auth.ts): same
 // discriminated-union return shape so callers can do:
 //
 //   const ctx = await requireDecisionMakerContext();
 //   if ("error" in ctx) return ctx.error;
-//   const { anthropicKey, perplexityKey, organizationId, admin, user } = ctx;
+//   const { anthropicKey, organizationId, admin, user } = ctx;
 //
-// Anthropic is required (400 if missing): Layer 1 site-read uses Haiku.
-// Perplexity powers Layer 2 web-search and there is NO Claude fallback (owner
-// directive 2026-08-28): with no Perplexity key, Layer 2 is skipped and the
-// item stays name-less. `perplexityKey` is null when not configured.
+// Anthropic is required (400 if missing): it runs both layers, the Layer 1
+// site read (Haiku 4.5) and the Layer 2 web search (Haiku 5.5; it replaced
+// Perplexity on 2026-10-11).
 
 export async function requireDecisionMakerContext(): Promise<
   | { error: NextResponse }
@@ -26,7 +24,6 @@ export async function requireDecisionMakerContext(): Promise<
       user: User;
       organizationId: string;
       anthropicKey: string;
-      perplexityKey: string | null;
       admin: SupabaseClient;
     }
 > {
@@ -63,18 +60,14 @@ export async function requireDecisionMakerContext(): Promise<
   const admin = createAdminClient();
   const { data: org } = await admin
     .from("organizations")
-    .select("anthropic_api_key, perplexity_api_key")
+    .select("anthropic_api_key")
     .eq("id", organizationId)
     .maybeSingle();
 
-  const orgKeys = org as
-    | { anthropic_api_key: string | null; perplexity_api_key: string | null }
-    | null;
+  const orgKeys = org as { anthropic_api_key: string | null } | null;
 
   const anthropicKey =
     orgKeys?.anthropic_api_key || process.env.ANTHROPIC_API_KEY || "";
-  const perplexityKey =
-    orgKeys?.perplexity_api_key || process.env.PERPLEXITY_API_KEY || null;
 
   if (!anthropicKey) {
     return {
@@ -92,7 +85,6 @@ export async function requireDecisionMakerContext(): Promise<
     user,
     organizationId,
     anthropicKey,
-    perplexityKey: perplexityKey || null,
     admin,
   };
 }

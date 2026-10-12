@@ -7,7 +7,7 @@ export const ENRICH_RUN_COLUMNS =
   "run_profiles, run_domains, run_waterfall, run_activity, run_verify, run_naming, phase, status, total_count, " +
   "phase_total_count, processed_count, found_emails_profiles_count, found_domains_count, " +
   "found_emails_waterfall_count, found_emails_count, found_activity_count, found_verified_count, found_names_count, " +
-  "outcome_counts, cost_usd, " +
+  "outcome_counts, cost_usd, cost_breakdown, " +
   "active_apify_run_id, active_apify_dataset_id, active_batch_started_at, active_batch_attempt, " +
   "consecutive_failures, locked_at, started_at, completed_at, progress_message, error_message, created_at";
 

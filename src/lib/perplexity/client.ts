@@ -1,15 +1,18 @@
 // Shared Perplexity Sonar client. Extracted verbatim from the decision-maker
 // Layer 2 path (src/lib/decision-maker/layer2.ts) so other features (e.g.
-// name→domain discovery) can reuse it. Plain fetch, no SDK. Token cost via the
-// decision-maker pricing table.
+// name→domain discovery) can reuse it. Plain fetch, no SDK. Cost via the
+// decision-maker pricing table: tokens plus Perplexity's per-request fee.
 
-import { calculateCost } from "../decision-maker/pricing";
+import { perplexityCallCost } from "../decision-maker/pricing";
 
 const DEFAULT_SYSTEM_PROMPT =
   "You are a business research assistant. Return ONLY valid JSON, no markdown, no explanation, no preamble.";
 
 export interface PerplexityCallResult {
   text: string;
+  // USD for this call: tokens plus the per-request fee (0.5¢ on sonar), which
+  // Perplexity bills on every answered request. A failed request throws, so it
+  // adds nothing.
   cost: number;
   // Top-level `citations` array (real URLs the answer was grounded on). Layer 2
   // ignored these; domain discovery uses them to catch hallucinated domains.
@@ -90,7 +93,7 @@ export async function callPerplexity(
     input_tokens: data.usage?.prompt_tokens || 0,
     output_tokens: data.usage?.completion_tokens || 0,
   };
-  const cost = calculateCost(usage, model);
+  const cost = perplexityCallCost(usage, model);
   const citations = Array.isArray(data.citations)
     ? data.citations.filter((c): c is string => typeof c === "string")
     : [];

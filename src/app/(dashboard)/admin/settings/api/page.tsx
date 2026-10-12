@@ -122,8 +122,8 @@ const PROVIDERS: Record<string, Provider> = {
   findymail:   { title: "Catch-all validation", blurb: "Recovers emails on catch-all domains.", icon: MailCheck, tile: "bg-indigo-600", iconClass: "text-white" },
   unipile:     { title: "Unipile (LinkedIn)", blurb: "LinkedIn sequences and reply ingestion.", icon: LinkedinIcon, tile: "bg-[#0A66C2]", iconClass: "text-white" },
 
-  anthropic:   { title: "Anthropic", blurb: "Decision-maker extraction in Prospecting.", icon: Sparkles, tile: "bg-amber-500", iconClass: "text-white" },
-  perplexity:  { title: "Perplexity", blurb: "Web-search fallback for finding an owner.", icon: Compass, tile: "bg-sky-500", iconClass: "text-white" },
+  anthropic:   { title: "Anthropic", blurb: "Finds owner names: site read, then web search.", icon: Sparkles, tile: "bg-amber-500", iconClass: "text-white" },
+  perplexity:  { title: "Perplexity", blurb: "Finds a company's website from its name.", icon: Compass, tile: "bg-sky-500", iconClass: "text-white" },
 
   stripe:      { title: "Stripe", blurb: "Billing and subscriptions.", icon: CreditCard, tile: "bg-violet-50", iconClass: "text-violet-500" },
 
@@ -1384,7 +1384,7 @@ export default function IntegrationsPage() {
             </CardContent>
           </Card>
         );
-      // Anthropic: decision-maker enrichment Layer 1
+      // Anthropic: decision-maker enrichment, both layers
       case "anthropic":
         return (
           <Card className="border-0 py-0 shadow-none">
@@ -1395,7 +1395,8 @@ export default function IntegrationsPage() {
               <div>
                 <CardTitle className="text-base">Anthropic</CardTitle>
                 <p className="text-xs text-muted-foreground">
-                  Powers decision-maker extraction in the Prospecting tab
+                  Finds business owners: reads the website, then one web search
+                  when the site names nobody
                 </p>
               </div>
             </CardHeader>
@@ -1413,8 +1414,11 @@ export default function IntegrationsPage() {
                 />
                 <p className="text-[11px] text-muted-foreground">
                   Find your key at{" "}
-                  <span className="font-mono">console.anthropic.com</span>. Roughly
-                  $0.003 per business enriched (Claude Haiku 4.5).
+                  <span className="font-mono">console.anthropic.com</span>. About
+                  0.3¢ per website read (Claude Haiku 4.5), plus about 1.2¢ per web
+                  search (Claude Haiku 5.5) when the site names nobody. Web search
+                  must be enabled for the key&apos;s organization in the Claude
+                  Console.
                 </p>
               </div>
               <div className="flex gap-2">
@@ -1462,7 +1466,7 @@ export default function IntegrationsPage() {
             </CardContent>
           </Card>
         );
-      // Perplexity: decision-maker enrichment Layer 2 (optional)
+      // Perplexity: name→domain discovery (optional)
       case "perplexity":
         return (
           <Card className="border-0 py-0 shadow-none">
@@ -1481,8 +1485,7 @@ export default function IntegrationsPage() {
                   </Badge>
                 </CardTitle>
                 <p className="text-xs text-muted-foreground">
-                  Web-search fallback when a business website doesn&apos;t surface a
-                  decision maker
+                  Finds a company&apos;s website when only its name is known
                 </p>
               </div>
             </CardHeader>
@@ -1500,9 +1503,8 @@ export default function IntegrationsPage() {
                 />
                 <p className="text-[11px] text-muted-foreground">
                   Find your key at{" "}
-                  <span className="font-mono">perplexity.ai/settings/api</span>. If
-                  unset, Layer 2 falls back to Claude&apos;s built-in web search
-                  (slightly less accurate).
+                  <span className="font-mono">perplexity.ai/settings/api</span>. Owner
+                  names no longer use it: their web search runs on the Anthropic key.
                 </p>
               </div>
               <div className="flex gap-2">

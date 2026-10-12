@@ -94,8 +94,15 @@ export function emailMatchesName(
   return patterns.some((p) => localPart === p);
 }
 
+// The scan behind extractEmails: EMAIL_REGEX, plus a branch that takes a run of
+// local-part characters whole when no address follows it. Scanning with bare
+// EMAIL_REGEX restarts at every character of such a run, which is quadratic: a
+// 40 KB run (minified SVG path data) took 0.8 s, and Layer 1 now reads pages of
+// up to 2 MB. Same matches, one pass.
+const EMAIL_SCAN = new RegExp(`${EMAIL_REGEX.source}|[a-zA-Z0-9._%+-]+`, "g");
+
 export function extractEmails(text: string): string[] {
-  const matches = text.match(EMAIL_REGEX) || [];
+  const matches = (text.match(EMAIL_SCAN) || []).filter((m) => m.includes("@"));
   return [...new Set(matches.map((e) => e.toLowerCase()).filter((e) => !isJunkEmail(e)))];
 }
 

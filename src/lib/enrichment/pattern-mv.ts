@@ -1,69 +1,23 @@
 // pattern_mv: the direct (non-Apify) second-pass email method (migration 00075,
 // Phase 2). Generates the common first/last/domain email permutations and
 // verifies each through Million Verifier, keeping the first that comes back
-// deliverable. Surgical and cheap (~≤6 MV credits/contact, catch-all + unknown
-// are free) vs the vdrmota directory dump.
+// deliverable. Surgical and cheap vs the vdrmota directory dump: MV charges only
+// for a determinate answer (catch-all + unknown are free), and the guessing
+// stops at the run's paid-guess limit (pattern_max_credits, default 3).
 //
 // This module is I/O-light on purpose: it only calls the MV client and returns
 // per-item outcomes. All DB writes + fail-closed org-state handling live in the
-// cron caller (run-apify-enrichment). The candidate generator is pure and
-// unit-tested by scripts/test-pattern-mv.ts.
+// cron caller (run-apify-enrichment). The candidate generator is pure, lives in
+// email-patterns.ts, and is unit-tested by scripts/test-pattern-mv.ts.
 
 import {
   MillionVerifierError,
   type MillionVerifierClient,
   type MillionVerifierResponse,
 } from "@/lib/millionverifier/client";
+import { generateEmailCandidates } from "./email-patterns";
 
-// Strip a name part down to an email-local-part-safe token: drop diacritics,
-// lowercase, keep [a-z0-9] only ("José" → "jose", "O'Brien" → "obrien").
-function normalizePart(s: string | null | undefined): string {
-  return (s ?? "")
-    .normalize("NFKD")
-    .replace(/[̀-ͯ]/g, "") // strip combining diacritical marks
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, "");
-}
-
-function normalizeDomain(domain: string | null | undefined): string {
-  return (domain ?? "")
-    .trim()
-    .toLowerCase()
-    .replace(/^https?:\/\//, "")
-    .replace(/^www\./, "")
-    .replace(/\/.*$/, "");
-}
-
-// The common decision-maker email permutations, in descending likelihood:
-//   first.last@ → first@ → flast@ → f.last@ → last@ → firstlast@
-// Deduped, order preserved. Empty when there's no domain or no usable name.
-export function generateEmailCandidates(
-  first: string | null | undefined,
-  last: string | null | undefined,
-  domain: string | null | undefined,
-): string[] {
-  const f = normalizePart(first);
-  const l = normalizePart(last);
-  const d = normalizeDomain(domain);
-  if (!d || (!f && !l)) return [];
-
-  const locals: string[] = [];
-  if (f && l) locals.push(`${f}.${l}`);
-  if (f) locals.push(f);
-  if (f && l) locals.push(`${f[0]}${l}`);
-  if (f && l) locals.push(`${f[0]}.${l}`);
-  if (l) locals.push(l);
-  if (f && l) locals.push(`${f}${l}`);
-
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const local of locals) {
-    if (!local || seen.has(local)) continue;
-    seen.add(local);
-    out.push(`${local}@${d}`);
-  }
-  return out;
-}
+export { generateEmailCandidates };
 
 // MV charges a credit only for a determinate verdict (ok/invalid/disposable);
 // catch_all, unknown, and per-address errors are free.
@@ -87,15 +41,23 @@ export interface PatternMvItem {
 // verification cache (via decideFromResult) - that plugs pattern_mv into the
 // shared 30-day cache so the end-of-run verify phase and the pre-send gate reuse
 // the verdict instead of paying to verify the same address again.
+//
+// capped marks a miss that stopped at the paid-guess limit (maxCredits) before
+// trying every pattern.
 export type PatternMvOutcome =
   | { kind: "found"; email: string; confidence: number; mvResult: "ok" | "catch_all"; mvResponse: MillionVerifierResponse; credits: number; candidatesTried: number; sawCatchAll?: boolean }
-  | { kind: "not_found"; credits: number; candidatesTried: number; note: string; sawCatchAll?: boolean }
+  | { kind: "not_found"; credits: number; candidatesTried: number; note: string; sawCatchAll?: boolean; capped?: boolean }
   | { kind: "inconclusive"; credits: number; candidatesTried: number; note: string; sawCatchAll?: boolean };
 
 export interface RunPatternMvOpts {
   // Write a catch-all guess (as a risky ~40-confidence hit) when no address
   // verifies clean. Mirrors the org's accept_catch_all_guesses setting.
   acceptCatchAll: boolean;
+  // Paid-guess limit: the most MV credits one person may cost per attempt. The
+  // guessing stops after this many paid answers (invalid / disposable) without
+  // a hit; catch-all and unknown answers are free and don't count. The run's
+  // waterfall_config.pattern_max_credits.
+  maxCredits: number;
   // Per-address MV server-side timeout (seconds). A slow mail server returns
   // "unknown" at this bound rather than hanging.
   timeoutSec: number;
@@ -108,10 +70,11 @@ export interface RunPatternMvOpts {
   concurrency: number;
 }
 
-// Verify one contact's candidates in order; first `ok` wins. A DEFINITIVE MV
-// error (bad key / no credits / IP blocked) is thrown so the caller can trip
-// the shared fail-closed suppression; transient/per-address errors are absorbed
-// as "indeterminate" and the item is retried later.
+// Verify one contact's candidates in order; first `ok` wins, and the guessing
+// stops at the paid-guess limit. A DEFINITIVE MV error (bad key / no credits /
+// IP blocked) is thrown so the caller can trip the shared fail-closed
+// suppression; transient/per-address errors are absorbed as "indeterminate" and
+// the item is retried later.
 async function processItem(
   client: MillionVerifierClient,
   item: PatternMvItem,
@@ -129,8 +92,15 @@ async function processItem(
   // accepted outcome (same as an `ok` win below).
   let catchAll: { email: string; res: MillionVerifierResponse } | null = null;
   let sawIndeterminate = false;
+  let capped = false;
 
   for (const candidate of candidates) {
+    // Every paid answer so far was a miss (an `ok` returns below), so reaching
+    // the limit means this person has cost all the credits it may.
+    if (credits >= opts.maxCredits) {
+      capped = true;
+      break;
+    }
     if (Date.now() > opts.deadlineMs) {
       return { kind: "inconclusive", credits, candidatesTried: tried, note: "tick deadline reached mid-verify" };
     }
@@ -161,7 +131,10 @@ async function processItem(
   if (catchAll && opts.acceptCatchAll) {
     return { kind: "found", email: catchAll.email, confidence: 40, mvResult: "catch_all", mvResponse: catchAll.res, credits, candidatesTried: tried, sawCatchAll: true };
   }
-  if (sawIndeterminate) {
+  // A search stopped at the limit is final even with an unknown answer in it: a
+  // retry starts over and pays for the same invalid guesses again, and no
+  // pattern_mv find has ever come from a retry (0 of 635, 2026-10-12).
+  if (sawIndeterminate && !capped) {
     return {
       kind: "inconclusive",
       credits,
@@ -174,8 +147,13 @@ async function processItem(
     kind: "not_found",
     credits,
     candidatesTried: tried,
-    note: catchAll ? "only catch-all guesses (not accepted)" : "no deliverable address in the common patterns",
+    note: catchAll
+      ? "only catch-all guesses (not accepted)"
+      : capped
+        ? `no deliverable address in the first ${tried} patterns (paid-guess limit ${opts.maxCredits})`
+        : "no deliverable address in the common patterns",
     sawCatchAll: catchAll !== null,
+    ...(capped ? { capped: true } : {}),
   };
 }
 

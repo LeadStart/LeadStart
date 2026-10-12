@@ -13,7 +13,7 @@ import {
   pickPublishedOwnerEmail,
   publishedEmailsOf,
 } from "../src/lib/enrichment/published-email.ts";
-import { POOL_TAG, POOL_RELEASED_TAG, isPooled, withPoolTag, withPoolReleased } from "../src/lib/enrichment/pool.ts";
+import { POOL_TAG, POOL_RELEASED_TAG, isPooled, isPoolReleased, withPoolTag, withPoolReleased } from "../src/lib/enrichment/pool.ts";
 
 let pass = 0;
 let fail = 0;
@@ -58,6 +58,8 @@ eq(withPoolTag(["maps", "prospecting"]), ["maps", "prospecting", POOL_TAG], "tag
 eq(withPoolTag([POOL_TAG]), [POOL_TAG], "tagging is idempotent");
 eq(withPoolReleased(["maps", POOL_TAG]), ["maps", POOL_RELEASED_TAG], "release swaps the pool tag for the released marker");
 eq(isPooled(withPoolReleased(["maps", POOL_TAG])), false, "a released contact is no longer pooled");
+eq(isPoolReleased(withPoolReleased(["maps", POOL_TAG])), true, "a released contact carries the released marker");
+eq(isPoolReleased(["maps", POOL_TAG]), false, "a pooled contact isn't released");
 
 console.log("published-email helpers");
 eq(isPublishedEmailProvider("site_scrape"), true, "site scrape reads the site");

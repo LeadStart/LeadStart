@@ -54,6 +54,7 @@ import {
   MV_CREDIT_COST_USD,
   DOMAIN_DISCOVERY_COST_USD,
   FINDYMAIL_CATCHALL_COST_USD,
+  SITE_SCRAPE_COST_USD,
   SOURCING_SHORT_USD,
   SOURCING_FULL_USD,
   SOURCING_FULL_EMAIL_USD,
@@ -116,13 +117,12 @@ const DEPTHS: { value: Depth; label: string; hint: string; rate: number }[] = [
 // (2nd pass, the default method), profile-posts (activity); verify is Million
 // Verifier (not Apify).
 // All rates derive from pricing.ts (single source of truth, SPEND-35), so they
-// can never drift from the constants two lines away. waterfall/verify are Million
-// Verifier credits at the 10K-bundle rate: waterfall = the 6-candidate upper bound
-// (estimatePatternMvCost of one contact), verify = 1 credit.
+// can never drift from the constants two lines away. verify is one Million
+// Verifier credit at the 10K-bundle rate. The waterfall rate (pattern + verify)
+// is computed in the panel from the org's paid-guess limit (estimatePatternMvCost).
 const ENRICH_RATES = {
   email: PROFILE_EMAIL_COST_USD,
   domain: DOMAIN_COST_USD,
-  waterfall: estimatePatternMvCost(1),
   activity: ACTIVITY_COST_USD,
   verify: MV_CREDIT_COST_USD,
   // Findymail catch-all recovery (pay-on-hit; only the catch-all subset).
@@ -130,6 +130,9 @@ const ENRICH_RATES = {
   // Web lookup for companies with no LinkedIn page. Only that subset incurs it,
   // but it's counted per-person in the ceiling estimate (see the breakdown note).
   domain_discovery: DOMAIN_DISCOVERY_COST_USD,
+  // Company-inbox fallback: one site scrape ahead of pattern+verify for a person
+  // the profile gave no email (a size band that already scrapes adds nothing).
+  company_inbox: SITE_SCRAPE_COST_USD,
 };
 
 // Deep search (auto query-segmentation) sweeps many sub-queries and opens far
@@ -937,12 +940,16 @@ export function LinkedInSearchPanel() {
   const [addCatchAll, setAddCatchAll] = useState(false);
   const [addVerify, setAddVerify] = useState(false);
   const [addValidateCatchAll, setAddValidateCatchAll] = useState(false);
+  const [addCompanyInbox, setAddCompanyInbox] = useState(false);
   // Org kill-switch: does a finished search auto-import + enrich? Only changes
   // the panel's "sourced" caption. Fetched once from enrichment settings.
   const [autoRun, setAutoRun] = useState(true);
   // Org setting: discover websites for companies with no LinkedIn page (feeds the
   // per-person estimate + the breakdown row).
   const [domainDiscoveryOn, setDomainDiscoveryOn] = useState(true);
+  // Org setting: pattern + verify's paid-guess limit (MV credits per person at
+  // most); undefined until loaded → the default limit.
+  const [patternMaxCredits, setPatternMaxCredits] = useState<number | undefined>(undefined);
   // Deep search (auto query-segmentation): a PAID-Apify feature that splits a
   // search into sub-queries to pull past LinkedIn's 2,500-per-query ceiling.
   // OFF by default: it's only for bulk pulls, and on the free Apify tier the
@@ -1026,6 +1033,7 @@ export function LinkedInSearchPanel() {
         if (!cancelled && d?.settings) {
           setAutoRun(d.settings.auto_run_after_search !== false);
           setDomainDiscoveryOn(d.settings.domain_discovery_enabled !== false);
+          if (typeof d.settings.pattern_max_credits === "number") setPatternMaxCredits(d.settings.pattern_max_credits);
         }
       })
       .catch(() => {});
@@ -1358,7 +1366,13 @@ export function LinkedInSearchPanel() {
           depth,
           max_results: maxResults,
           name: searchNameInput.trim(),
-          addons: { activity: addActivity, verify: addVerify, include_catch_all: addCatchAll, validate_catch_all: addValidateCatchAll },
+          addons: {
+            activity: addActivity,
+            verify: addVerify,
+            include_catch_all: addCatchAll,
+            validate_catch_all: addValidateCatchAll,
+            company_inbox_fallback: addCompanyInbox,
+          },
         }),
       });
       const data = await res.json();
@@ -1484,14 +1498,27 @@ export function LinkedInSearchPanel() {
   // Findymail catch-all validation (pay-on-hit; ~20% of leads yield a recoverable
   // catch-all, so the per-person ceiling is a fraction of the per-hit rate).
   const catchAllRate = addValidateCatchAll ? ENRICH_RATES.catch_all * 0.2 : 0;
+  // Company-inbox fallback: a site scrape for each person left without an email,
+  // counted per person as a ceiling.
+  const companyInboxRate = addCompanyInbox ? ENRICH_RATES.company_inbox : 0;
   // Website discovery: a web lookup for the subset of people whose company has
   // no LinkedIn page. Counted per-person as a small ceiling addition (only that
   // subset actually incurs it), unless discovery is turned off in settings.
   const discoveryRate = domainDiscoveryOn
     ? (livePricing?.enrich.domain_discovery ?? ENRICH_RATES.domain_discovery)
     : 0;
+  // 2nd-pass pattern + verify for a person the profile gave no email: at most the
+  // paid-guess limit in Million Verifier credits.
+  const waterfallRate = estimatePatternMvCost(1, patternMaxCredits);
   const perPersonEnrich =
-    emailRate + domainRate + ENRICH_RATES.waterfall + activityRate + verifyRate + catchAllRate + discoveryRate;
+    emailRate +
+    domainRate +
+    waterfallRate +
+    activityRate +
+    verifyRate +
+    catchAllRate +
+    companyInboxRate +
+    discoveryRate;
   const projectedTotal = estimate + perPersonEnrich * maxResults;
   const pricesLive = livePricing?.source === "live" || livePricing?.source === "partial";
   // Est. cost per email type for the results radial, from the same live rates as
@@ -1572,8 +1599,17 @@ export function LinkedInSearchPanel() {
           (detail.query.addons as { include_catch_all?: unknown }).include_catch_all === true,
         validate_catch_all:
           (detail.query.addons as { validate_catch_all?: unknown }).validate_catch_all === true,
+        company_inbox_fallback:
+          (detail.query.addons as { company_inbox_fallback?: unknown }).company_inbox_fallback === true,
       }
-    : { activity: addActivity, verify: addVerify, naming: false, include_catch_all: addCatchAll, validate_catch_all: addValidateCatchAll };
+    : {
+        activity: addActivity,
+        verify: addVerify,
+        naming: false,
+        include_catch_all: addCatchAll,
+        validate_catch_all: addValidateCatchAll,
+        company_inbox_fallback: addCompanyInbox,
+      };
 
   // Actual-spend breakdown (the "What did this cost?" popover). Sourcing +
   // enrichment are both real Apify usageTotalUsd figures; together they reconcile
@@ -1848,6 +1884,23 @@ export function LinkedInSearchPanel() {
                   <span className="block text-[11px] text-muted-foreground">
                     Recover genuinely deliverable emails on catch-all domains via Findymail
                     (~$0.049 per hit, charged only when one is found). Needs a Findymail key.
+                  </span>
+                </span>
+              </label>
+              <label className="flex cursor-pointer items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={addCompanyInbox}
+                  onChange={(e) => setAddCompanyInbox(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 cursor-pointer rounded border-border accent-[#2E37FE]"
+                />
+                <span>
+                  Company inbox fallback
+                  <span className="block text-[11px] text-muted-foreground">
+                    When no personal email turns up, email the company&apos;s general inbox
+                    (info@, contact@) from its website instead, labelled Company inbox. Scrapes
+                    the site first where the pattern guess wouldn&apos;t (
+                    {`~$${ENRICH_RATES.company_inbox.toFixed(3)} per company`}).
                   </span>
                 </span>
               </label>
@@ -2532,7 +2585,7 @@ export function LinkedInSearchPanel() {
               )}
               <div className="flex items-center justify-between">
                 <span>2nd-pass email · <span className="font-mono">pattern + verify</span> (misses)</span>
-                <span className="font-mono tabular-nums">${ENRICH_RATES.waterfall.toFixed(4)}</span>
+                <span className="font-mono tabular-nums">${waterfallRate.toFixed(4)}</span>
               </div>
               {addActivity && (
                 <div className="flex items-center justify-between">
@@ -2550,6 +2603,15 @@ export function LinkedInSearchPanel() {
                     <span className="text-[9px] uppercase tracking-wide text-[#2E37FE]/70">add-on</span>
                   </span>
                   <span className="font-mono tabular-nums">${verifyRate.toFixed(4)}</span>
+                </div>
+              )}
+              {addCompanyInbox && (
+                <div className="flex items-center justify-between">
+                  <span>
+                    Company inbox · <span className="font-mono">site scrape</span>{" "}
+                    <span className="text-[9px] uppercase tracking-wide text-[#2E37FE]/70">add-on</span>
+                  </span>
+                  <span className="font-mono tabular-nums">${companyInboxRate.toFixed(4)}</span>
                 </div>
               )}
               {addValidateCatchAll && (

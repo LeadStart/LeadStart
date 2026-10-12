@@ -72,7 +72,8 @@ export async function enrichBusiness(
   const timeoutMs = opts.perBusinessTimeoutMs ?? DEFAULT_PER_BUSINESS_TIMEOUT_MS;
 
   const work = async (): Promise<EnrichmentResult> => {
-    const layer1 = await enrichWithWebsite(input, opts);
+    // Layer 1 sizes its page fetches to the limit, leaving time for Layer 2.
+    const layer1 = await enrichWithWebsite(input, { ...opts, perBusinessTimeoutMs: timeoutMs });
 
     if (!opts.useLayer2 || layer1.first_name) {
       return layer1;

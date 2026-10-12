@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import {
   DEFAULT_ENRICHMENT_SETTINGS,
   ENRICHMENT_WATERFALL_METHODS,
+  PATTERN_MAX_CREDITS_LIMIT,
   type EnrichmentAddons,
   type EnrichmentSettings,
   type EnrichmentWaterfallMethod,
@@ -53,6 +54,7 @@ export function normalizeEnrichmentSettings(
     large_method: method(o.large_method, base.large_method),
     unknown_method: method(o.unknown_method, base.unknown_method),
     accept_catch_all_guesses: bool(o.accept_catch_all_guesses, base.accept_catch_all_guesses),
+    pattern_max_credits: intClamp(o.pattern_max_credits, base.pattern_max_credits, 1, PATTERN_MAX_CREDITS_LIMIT),
     validate_catch_all: bool(o.validate_catch_all, base.validate_catch_all),
     scrape_max_pages: intClamp(o.scrape_max_pages, base.scrape_max_pages, 1, 20),
     auto_run_after_search: bool(o.auto_run_after_search, base.auto_run_after_search),
@@ -71,6 +73,7 @@ export function normalizeAddons(input: unknown): EnrichmentAddons {
     naming: o.naming === true,
     include_catch_all: o.include_catch_all === true,
     validate_catch_all: o.validate_catch_all === true,
+    company_inbox_fallback: o.company_inbox_fallback === true,
   };
 }
 

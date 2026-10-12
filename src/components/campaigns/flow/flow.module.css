@@ -171,8 +171,8 @@
   display: flex; flex-direction: column; overflow: hidden;
   transition: width .18s ease, max-height .18s ease;
 }
-/* "Expand" toggle: a wider, taller focused view for the email editor. */
-.modalWide { width: min(1040px, 96vw); max-height: 92vh; }
+/* The email step opens as a wide, tall workspace (see .ws below). */
+.modalWorkspace { width: min(1240px, 96vw); height: min(820px, 92vh); max-height: 92vh; }
 .mHead {
   display: flex; align-items: center; gap: 11px; padding: 12px 16px; flex-shrink: 0;
   background: var(--foreground); color: #fff;
@@ -184,6 +184,7 @@
 .mTitle { font-size: 15px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mClose { width: 30px; height: 30px; border-radius: 8px; border: 1px solid rgba(255,255,255,.24); background: transparent; color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; }
 .mClose:hover { background: rgba(255,255,255,.12); }
+.mPill { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; color: #fff; background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.2); border-radius: 999px; padding: 3px 9px; white-space: nowrap; flex-shrink: 0; }
 .mBody { padding: 16px; display: flex; flex-direction: column; gap: 13px; overflow: auto; flex: 1; }
 .mFoot { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-top: 1px solid var(--border); flex-shrink: 0; background: #fff; }
 .mDelete { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); background: #fff; color: var(--destructive); border-radius: 9px; padding: 8px 12px; font-size: 12.5px; font-weight: 600; cursor: pointer; }
@@ -202,25 +203,75 @@
 .threadHelp { font-size: 11.5px; color: var(--muted-foreground); line-height: 1.5; }
 .threadHelp b { color: var(--secondary-foreground); }
 
-/* ---- A/B accordion (extra variants B, C…) ---- */
-.abHead { display: flex; align-items: center; gap: 8px; }
-.addDashedSm { display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px; border: 1.5px dashed var(--border); border-radius: 8px; background: #fff; color: var(--muted-foreground); font-size: 12px; font-weight: 600; cursor: pointer; }
-.addDashedSm:hover { border-color: var(--primary); color: var(--primary); background: var(--brand-50, #EDEEFF); }
-.abAcc { margin-top: 8px; display: flex; flex-direction: column; gap: 8px; }
-.abItem { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; transition: border-color .2s, box-shadow .2s; }
-.abOpen { border-color: var(--primary); box-shadow: 0 8px 20px rgba(15,23,42,.07); }
-.abIRow { display: flex; align-items: center; gap: 10px; padding: 9px 11px; cursor: pointer; }
-.abIRow:hover { background: #fcfcfd; }
-.abK { width: 22px; height: 22px; border-radius: 7px; background: var(--muted); color: var(--secondary-foreground); font-size: 11px; font-weight: 800; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: transform .3s cubic-bezier(.34,1.56,.64,1), background .2s, color .2s; }
-.abOpen .abK { background: var(--primary); color: #fff; transform: scale(1.08); }
-.abIS { flex: 1; min-width: 0; font-size: 12.5px; font-weight: 500; color: var(--foreground); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.abChev { color: var(--muted-foreground); transition: transform .3s cubic-bezier(.34,1.56,.64,1); flex-shrink: 0; }
-.abChevOpen { transform: rotate(180deg); }
-.abBW { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .3s cubic-bezier(.34,1.56,.64,1); }
-.abOpen .abBW { grid-template-rows: 1fr; }
-.abBI { overflow: hidden; min-height: 0; }
-.abBody { padding: 11px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; opacity: 0; transform: translateY(-6px); transition: opacity .24s ease, transform .3s cubic-bezier(.34,1.56,.64,1); }
-.abOpen .abBody { opacity: 1; transform: none; }
+/* ---- email WORKSPACE: variant rail | editor | inbox preview ---- */
+.ws { flex: 1; min-height: 0; display: grid; grid-template-columns: 280px minmax(0, 1fr) 340px; grid-template-rows: minmax(0, 1fr); }
+.abK { width: 22px; height: 22px; border-radius: 7px; background: var(--muted); color: var(--secondary-foreground); font-size: 11px; font-weight: 800; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.abKOn { background: var(--primary); color: #fff; }
+.wsMuted { font-size: 12px; color: var(--muted-foreground); }
+.wsRail { border-right: 1px solid var(--border); background: #f8fafc; padding: 12px 10px; overflow: auto; display: flex; flex-direction: column; gap: 6px; min-height: 0; }
+.wsRailH { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted-foreground); padding: 2px 4px 4px; }
+.wsList { display: flex; flex-direction: column; gap: 6px; }
+.wsItem { display: flex; align-items: flex-start; gap: 9px; width: 100%; text-align: left; padding: 9px; border: 1px solid transparent; border-radius: 10px; background: transparent; cursor: pointer; transition: background .15s, border-color .15s; }
+.wsItem:hover { background: #eef2f7; }
+.wsItemOn, .wsItemOn:hover { background: #fff; border-color: var(--primary); box-shadow: 0 6px 16px rgba(15,23,42,.07); }
+.wsItemTxt { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.wsItemSub { font-size: 12.5px; font-weight: 600; color: var(--foreground); line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.wsItemSubGhost { font-style: italic; font-weight: 500; color: #4f46e5; }
+.wsItemMeta { font-size: 11px; color: var(--muted-foreground); display: flex; align-items: center; gap: 5px; }
+.wsDot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; flex-shrink: 0; background: var(--success); }
+.wsDotWarn { background: #d97706; }
+.wsAdd { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 8px; border: 1.5px dashed #cbd5e1; border-radius: 10px; background: #fff; color: var(--muted-foreground); font-size: 12px; font-weight: 600; cursor: pointer; }
+.wsAdd:hover { border-color: var(--primary); color: var(--primary); background: var(--brand-50, #EDEEFF); }
+.wsSec { margin-top: 10px; padding-top: 12px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 7px; }
+.wsSplit { display: flex; height: 22px; border-radius: 7px; overflow: hidden; gap: 2px; }
+.wsSplit span { flex: 1; background: var(--brand-100, #D1D3FF); color: var(--brand-500, #1C24B8); font-size: 10.5px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.wsSplit .wsSplitOn { background: var(--primary); color: #fff; }
+.wsSplit .wsSplitPaused { background: var(--muted); color: var(--muted-foreground); text-decoration: line-through; }
+.wsEd { display: flex; flex-direction: column; gap: 10px; padding: 14px 18px; min-height: 0; min-width: 0; overflow: auto; }
+.wsEdHead { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.wsEdHead b { font-size: 13.5px; }
+.wsBtn { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--border); background: #fff; color: var(--secondary-foreground); border-radius: 8px; padding: 5px 9px; font-size: 12px; font-weight: 600; white-space: nowrap; cursor: pointer; flex-shrink: 0; }
+.wsBtn:hover { border-color: #cbd5e1; background: #fcfcfd; }
+.wsBtnDanger { color: var(--destructive); }
+.wsBtnDanger:hover { background: var(--danger-light); border-color: var(--danger-light); }
+.wsNote { font-size: 11.5px; line-height: 1.45; color: #475569; background: var(--muted); border-radius: 8px; padding: 6px 10px; }
+.wsSubj { font-weight: 600; font-size: 14.5px; }
+.wsBody { flex: 1; resize: none; min-height: 180px; font-size: 14px; line-height: 1.65; padding: 12px 14px; }
+.wsEdFoot { font-size: 11.5px; color: var(--muted-foreground); display: flex; gap: 14px; flex-wrap: wrap; }
+.wsPv { border-left: 1px solid var(--border); background: #f8fafc; padding: 12px; overflow: auto; display: flex; flex-direction: column; gap: 10px; min-height: 0; min-width: 0; }
+.wsPvHead { display: flex; align-items: center; gap: 8px; font-size: 12.5px; white-space: nowrap; }
+.wsSelectSm { width: auto; max-width: 200px; min-width: 0; padding: 5px 8px; font-size: 12px; border-radius: 8px; }
+.wsMail { background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; box-shadow: 0 4px 12px rgba(15,23,42,.05); }
+.wsLoading { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--muted-foreground); padding: 6px 0; }
+.wsMailTop { display: flex; gap: 9px; align-items: center; font-size: 12px; }
+.wsMailWho { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.wsMailWho .wsMuted { font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wsAv { width: 28px; height: 28px; border-radius: 50%; background: var(--foreground); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px; flex-shrink: 0; }
+.wsMailSubj { font-weight: 700; font-size: 14px; margin: 10px 0 8px; overflow-wrap: anywhere; }
+.wsMailBody { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; line-height: 1.6; color: #1e293b; }
+.wsBlank { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border); font-size: 11.5px; line-height: 1.45; color: #b45309; }
+.wsUnmapped { font-size: 11.5px; line-height: 1.45; color: #8a5a0b; background: #f6eddc; border: 1px solid #e6d3a3; border-radius: 7px; padding: 6px 10px; }
+.wsOk { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #047857; }
+
+/* Tablet / small laptop: the preview drops under the editor and the panes
+   scroll as one. Panes size to their content here (min-height: auto), or the
+   fixed-height modal squeezes the preview row to the leftover space. */
+@media (max-width: 1100px) {
+  .ws { grid-template-columns: 250px minmax(0, 1fr); grid-template-rows: auto auto; overflow-y: auto; }
+  .wsRail { grid-row: 1 / span 2; overflow: visible; min-height: auto; }
+  .wsEd { overflow: visible; min-height: auto; }
+  .wsBody { flex: none; min-height: 320px; }
+  .wsPv { grid-column: 2; border-left: 0; border-top: 1px solid var(--border); overflow: visible; min-height: auto; }
+}
+/* Phone: one column; the variants wrap into a strip above the editor. */
+@media (max-width: 640px) {
+  .ws { grid-template-columns: minmax(0, 1fr); }
+  .wsRail { grid-row: auto; border-right: 0; border-bottom: 1px solid var(--border); }
+  .wsList { flex-direction: row; flex-wrap: wrap; }
+  .wsItem { flex: 1 1 150px; width: auto; }
+  .wsEd { padding: 12px; }
+  .wsPv { grid-column: auto; }
+}
 
 /* ── Mobile: fit the sequence spine + node tiles to the viewport so nodes
    don't clip or force a horizontal pan on phones. Desktop (>640px) keeps the
