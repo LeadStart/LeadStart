@@ -811,6 +811,9 @@ async function runPatternMvBatch(
   }
 
   const config = run.waterfall_config ?? DEFAULT_ENRICHMENT_SETTINGS;
+  // Paid-guess limit, read through the normalizer: a run snapshotted before the
+  // setting existed gets the default, and an out-of-range value is clamped.
+  const maxCredits = normalizeEnrichmentSettings(run.waterfall_config ?? undefined).pattern_max_credits;
   // Findymail catch-all recovery opt-in: when the run's config asks for it AND a
   // Findymail key is present, catch-all items pattern_mv can't verify are deferred
   // past the normal write and handed to Findymail for a deliverable address.
@@ -890,6 +893,7 @@ async function runPatternMvBatch(
   try {
     outcomes = await runPatternMv(client, mvItems, {
       acceptCatchAll: config.accept_catch_all_guesses,
+      maxCredits,
       timeoutSec: PATTERN_MV_VERIFY_TIMEOUT_SEC,
       deadlineMs,
       concurrency: PATTERN_MV_CONCURRENCY,
@@ -912,6 +916,7 @@ async function runPatternMvBatch(
   let inconclusive = 0;
   let totalCredits = 0;
   let publishedUsed = 0;
+  let capped = 0;
   // Catch-all items held back for the Findymail recovery pass (a found-catch_all
   // guess, or a catch-all miss). Deferring their write keeps the fill-only
   // contacts.email slot free so a clean Findymail hit can take it instead of a
@@ -950,6 +955,7 @@ async function runPatternMvBatch(
     const outcome = outcomes.get(item.id);
     if (!outcome) continue; // hit the deadline: stays pending for the next tick
     totalCredits += outcome.credits;
+    if (outcome.kind === "not_found" && outcome.capped) capped++;
     const share = outcome.credits * MV_CREDIT_COST_USD;
 
     // A catch-all outcome (an accepted confidence-40 guess, or a catch-all miss)
@@ -1103,10 +1109,11 @@ async function runPatternMvBatch(
   const recoverNote = recovered > 0 ? ` · ${recovered} catch-all recovered (Findymail)` : "";
   const publishedNote = publishedUsed > 0 ? ` · ${publishedUsed} published owner address used` : "";
   const noMxNote = noMailServer.size > 0 ? ` · ${noMailServer.size} skipped (no mail server)` : "";
+  const cappedNote = capped > 0 ? ` · ${capped} stopped at the ${maxCredits}-guess limit` : "";
   await admin
     .from("enrichment_runs")
     .update({
-      progress_message: `Pattern+verify: ${found} found · ${notFound} miss · ${inconclusive} retrying (${totalCredits} MV credits)${recoverNote}${publishedNote}${noMxNote}`,
+      progress_message: `Pattern+verify: ${found} found · ${notFound} miss · ${inconclusive} retrying (${totalCredits} MV credits)${recoverNote}${publishedNote}${noMxNote}${cappedNote}`,
       locked_at: null,
     })
     .eq("id", run.id);
@@ -1121,6 +1128,7 @@ async function runPatternMvBatch(
     recovered,
     published: publishedUsed,
     no_mail_server: noMailServer.size,
+    capped,
   };
 }
 

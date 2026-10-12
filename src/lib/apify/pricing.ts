@@ -2,6 +2,8 @@
 // usageTotalUsd isn't available yet. Actual cost is read from the Apify run's
 // usageTotalUsd on completion; these are only estimates. Verified 2026-08-22.
 
+import { DEFAULT_ENRICHMENT_SETTINGS, PATTERN_MAX_CREDITS_LIMIT } from "@/types/app";
+
 export const PROFILE_EMAIL_COST_USD = 0.01;   // harvestapi profile + email search
 export const DOMAIN_COST_USD = 0.004;         // harvestapi company (paid-tier)
 export const WATERFALL_LEAD_COST_USD = 0.005; // generic apify-waterfall per-item fallback (paid tier)
@@ -21,16 +23,22 @@ export const SOURCING_FULL_EMAIL_USD = 0.014;
 // Cost of ONE Million Verifier credit at the org's purchase tier. MV is a
 // prepaid tiered pool ($37/10K ≈ $0.0037 … $549/1M ≈ $0.00055, verified
 // against MV pricing 2026-08-25); owner call 2026-08-25: assume the 10K
-// pay-as-you-go bundle until purchasing changes. Pattern_mv typically resolves
-// in 1–3 charged credits (~$0.004–0.011/contact; ≤6 worst case ≈ $0.022;
-// catch-all + unknown verdicts are free).
+// pay-as-you-go bundle until purchasing changes. Pattern_mv costs at most its
+// paid-guess limit per contact (pattern_max_credits, default 3 ≈ $0.011; a find
+// usually costs less; catch-all + unknown verdicts are free).
 export const MV_CREDIT_COST_USD = 0.0037;
 
-// Estimate for the pattern_mv method (the default): contacts × ~6 candidate
-// checks × unit price, an honest upper bound (most resolve in far fewer).
-export const PATTERN_MV_MAX_CREDITS_PER_CONTACT = 6;
-export function estimatePatternMvCost(contacts: number): number {
-  return contacts * PATTERN_MV_MAX_CREDITS_PER_CONTACT * MV_CREDIT_COST_USD;
+// Estimate for the pattern_mv method (the default): contacts × the paid-guess
+// limit × unit price, an honest upper bound. Pass the org's pattern_max_credits
+// where it's loaded; otherwise the default limit applies.
+export const PATTERN_MV_MAX_CREDITS_PER_CONTACT = PATTERN_MAX_CREDITS_LIMIT;
+export function estimatePatternMvCost(
+  contacts: number,
+  maxCredits: number = DEFAULT_ENRICHMENT_SETTINGS.pattern_max_credits,
+): number {
+  const limit = Number.isFinite(maxCredits) ? Math.round(maxCredits) : DEFAULT_ENRICHMENT_SETTINGS.pattern_max_credits;
+  const perContact = Math.min(PATTERN_MV_MAX_CREDITS_PER_CONTACT, Math.max(1, limit));
+  return contacts * perContact * MV_CREDIT_COST_USD;
 }
 
 // site_scrape (our own actor) bills raw Apify COMPUTE per site, not per-lead

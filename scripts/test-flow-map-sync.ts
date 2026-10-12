@@ -69,6 +69,12 @@ ok(/from ["']@\/lib\/apify\/pricing["']/.test(dataText), "imports pricing consta
 ok(/from ["']@\/types\/app["']/.test(dataText), "imports DEFAULT_ENRICHMENT_SETTINGS / ADDONS");
 ok(/PROFILE_EMAIL_COST_USD/.test(dataText) && /MV_CREDIT_COST_USD/.test(dataText), "derives profile + MV cost from constants");
 ok(/DEFAULT_ENRICHMENT_ADDONS/.test(dataText) || /ADDONS\./.test(dataText), "derives add-on default labels from config");
+ok(/CFG\.pattern_max_credits/.test(dataText), "derives pattern_mv's paid-guess limit from the default config");
+ok(
+  /from ["']@\/lib\/enrichment\/email-patterns["']/.test(dataText) && /EMAIL_PATTERN_LABELS/.test(dataText),
+  "derives pattern_mv's pattern order from the candidate generator",
+);
+ok(!/first\.last@domain/.test(dataText), "no hard-coded pattern text left in the map");
 
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

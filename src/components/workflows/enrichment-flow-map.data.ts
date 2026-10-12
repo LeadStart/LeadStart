@@ -2,8 +2,9 @@
 //
 // SYNC CONTRACT (see docs/PROSPECTING_FLOW.md, the canonical flow doc):
 //   • Costs + default behaviour are DERIVED from the live constants below
-//     (pricing.ts, types/app.ts). A price change or a flipped default updates
-//     the map automatically; a renamed constant breaks the build.
+//     (pricing.ts, types/app.ts, and pattern_mv's pattern order from
+//     lib/enrichment/email-patterns.ts). A price change or a flipped default
+//     updates the map automatically; a renamed constant breaks the build.
 //   • Actor IDs are the string literals in ACTORS. scripts/test-flow-map-sync.ts
 //     extracts the current ids from the provider source and FAILS if the map
 //     falls out of sync: run it (and update this file) whenever a sourcing
@@ -20,6 +21,7 @@ import {
   NAMING_COST_USD,
 } from "@/lib/apify/pricing";
 import { DEFAULT_ENRICHMENT_SETTINGS as CFG, DEFAULT_ENRICHMENT_ADDONS as ADDONS } from "@/types/app";
+import { EMAIL_PATTERN_LABELS } from "@/lib/enrichment/email-patterns";
 
 // ---- diagram vocabulary (structure only; colours/fonts live in the component)
 export type Tone =
@@ -43,7 +45,10 @@ export const ACTORS = {
 
 // ---- derived display values (auto-synced to the live constants) -------------
 const usd = (n: number) => `$${n}`; // 0.01 → "$0.01", 0.004 → "$0.004", 0.0037 → "$0.0037"
-const MV_RANGE = `~$${MV_CREDIT_COST_USD.toFixed(3)}-${(MV_CREDIT_COST_USD * 3).toFixed(3)}`; // ~$0.004-0.011
+// pattern_mv's paid-guess limit (default 3) and the patterns it tries first, in order.
+const GUESS_CAP = CFG.pattern_max_credits;
+const FIRST_PATTERNS = `${EMAIL_PATTERN_LABELS.slice(0, 3).join(" ")} …`; // "first@ flast@ first.last@ …"
+const MV_RANGE = `~$${MV_CREDIT_COST_USD.toFixed(3)}-${(MV_CREDIT_COST_USD * GUESS_CAP).toFixed(3)}`; // ~$0.004-0.011
 const DEFAULT_METHOD = CFG.small_method; // "pattern_mv" while the default bands agree
 const addonTag = (on: boolean) => (on ? "(add-on, on)" : "(add-on, off)");
 const inboxAddon = ADDONS.company_inbox_fallback ? "inbox (add-on, on)" : "inbox (add-on)";
@@ -67,7 +72,7 @@ export const LI_NODES: FlowNode[] = [
   { id: "dom", kind: "box", x: 50, y: 342, w: 300, h: 66, tone: "step",
     lines: [{ t: "Phase 2 · Domains", s: "title" }, { t: ACTORS.company, s: "actor" }, { t: `${usd(DOMAIN_COST_USD)} / company · PER QUERY`, s: "pq" }] },
   { id: "wf", kind: "box", x: 50, y: 450, w: 300, h: 84, tone: "stepV",
-    lines: [{ t: "Phase 3 · Waterfall (fallback)", s: "title" }, { t: `${DEFAULT_METHOD} · first.last@domain + MV`, s: "actor" }, { t: `MV ${MV_RANGE} · ON HIT`, s: "mv" }, { t: `${inboxAddon}: site scrape first`, s: "opt" }] },
+    lines: [{ t: "Phase 3 · Waterfall (fallback)", s: "title" }, { t: `${DEFAULT_METHOD} · ${FIRST_PATTERNS}`, s: "actor" }, { t: `MV ${MV_RANGE} · ≤${GUESS_CAP} paid / person`, s: "mv" }, { t: `${inboxAddon}: site scrape first`, s: "opt" }] },
   { id: "d2", kind: "diamond", x: 120, y: 560, w: 160, h: 72, tone: "dia",
     lines: [{ t: "MV verdict?", s: "dia" }] },
   { id: "ca", kind: "box", x: 380, y: 552, w: 240, h: 44, tone: "addon",
@@ -116,7 +121,7 @@ export const MAPS_NODES: FlowNode[] = [
   { id: "d", kind: "diamond", x: 210, y: 476, w: 160, h: 72, tone: "dia",
     lines: [{ t: "Owner named?", s: "dia" }] },
   { id: "pm", kind: "box", x: 30, y: 594, w: 220, h: 126, tone: "stepV",
-    lines: [{ t: `Waterfall · ${DEFAULT_METHOD}`, s: "titleSm" }, { t: "guess owner email + MV", s: "actor" }, { t: "ok → conf 85 · no MX → skip", s: "muted" }, { t: "catch-all → owner's site addr", s: "muted" }, { t: `else Findymail ${ADDONS.validate_catch_all ? "(add-on, on)" : "(add-on)"}`, s: "opt" }, { t: `${inboxAddon}: scrape first,`, s: "opt" }, { t: "no email → info@ · conf 30", s: "opt" }] },
+    lines: [{ t: `Waterfall · ${DEFAULT_METHOD}`, s: "titleSm" }, { t: `guess owner email · ≤${GUESS_CAP} paid`, s: "actor" }, { t: "ok → conf 85 · no MX → skip", s: "muted" }, { t: "catch-all → owner's site addr", s: "muted" }, { t: `else Findymail ${ADDONS.validate_catch_all ? "(add-on, on)" : "(add-on)"}`, s: "opt" }, { t: `${inboxAddon}: scrape first,`, s: "opt" }, { t: "no email → info@ · conf 30", s: "opt" }] },
   { id: "ss", kind: "box", x: 330, y: 594, w: 220, h: 80, tone: "step",
     lines: [{ t: "Waterfall · site_scrape", s: "titleSm" }, { t: ACTORS.siteScrape, s: "actor" }, { t: `~${usd(SITE_SCRAPE_MEASURED_USD)}/site · PER QUERY`, s: "pq" }, { t: "info@ → contacts.email conf 30", s: "muted" }] },
   { id: "act", kind: "box", x: 140, y: 746, w: 300, h: 56, tone: "skip",

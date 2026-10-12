@@ -2,7 +2,8 @@
 
 // Enrichment waterfall: org-level config for the second-pass email waterfall
 // (migration 00075): master toggle, company-size routing (small/large/unknown
-// bands split at an employee-count threshold), and the catch-all toggle. Default
+// bands split at an employee-count threshold), the pattern method's paid-guess
+// limit, and the catch-all toggle. Default
 // method is pattern_mv; site_scrape/scrape_plus_pattern need the private actor,
 // bovi is the opt-in pay-per-found fallback.
 
@@ -20,7 +21,13 @@ import {
 } from "@/components/ui/select";
 import { SlidersHorizontal, CheckCircle, XCircle, Loader2, AlertTriangle } from "lucide-react";
 import { appUrl } from "@/lib/api-url";
-import type { EnrichmentSettings, EnrichmentWaterfallMethod } from "@/types/app";
+import { EMAIL_PATTERN_LABELS } from "@/lib/enrichment/email-patterns";
+import {
+  DEFAULT_ENRICHMENT_SETTINGS,
+  PATTERN_MAX_CREDITS_LIMIT,
+  type EnrichmentSettings,
+  type EnrichmentWaterfallMethod,
+} from "@/types/app";
 
 // Available methods. site_scrape + scrape_plus_pattern need the private Apify
 // actor deployed (apify-actors/site-contact-scraper): see the hint below.
@@ -31,6 +38,9 @@ const METHOD_OPTIONS: { value: EnrichmentWaterfallMethod; label: string }[] = [
   { value: "bovi", label: "Pattern finder (bovi)" },
   { value: "off", label: "Off, skip this band" },
 ];
+
+// Paid-guess limit choices for the pattern method: 1 … one per pattern.
+const GUESS_LIMITS = Array.from({ length: PATTERN_MAX_CREDITS_LIMIT }, (_, i) => i + 1);
 
 const BANDS: { key: "small_method" | "large_method" | "unknown_method"; label: string; hint: string }[] = [
   { key: "small_method", label: "Small companies", hint: "below the threshold" },
@@ -246,6 +256,42 @@ export function WaterfallSettingsCard() {
                 methods need the private scraper actor deployed first
                 (apify-actors/site-contact-scraper). Off in every band disables the
                 second pass.
+              </p>
+            </div>
+
+            {/* paid-guess limit for the pattern method */}
+            <div className="space-y-1">
+              <div className="flex items-center gap-3">
+                <div className="w-44 shrink-0">
+                  <span className="text-sm font-medium">Paid guesses per person</span>
+                  <span className="block text-[11px] text-muted-foreground">pattern + verify</span>
+                </div>
+                <Select
+                  value={String(settings.pattern_max_credits)}
+                  onValueChange={(v) => v && setSettings({ ...settings, pattern_max_credits: Number(v) })}
+                >
+                  <SelectTrigger className="w-[240px]" disabled={!enabled}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {GUESS_LIMITS.map((n) => (
+                      <SelectItem key={n} value={String(n)}>
+                        {n === PATTERN_MAX_CREDITS_LIMIT
+                          ? `${n}, every pattern`
+                          : n === DEFAULT_ENRICHMENT_SETTINGS.pattern_max_credits
+                            ? `${n} (default)`
+                            : String(n)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                The pattern method tries {EMAIL_PATTERN_LABELS.join(", ")}{" "}
+                in that order and gives up on a person after this many come back
+                invalid. Each invalid answer costs a Million Verifier credit; catch-all
+                and unknown answers are free and don&apos;t count. Measured on 635
+                verified finds, the first three patterns held 94% of them.
               </p>
             </div>
 

@@ -117,13 +117,12 @@ const DEPTHS: { value: Depth; label: string; hint: string; rate: number }[] = [
 // (2nd pass, the default method), profile-posts (activity); verify is Million
 // Verifier (not Apify).
 // All rates derive from pricing.ts (single source of truth, SPEND-35), so they
-// can never drift from the constants two lines away. waterfall/verify are Million
-// Verifier credits at the 10K-bundle rate: waterfall = the 6-candidate upper bound
-// (estimatePatternMvCost of one contact), verify = 1 credit.
+// can never drift from the constants two lines away. verify is one Million
+// Verifier credit at the 10K-bundle rate. The waterfall rate (pattern + verify)
+// is computed in the panel from the org's paid-guess limit (estimatePatternMvCost).
 const ENRICH_RATES = {
   email: PROFILE_EMAIL_COST_USD,
   domain: DOMAIN_COST_USD,
-  waterfall: estimatePatternMvCost(1),
   activity: ACTIVITY_COST_USD,
   verify: MV_CREDIT_COST_USD,
   // Findymail catch-all recovery (pay-on-hit; only the catch-all subset).
@@ -948,6 +947,9 @@ export function LinkedInSearchPanel() {
   // Org setting: discover websites for companies with no LinkedIn page (feeds the
   // per-person estimate + the breakdown row).
   const [domainDiscoveryOn, setDomainDiscoveryOn] = useState(true);
+  // Org setting: pattern + verify's paid-guess limit (MV credits per person at
+  // most); undefined until loaded → the default limit.
+  const [patternMaxCredits, setPatternMaxCredits] = useState<number | undefined>(undefined);
   // Deep search (auto query-segmentation): a PAID-Apify feature that splits a
   // search into sub-queries to pull past LinkedIn's 2,500-per-query ceiling.
   // OFF by default: it's only for bulk pulls, and on the free Apify tier the
@@ -1031,6 +1033,7 @@ export function LinkedInSearchPanel() {
         if (!cancelled && d?.settings) {
           setAutoRun(d.settings.auto_run_after_search !== false);
           setDomainDiscoveryOn(d.settings.domain_discovery_enabled !== false);
+          if (typeof d.settings.pattern_max_credits === "number") setPatternMaxCredits(d.settings.pattern_max_credits);
         }
       })
       .catch(() => {});
@@ -1504,10 +1507,13 @@ export function LinkedInSearchPanel() {
   const discoveryRate = domainDiscoveryOn
     ? (livePricing?.enrich.domain_discovery ?? ENRICH_RATES.domain_discovery)
     : 0;
+  // 2nd-pass pattern + verify for a person the profile gave no email: at most the
+  // paid-guess limit in Million Verifier credits.
+  const waterfallRate = estimatePatternMvCost(1, patternMaxCredits);
   const perPersonEnrich =
     emailRate +
     domainRate +
-    ENRICH_RATES.waterfall +
+    waterfallRate +
     activityRate +
     verifyRate +
     catchAllRate +
@@ -2579,7 +2585,7 @@ export function LinkedInSearchPanel() {
               )}
               <div className="flex items-center justify-between">
                 <span>2nd-pass email · <span className="font-mono">pattern + verify</span> (misses)</span>
-                <span className="font-mono tabular-nums">${ENRICH_RATES.waterfall.toFixed(4)}</span>
+                <span className="font-mono tabular-nums">${waterfallRate.toFixed(4)}</span>
               </div>
               {addActivity && (
                 <div className="flex items-center justify-between">

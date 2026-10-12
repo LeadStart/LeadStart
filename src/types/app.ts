@@ -1646,6 +1646,11 @@ export interface EnrichmentSettings {
   unknown_method: EnrichmentWaterfallMethod;
   // Whether pattern_mv may auto-write a catch-all guess (Phase 2 gate).
   accept_catch_all_guesses: boolean;
+  // Paid-guess limit for pattern_mv: the most Million Verifier credits one
+  // person may cost per attempt. The guesses stop after this many paid answers
+  // (invalid / disposable) without a hit; catch-all and unknown answers are free
+  // and don't count. 1 to PATTERN_MAX_CREDITS_LIMIT (one per pattern).
+  pattern_max_credits: number;
   // Org-level default for Findymail catch-all validation (the per-run
   // EnrichmentAddons.validate_catch_all toggle ORs over this). When on, catch-all
   // leads pattern_mv can't verify are handed to Findymail to recover a genuinely
@@ -1664,6 +1669,10 @@ export interface EnrichmentSettings {
   domain_discovery_enabled: boolean;
 }
 
+// Upper bound for EnrichmentSettings.pattern_max_credits: pattern_mv knows six
+// email patterns, so six paid answers already means every pattern was tried.
+export const PATTERN_MAX_CREDITS_LIMIT = 6;
+
 // Defaults route every band to pattern_mv (pattern-permutation + Million
 // Verifier): ~$0.004/contact, surgical, no Apify. site_scrape / scrape_plus_pattern
 // and the bovi fallback are opt-in per band.
@@ -1674,6 +1683,12 @@ export const DEFAULT_ENRICHMENT_SETTINGS: EnrichmentSettings = {
   large_method: "pattern_mv",
   unknown_method: "pattern_mv",
   accept_catch_all_guesses: false,
+  // 3: measured 2026-10-12 on all 635 Million Verifier-confirmed pattern_mv
+  // finds, the first three patterns held 599 (94%), while 697 people whose
+  // guesses all came back invalid cost 4,126 credits. On the SaaSassins
+  // national LinkedIn import, 3 keeps 130 of 142 finds for ~46% fewer credits;
+  // 4 keeps 140 for ~30% fewer (docs/PROSPECTING_FLOW.md §3).
+  pattern_max_credits: 3,
   // Off by default: Findymail catch-all recovery is opt-in per search and needs
   // a Findymail key, same posture as accept_catch_all_guesses.
   validate_catch_all: false,

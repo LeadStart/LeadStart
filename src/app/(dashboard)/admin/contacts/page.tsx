@@ -398,6 +398,8 @@ export default function ContactsPage() {
     // Whether web-lookup domain discovery is on (name-only companies can gain a
     // domain, so they count toward the domain + downstream estimate).
     domainDiscovery: boolean;
+    // pattern_mv's paid-guess limit: the most MV credits one contact may cost.
+    patternMaxCredits?: number;
   } | null>(null);
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
   useEffect(() => {
@@ -428,6 +430,7 @@ export default function ContactsPage() {
             large_method?: string;
             unknown_method?: string;
             domain_discovery_enabled?: boolean;
+            pattern_max_credits?: number;
           };
         }) => {
           if (cancelled || !d?.settings) return;
@@ -445,7 +448,12 @@ export default function ContactsPage() {
                 : applicable.some((m) => m === "site_scrape" || m === "scrape_plus_pattern")
                   ? "scrape"
                   : "pattern";
-          setEnrichWaterfallCfg({ enabled, kind, domainDiscovery: s.domain_discovery_enabled !== false });
+          setEnrichWaterfallCfg({
+            enabled,
+            kind,
+            domainDiscovery: s.domain_discovery_enabled !== false,
+            patternMaxCredits: s.pattern_max_credits,
+          });
           if (!enabled || kind === "off") setEnrichRunWaterfall(false);
         },
       )
@@ -592,7 +600,7 @@ export default function ContactsPage() {
       : waterfallKind === "scrape"
         ? estimateScrapeCost(enrichWaterfallDomains)
         : waterfallKind === "pattern"
-          ? estimatePatternMvCost(enrichNeedsEmail)
+          ? estimatePatternMvCost(enrichNeedsEmail, enrichWaterfallCfg?.patternMaxCredits)
           : 0;
   const enrichEstimate =
     (enrichRunProfiles ? enrichNeedsEmail * ENRICH_COST_PROFILE : 0) +
@@ -1815,7 +1823,7 @@ export default function ContactsPage() {
                     {waterfallDisabled
                       ? "turned off in Settings → Integrations"
                       : waterfallKind === "pattern"
-                        ? `guesses the common email patterns + verifies each with Million Verifier ≈ $${estimatePatternMvCost(1).toFixed(3)} per contact`
+                        ? `guesses the common email patterns + verifies each with Million Verifier, up to $${estimatePatternMvCost(1, enrichWaterfallCfg?.patternMaxCredits).toFixed(3)} per contact`
                         : waterfallKind === "scrape"
                           ? `scrapes each company site for phone + emails ≈ $${estimateScrapeCost(1).toFixed(3)} per company (compute; +MV credits if it falls through to pattern)`
                           : `runs the bovi pattern finder ≈ $${estimateBoviCost(1).toFixed(3)} per company (billed per found email)`}
