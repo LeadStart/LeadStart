@@ -9,8 +9,8 @@
  * makes (select / insert / update / upsert with eq, in, is, gte, or, order,
  * maybeSingle, count+head), plus what enqueueEnrichment and the
  * drain-enrichment-queue cron add (delete, not(col, "is", null), limit,
- * single), what the run-apify-enrichment cron adds (range, an lt term inside
- * or()), the two unique indexes those routes rely on
+ * single), what the run-apify-enrichment cron adds (range, lt and not.is.null
+ * terms inside or()), the two unique indexes those routes rely on
  * (contacts: org + lower(email), checked on insert and on an update that sets
  * an email; campaign_enrollments: campaign + contact), and records every
  * write. Anything else throws, so a route change that outgrows the fake fails
@@ -94,6 +94,8 @@ function splitTopLevel(s: string): string[] {
 }
 
 function orTerm(term: string): (r: Row) => boolean {
+  const notNull = /^([A-Za-z_]+)\.not\.is\.null$/.exec(term.trim());
+  if (notNull) return (r) => r[notNull[1]] != null;
   const m = /^([A-Za-z_]+)\.(eq|is|in|lt)\.(.*)$/.exec(term.trim());
   if (!m) throw new Error(`fake-supabase: unsupported or() term "${term}"`);
   const [, col, op, val] = m;

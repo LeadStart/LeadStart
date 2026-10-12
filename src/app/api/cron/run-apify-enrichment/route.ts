@@ -54,6 +54,7 @@ import {
   type CompanyInboxFallbackScope,
 } from "@/lib/enrichment/company-inbox";
 import { lookupMailHosts, readMailHost } from "@/lib/enrichment/mail-host";
+import { emailDomainOf, isOtherEmployerEmail, setAsideOtherEmployerEmail } from "@/lib/enrichment/other-employer-email";
 import { pickPublishedOwnerEmail, publishedEmailsOf } from "@/lib/enrichment/published-email";
 import { classifyContactOutcome, addOutcome, ALL_COUNT_KEYS } from "@/lib/enrichment/outcomes";
 import { callPerplexity } from "@/lib/perplexity/client";
@@ -2236,9 +2237,119 @@ async function writePhaseResult(
         .is("company_linkedin_url", null);
     }
   }
+  if (phase === "profiles") await writeProfileTitle(admin, item, res, contact);
 
   const providerId: EmailProviderId = phase === "profiles" ? "harvestapi" : waterfallProviderId(run);
   return writeEmail(admin, cols, item, res, contact, providerId, share);
+}
+
+// The profiles phase's job title: the current role at the contact's own company
+// (a Short-mode LinkedIn search returns none, and naming only covers name-less
+// Maps firms). Fill-only on contacts.title and the item's title, whether or not
+// the profile had an email. The profile block (headline, and which role the
+// title came from) lands in enrichment.profile either way.
+async function writeProfileTitle(
+  admin: Admin,
+  item: ItemRow,
+  res: PhaseResult,
+  contact: Contact | undefined,
+): Promise<void> {
+  const profile = res.extra?.profile;
+  if (!profile || typeof profile !== "object") return; // no profile came back
+  if (res.title) {
+    await admin.from("enrichment_run_items").update({ title: res.title }).eq("id", item.id).is("title", null);
+  }
+  if (!contact) return;
+  const ed = mergeEnrichment(contact.enrichment_data, { profile });
+  // writeEmail merges onto this snapshot next: carry the block forward.
+  contact.enrichment_data = ed;
+  if (res.title) {
+    const { data: updated } = await admin
+      .from("contacts")
+      .update({ title: res.title, enrichment_data: ed })
+      .eq("id", contact.id)
+      .is("title", null)
+      .select("id");
+    if (updated && updated.length > 0) return;
+  }
+  // Title already set (never overwritten): still record the provenance.
+  await admin.from("contacts").update({ enrichment_data: ed }).eq("id", contact.id);
+}
+
+// Profile emails at another employer (other-employer-email.ts). Once the domains
+// phase has resolved each company's domain, every email this run's profiles phase
+// wrote is checked against it; one on another business domain is set aside in
+// enrichment_data, the contact goes back to no email, and its item drops to
+// not_found, so the waterfall (seeded next) looks for an address at the company's
+// own domain. Out of time → done:false; the caller stays in the domains phase and
+// the next tick resumes (a set-aside item no longer matches the query).
+const OTHER_EMPLOYER_BUDGET_MS = 20_000;
+
+type ProfileEmailItem = { id: string; contact_id: string; email: string; company_domain: string | null };
+type ProfileEmailContact = { id: string; email: string | null; company_domain: string | null; enrichment_data: unknown };
+
+async function demoteOtherEmployerEmails(admin: Admin, run: RunRow): Promise<{ moved: number; done: boolean }> {
+  const deadline = Date.now() + OTHER_EMPLOYER_BUDGET_MS;
+  const items: ProfileEmailItem[] = [];
+  for (let offset = 0; ; offset += 1000) {
+    const { data } = await admin
+      .from("enrichment_run_items")
+      .select("id, contact_id, email, company_domain")
+      .eq("run_id", run.id)
+      .eq("profile_status", "found")
+      .eq("email_provider", "harvestapi")
+      .not("email", "is", null)
+      .order("id", { ascending: true })
+      .range(offset, offset + 999);
+    const rows = (data as ProfileEmailItem[] | null) ?? [];
+    items.push(...rows);
+    if (rows.length < 1000) break;
+  }
+  if (items.length === 0) return { moved: 0, done: true };
+
+  const contacts = new Map<string, ProfileEmailContact>();
+  const ids = Array.from(new Set(items.map((i) => i.contact_id)));
+  for (let i = 0; i < ids.length; i += 300) {
+    const { data } = await admin
+      .from("contacts")
+      .select("id, email, company_domain, enrichment_data")
+      .eq("organization_id", run.organization_id)
+      .in("id", ids.slice(i, i + 300));
+    for (const c of (data as ProfileEmailContact[] | null) ?? []) contacts.set(c.id, c);
+  }
+
+  let moved = 0;
+  for (const item of items) {
+    if (Date.now() > deadline) return { moved, done: false };
+    const c = contacts.get(item.contact_id);
+    // Only the address this run wrote, if it is still the contact's.
+    if (!c?.email || c.email.toLowerCase() !== item.email.toLowerCase()) continue;
+    const companyDomain = c.company_domain ?? item.company_domain;
+    const profile = (c.enrichment_data as { enrichment?: { profile?: { email_free?: unknown } } } | null)?.enrichment?.profile;
+    const free = typeof profile?.email_free === "boolean" ? profile.email_free : null;
+    if (!companyDomain || !isOtherEmployerEmail(c.email, companyDomain, { free })) continue;
+
+    const ed = setAsideOtherEmployerEmail(c.enrichment_data, c.email, companyDomain, new Date().toISOString());
+    const { data: updated } = await admin
+      .from("contacts")
+      .update({ email: null, enrichment_data: ed })
+      .eq("id", c.id)
+      .eq("email", c.email)
+      .select("id");
+    if (!updated || updated.length === 0) continue; // changed since the read
+    await admin
+      .from("enrichment_run_items")
+      .update({
+        email: null,
+        email_provider: null,
+        confidence: null,
+        profile_status: "not_found",
+        profile_notes: `email at another employer (${emailDomainOf(c.email)}, not ${companyDomain}): set aside, not used`,
+      })
+      .eq("id", item.id);
+    moved++;
+  }
+  return { moved, done: true };
 }
 
 function waterfallProviderId(run: RunRow): EmailProviderId {
@@ -2850,7 +2961,7 @@ async function finalizeOutcomes(admin: Admin, run: RunRow): Promise<void> {
 // Move to the next enabled phase that has work; finalize when none remain.
 async function advancePhase(admin: Admin, client: ApifyClient, run: RunRow): Promise<void> {
   let phase: EnrichmentPhase = run.phase;
-  let inboxNote = "";
+  let passNote = "";
 
   for (;;) {
     if (phase === "profiles") {
@@ -2887,6 +2998,22 @@ async function advancePhase(admin: Admin, client: ApifyClient, run: RunRow): Pro
       continue;
     }
     if (phase === "domains") {
+      // Every company domain is known now: set aside profile emails at another
+      // employer before naming and the waterfall run, so the waterfall looks for
+      // those contacts' own addresses. Out of time → stay in domains; the next
+      // tick finishes the pass.
+      const aside = await demoteOtherEmployerEmails(admin, run);
+      if (aside.moved > 0) {
+        passNote += ` · ${aside.moved} profile email${aside.moved === 1 ? "" : "s"} at another employer set aside`;
+      }
+      if (!aside.done) {
+        await admin
+          .from("enrichment_runs")
+          .update({ phase: "domains", progress_message: `Checking profile emails${passNote}, continuing`, locked_at: null })
+          .eq("id", run.id);
+        run.phase = "domains";
+        return;
+      }
       phase = "naming";
       if (run.run_naming) {
         // Seed name-less, company-named items for owner-name discovery. Runs
@@ -2924,12 +3051,12 @@ async function advancePhase(admin: Admin, client: ApifyClient, run: RunRow): Pro
       // time → stay in the waterfall; the next tick finishes the pass.
       const inbox = await applyCompanyInboxFallback(admin, run);
       if (inbox.promoted > 0) {
-        inboxNote = ` · ${inbox.promoted} company inbox${inbox.promoted === 1 ? "" : "es"} filled`;
+        passNote += ` · ${inbox.promoted} company inbox${inbox.promoted === 1 ? "" : "es"} filled`;
       }
       if (!inbox.done) {
         await admin
           .from("enrichment_runs")
-          .update({ phase: "waterfall", progress_message: `Company inbox fallback${inboxNote}, continuing`, locked_at: null })
+          .update({ phase: "waterfall", progress_message: `Company inbox fallback${passNote}, continuing`, locked_at: null })
           .eq("id", run.id);
         run.phase = "waterfall";
         return;
@@ -2986,7 +3113,7 @@ async function advancePhase(admin: Admin, client: ApifyClient, run: RunRow): Pro
           (run.run_naming ? ` · names ${counts.found_names_count}` : "") +
           (run.run_activity ? ` · activity ${counts.found_activity_count}` : "") +
           (run.run_verify ? ` · verified ${counts.found_verified_count}` : "") +
-          inboxNote,
+          passNote,
       })
       .eq("id", run.id);
     run.phase = "complete";
@@ -2994,7 +3121,7 @@ async function advancePhase(admin: Admin, client: ApifyClient, run: RunRow): Pro
   } else {
     await admin
       .from("enrichment_runs")
-      .update({ phase, progress_message: `Starting ${phase}${inboxNote}`, locked_at: null })
+      .update({ phase, progress_message: `Starting ${phase}${passNote}`, locked_at: null })
       .eq("id", run.id);
     run.phase = phase;
   }

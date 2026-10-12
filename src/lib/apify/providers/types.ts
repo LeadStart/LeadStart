@@ -22,6 +22,7 @@ export interface PhaseResult {
   confidence?: number; // 0-100: the provider's own confidence in `email`
   companyDomain?: string | null; // set by the domains phase (or profile currentPosition)
   companyLinkedinUrl?: string | null; // set by the profiles phase
+  title?: string | null; // set by the profiles phase: the person's current job title
   extra?: Record<string, unknown>; // merged into enrichment_data.enrichment.*
   raw?: unknown; // trimmed provider record, kept for audit (feeds catch-all adjudication)
 }
