@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { DEFAULT_LAYER2_MODEL } from "@/lib/decision-maker/pricing";
+import { PERPLEXITY_MODEL } from "@/lib/decision-maker/pricing";
 
 // POST /api/admin/prospecting/validate-perplexity
 //
@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: DEFAULT_LAYER2_MODEL,
+        model: PERPLEXITY_MODEL,
         messages: [{ role: "user", content: "ping" }],
         // Perplexity requires max_tokens >= 16 (a lower value 400s before the key
         // is even checked). Keep it minimal: this is just a reachability probe.
@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    return NextResponse.json({ success: true, model: DEFAULT_LAYER2_MODEL });
+    return NextResponse.json({ success: true, model: PERPLEXITY_MODEL });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 400 });

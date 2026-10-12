@@ -112,7 +112,7 @@ export const MAPS_NODES: FlowNode[] = [
   { id: "dom", kind: "box", x: 140, y: 252, w: 300, h: 66, tone: "step",
     lines: [{ t: "Phase 2 · Domains", s: "title" }, { t: "web-lookup if missing", s: "actor" }, { t: `~${usd(DOMAIN_DISCOVERY_COST_USD)} · often no-op`, s: "muted" }] },
   { id: "nam", kind: "box", x: 140, y: 360, w: 300, h: 78, tone: "addon",
-    lines: [{ t: `Phase 3 · Naming  ${ADDONS.naming ? "(add-on, on)" : "(add-on)"}`, s: "title" }, { t: "decision-maker · Perplexity Sonar", s: "actor" }, { t: `~${usd(NAMING_COST_USD)} / business`, s: "opt" }] },
+    lines: [{ t: `Phase 3 · Naming  ${ADDONS.naming ? "(add-on, on)" : "(add-on)"}`, s: "title" }, { t: "Haiku · site read + 1 web search", s: "actor" }, { t: `~${usd(NAMING_COST_USD)} / business`, s: "opt" }] },
   { id: "d", kind: "diamond", x: 210, y: 476, w: 160, h: 72, tone: "dia",
     lines: [{ t: "Owner named?", s: "dia" }] },
   { id: "pm", kind: "box", x: 30, y: 594, w: 220, h: 126, tone: "stepV",

@@ -13,8 +13,8 @@ import type { ScrapioBusiness } from "@/types/app";
 //
 // Worker tick. Picks one decision_maker_runs row in 'pending' or 'running'
 // status and processes a chunk of pending result rows. Layer 1 (website
-// scrape via Claude Haiku) + optional Layer 2 (Perplexity Sonar or Claude
-// web_search) per business. Persists per-result enrichment fields and
+// scrape via Claude Haiku 4.5) + optional Layer 2 (one Claude Haiku 5.5 web
+// search) per business, both on the Anthropic key. Persists per-result enrichment fields and
 // aggregates cost / progress on the run row between ticks.
 //
 // Designed to mirror /api/cron/run-prospect-searches:
@@ -105,19 +105,16 @@ export async function GET(request: NextRequest) {
   }
   const run = claimedRows[0] as RunRow;
 
-  // Look up the org's API keys (with env fallback for local dev).
+  // Look up the org's Anthropic key (with env fallback for local dev). It runs
+  // both layers.
   const { data: org } = await admin
     .from("organizations")
-    .select("anthropic_api_key, perplexity_api_key")
+    .select("anthropic_api_key")
     .eq("id", run.organization_id)
     .maybeSingle();
-  const orgKeys = org as
-    | { anthropic_api_key: string | null; perplexity_api_key: string | null }
-    | null;
+  const orgKeys = org as { anthropic_api_key: string | null } | null;
   const anthropicKey =
     orgKeys?.anthropic_api_key || process.env.ANTHROPIC_API_KEY || "";
-  const perplexityKey =
-    orgKeys?.perplexity_api_key || process.env.PERPLEXITY_API_KEY || null;
 
   if (!anthropicKey) {
     await admin
@@ -210,7 +207,6 @@ export async function GET(request: NextRequest) {
             serviceType,
             useLayer2: run.use_layer2,
             anthropicKey,
-            perplexityKey: perplexityKey ?? undefined,
           });
           return { row, result };
         }),

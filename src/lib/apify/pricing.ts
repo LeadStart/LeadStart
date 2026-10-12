@@ -56,18 +56,18 @@ export function estimateBoviCost(domains: number): number {
 // removed). Honest ceiling: ~$0.0005 in tokens plus Perplexity's per-request
 // search fee; the homepage-confirmation fetch is free. NOTE: the cost accrued
 // onto the run is token-only (calculateCost), so it undercounts the per-request
-// search fee, the same known simplification as the decision-maker layer.
+// search fee.
 export const DOMAIN_DISCOVERY_COST_USD = 0.005;
 export function estimateDomainDiscoveryCost(companies: number): number {
   return companies * DOMAIN_DISCOVERY_COST_USD;
 }
 
-// Owner-name (naming) discovery: decision-maker Layer 1 (Haiku site scrape) plus
-// optional Layer 2 (Perplexity Sonar web search ONLY since 2026-08-28; no Claude
-// fallback, so no key = Layer 2 no-ops) per business. Honest ceiling: Layer 1 is
-// ~$0.003-0.01 in tokens, Layer 2 adds ~$0.005-0.015 when it fires; the site
-// fetch is free. Token-only accrual undercounts per-request search fees, so this
-// is the estimate ceiling.
+// Owner-name (naming) discovery per business: decision-maker Layer 1 (Haiku 4.5
+// reads the site) plus, when the site names nobody and the firm has a domain with
+// a mail server, Layer 2 (one Claude Haiku 5.5 web search; replaced Perplexity
+// 2026-10-11). Measured 2026-10-11 on 147 cleaning firms: Layer 1 ~0.33¢ per site
+// read, Layer 2 ~1.16¢ per lookup (1¢ search fee + ~13K tokens). Both layers ≈
+// 1.5¢, so this is the ceiling. Recorded cost now includes the search fee.
 export const NAMING_COST_USD = 0.015;
 export function estimateNamingCost(businesses: number): number {
   return businesses * NAMING_COST_USD;

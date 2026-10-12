@@ -82,7 +82,8 @@ function buildItemRows(
     // waterfall seeding), so we do NOT pre-seed 'pending' here.
     const wantWaterfallOnly = !c.email && Boolean(c.company_domain?.trim());
     // Name-less business lead that opted into the owner-name (naming) add-on,
-    // eligible even with no domain (naming's Layer 2 web-searches by name + city).
+    // eligible even with no domain (the domains phase may find one first; without
+    // one, naming has no site to read and skips its web lookup).
     // Gated on the per-contact addon stamp so a run without naming doesn't pull in
     // contacts it can't work.
     // Per-contact add-on opt-ins (stamped on enrichment_data.addons at import).

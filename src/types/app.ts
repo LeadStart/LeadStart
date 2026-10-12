@@ -27,9 +27,10 @@ export interface Organization {
   scrapio_api_key: string | null;
   scrapio_credits_balance: number | null;
   scrapio_last_credit_check_at: string | null;
-  // Decision-maker enrichment (migration 00044). Anthropic powers Layer 1
-  // (website scrape via Haiku); Perplexity is the optional Layer 2
-  // fallback (web search). Either may fall back to env vars at runtime.
+  // Decision-maker enrichment (migration 00044). Anthropic runs both owner-name
+  // layers (Layer 1 site read with Haiku 4.5, Layer 2 web search with Haiku 5.5,
+  // since 2026-10-11); Perplexity now only finds a company's website from its
+  // name (domain discovery). Either may fall back to env vars at runtime.
   anthropic_api_key: string | null;
   perplexity_api_key: string | null;
   // Unipile (LinkedIn channel, migration 00046). DSN is the per-workspace

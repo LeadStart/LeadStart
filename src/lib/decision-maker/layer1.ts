@@ -36,7 +36,7 @@ const HOME_TEXT_FLOOR = 3_000;
 
 // Page fetches get the first half of the per-business limit (enrichBusiness
 // races the whole lookup against it: 30 s in the naming phase), so the Haiku
-// call and, when Layer 1 names nobody, Layer 2's Perplexity call keep the rest.
+// call and, when Layer 1 names nobody, Layer 2's web search keep the rest.
 // The subpages load together, so fetching takes the homepage plus the slowest
 // subpage, not the sum of all five: one after another they could take 50 s,
 // which timed the lookup out and lost every page already read.

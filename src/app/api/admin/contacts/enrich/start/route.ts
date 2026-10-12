@@ -227,7 +227,8 @@ export async function POST(request: NextRequest) {
     // want-flag and was dropped from the run entirely.
     const wantWaterfallOnly = runWaterfallEffective && !c.email && Boolean(c.company_domain);
     // Owner-name discovery: a name-less, company-named contact (no email yet).
-    // Works even without a domain (Layer 2 web-searches by name + city).
+    // Eligible even without a domain: the domains phase may find one first
+    // (without one, naming has no site to read and skips its web lookup).
     const wantNaming =
       runNaming && !c.email && !c.first_name && !c.last_name && Boolean(c.company_name?.trim());
     // Activity scoring only needs a profile URL: works even for contacts that

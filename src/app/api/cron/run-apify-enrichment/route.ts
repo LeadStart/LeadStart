@@ -61,6 +61,7 @@ import { callPerplexity } from "@/lib/perplexity/client";
 import { fetchPage } from "@/lib/decision-maker/fetcher";
 import { isSafeUrl } from "@/lib/decision-maker/validation";
 import { enrichBusiness, type EnrichmentInput, type EnrichmentResult } from "@/lib/decision-maker";
+import { layer2CanYieldContact } from "@/lib/decision-maker/layer2";
 import {
   runDomainDiscovery,
   extractContactLocation,
@@ -1340,16 +1341,15 @@ async function runNamingBatch(
 ): Promise<Record<string, unknown>> {
   const cols = PHASE_COLS.naming;
 
-  // Org keys: Anthropic is mandatory (Layer 1 is Haiku); Perplexity required
-  // for Layer 2 web-search (no Claude fallback; Layer 2 is skipped without it).
+  // Org key: Anthropic runs both layers (Layer 1 reads the site with Haiku 4.5,
+  // Layer 2 web searches with Haiku 5.5; Perplexity is no longer used here).
   const { data: orgRow } = await admin
     .from("organizations")
-    .select("anthropic_api_key, perplexity_api_key")
+    .select("anthropic_api_key")
     .eq("id", run.organization_id)
     .maybeSingle();
-  const org = orgRow as { anthropic_api_key: string | null; perplexity_api_key: string | null } | null;
+  const org = orgRow as { anthropic_api_key: string | null } | null;
   const anthropicKey = org?.anthropic_api_key?.trim() || process.env.ANTHROPIC_API_KEY?.trim() || null;
-  const perplexityKey = org?.perplexity_api_key?.trim() || process.env.PERPLEXITY_API_KEY?.trim() || null;
 
   // No Anthropic key → naming can't run. Mark ALL pending naming items not_found
   // with a config note and complete the phase (mirrors verify's no-key path).
@@ -1427,9 +1427,10 @@ async function runNamingBatch(
       try {
         const res = await enrichBusiness(input, {
           serviceType: "operations",
-          useLayer2: true, // Perplexity only; skipped if no Perplexity key
+          // The web lookup (~1.2¢) only where a found name could become a
+          // contact we can confirm: a domain with a mail server.
+          useLayer2: layer2CanYieldContact(item.company_domain, readMailHost(contact?.enrichment_data)),
           anthropicKey: anthropicKey as string,
-          perplexityKey: perplexityKey ?? undefined,
           perBusinessTimeoutMs: NAMING_PER_BUSINESS_TIMEOUT_MS,
         });
         outcomes.set(item.id, res);
