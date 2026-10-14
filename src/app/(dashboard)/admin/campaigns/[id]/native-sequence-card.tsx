@@ -17,6 +17,7 @@ import { appUrl } from "@/lib/api-url";
 import { formatSendWindow, type SendWindowConfig } from "@/lib/gmail/ramp";
 import type { SendingStrategy } from "@/types/app";
 import { StepCopyCheck } from "@/components/campaigns/step-copy-check";
+import { NewLeadsControl, newLeadsSummary } from "@/components/campaigns/new-leads-control";
 
 export interface StepDraft {
   subject: string;
@@ -50,7 +51,8 @@ export function NativeSequenceCard({
   campaignId: string;
   initialSteps: StepDraft[];
   initialWindow: SendWindowConfig;
-  initialNewLeadsCap: number;
+  /** null = no limit (the default); 0 = new contacts paused. */
+  initialNewLeadsCap: number | null;
   initialStrategy: SendingStrategy;
   // Extra controls rendered to the left of Edit in the read-mode header
   // (e.g. the deliverability "Run check" trigger).
@@ -60,7 +62,7 @@ export function NativeSequenceCard({
   const [editing, setEditing] = useState(false);
   const [steps, setSteps] = useState<StepDraft[]>(initialSteps);
   const [win, setWin] = useState<SendWindowConfig>(initialWindow);
-  const [newLeadsCap, setNewLeadsCap] = useState<number>(initialNewLeadsCap);
+  const [newLeadsCap, setNewLeadsCap] = useState<number | null>(initialNewLeadsCap);
   const [strategy, setStrategy] = useState<SendingStrategy>(initialStrategy);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -143,9 +145,7 @@ export function NativeSequenceCard({
             <CardTitle className="text-base">Sequence &amp; schedule</CardTitle>
             <p className="text-xs text-muted-foreground mt-0.5 inline-flex flex-wrap items-center gap-1">
               <Clock size={12} /> {formatSendWindow(win)} ·{" "}
-              {newLeadsCap === 0
-                ? "new leads paused"
-                : `up to ${newLeadsCap} new lead${newLeadsCap === 1 ? "" : "s"}/day`}{" "}
+              {newLeadsSummary(newLeadsCap)}{" "}
               · {strategy === "reach_first" ? "Reach everyone first" : "Finish the sequence first"}
             </p>
           </div>
@@ -267,34 +267,6 @@ export function NativeSequenceCard({
               </label>
             </div>
           </div>
-          <div className="flex items-end gap-3 pt-1">
-            <div className="space-y-1 w-32 shrink-0">
-              <Label className="text-xs">New leads / day</Label>
-              <Input
-                type="number"
-                min={0}
-                max={1000}
-                value={newLeadsCap}
-                onChange={(e) =>
-                  setNewLeadsCap(Math.max(0, Math.min(1000, Math.floor(Number(e.target.value) || 0))))
-                }
-              />
-            </div>
-            <p className="text-[11px] text-muted-foreground pb-2">
-              {strategy === "reach_first" ? (
-                <>
-                  In <span className="font-medium">Reach everyone first</span> this is only an
-                  on/off: first-touches use full inbox capacity regardless of the number.
-                  Set 0 to pause new leads while replies keep sending.
-                </>
-              ) : (
-                <>
-                  New first-touches started per day on this campaign. Follow-ups aren&apos;t
-                  limited by this: set 0 to pause new leads while replies keep sending.
-                </>
-              )}
-            </p>
-          </div>
           <p className="text-[11px] text-muted-foreground">{formatSendWindow(win)}</p>
         </div>
 
@@ -310,21 +282,16 @@ export function NativeSequenceCard({
               active={strategy === "finish_first"}
               onClick={() => setStrategy("finish_first")}
               title="Finish the sequence first"
-              desc="Follow-ups get priority; new leads drip in at the cap above. Every contact is walked through the whole sequence. Steady and predictable: slower reach."
+              desc="Recommended. Due follow-ups always send before new contacts, so everyone gets each email on schedule; new contacts fill the capacity left."
             />
             <StrategyOption
               active={strategy === "reach_first"}
               onClick={() => setStrategy("reach_first")}
               title="Reach everyone first"
-              desc="New first-touches get priority and use full inbox capacity (the cap above no longer limits the rate). Email #1 reaches the whole list fast; follow-ups fill in behind. Best for time-sensitive intros."
+              desc="Email #1 goes before follow-ups and uses full inbox capacity, so it reaches the whole list fast, but follow-ups can run days late."
             />
           </div>
-          {strategy === "reach_first" && newLeadsCap === 0 && (
-            <p className="text-[11px] text-amber-600">
-              New leads are paused (0/day), so reach-first has nothing to send. Set the
-              New leads/day above to any non-zero value to let first-touches flow.
-            </p>
-          )}
+          <NewLeadsControl value={newLeadsCap} onChange={setNewLeadsCap} strategy={strategy} />
         </div>
 
         {/* Steps */}

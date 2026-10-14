@@ -72,7 +72,7 @@ export function simInputFor(s: PlannerState): CampaignSimInput {
     domainDailyCap: s.domainDailyCap,
     otherSendsPerDay: s.otherSendsPerDay,
     startWarmed: s.startWarmed,
-    launchDate: launchDateFor(s.startDate, s.warmingDays),
+    launchDate: launchDateFor(s.startDate),
   };
 }
 
@@ -100,7 +100,7 @@ function CampaignInputs({ state: s, update, history }: { state: PlannerState; up
   const gaps = s.waits.slice(1);
   const uniformGap = gaps.length > 0 && gaps.every((g) => g === gaps[0]) ? gaps[0] : null;
   const inboxes = s.domains * s.inboxesPerDomain;
-  const launch = launchDateFor(s.startDate, s.warmingDays);
+  const launch = launchDateFor(s.startDate);
   const weSource = s.contactsMode === "we_source";
 
   const setEmails = (n: number | null) => update({ waits: withEmailCount(s.waits, n) });
@@ -198,10 +198,12 @@ function CampaignInputs({ state: s, update, history }: { state: PlannerState; up
           each day it sends its full allowance, up to {s.maxDailyCap}/day ({formatInt(inboxes * s.maxDailyCap)}/day in total once warmed).
         </Hint>
         <div className="grid grid-cols-2 gap-3">
-          <DateField label="Buy inboxes on" value={s.startDate} onChange={(v) => update({ startDate: v })} />
-          <NumField label="Warm-up days" value={s.warmingDays} min={0} max={365} integer onChange={(v) => update({ warmingDays: v ?? 0 })} />
+          <DateField label="Inboxes set up on" value={s.startDate} onChange={(v) => update({ startDate: v })} />
         </div>
-        <Hint>First email goes out {formatCivilDate(launch, { weekday: true })} (start + warm-up days, moved to a weekday).</Hint>
+        <Hint>
+          First email goes out {formatCivilDate(launch, { weekday: true })}: inboxes send from the day they&apos;re set up
+          (moved to a weekday). Warm-up is the ramp above, not days without sending.
+        </Hint>
       </Section>
 
       <Section title="What it costs us" icon={<Coins size={14} />}>
@@ -294,7 +296,11 @@ function CampaignInputs({ state: s, update, history }: { state: PlannerState; up
         <summary className="flex cursor-pointer list-none items-center gap-1.5 text-sm font-semibold">
           <Settings2 size={14} /> Sending rules
           <span className="ml-auto text-xs font-normal text-muted-foreground group-open:hidden">
-            {s.strategy === "reach_first" ? "Reach everyone first" : `Finish first, ${s.newLeadsCap} new/day`}
+            {s.strategy === "reach_first"
+              ? "Reach everyone first"
+              : s.newLeadsCap == null
+                ? "Finish first, no new-lead limit"
+                : `Finish first, ${s.newLeadsCap} new/day`}
           </span>
         </summary>
         <div className="mt-3 space-y-3">
@@ -309,7 +315,7 @@ function CampaignInputs({ state: s, update, history }: { state: PlannerState; up
             hint={
               s.strategy === "reach_first"
                 ? "First emails get priority and use full inbox capacity; follow-ups fill in behind."
-                : "Follow-ups get priority; new contacts start at the new-leads cap below."
+                : "Follow-ups get priority; new contacts fill the capacity left over (or up to a limit below)."
             }
           />
           <div className="grid grid-cols-2 gap-3">
@@ -319,8 +325,10 @@ function CampaignInputs({ state: s, update, history }: { state: PlannerState; up
               min={0}
               max={1000}
               integer
-              onChange={(v) => update({ newLeadsCap: v ?? 0 })}
-              hint={s.strategy === "reach_first" ? "Only 0 matters here (pauses)." : "Per campaign. 0 pauses."}
+              nullable
+              placeholder="No limit"
+              onChange={(v) => update({ newLeadsCap: v })}
+              hint={s.strategy === "reach_first" ? "Only 0 matters here (pauses)." : "Per campaign. Empty = no limit; 0 pauses."}
             />
             <NumField
               label="Max per inbox / day"
@@ -601,7 +609,7 @@ function CampaignResults({ state, update, history }: { state: PlannerState; upda
 }
 
 // Plain-language advice from whatIf(): what actually moves the last email.
-function adviceText(a: WhatIf, sim: SimResult, cap: number): string {
+function adviceText(a: WhatIf, sim: SimResult, cap: number | null): string {
   const day = (d: string | null) => formatCivilDate(d, { weekday: true, year: false });
   const now = day(sim.lastSendDate);
   const md = `${a.moreDomains.domains} domains`;

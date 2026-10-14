@@ -24,7 +24,8 @@ export function NativeSequenceSection({
   campaignId: string;
   initialSteps: StepDraft[];
   initialWindow: SendWindowConfig;
-  initialNewLeadsCap: number;
+  /** null = no limit (the default); 0 = new contacts paused. */
+  initialNewLeadsCap: number | null;
   initialStrategy: SendingStrategy;
 }) {
   const [result, setResult] = useState<DeliverabilityResult | null>(null);

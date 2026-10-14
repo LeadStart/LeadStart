@@ -5,11 +5,11 @@
 // and every month's sending is measured with the tick engine, so month 1
 // carries the warm-up ramp instead of a flat average.
 //
-// Month 0 is the stretch before the first email: domains are bought (a year
-// up front) and the inboxes' seats run through the warm-up window. A domain
-// renewal lands in the month a year after purchase, if the horizon reaches it.
+// Warm-up IS the ramp (owner rule, CLAUDE.md): inboxes send from their first
+// day, so there is no idle stretch of paid seats before the first email.
+// Month 0 is just the domains, bought a year up front; a renewal lands in
+// month 13 if the horizon reaches it.
 
-import { AVG_DAYS_PER_MONTH } from "@/lib/deliverability/costs";
 import { fleetContext, type BudgetInput, type BudgetLimit, type FleetContext } from "./budget";
 
 /** Longest horizon the view offers. */
@@ -25,8 +25,6 @@ export interface TimelineInput extends Omit<BudgetInput, "monthlyBudgetUsd"> {
   amountUsd: number;
   /** Months of sending to show; in total mode, also the months the pot is spread over. */
   months: number;
-  /** Days of seats paid before the first email (the warm-up window). */
-  warmingDays: number;
   /** Repliers ÷ contacts emailed, in %. null = no reply projection. */
   replyRatePct: number | null;
   /** Positive replies ÷ replies, in %. */
@@ -34,7 +32,7 @@ export interface TimelineInput extends Omit<BudgetInput, "monthlyBudgetUsd"> {
 }
 
 export interface TimelineRow {
-  /** 0 = before the first email (domains bought, inboxes warming). */
+  /** 0 = before the first email (domains bought). */
   month: number;
   spend: number;
   /** Full sequences' worth (emails ÷ emails per contact), as in the per-month view. */
@@ -68,7 +66,7 @@ export interface TimelinePlan {
   leftover: number;
   costPerContact: number | null;
   costPerPositive: number | null;
-  /** Month 0: domains + warm-up seats. */
+  /** Month 0: the domains. */
   setupCost: number;
 }
 
@@ -80,11 +78,10 @@ export function timelinePlans(
 ): TimelinePlan[] {
   const S = ctx.S;
   const amount = Math.max(0, x.amountUsd || 0);
-  const warmMonths = Math.max(0, x.warmingDays || 0) / AVG_DAYS_PER_MONTH;
   const reply = x.replyRatePct != null && x.replyRatePct >= 0 ? x.replyRatePct / 100 : null;
   const positive = x.positiveRatePct != null && x.positiveRatePct >= 0 ? x.positiveRatePct / 100 : null;
-  // Domains are bought warmMonths before month 1 and renew a year later.
-  const renewalMonth = Math.floor(12 - warmMonths) + 1;
+  // Domains are bought just before month 1 and renew a year later.
+  const renewalMonth = 13;
 
   return horizons.map((h) => {
     const N = Math.min(MAX_TIMELINE_MONTHS, Math.max(1, Math.floor(h) || 1));
@@ -95,10 +92,10 @@ export function timelinePlans(
       // The whole pot must cover the domains (each year started), the seats
       // from purchase to the end, and (when we source) the contacts at their
       // full-use ceiling so it never under-reserves.
-      const years = Math.ceil((N + warmMonths) / 12);
+      const years = Math.ceil(N / 12);
       const totalCost = (inb: number) =>
         ctx.domainsFor(inb) * x.domainUsdPerYear * years +
-        inb * x.seatUsdPerMonth * (N + warmMonths) +
+        inb * x.seatUsdPerMonth * N +
         (x.weSource ? ctx.fullUseContacts(inb) * N * x.sourcingUsdPerContact : 0);
       aff = 0;
       if (!ctx.paused) while (aff < ctx.maxInboxes && totalCost(aff + 1) <= amount) aff++;
@@ -107,7 +104,7 @@ export function timelinePlans(
     const domains = ctx.domainsFor(inboxes);
     const sent = inboxes > 0 ? ctx.measure(inboxes, N) : [];
 
-    const setupCost = domains * x.domainUsdPerYear + inboxes * x.seatUsdPerMonth * warmMonths;
+    const setupCost = domains * x.domainUsdPerYear;
     const rows: TimelineRow[] = [
       {
         month: 0,

@@ -14,6 +14,7 @@ import {
   effectiveDailyCap,
   rampStage,
   resolveDailyNewLeadsCap,
+  newLeadsPaused,
   resolveSendWindow,
   resolveSendingStrategy,
   type SendWindowConfig,
@@ -143,7 +144,8 @@ export interface LiveModel {
   input: CampaignSimInput;
   window: SendWindowConfig;
   strategy: SendingStrategy;
-  newLeadsCap: number;
+  /** null = no limit. */
+  newLeadsCap: number | null;
   today: CivilDate;
   /** Active contacts not emailed yet. */
   firstTouches: number;
@@ -362,7 +364,7 @@ export function projectLiveCampaign(snap: LiveSnapshot): LiveProjection {
       driver: "No active contacts remaining: every enrolled contact has finished, replied, or exited.",
     });
   }
-  if (model.firstTouches > 0 && model.newLeadsCap <= 0) {
+  if (model.firstTouches > 0 && newLeadsPaused(model.newLeadsCap)) {
     return result({
       status: "paused",
       ...none,
@@ -432,7 +434,7 @@ export function projectLiveCampaign(snap: LiveSnapshot): LiveProjection {
     parts.push(`Everyone has a first email by ${formatCivilDate(sim.firstTouchesDoneDate, { year: false })} (${order}).`);
   }
   const busy = Math.round(sim.capacityUsedPct);
-  if (model.firstTouches > 0 && sim.bottleneck === "new_leads_cap") {
+  if (model.firstTouches > 0 && sim.bottleneck === "new_leads_cap" && model.newLeadsCap != null) {
     parts.push(`The ${formatInt(model.newLeadsCap)}/day new-leads cap is the main limit (inboxes ${busy}% busy).`);
   } else if (busy >= 80) {
     parts.push(`Inboxes run ${busy}% busy, so inbox capacity is the main limit.`);

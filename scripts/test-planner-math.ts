@@ -19,7 +19,11 @@ import {
   NATIVE_TICK_MINUTES,
   PER_MAILBOX_PER_TICK,
   SENDS_PER_TICK,
+  newLeadsCapReached,
+  newLeadsPaused,
+  resolveDailyNewLeadsCap,
 } from "../src/lib/gmail/ramp";
+import { parsePlannerState, plannerDefaults, serializePlannerState } from "../src/components/planner/planner-state";
 import { GOOGLE_SEAT_USD_PER_MONTH, SENDING_DOMAIN_USD_PER_YEAR, AVG_DAYS_PER_MONTH } from "../src/lib/deliverability/costs";
 import {
   WARMED_AT,
@@ -167,7 +171,7 @@ const ff = checkLimits("finish_first", {});
 {
   const perDayNew = new Map<string, number>();
   for (const e of ff.events) if (e.step === 0) perDayNew.set(e.date, (perDayNew.get(e.date) ?? 0) + 1);
-  ok(Math.max(...perDayNew.values()) <= BASE.newLeadsCap, `first touches per day ≤ the new-leads cap (${Math.max(...perDayNew.values())})`);
+  ok(Math.max(...perDayNew.values()) <= (BASE.newLeadsCap ?? Infinity), `first touches per day ≤ the new-leads cap (${Math.max(...perDayNew.values())})`);
 }
 console.log("Dispatcher limits (reach_first, 3 domains):");
 const rf = checkLimits("reach_first", { domains: 3, contacts: 2000, strategy: "reach_first" });
@@ -185,10 +189,39 @@ console.log("Weekends and civil dates:");
   ok(fri[1]?.date === "2026-10-23" && fri[1].minute % 1440 === 8 * 60, "a 2-day wait from Wednesday 8:00 sends Friday 8:00");
   const mon = run({ contacts: 1, waits: [0, 3], launchDate: wed }).events;
   ok(mon[1]?.date === "2026-10-26" && mon[1].minute % 1440 === 8 * 60, "a follow-up due Saturday goes Monday 8:00");
-  ok(launchDateFor("2026-10-03", 14) === MONDAY, "Saturday start + 14 days (a Saturday) → launches Monday");
-  ok(launchDateFor("2026-10-02", 0) === "2026-10-02", "Friday start + 0 days → launches that Friday");
+  ok(launchDateFor("2026-10-17") === MONDAY, "Saturday start → first send Monday (no warm-up days: warm-up IS the ramp)");
+  ok(launchDateFor("2026-10-02") === "2026-10-02", "Friday start → first send that Friday");
   ok(addMonths("2026-01-31", 1) === "2026-02-28", "Jan 31 + 1 month → Feb 28");
   ok(addDays("2026-12-31", 1) === "2027-01-01", "Dec 31 + 1 day → Jan 1");
+}
+
+console.log("No new-leads limit (the default since 2026-10-14):");
+{
+  ok(resolveDailyNewLeadsCap({ daily_new_leads_cap: null }) === null, "a campaign with no cap set has no limit (null), not 20");
+  ok(resolveDailyNewLeadsCap({}) === null, "an unset field is no limit too");
+  ok(resolveDailyNewLeadsCap({ daily_new_leads_cap: 0 }) === 0 && resolveDailyNewLeadsCap({ daily_new_leads_cap: 25 }) === 25, "0 and a number come through as set");
+  ok(!newLeadsPaused(null) && newLeadsPaused(0) && !newLeadsPaused(5), "only exactly 0 pauses (null <= 0 is true in JS, so no limit must not read as paused)");
+  ok(!newLeadsCapReached(null, 1_000_000) && newLeadsCapReached(20, 20) && !newLeadsCapReached(20, 19), "no limit is never reached; a number is reached at that count");
+  const free = simulateCampaign({ ...BASE, contacts: 1000, domains: 10, newLeadsCap: null });
+  const capped = simulateCampaign({ ...BASE, contacts: 1000, domains: 10 });
+  ok(free.status === "projected" && (free.lastSendDate ?? "") < (capped.lastSendDate ?? ""), `no limit runs (not paused) and beats 20/day at 10 domains (${free.lastSendDate} vs ${capped.lastSendDate})`);
+  ok(free.bottleneck !== "new_leads_cap", `with no limit the cap is never the bottleneck (${free.bottleneck})`);
+  const firstPerDay = new Map<number, number>();
+  const followDue: number[] = [];
+  const lastAt = new Map<number, number>();
+  simulateCampaign({ ...BASE, contacts: 400, domains: 3, newLeadsCap: null, onSend: (e) => {
+    if (e.step === 0) firstPerDay.set(Math.floor(e.minute / 1440), (firstPerDay.get(Math.floor(e.minute / 1440)) ?? 0) + 1);
+    else followDue.push(e.minute - (lastAt.get(e.contact)! + BASE.waits[e.step] * 1440));
+    lastAt.set(e.contact, e.minute);
+  } });
+  ok(Math.max(...firstPerDay.values()) > 20, `no limit lets more than 20 contacts start on a day (${Math.max(...firstPerDay.values())})`);
+  ok(followDue.every((m) => m >= 0), "no follow-up ever goes before it is due");
+  const d = plannerDefaults("2026-10-14");
+  ok(d.newLeadsCap === null, "the Planner defaults to no new-leads limit");
+  ok(!("warmingDays" in d), "the Planner has no warm-up days (warm-up IS the ramp)");
+  ok(serializePlannerState(d, d) === "", "the default plan writes nothing to the URL");
+  const twenty = parsePlannerState({ cap: "20" }, d);
+  ok(twenty.newLeadsCap === 20 && serializePlannerState(twenty, d) === "cap=20", "a 20/day plan round-trips through the URL");
 }
 
 console.log("Domains vs the new-leads cap:");
@@ -198,7 +231,8 @@ console.log("Domains vs the new-leads cap:");
   ok(ten.bottleneck === "new_leads_cap", `10 domains at cap 20/day → the cap is the bottleneck`);
   ok(ten.lastSendDate === twenty.lastSendDate, `20 domains finish the same day as 10 (${ten.lastSendDate})`);
   const sweep = capSweep({ ...BASE, contacts: 1000, domains: 10 });
-  ok(sweep.length === 4 && (sweep[1].lastSendDate ?? "") < (sweep[0].lastSendDate ?? ""), "doubling the cap finishes sooner");
+  ok(sweep.length === 5 && (sweep[1].lastSendDate ?? "") < (sweep[0].lastSendDate ?? ""), "doubling the cap finishes sooner");
+  ok(sweep[3].newLeadsCap === null && (sweep[3].lastSendDate ?? "") <= (sweep[2].lastSendDate ?? ""), "the sweep shows no limit, finishing no later than 3× the cap");
   // The advice is counterfactual: it says "domains won't help" only when they don't.
   const oneIn = { ...BASE, contacts: 1000, domains: 1 };
   const oneSim = simulateCampaign(oneIn);

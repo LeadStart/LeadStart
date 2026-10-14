@@ -3,8 +3,6 @@
 // timezone. The planner page renders on the server and again in the browser,
 // and both must print the same dates.
 
-import { computeLaunchDate } from "@/lib/billing/schedule";
-
 export type CivilDate = string; // "YYYY-MM-DD"
 
 const CIVIL_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
@@ -71,16 +69,15 @@ export function addMonths(s: CivilDate, k: number): CivilDate {
 }
 
 /**
- * Launch day for inboxes bought on `start`: the real quote-schedule rule
- * (computeLaunchDate: start + warm-up days, rolled to the next weekday). A Date
- * built from local parts and read back with local getters gives the same civil
- * answer in every runtime timezone.
+ * First sending day for inboxes set up on `start`: that day, or the next
+ * weekday when it falls on a weekend. Warm-up IS the ramp (owner rule,
+ * CLAUDE.md), so no warm-up days are added: a new inbox sends from day 1.
  */
-export function launchDateFor(start: CivilDate, warmingDays: number): CivilDate {
-  const p = parseCivil(start);
-  if (!p) throw new Error(`Not a YYYY-MM-DD date: ${start}`);
-  const launch = computeLaunchDate(new Date(p.y, p.m - 1, p.d), warmingDays);
-  return `${launch.getFullYear()}-${pad(launch.getMonth() + 1)}-${pad(launch.getDate())}`;
+export function launchDateFor(start: CivilDate): CivilDate {
+  if (!parseCivil(start)) throw new Error(`Not a YYYY-MM-DD date: ${start}`);
+  let d = start;
+  while (isWeekend(d)) d = addDays(d, 1);
+  return d;
 }
 
 /** Today's civil date in an IANA timezone (the planner uses the send window's). */

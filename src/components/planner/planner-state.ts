@@ -4,13 +4,11 @@
 // so links stay short and pick up a changed constant automatically.
 
 import {
-  DEFAULT_DAILY_NEW_LEADS_CAP,
   DEFAULT_MAX_DAILY_CAP,
   DEFAULT_SENDING_STRATEGY,
   ABSOLUTE_MAX_DAILY_CAP,
   SEND_WINDOW,
 } from "@/lib/gmail/ramp";
-import { DEFAULT_WARMING_DAYS } from "@/lib/billing/schedule";
 import { MAX_INBOXES_PER_DOMAIN } from "@/lib/deliverability/provisioning";
 import { DRAIN_DAYS } from "@/lib/deliverability/lifecycle";
 import { GOOGLE_SEAT_USD_PER_MONTH, SENDING_DOMAIN_USD_PER_YEAR } from "@/lib/deliverability/costs";
@@ -41,8 +39,8 @@ export interface PlannerState {
   // Sending infrastructure and timeline
   domains: number;
   inboxesPerDomain: number;
+  /** The day the inboxes are set up; they send from it (warm-up IS the ramp). */
   startDate: CivilDate;
-  warmingDays: number;
   // Our costs
   sourcingUsd: number;
   seatUsd: number;
@@ -61,7 +59,8 @@ export interface PlannerState {
   positiveRatePct: number | null;
   // Sending rules (Advanced)
   strategy: SendingStrategy;
-  newLeadsCap: number;
+  /** null = no limit (the campaign default). */
+  newLeadsCap: number | null;
   maxDailyCap: number;
   startHour: number;
   endHour: number;
@@ -98,7 +97,6 @@ export function plannerDefaults(today: CivilDate): PlannerState {
     domains: 1,
     inboxesPerDomain: MAX_INBOXES_PER_DOMAIN,
     startDate: today,
-    warmingDays: DEFAULT_WARMING_DAYS,
     sourcingUsd: PLANNER_DEFAULT_SOURCING_USD,
     seatUsd: GOOGLE_SEAT_USD_PER_MONTH,
     domainUsd: SENDING_DOMAIN_USD_PER_YEAR,
@@ -113,7 +111,7 @@ export function plannerDefaults(today: CivilDate): PlannerState {
     replyRatePct: null,
     positiveRatePct: null,
     strategy: DEFAULT_SENDING_STRATEGY,
-    newLeadsCap: DEFAULT_DAILY_NEW_LEADS_CAP,
+    newLeadsCap: null,
     maxDailyCap: DEFAULT_MAX_DAILY_CAP,
     startHour: SEND_WINDOW.startHour,
     endHour: SEND_WINDOW.endHour,
@@ -154,7 +152,6 @@ const NUMS: Partial<Record<keyof PlannerState, Num>> = {
   sendablePct: { key: "sp", min: 0, max: 100 },
   domains: { key: "d", min: 1, max: MAX_PLANNED_DOMAINS, int: true },
   inboxesPerDomain: { key: "ipd", min: 1, max: MAX_INBOXES_PER_DOMAIN, int: true },
-  warmingDays: { key: "wd", min: 0, max: 365, int: true },
   sourcingUsd: { key: "sc", min: 0, max: 100 },
   seatUsd: { key: "seat", min: 0, max: 1000 },
   domainUsd: { key: "dom", min: 0, max: 1000 },
@@ -179,7 +176,7 @@ const NUMS: Partial<Record<keyof PlannerState, Num>> = {
   totalBudgetUsd: { key: "tb", min: 0, max: 10_000_000 },
   horizonMonths: { key: "hm", min: 1, max: MAX_TIMELINE_MONTHS, int: true },
 };
-const NULLABLE = new Set<keyof PlannerState>(["chargesOverride", "replyRatePct", "positiveRatePct", "domainDailyCap"]);
+const NULLABLE = new Set<keyof PlannerState>(["chargesOverride", "replyRatePct", "positiveRatePct", "domainDailyCap", "newLeadsCap"]);
 
 export type RawParams = Record<string, string | string[] | undefined>;
 

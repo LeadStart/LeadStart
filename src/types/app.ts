@@ -146,7 +146,8 @@ export interface ClientUser {
 
 // How a native campaign spends its fixed daily send budget between brand-new
 // first-touches and follow-ups (migration 00066). 'finish_first' (default)
-// prioritizes follow-ups + throttles new leads by daily_new_leads_cap;
+// prioritizes follow-ups (new leads fill the capacity left, up to
+// daily_new_leads_cap when one is set);
 // 'reach_first' prioritizes new first-touches and lets them use full warmed
 // inbox capacity. Resolved against DEFAULT_SENDING_STRATEGY in src/lib/gmail/ramp.ts.
 export type SendingStrategy = "finish_first" | "reach_first";
@@ -176,9 +177,10 @@ export interface Campaign {
   send_start_hour: number | null;
   send_end_hour: number | null;
   send_weekdays_only: boolean | null;
-  // Per-campaign cap on new leads (step-0 first-touches) started per day
-  // (migration 00064). NULL = inherit DEFAULT_DAILY_NEW_LEADS_CAP; 0 pauses new
-  // leads while follow-ups keep flowing. Follow-ups are never limited by this.
+  // Per-campaign limit on new leads (step-0 first-touches) started per day
+  // (migration 00064). NULL = no limit (the default since 2026-10-14); a number
+  // throttles first touches under finish_first; 0 pauses new leads while
+  // follow-ups keep flowing. Follow-ups are never limited by this.
   daily_new_leads_cap: number | null;
   // How the send worker allocates the day's budget between new first-touches and
   // follow-ups (migration 00066). NULL = inherit DEFAULT_SENDING_STRATEGY

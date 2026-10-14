@@ -41,6 +41,8 @@ import {
   resolveSendWindow,
   startOfLocalDay,
   resolveDailyNewLeadsCap,
+  newLeadsPaused,
+  newLeadsCapReached,
   resolveSendingStrategy,
   minutesUntilWindowClose,
   sendSpacingMinutes,
@@ -1128,10 +1130,10 @@ export async function GET(request: NextRequest) {
     // Per-campaign new-leads/day gate for the first touch (identical to linear).
     if (isFirst) {
       const newLeadCap = resolveDailyNewLeadsCap(campaign);
-      if (newLeadCap <= 0) return { result: "new_leads_paused" };
+      if (newLeadsPaused(newLeadCap)) return { result: "new_leads_paused" };
       if (resolveSendingStrategy(campaign) === "finish_first") {
         const usedNewLeads = (newLeadsToday[campaign.id] ?? 0) + (newLeadsInTick[campaign.id] ?? 0);
-        if (usedNewLeads >= newLeadCap) return { result: "new_leads_cap_reached" };
+        if (newLeadsCapReached(newLeadCap, usedNewLeads)) return { result: "new_leads_cap_reached" };
       }
     }
 
@@ -1373,21 +1375,22 @@ export async function GET(request: NextRequest) {
     }
 
     // Per-campaign new-leads/day gate for step-0 first-touches. A cap of 0
-    // pauses new leads in BOTH strategies (an explicit off switch). Under
-    // finish_first the numeric cap throttles the daily first-touch rate; under
-    // reach_first the cap is NOT a rate limit: first-touches use full warmed
-    // inbox capacity, still bounded by the per-mailbox ceiling in eligible().
-    // Follow-ups (step 1+) are never gated here. Leaves the enrollment active to
-    // retry once the day's count resets.
+    // pauses new leads in BOTH strategies (an explicit off switch). No cap
+    // (NULL, the default) lets first touches fill whatever capacity the
+    // follow-ups leave. Under finish_first a numeric cap throttles the daily
+    // first-touch rate; under reach_first the cap is NOT a rate limit:
+    // first-touches use full warmed inbox capacity, still bounded by the
+    // per-mailbox ceiling in eligible(). Follow-ups (step 1+) are never gated
+    // here. Leaves the enrollment active to retry once the day's count resets.
     if (enrollment.current_step_index === 0) {
       const newLeadCap = resolveDailyNewLeadsCap(campaign);
-      if (newLeadCap <= 0) {
+      if (newLeadsPaused(newLeadCap)) {
         results.push({ enrollment_id: enrollment.id, result: "new_leads_paused" });
         continue;
       }
       if (resolveSendingStrategy(campaign) === "finish_first") {
         const usedNewLeads = (newLeadsToday[campaign.id] ?? 0) + (newLeadsInTick[campaign.id] ?? 0);
-        if (usedNewLeads >= newLeadCap) {
+        if (newLeadsCapReached(newLeadCap, usedNewLeads)) {
           results.push({ enrollment_id: enrollment.id, result: "new_leads_cap_reached" });
           continue;
         }

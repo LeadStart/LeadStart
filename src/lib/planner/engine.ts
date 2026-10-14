@@ -11,7 +11,7 @@
 //     send per inbox per tick (PER_MAILBOX_PER_TICK)
 //   - each inbox's day cap from its cumulative sends at the start of the ET day
 //     (effectiveDailyCap) and the spacing gate (sendSpacingMinutes)
-//   - the per-campaign new-leads/day gate (finish_first only; 0 pauses both)
+//   - the per-campaign new-leads/day gate (finish_first only; null = no limit; 0 pauses both)
 //   - sticky follow-ups, and first touches to the least-loaded inbox
 //   - waits measured from the previous send, in calendar days
 // The same replay also runs a campaign that is already sending (`live`): it
@@ -30,6 +30,8 @@ import {
   RAMP_STAGES,
   SENDS_PER_TICK,
   effectiveDailyCap,
+  newLeadsCapReached,
+  newLeadsPaused,
   sendSpacingMinutes,
   type RampMailbox,
 } from "@/lib/gmail/ramp";
@@ -126,8 +128,8 @@ export interface CampaignSimInput {
   /** Per-inbox ceiling (native_mailboxes.max_daily_cap). */
   maxDailyCap: number;
   strategy: SendingStrategy;
-  /** daily_new_leads_cap: throttles first touches under finish_first; 0 pauses both. */
-  newLeadsCap: number;
+  /** daily_new_leads_cap: null = no limit (default); a number throttles first touches under finish_first; 0 pauses both. */
+  newLeadsCap: number | null;
   weekdaysOnly: boolean;
   /** Send window in the campaign's timezone: start inclusive, end exclusive. */
   startHour: number;
@@ -278,7 +280,7 @@ export function sanitizeSimInput(x: CampaignSimInput): CampaignSimInput {
     inboxesPerDomain: clampInt(x.inboxesPerDomain, MAX_INBOXES_PER_DOMAIN, 1, MAX_INBOXES_PER_DOMAIN),
     maxDailyCap: clampInt(x.maxDailyCap, ABSOLUTE_MAX_DAILY_CAP, 1, ABSOLUTE_MAX_DAILY_CAP),
     strategy: x.strategy === "reach_first" ? "reach_first" : "finish_first",
-    newLeadsCap: clampInt(x.newLeadsCap, 0, 0, 1000),
+    newLeadsCap: x.newLeadsCap == null ? null : clampInt(x.newLeadsCap, 0, 0, 1000),
     weekdaysOnly: x.weekdaysOnly !== false,
     startHour,
     endHour,
@@ -344,7 +346,7 @@ export function simulateCampaign(raw: CampaignSimInput): SimResult {
   let stuckRows = 0;
   for (const r of live?.rows ?? []) {
     const usable =
-      (r.inbox >= 0 ? sends[r.inbox] === 1 : anyTakesNew) && !(r.step === 0 && input.newLeadsCap <= 0);
+      (r.inbox >= 0 ? sends[r.inbox] === 1 : anyTakesNew) && !(r.step === 0 && newLeadsPaused(input.newLeadsCap));
     if (usable) liveRows.push(r);
     else if (r.step < S) stuckRows++;
   }
@@ -358,7 +360,7 @@ export function simulateCampaign(raw: CampaignSimInput): SimResult {
   }
   // Queued first touches never start at a cap of 0; a live campaign with none
   // queued still sends its follow-ups (the cap never gates them).
-  if (input.newLeadsCap <= 0 && input.contacts > 0) {
+  if (newLeadsPaused(input.newLeadsCap) && input.contacts > 0) {
     return {
       ...base,
       status: "paused",
@@ -605,7 +607,7 @@ export function simulateCampaign(raw: CampaignSimInput): SimResult {
           // A live row that never had an email (a flow node ran first) is still
           // a first touch: the new-leads gate applies to it (route.ts isFirst).
           const first = rowStep[r] === 0;
-          if (first && finishFirst && newToday >= input.newLeadsCap) continue;
+          if (first && finishFirst && newLeadsCapReached(input.newLeadsCap, newToday)) continue;
           const mb = rowInbox[r] >= 0 ? rowInbox[r] : pickInbox();
           if (mb < 0 || !eligible(mb)) continue; // sticky inbox busy: the row waits
           send(r, mb);
@@ -622,7 +624,7 @@ export function simulateCampaign(raw: CampaignSimInput): SimResult {
       const runNewLeads = () => {
         for (let k = 0; k < newFetched; k++) {
           if (sent >= budget) return;
-          if (finishFirst && newToday >= input.newLeadsCap) return;
+          if (finishFirst && newLeadsCapReached(input.newLeadsCap, newToday)) return;
           const pick = pickInbox();
           if (pick < 0) return;
           const r = rows++;
@@ -655,7 +657,7 @@ export function simulateCampaign(raw: CampaignSimInput): SimResult {
       ? newRemaining > 0 && (!firstDue || firstDue[input.contacts - newRemaining] < dayBase + windowEnd)
       : newRemaining > 0 && dayBase + windowEnd > input.waits[0] * 1440;
     if (waitingToday) {
-      newLeadsLimit = finishFirst && newToday >= input.newLeadsCap ? "cap" : "capacity";
+      newLeadsLimit = finishFirst && newLeadsCapReached(input.newLeadsCap, newToday) ? "cap" : "capacity";
     }
     days.push({ date, sendDay, capacity, firstTouches: dayFirst, followUps: dayFollow, warmedInboxes: warmed, newLeadsLimit });
     if (dayFirst + dayFollow > 0) {
@@ -763,7 +765,7 @@ export function solveDomains(input: CampaignSimInput, finishBy: CivilDate): Doma
         result: r,
         reason:
           r.bottleneck === "new_leads_cap"
-            ? `Not reachable by adding domains: at ${d} domains the new-leads cap (${x.newLeadsCap}/day) is the limit and the last email still goes out ${formatCivilDate(r.lastSendDate, { weekday: true })}. Raise the cap or switch to "Reach everyone first".`
+            ? `Not reachable by adding domains: at ${d} domains the new-leads cap (${x.newLeadsCap}/day) is the limit and the last email still goes out ${formatCivilDate(r.lastSendDate, { weekday: true })}. Raise the cap or remove it (no limit).`
             : `Not reachable by adding domains: at ${d} domains the gaps between emails set the finish (${formatCivilDate(r.lastSendDate, { weekday: true })}). Shorten the sequence or start sooner.`,
       };
     }
@@ -777,7 +779,7 @@ export interface WhatIf {
   limit: Limit;
   /** The same plan on twice the domains. */
   moreDomains: { domains: number; lastSendDate: CivilDate | null };
-  /** The same plan at twice the new-leads cap (finish_first only). */
+  /** The same plan at twice the new-leads cap (finish_first with a cap only). */
   higherCap: { newLeadsCap: number; lastSendDate: CivilDate | null } | null;
 }
 
@@ -792,35 +794,50 @@ export function whatIf(input: CampaignSimInput, base: SimResult): WhatIf | null 
   const x = sanitizeSimInput({ ...input, onSend: undefined });
   const doubled = Math.min(MAX_PLANNED_DOMAINS, x.domains * 2);
   const md = doubled > x.domains ? simulateCampaign({ ...x, domains: doubled }) : base;
-  const hc = x.strategy === "finish_first" ? simulateCampaign({ ...x, newLeadsCap: x.newLeadsCap * 2 }) : null;
+  const cap = x.newLeadsCap;
+  const hc = x.strategy === "finish_first" && cap != null ? simulateCampaign({ ...x, newLeadsCap: cap * 2 }) : null;
   const domainsHelp = md.lastSendDate != null && md.lastSendDate < base.lastSendDate;
   const capHelps = hc?.lastSendDate != null && hc.lastSendDate < base.lastSendDate;
   return {
     limit: domainsHelp && capHelps ? "both" : domainsHelp ? "capacity" : capHelps ? "new_leads_cap" : "sequence",
     moreDomains: { domains: doubled, lastSendDate: md.lastSendDate },
-    higherCap: hc ? { newLeadsCap: x.newLeadsCap * 2, lastSendDate: hc.lastSendDate } : null,
+    higherCap: hc && cap != null ? { newLeadsCap: cap * 2, lastSendDate: hc.lastSendDate } : null,
   };
 }
 
 export interface CapSweepRow {
   label: string;
   strategy: SendingStrategy;
-  newLeadsCap: number;
+  newLeadsCap: number | null;
   lastSendDate: CivilDate | null;
   sendDays: number;
   status: SimStatus;
 }
 
-/** "What if the cap were higher?": the plan re-run at 2× and 3× the cap, and as reach_first. */
+/**
+ * "What if the cap were different?": with a cap, the plan re-run at 2× and 3×
+ * the cap, with no limit, and as reach_first; with no limit, the plan against
+ * 20 and 40 a day and reach_first.
+ */
 export function capSweep(input: CampaignSimInput): CapSweepRow[] {
   const x = sanitizeSimInput(input);
-  const cap = Math.max(1, x.newLeadsCap);
-  const runs: { label: string; strategy: SendingStrategy; newLeadsCap: number }[] = [
-    { label: `Finish first, ${cap}/day`, strategy: "finish_first", newLeadsCap: cap },
-    { label: `Finish first, ${cap * 2}/day`, strategy: "finish_first", newLeadsCap: cap * 2 },
-    { label: `Finish first, ${cap * 3}/day`, strategy: "finish_first", newLeadsCap: cap * 3 },
-    { label: "Reach everyone first", strategy: "reach_first", newLeadsCap: cap },
-  ];
+  const runs: { label: string; strategy: SendingStrategy; newLeadsCap: number | null }[] = [];
+  if (x.newLeadsCap == null) {
+    runs.push(
+      { label: "Finish first, no limit", strategy: "finish_first", newLeadsCap: null },
+      { label: "Finish first, 20/day", strategy: "finish_first", newLeadsCap: 20 },
+      { label: "Finish first, 40/day", strategy: "finish_first", newLeadsCap: 40 },
+    );
+  } else {
+    const cap = Math.max(1, x.newLeadsCap);
+    runs.push(
+      { label: `Finish first, ${cap}/day`, strategy: "finish_first", newLeadsCap: cap },
+      { label: `Finish first, ${cap * 2}/day`, strategy: "finish_first", newLeadsCap: cap * 2 },
+      { label: `Finish first, ${cap * 3}/day`, strategy: "finish_first", newLeadsCap: cap * 3 },
+      { label: "Finish first, no limit", strategy: "finish_first", newLeadsCap: null },
+    );
+  }
+  runs.push({ label: "Reach everyone first", strategy: "reach_first", newLeadsCap: null });
   return runs.map((run) => {
     const r = simulateCampaign({ ...x, strategy: run.strategy, newLeadsCap: run.newLeadsCap });
     return { ...run, lastSendDate: r.lastSendDate, sendDays: r.sendDays, status: r.status };
