@@ -14,6 +14,13 @@ Also run `npm install` if `package.json` changed in the pull.
 
 Do not skip this even if the session appears to be a continuation — a different machine or session may have pushed since.
 
+# 🔴 CARDINAL RULE: warm-up IS the ramp — a new inbox sends from day 1 (owner, 2026-10-14)
+Daniel, 2026-10-14: "Warm up does not mean dont send for 14 days. warm up IS ramping."
+- **There is no idle warm-up period.** A new inbox sends cold email on its first day. Warm-up *is* the per-inbox ramp in `src/lib/gmail/ramp.ts` (`RAMP_STAGES`): 5 sends on day 1, then +1 per sending day up to 20/day (`ABSOLUTE_MAX_DAILY_CAP`). There is no warmup pool either, on purpose.
+- **Capacity = inboxes × that day's ramp cap.** 9 inboxes send 45 on day 1, 54 on day 2 … 171 on day 15, then **180/day at full swing**. Never put a no-send gap into a timeline, a finish date or a cost.
+- **Finish dates:** replay the sender with `simulateCampaign` (`src/lib/planner/engine.ts`), `launchDate` = the first weekday the inboxes are connected (`launchDateFor(start)`), with no warm-up days added. Also state the campaign's `daily_new_leads_cap`: NULL = no limit (the default since 2026-10-14), a number throttles first touches under `finish_first`, 0 pauses them. "Finish the sequence first" is what keeps follow-ups on time, not the cap.
+- **Known conflict, not yet fixed:** `DEFAULT_WARMING_DAYS = 14` (`src/lib/billing/schedule.ts`) still sets the billing quote's launch / first-charge date and the client-facing "launch after 14 calendar days" copy (quote page, welcome page, signup emails). That is a billing decision pending the owner; never use it for a send timeline.
+
 # CRITICAL: Prospecting/enrichment flow — read the doc, don't reason from memory
 Both prospecting veins (Maps + LinkedIn) and the shared enrichment engine are
 documented canonically, with `file:line` citations and verified actor costs, in
