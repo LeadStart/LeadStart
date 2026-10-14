@@ -98,7 +98,11 @@ function MonthlyBudget({ state, update }: { state: PlannerState; update: Update 
           <Hint>
             Uses the Campaign tab&apos;s sequence and sending rules: {s.waits.length} email{s.waits.length === 1 ? "" : "s"} per contact
             {gaps.length > 0 ? ` (${gaps.join(" and ")} days apart)` : ""},{" "}
-            {s.strategy === "reach_first" ? "reach everyone first" : `finish first at ${s.newLeadsCap} new contacts/day per campaign`},
+            {s.strategy === "reach_first"
+              ? "reach everyone first"
+              : s.newLeadsCap == null
+                ? "finish first with no limit on new contacts a day"
+                : `finish first at ${s.newLeadsCap} new contacts/day per campaign`},
             up to {s.maxDailyCap}/day per inbox, {s.inboxesPerDomain} inbox{s.inboxesPerDomain === 1 ? "" : "es"} per domain, seats at{" "}
             {formatUsd(s.seatUsd, { cents: true })}/mo and domains at {formatUsd(s.domainUsd, { cents: true })}/yr.
           </Hint>
@@ -131,7 +135,7 @@ function BudgetResults({ state, update }: { state: PlannerState; update: Update 
       seatUsdPerMonth: s.seatUsd,
       domainUsdPerYear: s.domainUsd,
       otherSendsPerDay: s.otherSendsPerDay,
-      launchDate: launchDateFor(s.startDate, s.warmingDays),
+      launchDate: launchDateFor(s.startDate),
     }),
     [s],
   );

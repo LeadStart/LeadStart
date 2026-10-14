@@ -95,7 +95,7 @@ function TimelineInputs({ state: s, update, history }: { state: PlannerState; up
         <Hint>
           {total
             ? "The pot pays for everything: domains, inbox seats from purchase to the last month, and contacts."
-            : "Monthly means recurring spend. The one-time setup (domains, paid a year up front, and the inboxes' warm-up weeks) shows on its own line."}
+            : "Monthly means recurring spend. The one-time setup (domains, paid a year up front) shows on its own line. Inboxes send from day one: warm-up is the ramp."}
         </Hint>
       </Section>
 
@@ -133,8 +133,10 @@ function TimelineInputs({ state: s, update, history }: { state: PlannerState; up
             min={0}
             max={1000}
             integer
-            onChange={(v) => update({ newLeadsCap: v ?? 0 })}
-            hint={s.strategy === "reach_first" ? "Only 0 matters under reach-first." : "Per campaign."}
+            nullable
+            placeholder="No limit"
+            onChange={(v) => update({ newLeadsCap: v })}
+            hint={s.strategy === "reach_first" ? "Only 0 matters under reach-first." : "Per campaign. Empty = no limit."}
           />
           <NumField label="Campaigns" value={s.campaigns} min={1} max={100} integer onChange={(v) => update({ campaigns: v ?? 1 })} />
           <NumField
@@ -156,14 +158,6 @@ function TimelineInputs({ state: s, update, history }: { state: PlannerState; up
             min={0}
             max={100}
             onChange={(v) => update({ positiveRatePct: v })}
-          />
-          <NumField
-            label="Warm-up days"
-            value={s.warmingDays}
-            min={0}
-            max={365}
-            integer
-            onChange={(v) => update({ warmingDays: v ?? 0 })}
           />
         </div>
         <Hint>
@@ -189,7 +183,6 @@ function TimelineResults({ state, update, history }: { state: PlannerState; upda
       budgetMode: s.budgetMode,
       amountUsd: s.budgetMode === "total" ? s.totalBudgetUsd : s.budgetUsd,
       months: s.horizonMonths,
-      warmingDays: s.warmingDays,
       replyRatePct: s.replyRatePct ?? history?.replyRatePct ?? null,
       positiveRatePct: s.positiveRatePct ?? history?.positiveRatePct ?? null,
       waits: s.waits,
@@ -206,7 +199,7 @@ function TimelineResults({ state, update, history }: { state: PlannerState; upda
       seatUsdPerMonth: s.seatUsd,
       domainUsdPerYear: s.domainUsd,
       otherSendsPerDay: s.otherSendsPerDay,
-      launchDate: launchDateFor(s.startDate, s.warmingDays),
+      launchDate: launchDateFor(s.startDate),
     }),
     [s, history],
   );
@@ -264,8 +257,8 @@ function TimelineResults({ state, update, history }: { state: PlannerState; upda
                 <TableRow key={r.month}>
                   <TableCell className="whitespace-normal">
                     <p className="text-sm">{r.month === 0 ? "Before sending" : `Month ${r.month}`}</p>
-                    {r.month === 0 && <p className="text-[11px] text-muted-foreground">Domains + {s.warmingDays} days of seats</p>}
-                    {r.month === 1 && <p className="text-[11px] text-muted-foreground">Inboxes still warming up</p>}
+                    {r.month === 0 && <p className="text-[11px] text-muted-foreground">Domains</p>}
+                    {r.month === 1 && <p className="text-[11px] text-muted-foreground">Inboxes ramping up</p>}
                     {r.renewal && <p className="text-[11px] text-muted-foreground">Domains renew</p>}
                   </TableCell>
                   <TableCell className="text-right align-top tabular-nums">{formatUsd(r.spend)}</TableCell>
@@ -396,7 +389,7 @@ function PlanCallout({ plan, state: s }: { plan: TimelinePlan; state: PlannerSta
           but {s.campaigns} campaign{s.campaigns === 1 ? "" : "s"} starting {s.newLeadsCap} new contacts a day only fill {fleet}
           {setup}. {formatUsd(plan.leftover)} of it goes unspent over {span}.
         </p>
-        <p className="text-xs opacity-80">Raise the cap (campaign Setup), switch to &quot;Reach everyone first&quot;, or run more campaigns to use it.</p>
+        <p className="text-xs opacity-80">Raise or remove the cap (campaign Schedule), or run more campaigns to use it.</p>
       </Callout>
     );
   }

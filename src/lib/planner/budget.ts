@@ -35,8 +35,8 @@ export interface BudgetInput {
   /** Campaigns sharing this budget; each has its own new-leads cap. */
   campaigns: number;
   strategy: SendingStrategy;
-  /** Per campaign. */
-  newLeadsCap: number;
+  /** Per campaign; null = no limit. */
+  newLeadsCap: number | null;
   weekdaysOnly: boolean;
   startHour: number;
   endHour: number;
@@ -145,14 +145,15 @@ export function fleetContext(x: BudgetInput): FleetContext {
   const campaigns = Math.max(1, Math.floor(x.campaigns) || 1);
   const maxCap = Math.min(ABSOLUTE_MAX_DAILY_CAP, Math.max(1, Math.floor(x.maxDailyCap) || 1));
   const sdpm = sendDaysPerMonth(x.weekdaysOnly);
-  const paused = x.newLeadsCap <= 0;
+  const paused = x.newLeadsCap === 0;
+  const capped = x.strategy === "finish_first" && x.newLeadsCap != null;
   const ceiling = Math.max(0, platformCeilingPerDay(x.startHour, x.endHour) - Math.max(0, x.otherSendsPerDay));
   const maxInboxes = MAX_PLANNED_DOMAINS * ipd;
 
   // Full-use contact ceiling per month: capacity ÷ emails per contact, capped
   // by the campaigns' new-leads caps under finish_first.
   const capMonthly =
-    paused ? 0 : x.strategy === "finish_first" ? campaigns * x.newLeadsCap * sdpm : Infinity;
+    paused ? 0 : capped ? campaigns * (x.newLeadsCap ?? 0) * sdpm : Infinity;
   const fullUseContacts = (inb: number) => Math.min((inb * maxCap * sdpm) / S, capMonthly, (ceiling * sdpm) / S);
   const usableSendsPerDay = Math.min((capMonthly / sdpm) * S, ceiling);
   const domainsFor = (inb: number) => Math.ceil(inb / ipd);
@@ -183,7 +184,7 @@ export function fleetContext(x: BudgetInput): FleetContext {
         maxDailyCap: maxCap,
         strategy: x.strategy,
         // Campaigns are pooled: N campaigns at cap C start ≈ one at N×C.
-        newLeadsCap: x.newLeadsCap * campaigns,
+        newLeadsCap: x.newLeadsCap == null ? null : x.newLeadsCap * campaigns,
         weekdaysOnly: x.weekdaysOnly,
         startHour: x.startHour,
         endHour: x.endHour,
@@ -223,7 +224,7 @@ export function fleetContext(x: BudgetInput): FleetContext {
   const limitFor = (inboxes: number, aff: number): BudgetLimit => {
     if (paused) return "paused";
     if (inboxes >= aff) return "budget";
-    const capPerDaySends = x.strategy === "finish_first" ? campaigns * x.newLeadsCap * S : Infinity;
+    const capPerDaySends = capped ? campaigns * (x.newLeadsCap ?? 0) * S : Infinity;
     return capPerDaySends < ceiling ? "new_leads_cap" : "platform";
   };
 

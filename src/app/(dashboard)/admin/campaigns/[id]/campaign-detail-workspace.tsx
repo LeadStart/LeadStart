@@ -53,6 +53,7 @@ import type { AbNodeStats } from "@/lib/flow/variants";
 import { NativeImportPanel } from "@/components/campaigns/native-import-panel";
 import { CrmPullPanel } from "@/components/campaigns/crm-pull-panel";
 import { CampaignProbeCard } from "@/components/campaigns/campaign-probe-card";
+import { NewLeadsControl } from "@/components/campaigns/new-leads-control";
 import { CampaignLifecycleButton } from "./campaign-lifecycle-button";
 import { CampaignContactsCard, type CampaignContactRow } from "./campaign-contacts-card";
 import { StageFlowCard, type StageRow } from "./stage-flow-card";
@@ -146,7 +147,8 @@ export function CampaignDetailWorkspace({
   contactsMissing: boolean;
   initialGraph: FlowGraph;
   initialWindow: SendWindowConfig;
-  initialNewLeadsCap: number;
+  /** null = no limit (the default); 0 = new contacts paused. */
+  initialNewLeadsCap: number | null;
   initialStrategy: SendingStrategy;
   initialAbAutoPauseDefault: boolean;
   initialVerifyBeforeSend: boolean;
@@ -171,7 +173,7 @@ export function CampaignDetailWorkspace({
   const [tab, setTab] = useState("sequence");
   const [graph, setGraph] = useState<FlowGraph>(initialGraph);
   const [win, setWin] = useState<SendWindowConfig>(initialWindow);
-  const [newLeadsCap, setNewLeadsCap] = useState<number>(initialNewLeadsCap);
+  const [newLeadsCap, setNewLeadsCap] = useState<number | null>(initialNewLeadsCap);
   const [strategy, setStrategy] = useState<SendingStrategy>(initialStrategy);
   const [abAutoPauseDefault, setAbAutoPauseDefault] = useState<boolean>(initialAbAutoPauseDefault);
   const [saving, setSaving] = useState(false);
@@ -583,22 +585,7 @@ export function CampaignDetailWorkspace({
                   </label>
                 </div>
               </div>
-              <div className="flex items-end gap-3 pt-1">
-                <div className="w-32 shrink-0 space-y-1">
-                  <label className="text-xs font-medium text-secondary-foreground">New leads / day</label>
-                  <input
-                    type="number"
-                    min={0}
-                    max={1000}
-                    value={newLeadsCap}
-                    onChange={(e) =>
-                      setNewLeadsCap(Math.max(0, Math.min(1000, Math.floor(Number(e.target.value) || 0))))
-                    }
-                    className="w-full rounded-md border border-border/60 bg-background px-2 py-1.5 text-sm"
-                  />
-                </div>
-                <p className="pb-2 text-[11px] text-muted-foreground">{formatSendWindow(win)}</p>
-              </div>
+              <p className="pt-1 text-[11px] text-muted-foreground">{formatSendWindow(win)}</p>
             </div>
 
             <div className="space-y-3 rounded-xl border border-border/60 p-4">
@@ -610,15 +597,16 @@ export function CampaignDetailWorkspace({
                   active={strategy === "finish_first"}
                   onClick={() => setStrategy("finish_first")}
                   title="Finish the sequence first"
-                  desc="Follow-ups get priority; new leads drip in at the cap. Steady and predictable: slower reach."
+                  desc="Recommended. Due follow-ups always send before new contacts, so everyone gets each email on schedule; new contacts fill the capacity left."
                 />
                 <StrategyOption
                   active={strategy === "reach_first"}
                   onClick={() => setStrategy("reach_first")}
                   title="Reach everyone first"
-                  desc="First-touches get priority and use full inbox capacity. Email #1 reaches the whole list fast."
+                  desc="Email #1 goes before follow-ups and uses full inbox capacity, so it reaches the whole list fast, but follow-ups can run days late."
                 />
               </div>
+              <NewLeadsControl value={newLeadsCap} onChange={setNewLeadsCap} strategy={strategy} />
             </div>
 
             <div className="space-y-3 rounded-xl border border-border/60 p-4">

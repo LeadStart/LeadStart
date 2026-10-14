@@ -52,21 +52,33 @@ export const RAMP_STAGES: { cap: number; graduateAt: number }[] = [
   { cap: 19, graduateAt: 180 },
 ];
 
-// Per-campaign cap on how many BRAND-NEW leads (step-0 first-touches) may start
-// the sequence per day, independent of inbox capacity, so a big import can't
-// crowd out follow-ups and new-lead velocity is controllable per campaign.
-// Follow-ups (step 1+) are never limited by this. NULL on a campaign inherits
-// this default (migration 00064); 0 pauses new leads while follow-ups continue.
-export const DEFAULT_DAILY_NEW_LEADS_CAP = 20;
-
-// Resolve a campaign's effective new-leads/day cap: its own value, or the
-// global default when unset. Same "NULL = inherit default" shape as
-// resolveSendWindow below.
+// Per-campaign limit on how many BRAND-NEW leads (step-0 first-touches) may
+// start the sequence per day (migration 00064). Follow-ups (step 1+) are never
+// limited by it.
+//   - NULL = no limit, the default since 2026-10-14. Under finish_first every
+//     tick sends the due follow-ups before any first touch, so first touches
+//     only fill the inbox capacity left over and follow-ups stay on time
+//     without a cap (owner call; measured on the planner replay, 9 inboxes and
+//     775 contacts: no limit keeps 99.4% of follow-ups within one sending day
+//     of due and finishes 5 weeks before a 20/day cap).
+//   - A number is a deliberate throttle under finish_first (reach_first ignores it).
+//   - 0 pauses new leads in BOTH strategies while follow-ups continue.
+// Callers must test for 0 with `=== 0`: `null <= 0` is true in JS.
 export function resolveDailyNewLeadsCap(campaign: {
   daily_new_leads_cap?: number | null;
-}): number {
+}): number | null {
   const v = campaign.daily_new_leads_cap;
-  return v == null ? DEFAULT_DAILY_NEW_LEADS_CAP : Math.max(0, v);
+  return v == null ? null : Math.max(0, v);
+}
+
+/** True when first touches are paused (a cap of exactly 0). */
+export function newLeadsPaused(cap: number | null): boolean {
+  return cap === 0;
+}
+
+/** True when a finish_first campaign has used its day's new-lead limit (never with no limit). */
+export function newLeadsCapReached(cap: number | null, usedToday: number): boolean {
+  return cap !== null && usedToday >= cap;
 }
 
 // Default sending strategy for a campaign that hasn't chosen one (migration
@@ -76,7 +88,7 @@ export const DEFAULT_SENDING_STRATEGY: SendingStrategy = "finish_first";
 
 // Resolve a campaign's effective sending strategy: its own value, or the
 // default when unset/invalid. Same "NULL = inherit default" shape as
-// resolveDailyNewLeadsCap / resolveSendWindow.
+// resolveSendWindow.
 export function resolveSendingStrategy(campaign: {
   sending_strategy?: string | null;
 }): SendingStrategy {

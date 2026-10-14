@@ -31,7 +31,6 @@ const BASE: TimelineInput = {
   budgetMode: "monthly",
   amountUsd: 100,
   months: 6,
-  warmingDays: 14,
   replyRatePct: 1.2,
   positiveRatePct: 25,
   waits: [0, 3, 2],
@@ -66,8 +65,9 @@ console.log("Shape and running totals:");
   }
   ok(consistent, "spent-to-date and contacts-to-date are the running sums");
   ok(near(p.totalSpend, spend) && near(p.totalContacts, contacts), "totals equal the last running sums");
-  const expectSetup = p.domains * SENDING_DOMAIN_USD_PER_YEAR + p.inboxes * GOOGLE_SEAT_USD_PER_MONTH * (14 / AVG_DAYS_PER_MONTH);
-  ok(near(p.setupCost, expectSetup) && near(p.rows[0].spend, expectSetup), `setup = domains (a year up front) + 14 days of seats ($${expectSetup.toFixed(2)})`);
+  // Warm-up IS the ramp: no idle seats are paid before the first email.
+  const expectSetup = p.domains * SENDING_DOMAIN_USD_PER_YEAR;
+  ok(near(p.setupCost, expectSetup) && near(p.rows[0].spend, expectSetup), `setup = domains only, a year up front ($${expectSetup.toFixed(2)})`);
   const r1 = p.rows[1];
   ok(near(r1.spend, p.inboxes * GOOGLE_SEAT_USD_PER_MONTH + r1.contacts * 0.08), "a month = seats + the contacts it sourced");
   ok(r1.replies != null && near(r1.replies, r1.contacts * 0.012) && r1.positives != null && near(r1.positives, r1.contacts * 0.012 * 0.25), "replies = contacts × 1.2%; positives = replies × 25%");
@@ -100,8 +100,9 @@ console.log("Ramp, renewals, limits:");
   const cold = timelinePlan({ ...BASE, strategy: "reach_first", weSource: false, months: 3 });
   ok(cold.rows[1].contacts < cold.rows[3].contacts, `month 1 (warming) carries fewer contacts than month 3 (${cold.rows[1].contacts.toFixed(0)} < ${cold.rows[3].contacts.toFixed(0)})`);
   const year = timelinePlan({ ...BASE, months: 12 });
-  ok(year.rows[12].renewal && !year.rows.slice(1, 12).some((r) => r.renewal), "domains renew in month 12 (bought 14 days before month 1)");
-  ok(near(year.rows[12].spend - year.rows[11].spend, year.domains * SENDING_DOMAIN_USD_PER_YEAR, year.rows[12].contacts * 0.08 + 1), "the renewal month carries the domains' fee");
+  // Warm-up IS the ramp: no idle seats before month 1, so domains bought just before it renew in month 13.
+  ok(!year.rows.some((r) => r.renewal), "no renewal inside 12 months (domains bought just before month 1 renew in month 13)");
+  ok(near(year.rows[0].spend, year.domains * SENDING_DOMAIN_USD_PER_YEAR), "month 0 is the domains only: no warm-up seats");
   const half = timelinePlan({ ...BASE, months: 6 });
   ok(!half.rows.some((r) => r.renewal), "no renewal inside 6 months");
   const paused = timelinePlan({ ...BASE, newLeadsCap: 0 });
