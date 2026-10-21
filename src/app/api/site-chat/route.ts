@@ -1,42 +1,40 @@
-// Public FAQ chatbot endpoint for the LeadStart.io marketing site.
+// Pan Pal's chat endpoint for the leadstart.io website.
 //
-// The embeddable widget (public/site-chat.js) POSTs the conversation here.
-// We answer with Claude Haiku, using the curated knowledge document in
-// src/lib/site-chat/knowledge.ts as a CACHED system prompt so repeat turns
-// pay ~0.1x for the (large, stable) background.
+// The website's widget (assets/js/panpal.js in the LeadStart-Website repo)
+// calls /app/api/site-chat through the site's /app rewrite, so on leadstart.io
+// it's the same site. Every reply is an answer-book entry, word for word
+// (src/lib/site-chat/answer-book.ts):
 //
-// This is a PUBLIC, unauthenticated endpoint living on a different origin
-// than the widget (widget runs on leadstart.io, API runs on the app
-// domain). So it carries its own guards: an origin allowlist, a basic
-// per-IP rate limit, and hard caps on conversation size + output tokens
-// so nobody can run up the Anthropic bill.
+// - { topic }: a hello line or suggested question whose topic the widget
+//   already knows. No Claude call.
+// - { messages }: what the visitor typed. Claude Haiku 5.5 picks the topic
+//   (src/lib/site-chat/picker.ts); it never writes the reply.
+//
+// This is a public, unauthenticated endpoint (the /api/ bypass in
+// src/lib/supabase/middleware.ts), so it carries its own guards: an origin
+// allowlist for browser calls, the shared rate limiter (the rate_limits table,
+// so every instance counts together), and caps on message size and
+// conversation length. A question no answer covers goes to the owner-alert
+// queue (one digest email every 5 minutes), so Daniel can add an answer.
 
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
-import { getAnthropic, MissingAnthropicKeyError } from "@/lib/ai/client";
-import { SITE_CHAT_SYSTEM_PROMPT } from "@/lib/site-chat/knowledge";
+import { MissingAnthropicKeyError } from "@/lib/ai/client";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { enqueueOwnerAlert } from "@/lib/notifications/owner-alerts";
+import { checkRateLimit, checkRateLimits, clientIp } from "@/lib/security/rate-limit";
+import { BOOK_VERSION, answerFor, isTopicId, type TopicId } from "@/lib/site-chat/answer-book";
+import { pickTopics, type ChatTurn } from "@/lib/site-chat/picker";
 
-const MODEL = "claude-haiku-4-5";
-const MAX_TOKENS = 800; // FAQ answers are short; this also caps cost.
-
-// Conversation-size guards. A visitor can't POST a giant fabricated
-// history to burn tokens.
+// Conversation-size guards: a visitor can't post a giant made-up history to
+// burn tokens. Pan Pal's own answers run to about 400 characters.
 const MAX_TURNS = 24;
-const MAX_CHARS_PER_MESSAGE = 4000;
+const MAX_VISITOR_CHARS = 1000;
+const MAX_ANY_CHARS = 2000;
 
-// Best-effort per-IP rate limit. NOTE: this Map lives in the serverless
-// instance's memory, so it's per-instance, not global: good enough to
-// blunt a single IP hammering a warm instance for an MVP. The documented
-// upgrade path is a shared store (Supabase table or Upstash) if abuse
-// becomes real.
-const RATE_WINDOW_MS = 60_000;
-const RATE_MAX = 15;
-const ipHits = new Map<string, number[]>();
-
-// Origins allowed to call this endpoint. Override in env with a
-// comma-separated list (SITE_CHAT_ALLOWED_ORIGINS) once the real
-// marketing domain is final. localhost is included so the widget can be
-// tested locally.
+// Origins allowed to call this endpoint from a browser. Override in env with a
+// comma-separated list (SITE_CHAT_ALLOWED_ORIGINS), e.g. to test the widget
+// from a local copy of the website.
 const DEFAULT_ALLOWED_ORIGINS = [
   "https://leadstart.io",
   "https://www.leadstart.io",
@@ -65,70 +63,50 @@ function corsHeaders(origin: string | null): Record<string, string> {
   return headers;
 }
 
-function clientIp(request: NextRequest): string {
-  const xff = request.headers.get("x-forwarded-for");
-  if (xff) return xff.split(",")[0]!.trim();
-  return request.headers.get("x-real-ip")?.trim() || "unknown";
-}
+type Parsed = { topic: TopicId } | { conversation: ChatTurn[] } | { error: string };
 
-function isRateLimited(ip: string): boolean {
-  const now = Date.now();
-  const recent = (ipHits.get(ip) ?? []).filter(
-    (t) => now - t < RATE_WINDOW_MS
-  );
-  recent.push(now);
-  ipHits.set(ip, recent);
-  // Opportunistic cleanup so the Map can't grow unbounded.
-  if (ipHits.size > 5000) {
-    for (const [k, v] of ipHits) {
-      if (v.every((t) => now - t >= RATE_WINDOW_MS)) ipHits.delete(k);
-    }
-  }
-  return recent.length > RATE_MAX;
-}
+/**
+ * The request: `{ topic }`, or `{ messages }` with the visitor's turns as role "visitor" and Pan Pal's as "pan_pal"
+ * (the older widget's "user" and "assistant", with `content`, are read the same way). The last turn must be the
+ * visitor's.
+ */
+function parseBody(body: unknown): Parsed {
+  if (typeof body !== "object" || body === null) return { error: "Expected a JSON object." };
+  const topic = (body as { topic?: unknown }).topic;
+  if (topic !== undefined) return isTopicId(topic) ? { topic } : { error: "Unknown topic." };
 
-type InboundMessage = { role: "user" | "assistant"; content: string };
+  const raw = (body as { messages?: unknown }).messages;
+  if (!Array.isArray(raw) || raw.length === 0) return { error: "Expected { topic } or a non-empty { messages }." };
+  if (raw.length > MAX_TURNS) return { error: `Conversation too long (max ${MAX_TURNS} messages).` };
 
-function parseMessages(body: unknown): InboundMessage[] | { error: string } {
-  if (typeof body !== "object" || body === null || !("messages" in body)) {
-    return { error: "Expected a { messages: [...] } body." };
-  }
-  const raw = (body as { messages: unknown }).messages;
-  if (!Array.isArray(raw) || raw.length === 0) {
-    return { error: "messages must be a non-empty array." };
-  }
-  if (raw.length > MAX_TURNS) {
-    return { error: `Conversation too long (max ${MAX_TURNS} messages).` };
-  }
-  const out: InboundMessage[] = [];
+  const conversation: ChatTurn[] = [];
   for (const m of raw) {
-    if (typeof m !== "object" || m === null) {
-      return { error: "Each message must be an object." };
-    }
-    const role = (m as { role?: unknown }).role;
-    const content = (m as { content?: unknown }).content;
-    if (role !== "user" && role !== "assistant") {
-      return { error: "Each message.role must be 'user' or 'assistant'." };
-    }
-    if (typeof content !== "string" || !content.trim()) {
-      return { error: "Each message.content must be a non-empty string." };
-    }
-    if (content.length > MAX_CHARS_PER_MESSAGE) {
-      return {
-        error: `A message exceeds the ${MAX_CHARS_PER_MESSAGE}-character limit.`,
-      };
-    }
-    out.push({ role, content: content.trim() });
+    if (typeof m !== "object" || m === null) return { error: "Each message must be an object." };
+    const r = (m as { role?: unknown }).role;
+    const role = r === "visitor" || r === "user" ? "visitor" : r === "pan_pal" || r === "assistant" ? "pan_pal" : null;
+    if (!role) return { error: "Each message.role must be 'visitor' or 'pan_pal'." };
+    const t = (m as { text?: unknown; content?: unknown }).text ?? (m as { content?: unknown }).content;
+    if (typeof t !== "string" || !t.trim()) return { error: "Each message needs non-empty text." };
+    const cap = role === "visitor" ? MAX_VISITOR_CHARS : MAX_ANY_CHARS;
+    if (t.length > cap) return { error: `A message exceeds the ${cap}-character limit.` };
+    conversation.push({ role, text: t.trim() });
   }
-  // The Messages API requires the first turn to be from the user, and a
-  // chat only makes sense if the latest turn is the visitor's question.
-  if (out[0]!.role !== "user") {
-    return { error: "Conversation must start with a user message." };
+  if (conversation[conversation.length - 1]!.role !== "visitor") {
+    return { error: "The last message must be the visitor's." };
   }
-  if (out[out.length - 1]!.role !== "user") {
-    return { error: "The last message must be from the user." };
-  }
-  return out;
+  return { conversation };
+}
+
+function reply(topics: TopicId[], cors: Record<string, string>, extra: Record<string, unknown> = {}) {
+  const replies = topics.map((id) => {
+    const a = answerFor(id);
+    return { topic: a.id, text: a.text, links: a.links };
+  });
+  // `reply` keeps the older widget (src/app/site-chat.js) working: it reads one string.
+  return NextResponse.json(
+    { replies, reply: replies.map((r) => r.text).join("\n\n"), version: BOOK_VERSION, ...extra },
+    { headers: cors },
+  );
 }
 
 export async function OPTIONS(request: NextRequest) {
@@ -142,21 +120,22 @@ export async function POST(request: NextRequest) {
   const origin = request.headers.get("origin");
   const cors = corsHeaders(origin);
 
-  // If the request carries an Origin (i.e. it's a browser cross-site
-  // call) it must be on the allowlist. Requests with no Origin header
-  // (curl, server-to-server, same-origin) are allowed through so the
-  // endpoint stays testable.
+  // A browser call (it carries an Origin) must come from an allowed site.
+  // Calls with no Origin (curl, server-to-server) go through, so the endpoint
+  // stays testable; the rate limits below still apply to them.
   if (origin && !allowedOrigins().includes(origin)) {
-    return NextResponse.json(
-      { error: "Origin not allowed." },
-      { status: 403, headers: cors }
-    );
+    return NextResponse.json({ error: "Origin not allowed." }, { status: 403, headers: cors });
   }
 
-  if (isRateLimited(clientIp(request))) {
+  const ip = clientIp(request);
+  const limit = await checkRateLimits([
+    { bucket: `site-chat:ip:${ip}`, limit: 20, windowSeconds: 60 },
+    { bucket: `site-chat:ip-day:${ip}`, limit: 300, windowSeconds: 86_400 },
+  ]);
+  if (!limit.allowed) {
     return NextResponse.json(
       { error: "Too many messages, give it a moment and try again." },
-      { status: 429, headers: cors }
+      { status: 429, headers: { ...cors, "Retry-After": String(Math.max(1, Math.ceil(limit.retryAfterSeconds))) } },
     );
   }
 
@@ -164,79 +143,42 @@ export async function POST(request: NextRequest) {
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json(
-      { error: "Invalid JSON." },
-      { status: 400, headers: cors }
-    );
+    return NextResponse.json({ error: "Invalid JSON." }, { status: 400, headers: cors });
   }
 
-  const parsed = parseMessages(body);
-  if ("error" in parsed) {
-    return NextResponse.json(
-      { error: parsed.error },
-      { status: 400, headers: cors }
-    );
-  }
+  const parsed = parseBody(body);
+  if ("error" in parsed) return NextResponse.json({ error: parsed.error }, { status: 400, headers: cors });
+  if ("topic" in parsed) return reply([parsed.topic], cors);
 
+  const question = parsed.conversation[parsed.conversation.length - 1]!.text;
   try {
-    const client = getAnthropic();
-    const response = await client.messages.create({
-      model: MODEL,
-      max_tokens: MAX_TOKENS,
-      // Knowledge doc is the stable prefix → cached. The conversation
-      // is volatile → after the cached prefix, no cache marker.
-      system: [
-        {
-          type: "text",
-          text: SITE_CHAT_SYSTEM_PROMPT,
-          cache_control: { type: "ephemeral" },
-        },
-      ],
-      messages: parsed.map((m) => ({ role: m.role, content: m.content })),
-    });
+    const pick = await pickTopics(parsed.conversation);
+    // A refusal or an unreadable pick gets the fixed "I can't answer that one" reply.
+    const topics: TopicId[] = pick.ok ? pick.topics : ["unknown"];
+    if (!pick.ok) console.warn(`[site-chat] pick failed (${pick.reason})`);
 
-    const reply = response.content
-      .filter(
-        (b): b is Anthropic.TextBlock => b.type === "text"
-      )
-      .map((b) => b.text)
-      .join("")
-      .trim();
-
-    if (!reply) {
-      // Refusal or empty completion: don't echo nothing back.
-      return NextResponse.json(
-        {
-          reply:
-            "Sorry, I can't help with that one. I can answer questions about LeadStart though: what would you like to know?",
-        },
-        { headers: cors }
-      );
+    if (topics.includes("unknown")) {
+      // Queue the question for Daniel once the reply is out. At most 5 a day
+      // from one visitor, so nobody can flood the digest.
+      after(async () => {
+        const allowed = await checkRateLimit({ bucket: `site-chat:alert:${ip}`, limit: 5, windowSeconds: 86_400 });
+        if (!allowed.allowed) return;
+        await enqueueOwnerAlert({
+          admin: createAdminClient(),
+          kind: "site_chat_unanswered",
+          subject: "Pan Pal couldn't answer a website visitor",
+          summary: `A visitor asked: "${question.slice(0, 300)}"`,
+          context: { question: question.slice(0, MAX_VISITOR_CHARS), answerBook: BOOK_VERSION },
+        });
+      });
     }
-
-    return NextResponse.json({ reply }, { headers: cors });
+    return reply(topics, cors);
   } catch (err) {
-    if (err instanceof MissingAnthropicKeyError) {
-      console.error("[site-chat] ANTHROPIC_API_KEY missing");
-      return NextResponse.json(
-        { error: "Chat is temporarily unavailable." },
-        { status: 503, headers: cors }
-      );
-    }
-    if (
-      err instanceof Anthropic.RateLimitError ||
-      err instanceof Anthropic.InternalServerError
-    ) {
-      console.error("[site-chat] Anthropic transient error:", err);
-      return NextResponse.json(
-        { error: "I'm a bit busy right now, try again in a moment." },
-        { status: 503, headers: cors }
-      );
-    }
-    console.error("[site-chat] Unexpected error:", err);
-    return NextResponse.json(
-      { error: "Something went wrong. Please try again." },
-      { status: 502, headers: cors }
-    );
+    // Claude unreachable or misconfigured: the visitor still gets an approved
+    // answer (the way to reach Daniel), never an error message.
+    if (err instanceof MissingAnthropicKeyError) console.error("[site-chat] ANTHROPIC_API_KEY missing");
+    else if (err instanceof Anthropic.APIError) console.error(`[site-chat] Anthropic error ${err.status}:`, err.message);
+    else console.error("[site-chat] Unexpected error:", err);
+    return reply(["unknown"], cors, { degraded: true });
   }
 }

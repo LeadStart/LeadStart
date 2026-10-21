@@ -46,7 +46,9 @@ export type OwnerAlertKind =
   | "email_verifier_credits_low"
   | "domain_lifecycle"
   | "registrar_spend_cap"
-  | "domain_provisioning";
+  | "domain_provisioning"
+  // Pan Pal (the leadstart.io chat helper) got a question his answer book does not cover.
+  | "site_chat_unanswered";
 
 export interface OwnerAlertInput {
   admin: ReturnType<typeof createAdminClient>;
@@ -267,6 +269,7 @@ const KIND_LABEL: Record<OwnerAlertKind, string> = {
   domain_lifecycle: "Sending-domain lifecycle change",
   registrar_spend_cap: "Domain purchase blocked by the spend cap",
   domain_provisioning: "Domain provisioning needs attention",
+  site_chat_unanswered: "Pan Pal couldn't answer a website visitor",
 };
 
 const KIND_COLOR: Record<OwnerAlertKind, string> = {
@@ -291,6 +294,8 @@ const KIND_COLOR: Record<OwnerAlertKind, string> = {
   // both need an owner to act, so amber like the other operational warnings.
   registrar_spend_cap: "#c2410c",
   domain_provisioning: "#c2410c",
+  // Informational: a question to add to Pan Pal's answer book.
+  site_chat_unanswered: "#2563eb",
 };
 
 function renderEventCard(input: {
