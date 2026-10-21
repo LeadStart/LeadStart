@@ -157,7 +157,9 @@ export async function POST(request: NextRequest) {
     const topics: TopicId[] = pick.ok ? pick.topics : ["unknown"];
     if (!pick.ok) console.warn(`[site-chat] pick failed (${pick.reason})`);
 
-    if (topics.includes("unknown")) {
+    // Local dev points at the production database, so a test question there
+    // never reaches the owners' digest.
+    if (topics.includes("unknown") && process.env.NODE_ENV !== "development") {
       // Queue the question for Daniel once the reply is out. At most 5 a day
       // from one visitor, so nobody can flood the digest.
       after(async () => {
