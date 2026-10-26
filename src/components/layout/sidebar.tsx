@@ -73,18 +73,22 @@ function isNavActive(item: NavItem, pathname: string): boolean {
   return pathname === item.href;
 }
 
+// Forge's rail rows (task #228): a quiet hover, and the chosen row as Forge's
+// chosen row in LeadStart's colours: the brand fill with its 140deg sheen and a
+// soft drop under it (Forge's `.rail-row.on .rail-item` before its Sterling theme).
 function NavLink({ item, active }: { item: NavItem; active: boolean }) {
   return (
     <Link
       href={item.href}
+      aria-current={active ? "page" : undefined}
       className={cn(
-        "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+        "flex items-center gap-3 rounded-xl px-3 py-[9px] text-[13.5px] font-medium transition-[background-color,box-shadow,color] duration-150",
         active
-          ? "bg-sidebar-primary text-sidebar-primary-foreground font-semibold"
-          : "text-sidebar-foreground hover:bg-white/10 hover:text-white"
+          ? "bg-primary bg-(image:--tex-brand) text-white shadow-[0_1px_1px_rgba(0,0,0,0.2),0_4px_12px_rgba(5,8,40,0.4)]"
+          : "text-[#dbe3f0]/85 hover:bg-white/7 hover:text-white"
       )}
     >
-      <span className="shrink-0">{item.icon}</span>
+      <span className={cn("shrink-0", active ? "text-white" : "text-[#8b95b5]")}>{item.icon}</span>
       <span>{item.label}</span>
     </Link>
   );
@@ -94,8 +98,8 @@ function NavSection({ label, items, pathname }: { label: string; items: NavItem[
   if (items.length === 0) return null;
   return (
     <>
-      <div className="pt-4 pb-2 px-3">
-        <p className="text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/50">
+      <div className="px-3 pt-4 pb-1.5">
+        <p className="text-[10.5px] font-semibold uppercase tracking-[0.08em] text-[#8b95b5]">
           {label}
         </p>
       </div>
@@ -135,11 +139,10 @@ export function Sidebar({ role, open = false, onClose }: { role: AppRole; open?:
       )}
       <aside
         style={{
-          // Solid brand-blue → navy. The floating rail carries a real
-          // elevation shadow (globals.css `.app-rail`) and the logo a soft
-          // bloom: deliberate exceptions to the flat contract, approved
-          // 2026-08-23 (see UI_RULES.md). Gradient stays inline (Tailwind v4
-          // @layer utilities don't reliably emit it).
+          // The navy rail (Forge's frame, which began as this one): brand blue
+          // down to navy, with its float shadow from globals.css `.app-rail`.
+          // Gradient stays inline (Tailwind v4 @layer utilities don't reliably
+          // emit it).
           background:
             "linear-gradient(180deg, #1b2273 0%, #151d67 34%, #0f172a 100%)",
           backgroundColor: "#0f172a",
@@ -151,42 +154,25 @@ export function Sidebar({ role, open = false, onClose }: { role: AppRole; open?:
           open ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         )}
       >
-        {/* Brand header: transparent mark backlit by a soft bloom + live wordmark */}
-        <div className="relative flex flex-col items-center gap-2.5 px-4 pt-4 pb-3">
-          <Link href={roleHomePath(role)} className="flex flex-col items-center gap-2.5">
-            <span className="relative flex items-center justify-center">
-              {/* Spotlight bloom (mockup direction D @ 0.91): a wide soft aura +
-                  a crisp bright core behind the transparent mark, so the full
-                  funnel reads on white. Two stacked radials, each scaled 0.91;
-                  both fade to 0 above the wordmark so it stays on navy. */}
+        {/* Forge's brand row: the mark on a 34px white tile with a soft bloom behind
+            it, beside the spaced wordmark, on one line. */}
+        <div className="relative flex items-center justify-center px-4 pt-6 pb-4">
+          <Link href={roleHomePath(role)} className="flex items-center gap-2.5 rounded-md focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#c3ccff]">
+            <span className="relative grid size-[34px] shrink-0 place-items-center">
               <span
                 aria-hidden
-                className="pointer-events-none absolute left-1/2 top-1/2"
+                className="pointer-events-none absolute -inset-3.5 rounded-full blur-[6px]"
                 style={{
-                  width: 216,
-                  height: 128,
-                  transform: "translate(-50%, -52%) scale(0.91)",
                   background:
-                    "radial-gradient(ellipse at 50% 46%, rgba(255,255,255,0.44) 0%, rgba(255,255,255,0.15) 44%, rgba(255,255,255,0) 78%)",
-                  filter: "blur(14px)",
+                    "radial-gradient(closest-side, rgba(120,128,255,0.55), rgba(120,128,255,0) 70%)",
                 }}
               />
-              <span
-                aria-hidden
-                className="pointer-events-none absolute left-1/2 top-1/2"
-                style={{
-                  width: 128,
-                  height: 92,
-                  transform: "translate(-50%, -52%) scale(0.91)",
-                  background:
-                    "radial-gradient(ellipse at 50% 46%, #ffffff 0%, rgba(255,255,255,0.90) 40%, rgba(255,255,255,0.28) 70%, rgba(255,255,255,0) 84%)",
-                  filter: "blur(4px)",
-                }}
-              />
-              <Image src={leadstartMark} alt="LeadStart" priority className="relative h-[62px] w-auto" />
+              <span className="relative grid size-[34px] place-items-center rounded-[11px] bg-card bg-(image:--tex-white)">
+                <Image src={leadstartMark} alt="LeadStart" priority className="h-[22px] w-auto" />
+              </span>
             </span>
             <span
-              className="relative text-[17px] font-extrabold uppercase tracking-[0.2em] leading-none"
+              className="-mr-[0.24em] text-[15px] font-bold uppercase leading-none tracking-[0.24em]"
               style={{
                 backgroundImage: "linear-gradient(180deg, #ffffff 0%, #c3ccff 100%)",
                 WebkitBackgroundClip: "text",
@@ -200,7 +186,7 @@ export function Sidebar({ role, open = false, onClose }: { role: AppRole; open?:
           {/* Close button (mobile only) */}
           <button
             onClick={onClose}
-            className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-lg text-white/70 hover:bg-white/10 lg:hidden"
+            className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full text-white/70 hover:bg-white/10 lg:hidden"
             aria-label="Close menu"
           >
             <X size={18} />
@@ -208,7 +194,7 @@ export function Sidebar({ role, open = false, onClose }: { role: AppRole; open?:
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 space-y-0.5 px-3 pt-3 pb-4 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <nav className="flex-1 space-y-0.5 px-3 pt-1 pb-4 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {nav.map((item) => (
             <NavLink key={item.href} item={item} active={isNavActive(item, pathname)} />
           ))}
@@ -218,7 +204,7 @@ export function Sidebar({ role, open = false, onClose }: { role: AppRole; open?:
         {/* Footer: a single Settings entry pinned to the bottom. Replaces the
             old profile block; the top-right avatar menu already shows profile. */}
         {settingsItem && (
-          <div className="border-t border-sidebar-border p-3">
+          <div className="border-t border-white/8 bg-black/12 p-3">
             <NavLink item={settingsItem} active={isNavActive(settingsItem, pathname)} />
           </div>
         )}

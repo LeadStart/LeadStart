@@ -364,7 +364,7 @@ export default function ClientSettingsPage() {
     <div className="space-y-5 max-w-3xl">
       {/* Header */}
       <div>
-        <h1 className="text-[22px] font-bold text-[#0f172a]" style={{ letterSpacing: "-0.01em" }}>
+        <h1 className="text-[22px] font-bold text-foreground" style={{ letterSpacing: "-0.01em" }}>
           Settings
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
@@ -373,9 +373,9 @@ export default function ClientSettingsPage() {
       </div>
 
       {/* ===== Account ===== */}
-      <Card className="border-border/50 shadow-sm">
+      <Card>
         <CardHeader className="flex flex-row items-center gap-2 pb-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
             <User size={16} className="text-white" />
           </div>
           <CardTitle className="text-base">Account</CardTitle>
@@ -406,12 +406,11 @@ export default function ClientSettingsPage() {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-3 pt-1 border-t border-border/30 pt-3">
+          <div className="flex items-center gap-3 pt-1 border-t border-border-soft pt-3">
             <Button
               onClick={handleSaveAccount}
               disabled={accountStatus.state === "saving" || previewing}
               className="gap-1.5"
-              style={{ background: "#2E37FE" }}
             >
               <Save size={14} />
               {accountStatus.state === "saving" ? "Saving…" : "Save"}
@@ -422,9 +421,9 @@ export default function ClientSettingsPage() {
       </Card>
 
       {/* ===== Password ===== */}
-      <Card className="border-border/50 shadow-sm">
+      <Card>
         <CardHeader className="flex flex-row items-center gap-2 pb-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
             <KeyRound size={16} className="text-white" />
           </div>
           <CardTitle className="text-base">Password</CardTitle>
@@ -456,7 +455,7 @@ export default function ClientSettingsPage() {
               />
             </div>
           </div>
-          <div className="flex items-center gap-3 pt-3 border-t border-border/30">
+          <div className="flex items-center gap-3 pt-3 border-t border-border-soft">
             <Button
               onClick={handleSavePassword}
               disabled={
@@ -466,7 +465,6 @@ export default function ClientSettingsPage() {
                 !passwordForm.confirm
               }
               className="gap-1.5"
-              style={{ background: "#2E37FE" }}
             >
               <Save size={14} />
               {passwordStatus.state === "saving" ? "Saving…" : "Change password"}
@@ -477,9 +475,9 @@ export default function ClientSettingsPage() {
       </Card>
 
       {/* ===== Notifications ===== */}
-      <Card className="border-border/50 shadow-sm">
+      <Card>
         <CardHeader className="flex flex-row items-center gap-2 pb-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
             <Bell size={16} className="text-white" />
           </div>
           <CardTitle className="text-base">Hot-lead notifications</CardTitle>
@@ -542,12 +540,11 @@ export default function ClientSettingsPage() {
             </p>
           </div>
 
-          <div className="flex items-center gap-3 pt-3 border-t border-border/30">
+          <div className="flex items-center gap-3 pt-3 border-t border-border-soft">
             <Button
               onClick={handleSaveNotifications}
               disabled={notifyStatus.state === "saving" || previewing}
               className="gap-1.5"
-              style={{ background: "#2E37FE" }}
             >
               <Save size={14} />
               {notifyStatus.state === "saving" ? "Saving…" : "Save"}
@@ -558,9 +555,9 @@ export default function ClientSettingsPage() {
       </Card>
 
       {/* ===== Reports ===== */}
-      <Card className="border-border/50 shadow-sm">
+      <Card>
         <CardHeader className="flex flex-row items-center gap-2 pb-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
             <FileText size={16} className="text-white" />
           </div>
           <CardTitle className="text-base flex-1">Reports</CardTitle>
@@ -584,8 +581,8 @@ export default function ClientSettingsPage() {
                     disabled={reportsStatus.state === "saving"}
                     className={`text-sm px-3 py-2.5 rounded-lg border transition-colors cursor-pointer ${
                       selected
-                        ? "border-[#2E37FE] bg-[#2E37FE]/10 text-[#2E37FE] font-medium"
-                        : "border-border/60 hover:bg-muted/50"
+                        ? "border-primary bg-primary/10 text-primary font-medium"
+                        : "border-border-soft hover:bg-muted/50"
                     } disabled:cursor-not-allowed disabled:opacity-60`}
                   >
                     {opt.label}
@@ -614,7 +611,7 @@ export default function ClientSettingsPage() {
                       }))
                     }
                     disabled={reportsStatus.state === "saving"}
-                    className="w-full rounded-lg border border-border/60 bg-card px-3 py-2 text-sm outline-none focus:border-[#2E37FE] disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer"
+                    className="ls-select w-full disabled:cursor-not-allowed"
                   >
                     {WEEKDAY_LABELS.map((d) => (
                       <option key={d.value} value={d.value}>
@@ -638,7 +635,7 @@ export default function ClientSettingsPage() {
                       }))
                     }
                     disabled={reportsStatus.state === "saving"}
-                    className="w-full rounded-lg border border-border/60 bg-card px-3 py-2 text-sm outline-none focus:border-[#2E37FE] disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer"
+                    className="ls-select w-full disabled:cursor-not-allowed"
                   >
                     {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => (
                       <option key={d} value={d}>
@@ -672,7 +669,7 @@ export default function ClientSettingsPage() {
                     setReportsForm((p) => ({ ...p, report_timezone: e.target.value }))
                   }
                   disabled={reportsStatus.state === "saving"}
-                  className="w-full rounded-lg border border-border/60 bg-card px-3 py-2 text-sm outline-none focus:border-[#2E37FE] disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer"
+                  className="ls-select w-full disabled:cursor-not-allowed"
                 >
                   {COMMON_TIMEZONES.map((tz) => (
                     <option key={tz.value} value={tz.value}>
@@ -690,7 +687,7 @@ export default function ClientSettingsPage() {
             </div>
           )}
 
-          <p className="text-[13px] font-medium text-[#0f172a]">
+          <p className="text-[13px] font-medium text-foreground">
             {scheduleSummary ? scheduleSummary : "Reports are off."}
           </p>
 
@@ -708,12 +705,11 @@ export default function ClientSettingsPage() {
             </p>
           </div>
 
-          <div className="flex items-center gap-3 pt-3 border-t border-border/30">
+          <div className="flex items-center gap-3 pt-3 border-t border-border-soft">
             <Button
               onClick={handleSaveReports}
               disabled={reportsStatus.state === "saving" || previewing}
               className="gap-1.5"
-              style={{ background: "#2E37FE" }}
             >
               <Save size={14} />
               {reportsStatus.state === "saving" ? "Saving…" : "Save"}

@@ -112,14 +112,14 @@ export function TagChipInput({
           inputRef.current?.focus();
           setOpen(true);
         }}
-        className={`flex flex-wrap items-center gap-1 rounded-md border border-border/60 bg-background px-1.5 py-1 text-sm ${
-          disabled ? "opacity-60" : "cursor-text focus-within:border-[#2E37FE]"
+        className={`flex flex-wrap items-center gap-1 rounded-md border border-border-soft bg-background px-1.5 py-1 text-sm ${
+          disabled ? "opacity-60" : "cursor-text focus-within:border-primary"
         }`}
       >
         {value.map((tag) => (
           <span
             key={tag}
-            className="inline-flex items-center gap-1 rounded-full bg-[#2E37FE]/10 px-2 py-0.5 text-xs font-medium text-[#2E37FE]"
+            className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary"
           >
             {tag}
             <button
@@ -129,7 +129,7 @@ export function TagChipInput({
                 removeTag(tag);
               }}
               disabled={disabled}
-              className="cursor-pointer rounded-full hover:bg-[#2E37FE]/20 disabled:cursor-not-allowed"
+              className="cursor-pointer rounded-full hover:bg-primary/20 disabled:cursor-not-allowed"
               aria-label={`Remove tag ${tag}`}
             >
               <X size={11} />
@@ -192,7 +192,7 @@ export function TagChipInput({
         <div
           id={listboxId}
           role="listbox"
-          className="absolute left-0 z-30 mt-1 max-h-56 w-full min-w-[13rem] overflow-y-auto overflow-x-hidden rounded-lg border border-border bg-background p-1 shadow-lg"
+          className="absolute left-0 z-30 mt-1 max-h-56 w-full min-w-[13rem] overflow-y-auto overflow-x-hidden ls-menu-in rounded-2xl border border-border bg-popover p-1.5 shadow-pop"
         >
           {matches.length > 0 && (
             <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
@@ -221,11 +221,11 @@ export function TagChipInput({
               >
                 {opt.kind === "create" ? (
                   <>
-                    <Plus size={13} className="shrink-0 text-[#2E37FE]" />
+                    <Plus size={13} className="shrink-0 text-primary" />
                     <span className="min-w-0 flex-1 truncate">
                       Create <span className="font-medium">“{opt.label}”</span>
                     </span>
-                    <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-[#2E37FE]">
+                    <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-primary">
                       new
                     </span>
                   </>

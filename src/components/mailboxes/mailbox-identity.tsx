@@ -81,8 +81,8 @@ export function MailboxIdentity({ mailbox, onSaved }: { mailbox: IdentityMailbox
     patch({ display_name: name, signature, ...(capDirty ? { max_daily_cap: capNum } : {}) });
 
   return (
-    <div className="space-y-3 rounded-lg border border-border/60 bg-white p-3">
-      <p className="text-xs font-semibold text-[#0f172a] uppercase tracking-wide">Identity and warmup</p>
+    <div className="space-y-3 rounded-lg border border-border-soft bg-card p-3">
+      <p className="text-xs font-semibold text-foreground uppercase tracking-wide">Identity and warmup</p>
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
         <div className="space-y-3">
           <div className="space-y-1.5">
@@ -150,7 +150,7 @@ export function MailboxIdentity({ mailbox, onSaved }: { mailbox: IdentityMailbox
         </div>
       </div>
       <div className="flex flex-wrap items-center gap-3">
-        <Button size="sm" onClick={save} disabled={saving || !dirty || !capValid} style={{ background: "#2E37FE" }}>
+        <Button size="sm" onClick={save} disabled={saving || !dirty || !capValid}>
           {saving ? "Saving…" : "Save"}
         </Button>
         {message && (
@@ -158,7 +158,7 @@ export function MailboxIdentity({ mailbox, onSaved }: { mailbox: IdentityMailbox
         )}
         <span className="text-[11px] text-muted-foreground whitespace-pre-line">
           {"Signs as: "}
-          <span className="text-[#0f172a]">{signsAs}</span>
+          <span className="text-foreground">{signsAs}</span>
         </span>
       </div>
     </div>

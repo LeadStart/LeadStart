@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogClose, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Lock, Loader2, X } from "lucide-react";
 import { appUrl } from "@/lib/api-url";
 import { loadStripe, type StripeEmbeddedCheckout } from "@stripe/stripe-js";
@@ -25,31 +26,37 @@ export function AcceptAndPay({
   const [status, setStatus] = useState<"idle" | "submitting" | "open">("idle");
   const [error, setError] = useState<string | null>(null);
   const [checkout, setCheckout] = useState<StripeEmbeddedCheckout | null>(null);
-  const containerRef = useRef<HTMLDivElement | null>(null);
   const mountedRef = useRef(false);
 
-  useEffect(() => {
-    if (
-      status === "open" &&
-      checkout &&
-      containerRef.current &&
-      !mountedRef.current
-    ) {
-      mountedRef.current = true;
-      checkout.mount(containerRef.current);
-    }
-  }, [status, checkout]);
+  // The checkout mounts into its box as soon as the popup puts the box on the
+  // page (the popup's portal can attach it a frame after it opens).
+  const checkoutBox = useCallback(
+    (el: HTMLDivElement | null) => {
+      if (el && checkout && !mountedRef.current) {
+        mountedRef.current = true;
+        checkout.mount(el);
+      }
+    },
+    [checkout],
+  );
 
-  const closeModal = useCallback(() => {
-    try {
-      checkout?.destroy();
-    } catch {
-      /* already destroyed */
-    }
-    mountedRef.current = false;
-    setCheckout(null);
-    setStatus("idle");
-  }, [checkout]);
+  // Every way out (the X, a tap outside, Esc, a pull on a phone) closes the popup;
+  // the checkout is taken down once its way out has finished, so it never
+  // vanishes mid-motion.
+  const closeModal = useCallback(() => setStatus("idle"), []);
+  const afterClose = useCallback(
+    (open: boolean) => {
+      if (open) return;
+      try {
+        checkout?.destroy();
+      } catch {
+        /* already destroyed */
+      }
+      mountedRef.current = false;
+      setCheckout(null);
+    },
+    [checkout],
+  );
 
   async function handleAccept() {
     setStatus("submitting");
@@ -108,7 +115,6 @@ export function AcceptAndPay({
       <Button
         onClick={handleAccept}
         disabled={status !== "idle"}
-        style={{ background: "#2E37FE" }}
         className="w-full sm:w-auto"
       >
         {status === "submitting" ? (
@@ -130,32 +136,29 @@ export function AcceptAndPay({
       </p>
       {error && <p className="text-xs text-red-600">{error}</p>}
 
-      {status === "open" && (
-        <div
-          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/50 p-4 sm:p-8"
-          role="dialog"
-          aria-modal="true"
+      <Dialog
+        open={status === "open"}
+        onOpenChange={(open) => !open && closeModal()}
+        onOpenChangeComplete={afterClose}
+      >
+        <DialogContent
+          showCloseButton={false}
+          className="max-w-lg gap-0 overflow-hidden border-t-[3px] border-t-primary p-0 sm:max-w-lg"
         >
-          <div className="my-8 w-full max-w-lg rounded-2xl border-t-[3px] border-[#2E37FE] bg-white shadow-xl">
-            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3.5">
-              <div className="text-sm font-semibold text-[#0f172a]">
-                Complete your payment
-              </div>
-              <button
-                type="button"
-                onClick={closeModal}
-                aria-label="Close"
-                className="cursor-pointer text-slate-400 hover:text-slate-600"
-              >
-                <X size={18} />
-              </button>
-            </div>
-            <div className="p-2 sm:p-3">
-              <div ref={containerRef} />
-            </div>
+          <div className="flex items-center justify-between border-b border-border-soft px-5 py-3.5">
+            <DialogTitle className="pr-0 text-sm">Complete your payment</DialogTitle>
+            <DialogClose
+              aria-label="Close"
+              className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              <X size={18} />
+            </DialogClose>
           </div>
-        </div>
-      )}
+          <div className="p-2 sm:p-3">
+            <div ref={checkoutBox} />
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

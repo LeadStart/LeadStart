@@ -226,7 +226,7 @@ export default function ReplyDossierPage() {
     return (
       <div className="space-y-4">
         <BackButton href="/client/inbox" label="Back to inbox" />
-        <Card className="border-border/50">
+        <Card>
           <CardContent className="py-12 text-center">
             <p className="text-muted-foreground">Reply not found or you don&apos;t have access.</p>
           </CardContent>
@@ -278,7 +278,7 @@ export default function ReplyDossierPage() {
       )}
 
       {/* Contact / company card */}
-      <Card className="border-border/50 shadow-sm">
+      <Card>
         <CardContent className="px-5 py-4 space-y-4">
           <div className="flex items-start gap-3">
             <div
@@ -296,7 +296,7 @@ export default function ReplyDossierPage() {
                   </p>
                   <a
                     href={`mailto:${reply.lead_email}`}
-                    className="text-sm font-semibold text-[#2E37FE] break-all"
+                    className="text-sm font-semibold text-primary break-all"
                   >
                     {reply.lead_email}
                   </a>
@@ -309,17 +309,17 @@ export default function ReplyDossierPage() {
 
           {/* Detail rows */}
           {(!isGeneric || reply.lead_phone_e164 || reply.lead_linkedin_url) && (
-            <div className="border-t border-border/40 text-sm">
+            <div className="border-t border-border-soft text-sm">
               {!isGeneric && (
-                <div className="flex items-center justify-between gap-3 py-2.5 border-b border-border/30">
+                <div className="flex items-center justify-between gap-3 py-2.5 border-b border-border-soft">
                   <span className="text-muted-foreground">Email</span>
-                  <a href={`mailto:${reply.lead_email}`} className="font-semibold text-[#2E37FE] truncate">
+                  <a href={`mailto:${reply.lead_email}`} className="font-semibold text-primary truncate">
                     {reply.lead_email}
                   </a>
                 </div>
               )}
               {reply.lead_phone_e164 && (
-                <div className="flex items-center justify-between gap-3 py-2.5 border-b border-border/30">
+                <div className="flex items-center justify-between gap-3 py-2.5 border-b border-border-soft">
                   <span className="text-muted-foreground">Phone</span>
                   <a href={callLink ?? "#"} className="font-semibold text-foreground">
                     {reply.lead_phone_e164}
@@ -327,13 +327,13 @@ export default function ReplyDossierPage() {
                 </div>
               )}
               {reply.lead_linkedin_url && (
-                <div className="flex items-center justify-between gap-3 py-2.5 border-b border-border/30">
+                <div className="flex items-center justify-between gap-3 py-2.5 border-b border-border-soft">
                   <span className="text-muted-foreground">LinkedIn</span>
                   <a
                     href={reply.lead_linkedin_url}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex items-center gap-1 font-semibold text-[#2E37FE]"
+                    className="inline-flex items-center gap-1 font-semibold text-primary"
                   >
                     View profile <ExternalLink size={11} />
                   </a>
@@ -371,7 +371,7 @@ export default function ReplyDossierPage() {
       </Card>
 
       {/* Their reply: chat bubble */}
-      <Card className="border-border/50 shadow-sm">
+      <Card>
         <CardContent className="px-5 py-4">
           <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-3">
             Their reply
@@ -425,7 +425,7 @@ export default function ReplyDossierPage() {
 
       {/* Reply composer (open) OR sent confirmation */}
       {isSent ? (
-        <Card className="border-emerald-200 bg-emerald-50/40 shadow-sm">
+        <Card className="border-emerald-200 bg-emerald-50/40">
           <CardContent className="px-5 py-4">
             <div className="flex items-start gap-2">
               <CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5" />
@@ -451,9 +451,9 @@ export default function ReplyDossierPage() {
           </CardContent>
         </Card>
       ) : canReply ? (
-        <Card className="shadow-sm" style={{ borderColor: "#C9CEEA" }}>
+        <Card style={{ borderColor: "#C9CEEA" }}>
           <CardContent className="px-5 py-4 space-y-3">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-[#2E37FE]">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-primary">
               ✍️ Your reply
             </p>
             <div className="flex flex-col gap-1.5">
@@ -465,7 +465,7 @@ export default function ReplyDossierPage() {
                 value={composerSubject}
                 onChange={(e) => setComposerSubject(e.target.value)}
                 disabled={sending}
-                className="w-full rounded-lg border border-border/60 bg-card px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#2E37FE]/30 disabled:opacity-60"
+                className="w-full rounded-lg border border-border-soft bg-card px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-60"
               />
             </div>
             <div className="flex flex-col gap-1.5">
@@ -478,7 +478,7 @@ export default function ReplyDossierPage() {
                 rows={9}
                 placeholder="Write your reply…"
                 disabled={sending}
-                className="w-full rounded-lg border border-border/60 bg-card px-3 py-2 text-sm resize-y focus:outline-none focus:ring-2 focus:ring-[#2E37FE]/30 disabled:opacity-60"
+                className="w-full rounded-lg border border-border-soft bg-card px-3 py-2 text-sm resize-y focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-60"
               />
             </div>
 
@@ -495,8 +495,7 @@ export default function ReplyDossierPage() {
               <button
                 onClick={handleSend}
                 disabled={!composerBody.trim() || sending || previewing}
-                className="text-white rounded-[10px] px-5 py-2.5 text-sm font-bold inline-flex items-center gap-1.5 shrink-0 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                style={{ background: GRAD }}
+                className="inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full bg-primary bg-(image:--tex-brand) px-5 py-2.5 text-sm font-semibold text-white transition-[filter] hover:brightness-106 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Send size={14} />
                 {sending ? "Sending…" : "Send reply"}
@@ -505,7 +504,7 @@ export default function ReplyDossierPage() {
           </CardContent>
         </Card>
       ) : noReply ? (
-        <Card className="border-border/50 shadow-sm">
+        <Card>
           <CardContent className="px-5 py-4">
             <p className="text-sm text-muted-foreground">
               {reply.final_class === "unsubscribe"
@@ -517,7 +516,7 @@ export default function ReplyDossierPage() {
       ) : null}
 
       {/* Shared lead note: the client jots it; their LeadStart team sees it too */}
-      <Card className="border-border/50 shadow-sm">
+      <Card>
         <CardContent className="px-5 py-4 space-y-3">
           <div className="flex items-center justify-between">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -538,7 +537,7 @@ export default function ReplyDossierPage() {
             onChange={(e) => setNoteText(e.target.value)}
             rows={3}
             disabled={savingNote || previewing}
-            className="w-full rounded-lg border border-border/60 bg-card px-3 py-2 text-sm resize-y focus:outline-none focus:ring-2 focus:ring-[#2E37FE]/30 disabled:opacity-60"
+            className="w-full rounded-lg border border-border-soft bg-card px-3 py-2 text-sm resize-y focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-60"
           />
           <div className="flex items-center justify-end gap-3">
             <button
@@ -556,7 +555,7 @@ export default function ReplyDossierPage() {
       </Card>
 
       {/* Outcome capture */}
-      <Card className="border-border/50 shadow-sm">
+      <Card>
         <CardContent className="px-5 py-4 space-y-3">
           <div className="flex items-center justify-between">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -578,8 +577,8 @@ export default function ReplyDossierPage() {
                 onClick={() => setOutcomeValue(opt.value)}
                 className={`text-left text-sm px-3 py-2.5 rounded-lg border transition-colors cursor-pointer ${
                   outcomeValue === opt.value
-                    ? "border-[#2E37FE] bg-[#2E37FE]/10 text-[#2E37FE] font-medium"
-                    : "border-border/60 hover:bg-muted/50"
+                    ? "border-primary bg-primary/10 text-primary font-medium"
+                    : "border-border-soft hover:bg-muted/50"
                 }`}
               >
                 {opt.label}
@@ -591,7 +590,7 @@ export default function ReplyDossierPage() {
             value={outcomeNotes}
             onChange={(e) => setOutcomeNotes(e.target.value)}
             rows={2}
-            className="w-full rounded-lg border border-border/60 bg-card px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[#2E37FE]/30"
+            className="w-full rounded-lg border border-border-soft bg-card px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/30"
           />
           <div className="flex items-center justify-between gap-3">
             <div className="text-xs text-muted-foreground">

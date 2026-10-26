@@ -420,9 +420,9 @@ export function ReportsClient({
       />
 
       {/* Report Builder */}
-      <Card className="border-border/50">
+      <Card>
         <CardHeader className="flex flex-row items-center gap-2 pb-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
             <Send size={16} className="text-white" />
           </div>
           <div>
@@ -526,7 +526,7 @@ export function ReportsClient({
       </Card>
 
       {/* Per-Client Auto Report Schedule */}
-      <Card className="border-border/50 shadow-sm">
+      <Card>
         <CardHeader className="flex flex-row items-center gap-2 pb-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-50">
             <Clock size={16} className="text-amber-500" />
@@ -548,9 +548,9 @@ export function ReportsClient({
                 const scheduleSummary = describeSchedule(client);
 
                 return (
-                  <div key={client.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-xl border border-border/50 p-4 hover:bg-muted/20 transition-colors">
+                  <div key={client.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-xl border border-border-soft p-4 hover:bg-muted/20 transition-colors">
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold text-white shrink-0" style={{ background: '#2E37FE' }}>
+                      <div className="flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold text-white shrink-0 bg-primary">
                         {client.name.charAt(0)}
                       </div>
                       <div className="min-w-0">
@@ -616,7 +616,7 @@ export function ReportsClient({
           <DialogContent className="max-w-lg">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
-                <Settings2 size={18} className="text-[#2E37FE]" />
+                <Settings2 size={18} className="text-primary" />
                 Schedule: {editingScheduleClient.name}
               </DialogTitle>
             </DialogHeader>
@@ -745,10 +745,10 @@ export function ReportsClient({
                               )
                             )
                           }
-                          className="h-4 w-4 rounded border-border accent-[#2E37FE]"
+                          className="h-4 w-4 rounded border-border accent-primary"
                         />
                         <div className="flex items-center gap-2 flex-1 min-w-0">
-                          <div className="flex h-6 w-6 items-center justify-center rounded-md text-[10px] font-bold text-white shrink-0" style={{ background: '#2E37FE' }}>
+                          <div className="flex h-6 w-6 items-center justify-center rounded-md text-[10px] font-bold text-white shrink-0 bg-primary">
                             {r.name.charAt(0).toUpperCase()}
                           </div>
                           <div className="min-w-0">
@@ -795,7 +795,6 @@ export function ReportsClient({
                 <Button
                   onClick={saveSchedule}
                   disabled={savingSchedule}
-                  style={{ background: '#2E37FE' }}
                   className="text-white"
                 >
                   <Save size={14} className="mr-1" />
@@ -808,9 +807,9 @@ export function ReportsClient({
       )}
 
       {/* Report History */}
-      <Card className="border-border/50">
+      <Card>
         <CardHeader className="flex flex-row items-center gap-2 pb-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
             <FileText size={16} className="text-white" />
           </div>
           <CardTitle className="text-base">Report History</CardTitle>
@@ -828,10 +827,10 @@ export function ReportsClient({
                   <div
                     key={report.id}
                     onClick={() => { setSelectedReport(report); loadRecipients(report.client_id); }}
-                    className="group cursor-pointer flex items-center justify-between rounded-xl border border-border/50 p-4 transition-all hover:border-[#2E37FE]/20 hover:shadow-md"
+                    className="group cursor-pointer flex items-center justify-between rounded-xl border border-border-soft p-4 transition-all hover:border-primary/20 hover:shadow-float"
                   >
                     <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-lg text-sm font-bold text-white shrink-0" style={{ background: '#2E37FE' }}>
+                      <div className="flex h-10 w-10 items-center justify-center rounded-lg text-sm font-bold text-white shrink-0 bg-primary">
                         {client?.name?.charAt(0) || "?"}
                       </div>
                       <div>
@@ -900,7 +899,7 @@ export function ReportsClient({
           <DialogContent className="w-[85vw] max-w-5xl min-h-[75vh] max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg text-sm font-bold text-[#0f172a]" style={{ background: '#2E37FE' }}>
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg text-sm font-bold text-foreground bg-primary">
                   {clientMap.get(selectedReport.client_id)?.name?.charAt(0) || "?"}
                 </div>
                 <div>
@@ -914,7 +913,7 @@ export function ReportsClient({
 
             <div className="space-y-4 mt-2">
               {/* Status bar */}
-              <div className="rounded-xl border border-border/50 bg-muted/20 p-4 space-y-3">
+              <div className="rounded-xl border border-border-soft bg-muted/20 p-4 space-y-3">
                 <div className="flex items-center gap-2 flex-wrap">
                   {selectedReport.sent_at ? (
                     <Badge className="badge-green">
@@ -958,7 +957,6 @@ export function ReportsClient({
                     <Button
                       size="sm"
                       className="text-xs"
-                      style={{ background: '#2E37FE' }}
                       onClick={() => handleSendReport(selectedReport)}
                       disabled={sending}
                     >
@@ -987,9 +985,9 @@ export function ReportsClient({
               </div>
 
               {/* Recipients */}
-              <div className="rounded-xl border border-border/50 bg-muted/10 p-4">
+              <div className="rounded-xl border border-border-soft bg-muted/10 p-4">
                 <div className="flex items-center gap-2 mb-3">
-                  <Users size={14} className="text-[#2E37FE]" />
+                  <Users size={14} className="text-primary" />
                   <span className="text-sm font-semibold">Recipients</span>
                   <span className="text-xs text-muted-foreground">
                     ({recipients.filter((r) => r.checked).length} selected)
@@ -1013,10 +1011,10 @@ export function ReportsClient({
                               )
                             )
                           }
-                          className="h-4 w-4 rounded border-border accent-[#2E37FE]"
+                          className="h-4 w-4 rounded border-border accent-primary"
                         />
                         <div className="flex items-center gap-2 flex-1 min-w-0">
-                          <div className="flex h-7 w-7 items-center justify-center rounded-md text-[10px] font-bold text-white shrink-0" style={{ background: '#2E37FE' }}>
+                          <div className="flex h-7 w-7 items-center justify-center rounded-md text-[10px] font-bold text-white shrink-0 bg-primary">
                             {r.name.charAt(0).toUpperCase()}
                           </div>
                           <div className="min-w-0">
@@ -1033,8 +1031,8 @@ export function ReportsClient({
 
               {/* KPI Summary */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div className="text-center p-3 rounded-lg bg-[#2E37FE]/5 border border-[#2E37FE]/10">
-                  <p className="text-xl font-bold text-[#6B72FF]">{selectedReport.report_data.totals.emails_sent.toLocaleString()}</p>
+                <div className="text-center p-3 rounded-lg bg-primary/5 border border-primary/10">
+                  <p className="text-xl font-bold text-brand-300">{selectedReport.report_data.totals.emails_sent.toLocaleString()}</p>
                   <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Emails Sent</p>
                 </div>
                 <div className="text-center p-3 rounded-lg bg-emerald-50/50 border border-emerald-100">
@@ -1053,7 +1051,7 @@ export function ReportsClient({
 
               {/* Campaign breakdown */}
               {selectedReport.report_data.campaigns.map((camp) => (
-                <div key={camp.campaign_id} className="rounded-xl border border-border/50 p-4">
+                <div key={camp.campaign_id} className="rounded-xl border border-border-soft p-4">
                   <p className="text-sm font-semibold mb-2">{camp.campaign_name}</p>
                   <div className="grid grid-cols-4 gap-4 text-center">
                     <div>
@@ -1082,8 +1080,8 @@ export function ReportsClient({
 
               {/* Email Preview iframe */}
               {showPreview && (
-                <div className="rounded-xl border border-border/50 overflow-hidden">
-                  <div className="bg-muted/30 border-b border-border/30 py-2 px-4 flex items-center gap-3">
+                <div className="rounded-xl border border-border-soft overflow-hidden">
+                  <div className="bg-muted/30 border-b border-border-soft py-2 px-4 flex items-center gap-3">
                     <div className="flex gap-1.5">
                       <span className="h-2.5 w-2.5 rounded-full bg-red-400" />
                       <span className="h-2.5 w-2.5 rounded-full bg-amber-400" />

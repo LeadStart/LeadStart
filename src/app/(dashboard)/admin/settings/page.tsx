@@ -21,7 +21,7 @@ export default function SettingsIndexPage() {
                 <Link
                   key={entry.href}
                   href={entry.href}
-                  className="group flex w-full flex-col gap-1.5 rounded-xl border bg-card p-4 transition-colors hover:border-primary/40 hover:bg-muted/40 sm:w-[15.5rem]"
+                  className="group flex w-full flex-col gap-1.5 rounded-xl border border-border-soft bg-card shadow-card p-4 transition-colors hover:border-primary/40 hover:bg-muted/40 sm:w-[15.5rem]"
                 >
                   <div className="flex items-center gap-2">
                     <Icon size={16} className="shrink-0 text-primary" />

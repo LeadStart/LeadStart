@@ -80,7 +80,7 @@ export default async function AdminReplyDetailPage({
     return (
       <div className="space-y-4">
         <BackButton href="/admin/inbox" label="Back to inbox" />
-        <Card className="border-border/50">
+        <Card>
           <CardContent className="py-12 text-center">
             <p className="text-muted-foreground">Reply not found.</p>
           </CardContent>
@@ -106,7 +106,7 @@ export default async function AdminReplyDetailPage({
       </div>
 
       {/* Prospect + client card */}
-      <Card className="border-border/50 shadow-sm">
+      <Card>
         <CardContent className="px-5 py-4 space-y-3">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
@@ -139,7 +139,7 @@ export default async function AdminReplyDetailPage({
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-xs">
                 <a
                   href={`mailto:${reply.lead_email}`}
-                  className="inline-flex items-center gap-1 text-[#2E37FE] hover:underline"
+                  className="inline-flex items-center gap-1 text-primary hover:underline"
                 >
                   <Mail size={11} /> {reply.lead_email}
                 </a>
@@ -164,7 +164,7 @@ export default async function AdminReplyDetailPage({
               </div>
 
               {/* Client + when the reply arrived */}
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 pt-2 border-t border-border/40 text-xs">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 pt-2 border-t border-border-soft text-xs">
                 <span className="text-muted-foreground">
                   Client:{" "}
                   <span className="text-foreground font-medium">
@@ -188,7 +188,7 @@ export default async function AdminReplyDetailPage({
       </Card>
 
       {/* Reply body */}
-      <Card className="border-border/50 shadow-sm">
+      <Card>
         <CardContent className="px-5 py-4">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
@@ -215,10 +215,10 @@ export default async function AdminReplyDetailPage({
       </Card>
 
       {/* Classification audit */}
-      <Card className="border-border/50 shadow-sm">
+      <Card>
         <CardContent className="px-5 py-4 space-y-3">
           <div className="flex items-center gap-2">
-            <Bot size={14} className="text-[#2E37FE]" />
+            <Bot size={14} className="text-primary" />
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Classification trail
             </p>
@@ -242,7 +242,7 @@ export default async function AdminReplyDetailPage({
             </div>
           </div>
           {reply.claude_reason && (
-            <div className="pt-2 border-t border-border/50">
+            <div className="pt-2 border-t border-border-soft">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">
                 Reason
               </p>
@@ -253,7 +253,7 @@ export default async function AdminReplyDetailPage({
           )}
 
           {reply.referral_contact && (
-            <div className="pt-2 border-t border-border/50">
+            <div className="pt-2 border-t border-border-soft">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">
                 Extracted referral
               </p>
@@ -274,7 +274,7 @@ export default async function AdminReplyDetailPage({
         </CardContent>
       </Card>
 
-      <Card className="border-border/50 shadow-sm">
+      <Card>
         <CardContent className="px-5 py-4 space-y-4">
           <ReclassifyForm
             replyId={reply.id}
@@ -288,7 +288,7 @@ export default async function AdminReplyDetailPage({
       </Card>
 
       {/* Client notes (read-only mirror of the client's inbox note) */}
-      <Card className="border-border/50 shadow-sm">
+      <Card>
         <CardContent className="px-5 py-4">
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
             Client notes
@@ -306,7 +306,7 @@ export default async function AdminReplyDetailPage({
       </Card>
 
       {/* Outcome (read-only) */}
-      <Card className="border-border/50 shadow-sm">
+      <Card>
         <CardContent className="px-5 py-4">
           <div className="flex items-center justify-between mb-2">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">

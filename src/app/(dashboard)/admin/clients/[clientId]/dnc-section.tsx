@@ -97,7 +97,7 @@ export function DncSection({
   }
 
   return (
-    <Card className="border-border/50 shadow-sm">
+    <Card>
       <CardHeader
         className="flex flex-row items-center gap-2 pb-3 cursor-pointer select-none"
         onClick={() => setOpen((v) => !v)}
@@ -141,11 +141,11 @@ export function DncSection({
               <Loader2 size={12} className="animate-spin" /> Loading…
             </p>
           ) : entries && entries.length > 0 ? (
-            <div className="rounded-md border border-border/60 divide-y divide-border/40">
+            <div className="rounded-md border border-border-soft divide-y divide-border-soft">
               {entries.map((e) => (
                 <div key={e.id} className="flex items-center gap-3 px-3 py-2 text-sm">
                   <div className="min-w-0 flex-1">
-                    <p className="truncate font-medium text-[#0f172a]">{e.email}</p>
+                    <p className="truncate font-medium text-foreground">{e.email}</p>
                     <p className="text-[11px] text-muted-foreground">
                       {REASON_LABEL[e.reason] ?? e.reason}
                       {e.source_channel ? ` · ${e.source_channel}` : ""} ·{" "}

@@ -20,7 +20,7 @@ export function Section({
   className?: string;
 }) {
   return (
-    <section className={cn("rounded-xl border bg-card p-4 space-y-3", className)}>
+    <section className={cn("rounded-xl border border-border-soft bg-card shadow-card p-4 space-y-3", className)}>
       <h3 className="inline-flex items-center gap-1.5 text-sm font-semibold text-foreground">
         {icon}
         {title}
@@ -182,7 +182,7 @@ export function SelectField<T extends string | number>({
           const hit = options.find((o) => String(o.value) === e.target.value);
           if (hit) onChange(hit.value);
         }}
-        className="h-9 w-full rounded-lg border border-input bg-background px-2 text-sm"
+        className="ls-select w-full"
       >
         {options.map((o) => (
           <option key={String(o.value)} value={String(o.value)}>

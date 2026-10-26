@@ -292,7 +292,7 @@ function CampaignInputs({ state: s, update, history }: { state: PlannerState; up
         </Hint>
       </Section>
 
-      <details className="group rounded-xl border bg-card p-4">
+      <details className="group rounded-xl border border-border-soft bg-card shadow-card p-4">
         <summary className="flex cursor-pointer list-none items-center gap-1.5 text-sm font-semibold">
           <Settings2 size={14} /> Sending rules
           <span className="ml-auto text-xs font-normal text-muted-foreground group-open:hidden">

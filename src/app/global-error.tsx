@@ -48,7 +48,7 @@ export default function GlobalError({ error, reset, unstable_retry }: Props) {
     >
       <body className="flex min-h-screen items-center justify-center p-6 font-sans">
         <title>Something went wrong | LeadStart</title>
-        <main className="w-full max-w-md rounded-xl border bg-card p-6 text-sm">
+        <main className="w-full max-w-md rounded-xl border border-border-soft bg-card shadow-card p-6 text-sm">
           <div className="mb-3 inline-flex size-9 items-center justify-center rounded-full bg-destructive/10 text-destructive">
             <AlertTriangle size={18} />
           </div>

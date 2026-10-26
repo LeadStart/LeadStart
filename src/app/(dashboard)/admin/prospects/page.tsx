@@ -68,9 +68,9 @@ type StageDef = {
 };
 
 const STAGES: StageDef[] = [
-  { value: "lead", label: "Lead", badge: "bg-[#e2e8f0] text-[#475569]", badgeBorder: "border-slate-200", columnBar: "bg-slate-400", headerTint: "bg-slate-50" },
+  { value: "lead", label: "Lead", badge: "bg-border text-[#475569]", badgeBorder: "border-slate-200", columnBar: "bg-slate-400", headerTint: "bg-slate-50" },
   { value: "contacted", label: "Contacted", badge: "badge-blue", badgeBorder: "border-blue-200", columnBar: "bg-blue-500", headerTint: "bg-blue-50" },
-  { value: "meeting", label: "Meeting", badge: "bg-[#2E37FE]/15 text-[#2E37FE]", badgeBorder: "border-[#2E37FE]/20", columnBar: "bg-[#2E37FE]", headerTint: "bg-[#EDEEFF]" },
+  { value: "meeting", label: "Meeting", badge: "bg-primary/15 text-primary", badgeBorder: "border-primary/20", columnBar: "bg-primary", headerTint: "bg-brand-50" },
   { value: "proposal", label: "Proposal", badge: "badge-amber", badgeBorder: "border-amber-200", columnBar: "bg-amber-500", headerTint: "bg-amber-50" },
   { value: "closed", label: "Closed Won", badge: "badge-green", badgeBorder: "border-emerald-200", columnBar: "bg-emerald-500", headerTint: "bg-emerald-50" },
   { value: "lost", label: "Lost", badge: "badge-red", badgeBorder: "border-red-200", columnBar: "bg-red-400", headerTint: "bg-red-50" },
@@ -118,14 +118,11 @@ function ProspectCardInner({
   return (
     <Card
       onClick={onSelect}
-      className={`group cursor-pointer transition-all hover:border-[#2E37FE]/30 hover:shadow-md ${dragging ? "shadow-lg ring-2 ring-[#2E37FE]/30" : ""}`}
+      className={`group cursor-pointer transition-all hover:border-primary/30 hover:shadow-float ${dragging ? "shadow-float ring-2 ring-primary/30" : ""}`}
     >
       <CardContent className="p-3">
         <div className="flex items-start gap-2.5 mb-2">
-          <div
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold text-white shrink-0"
-            style={{ background: "#2E37FE" }}
-          >
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold text-white shrink-0 bg-primary">
             {companyInitial}
           </div>
           <div className="min-w-0 flex-1">
@@ -156,7 +153,7 @@ function ProspectCardInner({
         )}
 
         {(contact.email || contact.pipeline_follow_up_date) && (
-          <div className="flex items-center gap-3 pt-2 border-t border-border/30 text-[11px] text-muted-foreground">
+          <div className="flex items-center gap-3 pt-2 border-t border-border-soft text-[11px] text-muted-foreground">
             {contact.email && (
               <span className="flex items-center gap-1 truncate">
                 <Mail size={10} className="shrink-0" />
@@ -219,21 +216,21 @@ function KanbanColumn({
   });
 
   return (
-    <div className="flex flex-col w-[280px] shrink-0 rounded-xl border border-border/50 bg-background/40 overflow-hidden">
-      <div className={`flex items-center justify-between px-3 py-2.5 ${stage.headerTint} border-b border-border/50`}>
+    <div className="flex flex-col w-[280px] shrink-0 rounded-xl border border-border-soft bg-background/40 overflow-hidden">
+      <div className={`flex items-center justify-between px-3 py-2.5 ${stage.headerTint} border-b border-border-soft`}>
         <div className="flex items-center gap-2">
           <span className={`h-2 w-2 rounded-full ${stage.columnBar}`} />
-          <span className="text-sm font-semibold text-[#0f172a]">{stage.label}</span>
+          <span className="text-sm font-semibold text-foreground">{stage.label}</span>
           <span className="text-xs font-medium text-muted-foreground">{contacts.length}</span>
         </div>
       </div>
       <SortableContext items={contacts.map((c) => c.id)} strategy={verticalListSortingStrategy}>
         <div
           ref={setNodeRef}
-          className={`flex-1 min-h-[300px] p-2.5 space-y-2 transition-colors ${isOver ? "bg-[#2E37FE]/5" : ""}`}
+          className={`flex-1 min-h-[300px] p-2.5 space-y-2 transition-colors ${isOver ? "bg-primary/5" : ""}`}
         >
           {contacts.length === 0 ? (
-            <div className={`h-24 rounded-lg border-2 border-dashed flex items-center justify-center text-xs text-muted-foreground ${isOver ? "border-[#2E37FE]/40" : "border-border/50"}`}>
+            <div className={`h-24 rounded-lg border-2 border-dashed flex items-center justify-center text-xs text-muted-foreground ${isOver ? "border-primary/40" : "border-border-soft"}`}>
               Drop here
             </div>
           ) : (
@@ -488,8 +485,8 @@ export default function ProspectsPage() {
         <StatCard
           label="Active Pipeline"
           value={activeCount}
-          icon={<Target size={18} className="text-[#2E37FE]" />}
-          iconBg="bg-[#2E37FE]/10"
+          icon={<Target size={18} className="text-primary" />}
+          iconBg="bg-primary/10"
         />
         <StatCard
           label="Closed Won"
@@ -546,10 +543,7 @@ export default function ProspectsPage() {
           <DialogContent className="max-w-lg">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-3">
-                <div
-                  className="flex h-10 w-10 items-center justify-center rounded-lg text-sm font-bold text-white"
-                  style={{ background: "#2E37FE" }}
-                >
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg text-sm font-bold text-white bg-primary">
                   {(selected.company_name || selected.email || "?").charAt(0).toUpperCase()}
                 </div>
                 <div className="min-w-0">
@@ -578,14 +572,14 @@ export default function ProspectsPage() {
                 </div>
               )}
 
-              <div className="rounded-xl border border-border/50 p-4 space-y-2 bg-muted/20">
+              <div className="rounded-xl border border-border-soft p-4 space-y-2 bg-muted/20">
                 <div className="flex items-center justify-between">
                   <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
                     <Lock size={11} /> Contact info (read-only)
                   </p>
                   <Link
                     href="/admin/contacts"
-                    className="text-xs font-medium text-[#2E37FE] hover:underline flex items-center gap-1"
+                    className="text-xs font-medium text-primary hover:underline flex items-center gap-1"
                   >
                     View contact <ExternalLink size={11} />
                   </Link>
@@ -643,7 +637,7 @@ export default function ProspectsPage() {
                 </div>
               </div>
 
-              <div className="flex items-center justify-between pt-2 border-t border-border/30">
+              <div className="flex items-center justify-between pt-2 border-t border-border-soft">
                 <Button
                   variant="ghost"
                   size="sm"
@@ -659,7 +653,6 @@ export default function ProspectsPage() {
                   </Button>
                   <Button
                     size="sm"
-                    style={{ background: "#2E37FE" }}
                     disabled={savingEdits}
                     onClick={handleSaveProspectEdits}
                   >
@@ -689,7 +682,7 @@ export default function ProspectsPage() {
                   </p>
                 </div>
                 <Link href="/admin/contacts">
-                  <Button style={{ background: "#2E37FE" }} onClick={() => setShowAdd(false)}>
+                  <Button onClick={() => setShowAdd(false)}>
                     Go to Contacts
                   </Button>
                 </Link>
@@ -724,7 +717,7 @@ export default function ProspectsPage() {
                     autoFocus
                   />
                 </div>
-                <div className="max-h-[360px] overflow-y-auto rounded-xl border border-border/50 divide-y divide-border/50">
+                <div className="max-h-[360px] overflow-y-auto rounded-xl border border-border-soft divide-y divide-border-soft">
                   {addableContacts.length === 0 ? (
                     <p className="p-4 text-sm text-muted-foreground text-center">
                       No matching contacts.
@@ -736,10 +729,7 @@ export default function ProspectsPage() {
                         onClick={() => addContactToPipeline(c)}
                         className="w-full flex items-center gap-3 p-3 hover:bg-muted/40 transition-colors text-left"
                       >
-                        <div
-                          className="flex h-9 w-9 items-center justify-center rounded-lg text-xs font-bold text-white shrink-0"
-                          style={{ background: "#2E37FE" }}
-                        >
+                        <div className="flex h-9 w-9 items-center justify-center rounded-lg text-xs font-bold text-white shrink-0 bg-primary">
                           {(c.company_name || c.email || "?").charAt(0).toUpperCase()}
                         </div>
                         <div className="min-w-0 flex-1">
@@ -750,14 +740,14 @@ export default function ProspectsPage() {
                             {displayName(c)} · {c.email}
                           </p>
                         </div>
-                        <Plus size={16} className="text-[#2E37FE] shrink-0" />
+                        <Plus size={16} className="text-primary shrink-0" />
                       </button>
                     ))
                   )}
                 </div>
                 <p className="text-[11px] text-muted-foreground">
                   Don&apos;t see them?{" "}
-                  <Link href="/admin/contacts" className="text-[#2E37FE] hover:underline">
+                  <Link href="/admin/contacts" className="text-primary hover:underline">
                     Create a contact
                   </Link>{" "}
                   first.

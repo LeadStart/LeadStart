@@ -76,16 +76,16 @@ export function CampaignTagFollow({
   // ── Bound: show the live binding + unfollow ────────────────────────────────
   if (boundTag) {
     return (
-      <div className="space-y-1.5 rounded-lg border border-[#2E37FE]/25 bg-[#2E37FE]/5 p-3">
+      <div className="space-y-1.5 rounded-lg border border-primary/25 bg-primary/5 p-3">
         <div className="flex items-center justify-between gap-2">
-          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-[#2E37FE]">
+          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-primary">
             <Tag size={13} /> Following tag “{boundTag}”
           </span>
           <button
             type="button"
             onClick={() => bind(null)}
             disabled={busy}
-            className="inline-flex items-center gap-1 rounded-md border border-border/60 bg-background px-2 py-1 text-[11px] font-medium text-secondary-foreground transition-colors hover:border-[#2E37FE]/50 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex items-center gap-1 rounded-md border border-border-soft bg-background px-2 py-1 text-[11px] font-medium text-secondary-foreground transition-colors hover:border-primary/50 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {busy && <Loader2 size={11} className="animate-spin" />} Unfollow
           </button>
@@ -98,7 +98,7 @@ export function CampaignTagFollow({
           </Link>{" "}
           page. Unfollow to edit the pool by hand.
         </p>
-        {summary && <p className="text-[11px] text-[#2E37FE]">{summary}</p>}
+        {summary && <p className="text-[11px] text-primary">{summary}</p>}
         {err && <p className="text-[11px] text-red-600">{err}</p>}
       </div>
     );
@@ -106,7 +106,7 @@ export function CampaignTagFollow({
 
   // ── Unbound: offer to follow a tag ─────────────────────────────────────────
   return (
-    <div className="space-y-1.5 rounded-lg border border-border/60 bg-muted/20 p-3">
+    <div className="space-y-1.5 rounded-lg border border-border-soft bg-muted/20 p-3">
       <span className="inline-flex items-center gap-1.5 text-xs font-medium text-secondary-foreground">
         <Tag size={13} /> Follow a tag <span className="text-muted-foreground">(auto-add inboxes)</span>
       </span>
@@ -125,7 +125,7 @@ export function CampaignTagFollow({
               value={choice}
               onChange={(e) => setChoice(e.target.value)}
               disabled={busy}
-              className="min-w-0 flex-1 rounded-md border border-border/60 bg-background px-2 py-1.5 text-xs outline-none focus:border-[#2E37FE]/50 disabled:opacity-60"
+              className="ls-select ls-select-sm min-w-0 flex-1"
             >
               <option value="">Choose a tag…</option>
               {availableTags.map((t) => (
@@ -138,7 +138,7 @@ export function CampaignTagFollow({
               type="button"
               onClick={() => choice && bind(choice)}
               disabled={busy || !choice}
-              className="inline-flex shrink-0 items-center gap-1 rounded-md bg-[#2E37FE] px-2.5 py-1.5 text-xs font-medium text-white transition-colors hover:bg-[#2731d6] disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex shrink-0 items-center gap-1 rounded-md bg-primary px-2.5 py-1.5 text-xs font-medium text-white transition-colors hover:bg-[#2731d6] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {busy ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />} Follow
             </button>

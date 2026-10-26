@@ -175,7 +175,7 @@ export function GlobalSearch() {
 
   return (
     <div ref={containerRef} className="relative hidden md:block w-72">
-      <div className="flex items-center gap-2 rounded-lg border border-border/50 bg-[#f8fafc] px-3 py-2 text-sm focus-within:border-[#2E37FE]/40 focus-within:bg-white focus-within:ring-3 focus-within:ring-[#2E37FE]/10 transition-colors">
+      <div className="flex h-9 items-center gap-2 rounded-full border border-border-soft bg-secondary px-3.5 text-[13px] focus-within:border-primary/40 focus-within:bg-card focus-within:ring-3 focus-within:ring-primary/10 transition-colors">
         <Search size={14} className="text-muted-foreground shrink-0" />
         <input
           ref={inputRef}
@@ -197,7 +197,7 @@ export function GlobalSearch() {
       </div>
 
       {showDropdown && (
-        <div className="absolute left-0 right-0 top-full mt-1.5 rounded-lg border border-border/50 bg-white shadow-lg max-h-96 overflow-y-auto z-50">
+        <div className="ls-menu ls-menu-in absolute left-0 right-0 top-full mt-2 max-h-96 overflow-y-auto p-1.5 z-50 [--transform-origin:top_center]">
           {results.length === 0 ? (
             <div className="px-3 py-4 text-center text-sm text-muted-foreground">
               No results for &ldquo;{query}&rdquo;
@@ -261,7 +261,7 @@ function ResultGroup({
 }: ResultGroupProps) {
   return (
     <div className="py-1">
-      <div className="flex items-center gap-1.5 px-3 pt-1.5 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+      <div className="flex items-center gap-1.5 px-2.5 pt-1.5 pb-1 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
         {icon}
         {title}
       </div>
@@ -274,8 +274,8 @@ function ResultGroup({
             type="button"
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => onSelect(r)}
-            className={`w-full flex items-start gap-2 px-3 py-1.5 text-left text-sm cursor-pointer transition-colors ${
-              active ? "bg-[#f1f2ff]" : "hover:bg-[#f8fafc]"
+            className={`w-full flex items-start gap-2 rounded-[11px] px-2.5 py-2 text-left text-[13.5px] cursor-pointer transition-colors ${
+              active ? "bg-brand-50" : "hover:bg-muted"
             }`}
           >
             <div className="flex-1 min-w-0">

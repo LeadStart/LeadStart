@@ -92,11 +92,11 @@ export default function AllCampaignsPage() {
           </div>
         }
       />
-      <Card className="border-border/50 shadow-sm">
+      <Card>
         <CardContent className="pt-6">
           {campaigns.length === 0 ? <p className="text-sm text-muted-foreground">No campaigns yet.</p> : (
             <>
-            <div className="mb-4 flex items-center justify-between gap-3">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <p className="text-[11px] text-muted-foreground">
                 Reply &amp; bounce rates reflect{" "}
                 {period === "all"
@@ -112,26 +112,26 @@ export default function AllCampaignsPage() {
                 const campaignHref = `/admin/campaigns/${row.id}`;
                 const clientHref = isOrphan ? null : `/admin/clients/${row.client_id}`;
                 return (
-                  <div key={row.id} className="rounded-xl border border-border bg-card p-4">
+                  <div key={row.id} className="rounded-xl border border-border-soft bg-card shadow-card p-4">
                     <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-lg text-white shrink-0" style={{ background: "#2E37FE" }}><Mail size={15} /></div>
+                      <div className="flex h-9 w-9 items-center justify-center rounded-lg text-white shrink-0 bg-primary"><Mail size={15} /></div>
                       <div className="min-w-0 flex-1">
-                        <Link href={campaignHref} className="block font-medium text-foreground truncate hover:text-[#2E37FE]">{row.name}</Link>
+                        <Link href={campaignHref} className="block font-medium text-foreground truncate hover:text-primary">{row.name}</Link>
                         <div className="text-xs text-muted-foreground truncate">
                           {clientHref ? <Link href={clientHref} className="hover:text-foreground">{row.clientName || "-"}</Link> : <span className="text-amber-600">Unlinked</span>}
                         </div>
                       </div>
                       <Badge variant="secondary" className={`shrink-0 ${row.status === "active" ? "badge-green" : row.status === "paused" ? "badge-amber" : "badge-slate"}`}>{row.status}</Badge>
                     </div>
-                    <div className="mt-3 grid grid-cols-4 gap-2 border-t border-border/60 pt-3">
+                    <div className="mt-3 grid grid-cols-4 gap-2 border-t border-border-soft pt-3">
                       <div className="min-w-0"><p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Sent</p><p className="text-sm font-semibold tabular-nums truncate">{row.metrics.emails_sent.toLocaleString()}</p></div>
                       <div className="min-w-0"><p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Reply</p><p className={`text-sm font-semibold tabular-nums ${row.metrics.reply_rate >= 5 ? "text-emerald-600" : row.metrics.reply_rate >= 2 ? "text-amber-600" : "text-red-600"}`}>{row.metrics.reply_rate}%</p></div>
                       <div className="min-w-0"><p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Bounce</p><p className={`text-sm font-semibold tabular-nums ${row.metrics.bounce_rate <= 2 ? "text-emerald-600" : "text-red-600"}`}>{row.metrics.bounce_rate}%</p></div>
                       <div className="min-w-0"><p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Positive</p><p className="text-sm font-semibold tabular-nums">{row.metrics.positive_replies}</p></div>
                     </div>
-                    <div className="mt-3 flex items-center gap-1 border-t border-border/60 pt-3">
+                    <div className="mt-3 flex items-center gap-1 border-t border-border-soft pt-3">
                       <CampaignRowActions campaignId={row.id} campaignName={row.name} status={row.status as "active" | "paused" | "draft" | "completed" | null} sourceChannel={row.source_channel} onChanged={refetch} />
-                      <Link href={campaignHref} className="ml-auto flex items-center gap-1 text-sm font-medium text-[#2E37FE]">View <ArrowRight size={13} /></Link>
+                      <Link href={campaignHref} className="ml-auto flex items-center gap-1 text-sm font-medium text-primary">View <ArrowRight size={13} /></Link>
                     </div>
                   </div>
                 );
@@ -152,7 +152,7 @@ export default function AllCampaignsPage() {
                   const clientHref = isOrphan ? null : `/admin/clients/${row.client_id}`;
                   return (
                     <TableRow key={row.id} href={campaignHref} className="group">
-                      <TableCell><div className="flex items-center gap-3"><div className="flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold text-white shrink-0" style={{ background: '#2E37FE' }}><Mail size={14} /></div><Link href={campaignHref} className="font-medium text-foreground hover:text-[#2E37FE] transition-colors">{row.name}</Link></div></TableCell>
+                      <TableCell><div className="flex items-center gap-3"><div className="flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold text-white shrink-0 bg-primary"><Mail size={14} /></div><Link href={campaignHref} className="font-medium text-foreground hover:text-primary transition-colors">{row.name}</Link></div></TableCell>
                       <TableCell>{clientHref ? (
                         <div className="space-y-1">
                           <Link href={clientHref} className="text-muted-foreground hover:text-foreground transition-colors">{row.clientName || "-"}</Link>

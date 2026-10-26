@@ -19,9 +19,9 @@ export function LaunchReadinessCard({ readiness }: { readiness: LaunchReadiness 
   }
 
   return (
-    <div className="rounded-lg border border-border/60 p-4">
+    <div className="rounded-lg border border-border-soft p-4">
       <div className="flex items-center gap-2 text-sm font-medium">
-        <Rocket size={15} className="text-[#2E37FE]" />
+        <Rocket size={15} className="text-primary" />
         {canLaunch ? "Ready to launch" : "Before you can launch"}
       </div>
       {blockers.length > 0 && (
@@ -35,7 +35,7 @@ export function LaunchReadinessCard({ readiness }: { readiness: LaunchReadiness 
         </ul>
       )}
       {warnings.length > 0 && (
-        <ul className={`space-y-1 ${blockers.length > 0 ? "mt-2 border-t border-border/40 pt-2" : "mt-2.5"}`}>
+        <ul className={`space-y-1 ${blockers.length > 0 ? "mt-2 border-t border-border-soft pt-2" : "mt-2.5"}`}>
           {warnings.map((w) => (
             <li key={w.key} className="flex items-center gap-2 text-xs text-amber-700">
               <AlertCircle size={12} className="shrink-0" />

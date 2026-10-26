@@ -55,7 +55,7 @@ export function MonthlyPositiveChart({ snapshots, height = 220 }: MonthlyPositiv
   const canGoForward = offset < maxOffset;
 
   return (
-    <Card className="border-border/50 shadow-sm">
+    <Card>
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
           <CardTitle className="text-base font-semibold">Positive Responses by Month</CardTitle>

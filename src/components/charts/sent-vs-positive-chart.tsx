@@ -40,7 +40,7 @@ export function SentVsPositiveChart({ snapshots, height = 220 }: SentVsPositiveC
   if (data.length === 0) return null;
 
   return (
-    <Card className="border-border/50 shadow-sm">
+    <Card>
       <CardHeader className="pb-2">
         <CardTitle className="text-base font-semibold">Emails Sent vs Positive Responses</CardTitle>
       </CardHeader>

@@ -108,7 +108,7 @@ export default function ClientDashboardPage() {
       <div className="flex items-center justify-center h-64">
         <div className="text-center space-y-2">
           <div className="flex justify-center">
-            <div className="h-12 w-12 rounded-full bg-[#2E37FE] flex items-center justify-center">
+            <div className="h-12 w-12 rounded-full bg-primary flex items-center justify-center">
               <TrendingUp size={24} className="text-white" />
             </div>
           </div>
@@ -130,8 +130,8 @@ export default function ClientDashboardPage() {
       {/* Row 1: Campaign Performance */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]"><TrendingUp size={16} className="text-white" /></div>
-          <h2 className="text-[15px] font-semibold text-[#0f172a]">Campaign Performance</h2>
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary"><TrendingUp size={16} className="text-white" /></div>
+          <h2 className="text-[15px] font-semibold text-foreground">Campaign Performance</h2>
         </div>
         <div className="flex items-center gap-3">
           {datePreset !== "custom" && (
@@ -140,7 +140,7 @@ export default function ClientDashboardPage() {
             </span>
           )}
           <Select value={datePreset} onValueChange={handlePresetChange}>
-            <SelectTrigger className="h-8 w-[130px] border-border/50 text-xs font-medium"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="h-8 w-[130px] border-border-soft text-xs font-medium"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="7d">Last 7 Days</SelectItem>
               <SelectItem value="30d">Last 30 Days</SelectItem>
@@ -152,20 +152,20 @@ export default function ClientDashboardPage() {
           </Select>
         </div>
       </div>
-      <Card className="border-border/50 shadow-sm overflow-hidden">
+      <Card className="overflow-hidden">
         {datePreset === "custom" && (
-          <div className="flex items-end gap-4 px-6 py-3 bg-[#2E37FE]/5 border-b border-border/30">
+          <div className="flex items-end gap-4 px-6 py-3 bg-primary/5 border-b border-border-soft">
             <div className="space-y-1 flex-1 min-w-0">
-              <Label className="text-xs font-medium text-[#2E37FE]/70">From</Label>
+              <Label className="text-xs font-medium text-primary/70">From</Label>
               <Input className="h-9 w-full text-sm" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
             </div>
             <div className="space-y-1 flex-1 min-w-0">
-              <Label className="text-xs font-medium text-[#2E37FE]/70">To</Label>
+              <Label className="text-xs font-medium text-primary/70">To</Label>
               <Input className="h-9 w-full text-sm" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
             </div>
           </div>
         )}
-        <div className="grid grid-cols-2 divide-x divide-border/50">
+        <div className="grid grid-cols-2 divide-x divide-border-soft">
           <div className="px-6 py-5 text-center">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">Emails Sent</p>
             <p className="text-3xl font-bold text-foreground">{metrics.emails_sent.toLocaleString()}</p>
@@ -181,12 +181,12 @@ export default function ClientDashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
         {allTimeSnapshots.length > 0 && <MonthlyPositiveChart snapshots={allTimeSnapshots} height={200} />}
 
-        <Card className="border-border/50 shadow-sm">
+        <Card>
           <CardHeader
             className="flex flex-row items-center gap-2 pb-3 cursor-pointer select-none"
             onClick={() => setCampaignsExpanded((v) => !v)}
           >
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
               <TrendingUp size={16} className="text-white" />
             </div>
             <CardTitle className="text-base flex-1">Your Campaigns</CardTitle>
@@ -204,9 +204,9 @@ export default function ClientDashboardPage() {
                     const campSnapshots = snapshots.filter((s) => s.campaign_id === campaign.id);
                     const campMetrics = calculateMetrics(campSnapshots);
                     return (
-                      <Link key={campaign.id} href={`/client/campaigns/${campaign.id}`} className="group flex items-center justify-between rounded-xl border border-border/50 p-3 transition-all duration-200 hover:border-[#2E37FE]/20 hover:shadow-md hover:bg-[#2E37FE]/5">
+                      <Link key={campaign.id} href={`/client/campaigns/${campaign.id}`} className="group flex items-center justify-between rounded-xl border border-border-soft p-3 transition-all duration-200 hover:border-primary/20 hover:shadow-float hover:bg-primary/5">
                         <div className="flex items-center gap-3">
-                          <div className="flex h-9 w-9 items-center justify-center rounded-lg text-sm font-bold text-white shrink-0" style={{ background: '#2E37FE' }}>
+                          <div className="flex h-9 w-9 items-center justify-center rounded-lg text-sm font-bold text-white shrink-0 bg-primary">
                             {campaign.name.charAt(0)}
                           </div>
                           <div className="min-w-0">

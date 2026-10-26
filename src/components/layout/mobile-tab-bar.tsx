@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 import type { AppRole } from "@/types/app";
 import {
@@ -50,26 +50,24 @@ function isActive(pathname: string, href: string, exact?: boolean) {
   return pathname === href || pathname.startsWith(href + "/");
 }
 
-// Condense geometry (mirrors ReciFeast's floating-nav, adapted to a centred pill
-// with no search circle): the pill spans the viewport minus a 16px inset each
-// side, capped at 480px on tablets. On scroll-down it shrinks toward the active
+// Condense geometry: the pill spans the viewport minus a 16px inset each side,
+// capped at 480px on tablets. On scroll-down it shrinks toward the active
 // tab only; scroll-up (or a route change) re-expands it. Widths are written
 // straight to the DOM per scroll event (no React render) and short CSS
 // transitions smooth the steps, so nothing ever snaps.
 const SIDE_INSET = 16;
-const PILL_PAD = 6;
+const PILL_PAD = 5;
 const MIN_W = 64; // condensed pill: active icon + padding
 const TAB_MIN_ON = 48; // active tab collapsed to icon-only
 const LABEL_MAX_W = 64;
 const CONDENSE_RANGE = 90; // px of scroll that takes the pill 0 -> fully condensed
 
 /**
- * Mobile-only primary navigation. A floating Liquid-Glass pill (ReciFeast-style,
- * approved by Daniel 2026-09-08) that replaces the hamburger as the main way
- * around on phones/tablets; hidden at `lg` where the floating sidebar rail takes
+ * Mobile-only primary navigation: Forge's phone nav (task #228), a floating
+ * brand-blue glass pill with a light capsule under the active tab that slides to
+ * the next one as you move. Hidden at `lg` where the floating sidebar rail takes
  * over. Secondary surfaces still live behind the avatar menu ("All sections") in
- * the topbar. The glass material is a sanctioned exemption to the flat contract
- * (see `globals.css` `.ls-mnav*` + UI_RULES.md).
+ * the topbar. Styles: `globals.css` `.ls-mnav*`.
  */
 export function MobileTabBar({ role }: { role: AppRole }) {
   const pathname = usePathname();
@@ -80,6 +78,31 @@ export function MobileTabBar({ role }: { role: AppRole }) {
   const pillRef = useRef<HTMLElement>(null);
   const tabRefs = useRef<(HTMLAnchorElement | null)[]>([]);
   const pRef = useRef(0);
+  // The capsule lives in the active tab, so it follows that tab's width through the
+  // condense on its own. Between tabs it slides (FLIP): where it stood before the
+  // route changed, measured as the old capsule last stood, glides to the new tab.
+  const glowRef = useRef<HTMLSpanElement>(null);
+  const glowWas = useRef<DOMRect | null>(null);
+  const noteGlow = useCallback(() => {
+    if (glowRef.current) glowWas.current = glowRef.current.getBoundingClientRect();
+  }, []);
+
+  useLayoutEffect(() => {
+    const el = glowRef.current;
+    const was = glowWas.current;
+    if (!el) return;
+    const now = el.getBoundingClientRect();
+    glowWas.current = now;
+    if (!was || Math.abs(was.left - now.left) < 1) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    el.animate(
+      [
+        { transform: `translateX(${was.left - now.left}px) scaleX(${was.width / now.width})` },
+        { transform: "none" },
+      ],
+      { duration: 320, easing: "cubic-bezier(0.32, 0.72, 0, 1)" },
+    );
+  }, [pathname]);
 
   // Write the condense state (0 = full pill, 1 = active tab only) directly to the
   // DOM. At rest (p≈0) all inline styles are cleared so the pill/tabs fall back to
@@ -103,7 +126,7 @@ export function MobileTabBar({ role }: { role: AppRole }) {
           t.style.paddingLeft = "";
           t.style.paddingRight = "";
           t.style.gap = "";
-          const lab = t.querySelector<HTMLElement>("span");
+          const lab = t.querySelector<HTMLElement>(".ls-mnav-label");
           if (lab) {
             lab.style.maxWidth = "";
             lab.style.maxHeight = "";
@@ -121,7 +144,7 @@ export function MobileTabBar({ role }: { role: AppRole }) {
       tabRefs.current.forEach((t, i) => {
         if (!t) return;
         const on = isActive(pathname, tabs[i].href, tabs[i].exact);
-        const lab = t.querySelector<HTMLElement>("span");
+        const lab = t.querySelector<HTMLElement>(".ls-mnav-label");
         t.style.flex = "0 0 auto";
         if (on) {
           t.style.width = `${(tabW - p * (tabW - TAB_MIN_ON)).toFixed(1)}px`;
@@ -201,6 +224,7 @@ export function MobileTabBar({ role }: { role: AppRole }) {
               }}
               aria-current={active ? "page" : undefined}
               className={cn("ls-mnav-tab", active && "is-on")}
+              onPointerDown={noteGlow}
               onClick={(e) => {
                 // Tapping the tab you're already on: scroll the page back to the
                 // top (which also re-expands a condensed pill) and refresh its
@@ -215,8 +239,9 @@ export function MobileTabBar({ role }: { role: AppRole }) {
                 router.refresh();
               }}
             >
+              {active && <span ref={glowRef} className="ls-mnav-glow" aria-hidden />}
               {tab.icon}
-              <span>{tab.label}</span>
+              <span className="ls-mnav-label">{tab.label}</span>
             </Link>
           );
         })}

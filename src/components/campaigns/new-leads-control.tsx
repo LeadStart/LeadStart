@@ -65,7 +65,7 @@ export function NewLeadsControl({
     <div className="space-y-1.5">
       <p className="text-xs font-medium text-secondary-foreground">New contacts per day</p>
       <div className="flex flex-wrap items-center gap-2">
-        <div role="radiogroup" aria-label="New contacts per day" className="inline-flex rounded-lg border border-border/60 bg-muted/40 p-0.5">
+        <div role="radiogroup" aria-label="New contacts per day" className="inline-flex rounded-lg border border-border-soft bg-muted/40 p-0.5">
           {MODES.map((m) => (
             <button
               key={m.value}
@@ -74,7 +74,7 @@ export function NewLeadsControl({
               aria-checked={mode === m.value}
               onClick={() => pick(m.value)}
               className={`cursor-pointer rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                mode === m.value ? "bg-[#2E37FE] text-white" : "text-muted-foreground hover:text-foreground"
+                mode === m.value ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"
               }`}
             >
               {m.label}
@@ -96,7 +96,7 @@ export function NewLeadsControl({
               setLastLimit(v);
               onChange(v);
             }}
-            className="w-24 rounded-md border border-border/60 bg-background px-2 py-1.5 text-sm"
+            className="w-24 rounded-md border border-border-soft bg-background px-2 py-1.5 text-sm"
           />
         )}
       </div>

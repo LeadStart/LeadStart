@@ -55,21 +55,21 @@ export function EmailTagInput({
   return (
     <div className="space-y-1.5">
       <div
-        className={`flex flex-wrap gap-1.5 rounded-lg border border-border/60 bg-card px-2.5 py-2 min-h-[42px] ${
+        className={`flex flex-wrap gap-1.5 rounded-xl border border-input bg-card px-3 py-2 min-h-[42px] shadow-[0_1px_3px_rgba(0,0,0,0.06)] focus-within:border-primary focus-within:ring-3 focus-within:ring-primary/15 ${
           disabled ? "opacity-60" : ""
         }`}
       >
         {value.map((email) => (
           <span
             key={email}
-            className="inline-flex items-center gap-1 rounded-full bg-[#2E37FE]/10 px-2.5 py-0.5 text-xs text-[#2E37FE]"
+            className="inline-flex items-center gap-1 rounded-full bg-brand-50 px-2.5 py-0.5 text-xs font-medium text-brand-500"
           >
             {email}
             <button
               type="button"
               onClick={() => !disabled && remove(email)}
               disabled={disabled}
-              className="rounded-full hover:bg-[#2E37FE]/20 p-0.5 cursor-pointer disabled:cursor-not-allowed"
+              className="rounded-full hover:bg-primary/15 p-0.5 cursor-pointer disabled:cursor-not-allowed"
               aria-label={`Remove ${email}`}
             >
               <X size={10} />

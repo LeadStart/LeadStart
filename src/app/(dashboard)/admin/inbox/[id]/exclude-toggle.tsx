@@ -35,7 +35,7 @@ export function ExcludeToggle({
   return (
     <div
       className={`flex items-center justify-between gap-3 rounded-lg border px-3 py-2.5 ${
-        excluded ? "border-amber-200 bg-amber-50/50" : "border-border/60"
+        excluded ? "border-amber-200 bg-amber-50/50" : "border-border-soft"
       }`}
     >
       <div className="min-w-0">
@@ -52,7 +52,7 @@ export function ExcludeToggle({
         type="button"
         onClick={toggle}
         disabled={saving}
-        className="shrink-0 rounded-md border border-border/60 px-3 py-1.5 text-xs font-medium hover:bg-muted/50 disabled:opacity-50 cursor-pointer"
+        className="shrink-0 rounded-md border border-border-soft px-3 py-1.5 text-xs font-medium hover:bg-muted/50 disabled:opacity-50 cursor-pointer"
       >
         {saving ? "…" : excluded ? "Include" : "Exclude"}
       </button>

@@ -51,10 +51,8 @@ export default function SignupPage() {
   }
 
   return (
-    <div
-      className="flex min-h-screen items-center justify-center p-4"
-      style={{ background: "linear-gradient(135deg,#EEF0FF 0%,#F4F5F9 40%,#FFFFFF 100%)" }}
-    >
+    // The page's own bloom (globals.css body) shows through, as on every page.
+    <div className="flex min-h-screen items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="flex flex-col items-center gap-3 pb-6">
           <Image src={leadstartMark} alt="LeadStart" priority className="h-14 w-auto" />
@@ -62,7 +60,7 @@ export default function SignupPage() {
           <p className="text-sm text-muted-foreground">Self-serve contact sourcing, charged only on delivered contacts.</p>
         </div>
 
-        <div className="rounded-2xl border border-border bg-white p-6 shadow-sm">
+        <div className="rounded-xl border border-border-soft bg-card p-6 shadow-card">
           {status === "done" ? (
             <div className="space-y-3 text-center">
               <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary text-2xl">
@@ -88,7 +86,7 @@ export default function SignupPage() {
                   type="text"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
-                  className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                  className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
                   autoComplete="name"
                 />
               </div>
@@ -101,7 +99,7 @@ export default function SignupPage() {
                   type="text"
                   value={company}
                   onChange={(e) => setCompany(e.target.value)}
-                  className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                  className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
                   autoComplete="organization"
                 />
               </div>
@@ -115,7 +113,7 @@ export default function SignupPage() {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                  className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
                   autoComplete="email"
                 />
               </div>
@@ -130,7 +128,7 @@ export default function SignupPage() {
                   minLength={8}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                  className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
                   autoComplete="new-password"
                 />
                 <p className="mt-1 text-xs text-muted-foreground">At least 8 characters.</p>
@@ -143,7 +141,7 @@ export default function SignupPage() {
               <button
                 type="submit"
                 disabled={status === "submitting"}
-                className="w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+                className="w-full rounded-full bg-primary bg-(image:--tex-brand) px-4 py-2.5 text-sm font-semibold text-white transition-opacity hover:brightness-106 disabled:opacity-60"
               >
                 {status === "submitting" ? "Creating account…" : "Create account"}
               </button>

@@ -149,8 +149,8 @@ export default function ClientCampaignPage({
       {/* Self-service CSV import: active native email campaigns only */}
       {typedCampaign.source_channel === "native_email" &&
         typedCampaign.status === "active" && (
-          <Card className="border-border/50 shadow-sm p-5">
-            <h2 className="text-[15px] font-semibold text-[#0f172a] mb-1">
+          <Card className="p-5">
+            <h2 className="text-[15px] font-semibold text-foreground mb-1">
               Add contacts to this campaign
             </h2>
             <p className="text-xs text-muted-foreground mb-4">
@@ -164,8 +164,8 @@ export default function ClientCampaignPage({
       {/* Campaign Performance with date picker */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]"><TrendingUp size={16} className="text-white" /></div>
-          <h2 className="text-[15px] font-semibold text-[#0f172a]">Campaign Performance</h2>
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary"><TrendingUp size={16} className="text-white" /></div>
+          <h2 className="text-[15px] font-semibold text-foreground">Campaign Performance</h2>
         </div>
         <div className="flex items-center gap-3">
           {datePreset !== "custom" && (
@@ -174,7 +174,7 @@ export default function ClientCampaignPage({
             </span>
           )}
           <Select value={datePreset} onValueChange={handlePresetChange}>
-            <SelectTrigger className="h-8 w-[130px] border-border/50 text-xs font-medium"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="h-8 w-[130px] border-border-soft text-xs font-medium"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="7d">Last 7 Days</SelectItem>
               <SelectItem value="30d">Last 30 Days</SelectItem>
@@ -188,14 +188,14 @@ export default function ClientCampaignPage({
       </div>
 
       {datePreset === "custom" && (
-        <Card className="border-border/50 shadow-sm overflow-hidden mb-4">
-          <div className="flex items-end gap-4 px-6 py-3 bg-[#2E37FE]/5">
+        <Card className="overflow-hidden mb-4">
+          <div className="flex items-end gap-4 px-6 py-3 bg-primary/5">
             <div className="space-y-1 flex-1 min-w-0">
-              <Label className="text-xs font-medium text-[#2E37FE]/70">From</Label>
+              <Label className="text-xs font-medium text-primary/70">From</Label>
               <Input className="h-9 w-full text-sm" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
             </div>
             <div className="space-y-1 flex-1 min-w-0">
-              <Label className="text-xs font-medium text-[#2E37FE]/70">To</Label>
+              <Label className="text-xs font-medium text-primary/70">To</Label>
               <Input className="h-9 w-full text-sm" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
             </div>
           </div>

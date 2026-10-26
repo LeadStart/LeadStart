@@ -107,8 +107,8 @@ export default function ClientsPage() {
       <AddClientForm />
       <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
         <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]"><Users size={16} className="text-white" /></div>
-          <h2 className="text-[15px] font-semibold text-[#0f172a]">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary"><Users size={16} className="text-white" /></div>
+          <h2 className="text-[15px] font-semibold text-foreground">
             {statusFilter === "active" ? "Active Clients" : "Former Clients"}
           </h2>
         </div>
@@ -119,7 +119,7 @@ export default function ClientsPage() {
           </TabsList>
         </Tabs>
       </div>
-      <Card className="border-border/50 shadow-sm">
+      <Card>
         <CardContent>
           {sorted.length === 0 ? (
             <p className="text-sm text-muted-foreground">
@@ -134,17 +134,17 @@ export default function ClientsPage() {
               {pageRows.map((row) => {
                 const rowStatus: ClientStatus = (row.status ?? "active") as ClientStatus;
                 return (
-                  <div key={row.id} className="rounded-xl border border-border bg-card p-4">
+                  <div key={row.id} className="rounded-xl border border-border-soft bg-card shadow-card p-4">
                     <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-lg text-xs font-bold text-white shrink-0" style={{ background: "#2E37FE" }}>{row.name.charAt(0)}</div>
+                      <div className="flex h-9 w-9 items-center justify-center rounded-lg text-xs font-bold text-white shrink-0 bg-primary">{row.name.charAt(0)}</div>
                       <div className="min-w-0 flex-1">
-                        <Link href={`/admin/clients/${row.id}`} className="block font-medium text-foreground truncate hover:text-[#2E37FE]">{row.name}</Link>
+                        <Link href={`/admin/clients/${row.id}`} className="block font-medium text-foreground truncate hover:text-primary">{row.name}</Link>
                         <p className="text-xs text-muted-foreground">{row.activeCampaigns} active / {row.totalCampaigns} total campaigns</p>
                       </div>
                       <Badge variant="secondary" className={`shrink-0 ${row.userCount > 0 ? "badge-green" : "badge-amber"}`}>{row.userCount > 0 ? `${row.userCount} user${row.userCount !== 1 ? "s" : ""}` : "Not invited"}</Badge>
                     </div>
-                    <div className="mt-3 flex items-center gap-2 border-t border-border/60 pt-3">
-                      <Button variant="ghost" size="sm" disabled={pendingId === row.id} onClick={() => toggleStatus(row.id, rowStatus)} className="h-8 px-2 text-xs text-muted-foreground hover:text-[#2E37FE]">
+                    <div className="mt-3 flex items-center gap-2 border-t border-border-soft pt-3">
+                      <Button variant="ghost" size="sm" disabled={pendingId === row.id} onClick={() => toggleStatus(row.id, rowStatus)} className="h-8 px-2 text-xs text-muted-foreground hover:text-primary">
                         {rowStatus === "active" ? (<><Archive size={13} /> Archive</>) : (<><ArchiveRestore size={13} /> Restore</>)}
                       </Button>
                       {rowStatus === "former" && (
@@ -152,7 +152,7 @@ export default function ClientsPage() {
                           <Trash2 size={13} /> Delete
                         </Button>
                       )}
-                      <Link href={`/admin/clients/${row.id}`} className="ml-auto flex items-center gap-1 text-sm font-medium text-[#2E37FE]">View <ArrowRight size={13} /></Link>
+                      <Link href={`/admin/clients/${row.id}`} className="ml-auto flex items-center gap-1 text-sm font-medium text-primary">View <ArrowRight size={13} /></Link>
                     </div>
                   </div>
                 );
@@ -167,7 +167,7 @@ export default function ClientsPage() {
                   const rowStatus: ClientStatus = (row.status ?? "active") as ClientStatus;
                   return (
                     <TableRow key={row.id} href={`/admin/clients/${row.id}`} className="group">
-                      <TableCell><div className="flex items-center gap-3"><div className="flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold text-white shrink-0" style={{ background: '#2E37FE' }}>{row.name.charAt(0)}</div><Link href={`/admin/clients/${row.id}`} className="font-medium text-foreground hover:text-[#2E37FE] transition-colors">{row.name}</Link></div></TableCell>
+                      <TableCell><div className="flex items-center gap-3"><div className="flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold text-white shrink-0 bg-primary">{row.name.charAt(0)}</div><Link href={`/admin/clients/${row.id}`} className="font-medium text-foreground hover:text-primary transition-colors">{row.name}</Link></div></TableCell>
                       <TableCell><span className="text-sm"><span className="font-medium">{row.activeCampaigns}</span><span className="text-muted-foreground"> active / {row.totalCampaigns} total</span></span></TableCell>
                       <TableCell><Badge variant="secondary" className={row.userCount > 0 ? "badge-green" : "badge-amber"}>{row.userCount > 0 ? `${row.userCount} user${row.userCount !== 1 ? "s" : ""}` : "Not invited"}</Badge></TableCell>
                       <TableCell>
@@ -177,7 +177,7 @@ export default function ClientsPage() {
                             size="sm"
                             disabled={pendingId === row.id}
                             onClick={() => toggleStatus(row.id, rowStatus)}
-                            className="h-8 px-2 text-xs text-muted-foreground hover:text-[#2E37FE]"
+                            className="h-8 px-2 text-xs text-muted-foreground hover:text-primary"
                           >
                             {rowStatus === "active" ? (
                               <><Archive size={13} /> Archive</>
@@ -195,7 +195,7 @@ export default function ClientsPage() {
                               <Trash2 size={13} /> Delete
                             </Button>
                           )}
-                          <Link href={`/admin/clients/${row.id}`} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-[#2E37FE] transition-colors">
+                          <Link href={`/admin/clients/${row.id}`} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-primary transition-colors">
                             View<ArrowRight size={13} className="opacity-0 group-hover:opacity-100 transition-opacity" />
                           </Link>
                         </div>

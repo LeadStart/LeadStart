@@ -141,7 +141,7 @@ export function AutomationsSettingsCard() {
   }
 
   return (
-    <Card className="border-border/50 shadow-sm">
+    <Card>
       <CardHeader className="flex flex-row items-center gap-2 pb-3">
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-600">
           <Zap size={16} className="text-white" />
@@ -363,7 +363,7 @@ export function AutomationsSettingsCard() {
               </div>
             )}
             {testResult && (
-              <div className="rounded-lg border border-border/60 bg-muted/30 p-3 space-y-1">
+              <div className="rounded-lg border border-border-soft bg-muted/30 p-3 space-y-1">
                 <p className="text-xs font-medium text-muted-foreground">Test delivery</p>
                 {testResult.length === 0 ? (
                   <p className="text-sm text-muted-foreground">No targets attempted.</p>

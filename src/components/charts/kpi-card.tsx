@@ -40,7 +40,7 @@ export function KPICard({ label, value, unit, kpiKey, subtitle }: KPICardProps) 
   const formattedValue = unit === "percent" ? `${value}%` : value.toLocaleString();
 
   return (
-    <Card className="relative overflow-hidden border-border/60 h-full">
+    <Card className="relative overflow-hidden h-full">
       {/* Top accent bar: the sole health signal */}
       <div className={cn("absolute top-0 left-0 right-0 h-1", accentClass(health))} />
 

@@ -454,7 +454,7 @@ export default async function AdminCampaignDetailPage({
       {/* Native email: send/reply stats, enrollment progress, mailbox pool, sequence */}
       {nativeStats && (
         <>
-          <Card className="border-border/50 shadow-sm">
+          <Card>
             <CardHeader className="flex flex-row items-center gap-2 pb-3">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#EA4335]">
                 <Inbox size={16} className="text-white" />
@@ -469,7 +469,7 @@ export default async function AdminCampaignDetailPage({
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-3 gap-4">
-                <QueueStat label="Sent" value={nativeStats.sent} color="text-[#2E37FE]" hint={null} />
+                <QueueStat label="Sent" value={nativeStats.sent} color="text-primary" hint={null} />
                 <QueueStat
                   label="Replied"
                   value={nativeStats.replied}
@@ -575,9 +575,9 @@ export default async function AdminCampaignDetailPage({
             />
           )}
 
-          <Card className="border-border/50 shadow-sm">
+          <Card>
             <CardHeader className="flex flex-row items-center gap-2 pb-3">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
                 <Upload size={16} className="text-white" />
               </div>
               <div className="flex-1">
@@ -624,7 +624,7 @@ export default async function AdminCampaignDetailPage({
 
       {/* Orphan: surface a client-linker so the owner can attach in one click */}
       {!campaign.client_id && orgClients.length > 0 && (
-        <Card className="border-amber-200 bg-amber-50 shadow-sm">
+        <Card className="border-amber-200 bg-amber-50">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm">Link to a client</CardTitle>
             <p className="text-xs text-amber-800/80">
@@ -670,11 +670,11 @@ export default async function AdminCampaignDetailPage({
       <DailyChart snapshots={snapshots} />
 
       <div className="flex items-center gap-2 mb-3">
-        <h2 className="text-[15px] font-semibold text-[#0f172a]">
+        <h2 className="text-[15px] font-semibold text-foreground">
           Daily Breakdown
         </h2>
       </div>
-      <Card className="border-border/50 shadow-sm">
+      <Card>
         <CardContent>
           {snapshots.length === 0 ? (
             <p className="text-sm text-muted-foreground">
@@ -726,7 +726,7 @@ function QueueStat({
   hint: string | null;
 }) {
   return (
-    <div className="rounded-lg border border-border/60 p-4">
+    <div className="rounded-lg border border-border-soft p-4">
       <p className="text-xs text-muted-foreground uppercase tracking-wide">
         {label}
       </p>
@@ -911,7 +911,7 @@ function LinkOrphanForm({
       <select
         name="client_id"
         defaultValue=""
-        className="flex-1 rounded-md border border-border/60 bg-background px-3 py-2 text-sm"
+        className="ls-select flex-1"
       >
         <option value="" disabled>
           Pick a client…

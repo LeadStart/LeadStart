@@ -18,6 +18,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import {
   X,
   Plus,
@@ -249,8 +250,6 @@ export function AddMailboxWizard({
   useEffect(() => {
     if (err) bodyRef.current?.scrollTo({ top: 0, behavior: "smooth" });
   }, [err]);
-
-  if (!open) return null;
 
   // ── derived: the domain name + registrar the flow is targeting ──
   const existingDomain = eligibleDomains.find((d) => d.id === existingId) ?? null;
@@ -607,23 +606,25 @@ export function AddMailboxWizard({
   const onFinalStep = door === "inbox" && step === 5;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 p-4"
-      onClick={(e) => e.target === e.currentTarget && close()}
-    >
-      <div className="flex h-[600px] max-h-[90vh] w-[600px] max-w-full flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl">
+    // The shared popup (task #228): its X, a tap outside and Esc close it, and on a
+    // phone it's a sheet with a grabber that pulls down to close.
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent
+        showCloseButton={false}
+        className="flex h-[600px] max-h-[90vh] w-[600px] max-w-[calc(100vw-2rem)] flex-col gap-0 overflow-hidden p-0"
+      >
         {/* header */}
-        <div className="flex items-center gap-3 border-b border-border/60 p-4">
-          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+        <div className="flex items-center gap-3 border-b border-border-soft p-4">
+          <span className="flex h-9 w-9 items-center justify-center rounded-[11px] bg-primary bg-(image:--tex-brand) text-primary-foreground">
             {headerIcon}
           </span>
           <div className="min-w-0">
-            <h2 className="text-[15px] font-semibold leading-tight">{headerTitle}</h2>
+            <DialogTitle className="pr-0 text-[15px] leading-tight">{headerTitle}</DialogTitle>
             {headerSub && <p className="font-mono text-xs text-muted-foreground">{headerSub}</p>}
           </div>
           <button
             onClick={close}
-            className="ml-auto flex h-8 w-8 items-center justify-center rounded-lg bg-muted text-muted-foreground hover:bg-muted/70"
+            className="ml-auto flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             aria-label="Close"
           >
             <X size={16} />
@@ -775,7 +776,7 @@ export function AddMailboxWizard({
 
         {/* footer */}
         {showFooter && (
-          <div className="flex items-center gap-2 border-t border-border/60 bg-muted/30 p-3.5">
+          <div className="flex items-center gap-2 border-t border-border-soft bg-muted/30 p-3.5">
             {!onFinalStep && (
               <Button
                 variant="ghost"
@@ -812,8 +813,8 @@ export function AddMailboxWizard({
             )}
           </div>
         )}
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -856,7 +857,7 @@ function Chooser({ onPick }: { onPick: (d: Door) => void }) {
         <button
           key={d.id}
           onClick={() => onPick(d.id)}
-          className="mb-2.5 flex w-full items-start gap-3 rounded-xl border border-border bg-card p-3.5 text-left transition hover:border-primary/40 hover:bg-primary/[0.02]"
+          className="mb-2.5 flex w-full items-start gap-3 rounded-xl border border-border-soft bg-card shadow-card p-3.5 text-left transition hover:border-primary/40 hover:bg-primary/[0.02]"
         >
           <span className={`flex h-10 w-10 flex-none items-center justify-center rounded-lg ${d.iconCls}`}>
             {d.icon}
@@ -895,7 +896,7 @@ function Segmented<T extends string>({
           key={o.id}
           onClick={() => onChange(o.id)}
           className={`flex-1 rounded-lg px-2 py-2 text-xs font-semibold transition ${
-            value === o.id ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+            value === o.id ? "bg-card bg-(image:--tex-white) text-foreground" : "text-muted-foreground hover:text-foreground"
           }`}
         >
           {o.label}
@@ -926,7 +927,7 @@ function RegistrarPicker({
       <div>
         <Label className="text-xs">Where its DNS lives</Label>
         <select
-          className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+          className="ls-select mt-1 w-full"
           value={value}
           onChange={(e) => onChange(e.target.value as RegistrarId | "manual")}
         >
@@ -1056,7 +1057,7 @@ function DomainStep(props: {
                   key={d.id}
                   onClick={() => props.setExistingId(d.id)}
                   className={`flex w-full items-center gap-2.5 rounded-lg border p-2.5 text-left ${
-                    props.existingId === d.id ? "border-primary bg-primary/5" : "border-border hover:border-border/70"
+                    props.existingId === d.id ? "border-primary bg-primary/5" : "border-border hover:border-border-soft"
                   }`}
                 >
                   <span
@@ -1128,7 +1129,7 @@ function DomainStep(props: {
                         ? "border-primary bg-primary/5 ring-2 ring-primary/15"
                         : selectable
                           ? "border-border hover:border-primary/40"
-                          : "border-border/50 bg-muted/30 opacity-60"
+                          : "border-border-soft bg-muted/30 opacity-60"
                     }`}
                   >
                     <div className="flex items-center justify-between">
@@ -1191,7 +1192,7 @@ function WorkspaceStep(props: {
             key={w.id}
             onClick={() => props.setWsId(w.id)}
             className={`flex w-full items-center gap-2.5 rounded-lg border p-2.5 text-left ${
-              props.wsId === w.id ? "border-primary bg-primary/5" : "border-border hover:border-border/70"
+              props.wsId === w.id ? "border-primary bg-primary/5" : "border-border hover:border-border-soft"
             }`}
           >
             <span
@@ -1394,7 +1395,7 @@ function ReviewStep(props: {
                   <th className="px-2.5 py-1.5 text-left font-semibold">Value</th>
                 </tr>
               </thead>
-              <tbody className="[&_td]:border-t [&_td]:border-border/60 [&_td]:px-2.5 [&_td]:py-2 [&_td]:align-top">
+              <tbody className="[&_td]:border-t [&_td]:border-border-soft [&_td]:px-2.5 [&_td]:py-2 [&_td]:align-top">
                 <tr><td>MX</td><td className="whitespace-nowrap">@</td><td className="[overflow-wrap:anywhere]">smtp.google.com <span className="text-muted-foreground">(priority 1)</span></td></tr>
                 <tr><td>TXT</td><td className="whitespace-nowrap">@</td><td className="[overflow-wrap:anywhere]">v=spf1 include:_spf.google.com ~all</td></tr>
                 <tr><td>TXT</td><td className="whitespace-nowrap">_dmarc</td><td className="[overflow-wrap:anywhere]">v=DMARC1; p=none;</td></tr>
@@ -1428,7 +1429,7 @@ function ReviewStep(props: {
           </p>
 
           {/* Optional URL forwarding (Porkbun only). */}
-          <div className="mt-3.5 border-t border-border/60 pt-3.5">
+          <div className="mt-3.5 border-t border-border-soft pt-3.5">
             <Label className="text-xs">URL forwarding (optional)</Label>
             {props.forwardingSupported ? (
               <>
@@ -1580,7 +1581,7 @@ function ConnectStep(props: {
 
 function SumRow({ k, v, mono }: { k: string; v: string; mono?: boolean }) {
   return (
-    <div className="flex justify-between gap-3 border-b border-border/60 px-3 py-2.5 text-[13px] last:border-b-0">
+    <div className="flex justify-between gap-3 border-b border-border-soft px-3 py-2.5 text-[13px] last:border-b-0">
       <span className="text-muted-foreground">{k}</span>
       <span className={`text-right font-medium ${mono ? "font-mono text-xs" : ""}`}>{v}</span>
     </div>

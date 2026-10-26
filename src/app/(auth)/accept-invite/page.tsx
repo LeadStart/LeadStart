@@ -19,7 +19,7 @@ import { appUrl } from "@/lib/api-url";
 
 export default function AcceptInvitePage() {
   return (
-    <Suspense fallback={<div className="flex min-h-screen items-center justify-center bg-background"><p className="text-muted-foreground">Loading...</p></div>}>
+    <Suspense fallback={<div className="flex min-h-screen items-center justify-center"><p className="text-muted-foreground">Loading...</p></div>}>
       <AcceptInviteForm />
     </Suspense>
   );
@@ -40,8 +40,8 @@ function AcceptInviteForm() {
 
   if (!token || !email) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <Card className="w-full max-w-md border-border/50 shadow-lg">
+      <div className="flex min-h-screen items-center justify-center">
+        <Card className="w-full max-w-md">
           <CardContent className="pt-6">
             <div className="rounded-lg bg-red-50 border border-red-200 p-4">
               <p className="text-sm text-red-700">
@@ -96,8 +96,8 @@ function AcceptInviteForm() {
 
   if (success) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <Card className="w-full max-w-md border-border/50 shadow-lg">
+      <div className="flex min-h-screen items-center justify-center">
+        <Card className="w-full max-w-md">
           <CardHeader className="text-center pb-2">
             <CardTitle className="text-2xl font-bold">You're all set!</CardTitle>
             <CardDescription>Redirecting to login...</CardDescription>
@@ -118,12 +118,12 @@ function AcceptInviteForm() {
   }
 
   return (
-    <div className="flex min-h-screen justify-center bg-background px-4 pt-4 pb-8">
+    <div className="flex min-h-screen justify-center px-4 pt-4 pb-8">
       <div className="w-full max-w-md flex flex-col items-center">
         <div className="flex justify-center -mb-3">
           <Image src={leadstartLogo} alt="LeadStart" priority className="h-72 w-auto" />
         </div>
-        <Card className="w-full border-border/50 shadow-lg">
+        <Card className="w-full">
           <CardHeader className="text-center pb-2">
             <CardTitle className="text-2xl font-bold">
               Welcome to LeadStart
@@ -185,7 +185,7 @@ function AcceptInviteForm() {
               )}
               <Button
                 type="submit"
-                className="w-full bg-[#2E37FE] text-white hover:bg-[#1C24B8] transition-colors font-medium"
+                className="w-full bg-primary text-white hover:bg-brand-500 transition-colors font-medium"
                 disabled={loading}
               >
                 {loading ? "Setting up..." : "Complete Setup"}

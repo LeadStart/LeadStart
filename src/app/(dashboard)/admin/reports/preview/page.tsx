@@ -1,5 +1,6 @@
 "use client";
 import { PageHeader } from "@/components/layout/page-header";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import { useState } from "react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -66,8 +67,8 @@ export default function ReportPreviewPage() {
       />
 
       {/* Controls */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
           <Badge variant="outline" className="text-xs">
             <Eye size={12} className="mr-1" />
             Preview Mode
@@ -76,35 +77,23 @@ export default function ReportPreviewPage() {
             Using sample data for: <strong>{reportData.client_name}</strong>
           </span>
         </div>
-        <div className="flex items-center gap-1 rounded-lg border border-border/50 p-1">
-          <button
-            onClick={() => setViewport("desktop")}
-            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-              viewport === "desktop"
-                ? "bg-[#2E37FE]/20 text-[#6B72FF]"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <Monitor size={13} />
-            Desktop
-          </button>
-          <button
-            onClick={() => setViewport("mobile")}
-            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-              viewport === "mobile"
-                ? "bg-[#2E37FE]/20 text-[#6B72FF]"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <Smartphone size={13} />
-            Mobile
-          </button>
-        </div>
+        <Tabs value={viewport} onValueChange={(v) => setViewport(v as typeof viewport)}>
+          <TabsList>
+            <TabsTrigger value="desktop">
+              <Monitor size={13} />
+              Desktop
+            </TabsTrigger>
+            <TabsTrigger value="mobile">
+              <Smartphone size={13} />
+              Mobile
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
       </div>
 
       {/* Email Preview Frame */}
-      <Card className="border-border/50 shadow-sm overflow-hidden">
-        <CardHeader className="bg-muted/30 border-b border-border/30 py-3 px-4">
+      <Card className="overflow-hidden">
+        <CardHeader className="bg-muted/30 border-b border-border-soft py-3 px-4">
           <div className="flex items-center gap-3 text-sm">
             <div className="flex gap-1.5">
               <span className="h-3 w-3 rounded-full bg-red-400" />

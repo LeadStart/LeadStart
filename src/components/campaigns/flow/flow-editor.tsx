@@ -11,7 +11,7 @@
 // are authored + persisted but don't run yet.
 
 import { Fragment, useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import {
   Mail,
   Clock,
@@ -224,21 +224,6 @@ export function FlowEditor({
   }, [campaignId]);
 
   const insertChips = [...new Set([...INSERT_TOKENS, ...customChips])];
-
-  // Lock body scroll + wire Esc-to-close while the modal is open.
-  useEffect(() => {
-    if (!openId) return;
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpenId(null);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => {
-      document.body.style.overflow = prevOverflow;
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [openId]);
 
   // Click-drag panning of the (potentially wide) canvas. Ignores drags that
   // begin on a control / tile so text selection, clicks + tile-opens still work.
@@ -559,8 +544,8 @@ export function FlowEditor({
   }
 
   // ---- the compose MODAL for the open content node --------------------------
-  // Returns a portal (rendered inline via a call, so its inputs keep focus while
-  // typing). Instant open, viewport-centered, contained.
+  // Returns the popup's content (rendered inline via a call, so its inputs keep
+  // focus while typing).
   function renderModal(n: EmailNode | LinkedInNode | InternalNode) {
     let head: React.ReactNode;
     let body: React.ReactNode;
@@ -680,28 +665,31 @@ export function FlowEditor({
       );
     }
 
-    return createPortal(
-      <>
-        <div className={styles.backdrop} onClick={() => setOpenId(null)} />
-        <div
-          className={`${styles.modal} ${n.kind === "email" ? styles.modalWorkspace : ""}`}
-          role="dialog"
-          aria-modal="true"
-        >
-          {head}
-          {body}
-          <div className={styles.mFoot}>
-            <button type="button" className={styles.mDelete} onClick={() => del(n.id)}>
-              <Trash2 size={14} /> Delete step
-            </button>
-            <div style={{ flex: 1 }} />
-            <button type="button" className={styles.mDone} onClick={() => setOpenId(null)}>
-              Done
-            </button>
-          </div>
+    // The shared popup (task #228): the step editor sits in it, so its X, Done, a
+    // tap outside and Esc close it, it locks the page's scroll, and on a phone it's
+    // a sheet with a grabber.
+    return (
+      <DialogContent
+        showCloseButton={false}
+        className={`flex flex-col gap-0 overflow-hidden p-0 ${
+          n.kind === "email"
+            ? "h-[min(820px,92vh)] max-h-[92vh] w-[min(1240px,96vw)] max-w-none"
+            : "max-h-[84vh] w-[min(600px,92vw)] max-w-none"
+        }`}
+      >
+        <DialogTitle className="sr-only">Edit step</DialogTitle>
+        {head}
+        {body}
+        <div className={styles.mFoot}>
+          <button type="button" className={styles.mDelete} onClick={() => del(n.id)}>
+            <Trash2 size={14} /> Delete step
+          </button>
+          <div style={{ flex: 1 }} />
+          <button type="button" className={styles.mDone} onClick={() => setOpenId(null)}>
+            Done
+          </button>
         </div>
-      </>,
-      document.body,
+      </DialogContent>
     );
   }
 
@@ -710,6 +698,16 @@ export function FlowEditor({
     openNode && (openNode.kind === "email" || openNode.kind === "linkedin" || openNode.kind === "internal")
       ? openNode
       : null;
+  // The last step shown stays in the popup while it closes, so it leaves whole;
+  // it's let go once the popup's way out has finished.
+  const [shownId, setShownId] = useState<string | null>(null);
+  if (modalNode && modalNode.id !== shownId) setShownId(modalNode.id);
+  const shownFound = shownId ? findNode(value.nodes, shownId) : null;
+  const shownNode =
+    modalNode ??
+    (shownFound && (shownFound.kind === "email" || shownFound.kind === "linkedin" || shownFound.kind === "internal")
+      ? shownFound
+      : null);
 
   return (
     <div className={styles.editor}>
@@ -720,7 +718,13 @@ export function FlowEditor({
           {renderSequence(value.nodes, "top-end")}
         </div>
       </div>
-      {modalNode && renderModal(modalNode)}
+      <Dialog
+        open={!!modalNode}
+        onOpenChange={(o) => !o && setOpenId(null)}
+        onOpenChangeComplete={(o) => !o && setShownId(null)}
+      >
+        {shownNode && renderModal(shownNode)}
+      </Dialog>
     </div>
   );
 }

@@ -143,7 +143,7 @@ export function RegistrarSettingsCard() {
     ) : null;
 
   return (
-    <Card className="border-border/50 shadow-sm">
+    <Card>
       <CardHeader className="flex flex-row items-center gap-2 pb-3">
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600">
           <Globe size={16} className="text-white" />

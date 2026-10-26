@@ -39,13 +39,21 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
-  --radius-sm: calc(var(--radius) * 0.75);
-  --radius-md: calc(var(--radius) * 0.9);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
+  /* Forge's corner ladder (task #228): 8px small chips, 12px rows and controls,
+     16px cards, 20px feature cards, 24px popups. Pills are rounded-full. */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 20px;
+  --radius-3xl: 24px;
+  --radius-4xl: 28px;
+
+  /* Forge's depth: soft card shadow, a float for chrome, one pop tier for overlays. */
+  --color-border-soft: var(--border-soft);
+  --shadow-card: var(--ls-shadow-card);
+  --shadow-float: var(--ls-shadow-float);
+  --shadow-pop: var(--ls-shadow-pop);
 
   /* Brand palette: Blue */
   --color-brand-50: #EDEEFF;
@@ -71,11 +79,15 @@
 }
 
 /* ============================================================
-   FLAT: Slate neutrals + blue primary, dark sidebar
-   Contract: /UI_RULES.md. Depth = hairline + tint, never gradient/glow.
+   Forge style, LeadStart colours (task #228). Contract: /UI_RULES.md.
+   The tokens are Forge's own LeadStart-coloured light theme (Forge
+   styles.css before its Sterling theme, e808aab^): slate neutrals,
+   brand blue #2E37FE, navy rail. Feel: a faint brand bloom on the
+   page, pillowy white cards with a soft shadow, and Forge's flat
+   buttons (idea #121): a gentle 140deg sheen, no shadow, no glow.
    ============================================================ */
 :root {
-  --background: #f8fafc;
+  --background: #f4f6fb;
   --foreground: #0f172a;
   --card: #ffffff;
   --card-foreground: #0f172a;
@@ -91,6 +103,7 @@
   --accent-foreground: #0f172a;
   --destructive: #dc2626;
   --border: #e2e8f0;
+  --border-soft: #e9eef5;
   --input: #e2e8f0;
   --ring: #2E37FE;
   --chart-1: #2E37FE;
@@ -98,8 +111,8 @@
   --chart-3: #EF4444;
   --chart-4: #F59E0B;
   --chart-5: #8B5CF6;
-  --radius: 0.5rem;
-  /* Sidebar: dark solid panel, light text, solid brand active pill */
+  --radius: 0.75rem;
+  /* Sidebar: the navy floating rail (unchanged colours). */
   --sidebar: #0f172a;
   --sidebar-foreground: #cbd5e1;
   --sidebar-primary: #2E37FE;
@@ -108,6 +121,22 @@
   --sidebar-accent-foreground: #f1f5f9;
   --sidebar-border: #1e293b;
   --sidebar-ring: #2E37FE;
+
+  /* Forge's page bloom: brand at the top right, a breath of green at the foot. */
+  --bloom: rgba(46, 55, 254, 0.07);
+  --bloom-2: rgba(16, 185, 129, 0.035);
+  /* Forge's flat fills (idea #121): each leans to a lighter top left and a deeper foot, at 140deg. */
+  --tex-brand: linear-gradient(140deg, #3b46fe, #2931ec);
+  --tex-white: linear-gradient(140deg, #ffffff, #f1f5f9);
+  --tex-ink: linear-gradient(140deg, #2a3350, #0f172a);
+  --tex-danger: linear-gradient(140deg, #e03a38, #d12323);
+  --ls-shadow-card: 0 1px 2px rgba(15, 23, 42, 0.04), 0 2px 12px rgba(15, 23, 42, 0.05);
+  --ls-shadow-float: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 1px 2px rgba(15, 23, 42, 0.05), 0 12px 32px rgba(15, 23, 42, 0.09);
+  --ls-shadow-pop: 0 16px 40px rgba(15, 23, 42, 0.16), 0 2px 6px rgba(15, 23, 42, 0.06);
+  /* Motion: Forge's clocks. Things grow in on 220ms and go a little quicker (160ms);
+     sheets rise on iOS's curve (up 520ms, down 420ms). */
+  --ease-out-soft: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-sheet: cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 @layer base {
@@ -115,10 +144,26 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply text-foreground;
+    /* Forge's page: a faint brand bloom over the pale page colour. */
+    background:
+      radial-gradient(900px 520px at 85% -10%, var(--bloom), transparent 70%),
+      radial-gradient(700px 420px at 30% 110%, var(--bloom-2), transparent 70%),
+      var(--background);
+    background-attachment: fixed;
+    -webkit-font-smoothing: antialiased;
   }
   html {
     @apply font-sans;
+    background-color: var(--background);
+  }
+  /* No grey iOS tap flash: presses show the app's own look. */
+  a,
+  button,
+  [role="button"],
+  [role="tab"],
+  [role="menuitem"] {
+    -webkit-tap-highlight-color: transparent;
   }
   /* Pointer cursor on all interactive elements */
   a,
@@ -144,27 +189,47 @@
   .cursor-pointer {
     cursor: pointer;
   }
-  /* Custom scrollbar */
+  /* Scrollbar: Forge's thin rounded thumb, inset from its track. */
   ::-webkit-scrollbar { width: 8px; height: 8px; }
   ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-  ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+  ::-webkit-scrollbar-thumb {
+    background: color-mix(in oklab, #94a3b8 55%, transparent);
+    border-radius: 99px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover { background-color: #94a3b8; }
+}
+
+/* iOS zooms the page when a text field under 16px gets focus: on touch screens every field is 16px. */
+@media (pointer: coarse) {
+  textarea,
+  select,
+  input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"]) {
+    font-size: 16px !important;
+  }
+}
+
+/* Shift never selects what you last pressed (cardinal rule, ported from Forge's
+   lib/pressFocus.ts): a press marks the page data-focus="press"
+   (src/lib/ui/press-focus.ts), and under that mark nothing but a text field shows a
+   focus ring, so Shift or Caps Lock alone lights nothing. The first key that does
+   something on its own (Tab, an arrow, a letter) brings the rings back. Rings drawn
+   as Tailwind ring utilities are box-shadows, so their ring layer is emptied too. */
+:root[data-focus="press"]
+  :focus-visible:not(textarea, [contenteditable], input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"], [type="button"], [type="submit"], [type="reset"], [type="image"])) {
+  outline: none;
+  --tw-ring-shadow: 0 0 #0000;
+  --tw-ring-offset-shadow: 0 0 #0000;
 }
 
 /* ============================================================
-   Floating shell: desktop ≥1024px.
-   The rail detaches from the edges into an inset, rounded,
-   elevated card; content clears it on the left. The elevation
-   shadow + the logo bloom are DELIBERATE exceptions to the flat
-   contract (no cast-shadow / no glow), approved by Daniel
-   2026-08-23. See UI_RULES.md → Sidebar. The topbar joins it as
-   a sibling floating card ("Twin Float", approved 2026-08-24):
-   same 24px top/right inset, rounded, white with a full hairline
-   instead of the flush border-b; page content drops its left
-   padding so it shares the bar's left gridline. Below 1024px the
-   rail stays a full-height slide-in drawer and the topbar stays
-   a flush full-width strip (Tailwind classes on the elements),
-   so these overrides are desktop-only.
+   Floating shell, desktop >=1024px: Forge's frame (which began as
+   LeadStart's). The navy rail is an inset, rounded card with its
+   float shadow; the topbar is its sibling, a white 16px card with
+   a hairline and no shadow; page content shares the bar's left
+   gridline. Below 1024px the rail is a slide-in drawer and the
+   topbar a stadium card (the max-width block at the end).
    ============================================================ */
 @media (min-width: 1024px) {
   .app-rail {
@@ -209,30 +274,43 @@
 }
 
 /* ============================================================
-   Flat button aliases: legacy .btn-gold / .btn-dark call sites.
-   Solid primary + flat secondary; no gradient, no glow.
+   Button aliases: legacy .btn-gold / .btn-blue / .btn-dark class
+   names, drawn as Forge's flat pills (brand sheen / white sheen, no
+   shadow). .btn-blue's rule was lost in the flat-contract commit
+   while three buttons still used it (task #228 brings it back).
    ============================================================ */
-.btn-gold {
-  background: var(--primary);
+.btn-gold,
+.btn-blue {
   color: var(--primary-foreground);
+  background: var(--primary);
+  background-image: var(--tex-brand);
   border: 1px solid transparent;
-  border-radius: var(--radius);
+  border-radius: 999px;
 }
-.btn-gold:hover {
-  background: color-mix(in oklab, var(--primary) 90%, black);
+.btn-gold:hover,
+.btn-blue:hover {
+  filter: brightness(1.06);
+}
+.btn-blue {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-weight: 600;
+  cursor: pointer;
 }
 .btn-dark {
-  background: var(--card);
-  border: 1px solid var(--border);
   color: var(--foreground);
-  border-radius: var(--radius);
+  background-image: var(--tex-white);
+  border: 1px solid var(--border);
+  border-radius: 999px;
 }
 .btn-dark:hover {
-  background: var(--muted);
+  filter: brightness(0.985);
 }
 
 /* ============================================================
-   Badge: solid semantic fill + white text (flat). Names kept
+   Badge: solid semantic fill + white text, as a pill. Names kept
    because lib modules return them as data.
    ============================================================ */
 .badge-green  { background: #059669; color: #fff; border-color: transparent; }
@@ -243,20 +321,213 @@
 .badge-slate  { background: #475569; color: #fff; border-color: transparent; }
 
 /* ============================================================
-   Mobile nav - floating Liquid-Glass pill (< lg only).
-   The ReciFeast bottom-bar material ported onto LeadStart tokens
-   + brand blue, approved by Daniel 2026-09-08. The glass
-   (backdrop blur + specular highlight + elevation) is a
-   DELIBERATE, scoped exemption to the flat contract - the mobile
-   analogue of the desktop rail's sanctioned shadow. See
-   UI_RULES.md → "What flat forbids" + Mobile nav. Hidden at lg
-   via `lg:hidden` on the wrapper; the sidebar rail takes over.
+   Popups (Dialog / AlertDialog, src/components/ui/dialog.tsx and
+   alert-dialog.tsx): Forge's Modal. One dim, one way in and out.
+   - Desktop: centred, 24px corners, pop shadow. It grows in over
+     180ms and shrinks back a little quicker (160ms).
+   - Phone (< 640px): a sheet from the bottom with a grabber. It
+     rises on iOS's curve (520ms) and slides back down (420ms) as
+     the dim fades; a pull down closes it (src/lib/ui/sheet-pull.ts).
+   Base UI marks the first and last frames with data-starting-style
+   / data-ending-style and waits for these transitions, so closed
+   mid-way in, a popup turns round from where it is.
+   ============================================================ */
+/* In the components layer, so a call site's own utilities (a taller max-height,
+   overflow-hidden, no padding) win over the shared look; the phone sheet's
+   !important lines still hold. */
+@layer components {
+.ls-dim {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(15, 23, 42, 0.32);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+  transition: opacity 180ms var(--ease-out-soft);
+}
+.ls-dim[data-starting-style],
+.ls-dim[data-ending-style] {
+  opacity: 0;
+}
+.ls-dim[data-ending-style] {
+  transition-duration: 160ms;
+}
+.ls-pop {
+  position: fixed;
+  z-index: 50;
+  top: 50%;
+  left: 50%;
+  translate: -50% -50%;
+  max-height: calc(100dvh - 48px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-radius: 24px;
+  background: var(--popover);
+  color: var(--popover-foreground);
+  border: 1px solid var(--border-soft);
+  box-shadow: var(--ls-shadow-pop);
+  outline: none;
+  transition:
+    opacity 180ms var(--ease-out-soft),
+    scale 180ms var(--ease-out-soft);
+}
+.ls-pop[data-starting-style],
+.ls-pop[data-ending-style] {
+  opacity: 0;
+}
+/* The shrink is the desktop's only. Not undone in the phone rules below: the CSS
+   compiler folds a `scale` into a `transform` set beside it and drops it, so the
+   sheet kept 0.96 and narrowed the frame it started to close. */
+@media (min-width: 640px) {
+  .ls-pop[data-starting-style],
+  .ls-pop[data-ending-style] {
+    scale: 0.96;
+  }
+}
+.ls-pop[data-ending-style] {
+  transition-duration: 160ms;
+  transition-timing-function: cubic-bezier(0.4, 0, 1, 1);
+}
+/* The grabber: a real button (a tap closes the sheet), shown on phones only. */
+.ls-grabber {
+  display: none;
+}
+@media (max-width: 639.98px) {
+  .ls-dim[data-ending-style] {
+    transition-duration: 420ms;
+    transition-timing-function: var(--ease-sheet);
+  }
+  .ls-dim {
+    transition: opacity 520ms var(--ease-sheet);
+  }
+  .ls-pop {
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    translate: none;
+    width: 100% !important;
+    max-width: none !important;
+    max-height: calc(100dvh - env(safe-area-inset-top, 0px) - 24px);
+    border-radius: 24px 24px 0 0;
+    border-bottom: 0;
+    padding-top: 26px !important;
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 20px) !important;
+    transition: transform 520ms var(--ease-sheet);
+  }
+  .ls-pop[data-starting-style],
+  .ls-pop[data-ending-style] {
+    opacity: 1;
+    transform: translateY(100%);
+  }
+  .ls-pop[data-ending-style] {
+    transition-duration: 420ms;
+    transition-timing-function: var(--ease-sheet);
+  }
+  .ls-grabber {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    translate: -50% 0;
+    display: grid;
+    place-items: center;
+    width: 72px;
+    height: 24px;
+    z-index: 2;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .ls-grabber::before {
+    content: "";
+    width: 38px;
+    height: 5px;
+    border-radius: 99px;
+    background: #cbd5e1;
+  }
+}
+
+/* Menus and select lists (dropdown-menu.tsx, select.tsx): Forge's menu. They grow out
+   of what was pressed and fade in (220ms), and go back the same way a little quicker
+   (160ms); pressed again mid-way, the transition turns round from where it is. */
+.ls-menu {
+  border-radius: 16px;
+  background: var(--popover);
+  color: var(--popover-foreground);
+  border: 1px solid var(--border);
+  box-shadow: var(--ls-shadow-pop);
+  transform-origin: var(--transform-origin);
+  transition:
+    opacity 220ms var(--ease-out-soft),
+    scale 220ms var(--ease-out-soft);
+}
+.ls-menu[data-starting-style],
+.ls-menu[data-ending-style] {
+  opacity: 0;
+  scale: 0.96;
+}
+.ls-menu[data-ending-style] {
+  transition-duration: 160ms;
+  transition-timing-function: cubic-bezier(0.4, 0, 1, 1);
+}
+
+/* Native <select>: the Select trigger's pill (select.tsx), kept native so a phone
+   still opens its own picker. Its focus glow is a box-shadow, so it's gated off
+   under the press mark like every other ring. `ls-select-sm` is the 30px size. */
+.ls-select {
+  appearance: none;
+  height: 38px;
+  min-width: 0;
+  border-radius: 9999px;
+  border: 1px solid var(--input);
+  background: var(--card)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")
+    no-repeat right 12px center / 16px;
+  padding: 0 36px 0 16px;
+  font-size: 13.5px;
+  color: var(--foreground);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  cursor: pointer;
+  transition: box-shadow 150ms, border-color 150ms;
+}
+.ls-select.ls-select-sm {
+  height: 30px;
+  padding: 0 28px 0 12px;
+  font-size: 12.5px;
+  background-position: right 9px center;
+  background-size: 14px;
+}
+.ls-select:focus-visible {
+  outline: none;
+}
+:where(:root:not([data-focus="press"])) .ls-select:focus-visible {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 15%, transparent);
+}
+.ls-select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ls-dim,
+  .ls-pop,
+  .ls-menu {
+    transition: none !important;
+  }
+}
+}
+
+/* ============================================================
+   Phone nav: Forge's floating brand-blue glass pill (< lg only),
+   with a light capsule that slides under the active tab. Glass
+   (blur + see-through blue) is the pill's own material, as in
+   Forge's phone nav (.fnav-pill). Hidden at lg via `lg:hidden`
+   on the wrapper; the sidebar rail takes over.
 
    `.ls-mnav` is a zero-height fixed anchor just above the safe
    area; the pill hangs off it so page content scrolls *under*
-   the glass. Component (`layout/mobile-tab-bar.tsx`) rewrites the
-   pill / tab widths per scroll event for the condense; at rest it
-   clears those inline styles so this flex layout governs.
+   the glass. The component (`layout/mobile-tab-bar.tsx`) rewrites
+   the pill / tab widths and the capsule's place per scroll event
+   for the condense; at rest it clears the widths so this flex
+   layout governs.
    ============================================================ */
 .ls-mnav {
   position: fixed;
@@ -274,37 +545,44 @@
   left: 50%;
   transform: translateX(-50%);
   bottom: 16px;
-  height: 60px;
+  height: 58px;
   width: calc(100vw - 32px);
   max-width: 480px;
   border-radius: 9999px;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0 6px;
+  padding: 0 5px;
   overflow: hidden;
-  background-color: rgba(255, 255, 255, 0.9);
-  background-image: linear-gradient(
-    140deg,
-    rgba(255, 255, 255, 0.55) 0%,
-    rgba(255, 255, 255, 0.08) 42%,
-    rgba(255, 255, 255, 0.02) 60%,
-    rgba(255, 255, 255, 0.18) 100%
-  );
-  border: 1px solid rgba(255, 255, 255, 0.65);
-  -webkit-backdrop-filter: blur(22px) saturate(1.9);
-  backdrop-filter: blur(22px) saturate(1.9);
+  background: radial-gradient(130% 120% at 50% 0%, rgba(90, 97, 255, 0.86) 0%, rgba(46, 55, 254, 0.84) 50%);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  -webkit-backdrop-filter: blur(18px) saturate(1.5);
+  backdrop-filter: blur(18px) saturate(1.5);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.9),
-    0 1px 1px rgba(0, 0, 0, 0.05),
-    0 4px 11px rgba(0, 0, 0, 0.12);
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    0 10px 24px rgba(46, 55, 254, 0.4);
   transition: width 0.22s ease-out;
+}
+/* A light capsule under the active tab: flat on the glass (Forge idea #121). It sits
+   inside the active tab, behind its icon and label, so it keeps the tab's width as the
+   pill condenses; the component slides it between tabs. */
+.ls-mnav-glow {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.2);
+  transform-origin: left center;
+  pointer-events: none;
 }
 
 .ls-mnav-tab {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex: 1 1 0;
   min-width: 0;
+  height: 48px;
   flex-direction: column;
   align-items: center;
   justify-content: center;
@@ -317,17 +595,20 @@
   font-size: 10px;
   font-weight: 600;
   line-height: 1;
-  color: var(--muted-foreground);
+  color: rgba(255, 255, 255, 0.68);
   white-space: nowrap;
   overflow: hidden;
   text-decoration: none;
   -webkit-tap-highlight-color: transparent;
   transition: width 0.22s ease-out, opacity 0.18s ease-out,
-    padding 0.22s ease-out, gap 0.22s ease-out, color 0.15s ease;
+    padding 0.22s ease-out, gap 0.22s ease-out, color 0.2s ease;
 }
-.ls-mnav-tab.is-on { color: var(--primary); }
-.ls-mnav-tab > svg { width: 22px; height: 22px; flex: none; }
-.ls-mnav-tab span {
+/* The active tab never shrinks below its icon (48px), so it needn't clip, and its
+   capsule can slide in from the tab it came from. */
+.ls-mnav-tab.is-on { color: #fff; overflow: visible; }
+.ls-mnav-tab > svg { width: 22px; height: 22px; flex: none; transition: transform 0.12s ease; }
+.ls-mnav-tab:active > svg { transform: scale(0.92); }
+.ls-mnav-label {
   display: inline-block;
   overflow: hidden;
   white-space: nowrap;
@@ -340,38 +621,83 @@
 
 @media (prefers-reduced-motion: reduce) {
   .ls-mnav-pill,
+  .ls-mnav-glow,
   .ls-mnav-tab,
-  .ls-mnav-tab span {
+  .ls-mnav-label {
     transition: none;
   }
 }
 
-/* Page content clears the floating pill below lg (pill = 16px inset + 60px tall,
+/* Page content clears the floating pill below lg (pill = 16px inset + 58px tall,
    above the safe-area inset). Scoped to a max-width query so it's mutually
-   exclusive with the lg shell block above - no source-order fight over the
-   `p-4 sm:p-6` bottom on the shell `<main>`; at lg the pill is hidden and p-6's
-   24px stands. */
+   exclusive with the lg shell block above. */
 @media (max-width: 1023.98px) {
   .app-main {
     padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 92px);
   }
-  /* Float the mobile topbar as a fully-rounded card that mirrors the bottom
-     pill (Daniel, 2026-09-08): inset from the top (+ safe area) and both sides
-     by 16px - the pill's inset - with a full stadium radius and a hairline all
-     the way round, sitting on the page background so the rounding reads in any
-     context. It still scrolls with the page (not pinned). Replaces the flush
-     `border-b` strip; the full border supersedes the element's `border-b`. */
+  /* The phone topbar: a fully-rounded white card that mirrors the bottom pill,
+     inset 16px from the top (+ safe area) and both sides, with a hairline all the
+     way round. It still scrolls with the page (not pinned). */
   .app-topbar {
     margin: calc(env(safe-area-inset-top, 0px) + 16px) 16px 0;
     border: 1px solid var(--border);
     border-radius: 9999px;
   }
-  /* No visible scrollbars on mobile - touch scrolls, so the 8px track from the
-     globals base layer is desktop-only. */
+  /* No visible scrollbars on mobile: touch scrolls, so the 8px track is desktop-only. */
   * {
     scrollbar-width: none;
   }
   *::-webkit-scrollbar {
     display: none;
+  }
+}
+
+/* A menu drawn by its owner (no Base UI start frame, e.g. the topbar search's
+   results): it grows in from its top on the menu's clock. */
+/* Loading veils (src/components/layout/loading-veil.tsx): the page itself, with its
+   bloom, over everything while signing in or loading the dashboard. It fades in
+   and fades out; it never pops. */
+.ls-veil {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(900px 520px at 85% -10%, var(--bloom), transparent 70%),
+    radial-gradient(700px 420px at 30% 110%, var(--bloom-2), transparent 70%),
+    var(--background);
+  animation: ls-veil-in 160ms var(--ease-out-soft);
+  transition: opacity 220ms var(--ease-out-soft);
+}
+.ls-veil[data-leaving] {
+  opacity: 0;
+  pointer-events: none;
+}
+@keyframes ls-veil-in {
+  from {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ls-veil {
+    animation: none;
+    transition: none;
+  }
+}
+
+@keyframes ls-menu-in {
+  from {
+    opacity: 0;
+    scale: 0.96;
+  }
+}
+.ls-menu-in {
+  animation: ls-menu-in 220ms var(--ease-out-soft);
+}
+@media (prefers-reduced-motion: reduce) {
+  .ls-menu-in {
+    animation: none;
   }
 }

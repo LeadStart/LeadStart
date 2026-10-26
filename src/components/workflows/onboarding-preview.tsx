@@ -53,8 +53,8 @@ function Frame({
   height?: number;
 }) {
   return (
-    <div className="overflow-hidden rounded-xl border border-border/70 bg-white shadow-sm">
-      <div className="flex items-center gap-2 border-b border-border/70 bg-muted/40 px-3 py-2">
+    <div className="overflow-hidden rounded-xl border border-border-soft bg-card shadow-card">
+      <div className="flex items-center gap-2 border-b border-border-soft bg-muted/40 px-3 py-2">
         <div className="flex gap-1.5">
           <span className="h-2.5 w-2.5 rounded-full bg-red-400/70" />
           <span className="h-2.5 w-2.5 rounded-full bg-amber-400/70" />
@@ -82,15 +82,12 @@ function StepHeading({
 }) {
   return (
     <div className="flex items-center gap-3">
-      <div
-        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-white"
-        style={{ background: "#2E37FE" }}
-      >
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-white bg-primary">
         {icon}
       </div>
       <div className="min-w-0">
         <div className="flex items-center gap-2">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-[#2E37FE]">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-primary">
             Step {n}
           </span>
           <h2 className="text-sm font-bold text-foreground">{title}</h2>
@@ -103,7 +100,7 @@ function StepHeading({
 
 function ConfigChip({ label, value }: { label: string; value: string }) {
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-white px-2.5 py-1 text-xs">
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-border-soft bg-card px-2.5 py-1 text-xs">
       <span className="text-muted-foreground">{label}</span>
       <span className="font-semibold text-foreground">{value}</span>
     </span>
@@ -154,9 +151,9 @@ export function OnboardingPreview() {
         </div>
 
         {/* Sample toggle */}
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/60 bg-muted/30 px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border-soft bg-muted/30 px-4 py-3">
           <div className="flex items-start gap-2">
-            <Info size={15} className="mt-0.5 shrink-0 text-[#2E37FE]" />
+            <Info size={15} className="mt-0.5 shrink-0 text-primary" />
             <p className="text-xs text-muted-foreground">
               Sample deal:{" "}
               <span className="font-semibold text-foreground">
@@ -176,7 +173,7 @@ export function OnboardingPreview() {
               type="checkbox"
               checked={sellsContacts}
               onChange={(e) => setSellsContacts(e.target.checked)}
-              className="h-4 w-4 rounded border-input accent-[#2E37FE]"
+              className="h-4 w-4 rounded border-input accent-primary"
             />
             <span className="text-sm font-medium">Selling contacts</span>
           </label>
@@ -191,7 +188,7 @@ export function OnboardingPreview() {
           dueToday={dueToday}
         />
       ) : (
-        <div className="rounded-xl border border-dashed border-border/60 p-12 text-center text-sm text-muted-foreground">
+        <div className="rounded-xl border border-dashed border-border-soft p-12 text-center text-sm text-muted-foreground">
           Rendering live preview…
         </div>
       )}
@@ -279,8 +276,8 @@ function Surfaces({
             </p>
           }
         >
-          <div className="min-h-full bg-slate-50 text-[#0f172a]">
-            <header className="border-b border-slate-200 bg-white">
+          <div className="min-h-full bg-slate-50 text-foreground">
+            <header className="border-b border-slate-200 bg-card">
               <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-4 sm:px-6">
                 <Image
                   src={leadstartLogo}
@@ -310,10 +307,7 @@ function Surfaces({
                 trailingSlot={
                   <div className="space-y-2">
                     <div
-                      className="w-full rounded-xl px-4 py-3 text-center text-sm font-semibold text-white"
-                      style={{
-                        background: "linear-gradient(135deg, #6B72FF, #2E37FE)",
-                      }}
+                      className="w-full rounded-full bg-primary bg-(image:--tex-brand) px-4 py-2.5 text-center text-[13.5px] font-semibold text-white"
                     >
                       Accept &amp; pay {formatCents(dueToday)} today
                     </div>

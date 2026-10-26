@@ -140,9 +140,9 @@ export function CampaignContactsCard({
   }
 
   return (
-    <Card className="border-border/50 shadow-sm">
+    <Card>
       <CardHeader className="flex flex-row items-center gap-2 pb-3">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
           <Users size={16} className="text-white" />
         </div>
         <div className="flex-1">
@@ -188,7 +188,7 @@ export function CampaignContactsCard({
                 const vb = verificationBadge(c.email_verification_status);
                 const eb = enrollmentBadge(c.enrollment);
                 return (
-                  <div key={c.id} className="rounded-xl border border-border bg-card p-3.5">
+                  <div key={c.id} className="rounded-xl border border-border-soft bg-card shadow-card p-3.5">
                     <div className="flex items-center justify-between gap-2">
                       <p className="font-medium text-foreground truncate">{name}</p>
                       <Badge variant="secondary" className={`${eb.className} text-[10px] shrink-0`}>{eb.label}</Badge>

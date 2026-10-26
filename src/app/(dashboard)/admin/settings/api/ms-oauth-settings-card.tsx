@@ -84,7 +84,7 @@ export function MsOauthSettingsCard() {
   const configured = status?.has_client_id && status?.has_secret;
 
   return (
-    <Card className="border-border/50 shadow-sm">
+    <Card>
       <CardHeader className="flex flex-row items-center gap-2 pb-3">
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-600">
           <KeyRound size={16} className="text-white" />
@@ -137,7 +137,7 @@ export function MsOauthSettingsCard() {
         </div>
         {error && <p className="text-xs text-red-600">{error}</p>}
         <div className="flex items-center gap-2">
-          <Button onClick={save} disabled={saving} style={{ background: "#2E37FE" }}>
+          <Button onClick={save} disabled={saving}>
             {saving ? "Saving…" : "Save"}
           </Button>
           {saved && (

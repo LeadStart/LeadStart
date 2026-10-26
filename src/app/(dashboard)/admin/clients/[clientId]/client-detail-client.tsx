@@ -1,5 +1,6 @@
 "use client";
 import { PageHeader } from "@/components/layout/page-header";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ViewAsClientButton } from "./view-as-client-button";
 
 import { useState, useTransition } from "react";
@@ -156,7 +157,7 @@ export function ClientDetailClient({
         }
       />
 
-      <div className="grid items-stretch gap-6 lg:grid-cols-[360px_minmax(0,1fr)]">
+      <div className="grid grid-cols-1 items-stretch gap-6 lg:grid-cols-[360px_minmax(0,1fr)]">
         {/* Left rail: client config + metadata. Compact panels that don't need
             the full viewport width. Sticky on desktop so it stays in view while
             the taller performance column scrolls. */}
@@ -183,19 +184,15 @@ export function ClientDetailClient({
         <div className="space-y-6">
           <div className="flex items-center gap-2">
             <Calendar size={14} className="text-muted-foreground" />
-            {(["7d", "30d", "lifetime"] as Period[]).map((p) => (
-              <button
-                key={p}
-                onClick={() => setPeriod(p)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                  period === p
-                    ? "bg-[#2E37FE]/20 text-[#6B72FF] border border-[#2E37FE]/20"
-                    : "bg-muted/50 text-muted-foreground hover:bg-muted"
-                }`}
-              >
-                {p === "7d" ? "7 Days" : p === "30d" ? "30 Days" : "Lifetime"}
-              </button>
-            ))}
+            <Tabs value={period} onValueChange={(v) => setPeriod(v as Period)}>
+              <TabsList>
+                {(["7d", "30d", "lifetime"] as Period[]).map((p) => (
+                  <TabsTrigger key={p} value={p}>
+                    {p === "7d" ? "7 Days" : p === "30d" ? "30 Days" : "Lifetime"}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
           </div>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -251,9 +248,9 @@ export function ClientDetailClient({
             />
           )}
 
-          <Card className="border-border/50 shadow-sm">
+          <Card>
             <CardHeader className="flex flex-row items-center gap-2 pb-3">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
                 <Mail size={16} className="text-white" />
               </div>
               <CardTitle className="text-base">
@@ -284,14 +281,11 @@ export function ClientDetailClient({
                       <Link
                         key={campaign.id}
                         href={`/admin/clients/${clientId}/campaigns/${campaign.id}`}
-                        className="group block rounded-xl border border-border/50 p-4 transition-all hover:border-[#2E37FE]/20 hover:shadow-md"
+                        className="group block rounded-xl border border-border-soft p-4 transition-all hover:border-primary/20 hover:shadow-float"
                       >
                         <div className="flex items-center justify-between mb-3">
                           <div className="flex items-center gap-3">
-                            <div
-                              className="flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold text-white shrink-0"
-                              style={{ background: "#2E37FE" }}
-                            >
+                            <div className="flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold text-white shrink-0 bg-primary">
                               <Mail size={14} />
                             </div>
                             <div>
@@ -322,7 +316,7 @@ export function ClientDetailClient({
 
                         {campPeriodMetrics.emails_sent > 0 ||
                         campLifetimeMetrics.emails_sent > 0 ? (
-                          <div className="space-y-2 pt-3 border-t border-border/30">
+                          <div className="space-y-2 pt-3 border-t border-border-soft">
                             <div className="grid grid-cols-4 gap-4">
                               <div>
                                 <p className="text-sm font-bold">
@@ -412,7 +406,7 @@ export function ClientDetailClient({
                               )}
                           </div>
                         ) : (
-                          <div className="pt-3 border-t border-border/30">
+                          <div className="pt-3 border-t border-border-soft">
                             <p className="text-xs text-muted-foreground">
                               No data yet
                             </p>
@@ -426,9 +420,9 @@ export function ClientDetailClient({
             </CardContent>
           </Card>
 
-          <Card className="border-border/50 shadow-sm">
+          <Card>
             <CardHeader className="flex flex-row items-center gap-2 pb-3">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
                 <MessageSquare size={16} className="text-white" />
               </div>
               <CardTitle className="text-base">Recent Feedback</CardTitle>
@@ -443,7 +437,7 @@ export function ClientDetailClient({
                   {feedback.map((f) => (
                     <div
                       key={f.id}
-                      className="flex items-center gap-3 rounded-xl border border-border/50 p-3 text-sm transition-colors hover:bg-muted/30"
+                      className="flex items-center gap-3 rounded-xl border border-border-soft p-3 text-sm transition-colors hover:bg-muted/30"
                     >
                       <Badge
                         variant="secondary"

@@ -51,9 +51,9 @@ export default async function HostedQuotePage({ params, searchParams }: Props) {
   const canAccept = !isExpired && !isAccepted && !isDeclined && !isCanceled;
 
   return (
-    <div className="min-h-screen bg-slate-50 text-[#0f172a]">
+    <div className="min-h-screen text-foreground">
       {/* Header */}
-      <header className="border-b border-slate-200 bg-white">
+      <header className="border-b border-slate-200 bg-card">
         <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-4 sm:px-6">
           <Image
             src={leadstartLogo}
@@ -120,7 +120,7 @@ export default async function HostedQuotePage({ params, searchParams }: Props) {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-slate-200 bg-white">
+      <footer className="border-t border-slate-200 bg-card">
         <div className="mx-auto max-w-3xl px-4 py-6 sm:px-6 text-xs text-muted-foreground flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between">
           <p>
             &copy; {new Date().getFullYear()}

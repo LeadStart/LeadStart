@@ -160,7 +160,7 @@ export function TubeExportDialog({
 
         {handoff && !loading && (
           <div className="space-y-3">
-            <div className="rounded-lg border border-border/60 bg-muted/20 p-3">
+            <div className="rounded-lg border border-border-soft bg-muted/20 p-3">
               <div className="text-2xl font-semibold tabular-nums">{handoff.rows.length}</div>
               <div className="text-xs text-muted-foreground">
                 of {places.length} {places.length === 1 ? "firm" : "firms"} ready for TuBe (about $

@@ -146,7 +146,7 @@ export default function BuyerContactsPage() {
         </form>
         <a
           href={appUrl("/api/buyer/contacts/export")}
-          className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+          className="flex items-center gap-2 rounded-full bg-primary bg-(image:--tex-brand) px-4 py-2 text-sm font-semibold text-white transition-opacity hover:brightness-106"
         >
           <Download size={15} /> Download CSV
         </a>
@@ -155,7 +155,7 @@ export default function BuyerContactsPage() {
       {/* Re-verify stale emails (async job). Hidden unless the feature is priced
           and there's something to do. */}
       {rv?.available && (rv.active_job || rv.stale_count > 0 || rvNotice) && (
-        <div className="rounded-2xl border border-border bg-white p-4 shadow-sm">
+        <div className="rounded-xl border border-border-soft bg-card p-4 shadow-card">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2 text-sm">
               <RefreshCw size={16} className={`text-primary ${rv.active_job ? "animate-spin" : ""}`} />
@@ -171,7 +171,7 @@ export default function BuyerContactsPage() {
               <button
                 onClick={startReverify}
                 disabled={rvBusy}
-                className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+                className="rounded-full bg-primary bg-(image:--tex-brand) px-4 py-2 text-sm font-semibold text-white transition-opacity hover:brightness-106 disabled:opacity-60"
               >
                 {rvBusy ? "Starting…" : `Re-verify (${(rv.cost ?? 0).toLocaleString()} tokens)`}
               </button>
@@ -181,7 +181,7 @@ export default function BuyerContactsPage() {
         </div>
       )}
 
-      <div className="rounded-2xl border border-border bg-white p-6 shadow-sm">
+      <div className="rounded-xl border border-border-soft bg-card p-6 shadow-card">
         <div className="flex items-center justify-between">
           <p className="text-sm text-muted-foreground">
             {total.toLocaleString()} contact{total === 1 ? "" : "s"}
@@ -211,7 +211,7 @@ export default function BuyerContactsPage() {
                 </thead>
                 <tbody>
                   {rows.map((c) => (
-                    <tr key={c.id} className="border-t border-border/60 align-top">
+                    <tr key={c.id} className="border-t border-border-soft align-top">
                       <td className="py-2 pr-4 font-medium">{fullName(c)}</td>
                       <td className="py-2 pr-4">{c.company_name ?? "-"}</td>
                       <td className="py-2 pr-4 text-muted-foreground">{c.title ?? "-"}</td>

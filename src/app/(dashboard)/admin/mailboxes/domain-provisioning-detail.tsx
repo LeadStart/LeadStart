@@ -345,7 +345,7 @@ export function DomainProvisioningDetail({
 
       {/* DKIM paste: only while provisioning (active domains already have it) */}
       {domain.lifecycle_status === "provisioning" && (
-      <div className="space-y-1 border-t border-border/50 pt-3">
+      <div className="space-y-1 border-t border-border-soft pt-3">
         <Label className="text-xs">DKIM authentication</Label>
         <p className="text-[11px] text-muted-foreground">
           Generate DKIM in Google Admin &rarr; Apps &rarr; Google Workspace &rarr; Gmail &rarr; Authenticate email,
@@ -375,7 +375,7 @@ export function DomainProvisioningDetail({
       )}
 
       {/* DNS panel */}
-      <div className="space-y-1 border-t border-border/50 pt-3">
+      <div className="space-y-1 border-t border-border-soft pt-3">
         <div className="flex items-center justify-between">
           <Label className="text-xs">DNS records</Label>
           {domain.registrar !== "manual" && (
@@ -399,7 +399,7 @@ export function DomainProvisioningDetail({
           </div>
         )}
         {dns && (
-          <div className="mt-1 max-h-40 overflow-auto rounded border border-border/50 bg-background p-2">
+          <div className="mt-1 max-h-40 overflow-auto rounded border border-border-soft bg-background p-2">
             <table className="w-full text-[11px]">
               <tbody>
                 {dns.expected.map((r, i) => (
@@ -422,7 +422,7 @@ export function DomainProvisioningDetail({
 
       {/* URL forwarding: redirect the bare domain to the client's real site.
           Porkbun sets this over its API; Spaceship/manual show the manual step. */}
-      <div className="space-y-1 border-t border-border/50 pt-3">
+      <div className="space-y-1 border-t border-border-soft pt-3">
         <Label className="text-xs">URL forwarding</Label>
         {!fwd ? (
           <p className="text-[11px] text-muted-foreground">Checking…</p>
@@ -468,7 +468,7 @@ export function DomainProvisioningDetail({
 
       {/* Delete / re-provision: removes the domain from Google Workspace + our
           tracking (registration + DNS untouched). Blocked if it has inboxes. */}
-      <div className="border-t border-border/50 pt-3">
+      <div className="border-t border-border-soft pt-3">
         {!confirmDelete ? (
           <button
             className="text-[11px] font-medium text-red-600 hover:underline"

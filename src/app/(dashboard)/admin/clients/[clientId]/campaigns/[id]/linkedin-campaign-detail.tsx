@@ -189,7 +189,7 @@ export function LinkedinCampaignDetail({
         <KPICard label="Failed" value={counts.failed} unit="count" />
       </div>
 
-      <Card className="border-border/50 shadow-sm">
+      <Card>
         <CardHeader className="flex flex-row items-center gap-2 pb-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#0A66C2]">
             <Layers size={16} className="text-white" />
@@ -204,7 +204,7 @@ export function LinkedinCampaignDetail({
               {steps.map((s) => (
                 <div
                   key={s.id}
-                  className="flex items-start gap-3 rounded-xl border border-border/50 p-3"
+                  className="flex items-start gap-3 rounded-xl border border-border-soft p-3"
                 >
                   <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-[#0A66C2] px-2 text-xs font-bold text-white shrink-0">
                     {s.step_index + 1}
@@ -231,7 +231,7 @@ export function LinkedinCampaignDetail({
         </CardContent>
       </Card>
 
-      <Card className="border-border/50 shadow-sm">
+      <Card>
         <CardHeader className="flex flex-row items-center gap-2 pb-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#0A66C2]">
             <Users size={16} className="text-white" />

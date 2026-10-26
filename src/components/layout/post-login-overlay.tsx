@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { BounceLoader } from "@/components/ui/bounce-loader";
+import { LoadingVeil } from "@/components/layout/loading-veil";
 
 const FLAG_KEY = "ls-post-login";
 
@@ -41,14 +41,5 @@ export function PostLoginOverlay() {
     };
   }, []);
 
-  if (!visible) return null;
-
-  return (
-    <div
-      className="fixed inset-0 z-[100] flex items-center justify-center"
-      style={{ background: "#f8fafc" }}
-    >
-      <BounceLoader caption="Loading your dashboard" />
-    </div>
-  );
+  return <LoadingVeil open={visible} caption="Loading your dashboard" z={100} />;
 }

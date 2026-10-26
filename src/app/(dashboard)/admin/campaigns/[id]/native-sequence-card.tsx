@@ -139,7 +139,7 @@ export function NativeSequenceCard({
   if (!editing) {
     const firstSubject = steps[0]?.subject || "(no subject)";
     return (
-      <Card className="border-border/50 shadow-sm">
+      <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-3">
           <div>
             <CardTitle className="text-base">Sequence &amp; schedule</CardTitle>
@@ -174,14 +174,14 @@ export function NativeSequenceCard({
                       {i + 1}
                     </span>
                     <div className="min-w-0 flex-1">
-                      <p className="font-medium text-[#0f172a]">{subject}</p>
+                      <p className="font-medium text-foreground">{subject}</p>
                       <p className="text-xs text-muted-foreground">
                         {s.wait_days === 0
                           ? "Sends immediately"
                           : `Waits ${s.wait_days} day${s.wait_days === 1 ? "" : "s"} after the previous step`}
                       </p>
                       {s.body && (
-                        <pre className="mt-2 whitespace-pre-wrap break-words rounded-md border border-border/40 bg-muted/30 p-3 font-sans text-xs leading-relaxed text-[#334155]">
+                        <pre className="mt-2 whitespace-pre-wrap break-words rounded-md border border-border-soft bg-muted/30 p-3 font-sans text-xs leading-relaxed text-secondary-foreground">
                           {s.body}
                         </pre>
                       )}
@@ -198,14 +198,14 @@ export function NativeSequenceCard({
 
   // ---------------- Edit mode ----------------
   return (
-    <Card className="border-[#2E37FE]/40 shadow-sm">
+    <Card className="border-primary/40">
       <CardHeader className="flex flex-row items-center justify-between pb-3">
         <CardTitle className="text-base">Edit sequence &amp; schedule</CardTitle>
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="sm" onClick={resetAndClose} disabled={saving} className="gap-1">
             <X size={14} /> Cancel
           </Button>
-          <Button size="sm" onClick={save} disabled={saving} className="gap-1.5 text-white" style={{ background: "#2E37FE" }}>
+          <Button size="sm" onClick={save} disabled={saving} className="gap-1.5 text-white">
             {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
             Save
           </Button>
@@ -213,7 +213,7 @@ export function NativeSequenceCard({
       </CardHeader>
       <CardContent className="space-y-5">
         {/* Send window */}
-        <div className="rounded-lg border border-border/50 p-4 space-y-3">
+        <div className="rounded-lg border border-border-soft p-4 space-y-3">
           <p className="text-sm font-medium inline-flex items-center gap-1.5">
             <Clock size={14} /> Sending schedule
           </p>
@@ -223,7 +223,7 @@ export function NativeSequenceCard({
               <select
                 value={win.timezone}
                 onChange={(e) => setWin((w) => ({ ...w, timezone: e.target.value }))}
-                className="w-full rounded-md border border-border/60 bg-background px-2 py-1.5 text-sm"
+                className="ls-select ls-select-sm w-full"
               >
                 {TIMEZONES.map((t) => (
                   <option key={t.value} value={t.value}>{t.label}</option>
@@ -235,7 +235,7 @@ export function NativeSequenceCard({
               <select
                 value={win.startHour}
                 onChange={(e) => setWin((w) => ({ ...w, startHour: Number(e.target.value) }))}
-                className="w-full rounded-md border border-border/60 bg-background px-2 py-1.5 text-sm"
+                className="ls-select ls-select-sm w-full"
               >
                 {Array.from({ length: 24 }, (_, h) => h).map((h) => (
                   <option key={h} value={h}>{fmtHour12(h)}</option>
@@ -247,7 +247,7 @@ export function NativeSequenceCard({
               <select
                 value={win.endHour}
                 onChange={(e) => setWin((w) => ({ ...w, endHour: Number(e.target.value) }))}
-                className="w-full rounded-md border border-border/60 bg-background px-2 py-1.5 text-sm"
+                className="ls-select ls-select-sm w-full"
               >
                 {Array.from({ length: 24 }, (_, h) => h + 1).map((h) => (
                   <option key={h} value={h}>{fmtHour12(h)}</option>
@@ -256,12 +256,12 @@ export function NativeSequenceCard({
             </div>
             <div className="space-y-1">
               <Label className="text-xs">Days</Label>
-              <label className="flex h-[34px] items-center gap-2 rounded-md border border-border/60 px-2 text-sm cursor-pointer">
+              <label className="flex h-[34px] items-center gap-2 rounded-md border border-border-soft px-2 text-sm cursor-pointer">
                 <input
                   type="checkbox"
                   checked={win.weekdaysOnly}
                   onChange={(e) => setWin((w) => ({ ...w, weekdaysOnly: e.target.checked }))}
-                  className="h-4 w-4 accent-[#2E37FE]"
+                  className="h-4 w-4 accent-primary"
                 />
                 Weekdays only
               </label>
@@ -273,7 +273,7 @@ export function NativeSequenceCard({
         {/* Sending strategy: how the day's send budget is split between new
             first-touches and follow-ups. Neither option changes total volume
             (inbox warmup caps set that); they change which emails win the slots. */}
-        <div className="rounded-lg border border-border/50 p-4 space-y-3">
+        <div className="rounded-lg border border-border-soft p-4 space-y-3">
           <p className="text-sm font-medium inline-flex items-center gap-1.5">
             <Route size={14} /> Sending strategy
           </p>
@@ -297,7 +297,7 @@ export function NativeSequenceCard({
         {/* Steps */}
         <div className="space-y-3">
           {steps.map((s, i) => (
-            <div key={i} className="rounded-xl border border-border/50 p-4 space-y-3">
+            <div key={i} className="rounded-xl border border-border-soft p-4 space-y-3">
               <div className="flex items-center gap-2">
                 <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-[#EA4335] px-2 text-xs font-bold text-white">
                   {i + 1}
@@ -386,19 +386,19 @@ function StrategyOption({
       aria-pressed={active}
       className={`rounded-lg border p-3 text-left transition-colors ${
         active
-          ? "border-[#2E37FE] bg-[#2E37FE]/5 ring-1 ring-[#2E37FE]/30"
-          : "border-border/60 hover:border-border"
+          ? "border-primary bg-primary/5 ring-1 ring-primary/30"
+          : "border-border-soft hover:border-border"
       }`}
     >
       <span className="flex items-center gap-2">
         <span
           className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
-            active ? "border-[#2E37FE]" : "border-muted-foreground/40"
+            active ? "border-primary" : "border-muted-foreground/40"
           }`}
         >
-          {active && <span className="h-2 w-2 rounded-full bg-[#2E37FE]" />}
+          {active && <span className="h-2 w-2 rounded-full bg-primary" />}
         </span>
-        <span className="text-sm font-semibold text-[#0f172a]">{title}</span>
+        <span className="text-sm font-semibold text-foreground">{title}</span>
       </span>
       <span className="mt-1.5 block text-[11px] leading-relaxed text-muted-foreground">
         {desc}

@@ -69,9 +69,9 @@ export function ReplyTemplateCard({
 
   const hasReport = tokens.includes("report_link");
   return (
-    <Card className="border-border/50 shadow-sm">
+    <Card>
       <CardHeader className="flex flex-row items-center gap-2 pb-3">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
           <MessageSquareReply size={16} className="text-white" />
         </div>
         <div className="flex-1">
@@ -105,7 +105,7 @@ export function ReplyTemplateCard({
               : "Hi {{first_name}},\n\n…\n\n{{signature}}"
           }
           disabled={saving}
-          className="w-full resize-y rounded-lg border border-border/60 bg-card px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#2E37FE]/30 disabled:opacity-60"
+          className="w-full resize-y rounded-lg border border-border-soft bg-card px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-60"
         />
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="text-[11px] text-muted-foreground">Insert:</span>
@@ -115,7 +115,7 @@ export function ReplyTemplateCard({
               onClick={() => insert(t)}
               disabled={saving}
               className={`rounded-md border px-2 py-0.5 text-[11px] font-medium cursor-pointer hover:bg-muted ${
-                t === "report_link" ? "border-[#2E37FE]/40 text-[#2E37FE]" : "border-border/60 text-muted-foreground"
+                t === "report_link" ? "border-primary/40 text-primary" : "border-border-soft text-muted-foreground"
               }`}
             >
               {`{{${t}}}`}
@@ -128,7 +128,7 @@ export function ReplyTemplateCard({
           <button
             onClick={save}
             disabled={!dirty || saving}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-[#2E37FE] px-4 py-2 text-sm font-bold text-white cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            className="inline-flex items-center gap-1.5 rounded-full bg-primary bg-(image:--tex-brand) px-4 py-2 text-sm font-semibold text-white cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {saving && <Loader2 size={14} className="animate-spin" />}
             {text.trim() ? "Save reply" : saved.trim() ? "Clear saved reply" : "Save reply"}

@@ -317,7 +317,7 @@ function CategoryPill({
       onClick={onClick}
       className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[11.5px] font-semibold transition-colors cursor-pointer ${
         active
-          ? "border-[#2E37FE]/25 bg-[#2E37FE]/[0.13] text-[#2E37FE]"
+          ? "border-primary/25 bg-primary/[0.13] text-primary"
           : "border-transparent bg-muted/60 text-muted-foreground hover:bg-muted"
       }`}
     >
@@ -356,7 +356,7 @@ function AdminThread({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {/* Header */}
-      <div className="flex-none border-b border-border/60 px-4 py-3 sm:px-5">
+      <div className="flex-none border-b border-border-soft px-4 py-3 sm:px-5">
         <MobileBack onBack={onBack} />
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -387,7 +387,7 @@ function AdminThread({
               </span>
             </div>
             <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px]">
-              <a href={`mailto:${reply.lead_email}`} className="inline-flex items-center gap-1 text-[#2E37FE] hover:underline">
+              <a href={`mailto:${reply.lead_email}`} className="inline-flex items-center gap-1 text-primary hover:underline">
                 <Mail size={11} /> {reply.lead_email}
               </a>
               {phone && (
@@ -643,7 +643,7 @@ function AdminComposer({
     content = (
       <button
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-1.5 rounded-lg bg-[#2E37FE] px-4 py-2 text-sm font-bold text-white cursor-pointer"
+        className="inline-flex items-center gap-1.5 rounded-full bg-primary bg-(image:--tex-brand) px-4 py-2 text-sm font-semibold text-white cursor-pointer"
       >
         <Send size={14} /> Reply for {reply.client?.name ?? "client"}
         {report.state === "done" && report.link && <span className="font-medium opacity-80">· report link ready</span>}
@@ -686,17 +686,17 @@ function AdminComposer({
           rows={5}
           placeholder="Write your reply…"
           disabled={sending}
-          className="w-full resize-y rounded-lg border border-border/60 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#2E37FE]/30 disabled:opacity-60"
+          className="w-full resize-y rounded-lg border border-border-soft px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-60"
         />
         <div className="flex flex-wrap items-center gap-1.5">
           {report.state === "loading" && (
             <span className="text-[11.5px] text-muted-foreground">Checking for this lead&apos;s report…</span>
           )}
           {report.state === "done" && report.link && (
-            <span className="inline-flex max-w-full items-center gap-1.5 rounded-lg border border-[#2E37FE]/30 bg-[#2E37FE]/[0.07] px-2.5 py-1 text-[11.5px] text-foreground">
-              <Link2 size={12} className="shrink-0 text-[#2E37FE]" />
+            <span className="inline-flex max-w-full items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/[0.07] px-2.5 py-1 text-[11.5px] text-foreground">
+              <Link2 size={12} className="shrink-0 text-primary" />
               <span className="font-medium">Report link</span>
-              <a href={report.link} target="_blank" rel="noreferrer" className="text-[#2E37FE] hover:underline">
+              <a href={report.link} target="_blank" rel="noreferrer" className="text-primary hover:underline">
                 View
               </a>
               {bodyText.includes(report.link) ? (
@@ -705,7 +705,7 @@ function AdminComposer({
                 <button
                   onClick={insertLink}
                   disabled={sending}
-                  className="font-semibold text-[#2E37FE] hover:underline cursor-pointer"
+                  className="font-semibold text-primary hover:underline cursor-pointer"
                 >
                   Insert link
                 </button>
@@ -719,7 +719,7 @@ function AdminComposer({
               title="Attached report PDFs have landed in spam; the link is the safer default."
               className={`inline-flex max-w-full items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[11.5px] cursor-pointer ${
                 attachReport
-                  ? "border-[#2E37FE]/30 bg-[#2E37FE]/[0.07] text-foreground"
+                  ? "border-primary/30 bg-primary/[0.07] text-foreground"
                   : "border-dashed border-border text-muted-foreground hover:text-foreground"
               }`}
             >
@@ -737,7 +737,7 @@ function AdminComposer({
           {uploads.map((f, i) => (
             <span
               key={`${f.name}-${i}`}
-              className="inline-flex max-w-full items-center gap-1.5 rounded-lg border border-border/60 bg-muted/40 px-2.5 py-1 text-[11.5px]"
+              className="inline-flex max-w-full items-center gap-1.5 rounded-lg border border-border-soft bg-muted/40 px-2.5 py-1 text-[11.5px]"
             >
               <Paperclip size={12} className="shrink-0 text-muted-foreground" />
               <span className="truncate">{f.name}</span>
@@ -792,7 +792,7 @@ function AdminComposer({
           <button
             onClick={send}
             disabled={!hasMessage || sending || !!unfilled}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-[#2E37FE] px-4 py-2 text-sm font-bold text-white cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-primary bg-(image:--tex-brand) px-4 py-2 text-sm font-semibold text-white cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Send size={14} /> {sending ? "Sending…" : "Send reply"}
           </button>
@@ -805,7 +805,7 @@ function AdminComposer({
   // Shrinks and scrolls: the unibox card is a fixed-height, overflow-hidden
   // column, so a rigid composer pushes Send out of reach on short screens.
   return (
-    <div className="min-h-[9rem] shrink overflow-y-auto border-t border-border/60 bg-card px-4 py-3 sm:px-5">{content}</div>
+    <div className="min-h-[9rem] shrink overflow-y-auto border-t border-border-soft bg-card px-4 py-3 sm:px-5">{content}</div>
   );
 }
 
@@ -829,12 +829,12 @@ function TrailFooter({ reply, onExclude }: { reply: InboxRowReply; onExclude: (v
   }
 
   return (
-    <div className="flex-none border-t border-border/60 bg-card">
+    <div className="flex-none border-t border-border-soft bg-card">
       <button
         onClick={() => setOpen((o) => !o)}
         className="flex w-full items-center gap-2 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground hover:bg-muted/40 cursor-pointer sm:px-5"
       >
-        <Bot size={13} className="text-[#2E37FE]" /> Classification trail
+        <Bot size={13} className="text-primary" /> Classification trail
         <ChevronDown size={13} className={`ml-auto transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
       {open && (
@@ -857,12 +857,12 @@ function TrailFooter({ reply, onExclude }: { reply: InboxRowReply; onExclude: (v
             </div>
           </div>
           {reply.claude_reason && (
-            <p className="border-t border-border/50 pt-2 italic text-muted-foreground">
+            <p className="border-t border-border-soft pt-2 italic text-muted-foreground">
               &ldquo;{reply.claude_reason}&rdquo;
             </p>
           )}
           {reply.referral_contact && (
-            <div className="border-t border-border/50 pt-2">
+            <div className="border-t border-border-soft pt-2">
               <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                 Extracted referral
               </p>
@@ -877,14 +877,14 @@ function TrailFooter({ reply, onExclude }: { reply: InboxRowReply; onExclude: (v
               )}
             </div>
           )}
-          <div className="flex items-center justify-between gap-3 border-t border-border/50 pt-2">
+          <div className="flex items-center justify-between gap-3 border-t border-border-soft pt-2">
             <span className="text-muted-foreground">
               {reply.excluded_from_stats ? "Excluded from client stats" : "Counted in client stats"}
             </span>
             <button
               onClick={toggleExclude}
               disabled={saving}
-              className="rounded-lg border border-border bg-white px-2.5 py-1 text-[11px] font-semibold hover:bg-muted cursor-pointer disabled:opacity-50"
+              className="rounded-lg border border-border bg-card px-2.5 py-1 text-[11px] font-semibold hover:bg-muted cursor-pointer disabled:opacity-50"
             >
               {saving ? "…" : reply.excluded_from_stats ? "Include" : "Exclude"}
             </button>

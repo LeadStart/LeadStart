@@ -471,13 +471,13 @@ function ChipInput({
       {values.map((v) => (
         <span
           key={v}
-          className="inline-flex items-center gap-1 rounded-md bg-[#EDEEFF] px-2 py-0.5 text-[12px] font-medium text-[#1C24B8]"
+          className="inline-flex items-center gap-1 rounded-md bg-brand-50 px-2 py-0.5 text-[12px] font-medium text-brand-500"
         >
           {v}
           <button
             type="button"
             onClick={() => onChange(values.filter((x) => x !== v))}
-            className="cursor-pointer text-[#1C24B8]/60 hover:text-[#1C24B8]"
+            className="cursor-pointer text-brand-500/60 hover:text-brand-500"
             aria-label={`Remove ${v}`}
           >
             <X size={12} />
@@ -554,14 +554,14 @@ function FacetMultiSelect({
         />
       </button>
       {open && (
-        <div className="absolute left-0 top-[42px] z-30 w-full rounded-lg border border-border bg-background p-1 shadow-md">
+        <div className="absolute left-0 top-[42px] z-30 w-full ls-menu-in rounded-2xl border border-border bg-popover p-1.5 shadow-pop">
           {searchable && (
             <input
               autoFocus
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="Search…"
-              className="mb-1 w-full rounded-md border border-input bg-transparent px-2 py-1 text-sm outline-none focus:border-[#2E37FE]"
+              className="mb-1 w-full rounded-md border border-input bg-transparent px-2 py-1 text-sm outline-none focus:border-primary"
             />
           )}
           <div className="max-h-56 overflow-auto">
@@ -577,7 +577,7 @@ function FacetMultiSelect({
                     type="checkbox"
                     checked={selected.has(o.value)}
                     onChange={() => toggle(o.value)}
-                    className="accent-[#2E37FE]"
+                    className="accent-primary"
                   />
                   {o.label}
                 </label>
@@ -588,7 +588,7 @@ function FacetMultiSelect({
             <button
               type="button"
               onClick={() => onChange(new Set())}
-              className="mt-1 w-full rounded-md px-2 py-1 text-left text-[12px] text-[#2E37FE] hover:bg-muted"
+              className="mt-1 w-full rounded-md px-2 py-1 text-left text-[12px] text-primary hover:bg-muted"
             >
               Clear ({selected.size})
             </button>
@@ -642,7 +642,7 @@ function InfoButton({ label, onClick }: { label: string; onClick: () => void }) 
       onClick={onClick}
       aria-label={label}
       aria-haspopup="dialog"
-      className="cursor-pointer text-muted-foreground transition-colors hover:text-[#2E37FE]"
+      className="cursor-pointer text-muted-foreground transition-colors hover:text-primary"
     >
       <Info size={13} />
     </button>
@@ -665,10 +665,10 @@ function PresetRow({ label, value, onClick }: { label: string; value: string; on
     <button
       type="button"
       onClick={onClick}
-      className="flex w-full cursor-pointer flex-col gap-0.5 rounded-md border border-border px-2.5 py-1.5 text-left transition-colors hover:border-[#2E37FE]/50 hover:bg-[#EDEEFF]/40"
+      className="flex w-full cursor-pointer flex-col gap-0.5 rounded-md border border-border px-2.5 py-1.5 text-left transition-colors hover:border-primary/50 hover:bg-brand-50/40"
     >
       <span className="text-[11px] font-semibold text-foreground">{label}</span>
-      <span className="break-words font-mono text-[11px] text-[#1C24B8]">{value}</span>
+      <span className="break-words font-mono text-[11px] text-brand-500">{value}</span>
     </button>
   );
 }
@@ -798,14 +798,14 @@ function SavedSearches({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex shrink-0 cursor-pointer items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-[12px] font-medium text-[#2E37FE] hover:bg-[#EDEEFF]/50"
+        className="flex shrink-0 cursor-pointer items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-[12px] font-medium text-primary hover:bg-brand-50/50"
       >
         <Bookmark size={14} fill={presets.length > 0 ? "currentColor" : "none"} />
         Saved{presets.length ? ` (${presets.length})` : ""}
         <ChevronDown size={13} className={`transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
       {open && (
-        <div className="absolute right-0 top-[40px] z-40 w-72 rounded-lg border border-border bg-background p-2 shadow-lg">
+        <div className="absolute right-0 top-[40px] z-40 w-72 ls-menu-in rounded-2xl border border-border bg-popover p-2 shadow-pop">
           <div className="mb-2">
             <p className="mb-1 px-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
               Save current search
@@ -821,13 +821,12 @@ function SavedSearches({
                   }
                 }}
                 placeholder="Name this search"
-                className="min-w-0 flex-1 rounded-md border border-input bg-transparent px-2 py-1 text-[12px] outline-none focus:border-[#2E37FE]"
+                className="min-w-0 flex-1 rounded-md border border-input bg-transparent px-2 py-1 text-[12px] outline-none focus:border-primary"
               />
               <Button
                 size="sm"
                 onClick={save}
                 disabled={saving || !name.trim()}
-                style={{ background: "#2E37FE" }}
                 className="text-white"
               >
                 {saving ? <Loader2 size={13} className="animate-spin" /> : "Save"}
@@ -862,7 +861,7 @@ function SavedSearches({
                           }
                         }}
                         maxLength={80}
-                        className="min-w-0 flex-1 rounded-md border border-input bg-transparent px-2 py-1 text-[12px] outline-none focus:border-[#2E37FE]"
+                        className="min-w-0 flex-1 rounded-md border border-input bg-transparent px-2 py-1 text-[12px] outline-none focus:border-primary"
                       />
                       <button
                         type="button"
@@ -899,7 +898,7 @@ function SavedSearches({
                         type="button"
                         onClick={() => startEdit(p)}
                         aria-label={`Rename ${p.name}`}
-                        className="shrink-0 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:text-[#2E37FE] group-hover:opacity-100"
+                        className="shrink-0 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:text-primary group-hover:opacity-100"
                       >
                         <Pencil size={13} />
                       </button>
@@ -1625,10 +1624,10 @@ export function LinkedInSearchPanel() {
     <div className="space-y-4">
       {/* Form (left) + live enrichment status (right) */}
       <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
-      <Card className="border-border/50 shadow-sm">
+      <Card>
         <CardHeader className="flex flex-col items-start gap-3 pb-3 sm:flex-row sm:justify-between">
           <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE] shrink-0">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary shrink-0">
               <UserSearch size={16} className="text-white" />
             </div>
             <div>
@@ -1644,7 +1643,7 @@ export function LinkedInSearchPanel() {
               type="button"
               onClick={() => setInfoOpen("tips")}
               aria-haspopup="dialog"
-              className="flex shrink-0 cursor-pointer items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-[12px] font-medium text-[#2E37FE] hover:bg-[#EDEEFF]/50"
+              className="flex shrink-0 cursor-pointer items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-[12px] font-medium text-primary hover:bg-brand-50/50"
             >
               <HelpCircle size={14} />
               How to search
@@ -1732,7 +1731,7 @@ export function LinkedInSearchPanel() {
                           <button
                             type="button"
                             onClick={() => replaceLocation(f.value, fix)}
-                            className="cursor-pointer rounded border border-amber-300 bg-white px-1.5 py-0.5 font-medium text-amber-900 hover:bg-amber-100"
+                            className="cursor-pointer rounded border border-amber-300 bg-card px-1.5 py-0.5 font-medium text-amber-900 hover:bg-amber-100"
                           >
                             Use &ldquo;{fix}&rdquo;
                           </button>
@@ -1763,7 +1762,7 @@ export function LinkedInSearchPanel() {
                       }
                       className={`cursor-pointer rounded-md border px-2 py-1 text-[12px] transition-colors ${
                         on
-                          ? "border-[#2E37FE] bg-[#2E37FE] text-white"
+                          ? "border-primary bg-primary text-white"
                           : "border-border bg-background hover:bg-muted"
                       }`}
                     >
@@ -1794,11 +1793,11 @@ export function LinkedInSearchPanel() {
               onClick={() => setRecentlyChanged((v) => !v)}
               className={`inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${
                 recentlyChanged
-                  ? "border-[#2E37FE] bg-[#EDEEFF] text-[#1C24B8]"
+                  ? "border-primary bg-brand-50 text-brand-500"
                   : "border-border hover:bg-muted"
               }`}
             >
-              <span className={`h-2 w-2 rounded-full ${recentlyChanged ? "bg-[#2E37FE]" : "bg-slate-300"}`} />
+              <span className={`h-2 w-2 rounded-full ${recentlyChanged ? "bg-primary" : "bg-slate-300"}`} />
               New in role · 90d
             </button>
             <button
@@ -1806,17 +1805,17 @@ export function LinkedInSearchPanel() {
               onClick={() => setActivePosters((v) => !v)}
               className={`inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${
                 activePosters
-                  ? "border-[#2E37FE] bg-[#EDEEFF] text-[#1C24B8]"
+                  ? "border-primary bg-brand-50 text-brand-500"
                   : "border-border hover:bg-muted"
               }`}
             >
-              <span className={`h-2 w-2 rounded-full ${activePosters ? "bg-[#2E37FE]" : "bg-slate-300"}`} />
+              <span className={`h-2 w-2 rounded-full ${activePosters ? "bg-primary" : "bg-slate-300"}`} />
               Active on LinkedIn · 30d
             </button>
           </div>
 
           {/* Enrichment add-ons: opt-in stages that extend the pipeline. */}
-          <div className="rounded-lg border border-border/60 bg-muted/30 p-3">
+          <div className="rounded-lg border border-border-soft bg-muted/30 p-3">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
               Enrichment add-ons
             </p>
@@ -1830,7 +1829,7 @@ export function LinkedInSearchPanel() {
                   type="checkbox"
                   checked={addActivity}
                   onChange={(e) => setAddActivity(e.target.checked)}
-                  className="mt-0.5 h-4 w-4 cursor-pointer rounded border-border accent-[#2E37FE]"
+                  className="mt-0.5 h-4 w-4 cursor-pointer rounded border-border accent-primary"
                 />
                 <span>
                   Activity check
@@ -1847,7 +1846,7 @@ export function LinkedInSearchPanel() {
                   type="checkbox"
                   checked={addVerify}
                   onChange={(e) => setAddVerify(e.target.checked)}
-                  className="mt-0.5 h-4 w-4 cursor-pointer rounded border-border accent-[#2E37FE]"
+                  className="mt-0.5 h-4 w-4 cursor-pointer rounded border-border accent-primary"
                 />
                 <span>
                   Email verification
@@ -1862,7 +1861,7 @@ export function LinkedInSearchPanel() {
                   type="checkbox"
                   checked={addCatchAll}
                   onChange={(e) => setAddCatchAll(e.target.checked)}
-                  className="mt-0.5 h-4 w-4 cursor-pointer rounded border-border accent-[#2E37FE]"
+                  className="mt-0.5 h-4 w-4 cursor-pointer rounded border-border accent-primary"
                 />
                 <span>
                   Include catch-all guesses
@@ -1877,7 +1876,7 @@ export function LinkedInSearchPanel() {
                   type="checkbox"
                   checked={addValidateCatchAll}
                   onChange={(e) => setAddValidateCatchAll(e.target.checked)}
-                  className="mt-0.5 h-4 w-4 cursor-pointer rounded border-border accent-[#2E37FE]"
+                  className="mt-0.5 h-4 w-4 cursor-pointer rounded border-border accent-primary"
                 />
                 <span>
                   Validate catch-all emails
@@ -1892,7 +1891,7 @@ export function LinkedInSearchPanel() {
                   type="checkbox"
                   checked={addCompanyInbox}
                   onChange={(e) => setAddCompanyInbox(e.target.checked)}
-                  className="mt-0.5 h-4 w-4 cursor-pointer rounded border-border accent-[#2E37FE]"
+                  className="mt-0.5 h-4 w-4 cursor-pointer rounded border-border accent-primary"
                 />
                 <span>
                   Company inbox fallback
@@ -1912,7 +1911,7 @@ export function LinkedInSearchPanel() {
             <button
               type="button"
               onClick={() => setAdvancedOpen((v) => !v)}
-              className="inline-flex cursor-pointer items-center gap-1 text-sm font-medium text-[#2E37FE]"
+              className="inline-flex cursor-pointer items-center gap-1 text-sm font-medium text-primary"
             >
               <ChevronDown
                 size={15}
@@ -1941,7 +1940,7 @@ export function LinkedInSearchPanel() {
                   </div>
                 </div>
                 {/* Deep search: the default; opt out here only for a cheap single-query search. */}
-                <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 border-t border-border/60 pt-3">
+                <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 border-t border-border-soft pt-3">
                   <button
                     type="button"
                     role="switch"
@@ -1951,11 +1950,11 @@ export function LinkedInSearchPanel() {
                   >
                     <span
                       className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${
-                        autoSegment ? "bg-[#2E37FE]" : "bg-slate-300"
+                        autoSegment ? "bg-primary" : "bg-slate-300"
                       }`}
                     >
                       <span
-                        className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-all ${
+                        className={`absolute top-0.5 h-4 w-4 rounded-full bg-card shadow-sm transition-all ${
                           autoSegment ? "left-[18px]" : "left-0.5"
                         }`}
                       />
@@ -1973,7 +1972,7 @@ export function LinkedInSearchPanel() {
           </div>
 
           {/* Depth + volume + search */}
-          <div className="flex flex-col gap-3 border-t border-border/60 pt-4 sm:flex-row sm:items-end sm:justify-between">
+          <div className="flex flex-col gap-3 border-t border-border-soft pt-4 sm:flex-row sm:items-end sm:justify-between">
             <div className="flex flex-wrap gap-4">
               <div className="space-y-1.5">
                 <div className="flex items-center gap-1.5">
@@ -1989,7 +1988,7 @@ export function LinkedInSearchPanel() {
                       title={d.hint}
                       className={`cursor-pointer rounded-md border px-2.5 py-1 text-[12px] transition-colors ${
                         depth === d.value
-                          ? "border-[#2E37FE] bg-[#2E37FE] text-white"
+                          ? "border-primary bg-primary text-white"
                           : "border-border bg-background hover:bg-muted"
                       }`}
                     >
@@ -2012,7 +2011,7 @@ export function LinkedInSearchPanel() {
                     }}
                     aria-label="Custom max people (up to 2,500)"
                     title="Custom: up to 2,500"
-                    className="w-[74px] rounded-md border border-border bg-background px-2 py-1 text-[12px] tabular-nums outline-none focus:border-[#2E37FE]"
+                    className="w-[74px] rounded-md border border-border bg-background px-2 py-1 text-[12px] tabular-nums outline-none focus:border-primary"
                   />
                   {MAX_OPTIONS.map((n) => (
                     <button
@@ -2021,7 +2020,7 @@ export function LinkedInSearchPanel() {
                       onClick={() => setMaxResults(n)}
                       className={`cursor-pointer rounded-md border px-2.5 py-1 text-[12px] transition-colors ${
                         maxResults === n
-                          ? "border-[#2E37FE] bg-[#2E37FE] text-white"
+                          ? "border-primary bg-primary text-white"
                           : "border-border bg-background hover:bg-muted"
                       }`}
                     >
@@ -2035,7 +2034,6 @@ export function LinkedInSearchPanel() {
               <Button
                 onClick={handleSearch}
                 disabled={starting || isRunning || !hasConstraint}
-                style={{ background: "#2E37FE" }}
                 className="text-white"
               >
                 {starting || isRunning ? (
@@ -2086,7 +2084,7 @@ export function LinkedInSearchPanel() {
       {/* Prior runs: collapsible. Click a run to reload its results (no new
           Apify charge; a completed run resolves on the first poll tick). */}
       {priorRuns.length > 0 && (
-        <Card className="border-border/50 shadow-sm">
+        <Card>
           <button
             type="button"
             onClick={() => setPriorOpen((v) => !v)}
@@ -2107,7 +2105,7 @@ export function LinkedInSearchPanel() {
             />
           </button>
           {priorOpen && (
-            <div className="border-t border-border/60 p-2">
+            <div className="border-t border-border-soft p-2">
               <div className="space-y-1">
                 {priorRuns.map((r) => {
                   const active = r.id === searchId;
@@ -2116,7 +2114,7 @@ export function LinkedInSearchPanel() {
                     <div
                       key={r.id}
                       className={`group flex items-center gap-1.5 rounded-md border px-2 transition-colors ${
-                        active ? "border-[#2E37FE] bg-[#EDEEFF]" : "border-transparent hover:bg-muted/50"
+                        active ? "border-primary bg-brand-50" : "border-transparent hover:bg-muted/50"
                       }`}
                     >
                       {editing ? (
@@ -2134,7 +2132,7 @@ export function LinkedInSearchPanel() {
                               }
                             }}
                             placeholder="Name this search"
-                            className="min-w-0 flex-1 rounded-md border border-input bg-background px-2 py-1 text-[12.5px] outline-none focus:border-[#2E37FE]"
+                            className="min-w-0 flex-1 rounded-md border border-input bg-background px-2 py-1 text-[12.5px] outline-none focus:border-primary"
                           />
                           <button
                             type="button"
@@ -2186,7 +2184,7 @@ export function LinkedInSearchPanel() {
                             onClick={() => startRename(r.id, r.query?.name ?? "")}
                             aria-label={`Rename ${searchName(r.query)}`}
                             title="Rename search"
-                            className="shrink-0 rounded p-1 text-muted-foreground transition-colors hover:bg-[#EDEEFF] hover:text-[#2E37FE]"
+                            className="shrink-0 rounded p-1 text-muted-foreground transition-colors hover:bg-brand-50 hover:text-primary"
                           >
                             <Pencil size={13} />
                           </button>
@@ -2207,7 +2205,7 @@ export function LinkedInSearchPanel() {
       {/* Info modals: the single popup pattern for every (i) on this page */}
       <InfoDialog open={infoOpen === "tips"} onClose={() => setInfoOpen(null)} title="How to search" wide>
         <div className="space-y-3 text-[12px] text-slate-600">
-          <div className="space-y-1.5 rounded-lg border border-[#2E37FE]/20 bg-[#EDEEFF]/40 p-3">
+          <div className="space-y-1.5 rounded-lg border border-primary/20 bg-brand-50/40 p-3">
             <p className="text-[13px] font-medium text-slate-900">How your filters combine</p>
             <p>
               <span className="font-medium text-slate-800">Within a field</span>, multiple values are
@@ -2255,7 +2253,7 @@ export function LinkedInSearchPanel() {
                   key={p.name}
                   type="button"
                   onClick={() => applyPreset(p)}
-                  className="cursor-pointer rounded-md border border-[#2E37FE]/40 bg-white px-2.5 py-1 text-[12px] font-medium text-[#1C24B8] hover:bg-[#EDEEFF]"
+                  className="cursor-pointer rounded-md border border-primary/40 bg-card px-2.5 py-1 text-[12px] font-medium text-brand-500 hover:bg-brand-50"
                 >
                   {p.name}
                 </button>
@@ -2510,7 +2508,7 @@ export function LinkedInSearchPanel() {
               </li>
             </ul>
           </div>
-          <p className="rounded-md bg-[#EDEEFF]/70 px-2.5 py-2 text-[11px]">
+          <p className="rounded-md bg-brand-50/70 px-2.5 py-2 text-[11px]">
             Seeing only 25 results? That&apos;s the{" "}
             <span className="font-medium text-foreground">free Apify tier&apos;s per-run cap</span>,
             upgrade the plan and a normal search returns up to your Max people, no Deep search needed.
@@ -2591,7 +2589,7 @@ export function LinkedInSearchPanel() {
                 <div className="flex items-center justify-between">
                   <span>
                     Activity · <span className="font-mono">profile-posts</span>
-                    {activePosters ? " (skipped)" : ""} <span className="text-[9px] uppercase tracking-wide text-[#2E37FE]/70">add-on</span>
+                    {activePosters ? " (skipped)" : ""} <span className="text-[9px] uppercase tracking-wide text-primary/70">add-on</span>
                   </span>
                   <span className="font-mono tabular-nums">${activityRate.toFixed(4)}</span>
                 </div>
@@ -2600,7 +2598,7 @@ export function LinkedInSearchPanel() {
                 <div className="flex items-center justify-between">
                   <span>
                     Verify · Million Verifier{" "}
-                    <span className="text-[9px] uppercase tracking-wide text-[#2E37FE]/70">add-on</span>
+                    <span className="text-[9px] uppercase tracking-wide text-primary/70">add-on</span>
                   </span>
                   <span className="font-mono tabular-nums">${verifyRate.toFixed(4)}</span>
                 </div>
@@ -2609,7 +2607,7 @@ export function LinkedInSearchPanel() {
                 <div className="flex items-center justify-between">
                   <span>
                     Company inbox · <span className="font-mono">site scrape</span>{" "}
-                    <span className="text-[9px] uppercase tracking-wide text-[#2E37FE]/70">add-on</span>
+                    <span className="text-[9px] uppercase tracking-wide text-primary/70">add-on</span>
                   </span>
                   <span className="font-mono tabular-nums">${companyInboxRate.toFixed(4)}</span>
                 </div>
@@ -2618,20 +2616,20 @@ export function LinkedInSearchPanel() {
                 <div className="flex items-center justify-between">
                   <span>
                     Validate catch-all · <span className="font-mono">Findymail</span>{" "}
-                    <span className="text-[9px] uppercase tracking-wide text-[#2E37FE]/70">add-on</span>{" "}
+                    <span className="text-[9px] uppercase tracking-wide text-primary/70">add-on</span>{" "}
                     <span className="text-[9px] text-muted-foreground">(~$0.049/hit, pay-on-hit)</span>
                   </span>
                   <span className="font-mono tabular-nums">${catchAllRate.toFixed(4)}</span>
                 </div>
               )}
-              <div className="flex items-center justify-between border-t border-border/60 pt-0.5 font-medium text-foreground">
+              <div className="flex items-center justify-between border-t border-border-soft pt-0.5 font-medium text-foreground">
                 <span>per imported person (max)</span>
                 <span className="font-mono tabular-nums">${perPersonEnrich.toFixed(4)}</span>
               </div>
             </div>
           </div>
 
-          <div className="flex items-center justify-between rounded-md bg-[#EDEEFF]/70 px-2 py-1.5 font-medium text-foreground">
+          <div className="flex items-center justify-between rounded-md bg-brand-50/70 px-2 py-1.5 font-medium text-foreground">
             <span>Projected total if you import + enrich all {maxResults.toLocaleString()}</span>
             <span className="font-mono tabular-nums">~${projectedTotal.toFixed(2)}</span>
           </div>
@@ -2671,7 +2669,7 @@ export function LinkedInSearchPanel() {
             </p>
           </div>
 
-          <div className="space-y-1 border-t border-border/60 pt-2">
+          <div className="space-y-1 border-t border-border-soft pt-2">
             <div className="flex items-center justify-between">
               <span>Enrichment · this run</span>
               <span className="font-mono tabular-nums font-medium text-foreground">
@@ -2693,7 +2691,7 @@ export function LinkedInSearchPanel() {
             </p>
           </div>
 
-          <div className="flex items-center justify-between rounded-md bg-[#EDEEFF]/70 px-2 py-1.5 font-medium text-foreground">
+          <div className="flex items-center justify-between rounded-md bg-brand-50/70 px-2 py-1.5 font-medium text-foreground">
             <span>Total Apify spend</span>
             <span className="font-mono tabular-nums">${totalApify.toFixed(2)}</span>
           </div>
@@ -2714,13 +2712,13 @@ export function LinkedInSearchPanel() {
       {/* Results: appears the moment sourced rows stream in (Phase 1) and
           gains live Email/Domain/Activity columns as enrichment lands (Phase 2). */}
       {showResults && (
-        <Card className="border-border/50 shadow-sm">
+        <Card>
           <CardHeader className="pb-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <div
                   className={`flex h-8 w-8 items-center justify-center rounded-lg ${
-                    isRunning ? "bg-[#2E37FE]" : "bg-emerald-500"
+                    isRunning ? "bg-primary" : "bg-emerald-500"
                   }`}
                 >
                   {isRunning ? (
@@ -2746,7 +2744,7 @@ export function LinkedInSearchPanel() {
                           }
                         }}
                         placeholder="Name this search"
-                        className="w-[220px] max-w-full rounded-md border border-input bg-background px-2 py-0.5 text-[12px] outline-none focus:border-[#2E37FE]"
+                        className="w-[220px] max-w-full rounded-md border border-input bg-background px-2 py-0.5 text-[12px] outline-none focus:border-primary"
                       />
                       <button
                         type="button"
@@ -2771,7 +2769,7 @@ export function LinkedInSearchPanel() {
                         type="button"
                         onClick={() => startRename(searchId, detail?.query?.name ?? "")}
                         title={detail?.query?.name ? "Rename this search" : "Name this search"}
-                        className="mb-1 inline-flex max-w-full items-center gap-1 rounded-md border border-dashed border-border px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground transition-colors hover:border-[#2E37FE]/60 hover:bg-[#EDEEFF]/50 hover:text-[#2E37FE]"
+                        className="mb-1 inline-flex max-w-full items-center gap-1 rounded-md border border-dashed border-border px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground transition-colors hover:border-primary/60 hover:bg-brand-50/50 hover:text-primary"
                       >
                         <Pencil size={11} className="shrink-0" />
                         <span className="truncate">
@@ -2795,7 +2793,7 @@ export function LinkedInSearchPanel() {
                       <span className="ml-1 text-emerald-600">· {emailCount} with email</span>
                     )}
                     {showEnrichCols && (
-                      <span className="ml-1 text-[#2E37FE]">
+                      <span className="ml-1 text-primary">
                         · enrichment found {enrichedEmailCount} email
                         {enrichedEmailCount === 1 ? "" : "s"}
                       </span>
@@ -2814,7 +2812,6 @@ export function LinkedInSearchPanel() {
                       setSaveMsg(null);
                       setAddOpen((v) => !v);
                     }}
-                    style={{ background: "#2E37FE" }}
                     className="text-white"
                   >
                     <Send size={15} className="mr-1.5" />
@@ -2842,14 +2839,14 @@ export function LinkedInSearchPanel() {
             {/* Email-outcome radial: person vs company-only vs none. Shows once
                 there's email data (Full+email sourcing or enrichment underway). */}
             {(hasEmails || showEnrichCols) && (
-              <div className="rounded-xl border border-border/50 bg-muted/20 px-4 py-3">
+              <div className="rounded-xl border border-border-soft bg-muted/20 px-4 py-3">
                 <EmailOutcomeRadial {...emailOutcome} costs={outcomeCosts} />
               </div>
             )}
             {/* Add-to-campaign inline panel */}
             {addOpen && selected.size > 0 && (
-              <div className="rounded-lg border border-[#2E37FE]/30 bg-[#EDEEFF]/40 p-4">
-                <p className="text-sm font-medium text-[#1C24B8]">
+              <div className="rounded-lg border border-primary/30 bg-brand-50/40 p-4">
+                <p className="text-sm font-medium text-brand-500">
                   Import {selected.size} to Contacts
                 </p>
                 <p className="mt-0.5 text-[12px] text-muted-foreground">
@@ -2860,7 +2857,7 @@ export function LinkedInSearchPanel() {
                   <select
                     value={targetCampaign}
                     onChange={(e) => setTargetCampaign(e.target.value)}
-                    className="h-9 rounded-lg border border-input bg-background px-2 text-sm"
+                    className="ls-select"
                   >
                     <option value="">No campaign (save only)</option>
                     {campaigns.map((c) => (
@@ -2873,7 +2870,6 @@ export function LinkedInSearchPanel() {
                     size="sm"
                     onClick={handleSave}
                     disabled={saving}
-                    style={{ background: "#2E37FE" }}
                     className="text-white"
                   >
                     {saving ? <Loader2 size={15} className="mr-1.5 animate-spin" /> : null}
@@ -2905,7 +2901,7 @@ export function LinkedInSearchPanel() {
                         type="checkbox"
                         checked={allPageSelected}
                         onChange={togglePage}
-                        className="accent-[#2E37FE]"
+                        className="accent-primary"
                         aria-label="Select all on page"
                       />
                     </TableHead>
@@ -2975,7 +2971,7 @@ export function LinkedInSearchPanel() {
                             checked={Boolean(on)}
                             onChange={() => url && toggleRow(url)}
                             disabled={!url}
-                            className="accent-[#2E37FE]"
+                            className="accent-primary"
                             aria-label={`Select ${name}`}
                           />
                         </TableCell>
@@ -3033,7 +3029,7 @@ export function LinkedInSearchPanel() {
                               href={url}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-[#2E37FE] hover:opacity-70"
+                              className="text-primary hover:opacity-70"
                               aria-label="Open LinkedIn profile"
                             >
                               <ExternalLink size={15} />
@@ -3052,7 +3048,7 @@ export function LinkedInSearchPanel() {
               onPageChange={setPage}
             />
             {isComplete && (
-              <div className="flex items-center justify-between border-t border-border/60 pt-2.5 text-[11px] text-muted-foreground">
+              <div className="flex items-center justify-between border-t border-border-soft pt-2.5 text-[11px] text-muted-foreground">
                 <span>Actual Apify cost for this search: billed per search page opened (up to 25 profiles/page) plus per profile opened. Deep search opens more pages than it returns.</span>
                 <span className="flex items-center gap-1.5">
                   <span className="font-mono tabular-nums font-medium text-foreground">
@@ -3096,7 +3092,7 @@ function EnrichCell({
 }) {
   if (value)
     return <span className={plain ? "text-foreground" : "text-foreground"}>{value}</span>;
-  if (loading) return <Loader2 size={13} className="animate-spin text-[#2E37FE]" />;
+  if (loading) return <Loader2 size={13} className="animate-spin text-primary" />;
   return <span className="text-muted-foreground">-</span>;
 }
 
@@ -3144,7 +3140,7 @@ function EmailCell({
         </span>
       </span>
     );
-  if (loading) return <Loader2 size={13} className="animate-spin text-[#2E37FE]" />;
+  if (loading) return <Loader2 size={13} className="animate-spin text-primary" />;
   return <span className="text-muted-foreground">-</span>;
 }
 
@@ -3172,7 +3168,7 @@ function RowStatusBadge({
     isStepActive(en.activity_status);
   if (active) {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-[#EDEEFF] px-1.5 py-0.5 text-[10px] font-medium text-[#1C24B8]">
+      <span className="inline-flex items-center gap-1 rounded-full bg-brand-50 px-1.5 py-0.5 text-[10px] font-medium text-brand-500">
         <Loader2 size={10} className="animate-spin" /> Enriching
       </span>
     );
@@ -3277,7 +3273,7 @@ function EmailOutcomeRadial({
           {segs.map((s) => (
             <div
               key={s.key}
-              className="flex items-center gap-2 border-b border-dashed border-border/60 py-[3px] text-[11.5px] last:border-b-0"
+              className="flex items-center gap-2 border-b border-dashed border-border-soft py-[3px] text-[11.5px] last:border-b-0"
             >
               <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: s.color }} />
               <span className="text-muted-foreground">{s.label}</span>

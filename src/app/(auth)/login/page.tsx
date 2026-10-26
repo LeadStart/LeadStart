@@ -17,7 +17,7 @@ import { Mail, Lock } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import leadstartLogo from "../../../../public/leadstart-logo.png";
-import { BounceLoader } from "@/components/ui/bounce-loader";
+import { LoadingVeil } from "@/components/layout/loading-veil";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -50,20 +50,13 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen justify-center bg-background px-4 pt-4 pb-8">
-      {loading && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center"
-          style={{ background: "#f8fafc" }}
-        >
-          <BounceLoader caption="Signing you in" />
-        </div>
-      )}
+    <div className="flex min-h-screen justify-center px-4 pt-4 pb-8">
+      <LoadingVeil open={loading} caption="Signing you in" />
       <div className="w-full max-w-md flex flex-col items-center">
         <div className="flex justify-center -mb-3">
           <Image src={leadstartLogo} alt="LeadStart" priority className="h-72 w-auto" />
         </div>
-        <Card className="w-full border-border/50 shadow-lg">
+        <Card className="w-full">
           <CardHeader className="text-center pb-2">
             <CardTitle className="text-2xl font-bold">Welcome back</CardTitle>
             <CardDescription className="text-muted-foreground">
@@ -108,7 +101,7 @@ export default function LoginPage() {
               )}
               <Button
                 type="submit"
-                className="w-full bg-[#2E37FE] text-white hover:bg-[#1C24B8] transition-colors font-medium"
+                className="w-full bg-primary text-white hover:bg-brand-500 transition-colors font-medium"
                 disabled={loading}
               >
                 {loading ? "Signing in..." : "Sign In"}
@@ -116,7 +109,7 @@ export default function LoginPage() {
               <div className="text-center">
                 <Link
                   href="/reset-password"
-                  className="text-sm text-[#2E37FE] hover:text-[#6B72FF] transition-colors"
+                  className="text-sm text-primary hover:text-brand-300 transition-colors"
                 >
                   Forgot your password?
                 </Link>

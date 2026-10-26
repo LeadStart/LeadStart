@@ -217,7 +217,7 @@ export default function NewLinkedinCampaignPage() {
         title="LinkedIn sequence"
       />
 
-      <Card className="border-border/50 shadow-sm">
+      <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Basics</CardTitle>
         </CardHeader>
@@ -273,7 +273,7 @@ export default function NewLinkedinCampaignPage() {
         </CardContent>
       </Card>
 
-      <Card className="border-border/50 shadow-sm">
+      <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-3">
           <CardTitle className="text-base">Steps</CardTitle>
           <Button
@@ -295,7 +295,7 @@ export default function NewLinkedinCampaignPage() {
           {steps.map((step, i) => (
             <div
               key={i}
-              className="rounded-xl border border-border/50 p-4 space-y-3"
+              className="rounded-xl border border-border-soft p-4 space-y-3"
             >
               <div className="flex items-center gap-2">
                 <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-[#0A66C2] px-2 text-xs font-bold text-white">

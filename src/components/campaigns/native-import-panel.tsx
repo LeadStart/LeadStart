@@ -424,7 +424,7 @@ export function NativeImportPanel({ campaignId }: { campaignId: string }) {
       <div>
         <label
           htmlFor={`native-csv-${campaignId}`}
-          className="flex items-center gap-3 rounded-lg border-2 border-dashed border-border/60 px-4 py-6 cursor-pointer hover:border-[#2E37FE]/40 hover:bg-[#2E37FE]/5 transition-colors"
+          className="flex items-center gap-3 rounded-lg border-2 border-dashed border-border-soft px-4 py-6 cursor-pointer hover:border-primary/40 hover:bg-primary/5 transition-colors"
         >
           <UploadCloud size={24} className="text-muted-foreground" />
           <div className="flex-1">
@@ -474,8 +474,8 @@ export function NativeImportPanel({ campaignId }: { campaignId: string }) {
 
       {/* Column mapping table */}
       {grid && csvHeaders.length > 0 && (
-        <div className="rounded-lg border border-border/60 overflow-hidden">
-          <div className="bg-muted/30 px-3 py-2 text-xs font-medium text-muted-foreground border-b border-border/60 flex items-center gap-2">
+        <div className="rounded-lg border border-border-soft overflow-hidden">
+          <div className="bg-muted/30 px-3 py-2 text-xs font-medium text-muted-foreground border-b border-border-soft flex items-center gap-2">
             <ArrowRight size={12} />
             Map CSV columns to contact fields and campaign variables
           </div>
@@ -512,7 +512,7 @@ export function NativeImportPanel({ campaignId }: { campaignId: string }) {
                 }
                 const inNewMode = newVarHeader === header;
                 return (
-                  <tr key={idx} className="border-t border-border/40">
+                  <tr key={idx} className="border-t border-border-soft">
                     <td className="px-3 py-2 font-medium">{header}</td>
                     <td className="px-3 py-2 text-muted-foreground truncate max-w-[200px]">
                       {sample || <span className="italic">empty</span>}
@@ -536,7 +536,7 @@ export function NativeImportPanel({ campaignId }: { campaignId: string }) {
                             }}
                             placeholder="variable name"
                             disabled={importing}
-                            className="min-w-0 flex-1 rounded-md border border-[#2E37FE]/30 bg-[#2E37FE]/5 px-2 py-1 text-xs"
+                            className="min-w-0 flex-1 rounded-md border border-primary/30 bg-primary/5 px-2 py-1 text-xs"
                           />
                           <span className="text-muted-foreground">{"}}"}</span>
                           <button
@@ -564,10 +564,8 @@ export function NativeImportPanel({ campaignId }: { campaignId: string }) {
                             else updateMapping(header, e.target.value);
                           }}
                           disabled={importing}
-                          className={`w-full rounded-md border px-2 py-1 text-xs ${
-                            value
-                              ? "border-[#2E37FE]/30 bg-[#2E37FE]/5"
-                              : "border-border/60 bg-background"
+                          className={`ls-select ls-select-sm w-full ${
+                            value ? "border-primary/30 bg-primary/5" : ""
                           }`}
                         >
                           <option value="">Skip</option>
@@ -654,8 +652,8 @@ export function NativeImportPanel({ campaignId }: { campaignId: string }) {
 
       {/* Preview */}
       {rows.length > 0 && (
-        <div className="rounded-lg border border-border/60 overflow-hidden">
-          <div className="bg-muted/30 px-3 py-2 text-xs font-medium text-muted-foreground border-b border-border/60 flex items-center gap-2">
+        <div className="rounded-lg border border-border-soft overflow-hidden">
+          <div className="bg-muted/30 px-3 py-2 text-xs font-medium text-muted-foreground border-b border-border-soft flex items-center gap-2">
             <FileText size={12} />
             Preview (first {Math.min(5, rows.length)} of {rows.length})
           </div>
@@ -677,7 +675,7 @@ export function NativeImportPanel({ campaignId }: { campaignId: string }) {
               </thead>
               <tbody>
                 {rows.slice(0, 5).map((r, i) => (
-                  <tr key={i} className="border-t border-border/40">
+                  <tr key={i} className="border-t border-border-soft">
                     <td className="px-3 py-2 font-mono text-[11px]">
                       {r.email}
                     </td>
@@ -795,9 +793,9 @@ export function NativeImportPanel({ campaignId }: { campaignId: string }) {
         })()}
 
       {importing && importProgress && (
-        <div className="space-y-2 rounded-lg border border-[#2E37FE]/20 bg-[#2E37FE]/5 p-3">
+        <div className="space-y-2 rounded-lg border border-primary/20 bg-primary/5 p-3">
           <div className="flex items-center justify-between text-xs">
-            <span className="flex items-center gap-1.5 font-medium text-[#2E37FE]">
+            <span className="flex items-center gap-1.5 font-medium text-primary">
               <Loader2 size={12} className="animate-spin" />
               Uploading {importProgress.done.toLocaleString()} of{" "}
               {importProgress.total.toLocaleString()} contacts…
@@ -809,9 +807,9 @@ export function NativeImportPanel({ campaignId }: { campaignId: string }) {
               %
             </span>
           </div>
-          <div className="h-1.5 w-full overflow-hidden rounded-full bg-[#2E37FE]/15">
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-primary/15">
             <div
-              className="h-full rounded-full bg-[#2E37FE] transition-all duration-300"
+              className="h-full rounded-full bg-primary transition-all duration-300"
               style={{
                 width: `${(importProgress.done / Math.max(1, importProgress.total)) * 100}%`,
               }}

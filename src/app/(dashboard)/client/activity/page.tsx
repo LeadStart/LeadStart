@@ -87,13 +87,13 @@ export default function ClientActivityPage() {
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
         <StatCard label="Replies" value={replies} icon={<MailOpen size={16} className="text-blue-500" />} iconBg="bg-blue-50" />
         <StatCard label="Positive Responses" value={meetings} icon={<CalendarCheck size={16} className="text-emerald-500" />} iconBg="bg-emerald-50" />
-        <StatCard label="Total" value={events.length} icon={<Activity size={16} className="text-[#2E37FE]" />} iconBg="bg-[#2E37FE]/10" />
+        <StatCard label="Total" value={events.length} icon={<Activity size={16} className="text-primary" />} iconBg="bg-primary/10" />
       </div>
 
       {events.length === 0 ? (
-        <Card className="border-border/50 shadow-sm">
+        <Card>
           <CardContent className="py-12 text-center">
-            <div className="flex justify-center mb-3"><div className="h-12 w-12 rounded-full bg-[#2E37FE] flex items-center justify-center"><Activity size={24} className="text-white" /></div></div>
+            <div className="flex justify-center mb-3"><div className="h-12 w-12 rounded-full bg-primary flex items-center justify-center"><Activity size={24} className="text-white" /></div></div>
             <p className="text-muted-foreground font-medium">No activity yet</p>
             <p className="text-sm text-muted-foreground">Events will appear here as your campaigns run.</p>
           </CardContent>
@@ -103,7 +103,7 @@ export default function ClientActivityPage() {
           {pageGroups.map(([dateLabel, dayEvents]) => (
             <div key={dateLabel}>
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3 px-1">{dateLabel}</p>
-              <Card className="border-border/50 shadow-sm">
+              <Card>
                 <CardContent className="py-2">
                   {dayEvents.map((event, i) => {
                     const config = getEventConfig(event.event_type);
@@ -111,7 +111,7 @@ export default function ClientActivityPage() {
                     // wire a proper campaign_id FK when events get rebuilt.
                     const campaignName = campaignNameMap.get(event.id);
                     return (
-                      <div key={event.id} className={`flex items-center gap-4 py-3 ${i < dayEvents.length - 1 ? "border-b border-border/30" : ""}`}>
+                      <div key={event.id} className={`flex items-center gap-4 py-3 ${i < dayEvents.length - 1 ? "border-b border-border-soft" : ""}`}>
                         <div className={`flex h-9 w-9 items-center justify-center rounded-full bg-muted/50 ${config.color} shrink-0`}>{config.icon}</div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">

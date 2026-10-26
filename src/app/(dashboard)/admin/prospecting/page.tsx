@@ -139,7 +139,7 @@ function SearchRow({
     <button
       type="button"
       onClick={onClick}
-      className="group flex items-center gap-4 rounded-xl border border-border bg-card p-4 text-left transition-colors hover:border-slate-300"
+      className="group flex items-center gap-4 rounded-xl border border-border-soft bg-card shadow-card p-4 text-left transition-colors hover:border-slate-300"
     >
       <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${iconClass}`}>
         {icon}

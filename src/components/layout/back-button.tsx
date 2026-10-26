@@ -16,8 +16,9 @@ import { cn } from "@/lib/utils";
 // it never affects layout.
 const CIRCLE =
   "inline-flex h-9 w-9 shrink-0 translate-y-[2px] cursor-pointer items-center justify-center " +
-  "rounded-full border border-border bg-card text-muted-foreground transition-colors " +
-  "hover:bg-muted hover:text-foreground focus-visible:outline-none " +
+  "rounded-full border border-border bg-card bg-(image:--tex-white) text-muted-foreground " +
+  "transition-[filter,color,scale] hover:text-foreground hover:brightness-[0.975] " +
+  "active:scale-[0.96] focus-visible:outline-none " +
   "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
 
 export interface BackButtonProps {

@@ -19,7 +19,7 @@ import { appUrl } from "@/lib/api-url";
 
 export default function UpdatePasswordPage() {
   return (
-    <Suspense fallback={<div className="flex min-h-screen items-center justify-center bg-background"><p className="text-muted-foreground">Loading...</p></div>}>
+    <Suspense fallback={<div className="flex min-h-screen items-center justify-center"><p className="text-muted-foreground">Loading...</p></div>}>
       <UpdatePasswordForm />
     </Suspense>
   );
@@ -39,8 +39,8 @@ function UpdatePasswordForm() {
 
   if (!token || !email) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <Card className="w-full max-w-md border-border/50 shadow-lg">
+      <div className="flex min-h-screen items-center justify-center">
+        <Card className="w-full max-w-md">
           <CardHeader className="text-center pb-2">
             <CardTitle className="text-2xl font-bold">Link expired</CardTitle>
             <CardDescription>This reset link is no longer valid</CardDescription>
@@ -53,7 +53,7 @@ function UpdatePasswordForm() {
             </div>
             <Button
               onClick={() => router.push("/reset-password")}
-              className="w-full bg-[#2E37FE] text-white hover:bg-[#1C24B8] transition-colors font-medium cursor-pointer"
+              className="w-full bg-primary text-white hover:bg-brand-500 transition-colors font-medium cursor-pointer"
             >
               Request New Reset Link
             </Button>
@@ -98,8 +98,8 @@ function UpdatePasswordForm() {
 
   if (success) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <Card className="w-full max-w-md border-border/50 shadow-lg">
+      <div className="flex min-h-screen items-center justify-center">
+        <Card className="w-full max-w-md">
           <CardHeader className="text-center pb-2">
             <CardTitle className="text-2xl font-bold">Password updated!</CardTitle>
             <CardDescription>Redirecting to login...</CardDescription>
@@ -120,12 +120,12 @@ function UpdatePasswordForm() {
   }
 
   return (
-    <div className="flex min-h-screen justify-center bg-background px-4 pt-4 pb-8">
+    <div className="flex min-h-screen justify-center px-4 pt-4 pb-8">
       <div className="w-full max-w-md flex flex-col items-center">
         <div className="flex justify-center -mb-3">
           <Image src={leadstartLogo} alt="LeadStart" priority className="h-72 w-auto" />
         </div>
-        <Card className="w-full border-border/50 shadow-lg">
+        <Card className="w-full">
           <CardHeader className="text-center pb-2">
             <CardTitle className="text-2xl font-bold">New password</CardTitle>
             <CardDescription className="text-muted-foreground">
@@ -153,7 +153,7 @@ function UpdatePasswordForm() {
                   <p className="text-sm text-red-700">{error}</p>
                 </div>
               )}
-              <Button type="submit" className="w-full bg-[#2E37FE] text-white hover:bg-[#1C24B8] transition-colors font-medium" disabled={loading}>
+              <Button type="submit" className="w-full bg-primary text-white hover:bg-brand-500 transition-colors font-medium" disabled={loading}>
                 {loading ? "Updating..." : "Update Password"}
               </Button>
             </form>

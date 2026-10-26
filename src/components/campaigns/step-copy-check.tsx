@@ -280,7 +280,7 @@ export function StepCopyCheck({
   if (nothingToSay && !onApplySpintax && !canPreview) return null;
 
   return (
-    <div className="mt-2 space-y-2 rounded-lg border border-border/50 bg-muted/30 p-2.5 text-xs">
+    <div className="mt-2 space-y-2 rounded-lg border border-border-soft bg-muted/30 p-2.5 text-xs">
       {!nothingToSay && (
         <div className="space-y-2">
           {/* 1. Spintax variant counts */}
@@ -357,7 +357,7 @@ export function StepCopyCheck({
 
       {/* 5. Live preview panel */}
       {previewOpen && canPreview && (
-        <div className="rounded-md border border-border/50 bg-background p-2.5">
+        <div className="rounded-md border border-border-soft bg-background p-2.5">
           {ctxLoading ? (
             <div className="flex items-center gap-2 py-2 text-[11px] text-muted-foreground">
               <Loader2 size={12} className="animate-spin" />
@@ -392,7 +392,7 @@ export function StepCopyCheck({
                 {preview?.body}
               </pre>
               {preview?.unresolved && preview.unresolved.length > 0 && (
-                <p className="mt-2 border-t border-border/40 pt-1.5 text-[10px] text-amber-700">
+                <p className="mt-2 border-t border-border-soft pt-1.5 text-[10px] text-amber-700">
                   Blank for this contact:{" "}
                   {preview.unresolved.map((t, i) => (
                     <span key={t.key}>
@@ -441,7 +441,7 @@ export function StepCopyCheck({
                     {formatCount(countVariants(body))} variants
                   </span>
                 </div>
-                <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-md border border-border/50 bg-muted/30 p-2 font-sans text-xs">
+                <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-md border border-border-soft bg-muted/30 p-2 font-sans text-xs">
                   {(subject && subject.length ? subject + "\n\n" : "") + body}
                 </pre>
               </div>
@@ -467,7 +467,6 @@ export function StepCopyCheck({
               type="button"
               onClick={applyGenerated}
               disabled={gen.loading || !gen.result}
-              style={{ background: "#2E37FE" }}
               className="text-white"
             >
               Use this

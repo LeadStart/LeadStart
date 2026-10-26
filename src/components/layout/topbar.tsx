@@ -101,13 +101,13 @@ export function Topbar({ userEmail, role, actualRole, viewingAsClient = false, o
   }
 
   return (
-    // Mobile: flush full-width strip with a border-b. Desktop (lg): `.app-topbar`
-    // (globals.css) floats it as an inset, rounded, hairline card matching the rail.
-    <header className="app-topbar flex h-16 shrink-0 items-center justify-between border-b border-border/50 bg-white px-4 sm:px-6 gap-3">
+    // Forge's top bar: a 52px white card with a hairline. `.app-topbar` (globals.css)
+    // floats it beside the rail on desktop and as a stadium card on phones.
+    <header className="app-topbar flex h-[52px] shrink-0 items-center justify-between gap-3 border border-border bg-card pr-2 pl-5 lg:pl-[18px]">
       <div className="flex items-center gap-3 min-w-0 flex-1">
         {/* Brand wordmark: mobile/tablet only. Primary nav is the bottom tab
             bar now; the sidebar rail carries the brand at lg+. */}
-        <span className="lg:hidden text-[15px] font-semibold tracking-tight text-foreground">
+        <span className="lg:hidden text-[13px] font-bold uppercase tracking-[0.2em] text-foreground">
           LeadStart
         </span>
         {/* Search bar: admin only, desktop only */}
@@ -118,7 +118,7 @@ export function Topbar({ userEmail, role, actualRole, viewingAsClient = false, o
         {/* Notification bell: admin only */}
         {isActualAdmin && (
           <DropdownMenu>
-            <DropdownMenuTrigger className="relative flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors outline-none cursor-pointer">
+            <DropdownMenuTrigger className="relative flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground aria-expanded:bg-muted transition-colors outline-none cursor-pointer focus-visible:ring-3 focus-visible:ring-ring/35">
               <Bell size={18} />
               {unreadCount > 0 && (
                 <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[9px] font-bold text-white">
@@ -166,17 +166,17 @@ export function Topbar({ userEmail, role, actualRole, viewingAsClient = false, o
         )}
 
         {/* Divider */}
-        <div className="h-8 w-px bg-border/50" />
+        <div className="h-6 w-px bg-border" />
 
         {/* User dropdown */}
         <DropdownMenu>
-          <DropdownMenuTrigger className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 transition-colors hover:bg-muted/50 outline-none cursor-pointer">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-xs font-bold text-white shrink-0">
+          <DropdownMenuTrigger className="flex items-center gap-2.5 rounded-full py-1 pr-1 pl-1 sm:pr-3 transition-colors hover:bg-muted aria-expanded:bg-muted outline-none cursor-pointer focus-visible:ring-3 focus-visible:ring-ring/35">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary bg-(image:--tex-brand) text-xs font-bold text-white shrink-0">
               {userEmail.charAt(0).toUpperCase()}
             </div>
             <div className="hidden sm:block text-left">
-              <p className="text-sm font-medium text-foreground leading-none">{userEmail}</p>
-              <p className="text-[11px] text-muted-foreground">{displayRole}</p>
+              <p className="text-[13px] font-semibold text-foreground leading-none">{userEmail}</p>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">{displayRole}</p>
             </div>
             <ChevronDown size={14} className="text-muted-foreground hidden sm:block" />
           </DropdownMenuTrigger>

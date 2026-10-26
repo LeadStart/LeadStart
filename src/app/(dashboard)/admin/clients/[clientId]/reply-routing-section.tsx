@@ -110,17 +110,18 @@ export function ReplyRoutingSection({
   ].filter((v) => v.trim().length > 0).length;
 
   return (
-    <Card className="border-border/50 shadow-sm">
+    <Card>
       <CardHeader
-        className="flex flex-row items-center gap-2 pb-3 cursor-pointer select-none"
+        className={`flex flex-row items-center gap-2 cursor-pointer select-none ${open ? "pb-3" : ""}`}
         onClick={() => setOpen((v) => !v)}
       >
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
           <Radio size={16} className="text-white" />
         </div>
-        <CardTitle className="text-base flex-1">Reply routing</CardTitle>
-        <span className="text-xs text-muted-foreground">
-          {populatedCount}/8 fields &middot; {form.auto_notify_classes.length} hot classes
+        <CardTitle className="text-base flex-1 whitespace-nowrap">Reply routing</CardTitle>
+        <span className="min-w-0 text-right text-xs leading-tight text-muted-foreground">
+          <span className="whitespace-nowrap">{populatedCount}/8 fields &middot;</span>{" "}
+          <span className="whitespace-nowrap">{form.auto_notify_classes.length} hot classes</span>
         </span>
         {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
       </CardHeader>
@@ -172,7 +173,7 @@ export function ReplyRoutingSection({
                 {form.notification_cc_emails.map((email) => (
                   <span
                     key={email}
-                    className="inline-flex items-center rounded-full bg-[#2E37FE]/10 px-2.5 py-0.5 text-xs text-[#2E37FE]"
+                    className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-0.5 text-xs text-primary"
                   >
                     {email}
                   </span>
@@ -268,15 +269,15 @@ export function ReplyRoutingSection({
                     key={cls}
                     className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm cursor-pointer transition-colors ${
                       checked
-                        ? "border-[#2E37FE]/30 bg-[#2E37FE]/5"
-                        : "border-border/50 hover:bg-muted/30"
+                        ? "border-primary/30 bg-primary/5"
+                        : "border-border-soft hover:bg-muted/30"
                     }`}
                   >
                     <input
                       type="checkbox"
                       checked={checked}
                       onChange={() => toggleClass(cls)}
-                      className="h-4 w-4 accent-[#2E37FE]"
+                      className="h-4 w-4 accent-primary"
                     />
                     <span>{meta.label}</span>
                   </label>
@@ -285,12 +286,11 @@ export function ReplyRoutingSection({
             </div>
           </div>
 
-          <div className="flex items-center gap-3 pt-2 border-t border-border/30">
+          <div className="flex items-center gap-3 pt-2 border-t border-border-soft">
             <Button
               onClick={handleSave}
               disabled={saving}
               className="gap-1.5"
-              style={{ background: '#2E37FE' }}
             >
               <Save size={14} />
               {saving ? "Saving…" : "Save settings"}

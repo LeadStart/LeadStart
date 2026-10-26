@@ -35,7 +35,8 @@ export function DashboardShell({
   const isAdmin = role === "owner" || role === "va";
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
+    // No fill of its own: the body's brand bloom (globals.css) shows through.
+    <div className="flex h-screen overflow-hidden">
       {isAdmin && <AdminPrefetcher />}
       <Sidebar
         role={role}

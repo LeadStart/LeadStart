@@ -70,7 +70,7 @@ export function ApifySpendCard() {
   const barColor = over ? "#dc2626" : near ? "#d97706" : "#059669";
 
   return (
-    <Card className="border-border/50 shadow-sm">
+    <Card>
       <CardHeader className="flex flex-row items-center gap-2 pb-3">
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-700">
           <Receipt size={16} className="text-white" />
@@ -135,7 +135,7 @@ export function ApifySpendCard() {
             {data.byActor.length === 0 ? (
               <p className="text-sm text-muted-foreground">No actor runs charged this cycle yet.</p>
             ) : (
-              <div className="overflow-hidden rounded-lg border border-border/60">
+              <div className="overflow-hidden rounded-lg border border-border-soft">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-muted/40 text-[10px] uppercase tracking-wide text-muted-foreground">
@@ -146,7 +146,7 @@ export function ApifySpendCard() {
                   </thead>
                   <tbody>
                     {data.byActor.map((a) => (
-                      <tr key={a.actorId} className="border-t border-border/50">
+                      <tr key={a.actorId} className="border-t border-border-soft">
                         <td className="px-3 py-2">
                           <span className="font-mono text-[12px]">{a.name}</span>
                         </td>

@@ -172,7 +172,7 @@ export function Typeahead({
       </div>
 
       {isOpen && results.length > 0 && (
-        <div className="absolute left-0 right-0 top-full mt-1 z-30 max-h-72 overflow-y-auto rounded-md border border-border bg-white shadow-lg">
+        <div className="absolute left-0 right-0 top-full mt-1 z-30 max-h-72 ls-menu-in overflow-y-auto rounded-2xl border border-border bg-popover shadow-pop">
           {results.map((item, i) => {
             const badge =
               variant === "location" && item.search_type

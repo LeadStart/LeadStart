@@ -108,7 +108,7 @@ export function useReclassifyGroup({
       <DropdownMenu>
         <DropdownMenuTrigger
           disabled={saving}
-          className="inline-flex items-center gap-1 rounded-lg border border-border bg-white px-2.5 py-1.5 text-xs font-semibold text-foreground transition-colors hover:bg-muted cursor-pointer disabled:opacity-50"
+          className="inline-flex items-center gap-1 rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs font-semibold text-foreground transition-colors hover:bg-muted cursor-pointer disabled:opacity-50"
         >
           More… <ChevronDown size={12} />
         </DropdownMenuTrigger>
@@ -126,7 +126,7 @@ export function useReclassifyGroup({
               <span className="flex-1">
                 <span className="flex items-center gap-1.5 font-medium">
                   {CLASS_META[cls].label}
-                  {currentClass === cls && <Check size={13} className="text-[#2E37FE]" />}
+                  {currentClass === cls && <Check size={13} className="text-primary" />}
                 </span>
                 <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground">
                   {CLASS_META[cls].when}

@@ -50,8 +50,8 @@ export function WelcomeContent({
   const contactsClause = sellsContacts ? "sourcing your contacts and " : "";
 
   return (
-    <div className={`bg-slate-50 text-[#0f172a] ${className ?? ""}`}>
-      <header className="border-b border-slate-200 bg-white">
+    <div className={`bg-slate-50 text-foreground ${className ?? ""}`}>
+      <header className="border-b border-slate-200 bg-card">
         <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-4 sm:px-6">
           <Image
             src={leadstartLogo}
@@ -65,7 +65,7 @@ export function WelcomeContent({
       </header>
 
       <main className="mx-auto max-w-2xl px-4 py-16 sm:px-6 sm:py-24">
-        <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-8 sm:p-12 text-center space-y-5">
+        <div className="rounded-xl bg-card border border-border-soft shadow-card p-8 sm:p-12 text-center space-y-5">
           {/* Success seal */}
           <div className="mx-auto" style={{ width: 74, height: 74, position: "relative" }}>
             <div
@@ -116,27 +116,27 @@ export function WelcomeContent({
               your business. We will get started on{" "}
               {contactsClause}setting up your domains and inboxes right away.
               Your campaigns will launch after{" "}
-              <strong className="text-[#0f172a]">
+              <strong className="text-foreground">
                 {warmingDays} calendar days
               </strong>
               , and your first monthly charge will be assessed on the day we
               launch, slated for{" "}
-              <strong className="text-[#0f172a]">{launchStr}</strong>.
+              <strong className="text-foreground">{launchStr}</strong>.
             </p>
           </div>
 
-          <div className="mt-4 rounded-xl border border-border/60 bg-muted/30 p-4 text-xs sm:text-sm text-muted-foreground space-y-1 text-left">
+          <div className="mt-4 rounded-xl border border-border-soft bg-muted/30 p-4 text-xs sm:text-sm text-muted-foreground space-y-1 text-left">
             <p>
-              <strong className="text-[#0f172a]">Receipt:</strong>{" "}
+              <strong className="text-foreground">Receipt:</strong>{" "}
               you&apos;ll get an email confirmation from Stripe within a few
               minutes.
             </p>
             <p>
-              <strong className="text-[#0f172a]">Questions?</strong>{" "}
+              <strong className="text-foreground">Questions?</strong>{" "}
               You can reach out to us any time{" "}
               <a
                 href="mailto:daniel@leadstart.io"
-                className="text-[#2E37FE] font-semibold hover:underline"
+                className="text-primary font-semibold hover:underline"
               >
                 HERE
               </a>

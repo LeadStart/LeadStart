@@ -118,7 +118,7 @@ export function StepFunnel({ stepMetrics, alerts, campaignName }: StepFunnelProp
 
   if (steps.length === 0) {
     return (
-      <Card className="border-border/50 shadow-sm">
+      <Card>
         <CardContent className="py-8 text-center">
           <Activity size={24} className="mx-auto text-muted-foreground mb-2" />
           <p className="text-sm text-muted-foreground">No step-level data yet. Data appears after the first sync.</p>
@@ -128,9 +128,9 @@ export function StepFunnel({ stepMetrics, alerts, campaignName }: StepFunnelProp
   }
 
   return (
-    <Card className="border-border/50 shadow-sm">
+    <Card>
       <CardHeader className="flex flex-row items-center gap-2 pb-3">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
           <Activity size={16} className="text-white" />
         </div>
         <div>
@@ -149,7 +149,7 @@ export function StepFunnel({ stepMetrics, alerts, campaignName }: StepFunnelProp
             return (
               <div key={s.step}>
                 {/* Step row */}
-                <div className={`flex items-center gap-4 py-4 ${!isLast ? "border-b border-border/30" : ""}`}>
+                <div className={`flex items-center gap-4 py-4 ${!isLast ? "border-b border-border-soft" : ""}`}>
                   {/* Step number indicator */}
                   <div className="flex flex-col items-center shrink-0 w-10">
                     <div className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold ${
@@ -157,7 +157,7 @@ export function StepFunnel({ stepMetrics, alerts, campaignName }: StepFunnelProp
                         ? "bg-red-100 text-red-700 ring-2 ring-red-500/30"
                         : alert?.severity === "warning"
                         ? "bg-amber-100 text-amber-700 ring-2 ring-amber-500/30"
-                        : "bg-[#2E37FE]/20 text-[#6B72FF]"
+                        : "bg-brand-50 text-brand-500"
                     }`}>
                       {s.step}
                     </div>

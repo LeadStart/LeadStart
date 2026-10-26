@@ -354,7 +354,7 @@ function PlanEditDialog({
               type="checkbox"
               checked={active}
               onChange={(e) => setActive(e.target.checked)}
-              className="h-4 w-4 rounded border-input accent-[#2E37FE]"
+              className="h-4 w-4 rounded border-input accent-primary"
             />
             <Label htmlFor="plan-active" className="cursor-pointer">
               Active (available on new quotes)
@@ -373,7 +373,6 @@ function PlanEditDialog({
           <Button
             onClick={handleSave}
             disabled={saving || !name.trim()}
-            style={{ background: "#2E37FE" }}
           >
             {saving
               ? "Saving…"
@@ -597,7 +596,7 @@ function NewQuoteDialog({
             terms={terms}
             expiresAt={expiresAt}
             trailingSlot={
-              <div className="rounded-xl border border-dashed border-[#2E37FE]/30 bg-[#2E37FE]/5 p-4 text-xs text-muted-foreground">
+              <div className="rounded-xl border border-dashed border-primary/30 bg-primary/5 p-4 text-xs text-muted-foreground">
                 Once sent, the recipient sees this exact layout at a signed URL
                 with an <strong>Accept &amp; pay</strong> button that opens an
                 on-site Stripe payment modal.
@@ -641,13 +640,13 @@ function NewQuoteDialog({
               )}
             </div>
 
-            <div className="rounded-lg border border-border/60 p-3 space-y-3">
+            <div className="rounded-lg border border-border-soft p-3 space-y-3">
               <label className="flex items-center gap-2 cursor-pointer select-none">
                 <input
                   type="checkbox"
                   checked={sellsContacts}
                   onChange={(e) => setSellsContacts(e.target.checked)}
-                  className="h-4 w-4 rounded border-input accent-[#2E37FE]"
+                  className="h-4 w-4 rounded border-input accent-primary"
                 />
                 <span className="text-sm font-medium">Selling contacts</span>
                 <span className="text-xs text-muted-foreground">
@@ -743,7 +742,7 @@ function NewQuoteDialog({
               </p>
             </div>
 
-            <div className="space-y-1.5 rounded-lg border border-border/60 p-3">
+            <div className="space-y-1.5 rounded-lg border border-border-soft p-3">
               <Label>Billing starts (first monthly charge)</Label>
               <Select
                 value={launchMode}
@@ -881,7 +880,6 @@ function NewQuoteDialog({
           <Button
             onClick={() => handleSubmit(true)}
             disabled={submitting || !canSend}
-            style={{ background: "#2E37FE" }}
             className="w-full sm:w-auto"
           >
             {submitting ? "Sending…" : "Send now"}
@@ -1304,8 +1302,8 @@ export default function BillingPage() {
         <StatCard
           label="Active Subs"
           value={activeCount}
-          icon={<Users size={18} className="text-[#2E37FE]" />}
-          iconBg="bg-[#2E37FE]/10"
+          icon={<Users size={18} className="text-primary" />}
+          iconBg="bg-primary/10"
         />
         <StatCard
           label="Warming"
@@ -1337,7 +1335,7 @@ export default function BillingPage() {
             <FileText size={14} />
             Quotes
             {pendingQuotesCount > 0 && (
-              <span className="ml-1 text-xs text-[#2E37FE]">
+              <span className="ml-1 text-xs text-primary">
                 ({pendingQuotesCount} pending)
               </span>
             )}
@@ -1383,7 +1381,6 @@ export default function BillingPage() {
             </p>
             <Button
               size="sm"
-              style={{ background: "#2E37FE" }}
               onClick={() => setCreatingPlan(true)}
             >
               <Plus size={14} className="mr-1" />
@@ -1391,7 +1388,7 @@ export default function BillingPage() {
             </Button>
           </div>
           {plans.length === 0 && (
-            <div className="rounded-xl border border-dashed border-border/60 p-8 text-center text-sm text-muted-foreground">
+            <div className="rounded-xl border border-dashed border-border-soft p-8 text-center text-sm text-muted-foreground">
               {loading
                 ? "Loading plans…"
                 : "No plans yet. Click New plan to create your first one, it'll sync to Stripe as a Product + Price on save."}
@@ -1407,10 +1404,10 @@ export default function BillingPage() {
                   key={plan.id}
                   type="button"
                   onClick={() => setEditingPlan(plan)}
-                  className="text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2E37FE] rounded-xl"
+                  className="text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-xl"
                 >
                   <Card
-                    className={`group transition-all hover:border-[#2E37FE]/40 hover:shadow-md cursor-pointer ${!plan.active ? "opacity-60" : ""}`}
+                    className={`group transition-all hover:border-primary/40 hover:shadow-float cursor-pointer ${!plan.active ? "opacity-60" : ""}`}
                   >
                     <CardContent className="p-5 space-y-3">
                       <div className="flex items-center justify-between">
@@ -1423,7 +1420,7 @@ export default function BillingPage() {
                         </div>
                         <Badge
                           variant="secondary"
-                          className="bg-[#2E37FE]/20 text-[#6B72FF] border border-[#2E37FE]/20"
+                          className="border-transparent bg-brand-50 text-brand-500"
                         >
                           {subCount} client{subCount !== 1 ? "s" : ""}
                         </Badge>
@@ -1475,14 +1472,13 @@ export default function BillingPage() {
             </p>
             <Button
               size="sm"
-              style={{ background: "#2E37FE" }}
               onClick={() => setNewQuoteOpen(true)}
             >
               <FileText size={14} className="mr-1" />
               New quote
             </Button>
           </div>
-          <Card className="border-border/50 shadow-sm">
+          <Card>
             <CardContent>
               <Table>
                 <TableHeader>
@@ -1527,10 +1523,7 @@ export default function BillingPage() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
-                          <div
-                            className="flex h-6 w-6 items-center justify-center rounded-md text-[10px] font-bold text-white shrink-0"
-                            style={{ background: "#2E37FE" }}
-                          >
+                          <div className="flex h-6 w-6 items-center justify-center rounded-md text-[10px] font-bold text-white shrink-0 bg-primary">
                             {clientName(q.client_id, clients).charAt(0)}
                           </div>
                           <span className="text-sm">
@@ -1611,7 +1604,7 @@ export default function BillingPage() {
           <p className="text-sm text-muted-foreground">
             Live subscription state mirrored from Stripe.
           </p>
-          <Card className="border-border/50 shadow-sm">
+          <Card>
             <CardContent>
               <Table>
                 <TableHeader>
@@ -1651,10 +1644,7 @@ export default function BillingPage() {
                       <TableRow key={s.id}>
                         <TableCell>
                           <div className="flex items-center gap-2">
-                            <div
-                              className="flex h-7 w-7 items-center justify-center rounded-md text-[10px] font-bold text-white shrink-0"
-                              style={{ background: "#2E37FE" }}
-                            >
+                            <div className="flex h-7 w-7 items-center justify-center rounded-md text-[10px] font-bold text-white shrink-0 bg-primary">
                               {clientName(s.client_id, clients).charAt(0)}
                             </div>
                             <div className="min-w-0">
@@ -1809,7 +1799,7 @@ export default function BillingPage() {
           <p className="text-sm text-muted-foreground">
             All invoices from Stripe, including paid, open, and past-due.
           </p>
-          <Card className="border-border/50 shadow-sm">
+          <Card>
             <CardContent>
               <Table>
                 <TableHeader>
@@ -1867,7 +1857,7 @@ export default function BillingPage() {
                               href={inv.hosted_invoice_url}
                               target="_blank"
                               rel="noreferrer"
-                              className="inline-flex items-center gap-1 text-xs text-[#2E37FE] hover:underline"
+                              className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
                             >
                               <ExternalLink size={12} />
                               View
@@ -1876,7 +1866,7 @@ export default function BillingPage() {
                               type="button"
                               onClick={() => handleSendInvoiceEmail(inv)}
                               disabled={sendingInvoiceId === inv.id}
-                              className="inline-flex items-center gap-1 text-xs text-[#2E37FE] hover:underline disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                              className="inline-flex items-center gap-1 text-xs text-primary hover:underline disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                             >
                               <Mail size={12} />
                               {sendingInvoiceId === inv.id ? "Sending…" : "Send"}
@@ -1896,9 +1886,9 @@ export default function BillingPage() {
       </Tabs>
 
       {/* Stripe integration footer */}
-      <Card className="border-border/50 shadow-sm">
+      <Card>
         <CardHeader className="flex flex-row items-center gap-2 pb-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
             <CreditCard size={16} className="text-white" />
           </div>
           <CardTitle className="text-base">Stripe Integration</CardTitle>
@@ -1911,7 +1901,7 @@ export default function BillingPage() {
                 ? "border-emerald-200 bg-emerald-50"
                 : stripeMode === "test"
                   ? "border-amber-200 bg-amber-50"
-                  : "border-dashed border-[#2E37FE]/20 bg-[#2E37FE]/5")
+                  : "border-dashed border-primary/20 bg-primary/5")
             }
           >
             <div className="flex items-center gap-2">
@@ -1940,7 +1930,7 @@ export default function BillingPage() {
             </p>
           </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 text-sm">
-            <div className="rounded-xl border border-border/50 p-4 space-y-1">
+            <div className="rounded-xl border border-border-soft p-4 space-y-1">
               <p className="font-semibold">Quote → Checkout</p>
               <p className="text-muted-foreground text-xs">
                 Accept button on a quote opens a Stripe Checkout session that
@@ -1948,14 +1938,14 @@ export default function BillingPage() {
                 for the 14-day warming window.
               </p>
             </div>
-            <div className="rounded-xl border border-border/50 p-4 space-y-1">
+            <div className="rounded-xl border border-border-soft p-4 space-y-1">
               <p className="font-semibold">Dunning</p>
               <p className="text-muted-foreground text-xs">
                 Stripe retries failed payments; we send a branded nudge via
                 Resend.
               </p>
             </div>
-            <div className="rounded-xl border border-border/50 p-4 space-y-1">
+            <div className="rounded-xl border border-border-soft p-4 space-y-1">
               <p className="font-semibold">Customer Portal</p>
               <p className="text-muted-foreground text-xs">
                 Admin emails a one-time link so the client can update card or
@@ -2087,7 +2077,7 @@ export default function BillingPage() {
                 href={portalUrlDialog.url}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-1 text-xs text-[#2E37FE] hover:underline"
+                className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
               >
                 <ExternalLink size={12} />
                 Open in new tab

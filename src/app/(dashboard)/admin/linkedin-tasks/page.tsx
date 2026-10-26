@@ -99,7 +99,7 @@ function CopyButton({ text }: { text: string }) {
           /* clipboard blocked: no-op */
         }
       }}
-      className="inline-flex items-center gap-1 rounded-md border border-border/60 bg-white px-2 py-1 text-xs font-medium text-[#0f172a] transition-colors hover:bg-muted/40 cursor-pointer"
+      className="inline-flex items-center gap-1 rounded-md border border-border-soft bg-card px-2 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted/40 cursor-pointer"
       title="Copy message"
     >
       {copied ? <Check size={12} className="text-emerald-600" /> : <Copy size={12} />}
@@ -208,16 +208,16 @@ export default function LinkedInTasksPage() {
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50">
           <ListChecks size={16} className="text-blue-600" />
         </div>
-        <h2 className="text-[15px] font-semibold text-[#0f172a]">LinkedIn to-dos</h2>
+        <h2 className="text-[15px] font-semibold text-foreground">LinkedIn to-dos</h2>
       </div>
-      <Card className="border-border/50 shadow-sm">
+      <Card>
         <CardContent>
           {filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-2 py-14 text-center">
               <div className="flex h-11 w-11 items-center justify-center rounded-full bg-blue-50">
                 <LinkedInGlyph size={20} className="text-blue-600" />
               </div>
-              <p className="text-sm font-medium text-[#0f172a]">
+              <p className="text-sm font-medium text-foreground">
                 No {STATUS_LABEL[statusFilter].toLowerCase()} LinkedIn to-dos
               </p>
               <p className="max-w-md text-xs text-muted-foreground">
@@ -246,7 +246,7 @@ export default function LinkedInTasksPage() {
                       {/* Contact */}
                       <TableCell className="align-top">
                         <div className="min-w-[150px] max-w-[220px]">
-                          <p className="font-medium text-[#0f172a] break-words">{contactName(c)}</p>
+                          <p className="font-medium text-foreground break-words">{contactName(c)}</p>
                           {c?.title && (
                             <p className="text-xs text-muted-foreground break-words">{c.title}</p>
                           )}
@@ -266,7 +266,7 @@ export default function LinkedInTasksPage() {
                         <div className="min-w-[220px] max-w-[420px]">
                           {task.rendered_body ? (
                             <>
-                              <p className="whitespace-pre-wrap break-words text-sm text-[#334155]">
+                              <p className="whitespace-pre-wrap break-words text-sm text-secondary-foreground">
                                 {task.rendered_body}
                               </p>
                               <div className="mt-1.5">
@@ -290,7 +290,7 @@ export default function LinkedInTasksPage() {
                             href={c.linkedin_url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 rounded-md border border-border/60 bg-white px-2 py-1 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-50 cursor-pointer"
+                            className="inline-flex items-center gap-1 rounded-md border border-border-soft bg-card px-2 py-1 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-50 cursor-pointer"
                             title={c.linkedin_url}
                           >
                             <LinkedInGlyph size={12} />
@@ -341,7 +341,7 @@ export default function LinkedInTasksPage() {
                               type="button"
                               disabled={busy}
                               onClick={() => setTaskStatus(task.id, "skipped")}
-                              className="inline-flex items-center gap-1 rounded-md border border-border/60 bg-white px-2.5 py-1 text-xs font-medium text-[#475569] transition-colors hover:bg-muted/40 disabled:opacity-50 cursor-pointer"
+                              className="inline-flex items-center gap-1 rounded-md border border-border-soft bg-card px-2.5 py-1 text-xs font-medium text-[#475569] transition-colors hover:bg-muted/40 disabled:opacity-50 cursor-pointer"
                             >
                               <SkipForward size={13} />
                               Skip
@@ -352,7 +352,7 @@ export default function LinkedInTasksPage() {
                             type="button"
                             disabled={busy}
                             onClick={() => setTaskStatus(task.id, "open")}
-                            className="inline-flex items-center gap-1 rounded-md border border-border/60 bg-white px-2.5 py-1 text-xs font-medium text-[#475569] transition-colors hover:bg-muted/40 disabled:opacity-50 cursor-pointer"
+                            className="inline-flex items-center gap-1 rounded-md border border-border-soft bg-card px-2.5 py-1 text-xs font-medium text-[#475569] transition-colors hover:bg-muted/40 disabled:opacity-50 cursor-pointer"
                           >
                             <RotateCcw size={13} />
                             Reopen

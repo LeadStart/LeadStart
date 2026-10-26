@@ -34,7 +34,7 @@ export function ActivatePreflightDialog({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Ready to activate?</DialogTitle>
           <DialogDescription>

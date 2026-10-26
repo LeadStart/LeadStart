@@ -727,7 +727,7 @@ export default function MailboxesPage() {
 
         {/* ── Sending inboxes ── */}
         <TabsContent value="inboxes">
-      <Card className="border-border/50 shadow-sm">
+      <Card>
         <CardContent className="pt-6">
           {loading ? (
             <p className="text-sm text-muted-foreground py-6 text-center">Loading…</p>
@@ -755,8 +755,8 @@ export default function MailboxesPage() {
                       aria-pressed={on}
                       className={`inline-flex cursor-pointer items-center rounded-full border px-2 py-0.5 text-xs font-medium transition-colors ${
                         on
-                          ? "border-[#2E37FE] bg-[#2E37FE] text-white"
-                          : "border-border/70 text-muted-foreground hover:border-[#2E37FE]/50 hover:text-[#2E37FE]"
+                          ? "border-primary bg-primary text-white"
+                          : "border-border-soft text-muted-foreground hover:border-primary/50 hover:text-primary"
                       }`}
                     >
                       {t}
@@ -771,7 +771,7 @@ export default function MailboxesPage() {
                     <button
                       type="button"
                       onClick={() => setTagFilter(new Set())}
-                      className="inline-flex cursor-pointer items-center gap-0.5 rounded-full px-1.5 py-0.5 text-xs text-muted-foreground hover:text-[#2E37FE]"
+                      className="inline-flex cursor-pointer items-center gap-0.5 rounded-full px-1.5 py-0.5 text-xs text-muted-foreground hover:text-primary"
                     >
                       <X size={11} /> Clear
                     </button>
@@ -781,8 +781,8 @@ export default function MailboxesPage() {
             )}
             {/* Bulk "tag selected" toolbar: appears once any inbox is checked. */}
             {selectedIds.size > 0 && (
-              <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-[#2E37FE]/30 bg-[#2E37FE]/5 px-3 py-2">
-                <span className="text-xs font-medium text-[#2E37FE]">
+              <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2">
+                <span className="text-xs font-medium text-primary">
                   {selectedIds.size} selected
                 </span>
                 {!bulkTagOpen ? (
@@ -842,7 +842,7 @@ export default function MailboxesPage() {
                 <button
                   type="button"
                   onClick={() => setTagFilter(new Set())}
-                  className="cursor-pointer underline hover:text-[#2E37FE]"
+                  className="cursor-pointer underline hover:text-primary"
                 >
                   Clear filter
                 </button>
@@ -851,7 +851,7 @@ export default function MailboxesPage() {
             // @container so the table sizes to its own box: the Deliverability
             // column drops (and folds into the Mailbox cell) on a narrow window
             // instead of the whole table scrolling sideways.
-            <div className="@container">
+            <div className="@container overflow-x-auto">
               <table className="w-full table-fixed text-sm">
                 <thead>
                   <tr className="border-b text-left text-xs text-muted-foreground">
@@ -874,7 +874,7 @@ export default function MailboxesPage() {
                             return next;
                           })
                         }
-                        className="h-3.5 w-3.5 accent-[#2E37FE]"
+                        className="h-3.5 w-3.5 accent-primary"
                         aria-label="Select all mailboxes"
                       />
                     </th>
@@ -894,13 +894,13 @@ export default function MailboxesPage() {
                           type="checkbox"
                           checked={selectedIds.has(mb.id)}
                           onChange={() => toggleSelect(mb.id)}
-                          className="h-3.5 w-3.5 accent-[#2E37FE]"
+                          className="h-3.5 w-3.5 accent-primary"
                           aria-label={`Select ${mb.email_address}`}
                         />
                       </td>
                       <td className="min-w-0 py-3 pr-3">
                         <div className="flex items-center gap-2">
-                          <span className="truncate font-medium text-[#0f172a]">{mb.email_address}</span>
+                          <span className="truncate font-medium text-foreground">{mb.email_address}</span>
                           {mb.status !== "active" && <StatusBadge status={mb.status} />}
                         </div>
                         {mb.display_name && (
@@ -920,7 +920,7 @@ export default function MailboxesPage() {
                           {(mb.tags ?? []).map((t) => (
                             <span
                               key={t}
-                              className="inline-flex items-center rounded-full bg-[#2E37FE]/10 px-1.5 py-0.5 text-[10px] font-medium text-[#2E37FE]"
+                              className="inline-flex items-center rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary"
                             >
                               {t}
                             </span>
@@ -928,7 +928,7 @@ export default function MailboxesPage() {
                           <button
                             type="button"
                             onClick={() => openTags(mb)}
-                            className="inline-flex cursor-pointer items-center gap-0.5 rounded-full border border-dashed border-border/70 px-1.5 py-0.5 text-[10px] text-muted-foreground hover:border-[#2E37FE]/50 hover:text-[#2E37FE]"
+                            className="inline-flex cursor-pointer items-center gap-0.5 rounded-full border border-dashed border-border-soft px-1.5 py-0.5 text-[10px] text-muted-foreground hover:border-primary/50 hover:text-primary"
                             aria-expanded={tagsOpenId === mb.id}
                             title="Edit tags"
                           >
@@ -939,7 +939,7 @@ export default function MailboxesPage() {
                           <button
                             type="button"
                             onClick={() => toggleExpanded(mb)}
-                            className="inline-flex cursor-pointer items-center gap-0.5 rounded-full border border-dashed border-border/70 px-1.5 py-0.5 text-[10px] text-muted-foreground hover:border-[#2E37FE]/50 hover:text-[#2E37FE]"
+                            className="inline-flex cursor-pointer items-center gap-0.5 rounded-full border border-dashed border-border-soft px-1.5 py-0.5 text-[10px] text-muted-foreground hover:border-primary/50 hover:text-primary"
                             aria-expanded={expandedId === mb.id}
                             title="Edit name, signature and warmup"
                           >
@@ -972,7 +972,7 @@ export default function MailboxesPage() {
                             className="inline-flex items-center gap-1.5 cursor-pointer"
                             title="Show the health breakdown and placement results"
                           >
-                            <span className="font-semibold text-[#0f172a]">{mb.health_score}</span>
+                            <span className="font-semibold text-foreground">{mb.health_score}</span>
                             {mb.health_band && (
                               <Badge
                                 variant="secondary"
@@ -1021,7 +1021,7 @@ export default function MailboxesPage() {
                             <DropdownMenuTrigger
                               disabled={busy[mb.id]}
                               aria-label={`More actions for ${mb.email_address}`}
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border bg-white text-slate-600 outline-none transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border bg-card text-slate-600 outline-none transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
                             >
                               {busy[mb.id] ? <Loader2 size={14} className="animate-spin" /> : <MoreHorizontal size={14} />}
                             </DropdownMenuTrigger>
@@ -1157,7 +1157,7 @@ export default function MailboxesPage() {
                           </div>
                           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
                             <div className="space-y-1.5">
-                              <p className="text-xs font-semibold text-[#0f172a] uppercase tracking-wide">
+                              <p className="text-xs font-semibold text-foreground uppercase tracking-wide">
                                 Health breakdown
                               </p>
                               {mb.health_components ? (
@@ -1166,7 +1166,7 @@ export default function MailboxesPage() {
                                     <span
                                       className={`mt-1 h-2 w-2 rounded-full shrink-0 ${dotClass(c.status)}`}
                                     />
-                                    <span className="font-medium text-[#0f172a] w-44 shrink-0">
+                                    <span className="font-medium text-foreground w-44 shrink-0">
                                       {c.label}
                                     </span>
                                     <span className="text-muted-foreground flex-1 min-w-0">{c.detail}</span>
@@ -1187,7 +1187,7 @@ export default function MailboxesPage() {
                               )}
                               {mb.health_components && (
                                 <p className="text-xs pt-1">
-                                  <span className="font-semibold text-[#0f172a]">Score: </span>
+                                  <span className="font-semibold text-foreground">Score: </span>
                                   <span className="text-muted-foreground tabular-nums">
                                     {scoreMath(mb.health_components)}
                                   </span>
@@ -1199,10 +1199,10 @@ export default function MailboxesPage() {
                                 </p>
                               )}
                               <details className="pt-1 text-xs">
-                                <summary className="cursor-pointer select-none font-medium text-[#0f172a] hover:underline">
+                                <summary className="cursor-pointer select-none font-medium text-foreground hover:underline">
                                   How the score works
                                 </summary>
-                                <div className="mt-2 space-y-2 rounded-md border bg-white p-3">
+                                <div className="mt-2 space-y-2 rounded-md border bg-card p-3">
                                   <ul className="space-y-1 text-muted-foreground">
                                     {HEALTH_SCALE.map((line) => (
                                       <li key={line}>{line}</li>
@@ -1214,7 +1214,7 @@ export default function MailboxesPage() {
                                         key={r.key}
                                         className="grid grid-cols-1 gap-0.5 sm:grid-cols-[11rem_1fr] sm:gap-2"
                                       >
-                                        <dt className="font-medium text-[#0f172a]">{r.label}</dt>
+                                        <dt className="font-medium text-foreground">{r.label}</dt>
                                         <dd className="text-muted-foreground">{r.rule}</dd>
                                       </div>
                                     ))}
@@ -1247,7 +1247,7 @@ export default function MailboxesPage() {
 
         {/* ── Sending domains ── */}
         <TabsContent value="domains">
-      <Card className="border-border/50 shadow-sm">
+      <Card>
         <CardContent className="space-y-4 pt-6">
           <p className="text-xs text-muted-foreground">
             The domains your mailboxes send from, with their burn-prevention lifecycle and health.
@@ -1259,7 +1259,7 @@ export default function MailboxesPage() {
               No sending domains yet: add a mailbox and its domain appears here.
             </p>
           ) : (
-            <div className="divide-y divide-border/50">
+            <div className="divide-y divide-border-soft">
               {domains.map((d) => {
                 const meta = LIFECYCLE_META[d.lifecycle_status];
                 // First setup for a never-set-up domain, or more inboxes on one
@@ -1342,7 +1342,7 @@ export default function MailboxesPage() {
 
         {/* ── Seed inboxes ── */}
         <TabsContent value="seeds">
-      <Card className="border-border/50 shadow-sm">
+      <Card>
         <CardContent className="space-y-4 pt-6">
           <p className="text-xs text-muted-foreground">
             Inboxes you control that we read to see where your mail lands: Workspace inboxes, or
@@ -1367,7 +1367,7 @@ export default function MailboxesPage() {
                   <div key={seed.id} className="flex items-center gap-3 px-3 py-2 text-sm">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <span className="font-medium text-[#0f172a] truncate">{seed.email_address}</span>
+                        <span className="font-medium text-foreground truncate">{seed.email_address}</span>
                         <span
                           className={`shrink-0 rounded border px-1.5 py-0.5 text-[10px] font-medium ${provider.cls}`}
                         >
@@ -1393,7 +1393,7 @@ export default function MailboxesPage() {
                       onChange={(e) =>
                         handleSetSeedRole(seed, e.target.value === "" ? null : (e.target.value as SeedRole))
                       }
-                      className="shrink-0 cursor-pointer rounded-md border border-border bg-white px-1.5 py-1 text-xs text-slate-600"
+                      className="ls-select ls-select-sm shrink-0"
                       title="Rotation role: a 'fresh' seed is one you rotate quarterly for a true first-contact read"
                     >
                       <option value="">Role…</option>
@@ -1593,7 +1593,7 @@ function WarmupCell({ mb }: { mb: MailboxRow }) {
       </div>
       <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-200">
         <div
-          className={`h-full rounded-full ${mb.warmed ? "bg-emerald-500" : "bg-[#2E37FE]"}`}
+          className={`h-full rounded-full ${mb.warmed ? "bg-emerald-500" : "bg-primary"}`}
           style={{ width: `${pct}%` }}
         />
       </div>
@@ -1683,7 +1683,7 @@ function PlacementPanel({
 
   return (
     <div className="space-y-2">
-      <p className="text-xs font-semibold text-[#0f172a] uppercase tracking-wide">
+      <p className="text-xs font-semibold text-foreground uppercase tracking-wide">
         Seed placement
       </p>
       {!test ? (
@@ -1702,7 +1702,7 @@ function PlacementPanel({
             ) : test.status === "failed" ? (
               <span className="text-red-600 font-medium">{test.error ?? "The test failed."}</span>
             ) : (
-              <span className="font-medium text-[#0f172a]">
+              <span className="font-medium text-foreground">
                 {describeCounts({
                   total: test.seeds_total,
                   inbox: test.inbox_count,
@@ -1724,10 +1724,10 @@ function PlacementPanel({
           ) : results.length === 0 ? (
             <p className="text-xs text-muted-foreground">No seed results recorded.</p>
           ) : (
-            <div className="divide-y divide-border rounded-lg border bg-white">
+            <div className="divide-y divide-border rounded-lg border bg-card">
               {results.map((r) => (
                 <div key={r.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-1.5 text-xs">
-                  <span className="font-medium text-[#0f172a] min-w-0 truncate">{r.seed_email}</span>
+                  <span className="font-medium text-foreground min-w-0 truncate">{r.seed_email}</span>
                   <Badge variant="secondary" className={`${resultBadgeClass(r.status)} text-[10px]`}>
                     {placementStatusLabel(r.status)}
                   </Badge>

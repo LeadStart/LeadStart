@@ -192,7 +192,7 @@ function PortfolioPulse({
   const barTotal = badCt + warningCt + noneCt + healthyCt;
 
   return (
-    <div className="rounded-[20px] border border-border bg-card p-5">
+    <div className="rounded-xl border border-border-soft bg-card shadow-card p-5">
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -205,7 +205,7 @@ function PortfolioPulse({
             {totalClients} active {totalClients === 1 ? "client" : "clients"}
           </p>
         </div>
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#EDEEFF] text-[#1C24B8]">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-brand-50 text-brand-500">
           <DollarSign size={20} />
         </div>
       </div>
@@ -273,7 +273,7 @@ function ClientRow({
       <Link
         href={href}
         className={cn(
-          "block rounded-2xl border border-border bg-card p-4 transition-colors hover:border-primary/40 hover:bg-muted/30 active:bg-muted/50",
+          "block rounded-xl border border-border-soft bg-card shadow-card p-4 transition-colors hover:border-primary/40 hover:bg-muted/30 active:bg-muted/50",
           onDelete && "pr-11",
         )}
       >
@@ -319,7 +319,7 @@ function ClientRow({
         </div>
 
         {/* Stats line: reply / bounce / positive, sparkline on desktop */}
-        <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-dashed border-border/70 pt-2.5 pl-[22px]">
+        <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-dashed border-border-soft pt-2.5 pl-[22px]">
           <div className="flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
             <span>
               Reply{" "}
@@ -583,7 +583,7 @@ export default function AdminOverviewPage() {
 
       {/* ---------- Roster ---------- */}
       {activeRows.length === 0 && formerRows.length === 0 ? (
-        <div className="rounded-2xl border border-border bg-card py-12 text-center">
+        <div className="rounded-xl border border-border-soft bg-card shadow-card py-12 text-center">
           <p className="font-medium text-muted-foreground">No clients yet.</p>
           <Link
             href="/admin/clients"
@@ -609,7 +609,7 @@ export default function AdminOverviewPage() {
                 value={sortIdx}
                 onChange={(e) => setSortIdx(Number(e.target.value))}
                 aria-label="Sort clients"
-                className="h-9 rounded-lg border border-input bg-card px-3 text-sm text-foreground"
+                className="ls-select"
               >
                 {SORT_OPTIONS.map((o, i) => (
                   <option key={o.key} value={i}>
@@ -634,7 +634,7 @@ export default function AdminOverviewPage() {
           </div>
 
           {displayRows.length === 0 ? (
-            <div className="rounded-2xl border border-border bg-card py-8 text-center">
+            <div className="rounded-xl border border-border-soft bg-card shadow-card py-8 text-center">
               <p className="text-sm text-muted-foreground">
                 {clientFilter === "active"
                   ? "No active clients. Check the Former tab or add a new client."

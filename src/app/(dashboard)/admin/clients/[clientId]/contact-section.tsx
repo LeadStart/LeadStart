@@ -72,10 +72,10 @@ export function ContactSection({
   }
 
   return (
-    <Card className="border-border/50 shadow-sm">
+    <Card>
       <CardHeader className="flex flex-row items-center justify-between gap-2 pb-3">
         <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
             <Contact size={16} className="text-white" />
           </div>
           <CardTitle className="text-base">Contact</CardTitle>
@@ -144,7 +144,6 @@ export function ContactSection({
                 size="sm"
                 onClick={save}
                 disabled={saving}
-                style={{ background: "#2E37FE" }}
               >
                 {saving ? "Saving…" : "Save"}
               </Button>

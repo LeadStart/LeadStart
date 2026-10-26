@@ -162,7 +162,7 @@ export default function BuyerSearchPage() {
       <PageHeader title="Run a search" />
       <BuyerAnnouncement announcement={experience.announcement} />
 
-      <form onSubmit={submit} className="rounded-2xl border border-border bg-white p-6 shadow-sm space-y-4">
+      <form onSubmit={submit} className="rounded-xl border border-border-soft bg-card p-6 shadow-card space-y-4">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <MapPin size={16} /> Google Maps sourcing. Available balance: <strong className="text-foreground">{balance.available.toLocaleString()}</strong> tokens.
         </div>
@@ -188,12 +188,12 @@ export default function BuyerSearchPage() {
           </div>
         </div>
         {notice && <p className="text-sm text-foreground">{notice}</p>}
-        <button type="submit" disabled={submitting} className="flex items-center justify-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60">
+        <button type="submit" disabled={submitting} className="flex items-center justify-center gap-2 rounded-full bg-primary bg-(image:--tex-brand) px-5 py-2.5 text-sm font-semibold text-white transition-opacity hover:brightness-106 disabled:opacity-60">
           {submitting ? <Loader2 size={16} className="animate-spin" /> : <SearchIcon size={16} />} Start search
         </button>
       </form>
 
-      <div className="rounded-2xl border border-border bg-white p-6 shadow-sm">
+      <div className="rounded-xl border border-border-soft bg-card p-6 shadow-card">
         <p className="text-sm font-semibold text-foreground">Recent searches</p>
         {rows === null ? (
           <p className="mt-3 text-sm text-muted-foreground">Loading…</p>
@@ -209,7 +209,7 @@ export default function BuyerSearchPage() {
               </thead>
               <tbody>
                 {rows.map((r) => (
-                  <tr key={r.id} className="border-t border-border/60">
+                  <tr key={r.id} className="border-t border-border-soft">
                     <td className="py-2 pr-4 capitalize">{r.kind}</td>
                     <td className="py-2 pr-4"><span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_STYLE[r.status] ?? "bg-muted text-muted-foreground"}`}>{r.status}</span></td>
                     <td className="py-2 pr-4">{r.result_count}</td>

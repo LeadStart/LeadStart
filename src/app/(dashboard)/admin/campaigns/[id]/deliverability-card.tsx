@@ -104,7 +104,7 @@ export function DeliverabilityCard({
     : "";
 
   return (
-    <Card className="border-border/50 shadow-sm">
+    <Card>
       <CardHeader className="flex flex-row items-center justify-between pb-3">
         <div className="flex items-center gap-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#16a34a]">
@@ -133,7 +133,7 @@ export function DeliverabilityCard({
               ) : (
                 <div className="space-y-3">
                   {result.domains.map((d) => (
-                    <div key={d.domain} className="rounded-lg border border-border/50 p-3 space-y-1.5">
+                    <div key={d.domain} className="rounded-lg border border-border-soft p-3 space-y-1.5">
                       <p className="text-sm font-medium">{d.domain}</p>
                       <AuthRow label="SPF" check={d.spf} />
                       <AuthRow label="DKIM" check={d.dkim} />
@@ -143,7 +143,7 @@ export function DeliverabilityCard({
                 </div>
               )}
 
-              <div className="rounded-lg border border-border/50 p-3">
+              <div className="rounded-lg border border-border-soft p-3">
                 <div className="flex items-center justify-between">
                   <p className="text-sm font-medium">Copy spam-score</p>
                   <span className={`text-lg font-bold ${scoreColor}`}>{result.copy.score}/100</span>
@@ -161,9 +161,9 @@ export function DeliverabilityCard({
                 )}
 
                 {result.copy.perStep && result.copy.perStep.length > 0 && (
-                  <div className="mt-3 space-y-2 border-t border-border/50 pt-3">
+                  <div className="mt-3 space-y-2 border-t border-border-soft pt-3">
                     {result.copy.perStep.map((step) => (
-                      <div key={step.stepIndex} className="rounded-md border border-border/40 p-2.5">
+                      <div key={step.stepIndex} className="rounded-md border border-border-soft p-2.5">
                         <div className="flex items-center justify-between">
                           <p className="text-xs font-medium">Step {step.stepIndex + 1}</p>
                           <span className={`text-sm font-semibold ${scoreBand(step.score)}`}>

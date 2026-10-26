@@ -169,7 +169,7 @@ export function MailboxPoolPicker({
           selectedList.map((m) => (
             <span
               key={m.id}
-              className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-[#2E37FE]/25 bg-[#2E37FE]/10 py-1 pl-2.5 pr-1 text-xs font-medium text-[#2E37FE]"
+              className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-primary/25 bg-primary/10 py-1 pl-2.5 pr-1 text-xs font-medium text-primary"
             >
               <span className="truncate">{m.email_address}</span>
               {m.status !== "active" && (
@@ -180,7 +180,7 @@ export function MailboxPoolPicker({
                 onClick={() => remove(m.id)}
                 disabled={disabled}
                 aria-label={`Remove ${m.email_address}`}
-                className="grid h-4 w-4 place-items-center rounded-full hover:bg-[#2E37FE]/20 disabled:cursor-not-allowed"
+                className="grid h-4 w-4 place-items-center rounded-full hover:bg-primary/20 disabled:cursor-not-allowed"
               >
                 <X size={11} />
               </button>
@@ -196,11 +196,11 @@ export function MailboxPoolPicker({
           disabled={disabled}
           onClick={() => setOpen((v) => !v)}
           aria-expanded={open}
-          className="inline-flex items-center gap-1.5 rounded-md border border-border/60 bg-background px-2.5 py-1.5 text-xs font-medium text-secondary-foreground transition-colors hover:border-[#2E37FE]/50 disabled:cursor-not-allowed disabled:opacity-60"
+          className="inline-flex items-center gap-1.5 rounded-md border border-border-soft bg-background px-2.5 py-1.5 text-xs font-medium text-secondary-foreground transition-colors hover:border-primary/50 disabled:cursor-not-allowed disabled:opacity-60"
         >
           <Plus size={13} /> Add inboxes or tags
           {selectedCount > 0 && (
-            <span className="rounded-full bg-[#2E37FE]/10 px-1.5 text-[10px] text-[#2E37FE]">
+            <span className="rounded-full bg-primary/10 px-1.5 text-[10px] text-primary">
               {selectedCount}
             </span>
           )}
@@ -209,8 +209,8 @@ export function MailboxPoolPicker({
         </button>
 
         {open && (
-          <div className="absolute left-0 z-20 mt-1 w-80 max-w-[calc(100vw-2rem)] overflow-hidden rounded-lg border border-border bg-background shadow-lg">
-            <div className="flex items-center gap-2 border-b border-border/60 px-2.5 py-2">
+          <div className="absolute left-0 z-20 mt-1 w-80 max-w-[calc(100vw-2rem)] ls-menu-in overflow-hidden rounded-2xl border border-border bg-popover shadow-pop">
+            <div className="flex items-center gap-2 border-b border-border-soft px-2.5 py-2">
               <Search size={13} className="shrink-0 text-muted-foreground" />
               <input
                 ref={inputRef}
@@ -257,14 +257,14 @@ function Mark({ state }: { state: "on" | "some" | "off" }) {
     <span
       className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
         state === "on"
-          ? "border-[#2E37FE] bg-[#2E37FE] text-white"
+          ? "border-primary bg-primary text-white"
           : state === "some"
-            ? "border-[#2E37FE] bg-[#2E37FE]/15"
+            ? "border-primary bg-primary/15"
             : "border-border"
       }`}
     >
       {state === "on" && <Check size={11} />}
-      {state === "some" && <span className="h-1.5 w-1.5 rounded-[1px] bg-[#2E37FE]" />}
+      {state === "some" && <span className="h-1.5 w-1.5 rounded-[1px] bg-primary" />}
     </span>
   );
 }
@@ -309,7 +309,7 @@ function TagOption({
     >
       <Mark state={allSelected ? "on" : someSelected ? "some" : "off"} />
       <span className="min-w-0 flex-1 truncate font-medium">{row.label}</span>
-      <span className="text-[10px] font-semibold uppercase tracking-wide text-[#2E37FE]">tag</span>
+      <span className="text-[10px] font-semibold uppercase tracking-wide text-primary">tag</span>
       <span className="shrink-0 text-xs text-muted-foreground">{row.addableIds.length}</span>
     </button>
   );
@@ -346,7 +346,7 @@ function MbOption({
       {(mb.tags ?? []).slice(0, 1).map((t) => (
         <span
           key={t}
-          className="shrink-0 rounded-full bg-[#2E37FE]/10 px-1.5 py-0.5 text-[10px] font-medium text-[#2E37FE]"
+          className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary"
         >
           {t}
         </span>

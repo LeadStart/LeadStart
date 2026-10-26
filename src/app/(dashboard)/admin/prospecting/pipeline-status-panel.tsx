@@ -285,15 +285,15 @@ export function PipelineStatusPanel({
   const offset = CIRC * (1 - overall);
 
   return (
-    <div className="flex h-full flex-col rounded-xl border border-border/60 bg-card p-4 shadow-sm">
+    <div className="flex h-full flex-col rounded-xl border border-border-soft bg-card p-4 shadow-card">
       <div className="flex items-center gap-2">
         <span
           className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
-            anyActivity ? "bg-[#EDEEFF] text-[#1C24B8]" : "bg-muted text-muted-foreground"
+            anyActivity ? "bg-brand-50 text-brand-500" : "bg-muted text-muted-foreground"
           }`}
         >
           {anyActivity ? (
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#2E37FE]" />
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
           ) : (
             <span className="h-1.5 w-1.5 rounded-full bg-slate-300" />
           )}
@@ -374,9 +374,9 @@ function StageRow({ stage, last }: { stage: StageView; last: boolean }) {
             failed
               ? "border-red-400 text-red-500"
               : done
-                ? "border-[#2E37FE] bg-[#2E37FE] text-white"
+                ? "border-primary bg-primary text-white"
                 : active
-                  ? "border-[#2E37FE] text-[#2E37FE] shadow-[0_0_0_4px_rgba(46,55,254,0.12)]"
+                  ? "border-primary text-primary shadow-[0_0_0_4px_rgba(46,55,254,0.12)]"
                   : "border-border text-muted-foreground"
           }`}
         >
@@ -392,7 +392,7 @@ function StageRow({ stage, last }: { stage: StageView; last: boolean }) {
         </span>
         {!last && (
           <span
-            className={`absolute top-[26px] h-[calc(100%-18px)] w-0.5 ${done ? "bg-[#2E37FE]" : "bg-border"}`}
+            className={`absolute top-[26px] h-[calc(100%-18px)] w-0.5 ${done ? "bg-primary" : "bg-border"}`}
           />
         )}
       </div>
@@ -431,8 +431,8 @@ function StageRow({ stage, last }: { stage: StageView; last: boolean }) {
           <p className="mt-1 text-[10px] text-muted-foreground">{stage.subNote}</p>
         )}
         {stage.router && (
-          <div className="mt-1.5 rounded-md border border-[#2E37FE]/15 bg-[#2E37FE]/[0.035] px-2 py-1.5">
-            <p className="mb-1 text-[9px] font-semibold uppercase tracking-wide text-[#1C24B8]/70">
+          <div className="mt-1.5 rounded-md border border-primary/15 bg-primary/[0.035] px-2 py-1.5">
+            <p className="mb-1 text-[9px] font-semibold uppercase tracking-wide text-brand-500/70">
               Routed by company size
             </p>
             <div className="space-y-0.5">
@@ -440,10 +440,10 @@ function StageRow({ stage, last }: { stage: StageView; last: boolean }) {
                 <div key={b.label} className="flex items-center justify-between gap-2 text-[10.5px]">
                   <span className="text-muted-foreground">{b.label}</span>
                   <span className="flex items-center gap-1">
-                    <span className="text-[#2E37FE]/50">→</span>
+                    <span className="text-primary/50">→</span>
                     <span
                       className={`font-mono text-[10px] ${
-                        b.method === "off" ? "text-muted-foreground/60" : "font-medium text-[#1C24B8]"
+                        b.method === "off" ? "text-muted-foreground/60" : "font-medium text-brand-500"
                       }`}
                     >
                       {METHOD_SHORT[b.method]}

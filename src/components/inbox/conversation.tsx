@@ -79,8 +79,8 @@ function Bubble({
       <div
         className={`w-fit max-w-[92%] rounded-xl border px-4 py-2.5 text-sm leading-normal ${
           outbound
-            ? "bg-muted/70 border-border/60"
-            : "bg-card border-border/60 border-l-[3px] border-l-[#2E37FE]"
+            ? "bg-muted/70 border-border-soft"
+            : "bg-card border-border-soft border-l-[3px] border-l-primary"
         }`}
       >
         <div className="mb-1.5 flex items-center gap-2 text-[11px] font-semibold text-muted-foreground">

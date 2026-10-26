@@ -95,7 +95,7 @@ export default function BuyerExperiencePage() {
         <div className="flex shrink-0 items-center gap-2">
           {saved && <span className="text-xs text-green-600">Saved</span>}
           {error && <span className="text-xs text-red-600">{error}</span>}
-          <Button style={{ background: "#2E37FE" }} onClick={save} disabled={saving || loading}>
+          <Button onClick={save} disabled={saving || loading}>
             {saving ? <Loader2 size={14} className="mr-1 animate-spin" /> : <Save size={14} className="mr-1" />}
             Save
           </Button>
@@ -105,14 +105,14 @@ export default function BuyerExperiencePage() {
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Editor */}
         <div className="space-y-5">
-          <section className="rounded-2xl border border-border bg-white p-5 shadow-sm space-y-3">
+          <section className="rounded-xl border border-border-soft bg-card p-5 shadow-card space-y-3">
             <p className="text-sm font-semibold text-foreground">Announcement banner</p>
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" checked={draft.announcement.enabled} onChange={(e) => patchAnn({ enabled: e.target.checked })} /> Show a banner at the top of the buyer portal
             </label>
             <label className="block space-y-1">
               <span className="text-sm font-medium text-foreground">Style</span>
-              <select value={draft.announcement.variant} onChange={(e) => patchAnn({ variant: e.target.value as AnnouncementVariant })} className="w-full rounded-lg border border-border px-3 py-2 text-sm">
+              <select value={draft.announcement.variant} onChange={(e) => patchAnn({ variant: e.target.value as AnnouncementVariant })} className="ls-select w-full">
                 <option value="info">Info (blue)</option>
                 <option value="warning">Warning (amber)</option>
                 <option value="success">Success (green)</option>
@@ -121,7 +121,7 @@ export default function BuyerExperiencePage() {
             <Field label="Banner text" value={draft.announcement.text} onChange={(v) => patchAnn({ text: v })} textarea placeholder="e.g. Scheduled maintenance Sunday 9pm ET." />
           </section>
 
-          <section className="rounded-2xl border border-border bg-white p-5 shadow-sm space-y-3">
+          <section className="rounded-xl border border-border-soft bg-card p-5 shadow-card space-y-3">
             <p className="text-sm font-semibold text-foreground">Dashboard copy</p>
             <Field label="Welcome paragraph" value={draft.dashboard.welcome_body} onChange={(v) => patchDash({ welcome_body: v })} textarea />
             <Field label="Balance note" value={draft.dashboard.balance_note} onChange={(v) => patchDash({ balance_note: v })} textarea />
@@ -136,7 +136,7 @@ export default function BuyerExperiencePage() {
             </div>
           </section>
 
-          <section className="rounded-2xl border border-border bg-white p-5 shadow-sm space-y-3">
+          <section className="rounded-xl border border-border-soft bg-card p-5 shadow-card space-y-3">
             <p className="text-sm font-semibold text-foreground">Empty states &amp; tips</p>
             <Field label="No contacts yet" value={draft.empty.contacts} onChange={(v) => patchEmpty({ contacts: v })} />
             <Field label="No searches yet" value={draft.empty.searches} onChange={(v) => patchEmpty({ searches: v })} />

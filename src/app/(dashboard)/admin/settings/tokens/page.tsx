@@ -57,7 +57,7 @@ function PriceCard({
   onPrice: (id: string, raw: string) => void;
 }) {
   return (
-    <Card className="border-border/50 shadow-sm">
+    <Card>
       <CardHeader className="flex flex-row items-center gap-2 pb-3">
         <div className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ background: color }}>{icon}</div>
         <div>
@@ -72,7 +72,7 @@ function PriceCard({
         {veinTiersList.map((tier) => {
           const meta = TIER_LABELS[tier.tier_key] ?? { name: tier.tier_key, desc: "", cost: "" };
           return (
-            <div key={tier.id} className="grid grid-cols-1 items-center gap-2 rounded-lg border border-border/50 px-3 py-2.5 sm:grid-cols-[1fr_auto_140px] sm:gap-4">
+            <div key={tier.id} className="grid grid-cols-1 items-center gap-2 rounded-lg border border-border-soft px-3 py-2.5 sm:grid-cols-[1fr_auto_140px] sm:gap-4">
               <div>
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium">{meta.name}</span>
@@ -172,7 +172,7 @@ export default function TokensSettingsPage() {
         <div className="flex shrink-0 items-center gap-2">
           {saved && <span className="text-xs text-green-600">Saved</span>}
           {error && <span className="text-xs text-red-600">{error}</span>}
-          <Button style={{ background: "#2E37FE" }} onClick={save} disabled={saving || loading}>
+          <Button onClick={save} disabled={saving || loading}>
             {saving ? <Loader2 size={14} className="mr-1 animate-spin" /> : <Save size={14} className="mr-1" />}
             Save
           </Button>
@@ -180,9 +180,9 @@ export default function TokensSettingsPage() {
       </div>
 
       {/* Token economics */}
-      <Card className="border-border/50 shadow-sm">
+      <Card>
         <CardHeader className="flex flex-row items-center gap-2 pb-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]"><Coins size={16} className="text-white" /></div>
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary"><Coins size={16} className="text-white" /></div>
           <div><CardTitle className="text-base">Token economics</CardTitle><p className="text-xs text-muted-foreground">What one token is worth, the markup over fully-loaded cost, and the Stripe packs buyers purchase.</p></div>
         </CardHeader>
         <CardContent className="space-y-5">
@@ -199,7 +199,7 @@ export default function TokensSettingsPage() {
           <div className="space-y-2">
             <Label className="text-sm font-medium">Token packs (Stripe one-time)</Label>
             {packs.map((pack) => (
-              <div key={pack.id} className="grid grid-cols-[1fr_auto_auto] items-center gap-3 rounded-lg border border-border/50 px-3 py-2.5">
+              <div key={pack.id} className="grid grid-cols-[1fr_auto_auto] items-center gap-3 rounded-lg border border-border-soft px-3 py-2.5">
                 <span className="text-sm font-medium">{pack.name}</span>
                 <span className="text-xs text-muted-foreground">{pack.tokens.toLocaleString()} tokens</span>
                 <div className="flex items-center gap-1">
@@ -216,7 +216,7 @@ export default function TokensSettingsPage() {
       <PriceCard title="LinkedIn vein: price card" description="Person-first sourcing. Pricier sourcing, richer record; separate prices from Maps." icon={<LinkedinIcon size={16} className="text-white" />} color="#0A66C2" veinTiersList={veinTiers("linkedin")} onPrice={setTierPrice} />
 
       {/* Spend safety */}
-      <Card className="border-border/50 shadow-sm">
+      <Card>
         <CardHeader className="flex flex-row items-center gap-2 pb-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-rose-600"><ShieldCheck size={16} className="text-white" /></div>
           <div><CardTitle className="text-base">Spend safety</CardTitle><p className="text-xs text-muted-foreground">Pre-fund only, then reserve → cap → settle. Buyers can never trigger more vendor spend than they&apos;ve pre-paid.</p></div>
@@ -235,13 +235,13 @@ export default function TokensSettingsPage() {
       </Card>
 
       {/* Dedup, coverage & re-verify */}
-      <Card className="border-border/50 shadow-sm">
+      <Card>
         <CardHeader className="flex flex-row items-center gap-2 pb-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-600"><CopyCheck size={16} className="text-white" /></div>
           <div><CardTitle className="text-base">Dedup, coverage &amp; re-verify</CardTitle><p className="text-xs text-muted-foreground">Per-buyer dedup, a segment cache so repeat pulls don&apos;t re-source, and a cheap re-verify tier.</p></div>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex items-center justify-between rounded-lg border border-border/50 px-3 py-2.5">
+          <div className="flex items-center justify-between rounded-lg border border-border-soft px-3 py-2.5">
             <div><p className="text-sm font-medium">Per-buyer dedup</p><p className="text-xs text-muted-foreground">Charge only net-new; skip enrichment on contacts a buyer already owns.</p></div>
             <Badge className="badge-green">Always on</Badge>
           </div>
@@ -263,13 +263,13 @@ export default function TokensSettingsPage() {
       </Card>
 
       {/* Master database */}
-      <Card className="border-border/50 shadow-sm">
+      <Card>
         <CardHeader className="flex flex-row items-center gap-2 pb-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-700"><Database size={16} className="text-white" /></div>
           <div><CardTitle className="text-base">Master contact database</CardTitle><p className="text-xs text-muted-foreground">Every sourced + enriched + verified contact is a durable, resellable asset; it decays, so it needs cheap maintenance.</p></div>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
-          <div className="flex items-center justify-between rounded-lg border border-border/50 px-3 py-2.5">
+          <div className="flex items-center justify-between rounded-lg border border-border-soft px-3 py-2.5">
             <div><p className="text-sm font-medium">Store contacts to master DB</p><p className="text-xs text-muted-foreground">With provenance + acquisition date per row.</p></div>
             <Badge className="badge-green">Always on</Badge>
           </div>
@@ -281,7 +281,7 @@ export default function TokensSettingsPage() {
       </Card>
 
       {/* Self-serve buyers */}
-      <Card className="border-border/50 shadow-sm">
+      <Card>
         <CardHeader className="flex flex-row items-center gap-2 pb-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600"><RefreshCw size={16} className="text-white" /></div>
           <div><CardTitle className="text-base">Self-serve buyers</CardTitle><p className="text-xs text-muted-foreground">Buyers create a quick account with their own token balance, separate from the client portal.</p></div>
@@ -294,13 +294,13 @@ export default function TokensSettingsPage() {
               { t: "Stripe token-pack purchase + top-up", live: true },
               { t: "Low-balance alert email", live: false },
             ].map((item) => (
-              <div key={item.t} className="flex items-center gap-2 rounded-lg border border-border/50 px-3 py-2.5">
+              <div key={item.t} className="flex items-center gap-2 rounded-lg border border-border-soft px-3 py-2.5">
                 <span className="text-sm">{item.t}</span>
                 <Badge className={item.live ? "badge-green ml-auto" : "badge-slate ml-auto"}>{item.live ? "Live" : "Planned"}</Badge>
               </div>
             ))}
           </div>
-          <div className="space-y-1 border-t border-border/50 pt-4">
+          <div className="space-y-1 border-t border-border-soft pt-4">
             <Label className="text-sm font-medium">Low-balance alert threshold (tokens)</Label>
             <Input type="number" value={cfgNum("low_balance_threshold_tokens")} onChange={(e) => setCfg("low_balance_threshold_tokens", e.target.value)} placeholder="200" className="max-w-[220px]" />
             <p className="text-[11px] text-muted-foreground">Saved now so it&apos;s ready. The alert email itself is not wired yet (Planned above): this only captures the threshold.</p>

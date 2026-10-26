@@ -538,7 +538,7 @@ export function ImportContactsDialog({
       }}
     >
       <DialogContent className="max-w-2xl max-h-[90vh] p-0 gap-0 flex flex-col">
-        <DialogHeader className="px-6 pt-6 pb-3 border-b border-border/50 shrink-0">
+        <DialogHeader className="px-6 pt-6 pb-3 border-b border-border-soft shrink-0">
           <DialogTitle>
             Import {ownerView === "leadstart" ? "LeadStart" : "Client"} Contacts from CSV
           </DialogTitle>
@@ -548,18 +548,18 @@ export function ImportContactsDialog({
           {/* Mode toggle */}
           {!preview && !result && (
             <div className="space-y-1.5">
-              <div className="inline-flex rounded-lg border border-border/60 bg-muted/30 p-0.5 text-sm">
+              <div className="inline-flex rounded-lg border border-border-soft bg-muted/30 p-0.5 text-sm">
                 <button
                   type="button"
                   onClick={() => switchMode("standard")}
-                  className={`px-3 py-1.5 rounded-md transition-colors ${importMode === "standard" ? "bg-background shadow-sm font-medium" : "text-muted-foreground"}`}
+                  className={`px-3 py-1.5 rounded-md transition-colors ${importMode === "standard" ? "bg-card bg-(image:--tex-white) font-medium text-foreground" : "text-muted-foreground"}`}
                 >
                   Standard CSV
                 </button>
                 <button
                   type="button"
                   onClick={() => switchMode("linkedin")}
-                  className={`px-3 py-1.5 rounded-md transition-colors ${importMode === "linkedin" ? "bg-background shadow-sm font-medium" : "text-muted-foreground"}`}
+                  className={`px-3 py-1.5 rounded-md transition-colors ${importMode === "linkedin" ? "bg-card bg-(image:--tex-white) font-medium text-foreground" : "text-muted-foreground"}`}
                 >
                   LinkedIn list (no emails)
                 </button>
@@ -575,9 +575,9 @@ export function ImportContactsDialog({
 
           {/* Sample download (standard mode only) */}
           {!linkedinMode && (
-            <div className="rounded-xl border border-border/50 bg-muted/30 p-3 flex items-center justify-between gap-3">
+            <div className="rounded-xl border border-border-soft bg-muted/30 p-3 flex items-center justify-between gap-3">
               <div className="flex items-center gap-2.5 min-w-0">
-                <FileText size={18} className="text-[#2E37FE] shrink-0" />
+                <FileText size={18} className="text-primary shrink-0" />
                 <div className="min-w-0">
                   <p className="text-sm font-medium">Not sure about the format?</p>
                   <p className="text-xs text-muted-foreground">
@@ -596,7 +596,7 @@ export function ImportContactsDialog({
 
           {/* File picker */}
           {!preview && (
-            <label className="block cursor-pointer rounded-xl border-2 border-dashed border-border p-6 text-center hover:border-[#2E37FE]/50 hover:bg-[#EDEEFF]/30 transition-colors">
+            <label className="block cursor-pointer rounded-xl border-2 border-dashed border-border p-6 text-center hover:border-primary/50 hover:bg-brand-50/30 transition-colors">
               <input
                 ref={inputRef}
                 type="file"
@@ -642,7 +642,7 @@ export function ImportContactsDialog({
             <>
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2 min-w-0">
-                  <FileText size={16} className="text-[#2E37FE] shrink-0" />
+                  <FileText size={16} className="text-primary shrink-0" />
                   <p className="text-sm font-medium truncate">{preview.filename}</p>
                   <span className="text-xs text-muted-foreground shrink-0">
                     {preview.rows.length} row{preview.rows.length === 1 ? "" : "s"}
@@ -684,7 +684,7 @@ export function ImportContactsDialog({
                 </div>
               )}
 
-              <div className="rounded-lg border border-border/50 overflow-hidden">
+              <div className="rounded-lg border border-border-soft overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
                     <thead className="bg-muted/40 text-muted-foreground">
@@ -709,7 +709,7 @@ export function ImportContactsDialog({
                     </thead>
                     <tbody>
                       {preview.rows.slice(0, 6).map((r, i) => (
-                        <tr key={i} className="border-t border-border/40">
+                        <tr key={i} className="border-t border-border-soft">
                           <td className="px-3 py-1.5">
                             {[r.first_name, r.last_name].filter(Boolean).join(" ") || "-"}
                           </td>
@@ -738,12 +738,12 @@ export function ImportContactsDialog({
                   </table>
                 </div>
                 {preview.rows.length > 6 && (
-                  <p className="px-3 py-2 text-xs text-muted-foreground border-t border-border/40">
+                  <p className="px-3 py-2 text-xs text-muted-foreground border-t border-border-soft">
                     + {preview.rows.length - 6} more row{preview.rows.length - 6 === 1 ? "" : "s"} not shown.
                   </p>
                 )}
                 {preview.skipped.length > 0 && (
-                  <p className="px-3 py-2 text-xs text-amber-700 bg-amber-50 border-t border-border/40">
+                  <p className="px-3 py-2 text-xs text-amber-700 bg-amber-50 border-t border-border-soft">
                     {preview.skipped.length} row{preview.skipped.length === 1 ? "" : "s"} skipped (no LinkedIn URL or name + company).
                   </p>
                 )}
@@ -775,7 +775,6 @@ export function ImportContactsDialog({
                   <div className="space-y-1.5">
                     <Button
                       size="sm"
-                      style={{ background: "#2E37FE" }}
                       disabled={enrichStarting}
                       onClick={handleEnrichNow}
                     >
@@ -800,14 +799,13 @@ export function ImportContactsDialog({
           )}
         </div>
 
-        <div className="flex gap-2 px-6 py-4 border-t border-border/50 shrink-0">
+        <div className="flex gap-2 px-6 py-4 border-t border-border-soft shrink-0">
           <Button variant="outline" className="flex-1" onClick={() => onOpenChange(false)}>
             {result ? "Close" : "Cancel"}
           </Button>
           {!result && (
             <Button
               className="flex-1"
-              style={{ background: "#2E37FE" }}
               disabled={!preview || importing || (ownerView === "client" && !targetClientId)}
               onClick={handleImport}
             >

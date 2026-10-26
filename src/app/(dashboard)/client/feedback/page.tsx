@@ -46,7 +46,7 @@ export default function ClientFeedbackPage() {
       <PageHeader backHref="/client" backLabel="Back to dashboard" title="My Feedback" />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <StatCard label="Total Submitted" value={total} icon={<MessageSquare size={18} className="text-[#2E37FE]" />} iconBg="bg-[#2E37FE]/10" />
+        <StatCard label="Total Submitted" value={total} icon={<MessageSquare size={18} className="text-primary" />} iconBg="bg-primary/10" />
         <StatCard label="Positive" value={good} icon={<ThumbsUp size={18} className="text-emerald-500" />} iconBg="bg-emerald-50" valueColor="text-emerald-600" />
         <StatCard label="Negative" value={bad} icon={<ThumbsDown size={18} className="text-red-500" />} iconBg="bg-red-50" valueColor="text-red-600" />
       </div>
@@ -54,10 +54,10 @@ export default function ClientFeedbackPage() {
       {feedback.length > 0 && (
         <>
         <div className="flex items-center gap-2 mb-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]"><MessageSquare size={16} className="text-white" /></div>
-          <h2 className="text-[15px] font-semibold text-[#0f172a]">Response Breakdown</h2>
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary"><MessageSquare size={16} className="text-white" /></div>
+          <h2 className="text-[15px] font-semibold text-foreground">Response Breakdown</h2>
         </div>
-        <Card className="border-border/50 shadow-sm">
+        <Card>
           <CardContent>
             <FeedbackDonut feedback={feedback} />
           </CardContent>
@@ -66,10 +66,10 @@ export default function ClientFeedbackPage() {
       )}
 
       <div className="flex items-center gap-2 mb-3">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]"><MessageSquare size={16} className="text-white" /></div>
-        <h2 className="text-[15px] font-semibold text-[#0f172a]">Feedback History</h2>
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary"><MessageSquare size={16} className="text-white" /></div>
+        <h2 className="text-[15px] font-semibold text-foreground">Feedback History</h2>
       </div>
-      <Card className="border-border/50 shadow-sm">
+      <Card>
         <CardContent>
           {feedback.length === 0 ? (
             <p className="text-sm text-muted-foreground">No feedback submitted yet.</p>

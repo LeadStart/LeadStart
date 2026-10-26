@@ -166,11 +166,11 @@ export default async function CampaignDetailPage({
       />
 
       <div className="flex items-center gap-2 mb-3">
-        <h2 className="text-[15px] font-semibold text-[#0f172a]">
+        <h2 className="text-[15px] font-semibold text-foreground">
           Daily Breakdown
         </h2>
       </div>
-      <Card className="border-border/50 shadow-sm">
+      <Card>
         <CardContent>
           {snapshots.length === 0 ? (
             <p className="text-sm text-muted-foreground">No data synced yet.</p>
@@ -211,9 +211,9 @@ export default async function CampaignDetailPage({
         </CardContent>
       </Card>
 
-      <Card className="border-border/50 shadow-sm">
+      <Card>
         <CardHeader className="flex flex-row items-center gap-2 pb-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
             <MessageSquare size={16} className="text-white" />
           </div>
           <CardTitle className="text-base">
@@ -230,7 +230,7 @@ export default async function CampaignDetailPage({
               {feedback.map((f) => (
                 <div
                   key={f.id}
-                  className="flex items-center gap-3 rounded-xl border border-border/50 p-3 text-sm hover:bg-muted/30 transition-colors"
+                  className="flex items-center gap-3 rounded-xl border border-border-soft p-3 text-sm hover:bg-muted/30 transition-colors"
                 >
                   <Badge
                     variant="secondary"

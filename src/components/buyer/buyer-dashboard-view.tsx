@@ -80,14 +80,14 @@ export function BuyerDashboardView({
     <div className="space-y-6">
       <BuyerAnnouncement announcement={content.announcement} />
 
-      <div className="rounded-2xl border border-border bg-white p-6 shadow-sm">
+      <div className="rounded-xl border border-border-soft bg-card p-6 shadow-card">
         <p className="text-sm text-muted-foreground">
           {loadingBalance ? "Loading your account…" : `Welcome, ${greetingName}.`}
         </p>
         <p className="mt-1 text-base text-foreground">{content.dashboard.welcome_body}</p>
       </div>
 
-      <div className="rounded-2xl border border-border bg-white p-6 shadow-sm">
+      <div className="rounded-xl border border-border-soft bg-card p-6 shadow-card">
         <div className="flex items-center gap-3">
           <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
             <Coins size={20} />
@@ -108,7 +108,7 @@ export function BuyerDashboardView({
         <p className="mt-4 text-sm text-muted-foreground">{content.dashboard.balance_note}</p>
       </div>
 
-      <div className="rounded-2xl border border-border bg-white p-6 shadow-sm">
+      <div className="rounded-xl border border-border-soft bg-card p-6 shadow-card">
         <div className="flex items-center gap-3 pb-1">
           <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
             <Sparkles size={18} />
@@ -137,7 +137,7 @@ export function BuyerDashboardView({
                 <button
                   onClick={() => onBuy?.(pack.id)}
                   disabled={preview || buyingId !== null}
-                  className="mt-4 flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+                  className="mt-4 flex items-center justify-center gap-2 rounded-full bg-primary bg-(image:--tex-brand) px-4 py-2 text-sm font-semibold text-white transition-opacity hover:brightness-106 disabled:opacity-60"
                 >
                   {buyingId === pack.id ? <Loader2 size={16} className="animate-spin" /> : "Buy"}
                 </button>
@@ -147,7 +147,7 @@ export function BuyerDashboardView({
         )}
       </div>
 
-      <div className="rounded-2xl border border-border bg-white p-6 shadow-sm">
+      <div className="rounded-xl border border-border-soft bg-card p-6 shadow-card">
         <div className="flex items-center gap-3 pb-1">
           <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
             <Receipt size={18} />
@@ -159,7 +159,7 @@ export function BuyerDashboardView({
         ) : usage.length === 0 ? (
           <p className="mt-3 text-sm text-muted-foreground">No activity yet. Buy tokens and run a search to get started.</p>
         ) : (
-          <div className="mt-2 divide-y divide-border/60">
+          <div className="mt-2 divide-y divide-border-soft">
             {usage.map((e) => (
               <div key={e.id} className="flex items-center justify-between py-2.5 text-sm">
                 <div>
@@ -179,7 +179,7 @@ export function BuyerDashboardView({
       <Link
         href={preview ? "#" : searchHref}
         onClick={preview ? (ev) => ev.preventDefault() : undefined}
-        className="flex items-center gap-3 rounded-2xl border border-border bg-white p-6 shadow-sm transition-colors hover:bg-muted/30"
+        className="flex items-center gap-3 rounded-xl border border-border-soft bg-card p-6 shadow-card transition-colors hover:bg-muted/30"
       >
         <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
           <Sparkles size={18} />

@@ -34,7 +34,7 @@ export default function SettingsWorkflowsPage() {
       {WORKFLOWS.map((wf) => {
         const Icon = wf.icon;
         return (
-          <Card key={wf.href} className="flex flex-col border-border/50 shadow-sm">
+          <Card key={wf.href} className="flex flex-col">
             <CardHeader className="flex flex-row items-center gap-2 pb-3">
               <div
                 className="flex h-8 w-8 items-center justify-center rounded-lg"

@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Poppins, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { PostLoginOverlay } from "@/components/layout/post-login-overlay";
+import { PressFocus } from "@/components/layout/press-focus";
 import { Toaster } from "@/components/ui/sonner";
 
 // 800 is loaded because the app actually asks for it: the sidebar wordmark
@@ -40,7 +41,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 5,
-  themeColor: "#ffffff",
+  themeColor: "#f4f6fb",
 };
 
 export default function RootLayout({
@@ -54,6 +55,7 @@ export default function RootLayout({
       className={`${poppins.variable} ${jetbrainsMono.variable} h-full antialiased`}
     >
       <body className="h-full font-sans">
+        <PressFocus />
         <PostLoginOverlay />
         {children}
         <Toaster position="bottom-right" richColors />

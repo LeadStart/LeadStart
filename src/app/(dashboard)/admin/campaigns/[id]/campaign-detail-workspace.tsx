@@ -467,7 +467,6 @@ export function CampaignDetailWorkspace({
             disabled={!canSave}
             variant={canSave ? "default" : "secondary"}
             className="gap-1.5"
-            style={canSave ? { background: "#2E37FE", color: "white" } : undefined}
             title={dirty ? undefined : "No unsaved changes"}
           >
             {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
@@ -525,7 +524,7 @@ export function CampaignDetailWorkspace({
         {/* Schedule + strategy */}
         <TabsContent value="schedule" className="min-h-0 overflow-y-auto pt-4">
           <div className="max-w-3xl space-y-5">
-            <div className="space-y-3 rounded-xl border border-border/60 p-4">
+            <div className="space-y-3 rounded-xl border border-border-soft p-4">
               <p className="inline-flex items-center gap-1.5 text-sm font-medium">
                 <Clock size={14} /> Sending schedule
               </p>
@@ -535,7 +534,7 @@ export function CampaignDetailWorkspace({
                   <select
                     value={win.timezone}
                     onChange={(e) => setWin((w) => ({ ...w, timezone: e.target.value }))}
-                    className="w-full rounded-md border border-border/60 bg-background px-2 py-1.5 text-sm"
+                    className="ls-select ls-select-sm w-full"
                   >
                     {TIMEZONES.map((t) => (
                       <option key={t.value} value={t.value}>
@@ -549,7 +548,7 @@ export function CampaignDetailWorkspace({
                   <select
                     value={win.startHour}
                     onChange={(e) => setWin((w) => ({ ...w, startHour: Number(e.target.value) }))}
-                    className="w-full rounded-md border border-border/60 bg-background px-2 py-1.5 text-sm"
+                    className="ls-select ls-select-sm w-full"
                   >
                     {Array.from({ length: 24 }, (_, h) => h).map((h) => (
                       <option key={h} value={h}>
@@ -563,7 +562,7 @@ export function CampaignDetailWorkspace({
                   <select
                     value={win.endHour}
                     onChange={(e) => setWin((w) => ({ ...w, endHour: Number(e.target.value) }))}
-                    className="w-full rounded-md border border-border/60 bg-background px-2 py-1.5 text-sm"
+                    className="ls-select ls-select-sm w-full"
                   >
                     {Array.from({ length: 24 }, (_, h) => h + 1).map((h) => (
                       <option key={h} value={h}>
@@ -574,12 +573,12 @@ export function CampaignDetailWorkspace({
                 </div>
                 <div className="space-y-1">
                   <label className="text-xs font-medium text-secondary-foreground">Days</label>
-                  <label className="flex h-[34px] cursor-pointer items-center gap-2 rounded-md border border-border/60 px-2 text-sm">
+                  <label className="flex h-[34px] cursor-pointer items-center gap-2 rounded-md border border-border-soft px-2 text-sm">
                     <input
                       type="checkbox"
                       checked={win.weekdaysOnly}
                       onChange={(e) => setWin((w) => ({ ...w, weekdaysOnly: e.target.checked }))}
-                      className="h-4 w-4 accent-[#2E37FE]"
+                      className="h-4 w-4 accent-primary"
                     />
                     Weekdays only
                   </label>
@@ -588,7 +587,7 @@ export function CampaignDetailWorkspace({
               <p className="pt-1 text-[11px] text-muted-foreground">{formatSendWindow(win)}</p>
             </div>
 
-            <div className="space-y-3 rounded-xl border border-border/60 p-4">
+            <div className="space-y-3 rounded-xl border border-border-soft p-4">
               <p className="inline-flex items-center gap-1.5 text-sm font-medium">
                 <Route size={14} /> Sending strategy
               </p>
@@ -609,7 +608,7 @@ export function CampaignDetailWorkspace({
               <NewLeadsControl value={newLeadsCap} onChange={setNewLeadsCap} strategy={strategy} />
             </div>
 
-            <div className="space-y-3 rounded-xl border border-border/60 p-4">
+            <div className="space-y-3 rounded-xl border border-border-soft p-4">
               <p className="inline-flex items-center gap-1.5 text-sm font-medium">
                 <Trophy size={14} /> A/B auto-winner
               </p>
@@ -648,7 +647,7 @@ export function CampaignDetailWorkspace({
                 <select
                   value={clientId}
                   onChange={(e) => setClientId(e.target.value)}
-                  className="w-full max-w-sm rounded-md border border-border/60 bg-background px-3 py-2 text-sm"
+                  className="ls-select w-full max-w-sm"
                 >
                   <option value="">No client (orphan)</option>
                   {clients.map((c) => (
@@ -752,7 +751,7 @@ export function CampaignDetailWorkspace({
           {flowProgress && <FlowProgress graph={initialGraph} data={flowProgress} />}
           {abStats.length > 0 && <AbResults stats={abStats} />}
           <div className="grid grid-cols-3 gap-4">
-            <Stat label="Sent" value={nativeStats.sent} color="text-[#2E37FE]" />
+            <Stat label="Sent" value={nativeStats.sent} color="text-primary" />
             <Stat label="Replied" value={nativeStats.replied} color="text-emerald-600" />
             <Stat
               label="Bounced"
@@ -844,7 +843,6 @@ export function CampaignDetailWorkspace({
                 }}
                 disabled={saving}
                 className="gap-1.5"
-                style={{ background: "#2E37FE", color: "white" }}
               >
                 {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
                 Save and exit
@@ -870,7 +868,7 @@ function TabCount({ n }: { n: number }) {
 
 function Stat({ label, value, color }: { label: string; value: number; color: string }) {
   return (
-    <div className="rounded-lg border border-border/60 p-4">
+    <div className="rounded-lg border border-border-soft p-4">
       <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
       <p className={`mt-1 text-2xl font-bold ${color}`}>{value}</p>
     </div>
@@ -894,18 +892,18 @@ function StrategyOption({
       onClick={onClick}
       aria-pressed={active}
       className={`rounded-lg border p-3 text-left transition-colors ${
-        active ? "border-[#2E37FE] bg-[#2E37FE]/5 ring-1 ring-[#2E37FE]/30" : "border-border/60 hover:border-border"
+        active ? "border-primary bg-primary/5 ring-1 ring-primary/30" : "border-border-soft hover:border-border"
       }`}
     >
       <span className="flex items-center gap-2">
         <span
           className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
-            active ? "border-[#2E37FE]" : "border-muted-foreground/40"
+            active ? "border-primary" : "border-muted-foreground/40"
           }`}
         >
-          {active && <span className="h-2 w-2 rounded-full bg-[#2E37FE]" />}
+          {active && <span className="h-2 w-2 rounded-full bg-primary" />}
         </span>
-        <span className="text-sm font-semibold text-[#0f172a]">{title}</span>
+        <span className="text-sm font-semibold text-foreground">{title}</span>
       </span>
       <span className="mt-1.5 block text-[11px] leading-relaxed text-muted-foreground">{desc}</span>
     </button>

@@ -683,7 +683,7 @@ export function MapsDiyPanel() {
         <div className="min-w-0 space-y-6">
           {/* Prior searches: left column (half width) */}
           {priorRuns.length > 0 && (
-            <Card className="border-border/50 shadow-sm">
+            <Card>
               <CardHeader className="flex flex-row items-center gap-2 pb-3">
                 <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-500">
                   <History size={16} className="text-white" />
@@ -719,7 +719,7 @@ export function MapsDiyPanel() {
                           setSearchId(s.id);
                         }}
                         className={`w-full text-left flex items-center gap-3 rounded-md border px-3 py-2 transition-colors cursor-pointer ${
-                          isActive ? "border-indigo-400 bg-indigo-50/50" : "border-border/60 hover:bg-muted/40"
+                          isActive ? "border-indigo-400 bg-indigo-50/50" : "border-border-soft hover:bg-muted/40"
                         }`}
                       >
                         <MapPin size={16} className={s.status === "complete" ? "text-emerald-600" : s.status === "failed" ? "text-red-500" : "text-amber-500"} />
@@ -745,7 +745,7 @@ export function MapsDiyPanel() {
                   key={p.id}
                   type="button"
                   onClick={() => applyPreset(p)}
-                  className="inline-flex items-center gap-1 rounded-full border border-border/60 px-2.5 py-1 text-xs hover:bg-muted/50 cursor-pointer"
+                  className="inline-flex items-center gap-1 rounded-full border border-border-soft px-2.5 py-1 text-xs hover:bg-muted/50 cursor-pointer"
                 >
                   <Bookmark size={11} /> {p.name}
                   {p.is_global && <Badge variant="secondary" className="ml-1 h-4 px-1 text-[10px]">Global</Badge>}
@@ -755,7 +755,7 @@ export function MapsDiyPanel() {
           )}
 
           {/* Where are your customers? */}
-          <Card className="border-border/50 shadow-sm">
+          <Card>
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-base">
                 <MapPin size={16} /> Where are your customers?
@@ -784,12 +784,12 @@ export function MapsDiyPanel() {
                 </div>
 
                 {geoOpen && (zipSuggestion || grouped.length > 0 || (locInput.trim().length >= 2 && !geoLoading)) && (
-                  <div className="absolute z-20 mt-1 max-h-80 w-full overflow-auto rounded-lg border border-border/70 bg-background shadow-lg">
+                  <div className="absolute z-20 mt-1 max-h-80 w-full ls-menu-in overflow-auto rounded-2xl border border-border bg-popover shadow-pop">
                     {zipSuggestion && (
                       <button
                         type="button"
                         onClick={() => addArea(zipSuggestion)}
-                        className="flex w-full items-center gap-2 border-b border-border/40 px-3 py-2 text-left text-sm hover:bg-muted/50 cursor-pointer"
+                        className="flex w-full items-center gap-2 border-b border-border-soft px-3 py-2 text-left text-sm hover:bg-muted/50 cursor-pointer"
                       >
                         <Hash size={14} className="text-indigo-600" />
                         <span>
@@ -836,7 +836,7 @@ export function MapsDiyPanel() {
                     key={s.name}
                     type="button"
                     onClick={() => addArea({ level: "state", state: s.name, countryCode: "us", label: s.label })}
-                    className="rounded-full border border-dashed border-border/60 px-2 py-0.5 text-[11px] text-muted-foreground hover:bg-muted/40 cursor-pointer"
+                    className="rounded-full border border-dashed border-border-soft px-2 py-0.5 text-[11px] text-muted-foreground hover:bg-muted/40 cursor-pointer"
                   >
                     + {s.label}
                   </button>
@@ -860,7 +860,7 @@ export function MapsDiyPanel() {
           </Card>
 
           {/* Who do you want?: audiences */}
-          <Card className="border-border/50 shadow-sm">
+          <Card>
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-base">
                 <Building2 size={16} /> Who are you looking for?
@@ -881,7 +881,7 @@ export function MapsDiyPanel() {
                       className={`group flex cursor-pointer flex-col gap-2.5 rounded-xl border p-4 text-left transition-colors ${
                         active
                           ? "border-primary bg-primary/[0.04] ring-1 ring-inset ring-primary"
-                          : "border-border/70 hover:border-indigo-300"
+                          : "border-border-soft hover:border-indigo-300"
                       }`}
                     >
                       <div className="flex items-center gap-2.5">
@@ -956,7 +956,7 @@ export function MapsDiyPanel() {
                   <select
                     value={websiteFilter}
                     onChange={(e) => setWebsiteFilter(e.target.value as "all" | "with" | "without")}
-                    className="h-9 w-full rounded-md border border-border/60 bg-background px-2 text-sm cursor-pointer"
+                    className="ls-select w-full"
                   >
                     <option value="all">All places</option>
                     <option value="with">Only with a website</option>
@@ -968,7 +968,7 @@ export function MapsDiyPanel() {
                   <select
                     value={minStars}
                     onChange={(e) => setMinStars(e.target.value)}
-                    className="h-9 w-full rounded-md border border-border/60 bg-background px-2 text-sm cursor-pointer"
+                    className="ls-select w-full"
                   >
                     {STAR_OPTIONS.map((s) => (
                       <option key={s.v} value={s.v}>
@@ -987,7 +987,7 @@ export function MapsDiyPanel() {
           {/* Lift the cart toward the page-header row; held sticky and vertically
               centered in the viewport on scroll (lg only, see the cartRef effect). */}
           <div ref={cartRef} className="lg:sticky lg:top-6 lg:-mt-[120px] space-y-3">
-            <Card className="border-indigo-200/70 shadow-md">
+            <Card className="border-indigo-200/70">
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-base">
                   <Rocket size={16} className="text-indigo-600" /> Your search
@@ -1028,7 +1028,7 @@ export function MapsDiyPanel() {
                   <select
                     value={maxResults}
                     onChange={(e) => setMaxResults(Number(e.target.value))}
-                    className="h-8 rounded-md border border-border/60 bg-background px-2 text-sm cursor-pointer"
+                    className="ls-select ls-select-sm"
                   >
                     {MAX_OPTIONS.map((m) => (
                       <option key={m} value={m}>
@@ -1039,7 +1039,7 @@ export function MapsDiyPanel() {
                 </div>
 
                 {/* Outcome estimate + tier mix */}
-                <div className="rounded-lg border border-border/60 bg-muted/20 p-3">
+                <div className="rounded-lg border border-border-soft bg-muted/20 p-3">
                   <div className="flex items-baseline justify-between">
                     <span className="text-xs text-muted-foreground">Est. cost · up to</span>
                     <span className="text-lg font-bold tabular-nums">${estTotal.toFixed(2)}</span>
@@ -1050,7 +1050,7 @@ export function MapsDiyPanel() {
                     <span><b className="text-slate-600">$0.05</b> record</span>
                     <span><b className="text-emerald-600">$0.10</b> company email</span>
                     <span><b className="text-indigo-600">$0.20</b> owner name</span>
-                    <span><b className="text-[#2E37FE]">$0.30</b> verified personal</span>
+                    <span><b className="text-primary">$0.30</b> verified personal</span>
                   </div>
                 </div>
 
@@ -1085,7 +1085,7 @@ export function MapsDiyPanel() {
 
       {/* Progress / results (full width) */}
       {detail && (
-        <Card className="border-border/50 shadow-sm">
+        <Card>
           <CardHeader className="pb-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <CardTitle className="text-base">
@@ -1104,7 +1104,7 @@ export function MapsDiyPanel() {
           </CardHeader>
           <CardContent className="space-y-3">
             {tierTotal > 0 && (
-              <div className="rounded-lg border border-border/60 bg-muted/20 p-3">
+              <div className="rounded-lg border border-border-soft bg-muted/20 p-3">
                 <MapsOutcomeRadial tiers={tiers} total={tierTotal} verified={dc.verified_email ?? 0} />
               </div>
             )}
@@ -1118,7 +1118,7 @@ export function MapsDiyPanel() {
                   <select
                     value={targetCampaign}
                     onChange={(e) => setTargetCampaign(e.target.value)}
-                    className="h-8 rounded-md border border-border/60 bg-background px-2 text-xs cursor-pointer"
+                    className="ls-select ls-select-sm"
                   >
                     <option value="">No campaign</option>
                     {campaigns.map((c) => (
@@ -1141,7 +1141,7 @@ export function MapsDiyPanel() {
                   )}
                 </div>
 
-                <div className="overflow-x-auto rounded-md border border-border/50">
+                <div className="overflow-x-auto rounded-md border border-border-soft">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -1179,7 +1179,7 @@ export function MapsDiyPanel() {
                               if (!tier || tier === "none") return null;
                               const cls =
                                 tier === "person"
-                                  ? "bg-[#EDEEFF] text-[#1C24B8]"
+                                  ? "bg-brand-50 text-brand-500"
                                   : tier === "company"
                                     ? "bg-emerald-50 text-emerald-700"
                                     : "bg-orange-50 text-orange-700";
@@ -1244,7 +1244,7 @@ function CartSection({ label, count, empty, children }: { label: string; count: 
         {label} <span className="rounded-full bg-muted px-1.5 text-[10px] tabular-nums">{count}</span>
       </div>
       {count === 0 ? (
-        <p className="rounded-md border border-dashed border-border/60 px-2.5 py-2 text-[11px] text-muted-foreground">{empty}</p>
+        <p className="rounded-md border border-dashed border-border-soft px-2.5 py-2 text-[11px] text-muted-foreground">{empty}</p>
       ) : (
         <div className="space-y-1">{children}</div>
       )}
@@ -1254,7 +1254,7 @@ function CartSection({ label, count, empty, children }: { label: string; count: 
 
 function CartRow({ children, onRemove }: { children: React.ReactNode; onRemove: () => void }) {
   return (
-    <div className="flex items-center justify-between gap-2 rounded-md border border-border/50 bg-background px-2.5 py-1.5 text-xs">
+    <div className="flex items-center justify-between gap-2 rounded-md border border-border-soft bg-background px-2.5 py-1.5 text-xs">
       <span className="inline-flex min-w-0 items-center gap-1.5 truncate">{children}</span>
       <button type="button" onClick={onRemove} className="shrink-0 text-muted-foreground hover:text-foreground cursor-pointer">
         <X size={12} />
@@ -1353,7 +1353,7 @@ function MapsOutcomeRadial({
         <p className="mb-1.5 text-[12px] font-semibold">Delivered outcomes</p>
         <div className="space-y-0.5">
           {segs.map((s) => (
-            <div key={s.key} className="flex items-center gap-2 border-b border-dashed border-border/60 py-[3px] text-[11.5px] last:border-b-0">
+            <div key={s.key} className="flex items-center gap-2 border-b border-dashed border-border-soft py-[3px] text-[11.5px] last:border-b-0">
               <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: s.color }} />
               <span className="text-muted-foreground">{s.label}</span>
               <span className="ml-auto font-mono font-semibold tabular-nums">{s.v}</span>

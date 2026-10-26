@@ -84,7 +84,6 @@ export function ClientEmailInline({
           onClick={save}
           disabled={saving || !value.trim()}
           className="h-7 text-xs"
-          style={{ background: "#2E37FE" }}
         >
           {saving ? "…" : "Save"}
         </Button>

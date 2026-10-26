@@ -27,11 +27,11 @@ export function Unibox({
   hasSelection: boolean;
 }) {
   return (
-    <div className="flex h-[calc(100dvh-11.5rem)] min-h-[460px] overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm lg:h-[calc(100dvh-8.5rem)]">
+    <div className="flex h-[calc(100dvh-11.5rem)] min-h-[460px] overflow-hidden rounded-xl border border-border-soft bg-card shadow-card lg:h-[calc(100dvh-8.5rem)]">
       {/* List: full width on mobile, fixed rail on sm+. Hidden on mobile once
           a reply is open. */}
       <div
-        className={`w-full flex-col border-border/60 sm:flex sm:max-w-[380px] sm:shrink-0 sm:border-r ${
+        className={`w-full flex-col border-border-soft sm:flex sm:max-w-[380px] sm:shrink-0 sm:border-r ${
           hasSelection ? "hidden sm:flex" : "flex"
         }`}
       >
@@ -51,7 +51,7 @@ export function Unibox({
 
 export function UniboxListHeader({ children }: { children: ReactNode }) {
   return (
-    <div className="flex flex-none flex-col gap-2.5 border-b border-border/60 p-3">
+    <div className="flex flex-none flex-col gap-2.5 border-b border-border-soft p-3">
       {children}
     </div>
   );
@@ -90,11 +90,11 @@ export function ReplyListRow({
     <button
       data-reply-id={id}
       onClick={onClick}
-      className={`relative flex w-full items-start gap-3 border-b border-border/60 px-3.5 py-3 text-left transition-colors cursor-pointer hover:bg-muted/40 ${
-        selected ? "bg-[#2E37FE]/[0.06]" : ""
+      className={`relative flex w-full items-start gap-3 border-b border-border-soft px-3.5 py-3 text-left transition-colors cursor-pointer hover:bg-muted/40 ${
+        selected ? "bg-primary/[0.06]" : ""
       }`}
     >
-      {selected && <span className="absolute inset-y-0 left-0 w-[3px] bg-[#2E37FE]" />}
+      {selected && <span className="absolute inset-y-0 left-0 w-[3px] bg-primary" />}
       <span
         className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
         style={{ background: accent }}
@@ -103,7 +103,7 @@ export function ReplyListRow({
       </span>
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-1.5">
-          {unread && <span className="h-2 w-2 shrink-0 rounded-full bg-[#2E37FE]" />}
+          {unread && <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />}
           <span className="truncate text-[13px] font-semibold text-foreground">{name}</span>
           <span className="ml-auto shrink-0 text-[11px] text-muted-foreground">{time}</span>
         </span>

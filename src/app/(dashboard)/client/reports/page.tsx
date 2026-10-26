@@ -14,7 +14,7 @@ const REPORTS_PAGE_SIZE = 25;
 
 function MetricRow({ label, value, unit, trend }: { label: string; value: number; unit: string; trend?: "up" | "down" | "flat" }) {
   return (
-    <div className="flex items-center justify-between py-2 border-b border-border/30 last:border-0">
+    <div className="flex items-center justify-between py-2 border-b border-border-soft last:border-0">
       <span className="text-sm text-muted-foreground">{label}</span>
       <div className="flex items-center gap-2">
         <span className="text-sm font-semibold">{unit === "percent" ? `${value}%` : value.toLocaleString()}</span>
@@ -60,9 +60,9 @@ export default function ClientReportsPage() {
       />
 
       {reports.length === 0 ? (
-        <Card className="border-border/50 shadow-sm">
+        <Card>
           <CardContent className="py-12 text-center space-y-2">
-            <div className="flex justify-center"><div className="h-12 w-12 rounded-full bg-[#2E37FE] flex items-center justify-center"><FileText size={24} className="text-white" /></div></div>
+            <div className="flex justify-center"><div className="h-12 w-12 rounded-full bg-primary flex items-center justify-center"><FileText size={24} className="text-white" /></div></div>
             <p className="text-muted-foreground font-medium">No reports yet</p>
             <p className="text-sm text-muted-foreground">Your first KPI report will appear here once generated.</p>
           </CardContent>
@@ -73,10 +73,10 @@ export default function ClientReportsPage() {
             const { totals, period, campaigns } = report.report_data;
             const wasSent = !!report.sent_at;
             return (
-              <Card key={report.id} className="border-border/50 shadow-sm overflow-hidden">
-                <div className="flex items-center justify-between px-6 py-3 bg-muted/30 border-b border-border/30">
+              <Card key={report.id} className="overflow-hidden">
+                <div className="flex items-center justify-between px-6 py-3 bg-muted/30 border-b border-border-soft">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]"><FileText size={16} className="text-white" /></div>
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary"><FileText size={16} className="text-white" /></div>
                     <div>
                       <p className="text-sm font-semibold">{new Date(period.start).toLocaleDateString("en-US", { month: "short", day: "numeric" })} to {new Date(period.end).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</p>
                       <p className="text-xs text-muted-foreground">{campaigns.length} campaign{campaigns.length !== 1 ? "s" : ""} included</p>
@@ -89,11 +89,11 @@ export default function ClientReportsPage() {
                 </div>
                 <CardContent className="pt-4">
                   <div className="grid grid-cols-2 gap-4 mb-4">
-                    <div className="text-center p-3 rounded-lg bg-[#2E37FE]/5"><p className="text-xl font-bold text-[#6B72FF]">{totals.emails_sent.toLocaleString()}</p><p className="text-xs text-muted-foreground">Emails Sent</p></div>
+                    <div className="text-center p-3 rounded-lg bg-primary/5"><p className="text-xl font-bold text-brand-300">{totals.emails_sent.toLocaleString()}</p><p className="text-xs text-muted-foreground">Emails Sent</p></div>
                     <div className="text-center p-3 rounded-lg bg-emerald-50/50"><p className="text-xl font-bold text-emerald-700">{totals.positive_replies}</p><p className="text-xs text-muted-foreground">Positive Responses</p></div>
                   </div>
                   {campaigns.map((camp) => (
-                    <div key={camp.campaign_id} className="rounded-xl border border-border/50 p-4 mt-3">
+                    <div key={camp.campaign_id} className="rounded-xl border border-border-soft p-4 mt-3">
                       <p className="text-sm font-semibold mb-2">{camp.campaign_name}</p>
                       <MetricRow label="Emails Sent" value={camp.metrics.emails_sent} unit="count" />
                       <MetricRow label="Positive Responses" value={camp.metrics.positive_replies} unit="count" trend="up" />

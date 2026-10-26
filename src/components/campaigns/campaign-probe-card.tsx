@@ -28,7 +28,7 @@ function MailboxesLink({ owner }: { owner: boolean }) {
   return (
     <a
       href={appUrl("/admin/mailboxes")}
-      className="text-xs font-medium text-[#2E37FE] hover:underline"
+      className="text-xs font-medium text-primary hover:underline"
     >
       Open Mailboxes →
     </a>
@@ -37,7 +37,7 @@ function MailboxesLink({ owner }: { owner: boolean }) {
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <Card className="border-border/50 shadow-sm">
+    <Card>
       <CardHeader className="flex flex-row items-center gap-2 pb-3">
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-600">
           <FlaskConical size={16} className="text-white" />
@@ -117,7 +117,7 @@ export function CampaignProbeCard({ campaignId }: { campaignId?: string }) {
       <div className="divide-y divide-border rounded-lg border">
         {status.mailboxes.map((m) => (
           <div key={m.mailbox_id} className="flex items-center justify-between gap-3 px-3 py-2">
-            <span className="min-w-0 truncate font-medium text-[#0f172a]">{m.email}</span>
+            <span className="min-w-0 truncate font-medium text-foreground">{m.email}</span>
             <span className="shrink-0 text-xs text-muted-foreground">{probeSummary(m.test)}</span>
           </div>
         ))}

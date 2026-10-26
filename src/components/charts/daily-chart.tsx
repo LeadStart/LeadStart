@@ -54,13 +54,13 @@ export function DailyChart({
   const activeSeries = series.filter((s) => SERIES_CONFIG[s]);
 
   return (
-    <Card className="border-border/50 shadow-sm">
+    <Card>
       <CardHeader className="pb-2">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
           <CardTitle className="text-base font-semibold">{title}</CardTitle>
-          <div className="flex items-center gap-4 text-xs text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
             {activeSeries.map((key) => (
-              <span key={key} className="flex items-center gap-1.5">
+              <span key={key} className="flex items-center gap-1.5 whitespace-nowrap">
                 <span
                   className="h-2 w-2 rounded-full"
                   style={{ backgroundColor: SERIES_CONFIG[key].color }}

@@ -26,7 +26,7 @@ export interface QuickActionGroup {
 
 export function QuickActionBar({ groups }: { groups: QuickActionGroup[] }) {
   return (
-    <div className="flex flex-none flex-col gap-2.5 border-b border-border/60 bg-card px-4 py-3 sm:px-5">
+    <div className="flex flex-none flex-col gap-2.5 border-b border-border-soft bg-card px-4 py-3 sm:px-5">
       {groups.map((group, gi) => (
         <div key={gi} className="flex flex-col gap-1.5">
           <p className="text-[10.5px] font-bold uppercase tracking-wide text-muted-foreground">

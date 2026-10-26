@@ -49,12 +49,12 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <div className="flex min-h-screen justify-center bg-background px-4 pt-4 pb-8">
+    <div className="flex min-h-screen justify-center px-4 pt-4 pb-8">
       <div className="w-full max-w-md flex flex-col items-center">
         <div className="flex justify-center -mb-3">
           <Image src={leadstartLogo} alt="LeadStart" priority className="h-72 w-auto" />
         </div>
-        <Card className="w-full border-border/50 shadow-lg">
+        <Card className="w-full">
           <CardHeader className="text-center pb-2">
             <CardTitle className="text-2xl font-bold">
               {sent ? "Check your email" : "Forgot password?"}
@@ -108,7 +108,7 @@ export default function ResetPasswordPage() {
                 )}
                 <Button
                   type="submit"
-                  className="w-full bg-[#2E37FE] text-white hover:bg-[#1C24B8] transition-colors font-medium"
+                  className="w-full bg-primary text-white hover:bg-brand-500 transition-colors font-medium"
                   disabled={loading}
                 >
                   {loading ? "Sending..." : "Send Reset Link"}

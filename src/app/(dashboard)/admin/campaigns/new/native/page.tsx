@@ -143,7 +143,6 @@ export default function NewNativeCampaignPage() {
             onClick={handleSave}
             disabled={saving}
             className="gap-1.5 text-white"
-            style={{ background: "#2E37FE" }}
           >
             <Save size={14} />
             {saving ? "Saving…" : "Save draft"}

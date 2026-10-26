@@ -116,7 +116,7 @@ export function WaterfallSettingsCard() {
   const enabled = settings?.waterfall_enabled ?? true;
 
   return (
-    <Card className="border-border/50 shadow-sm">
+    <Card>
       <CardHeader className="flex flex-row items-center gap-2 pb-3">
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600">
           <SlidersHorizontal size={16} className="text-white" />
@@ -149,7 +149,7 @@ export function WaterfallSettingsCard() {
                 onChange={(e) =>
                   setSettings({ ...settings, auto_run_after_search: e.target.checked })
                 }
-                className="mt-0.5 h-4 w-4 rounded border-border accent-[#2E37FE] cursor-pointer"
+                className="mt-0.5 h-4 w-4 rounded border-border accent-primary cursor-pointer"
               />
               <span>
                 Auto-run pipeline after a LinkedIn search
@@ -169,7 +169,7 @@ export function WaterfallSettingsCard() {
                 onChange={(e) =>
                   setSettings({ ...settings, domain_discovery_enabled: e.target.checked })
                 }
-                className="mt-0.5 h-4 w-4 rounded border-border accent-[#2E37FE] cursor-pointer"
+                className="mt-0.5 h-4 w-4 rounded border-border accent-primary cursor-pointer"
               />
               <span>
                 Discover websites for companies without a LinkedIn page
@@ -189,7 +189,7 @@ export function WaterfallSettingsCard() {
                 onChange={(e) =>
                   setSettings({ ...settings, waterfall_enabled: e.target.checked })
                 }
-                className="mt-0.5 h-4 w-4 rounded border-border accent-[#2E37FE] cursor-pointer"
+                className="mt-0.5 h-4 w-4 rounded border-border accent-primary cursor-pointer"
               />
               <span>
                 Run the second-pass waterfall
@@ -303,7 +303,7 @@ export function WaterfallSettingsCard() {
                 onChange={(e) =>
                   setSettings({ ...settings, accept_catch_all_guesses: e.target.checked })
                 }
-                className="mt-0.5 h-4 w-4 rounded border-border accent-[#2E37FE] cursor-pointer"
+                className="mt-0.5 h-4 w-4 rounded border-border accent-primary cursor-pointer"
               />
               <span>
                 Accept catch-all pattern guesses
@@ -326,7 +326,7 @@ export function WaterfallSettingsCard() {
                 onChange={(e) =>
                   setSettings({ ...settings, validate_catch_all: e.target.checked })
                 }
-                className="mt-0.5 h-4 w-4 rounded border-border accent-[#2E37FE] cursor-pointer"
+                className="mt-0.5 h-4 w-4 rounded border-border accent-primary cursor-pointer"
               />
               <span>
                 Findymail catch-all recovery
@@ -340,7 +340,7 @@ export function WaterfallSettingsCard() {
             </label>
 
             <div className="flex gap-2 items-center">
-              <Button onClick={handleSave} disabled={saving} style={{ background: "#2E37FE" }}>
+              <Button onClick={handleSave} disabled={saving}>
                 {saving ? "Saving..." : "Save"}
               </Button>
               {saved && (

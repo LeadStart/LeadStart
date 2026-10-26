@@ -178,9 +178,9 @@ export function ClientUsersSection({
   }
 
   return (
-    <Card className="border-border/50 shadow-sm">
+    <Card>
       <CardHeader className="flex flex-row items-center gap-2 pb-3">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
           <Users size={16} className="text-white" />
         </div>
         <CardTitle className="text-base flex-1">
@@ -188,7 +188,7 @@ export function ClientUsersSection({
         </CardTitle>
         <Link
           href="/admin/reports"
-          className="text-xs font-medium text-[#2E37FE] hover:underline flex items-center gap-1"
+          className="text-xs font-medium text-primary hover:underline flex items-center gap-1"
         >
           <Mail size={12} />
           Manage in Reports
@@ -205,10 +205,10 @@ export function ClientUsersSection({
             {users.map((user) => (
               <div
                 key={user.user_id}
-                className="flex items-center justify-between rounded-xl border border-border/50 p-3 transition-colors hover:bg-muted/30"
+                className="flex items-center justify-between rounded-xl border border-border-soft p-3 transition-colors hover:bg-muted/30"
               >
                 <div className="flex items-center gap-3">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-lg text-sm font-bold text-white shrink-0" style={{ background: user.invite_status === "pending" ? '#9CA3AF' : '#2E37FE' }}>
+                  <div className={`flex h-9 w-9 items-center justify-center rounded-lg text-sm font-bold text-white shrink-0 ${user.invite_status === "pending" ? "bg-gray-400" : "bg-primary"}`}>
                     {(user.full_name || user.email).charAt(0).toUpperCase()}
                   </div>
                   <div>
@@ -237,7 +237,7 @@ export function ClientUsersSection({
                       checked={receives(user.email)}
                       disabled={togglingEmail === user.email}
                       onChange={(e) => handleToggleReports(user.email, e.target.checked)}
-                      className="h-3.5 w-3.5 rounded border-border cursor-pointer accent-[#2E37FE]"
+                      className="h-3.5 w-3.5 rounded border-border cursor-pointer accent-primary"
                     />
                     <Mail size={11} />
                     Reports
@@ -301,7 +301,7 @@ export function ClientUsersSection({
         )}
 
         {/* Invite form */}
-        <form onSubmit={handleInvite} className="flex items-center gap-2 pt-2 border-t border-border/30">
+        <form onSubmit={handleInvite} className="flex items-center gap-2 pt-2 border-t border-border-soft">
           <UserPlus size={16} className="text-muted-foreground shrink-0" />
           <Input
             type="email"
@@ -315,7 +315,6 @@ export function ClientUsersSection({
             size="sm"
             disabled={inviting || !inviteEmail.trim()}
             className="h-8 text-xs"
-            style={{ background: '#2E37FE' }}
           >
             <Send size={12} className="mr-1" />
             {inviting ? "Sending..." : "Invite"}
@@ -333,7 +332,7 @@ export function ClientUsersSection({
                 <button
                   type="button"
                   onClick={() => { navigator.clipboard.writeText(inviteLink); }}
-                  className="underline hover:no-underline text-[#2E37FE]"
+                  className="underline hover:no-underline text-primary"
                 >
                   Copy link
                 </button>

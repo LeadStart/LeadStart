@@ -127,7 +127,7 @@ export function LinkedinSection({
   }
 
   return (
-    <Card className="border-border/50 shadow-sm">
+    <Card>
       <CardHeader
         className="flex flex-row items-center gap-2 pb-3 cursor-pointer select-none"
         onClick={() => setOpen((v) => !v)}
@@ -148,7 +148,7 @@ export function LinkedinSection({
                 originate from this LinkedIn account; inbound replies arrive
                 on the next webhook event.
               </p>
-              <div className="rounded-lg border border-border/50 bg-muted/20 px-3 py-2 text-xs">
+              <div className="rounded-lg border border-border-soft bg-muted/20 px-3 py-2 text-xs">
                 <span className="text-muted-foreground">Account ID&nbsp;</span>
                 <span className="font-mono break-all">{accountId}</span>
               </div>
@@ -206,7 +206,7 @@ export function LinkedinSection({
             </>
           )}
           {error && <p className="text-xs text-red-600">{error}</p>}
-          <p className="text-[11px] text-muted-foreground border-t border-border/30 pt-3">
+          <p className="text-[11px] text-muted-foreground border-t border-border-soft pt-3">
             LinkedIn account access is brokered through Unipile. Re-auth
             required when LinkedIn cookies expire (typically every 1–3 months).
           </p>

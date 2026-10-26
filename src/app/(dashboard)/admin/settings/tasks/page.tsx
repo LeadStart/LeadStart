@@ -48,7 +48,7 @@ const STATUS_LABELS: Record<TaskStatus, string> = {
 };
 
 const STATUS_COLORS: Record<TaskStatus, string> = {
-  todo: "bg-[#e2e8f0] text-[#7A7872] border-gray-200",
+  todo: "bg-border text-[#7A7872] border-gray-200",
   in_progress: "badge-blue",
   done: "badge-green",
 };
@@ -292,7 +292,7 @@ export default function TasksPage() {
 
       {/* Inline add task form */}
       {showAddForm && (
-        <Card className="border-border/50 shadow-sm">
+        <Card>
           <CardHeader className="flex flex-row items-center gap-2 pb-3">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-50">
               <Plus size={16} className="text-purple-500" />
@@ -374,10 +374,10 @@ export default function TasksPage() {
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-50">
           <CheckSquare size={16} className="text-purple-500" />
         </div>
-        <h2 className="text-[15px] font-semibold text-[#0f172a]">All Tasks</h2>
+        <h2 className="text-[15px] font-semibold text-foreground">All Tasks</h2>
         <span className="text-sm text-muted-foreground ml-auto">{filtered.length} task{filtered.length !== 1 ? "s" : ""}</span>
       </div>
-      <Card className="border-border/50 shadow-sm">
+      <Card>
         <CardContent>
           {filtered.length === 0 ? (
             <p className="text-sm text-muted-foreground">No tasks found.</p>

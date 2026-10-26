@@ -25,17 +25,17 @@ export function PaginationControls({
   if (totalItems <= pageSize) return null;
 
   return (
-    <div className="flex items-center justify-between gap-3 px-2 pt-3 pb-1 text-xs text-[#64748b]">
+    <div className="flex items-center justify-between gap-3 px-2 pt-3 pb-1 text-xs text-muted-foreground">
       <p className="whitespace-nowrap">
-        <span className="font-medium text-[#0f172a]">{start}–{end}</span>{" "}
-        of <span className="font-medium text-[#0f172a]">{totalItems.toLocaleString()}</span>
+        <span className="font-medium text-foreground">{start}–{end}</span>{" "}
+        of <span className="font-medium text-foreground">{totalItems.toLocaleString()}</span>
       </p>
       <div className="flex items-center gap-1">
         <button
           type="button"
           onClick={() => onPageChange(clampedPage - 1)}
           disabled={atStart}
-          className="flex h-7 items-center gap-1 rounded-md border border-border/60 bg-white px-2 font-medium text-[#0f172a] transition-colors hover:bg-muted/40 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white"
+          className="flex h-[30px] items-center gap-1 rounded-full border border-border bg-card bg-(image:--tex-white) px-3 text-[12.5px] font-semibold text-foreground transition-[filter] hover:brightness-[0.975] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:brightness-100"
           aria-label="Previous page"
         >
           <ChevronLeft size={14} />
@@ -45,7 +45,7 @@ export function PaginationControls({
           type="button"
           onClick={() => onPageChange(clampedPage + 1)}
           disabled={atEnd}
-          className="flex h-7 items-center gap-1 rounded-md border border-border/60 bg-white px-2 font-medium text-[#0f172a] transition-colors hover:bg-muted/40 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white"
+          className="flex h-[30px] items-center gap-1 rounded-full border border-border bg-card bg-(image:--tex-white) px-3 text-[12.5px] font-semibold text-foreground transition-[filter] hover:brightness-[0.975] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:brightness-100"
           aria-label="Next page"
         >
           Next

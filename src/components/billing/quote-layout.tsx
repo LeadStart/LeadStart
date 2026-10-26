@@ -62,7 +62,7 @@ export function QuoteLayout({
   const dueToday = setupCents + (contactSourcingCents > 0 ? contactSourcingCents : 0);
 
   return (
-    <div className="space-y-5 text-[#0f172a]">
+    <div className="space-y-5 text-foreground">
       {/* Letterhead */}
       <div
         className="relative overflow-hidden rounded-2xl p-5 sm:p-6"
@@ -73,14 +73,14 @@ export function QuoteLayout({
       >
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <p className="text-xs font-semibold tracking-wider text-[#2E37FE]">
+            <p className="text-xs font-semibold tracking-wider text-primary">
               LEADSTART PROPOSAL
             </p>
             <h2 className="mt-1 text-lg sm:text-xl font-bold">
               Outbound lead generation
             </h2>
           </div>
-          <div className="text-left sm:text-right text-xs text-[#64748b] space-y-0.5">
+          <div className="text-left sm:text-right text-xs text-muted-foreground space-y-0.5">
             <p>
               Issued {issueDate.toLocaleDateString()}
               {isDraft && " (draft)"}
@@ -92,19 +92,19 @@ export function QuoteLayout({
           </div>
         </div>
         <div className="mt-4 pt-4 border-t border-[rgba(46,55,254,0.15)] text-xs sm:text-sm">
-          <p className="text-[#64748b]">Prepared for</p>
+          <p className="text-muted-foreground">Prepared for</p>
           <p className="mt-0.5 font-semibold text-base">
             {contactName || "(no contact selected)"}
           </p>
           {contactEmail && (
-            <p className="text-[#64748b] break-all">{contactEmail}</p>
+            <p className="text-muted-foreground break-all">{contactEmail}</p>
           )}
         </div>
       </div>
 
       {/* Scope */}
       <div className="space-y-2">
-        <p className="text-xs font-semibold tracking-wider text-[#2E37FE]">
+        <p className="text-xs font-semibold tracking-wider text-primary">
           SCOPE OF WORK
         </p>
         {scopeLines.length === 0 ? (
@@ -128,10 +128,10 @@ export function QuoteLayout({
 
       {/* Pricing */}
       <div className="space-y-2">
-        <p className="text-xs font-semibold tracking-wider text-[#2E37FE]">
+        <p className="text-xs font-semibold tracking-wider text-primary">
           PRICING
         </p>
-        <div className="rounded-xl border border-border/60 bg-muted/30 p-4 space-y-3">
+        <div className="rounded-xl border border-border-soft bg-muted/30 p-4 space-y-3">
           {contactSourcingCents > 0 && (
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
@@ -179,9 +179,9 @@ export function QuoteLayout({
               </span>
             </p>
           </div>
-          <div className="border-t border-border/60 pt-3 flex items-center justify-between">
+          <div className="border-t border-border-soft pt-3 flex items-center justify-between">
             <p className="text-sm font-semibold">Due at acceptance</p>
-            <p className="text-base font-bold text-[#2E37FE]">
+            <p className="text-base font-bold text-primary">
               {formatCents(dueToday)}
             </p>
           </div>
@@ -191,7 +191,7 @@ export function QuoteLayout({
       {/* Terms */}
       {terms.trim() && (
         <div className="space-y-2">
-          <p className="text-xs font-semibold tracking-wider text-[#2E37FE]">
+          <p className="text-xs font-semibold tracking-wider text-primary">
             TERMS
           </p>
           <p className="text-sm text-muted-foreground whitespace-pre-wrap">

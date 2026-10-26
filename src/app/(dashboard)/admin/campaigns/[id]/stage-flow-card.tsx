@@ -49,7 +49,7 @@ export function StageFlowCard({
   const maxWaiting = Math.max(1, ...stages.map((s) => s.waiting));
 
   return (
-    <Card className="border-border/50 shadow-sm">
+    <Card>
       <CardHeader className="flex flex-row items-center gap-2 pb-3">
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#EA4335]">
           <Activity size={16} className="text-white" />
@@ -91,7 +91,7 @@ export function StageFlowCard({
                       {s.index + 1}
                     </span>
                     <div className="min-w-0 flex-1 pt-0.5">
-                      <p className="truncate text-sm font-semibold text-[#0f172a]">
+                      <p className="truncate text-sm font-semibold text-foreground">
                         {s.subject}
                         {isLast && (
                           <span className="ml-1 text-xs font-medium text-muted-foreground">
@@ -111,7 +111,7 @@ export function StageFlowCard({
                     </div>
                     <div className="w-[130px] shrink-0 pt-0.5 text-right">
                       <p
-                        className="text-[22px] font-bold leading-none text-[#0f172a]"
+                        className="text-[22px] font-bold leading-none text-foreground"
                         style={{ fontVariantNumeric: "tabular-nums" }}
                       >
                         {s.waiting.toLocaleString()}{" "}
@@ -165,10 +165,7 @@ function CompletionBanner({
           : "Not enough data yet";
 
   return (
-    <div
-      className="relative flex flex-wrap items-center gap-4 overflow-hidden rounded-2xl px-5 py-4 text-white"
-      style={{ background: "#2E37FE" }}
-    >
+    <div className="relative flex flex-wrap items-center gap-4 overflow-hidden rounded-2xl px-5 py-4 text-white bg-primary">
       <div
         className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
         style={{ background: "rgba(255,255,255,0.16)" }}

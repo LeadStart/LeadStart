@@ -16,7 +16,7 @@ export function AbResults({ stats }: { stats: AbNodeStats[] }) {
       {stats.map((node) => {
         const pausedCount = node.variants.filter((v) => v.paused).length;
         return (
-          <div key={node.nodeId} className="rounded-xl border border-border/60 p-4">
+          <div key={node.nodeId} className="rounded-xl border border-border-soft p-4">
             <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-0.5">
               <span className="text-sm font-semibold text-foreground">A/B test</span>
               <span className="text-xs text-muted-foreground">
@@ -31,7 +31,7 @@ export function AbResults({ stats }: { stats: AbNodeStats[] }) {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-border/50 text-left text-[11px] uppercase tracking-wide text-muted-foreground">
+                  <tr className="border-b border-border-soft text-left text-[11px] uppercase tracking-wide text-muted-foreground">
                     <th className="py-1 pr-3 font-medium">Variant</th>
                     <th className="py-1 pr-3 font-medium">Subject</th>
                     <th className="py-1 pr-3 text-right font-medium">Sent</th>

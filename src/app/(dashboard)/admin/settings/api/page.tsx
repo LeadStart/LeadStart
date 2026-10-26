@@ -1008,7 +1008,6 @@ export default function IntegrationsPage() {
                 <Button
                   onClick={handleSaveInboxHealth}
                   disabled={savingInboxHealth}
-                  style={{ background: "#2E37FE" }}
                 >
                   {savingInboxHealth ? "Saving..." : "Save"}
                 </Button>
@@ -1106,7 +1105,6 @@ export default function IntegrationsPage() {
                 <Button
                   onClick={handleSaveGmail}
                   disabled={savingGmail}
-                  style={{ background: "#2E37FE" }}
                 >
                   {savingGmail ? "Saving..." : "Save Service Account"}
                 </Button>
@@ -1177,7 +1175,6 @@ export default function IntegrationsPage() {
                 <Button
                   onClick={handleSaveMillionVerifier}
                   disabled={savingMillionVerifier}
-                  style={{ background: "#2E37FE" }}
                 >
                   {savingMillionVerifier ? "Saving..." : "Save"}
                 </Button>
@@ -1267,7 +1264,7 @@ export default function IntegrationsPage() {
                 </p>
               )}
               <div className="flex gap-2 items-center">
-                <Button onClick={handleSaveFindymail} disabled={savingFindymail} style={{ background: "#2E37FE" }}>
+                <Button onClick={handleSaveFindymail} disabled={savingFindymail}>
                   {savingFindymail ? "Saving..." : "Save"}
                 </Button>
                 <Button variant="outline" onClick={handleTestFindymail} disabled={testingFindymail || !findymailKey}>
@@ -1354,7 +1351,7 @@ export default function IntegrationsPage() {
                       </p>
                     )}
                     <div className="flex items-center gap-2">
-                      <Button onClick={() => handleSaveFinder(p.id)} disabled={busy !== null} style={{ background: "#2E37FE" }}>
+                      <Button onClick={() => handleSaveFinder(p.id)} disabled={busy !== null}>
                         {busy === "saving" ? "Saving..." : "Save"}
                       </Button>
                       <Button variant="outline" onClick={() => handleTestFinder(p.id)} disabled={busy !== null || !finderKeys[p.id]}>
@@ -1412,7 +1409,7 @@ export default function IntegrationsPage() {
                 </p>
               </div>
               <div className="flex gap-2">
-                <Button onClick={handleSaveScrapioKey} disabled={savingScrapio} style={{ background: '#2E37FE' }}>
+                <Button onClick={handleSaveScrapioKey} disabled={savingScrapio}>
                   {savingScrapio ? "Saving..." : "Save Key"}
                 </Button>
                 <Button variant="outline" onClick={handleTestScrapio} disabled={testingScrapio || !scrapioKey}>
@@ -1440,7 +1437,7 @@ export default function IntegrationsPage() {
                 </div>
               )}
 
-              <div className="border-t border-border/60 pt-4 mt-4 space-y-2">
+              <div className="border-t border-border-soft pt-4 mt-4 space-y-2">
                 <p className="text-sm font-medium">Prospecting blacklist</p>
                 <p className="text-[11px] text-muted-foreground">
                   Every business pulled by the Prospecting tab is added to a Scrap.io
@@ -1509,7 +1506,7 @@ export default function IntegrationsPage() {
                 </p>
               </div>
               <div className="flex gap-2">
-                <Button onClick={handleSaveApifyKey} disabled={savingApify} style={{ background: "#2E37FE" }}>
+                <Button onClick={handleSaveApifyKey} disabled={savingApify}>
                   {savingApify ? "Saving..." : "Save Token"}
                 </Button>
                 <Button variant="outline" onClick={handleTestApify} disabled={testingApify || !apifyKey}>
@@ -1585,7 +1582,6 @@ export default function IntegrationsPage() {
                 <Button
                   onClick={handleSaveAnthropic}
                   disabled={savingAnthropic}
-                  style={{ background: "#2E37FE" }}
                 >
                   {savingAnthropic ? "Saving..." : "Save Key"}
                 </Button>
@@ -1671,7 +1667,6 @@ export default function IntegrationsPage() {
                 <Button
                   onClick={handleSavePerplexity}
                   disabled={savingPerplexity}
-                  style={{ background: "#2E37FE" }}
                 >
                   {savingPerplexity ? "Saving..." : "Save Key"}
                 </Button>
@@ -1766,7 +1761,6 @@ export default function IntegrationsPage() {
                 <Button
                   onClick={handleSaveUnipile}
                   disabled={savingUnipile}
-                  style={{ background: "#2E37FE" }}
                 >
                   {savingUnipile ? "Saving..." : "Save Credentials"}
                 </Button>
@@ -1839,7 +1833,7 @@ export default function IntegrationsPage() {
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                <Button onClick={handleSaveResend} disabled={savingResend} style={{ background: '#2E37FE' }}>
+                <Button onClick={handleSaveResend} disabled={savingResend}>
                   {savingResend ? "Saving..." : "Save Email Settings"}
                 </Button>
                 {resendSaved && (
@@ -1904,7 +1898,7 @@ export default function IntegrationsPage() {
               </div>
 
               <div className="flex items-center gap-3 pt-2">
-                <Button onClick={handleSaveSchedule} disabled={savingSchedule} style={{ background: '#2E37FE' }}>
+                <Button onClick={handleSaveSchedule} disabled={savingSchedule}>
                   {savingSchedule ? "Saving..." : "Save Schedule"}
                 </Button>
                 {scheduleSaved && (
@@ -1977,7 +1971,7 @@ export default function IntegrationsPage() {
                     key={id}
                     type="button"
                     onClick={() => setOpenId(id)}
-                    className="group flex w-full flex-col gap-2 rounded-xl border bg-card p-4 text-left transition-colors hover:border-primary/40 hover:bg-muted/40"
+                    className="group flex w-full flex-col gap-2 rounded-xl border border-border-soft bg-card shadow-card p-4 text-left transition-colors hover:border-primary/40 hover:bg-muted/40"
                   >
                     <div className="flex items-center gap-2.5">
                       <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${p.tile}`}>

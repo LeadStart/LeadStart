@@ -32,7 +32,7 @@ const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const seenKey = (clientId: string) => `ls-onboarding-seen:${clientId}`;
 
 const eyebrowCls =
-  "text-[11px] font-bold uppercase tracking-[0.08em] text-[#2E37FE]";
+  "text-[11px] font-bold uppercase tracking-[0.08em] text-primary";
 const titleCls =
   "mt-1.5 mb-1.5 text-[22px] font-bold leading-tight tracking-tight text-foreground";
 const subCls = "text-[13.5px] leading-relaxed text-muted-foreground";
@@ -44,7 +44,7 @@ function Dots({ active }: { active: number }) {
         <span
           key={n}
           className={`h-[7px] rounded-full transition-all ${
-            n === active ? "w-5 bg-[#2E37FE]" : "w-[7px] bg-border"
+            n === active ? "w-5 bg-primary" : "w-[7px] bg-border"
           }`}
         />
       ))}
@@ -55,7 +55,7 @@ function Dots({ active }: { active: number }) {
 function FlowRow({ n, title, detail }: { n: number; title: string; detail: string }) {
   return (
     <div className="flex gap-3">
-      <div className="flex h-7 w-7 flex-none items-center justify-center rounded-full border border-[#a3a8ff]/40 bg-[#a3a8ff]/15 text-[13px] font-bold text-[#c3ccff]">
+      <div className="flex h-7 w-7 flex-none items-center justify-center rounded-full border border-brand-200/40 bg-brand-200/15 text-[13px] font-bold text-[#c3ccff]">
         {n}
       </div>
       <div>
@@ -77,7 +77,7 @@ function SummaryRow({
 }) {
   return (
     <div className="flex items-center gap-3 rounded-lg border border-border bg-muted/40 px-3 py-2.5">
-      <span className="flex size-8 flex-none items-center justify-center rounded-lg bg-[#2E37FE]/10 text-[#2E37FE]">
+      <span className="flex size-8 flex-none items-center justify-center rounded-lg bg-primary/10 text-primary">
         {icon}
       </span>
       <div className="min-w-0">
@@ -153,7 +153,7 @@ function OnboardingModal({
   if (step === 1) {
     left = (
       <>
-        <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#a3a8ff]">
+        <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-brand-200">
           Welcome aboard
         </p>
         <h3 className="mt-3 mb-4 text-[19px] font-bold leading-snug text-white">
@@ -185,7 +185,6 @@ function OnboardingModal({
           <Button
             onClick={() => setStep(2)}
             className="flex-1 gap-1.5"
-            style={{ background: "#2E37FE" }}
           >
             Set up lead routing <ArrowRight size={16} />
           </Button>
@@ -198,7 +197,7 @@ function OnboardingModal({
   } else if (step === 2) {
     left = (
       <>
-        <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#a3a8ff]">
+        <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-brand-200">
           How leads reach you
         </p>
         <h3 className="mt-3 mb-4 text-[19px] font-bold leading-snug text-white">
@@ -210,13 +209,13 @@ function OnboardingModal({
             title="A prospect replies"
             detail="They answer the campaign in your warmed inbox."
           />
-          <div className="ml-[13px] h-4 w-px bg-[#a3a8ff]/30" />
+          <div className="ml-[13px] h-4 w-px bg-brand-200/30" />
           <FlowRow
             n={2}
             title="You reply in the portal"
             detail="Answer right here. It sends under your name and signature."
           />
-          <div className="ml-[13px] h-4 w-px bg-[#a3a8ff]/30" />
+          <div className="ml-[13px] h-4 w-px bg-brand-200/30" />
           <FlowRow
             n={3}
             title="We CC your inbox"
@@ -275,7 +274,6 @@ function OnboardingModal({
             onClick={fromEmail}
             disabled={saving}
             className="gap-1.5"
-            style={{ background: "#2E37FE" }}
           >
             {saving ? "Saving…" : "Continue"} <ArrowRight size={16} />
           </Button>
@@ -285,7 +283,7 @@ function OnboardingModal({
   } else if (step === 3) {
     left = (
       <>
-        <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#a3a8ff]">
+        <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-brand-200">
           Bring your team
         </p>
         <h3 className="mt-3 mb-4 text-[19px] font-bold leading-snug text-white">
@@ -296,16 +294,16 @@ function OnboardingModal({
           thread, so a teammate can jump in even when you&apos;re out.
         </p>
         <div className="mt-4 flex">
-          <span className="flex size-9 items-center justify-center rounded-full border-2 border-[#1b2273] bg-[#2E37FE] text-xs font-bold text-white">
+          <span className="flex size-9 items-center justify-center rounded-full border-2 border-[#1b2273] bg-primary text-xs font-bold text-white">
             Y
           </span>
-          <span className="-ml-2 flex size-9 items-center justify-center rounded-full border-2 border-[#1b2273] bg-[#6B72FF] text-xs font-bold text-white">
+          <span className="-ml-2 flex size-9 items-center justify-center rounded-full border-2 border-[#1b2273] bg-brand-300 text-xs font-bold text-white">
             J
           </span>
-          <span className="-ml-2 flex size-9 items-center justify-center rounded-full border-2 border-[#1b2273] bg-[#A3A8FF] text-xs font-bold text-white">
+          <span className="-ml-2 flex size-9 items-center justify-center rounded-full border-2 border-[#1b2273] bg-brand-200 text-xs font-bold text-white">
             M
           </span>
-          <span className="-ml-2 flex size-9 items-center justify-center rounded-full border-2 border-[#1b2273] bg-[#a3a8ff]/25 text-xs font-bold text-[#c3ccff]">
+          <span className="-ml-2 flex size-9 items-center justify-center rounded-full border-2 border-[#1b2273] bg-brand-200/25 text-xs font-bold text-[#c3ccff]">
             +
           </span>
         </div>
@@ -344,7 +342,6 @@ function OnboardingModal({
             onClick={fromTeammates}
             disabled={saving}
             className="gap-1.5"
-            style={{ background: "#2E37FE" }}
           >
             {saving ? "Saving…" : "Continue"} <ArrowRight size={16} />
           </Button>
@@ -383,7 +380,6 @@ function OnboardingModal({
           <Button
             onClick={onDismiss}
             className="gap-1.5"
-            style={{ background: "#2E37FE" }}
           >
             Go to my dashboard <ArrowRight size={16} />
           </Button>
@@ -392,7 +388,7 @@ function OnboardingModal({
     );
     left = (
       <>
-        <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#a3a8ff]">
+        <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-brand-200">
           All set
         </p>
         <h3 className="mt-3 mb-4 text-[19px] font-bold leading-snug text-white">

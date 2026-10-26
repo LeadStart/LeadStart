@@ -158,7 +158,7 @@ export default function ClientInboxPage() {
                     onClick={() => setFilter(t.key)}
                     className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[11.5px] font-semibold transition-colors cursor-pointer ${
                       filter === t.key
-                        ? "border-[#2E37FE]/25 bg-[#2E37FE]/[0.13] text-[#2E37FE]"
+                        ? "border-primary/25 bg-primary/[0.13] text-primary"
                         : "border-transparent bg-muted/60 text-muted-foreground hover:bg-muted"
                     }`}
                   >
@@ -319,7 +319,7 @@ function ClientThread({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {/* Header */}
-      <div className="flex-none border-b border-border/60 px-4 py-3 sm:px-5">
+      <div className="flex-none border-b border-border-soft px-4 py-3 sm:px-5">
         <MobileBack onBack={onBack} />
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -330,7 +330,7 @@ function ClientThread({
               </p>
             )}
             <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px]">
-              <a href={`mailto:${reply.lead_email}`} className="inline-flex items-center gap-1 text-[#2E37FE] hover:underline">
+              <a href={`mailto:${reply.lead_email}`} className="inline-flex items-center gap-1 text-primary hover:underline">
                 <Mail size={11} /> {reply.lead_email}
               </a>
               {reply.lead_linkedin_url && (
@@ -385,7 +385,7 @@ function ClientThread({
 
       {/* Referral (if any) */}
       {reply.referral_contact && (
-        <div className="flex-none border-t border-border/60 bg-purple-50/60 px-4 py-2.5 text-xs sm:px-5">
+        <div className="flex-none border-t border-border-soft bg-purple-50/60 px-4 py-2.5 text-xs sm:px-5">
           <span className="font-semibold uppercase tracking-wide text-purple-700">Referred contact: </span>
           <span className="font-medium text-foreground">
             {reply.referral_contact.name || reply.referral_contact.email}
@@ -397,7 +397,7 @@ function ClientThread({
       )}
 
       {/* Composer / sent state / footer */}
-      <div className="flex-none border-t border-border/60 bg-card px-4 py-3 sm:px-5">
+      <div className="flex-none border-t border-border-soft bg-card px-4 py-3 sm:px-5">
         {isSent ? (
           <div className="flex items-center gap-2 text-[13px] font-medium text-emerald-700">
             <CheckCircle2 size={15} /> Reply sent {reply.sent_at ? timeSince(reply.sent_at) : ""} · a copy went to your inbox.
@@ -409,7 +409,7 @@ function ClientThread({
               onChange={(e) => setSubject(e.target.value)}
               disabled={sending}
               placeholder="Subject"
-              className="w-full rounded-lg border border-border/60 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#2E37FE]/30"
+              className="w-full rounded-lg border border-border-soft px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30"
             />
             <textarea
               value={bodyText}
@@ -417,7 +417,7 @@ function ClientThread({
               rows={3}
               placeholder="Write your reply…"
               disabled={sending}
-              className="w-full resize-y rounded-lg border border-border/60 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#2E37FE]/30"
+              className="w-full resize-y rounded-lg border border-border-soft px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30"
             />
             {sendError && (
               <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-900">{sendError}</div>
@@ -427,7 +427,7 @@ function ClientThread({
               <button
                 onClick={send}
                 disabled={!bodyText.trim() || sending || previewing}
-                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-[#2E37FE] px-4 py-2 text-sm font-bold text-white cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-primary bg-(image:--tex-brand) px-4 py-2 text-sm font-semibold text-white cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Send size={14} /> {sending ? "Sending…" : "Send reply"}
               </button>
@@ -436,7 +436,7 @@ function ClientThread({
         ) : canReply ? (
           <button
             onClick={() => setShowComposer(true)}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-[#2E37FE] px-4 py-2 text-sm font-bold text-white cursor-pointer"
+            className="inline-flex items-center gap-1.5 rounded-full bg-primary bg-(image:--tex-brand) px-4 py-2 text-sm font-semibold text-white cursor-pointer"
           >
             <Send size={14} /> Reply
           </button>

@@ -909,7 +909,7 @@ export default function ContactsPage() {
           campaign recipient lists. Only LeadStart contacts pipe into the
           Prospects kanban (enforced on the Prospects page query too). */}
       <div
-        className="inline-flex items-center gap-1 rounded-full border border-border/50 bg-muted/40 p-1 shadow-sm"
+        className="inline-flex items-center gap-1 rounded-full border border-border-soft bg-muted p-[3px]"
         role="tablist"
       >
         {([
@@ -926,7 +926,7 @@ export default function ContactsPage() {
               onClick={() => setOwnerView(opt.value)}
               className={`cursor-pointer rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
                 active
-                  ? "bg-white text-[#0f172a] shadow-sm"
+                  ? "bg-card bg-(image:--tex-white) text-foreground"
                   : "text-muted-foreground hover:text-foreground"
               }`}
               style={active ? { color: "#2E37FE" } : undefined}
@@ -939,7 +939,7 @@ export default function ContactsPage() {
 
       {/* Stat cards */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4">
-        <StatCard label="Total Contacts" value={totalContacts} icon={<Users size={18} className="text-[#2E37FE]" />} iconBg="bg-[#2E37FE]/10" />
+        <StatCard label="Total Contacts" value={totalContacts} icon={<Users size={18} className="text-primary" />} iconBg="bg-primary/10" />
         <StatCard label="Enriched" value={enrichedCount} icon={<CheckCircle size={18} className="text-blue-500" />} iconBg="bg-blue-50" valueColor="text-blue-600" />
         <StatCard label="Uploaded" value={uploadedCount} icon={<Upload size={18} className="text-emerald-500" />} iconBg="bg-emerald-50" valueColor="text-emerald-600" />
         <StatCard label="Needs Enrichment" value={needsEnrichment} icon={<AlertCircle size={18} className="text-amber-500" />} iconBg="bg-amber-50" valueColor={needsEnrichment > 0 ? "text-amber-600" : undefined} />
@@ -1013,8 +1013,8 @@ export default function ContactsPage() {
 
       {/* Bulk action bar: visible whenever any contact is selected */}
       {selectedIds.size > 0 && (
-        <div className="flex items-center justify-between rounded-lg border border-[#2E37FE]/30 bg-[#2E37FE]/5 px-4 py-2.5">
-          <p className="text-sm font-medium text-[#0f172a]">
+        <div className="flex items-center justify-between rounded-lg border border-primary/30 bg-primary/5 px-4 py-2.5">
+          <p className="text-sm font-medium text-foreground">
             {selectedIds.size.toLocaleString()} contact
             {selectedIds.size === 1 ? "" : "s"} selected
           </p>
@@ -1077,7 +1077,7 @@ export default function ContactsPage() {
       />
 
       {/* Contacts table: row click opens edit dialog */}
-      <Card className="border-border/50 shadow-sm">
+      <Card>
         <CardContent className="pt-6">
           {sorted.length === 0 ? (
             <p className="text-sm text-muted-foreground">No contacts found.</p>
@@ -1094,7 +1094,7 @@ export default function ContactsPage() {
                     key={row.id}
                     onClick={() => openForEdit(row)}
                     data-state={isSelected ? "selected" : undefined}
-                    className="rounded-xl border border-border bg-card p-4 cursor-pointer data-[state=selected]:border-[#2E37FE]/40 data-[state=selected]:bg-[#2E37FE]/5"
+                    className="rounded-xl border border-border-soft bg-card shadow-card p-4 cursor-pointer data-[state=selected]:border-primary/40 data-[state=selected]:bg-brand-50"
                   >
                     <div className="flex items-start gap-3">
                       <input
@@ -1103,13 +1103,13 @@ export default function ContactsPage() {
                         onChange={() => toggleRowSelection(row.id)}
                         onClick={(e) => e.stopPropagation()}
                         aria-label={`Select ${row.fullName}`}
-                        className="mt-0.5 h-4 w-4 shrink-0 rounded border-border accent-[#2E37FE] cursor-pointer"
+                        className="mt-0.5 h-4 w-4 shrink-0 rounded border-border accent-primary cursor-pointer"
                       />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between gap-2">
                           <p className="font-medium text-foreground truncate">{row.fullName}</p>
                           {row.pipeline_stage && (
-                            <Badge variant="outline" className="shrink-0 text-[11px] font-medium text-[#2E37FE] border-[#2E37FE]/30 bg-[#2E37FE]/5">
+                            <Badge variant="outline" className="shrink-0 text-[11px] font-medium text-primary border-primary/30 bg-primary/5">
                               <TrendingUp size={11} className="mr-1" />{row.pipeline_stage}
                             </Badge>
                           )}
@@ -1132,7 +1132,7 @@ export default function ContactsPage() {
                         {(row.phone || row.linkedin_url) && (
                           <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
                             {row.phone && (
-                              <a href={`tel:${row.phone}`} onClick={(e) => e.stopPropagation()} className="hover:text-[#2E37FE]">{row.phone}</a>
+                              <a href={`tel:${row.phone}`} onClick={(e) => e.stopPropagation()} className="hover:text-primary">{row.phone}</a>
                             )}
                             {row.linkedin_url && (
                               <a
@@ -1174,7 +1174,7 @@ export default function ContactsPage() {
                                 !pageAllSelected && pageSomeSelected;
                           }}
                           onChange={togglePageSelection}
-                          className="h-3.5 w-3.5 rounded border-border accent-[#2E37FE] cursor-pointer"
+                          className="h-3.5 w-3.5 rounded border-border accent-primary cursor-pointer"
                         />
                         <span>Page</span>
                       </label>
@@ -1191,7 +1191,7 @@ export default function ContactsPage() {
                                 !filteredAllSelected && filteredSomeSelected;
                           }}
                           onChange={toggleFilteredSelection}
-                          className="h-3.5 w-3.5 rounded border-border accent-[#2E37FE] cursor-pointer"
+                          className="h-3.5 w-3.5 rounded border-border accent-primary cursor-pointer"
                         />
                         <span>All</span>
                       </label>
@@ -1231,7 +1231,7 @@ export default function ContactsPage() {
                       key={row.id}
                       onClick={() => openForEdit(row)}
                       data-state={isSelected ? "selected" : undefined}
-                      className="group cursor-pointer transition-colors hover:bg-muted/40 data-[state=selected]:bg-[#2E37FE]/5"
+                      className="group cursor-pointer transition-colors hover:bg-muted/40 data-[state=selected]:bg-brand-50"
                     >
                       <TableCell
                         className="w-[88px]"
@@ -1242,7 +1242,7 @@ export default function ContactsPage() {
                           checked={isSelected}
                           onChange={() => toggleRowSelection(row.id)}
                           aria-label={`Select ${row.fullName}`}
-                          className={`h-3.5 w-3.5 rounded border-border accent-[#2E37FE] cursor-pointer transition-opacity ${
+                          className={`h-3.5 w-3.5 rounded border-border accent-primary cursor-pointer transition-opacity ${
                             isSelected
                               ? "opacity-100"
                               : "opacity-0 group-hover:opacity-100 focus:opacity-100"
@@ -1313,7 +1313,7 @@ export default function ContactsPage() {
                               <a
                                 href={`tel:${row.phone}`}
                                 onClick={(e) => e.stopPropagation()}
-                                className="hover:text-[#2E37FE] hover:underline"
+                                className="hover:text-primary hover:underline"
                               >
                                 {row.phone}
                               </a>
@@ -1323,7 +1323,7 @@ export default function ContactsPage() {
                                 href={`tel:${row.company_phone}`}
                                 onClick={(e) => e.stopPropagation()}
                                 title="Company main line"
-                                className="inline-flex items-center gap-1 text-[11px] text-muted-foreground/80 hover:text-[#2E37FE] hover:underline"
+                                className="inline-flex items-center gap-1 text-[11px] text-muted-foreground/80 hover:text-primary hover:underline"
                               >
                                 <span className="rounded bg-muted px-1 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground/70">
                                   co
@@ -1386,7 +1386,7 @@ export default function ContactsPage() {
                         {pipelineStage ? (
                           <Badge
                             variant="outline"
-                            className="text-[11px] font-medium text-[#2E37FE] border-[#2E37FE]/30 bg-[#2E37FE]/5"
+                            className="text-[11px] font-medium text-primary border-primary/30 bg-primary/5"
                           >
                             <TrendingUp size={11} className="mr-1" />
                             {pipelineStage}
@@ -1415,7 +1415,7 @@ export default function ContactsPage() {
       {/* Unified Contact dialog: Add mode (blank) or Edit mode (pre-filled) */}
       <Dialog open={isDialogOpen} onOpenChange={(v) => { if (!v) closeDialog(); }}>
         <DialogContent className="max-w-lg max-h-[90vh] p-0 gap-0 flex flex-col">
-          <DialogHeader className="px-6 pt-6 pb-3 border-b border-border/50 shrink-0">
+          <DialogHeader className="px-6 pt-6 pb-3 border-b border-border-soft shrink-0">
             <DialogTitle>
               {editing ? "Edit" : "Add"}{" "}
               {form.owner === "leadstart" ? "LeadStart" : "Client"} Contact
@@ -1608,7 +1608,6 @@ export default function ContactsPage() {
                 </Button>
                 <Button
                   className="flex-1"
-                  style={{ background: "#2E37FE" }}
                   disabled={
                     (!form.email.trim() && !form.linkedin.trim()) ||
                     saving ||
@@ -1748,7 +1747,6 @@ export default function ContactsPage() {
                 <Button
                   disabled={!selectedCampaignId || assigning}
                   onClick={handleBulkAssignCampaign}
-                  style={{ background: "#2E37FE" }}
                 >
                   {assigning ? "Assigning..." : "Assign"}
                 </Button>
@@ -1781,7 +1779,7 @@ export default function ContactsPage() {
                   type="checkbox"
                   checked={enrichRunProfiles}
                   onChange={(e) => setEnrichRunProfiles(e.target.checked)}
-                  className="mt-0.5 h-4 w-4 rounded border-border accent-[#2E37FE] cursor-pointer"
+                  className="mt-0.5 h-4 w-4 rounded border-border accent-primary cursor-pointer"
                 />
                 <span>
                   Find emails from LinkedIn profiles (HarvestAPI)
@@ -1795,7 +1793,7 @@ export default function ContactsPage() {
                   type="checkbox"
                   checked={enrichRunDomains}
                   onChange={(e) => setEnrichRunDomains(e.target.checked)}
-                  className="mt-0.5 h-4 w-4 rounded border-border accent-[#2E37FE] cursor-pointer"
+                  className="mt-0.5 h-4 w-4 rounded border-border accent-primary cursor-pointer"
                 />
                 <span>
                   Resolve company domains
@@ -1815,7 +1813,7 @@ export default function ContactsPage() {
                   checked={enrichRunWaterfall}
                   disabled={waterfallDisabled}
                   onChange={(e) => setEnrichRunWaterfall(e.target.checked)}
-                  className="mt-0.5 h-4 w-4 rounded border-border accent-[#2E37FE] cursor-pointer"
+                  className="mt-0.5 h-4 w-4 rounded border-border accent-primary cursor-pointer"
                 />
                 <span>
                   Second pass on misses
@@ -1835,11 +1833,11 @@ export default function ContactsPage() {
                   type="checkbox"
                   checked={enrichRunActivity}
                   onChange={(e) => setEnrichRunActivity(e.target.checked)}
-                  className="mt-0.5 h-4 w-4 rounded border-border accent-[#2E37FE] cursor-pointer"
+                  className="mt-0.5 h-4 w-4 rounded border-border accent-primary cursor-pointer"
                 />
                 <span>
                   Score LinkedIn activity (last posted){" "}
-                  <span className="text-[9px] uppercase tracking-wide text-[#2E37FE]/70">add-on</span>
+                  <span className="text-[9px] uppercase tracking-wide text-primary/70">add-on</span>
                   <span className="block text-[11px] text-muted-foreground">
                     {`≈ $${ENRICH_COST_ACTIVITY.toFixed(3)} per profile`} · stamps a recency rank to prioritize outreach
                   </span>
@@ -1850,11 +1848,11 @@ export default function ContactsPage() {
                   type="checkbox"
                   checked={enrichRunVerify}
                   onChange={(e) => setEnrichRunVerify(e.target.checked)}
-                  className="mt-0.5 h-4 w-4 rounded border-border accent-[#2E37FE] cursor-pointer"
+                  className="mt-0.5 h-4 w-4 rounded border-border accent-primary cursor-pointer"
                 />
                 <span>
                   Verify emails (Million Verifier){" "}
-                  <span className="text-[9px] uppercase tracking-wide text-[#2E37FE]/70">add-on</span>
+                  <span className="text-[9px] uppercase tracking-wide text-primary/70">add-on</span>
                   <span className="block text-[11px] text-muted-foreground">
                     ≈ ${ENRICH_COST_VERIFY.toFixed(4)} per email · marks each found address
                     valid / risky / invalid in the report
@@ -1866,11 +1864,11 @@ export default function ContactsPage() {
                   type="checkbox"
                   checked={enrichRunNaming}
                   onChange={(e) => setEnrichRunNaming(e.target.checked)}
-                  className="mt-0.5 h-4 w-4 rounded border-border accent-[#2E37FE] cursor-pointer"
+                  className="mt-0.5 h-4 w-4 rounded border-border accent-primary cursor-pointer"
                 />
                 <span>
                   Find owner names (decision-maker){" "}
-                  <span className="text-[9px] uppercase tracking-wide text-[#2E37FE]/70">add-on</span>
+                  <span className="text-[9px] uppercase tracking-wide text-primary/70">add-on</span>
                   <span className="block text-[11px] text-muted-foreground">
                     {`≈ $${NAMING_COST_USD.toFixed(3)} per business`} · for name-less company leads (e.g. Google Maps):
                     finds the owner&apos;s name &amp; title, then builds their personal email
@@ -1882,11 +1880,11 @@ export default function ContactsPage() {
                   type="checkbox"
                   checked={enrichIncludeCatchAll}
                   onChange={(e) => setEnrichIncludeCatchAll(e.target.checked)}
-                  className="mt-0.5 h-4 w-4 rounded border-border accent-[#2E37FE] cursor-pointer"
+                  className="mt-0.5 h-4 w-4 rounded border-border accent-primary cursor-pointer"
                 />
                 <span>
                   Include catch-all guesses{" "}
-                  <span className="text-[9px] uppercase tracking-wide text-[#2E37FE]/70">add-on</span>
+                  <span className="text-[9px] uppercase tracking-wide text-primary/70">add-on</span>
                   <span className="block text-[11px] text-muted-foreground">
                     no extra cost · on domains that accept every address, keep the best
                     pattern guess (flagged Catch-all, confidence 40) instead of discarding
@@ -1899,11 +1897,11 @@ export default function ContactsPage() {
                   type="checkbox"
                   checked={enrichValidateCatchAll}
                   onChange={(e) => setEnrichValidateCatchAll(e.target.checked)}
-                  className="mt-0.5 h-4 w-4 rounded border-border accent-[#2E37FE] cursor-pointer"
+                  className="mt-0.5 h-4 w-4 rounded border-border accent-primary cursor-pointer"
                 />
                 <span>
                   Validate catch-all emails{" "}
-                  <span className="text-[9px] uppercase tracking-wide text-[#2E37FE]/70">add-on</span>
+                  <span className="text-[9px] uppercase tracking-wide text-primary/70">add-on</span>
                   <span className="block text-[11px] text-muted-foreground">
                     {`~$${FINDYMAIL_CATCHALL_COST_USD.toFixed(3)} per hit`} · recover genuinely deliverable emails on catch-all domains via
                     Findymail (charged only when one is found). Needs a Findymail key.
@@ -1915,11 +1913,11 @@ export default function ContactsPage() {
                   type="checkbox"
                   checked={enrichCompanyInbox}
                   onChange={(e) => setEnrichCompanyInbox(e.target.checked)}
-                  className="mt-0.5 h-4 w-4 rounded border-border accent-[#2E37FE] cursor-pointer"
+                  className="mt-0.5 h-4 w-4 rounded border-border accent-primary cursor-pointer"
                 />
                 <span>
                   Company inbox fallback{" "}
-                  <span className="text-[9px] uppercase tracking-wide text-[#2E37FE]/70">add-on</span>
+                  <span className="text-[9px] uppercase tracking-wide text-primary/70">add-on</span>
                   <span className="block text-[11px] text-muted-foreground">
                     {`~$${estimateScrapeCost(1).toFixed(3)} per company · `}when no personal email turns up,
                     use the company&apos;s general inbox (info@, contact@) from its website instead,
@@ -1949,7 +1947,6 @@ export default function ContactsPage() {
                 Cancel
               </Button>
               <Button
-                style={{ background: "#2E37FE" }}
                 disabled={
                   enrichStarting ||
                   (!enrichRunProfiles &&

@@ -224,7 +224,7 @@ export function CrmPullPanel({ campaignId }: { campaignId: string }) {
         type="button"
         onClick={() => setOpen(true)}
         aria-expanded={false}
-        className="inline-flex items-center gap-2 rounded-lg border border-border/60 bg-background px-3 py-2 text-sm font-medium text-secondary-foreground transition-colors hover:border-[#2E37FE]/50"
+        className="inline-flex items-center gap-2 rounded-lg border border-border-soft bg-background px-3 py-2 text-sm font-medium text-secondary-foreground transition-colors hover:border-primary/50"
       >
         <Users size={15} /> Add from existing contacts
         <ChevronDown size={13} className="text-muted-foreground" />
@@ -250,7 +250,7 @@ export function CrmPullPanel({ campaignId }: { campaignId: string }) {
 
   if (clientAssigned === false) {
     return (
-      <div className="space-y-3 rounded-lg border border-border/60 p-4">
+      <div className="space-y-3 rounded-lg border border-border-soft p-4">
         {header}
         <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
           <AlertCircle size={16} className="mt-0.5 shrink-0 text-amber-500" />
@@ -263,7 +263,7 @@ export function CrmPullPanel({ campaignId }: { campaignId: string }) {
   }
 
   return (
-    <div className="space-y-3 rounded-lg border border-border/60 p-4">
+    <div className="space-y-3 rounded-lg border border-border-soft p-4">
       {header}
       <p className="text-xs text-muted-foreground">
         Pull already-imported or enriched contacts into this campaign. They keep their
@@ -281,7 +281,7 @@ export function CrmPullPanel({ campaignId }: { campaignId: string }) {
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && search(q, tag)}
             placeholder="Search name, email, company…"
-            className="w-full rounded-md border border-border/60 bg-background py-1.5 pl-7 pr-2 text-xs"
+            className="w-full rounded-md border border-border-soft bg-background py-1.5 pl-7 pr-2 text-xs"
           />
         </div>
         <input
@@ -290,13 +290,13 @@ export function CrmPullPanel({ campaignId }: { campaignId: string }) {
           onChange={(e) => setTag(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && search(q, tag)}
           placeholder="Filter by tag"
-          className="w-36 rounded-md border border-border/60 bg-background px-2 py-1.5 text-xs"
+          className="w-36 rounded-md border border-border-soft bg-background px-2 py-1.5 text-xs"
         />
         <button
           type="button"
           onClick={() => search(q, tag)}
           disabled={loading}
-          className="rounded-md border border-border/60 px-3 py-1.5 text-xs font-medium hover:bg-muted/50"
+          className="rounded-md border border-border-soft px-3 py-1.5 text-xs font-medium hover:bg-muted/50"
         >
           {loading ? <Loader2 size={13} className="animate-spin" /> : "Search"}
         </button>
@@ -310,7 +310,7 @@ export function CrmPullPanel({ campaignId }: { campaignId: string }) {
 
       {/* Results */}
       {candidates.length > 0 ? (
-        <div className="overflow-hidden rounded-md border border-border/60">
+        <div className="overflow-hidden rounded-md border border-border-soft">
           <table className="w-full text-xs">
             <thead className="bg-muted/20">
               <tr>
@@ -333,7 +333,7 @@ export function CrmPullPanel({ campaignId }: { campaignId: string }) {
               {candidates.map((c) => (
                 <tr
                   key={c.id}
-                  className={`border-t border-border/40 ${c.enrolled ? "opacity-60" : "cursor-pointer hover:bg-muted/20"}`}
+                  className={`border-t border-border-soft ${c.enrolled ? "opacity-60" : "cursor-pointer hover:bg-muted/20"}`}
                   onClick={() => !c.enrolled && toggle(c.id)}
                 >
                   <td className="px-2 py-1.5">
@@ -422,8 +422,7 @@ export function CrmPullPanel({ campaignId }: { campaignId: string }) {
           type="button"
           onClick={enroll}
           disabled={enrolling || selected.size === 0}
-          className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
-          style={{ background: "#2E37FE" }}
+          className="inline-flex cursor-pointer items-center gap-1.5 rounded-full bg-primary bg-(image:--tex-brand) px-3 py-1.5 text-xs font-semibold text-white hover:brightness-106 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {enrolling ? (
             <>

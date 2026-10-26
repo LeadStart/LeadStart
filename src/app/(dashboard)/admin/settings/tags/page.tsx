@@ -29,7 +29,7 @@ const keyOf = (t: MailboxTagSummary) => t.name.toLowerCase();
 
 function TagChip({ name }: { name: string }) {
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-[#2E37FE]/10 px-2.5 py-1 text-sm font-medium text-[#2E37FE]">
+    <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-sm font-medium text-primary">
       {name}
     </span>
   );
@@ -201,9 +201,9 @@ export default function TagsPage() {
       )}
 
       {/* Add a tag */}
-      <Card className="border-border/50 shadow-sm">
+      <Card>
         <CardHeader className="flex flex-row items-center gap-2 pb-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
             <Plus size={16} className="text-white" />
           </div>
           <div>
@@ -228,7 +228,7 @@ export default function TagsPage() {
                 placeholder="e.g. Agency, Client A warm pool"
               />
             </div>
-            <Button type="submit" disabled={adding || !newTag.trim()} style={{ background: "#2E37FE" }}>
+            <Button type="submit" disabled={adding || !newTag.trim()}>
               {adding ? "Adding..." : "Add tag"}
             </Button>
           </form>
@@ -236,9 +236,9 @@ export default function TagsPage() {
       </Card>
 
       {/* Tag list */}
-      <Card className="border-border/50 shadow-sm">
+      <Card>
         <CardHeader className="flex flex-row items-center gap-2 pb-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E37FE]">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
             <Tags size={16} className="text-white" />
           </div>
           <CardTitle className="text-base">
@@ -261,7 +261,7 @@ export default function TagsPage() {
                 return (
                   <div
                     key={k}
-                    className="rounded-xl border border-border/50 p-3 transition-colors hover:bg-muted/30"
+                    className="rounded-xl border border-border-soft p-3 transition-colors hover:bg-muted/30"
                   >
                     {isEditing ? (
                       /* Rename mode */
@@ -282,7 +282,6 @@ export default function TagsPage() {
                           onClick={() => handleRename(t)}
                           disabled={savingEdit}
                           className="h-8 text-xs"
-                          style={{ background: "#2E37FE" }}
                         >
                           <Check size={12} className="mr-1" />
                           {savingEdit ? "Saving..." : "Save"}

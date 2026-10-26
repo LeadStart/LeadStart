@@ -65,7 +65,7 @@ export function FeedbackDonut({ feedback }: FeedbackDonutProps) {
                 if (!payload?.length) return null;
                 const d = payload[0].payload;
                 return (
-                  <div className="rounded-lg border bg-background px-3 py-2 shadow-md">
+                  <div className="rounded-xl border border-border-soft bg-popover px-3 py-2 shadow-pop">
                     <p className="text-sm font-medium">{d.name}</p>
                     <p className="text-xs text-muted-foreground">
                       {d.value} lead{d.value !== 1 ? "s" : ""} ({d.pct}%)

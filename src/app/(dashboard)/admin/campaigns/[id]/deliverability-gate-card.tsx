@@ -81,7 +81,7 @@ export function DeliverabilityGateCard({
   }
 
   return (
-    <Card className="border-border/50 shadow-sm">
+    <Card>
       <CardHeader className="flex flex-row items-start gap-2 pb-3">
         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#7c3aed]">
           <ShieldCheck size={16} className="text-white" />
@@ -110,19 +110,19 @@ export function DeliverabilityGateCard({
                 onClick={() => choose(opt.value)}
                 className={`w-full rounded-lg border p-3 text-left transition-colors disabled:cursor-not-allowed ${
                   active
-                    ? "border-[#2E37FE] bg-[#2E37FE]/5 ring-1 ring-[#2E37FE]/30"
-                    : "border-border/60 hover:border-border"
+                    ? "border-primary bg-primary/5 ring-1 ring-primary/30"
+                    : "border-border-soft hover:border-border"
                 }`}
               >
                 <span className="flex items-center gap-2">
                   <span
                     className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
-                      active ? "border-[#2E37FE]" : "border-muted-foreground/40"
+                      active ? "border-primary" : "border-muted-foreground/40"
                     }`}
                   >
-                    {active && <span className="h-2 w-2 rounded-full bg-[#2E37FE]" />}
+                    {active && <span className="h-2 w-2 rounded-full bg-primary" />}
                   </span>
-                  <span className="text-sm font-semibold text-[#0f172a]">{opt.title}</span>
+                  <span className="text-sm font-semibold text-foreground">{opt.title}</span>
                 </span>
                 <span className="mt-1 block pl-6 text-[11px] leading-relaxed text-muted-foreground">
                   {opt.desc}
