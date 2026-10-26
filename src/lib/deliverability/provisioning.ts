@@ -46,6 +46,46 @@ export const PROVISIONING_STEP_LABELS: Record<ProvisioningStepId, string> = {
  *  that adds an inbox: Workspace provisioning and "Connect an existing inbox". */
 export const MAX_INBOXES_PER_DOMAIN = 3;
 
+/** Longest mailbox name LeadStart creates (Google allows 64). */
+export const MAX_LOCAL_PART_LENGTH = 40;
+
+/** A typed mailbox name as it is created: trimmed and lowercased (Google
+ *  usernames ignore case). Nothing else changes, so the address the owner
+ *  typed is the address that gets made. */
+export function normalizeLocalPart(raw: string | null | undefined): string {
+  return (raw ?? "").trim().toLowerCase();
+}
+
+/**
+ * Why a normalised mailbox name can't be a Google Workspace username, or null
+ * if it can. Google's rules (Admin Help, "Name guidelines for users and
+ * groups"): letters, numbers, dashes, underscores, apostrophes and periods; no
+ * period first or last, never two in a row. LeadStart also leaves apostrophes
+ * out and stops at MAX_LOCAL_PART_LENGTH.
+ */
+export function localPartProblem(local: string): string | null {
+  if (!local) return "Add an address.";
+  if (local.length > MAX_LOCAL_PART_LENGTH) return `Use ${MAX_LOCAL_PART_LENGTH} characters or fewer.`;
+  if (!/^[a-z0-9._-]+$/.test(local)) return "Use only letters, numbers, dots, dashes and underscores.";
+  if (local.startsWith(".") || local.endsWith(".")) return "An address can't start or end with a dot.";
+  if (local.includes("..")) return "An address can't have two dots in a row.";
+  return null;
+}
+
+/** The mailbox names that appear more than once in a list, normalised. Every
+ *  inbox needs its own address: a repeat is refused, never quietly dropped. */
+export function duplicateLocalParts(locals: string[]): string[] {
+  const seen = new Set<string>();
+  const dupes = new Set<string>();
+  for (const raw of locals) {
+    const local = normalizeLocalPart(raw);
+    if (!local) continue;
+    if (seen.has(local)) dupes.add(local);
+    seen.add(local);
+  }
+  return [...dupes];
+}
+
 /** The steps that set up the DOMAIN itself, as opposed to its inboxes. */
 export const DOMAIN_SETUP_STEPS: ProvisioningStepId[] = [
   "dns_records",

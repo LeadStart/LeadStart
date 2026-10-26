@@ -31,9 +31,12 @@ import { gmailTierRecords } from "@/lib/registrar/dns";
 import { checkDomainAuth } from "@/lib/deliverability/check";
 import {
   MAX_INBOXES_PER_DOMAIN,
+  duplicateLocalParts,
   inboxSetupEligibility,
   initAddInboxesState,
   initProvisioningState,
+  localPartProblem,
+  normalizeLocalPart,
 } from "@/lib/deliverability/provisioning";
 import { advanceProvisioning } from "@/lib/deliverability/provisioning-runner";
 import type { SendingDomain } from "@/types/app";
@@ -180,21 +183,32 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
 
   const body = (await req.json().catch(() => null)) as WorkspaceBody | null;
 
-  // Validate the inbox specs: 1 to MAX_INBOXES_PER_DOMAIN users, valid local
-  // parts, deduped.
+  // Validate the inbox specs: 1 to MAX_INBOXES_PER_DOMAIN users, each a valid
+  // Google username, no address twice. A repeat is refused, never skipped: the
+  // owner asked for that many inboxes.
   const rawUsers = Array.isArray(body?.users) ? body!.users : [];
-  const seen = new Set<string>();
+  const dupes = duplicateLocalParts(rawUsers.map((u) => u?.local_part ?? ""));
+  if (dupes.length > 0) {
+    const list = dupes.map((d) => `${d}@`).join(", ");
+    return NextResponse.json(
+      {
+        error:
+          `${list} ${dupes.length === 1 ? "is" : "are"} in the list more than once. ` +
+          `Each inbox needs its own address.`,
+      },
+      { status: 400 },
+    );
+  }
   const users: { local_part: string; display_name: string; given_name?: string; family_name?: string }[] = [];
   for (const u of rawUsers) {
-    const local = (u?.local_part ?? "").trim().toLowerCase();
-    if (!/^[a-z0-9._-]{1,40}$/.test(local)) {
+    const local = normalizeLocalPart(u?.local_part);
+    const problem = localPartProblem(local);
+    if (problem) {
       return NextResponse.json(
-        { error: `Invalid mailbox name "${u?.local_part ?? ""}". Use letters, numbers, dot, dash, underscore.` },
+        { error: `Mailbox name "${u?.local_part ?? ""}": ${problem}` },
         { status: 400 },
       );
     }
-    if (seen.has(local)) continue;
-    seen.add(local);
     const given = (u?.given_name ?? "").trim();
     const family = (u?.family_name ?? "").trim();
     const display = (u?.display_name ?? "").trim() || [given, family].filter(Boolean).join(" ") || local;

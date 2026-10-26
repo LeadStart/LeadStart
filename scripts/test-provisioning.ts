@@ -17,6 +17,10 @@ import {
   allStepsComplete,
   splitDisplayName,
   PROVISIONING_STEP_ORDER,
+  MAX_LOCAL_PART_LENGTH,
+  normalizeLocalPart,
+  localPartProblem,
+  duplicateLocalParts,
 } from "../src/lib/deliverability/provisioning.ts";
 import { advanceProvisioning } from "../src/lib/deliverability/provisioning-runner.ts";
 import { GooglePermanentError } from "../src/lib/google/auth.ts";
@@ -64,6 +68,26 @@ eq(splitDisplayName("Jane Doe").givenName, "Jane", "given name");
 eq(splitDisplayName("Jane Doe").familyName, "Doe", "family name");
 eq(splitDisplayName("Cher").familyName, "-", "single token → placeholder family");
 eq(splitDisplayName("Mary Jane Watson").givenName, "Mary Jane", "split on the LAST space");
+
+console.log("mailbox names: normalize, Google's rules, repeats");
+eq(normalizeLocalPart("  Daniel.T "), "daniel.t", "trimmed + lowercased, dots kept");
+eq(normalizeLocalPart(undefined), "", "missing → empty");
+eq(localPartProblem("daniel"), null, "plain name ok");
+eq(localPartProblem("daniel.tuccillo"), null, "dot inside ok");
+eq(localPartProblem("d_t-1"), null, "underscore, dash, digit ok");
+eq(localPartProblem(""), "Add an address.", "empty refused");
+ok(localPartProblem("daniel.") !== null, "trailing dot refused");
+ok(localPartProblem(".daniel") !== null, "leading dot refused");
+ok(localPartProblem("dan..t") !== null, "two dots in a row refused");
+ok(localPartProblem("daniel t") !== null, "space refused, not stripped");
+ok(localPartProblem("dan+1") !== null, "plus refused");
+eq(localPartProblem("a".repeat(MAX_LOCAL_PART_LENGTH)), null, "max length ok");
+ok(localPartProblem("a".repeat(MAX_LOCAL_PART_LENGTH + 1)) !== null, "over max length refused");
+eq(duplicateLocalParts(["daniel", "danielt", "danieltuccillo"]).length, 0, "three different names: no repeats");
+eq(duplicateLocalParts(["daniel", "danielt", "Daniel"]).join(), "daniel", "repeat found across case");
+eq(duplicateLocalParts(["daniel", " daniel ", "daniel"]).join(), "daniel", "a name three times listed once");
+eq(duplicateLocalParts(["daniel.t", "danielt"]).length, 0, "daniel.t and danielt are different addresses");
+eq(duplicateLocalParts(["", ""]).length, 0, "blank rows aren't repeats");
 
 console.log("markStep + ordering");
 {

@@ -37,6 +37,8 @@ import { appUrl } from "@/lib/api-url";
 import {
   MAX_INBOXES_PER_DOMAIN,
   inboxSetupEligibility,
+  localPartProblem,
+  normalizeLocalPart,
   type InboxSetupEligibility,
 } from "@/lib/deliverability/provisioning";
 import { GOOGLE_SEAT_USD_PER_MONTH } from "@/lib/deliverability/costs";
@@ -61,6 +63,8 @@ interface InboxSpec {
   last: string;
   local: string;
   touched: boolean;
+  /** The address box has been left once, so its format problems show. */
+  checked: boolean;
 }
 interface Quote {
   registrar: RegistrarId;
@@ -162,8 +166,10 @@ export function AddMailboxWizard({
 
   // Step 3: inboxes
   const [inboxes, setInboxes] = useState<InboxSpec[]>([
-    { first: "", last: "", local: "", touched: false },
+    { first: "", last: "", local: "", touched: false, checked: false },
   ]);
+  // Next was pressed on the Inboxes step: every row's problems show.
+  const [inboxesTried, setInboxesTried] = useState(false);
 
   // Step 5: result
   const [result, setResult] = useState<KickoffResult | null>(null);
@@ -235,7 +241,8 @@ export function AddMailboxWizard({
     setQuote(null);
     setBuyRegistrar(null);
     setForwardTo("");
-    setInboxes([{ first: "", last: "", local: "", touched: false }]);
+    setInboxes([{ first: "", last: "", local: "", touched: false, checked: false }]);
+    setInboxesTried(false);
     setResult(null);
     setCxEmail("");
     setCxName("");
@@ -295,7 +302,30 @@ export function AddMailboxWizard({
   const registrarMissingKey = targetRegistrar !== "manual" && !registrarConnected(targetRegistrar);
   // URL forwarding is Porkbun-only (Spaceship has no forwarding API).
   const forwardingSupported = targetRegistrar === "porkbun" && registrarConnected("porkbun");
-  const namedInboxes = inboxes.filter((i) => slug(i.local));
+  // The rows in use: anything typed in them. A row with a name but no address
+  // is flagged below, never quietly left out.
+  const inUse = (ib: InboxSpec) => !!(ib.first.trim() || ib.last.trim() || ib.local.trim());
+  const namedInboxes = inboxes.filter(inUse);
+  // Each row's problem, or null. Two rows on one address show at once; a bad
+  // format shows once its box is left or Next is pressed. Either blocks Next.
+  const inboxProblems = inboxes.map((ib, i) => {
+    if (!inUse(ib)) return null;
+    const local = normalizeLocalPart(ib.local);
+    const twin = local ? inboxes.findIndex((o, j) => j !== i && normalizeLocalPart(o.local) === local) : -1;
+    if (twin >= 0) {
+      const [a, b] = [i, twin].sort((x, y) => x - y);
+      return {
+        message: `Inbox ${twin + 1} has this address too. Each inbox needs its own.`,
+        summary: `Inboxes ${a + 1} and ${b + 1} are both ${local}@${targetDomainName}. Each inbox needs its own address.`,
+        live: true,
+      };
+    }
+    const bad = localPartProblem(local);
+    return bad ? { message: bad, summary: `Inbox ${i + 1}: ${bad}`, live: false } : null;
+  });
+  const shownInboxProblems = inboxProblems.map((p, i) =>
+    p && (p.live || inboxes[i].checked || inboxesTried) ? p.message : null,
+  );
 
   // ── step 1 gating ──
   const step1Ready =
@@ -320,6 +350,15 @@ export function AddMailboxWizard({
   // so a domain that can't take inboxes there fails before any naming.
   async function goNext() {
     setErr(null);
+    // Every inbox needs a valid address of its own before Review.
+    if (door === "inbox" && step === 3) {
+      setInboxesTried(true);
+      const bad = inboxProblems.findIndex(Boolean);
+      if (bad >= 0) {
+        setErr(inboxProblems[bad]!.summary);
+        return;
+      }
+    }
     // Switching to a domain that already has inboxes can leave more names than
     // it has room for: stop here rather than fail at Create.
     if (door === "inbox" && step === 3 && namedInboxes.length > inboxSlots) {
@@ -352,6 +391,7 @@ export function AddMailboxWizard({
   }
 
   function editInbox(i: number, key: "first" | "last" | "local", v: string) {
+    setErr(null);
     setInboxes((prev) => {
       const next = prev.map((x) => ({ ...x }));
       next[i][key] = v;
@@ -363,11 +403,16 @@ export function AddMailboxWizard({
   function addInbox() {
     // The hard cap counts the inboxes the domain already has.
     setInboxes((prev) =>
-      prev.length >= inboxSlots ? prev : [...prev, { first: "", last: "", local: "", touched: false }],
+      prev.length >= inboxSlots ? prev : [...prev, { first: "", last: "", local: "", touched: false, checked: false }],
     );
   }
   function removeInbox(i: number) {
+    setErr(null);
     setInboxes((prev) => prev.filter((_, j) => j !== i));
+  }
+  // The address box was left: its format problems show from now on.
+  function checkInbox(i: number) {
+    setInboxes((prev) => (prev[i]?.checked ? prev : prev.map((x, j) => (j === i ? { ...x, checked: true } : x))));
   }
 
   async function runQuote() {
@@ -433,6 +478,11 @@ export function AddMailboxWizard({
       setErr("Name at least one inbox.");
       return;
     }
+    const bad = inboxProblems.findIndex(Boolean);
+    if (bad >= 0) {
+      setErr(inboxProblems[bad]!.summary);
+      return;
+    }
     setBusy(true);
     setErr(null);
     try {
@@ -475,7 +525,7 @@ export function AddMailboxWizard({
       }
 
       const users = namedInboxes.map((i) => ({
-        local_part: slug(i.local),
+        local_part: normalizeLocalPart(i.local),
         given_name: i.first.trim(),
         family_name: i.last.trim(),
       }));
@@ -711,7 +761,9 @@ export function AddMailboxWizard({
               inboxes={inboxes}
               domain={targetDomainName || "your-domain.com"}
               existingCount={existingInboxCount}
+              problems={shownInboxProblems}
               editInbox={editInbox}
+              checkInbox={checkInbox}
               addInbox={addInbox}
               removeInbox={removeInbox}
             />
@@ -1251,7 +1303,10 @@ function InboxesStep(props: {
   domain: string;
   /** Inboxes the domain already has (adding to an existing domain), else 0. */
   existingCount: number;
+  /** Each row's problem to show (a repeated or invalid address), else null. */
+  problems: (string | null)[];
   editInbox: (i: number, key: "first" | "last" | "local", v: string) => void;
+  checkInbox: (i: number) => void;
   addInbox: () => void;
   removeInbox: (i: number) => void;
 }) {
@@ -1263,8 +1318,8 @@ function InboxesStep(props: {
       <h3 className="text-[15px] font-semibold">Name the inboxes</h3>
       <p className="mb-3.5 mt-1 text-xs text-muted-foreground">
         Google creates each user with a real first &amp; last name: that&rsquo;s the From name recipients
-        see. The mailbox handle is auto-suggested from the first name; edit it freely. Avoid role addresses
-        like <span className="font-mono">info@</span>.
+        see. The mailbox handle is auto-suggested from the first name; edit it freely, and give each inbox its
+        own. Avoid role addresses like <span className="font-mono">info@</span>.
         {props.existingCount > 0 && (
           <>
             {" "}
@@ -1300,13 +1355,20 @@ function InboxesStep(props: {
             <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">Mailbox address</Label>
             <div className="mt-1 flex items-center gap-2">
               <Input
-                className="flex-1 font-mono text-sm"
+                className="flex-1 font-mono text-sm lowercase"
                 placeholder="jane"
                 value={ib.local}
+                aria-invalid={props.problems[i] ? true : undefined}
                 onChange={(e) => props.editInbox(i, "local", e.target.value)}
+                onBlur={() => props.checkInbox(i)}
               />
               <span className="whitespace-nowrap font-mono text-xs text-muted-foreground">@{props.domain}</span>
             </div>
+            {props.problems[i] && (
+              <p className="mt-1 text-[11.5px] text-destructive" role="alert">
+                {props.problems[i]}
+              </p>
+            )}
           </div>
         </div>
       ))}
@@ -1362,10 +1424,16 @@ function ReviewStep(props: {
           <SumRow k="DNS / registrar" v={regLabel} />
         )}
         <SumRow k="Workspace" v={props.workspaceLabel} />
-        <SumRow
-          k={props.addingToExisting ? "New inboxes" : "Inboxes"}
-          v={`${seats} · ${props.inboxes.map((i) => `${i.first} ${i.last}`.trim() || i.local).join(", ")}`}
-        />
+        <SumRow k={props.addingToExisting ? "New inboxes" : "Inboxes"} v={inboxCount(seats)} />
+        {/* Each address exactly as it will be created, so a repeat can't hide behind one name. */}
+        {props.inboxes.map((ib, i) => (
+          <SumRow
+            key={i}
+            k={`${ib.first} ${ib.last}`.trim() || `Inbox ${i + 1}`}
+            v={`${normalizeLocalPart(ib.local)}@${props.domain}`}
+            mono
+          />
+        ))}
         <SumRow k="Est. cost" v={seatCost(seats, props.mode === "buy")} />
       </div>
 
@@ -1583,7 +1651,9 @@ function SumRow({ k, v, mono }: { k: string; v: string; mono?: boolean }) {
   return (
     <div className="flex justify-between gap-3 border-b border-border-soft px-3 py-2.5 text-[13px] last:border-b-0">
       <span className="text-muted-foreground">{k}</span>
-      <span className={`text-right font-medium ${mono ? "font-mono text-xs" : ""}`}>{v}</span>
+      <span className={`min-w-0 text-right font-medium [overflow-wrap:anywhere] ${mono ? "font-mono text-xs" : ""}`}>
+        {v}
+      </span>
     </div>
   );
 }
