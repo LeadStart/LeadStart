@@ -139,14 +139,14 @@ export default async function AdminReplyDetailPage({
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-xs">
                 <a
                   href={`mailto:${reply.lead_email}`}
-                  className="inline-flex items-center gap-1 text-primary hover:underline"
+                  className="inline-flex justify-center-safe items-center gap-1 text-primary hover:underline"
                 >
                   <Mail size={11} /> {reply.lead_email}
                 </a>
                 {reply.lead_phone_e164 && (
                   <a
                     href={telHref(reply.lead_phone_e164) ?? "#"}
-                    className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground"
+                    className="inline-flex justify-center-safe items-center gap-1 text-muted-foreground hover:text-foreground"
                   >
                     <Phone size={11} /> {reply.lead_phone_e164}
                   </a>
@@ -156,7 +156,7 @@ export default async function AdminReplyDetailPage({
                     href={reply.lead_linkedin_url}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex items-center gap-1 text-[#0077b5] hover:underline"
+                    className="inline-flex justify-center-safe items-center gap-1 text-[#0077b5] hover:underline"
                   >
                     LinkedIn <ExternalLink size={11} />
                   </a>

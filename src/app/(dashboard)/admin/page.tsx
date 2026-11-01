@@ -44,6 +44,7 @@ import type {
   BillingInvoice,
   Quote,
 } from "@/types/app";
+import { useCardPress } from "@/lib/ui/card-press";
 
 const OVERVIEW_PAGE_SIZE = 25;
 
@@ -265,6 +266,8 @@ function ClientRow({
   row: OverviewRow;
   onDelete?: () => void;
 }) {
+  // On a phone a finger that settles on a card lights it with the chosen look until it opens (lib/ui/card-press.ts).
+  const press = useCardPress();
   const href = `/admin/clients/${row.id}`;
   const dot = healthDotColor(row.riskScore);
 
@@ -272,8 +275,9 @@ function ClientRow({
     <div className="relative">
       <Link
         href={href}
+        {...press()}
         className={cn(
-          "block rounded-xl border border-border-soft bg-card shadow-card p-4 transition-colors hover:border-primary/40 hover:bg-muted/30 active:bg-muted/50",
+          "ls-press block rounded-xl border border-border-soft bg-card shadow-card p-4 transition-colors hover:border-primary/40 hover:bg-muted/30",
           onDelete && "pr-11",
         )}
       >

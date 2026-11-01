@@ -1,5 +1,6 @@
 "use client";
 
+import { Ink } from "@/components/ui/ink";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Bell, Settings, LogOut, ChevronDown, User, MessageSquare, Mail, FileText, Menu } from "lucide-react";
@@ -170,9 +171,12 @@ export function Topbar({ userEmail, role, actualRole, viewingAsClient = false, o
 
         {/* User dropdown */}
         <DropdownMenu>
-          <DropdownMenuTrigger className="flex items-center gap-2.5 rounded-full py-1 pr-1 pl-1 sm:pr-3 transition-colors hover:bg-muted aria-expanded:bg-muted outline-none cursor-pointer focus-visible:ring-3 focus-visible:ring-ring/35">
+          <DropdownMenuTrigger
+            data-tucked="the account's initials tucked into the round end (as far from the end as from the top); its name reads to the right"
+            className="flex justify-start items-center gap-2.5 rounded-full py-1 pr-1 pl-1 sm:pr-3 transition-colors hover:bg-muted aria-expanded:bg-muted outline-none cursor-pointer focus-visible:ring-3 focus-visible:ring-ring/35"
+          >
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary bg-(image:--tex-brand) text-xs font-bold text-white shrink-0">
-              {userEmail.charAt(0).toUpperCase()}
+              <Ink>{userEmail.charAt(0).toUpperCase()}</Ink>
             </div>
             <div className="hidden sm:block text-left">
               <p className="text-[13px] font-semibold text-foreground leading-none">{userEmail}</p>

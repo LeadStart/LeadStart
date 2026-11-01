@@ -29,7 +29,7 @@ function Field({ label, value, onChange, textarea, placeholder }: { label: strin
     <label className="block space-y-1">
       <span className="text-sm font-medium text-foreground">{label}</span>
       {textarea ? (
-        <textarea
+        <textarea data-kb-reveal
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}

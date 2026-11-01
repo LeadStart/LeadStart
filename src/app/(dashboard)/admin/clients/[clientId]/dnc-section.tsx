@@ -7,9 +7,10 @@
 
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Fold, foldToggle } from "@/components/ui/fold";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ChevronDown, ChevronRight, ShieldBan, Plus, Trash2, Loader2 } from "lucide-react";
+import { ChevronRight, ShieldBan, Plus, Trash2, Loader2 } from "lucide-react";
 import { appUrl } from "@/lib/api-url";
 
 interface DncEntry {
@@ -100,7 +101,7 @@ export function DncSection({
     <Card>
       <CardHeader
         className="flex flex-row items-center gap-2 pb-3 cursor-pointer select-none"
-        onClick={() => setOpen((v) => !v)}
+        {...foldToggle(open, () => setOpen((v) => !v))}
       >
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#EA4335]">
           <ShieldBan size={16} className="text-white" />
@@ -113,10 +114,10 @@ export function DncSection({
             Suppressed for {clientName}&apos;s campaigns only: never other clients.
           </p>
         </div>
-        {open ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+        <ChevronRight size={18} className={`ls-chev${open ? " is-open" : ""}`} />
       </CardHeader>
 
-      {open && (
+      <Fold open={open} className="-mt-4" inner="pt-4">
         <CardContent className="space-y-3">
           <div className="flex items-center gap-2">
             <Input
@@ -168,7 +169,7 @@ export function DncSection({
             <p className="text-xs text-muted-foreground">No suppressed contacts yet.</p>
           )}
         </CardContent>
-      )}
+      </Fold>
     </Card>
   );
 }

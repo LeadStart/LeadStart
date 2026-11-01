@@ -75,6 +75,7 @@ import {
   EnrichmentRunBanner,
   fetchActiveEnrichmentRunId,
 } from "@/components/contacts/enrichment-run-banner";
+import { useCardPress } from "@/lib/ui/card-press";
 
 const CONTACTS_PAGE_SIZE = 25;
 
@@ -287,6 +288,8 @@ function contactToForm(c: Contact): FormState {
 }
 
 export default function ContactsPage() {
+  // On a phone a finger that settles on a card lights it with the chosen look until it opens (lib/ui/card-press.ts).
+  const press = useCardPress();
   const { organizationId } = useUser();
   const { mutate: swrMutate } = useSWRConfig();
   const searchParams = useSearchParams();
@@ -1093,8 +1096,9 @@ export default function ContactsPage() {
                   <div
                     key={row.id}
                     onClick={() => openForEdit(row)}
+                    {...press()}
                     data-state={isSelected ? "selected" : undefined}
-                    className="rounded-xl border border-border-soft bg-card shadow-card p-4 cursor-pointer data-[state=selected]:border-primary/40 data-[state=selected]:bg-brand-50"
+                    className="ls-press rounded-xl border border-border-soft bg-card shadow-card p-4 cursor-pointer data-[state=selected]:border-primary/40 data-[state=selected]:bg-brand-50"
                   >
                     <div className="flex items-start gap-3">
                       <input
@@ -1141,7 +1145,7 @@ export default function ContactsPage() {
                                 rel="noopener noreferrer"
                                 onClick={(e) => e.stopPropagation()}
                                 aria-label="Open LinkedIn profile"
-                                className="inline-flex items-center gap-1 text-[#0A66C2]"
+                                className="inline-flex justify-center-safe items-center gap-1 text-[#0A66C2]"
                               >
                                 <LinkedinIcon size={13} /> LinkedIn
                               </a>
@@ -1323,7 +1327,7 @@ export default function ContactsPage() {
                                 href={`tel:${row.company_phone}`}
                                 onClick={(e) => e.stopPropagation()}
                                 title="Company main line"
-                                className="inline-flex items-center gap-1 text-[11px] text-muted-foreground/80 hover:text-primary hover:underline"
+                                className="inline-flex justify-center-safe items-center gap-1 text-[11px] text-muted-foreground/80 hover:text-primary hover:underline"
                               >
                                 <span className="rounded bg-muted px-1 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground/70">
                                   co
@@ -1505,7 +1509,7 @@ export default function ContactsPage() {
             </div>
             <div className="space-y-1">
               <Label className="text-sm font-medium">Notes</Label>
-              <Textarea
+              <Textarea data-kb-sheet
                 value={form.notes}
                 onChange={(e) => setForm({ ...form, notes: e.target.value })}
                 placeholder="Any notes about this contact..."

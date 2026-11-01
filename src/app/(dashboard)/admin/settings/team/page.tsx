@@ -1,5 +1,6 @@
 "use client";
 
+import { Ink } from "@/components/ui/ink";
 import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -241,7 +242,7 @@ export default function TeamPage() {
                     /* Edit mode */
                     <div className="flex items-center gap-3">
                       <div className="flex h-10 w-10 items-center justify-center rounded-lg text-sm font-bold text-white shrink-0 bg-primary">
-                        {(member.full_name || member.email).charAt(0).toUpperCase()}
+                        <Ink>{(member.full_name || member.email).charAt(0).toUpperCase()}</Ink>
                       </div>
                       <div className="flex items-center gap-3 flex-1">
                         <Input
@@ -284,7 +285,7 @@ export default function TeamPage() {
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <div className="flex h-10 w-10 items-center justify-center rounded-lg text-sm font-bold text-white shrink-0 bg-primary">
-                          {(member.full_name || member.email).charAt(0).toUpperCase()}
+                          <Ink>{(member.full_name || member.email).charAt(0).toUpperCase()}</Ink>
                         </div>
                         <div>
                           <p className="font-medium">
@@ -319,7 +320,7 @@ export default function TeamPage() {
                               handleToggleNotifications(member.id, !member.receives_contact_notifications)
                             }
                             disabled={notifyTogglingId === member.id}
-                            className={`flex items-center gap-1 px-2 h-6 rounded-md text-xs font-medium transition-colors ${
+                            className={`flex justify-center-safe items-center gap-1 px-2 h-6 rounded-md text-xs font-medium transition-colors ${
                               member.receives_contact_notifications
                                 ? "bg-primary/15 text-primary hover:bg-primary/25"
                                 : "bg-muted text-muted-foreground hover:bg-muted/80"

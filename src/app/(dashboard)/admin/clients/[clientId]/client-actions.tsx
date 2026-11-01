@@ -274,7 +274,7 @@ export function ClientActions({
     <div className="space-y-2">
       <button
         onClick={() => setEditing(true)}
-        className="flex items-center gap-2 text-sm text-foreground/50 hover:text-foreground transition-colors"
+        className="flex justify-center-safe items-center gap-2 text-sm text-foreground/50 hover:text-foreground transition-colors"
       >
         <Mail size={14} />
         <span>Add client email to send portal invite</span>

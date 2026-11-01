@@ -12,6 +12,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Check, ChevronDown, Loader2, Lock, Plus, Search, X } from "lucide-react";
+import { Grown } from "@/components/ui/grown";
 
 export interface PickerMailbox {
   id: string;
@@ -196,7 +197,7 @@ export function MailboxPoolPicker({
           disabled={disabled}
           onClick={() => setOpen((v) => !v)}
           aria-expanded={open}
-          className="inline-flex items-center gap-1.5 rounded-md border border-border-soft bg-background px-2.5 py-1.5 text-xs font-medium text-secondary-foreground transition-colors hover:border-primary/50 disabled:cursor-not-allowed disabled:opacity-60"
+          className="inline-flex justify-center-safe items-center gap-1.5 rounded-md border border-border-soft bg-background px-2.5 py-1.5 text-xs font-medium text-secondary-foreground transition-colors hover:border-primary/50 disabled:cursor-not-allowed disabled:opacity-60"
         >
           <Plus size={13} /> Add inboxes or tags
           {selectedCount > 0 && (
@@ -208,45 +209,47 @@ export function MailboxPoolPicker({
           <ChevronDown size={12} className={`transition-transform ${open ? "rotate-180" : ""}`} />
         </button>
 
-        {open && (
-          <div className="absolute left-0 z-20 mt-1 w-80 max-w-[calc(100vw-2rem)] ls-menu-in overflow-hidden rounded-2xl border border-border bg-popover shadow-pop">
-            <div className="flex items-center gap-2 border-b border-border-soft px-2.5 py-2">
-              <Search size={13} className="shrink-0 text-muted-foreground" />
-              <input
-                ref={inputRef}
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder="Search tags or inboxes…"
-                className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground/60"
-              />
-            </div>
-            <div className="max-h-72 overflow-y-auto p-1">
-              {rows.length === 0 ? (
-                <p className="px-2 py-3 text-center text-xs text-muted-foreground">No matches.</p>
-              ) : (
-                rows.map((row) =>
-                  row.kind === "tag" ? (
-                    <TagOption
-                      key={`t:${row.key}`}
-                      row={row}
-                      allSelected={row.addableIds.length > 0 && row.addableIds.every((id) => selected.has(id))}
-                      someSelected={row.addableIds.some((id) => selected.has(id))}
-                      onClick={() => toggleTag(row)}
-                    />
-                  ) : (
-                    <MbOption
-                      key={`m:${row.key}`}
-                      mb={row.mb}
-                      checked={selected.has(row.mb.id)}
-                      inUse={row.inUse}
-                      onClick={() => toggleMb(row.mb)}
-                    />
-                  ),
-                )
-              )}
-            </div>
+        <Grown
+          open={open}
+          origin="top left"
+          className="absolute left-0 z-20 mt-1 w-80 max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-border bg-popover shadow-pop"
+        >
+          <div className="flex items-center gap-2 border-b border-border-soft px-2.5 py-2">
+            <Search size={13} className="shrink-0 text-muted-foreground" />
+            <input
+              ref={inputRef}
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Search tags or inboxes…"
+              className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground/60"
+            />
           </div>
-        )}
+          <div className="max-h-72 overflow-y-auto overscroll-contain touch-pan-y p-1">
+            {rows.length === 0 ? (
+              <p className="px-2 py-3 text-center text-xs text-muted-foreground">No matches.</p>
+            ) : (
+              rows.map((row) =>
+                row.kind === "tag" ? (
+                  <TagOption
+                    key={`t:${row.key}`}
+                    row={row}
+                    allSelected={row.addableIds.length > 0 && row.addableIds.every((id) => selected.has(id))}
+                    someSelected={row.addableIds.some((id) => selected.has(id))}
+                    onClick={() => toggleTag(row)}
+                  />
+                ) : (
+                  <MbOption
+                    key={`m:${row.key}`}
+                    mb={row.mb}
+                    checked={selected.has(row.mb.id)}
+                    inUse={row.inUse}
+                    onClick={() => toggleMb(row.mb)}
+                  />
+                ),
+              )
+            )}
+          </div>
+        </Grown>
       </div>
     </div>
   );

@@ -25,6 +25,7 @@ import {
   formatBody,
   urgencyColor,
 } from "@/lib/replies/ui";
+import { Fold } from "@/components/ui/fold";
 
 // Brand gradients (inline, because custom gradient classes don't reliably generate
 // under Tailwind v4, per project convention).
@@ -84,6 +85,7 @@ export default function ReplyDossierPage() {
   // Portal-reply composer state (open by default, because the hot-lead email's
   // "Reply" button lands the client here to respond).
   const [composerSubject, setComposerSubject] = useState("");
+  const [sentOpen, setSentOpen] = useState(false);
   const [composerBody, setComposerBody] = useState("");
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
@@ -333,7 +335,7 @@ export default function ReplyDossierPage() {
                     href={reply.lead_linkedin_url}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex items-center gap-1 font-semibold text-primary"
+                    className="inline-flex justify-center-safe items-center gap-1 font-semibold text-primary"
                   >
                     View profile <ExternalLink size={11} />
                   </a>
@@ -437,14 +439,21 @@ export default function ReplyDossierPage() {
                   A copy went to your inbox (BCC, so the lead only sees the mailbox they wrote to).
                 </p>
                 {reply.final_body_text && (
-                  <details className="mt-3">
-                    <summary className="text-xs text-emerald-800/80 cursor-pointer hover:text-emerald-900">
+                  <div className="mt-3">
+                    <button
+                      type="button"
+                      onClick={() => setSentOpen((v) => !v)}
+                      aria-expanded={sentOpen}
+                      className="text-xs text-emerald-800/80 cursor-pointer hover:text-emerald-900"
+                    >
                       View sent message
-                    </summary>
-                    <pre className="mt-2 text-xs text-foreground whitespace-pre-wrap font-sans bg-white/60 rounded-lg p-3 border border-emerald-200/60">
-                      {reply.final_body_text}
-                    </pre>
-                  </details>
+                    </button>
+                    <Fold open={sentOpen}>
+                      <pre className="mt-2 text-xs text-foreground whitespace-pre-wrap font-sans bg-white/60 rounded-lg p-3 border border-emerald-200/60">
+                        {reply.final_body_text}
+                      </pre>
+                    </Fold>
+                  </div>
                 )}
               </div>
             </div>
@@ -472,7 +481,7 @@ export default function ReplyDossierPage() {
               <label className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                 Message
               </label>
-              <textarea
+              <textarea data-kb-reveal
                 value={composerBody}
                 onChange={(e) => setComposerBody(e.target.value)}
                 rows={9}
@@ -495,7 +504,7 @@ export default function ReplyDossierPage() {
               <button
                 onClick={handleSend}
                 disabled={!composerBody.trim() || sending || previewing}
-                className="inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full bg-primary bg-(image:--tex-brand) px-5 py-2.5 text-sm font-semibold text-white transition-[filter] hover:brightness-106 disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex justify-center-safe shrink-0 cursor-pointer items-center gap-1.5 rounded-full bg-primary bg-(image:--tex-brand) px-5 py-2.5 text-sm font-semibold text-white transition-[filter] hover:brightness-106 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Send size={14} />
                 {sending ? "Sending…" : "Send reply"}
@@ -531,7 +540,7 @@ export default function ReplyDossierPage() {
           <p className="text-xs text-muted-foreground -mt-1">
             Jot anything you want to remember about this lead. Your LeadStart team can see these notes too.
           </p>
-          <textarea
+          <textarea data-kb-reveal
             placeholder="Add a note…"
             value={noteText}
             onChange={(e) => setNoteText(e.target.value)}
@@ -585,7 +594,7 @@ export default function ReplyDossierPage() {
               </button>
             ))}
           </div>
-          <textarea
+          <textarea data-kb-reveal
             placeholder="Notes (optional)"
             value={outcomeNotes}
             onChange={(e) => setOutcomeNotes(e.target.value)}

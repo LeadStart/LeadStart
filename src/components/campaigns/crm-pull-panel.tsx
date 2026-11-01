@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { appUrl } from "@/lib/api-url";
 import { normalizeVarKey } from "@/lib/native/tokens";
+import { Fold } from "@/components/ui/fold";
 
 interface CampaignTokens {
   standard: { token: string; key: string; fields: string[]; hasFallback: boolean }[];
@@ -217,20 +218,20 @@ export function CrmPullPanel({ campaignId }: { campaignId: string }) {
   const name = (c: Candidate) =>
     [c.first_name, c.last_name].filter(Boolean).join(" ") || "-";
 
-  // Collapsed: a single button, so the Contacts tab lands clean.
-  if (!open) {
-    return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        aria-expanded={false}
-        className="inline-flex items-center gap-2 rounded-lg border border-border-soft bg-background px-3 py-2 text-sm font-medium text-secondary-foreground transition-colors hover:border-primary/50"
-      >
-        <Users size={15} /> Add from existing contacts
-        <ChevronDown size={13} className="text-muted-foreground" />
-      </button>
-    );
-  }
+  // Collapsed: a single button, so the Contacts tab lands clean. It opens in place into the
+  // panel (one shared fold; the button is its peek, and the two share their words, so they
+  // overlap rather than dim as they swap).
+  const collapsed = (
+    <button
+      type="button"
+      onClick={() => setOpen(true)}
+      aria-expanded={false}
+      className="inline-flex items-center justify-center-safe gap-2 rounded-lg border border-border-soft bg-background px-3 py-2 text-sm font-medium text-secondary-foreground transition-colors hover:border-primary/50"
+    >
+      <Users size={15} /> Add from existing contacts
+      <ChevronDown size={13} className="ls-chev-flip text-muted-foreground" />
+    </button>
+  );
 
   // Expanded header, doubling as the collapse control; shared by both open states.
   const header = (
@@ -238,31 +239,31 @@ export function CrmPullPanel({ campaignId }: { campaignId: string }) {
       type="button"
       onClick={() => setOpen(false)}
       aria-expanded
-      className="flex w-full items-center gap-2 text-sm font-medium"
+      className="flex w-full items-center justify-start gap-2 text-sm font-medium"
     >
       <Users size={15} /> Add from existing contacts
-      <ChevronDown
-        size={13}
-        className="ml-auto rotate-180 text-muted-foreground transition-transform"
-      />
+      <ChevronDown size={13} className="ls-chev-flip is-open ml-auto text-muted-foreground" />
     </button>
   );
 
   if (clientAssigned === false) {
     return (
-      <div className="space-y-3 rounded-lg border border-border-soft p-4">
-        {header}
-        <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
-          <AlertCircle size={16} className="mt-0.5 shrink-0 text-amber-500" />
-          <p className="text-sm text-amber-800">
-            Assign a client to this campaign to pull existing contacts from the CRM.
-          </p>
+      <Fold open={open} closed={collapsed} overlap>
+        <div className="space-y-3 rounded-lg border border-border-soft p-4">
+          {header}
+          <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
+            <AlertCircle size={16} className="mt-0.5 shrink-0 text-amber-500" />
+            <p className="text-sm text-amber-800">
+              Assign a client to this campaign to pull existing contacts from the CRM.
+            </p>
+          </div>
         </div>
-      </div>
+      </Fold>
     );
   }
 
   return (
+    <Fold open={open} closed={collapsed} overlap>
     <div className="space-y-3 rounded-lg border border-border-soft p-4">
       {header}
       <p className="text-xs text-muted-foreground">
@@ -422,7 +423,7 @@ export function CrmPullPanel({ campaignId }: { campaignId: string }) {
           type="button"
           onClick={enroll}
           disabled={enrolling || selected.size === 0}
-          className="inline-flex cursor-pointer items-center gap-1.5 rounded-full bg-primary bg-(image:--tex-brand) px-3 py-1.5 text-xs font-semibold text-white hover:brightness-106 disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex justify-center-safe cursor-pointer items-center gap-1.5 rounded-full bg-primary bg-(image:--tex-brand) px-3 py-1.5 text-xs font-semibold text-white hover:brightness-106 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {enrolling ? (
             <>
@@ -436,5 +437,6 @@ export function CrmPullPanel({ campaignId }: { campaignId: string }) {
         </button>
       </div>
     </div>
+    </Fold>
   );
 }

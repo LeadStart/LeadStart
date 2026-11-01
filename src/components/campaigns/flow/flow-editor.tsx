@@ -46,7 +46,7 @@ import styles from "./flow.module.css";
 // lucide v1 dropped brand icons; inline the LinkedIn glyph (matches the mockup).
 function LinkedInGlyph({ size = 16 }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <svg width={size} height={size} viewBox="-0.075 0.25 24 24" fill="currentColor" aria-hidden="true">
       <path d="M4.98 3.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5zM3 9h4v12H3zM9 9h3.8v1.7h.05c.53-.95 1.83-1.95 3.77-1.95 4 0 4.75 2.5 4.75 5.8V21H21v-5.9c0-1.4-.03-3.2-2-3.2-2 0-2.3 1.5-2.3 3.1V21H13z" />
     </svg>
   );
@@ -431,7 +431,17 @@ export function FlowEditor({
             )}
             {n.kind === "linkedin" && <span className={styles.mchip}>Manual</span>}
           </div>
-          <Maximize2 size={14} className={styles.tExpand} />
+          <button
+            type="button"
+            className={styles.tExpand}
+            aria-label="Open in the composer"
+            onClick={(e) => {
+              e.stopPropagation();
+              setOpenId(n.id);
+            }}
+          >
+            <Maximize2 size={14} />
+          </button>
         </div>
       </div>
     );
@@ -615,7 +625,7 @@ export function FlowEditor({
           </div>
           <div className={styles.field}>
             <label className={styles.label}>Note / message (the VA sends this by hand)</label>
-            <textarea
+            <textarea data-kb-reveal
               className={styles.textarea}
               rows={4}
               value={n.body}

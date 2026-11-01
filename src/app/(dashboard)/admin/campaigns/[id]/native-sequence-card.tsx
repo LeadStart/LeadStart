@@ -5,6 +5,7 @@
 // turns every step and the send window into editable fields, persisted via
 // /api/admin/campaigns/[id]/update-sequence.
 
+import { Ink } from "@/components/ui/ink";
 import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -171,7 +172,7 @@ export function NativeSequenceCard({
                 return (
                   <li key={i} className="flex gap-3 text-sm">
                     <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-[#EA4335] px-2 text-xs font-bold text-white shrink-0">
-                      {i + 1}
+                      <Ink>{i + 1}</Ink>
                     </span>
                     <div className="min-w-0 flex-1">
                       <p className="font-medium text-foreground">{subject}</p>
@@ -300,7 +301,7 @@ export function NativeSequenceCard({
             <div key={i} className="rounded-xl border border-border-soft p-4 space-y-3">
               <div className="flex items-center gap-2">
                 <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-[#EA4335] px-2 text-xs font-bold text-white">
-                  {i + 1}
+                  <Ink>{i + 1}</Ink>
                 </span>
                 <span className="text-sm font-medium">{i === 0 ? "First email" : "Follow-up"}</span>
                 <div className="ml-auto flex items-center gap-1">
@@ -337,7 +338,7 @@ export function NativeSequenceCard({
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs">Body</Label>
-                    <Textarea
+                    <Textarea data-kb-reveal
                       rows={8}
                       placeholder="Placeholders: {{FirstName}} {{PropertyAddress}} {{SoldDate}} {{YourName}} {{Signature}}"
                       value={s.body}

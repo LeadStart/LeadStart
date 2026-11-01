@@ -1,5 +1,6 @@
 "use client";
 
+import { Ink } from "@/components/ui/ink";
 import { useEffect, useState } from "react";
 import { useSupabaseQuery } from "@/hooks/use-supabase-query";
 import { useSort } from "@/hooks/use-sort";
@@ -136,7 +137,7 @@ export default function ClientsPage() {
                 return (
                   <div key={row.id} className="rounded-xl border border-border-soft bg-card shadow-card p-4">
                     <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-lg text-xs font-bold text-white shrink-0 bg-primary">{row.name.charAt(0)}</div>
+                      <div className="flex h-9 w-9 items-center justify-center rounded-lg text-xs font-bold text-white shrink-0 bg-primary"><Ink>{row.name.charAt(0)}</Ink></div>
                       <div className="min-w-0 flex-1">
                         <Link href={`/admin/clients/${row.id}`} className="block font-medium text-foreground truncate hover:text-primary">{row.name}</Link>
                         <p className="text-xs text-muted-foreground">{row.activeCampaigns} active / {row.totalCampaigns} total campaigns</p>
@@ -152,7 +153,7 @@ export default function ClientsPage() {
                           <Trash2 size={13} /> Delete
                         </Button>
                       )}
-                      <Link href={`/admin/clients/${row.id}`} className="ml-auto flex items-center gap-1 text-sm font-medium text-primary">View <ArrowRight size={13} /></Link>
+                      <Link href={`/admin/clients/${row.id}`} className="ml-auto flex justify-center-safe items-center gap-1 text-sm font-medium text-primary">View <ArrowRight size={13} /></Link>
                     </div>
                   </div>
                 );
@@ -167,7 +168,7 @@ export default function ClientsPage() {
                   const rowStatus: ClientStatus = (row.status ?? "active") as ClientStatus;
                   return (
                     <TableRow key={row.id} href={`/admin/clients/${row.id}`} className="group">
-                      <TableCell><div className="flex items-center gap-3"><div className="flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold text-white shrink-0 bg-primary">{row.name.charAt(0)}</div><Link href={`/admin/clients/${row.id}`} className="font-medium text-foreground hover:text-primary transition-colors">{row.name}</Link></div></TableCell>
+                      <TableCell><div className="flex items-center gap-3"><div className="flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold text-white shrink-0 bg-primary"><Ink>{row.name.charAt(0)}</Ink></div><Link href={`/admin/clients/${row.id}`} className="font-medium text-foreground hover:text-primary transition-colors">{row.name}</Link></div></TableCell>
                       <TableCell><span className="text-sm"><span className="font-medium">{row.activeCampaigns}</span><span className="text-muted-foreground"> active / {row.totalCampaigns} total</span></span></TableCell>
                       <TableCell><Badge variant="secondary" className={row.userCount > 0 ? "badge-green" : "badge-amber"}>{row.userCount > 0 ? `${row.userCount} user${row.userCount !== 1 ? "s" : ""}` : "Not invited"}</Badge></TableCell>
                       <TableCell>
@@ -195,7 +196,7 @@ export default function ClientsPage() {
                               <Trash2 size={13} /> Delete
                             </Button>
                           )}
-                          <Link href={`/admin/clients/${row.id}`} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-primary transition-colors">
+                          <Link href={`/admin/clients/${row.id}`} className="flex justify-center-safe items-center gap-1 text-sm text-muted-foreground hover:text-primary transition-colors">
                             View<ArrowRight size={13} className="opacity-0 group-hover:opacity-100 transition-opacity" />
                           </Link>
                         </div>

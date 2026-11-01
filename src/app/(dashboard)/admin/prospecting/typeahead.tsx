@@ -9,6 +9,7 @@ import {
   Tag,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { Grown } from "@/components/ui/grown";
 
 export interface TypeaheadResult {
   id: string;
@@ -171,57 +172,59 @@ export function Typeahead({
         )}
       </div>
 
-      {isOpen && results.length > 0 && (
-        <div className="absolute left-0 right-0 top-full mt-1 z-30 max-h-72 ls-menu-in overflow-y-auto rounded-2xl border border-border bg-popover shadow-pop">
-          {results.map((item, i) => {
-            const badge =
-              variant === "location" && item.search_type
-                ? TYPE_BADGES[item.search_type]
-                : null;
-            const BadgeIcon = badge?.Icon;
-            const active = i === activeIndex;
-            return (
-              <button
-                key={`${item.id}-${item.search_type ?? "cat"}-${i}`}
-                type="button"
-                onMouseDown={(e) => {
-                  // mousedown so blur on input doesn't fire first and tear
-                  // the dropdown down before the click registers.
-                  e.preventDefault();
-                  handleSelect(item);
-                }}
-                onMouseEnter={() => setActiveIndex(i)}
-                className={`w-full text-left px-3 py-2 flex items-center gap-3 transition-colors cursor-pointer ${
-                  active ? "bg-muted" : "hover:bg-muted/60"
-                }`}
-              >
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium truncate">
-                    {item.text}
-                  </div>
-                  <div className="text-[11px] text-muted-foreground font-mono truncate">
-                    {item.id}
-                  </div>
+      <Grown
+        open={isOpen && results.length > 0}
+        origin="top center"
+        className="absolute left-0 right-0 top-full mt-1 z-30 max-h-72 overflow-y-auto rounded-2xl border border-border bg-popover shadow-pop overscroll-contain touch-pan-y"
+      >
+        {results.map((item, i) => {
+          const badge =
+            variant === "location" && item.search_type
+              ? TYPE_BADGES[item.search_type]
+              : null;
+          const BadgeIcon = badge?.Icon;
+          const active = i === activeIndex;
+          return (
+            <button
+              key={`${item.id}-${item.search_type ?? "cat"}-${i}`}
+              type="button"
+              onMouseDown={(e) => {
+                // mousedown so blur on input doesn't fire first and tear
+                // the dropdown down before the click registers.
+                e.preventDefault();
+                handleSelect(item);
+              }}
+              onMouseEnter={() => setActiveIndex(i)}
+              className={`w-full text-left px-3 py-2 flex items-center gap-3 transition-colors cursor-pointer ${
+                active ? "bg-muted" : "hover:bg-muted/60"
+              }`}
+            >
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium truncate">
+                  {item.text}
                 </div>
-                {badge && BadgeIcon && (
-                  <span
-                    className={`flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0 ${badge.color}`}
-                  >
-                    <BadgeIcon size={11} />
-                    {badge.label}
-                  </span>
-                )}
-                {variant === "category" && (
-                  <Tag
-                    size={13}
-                    className="text-muted-foreground shrink-0"
-                  />
-                )}
-              </button>
-            );
-          })}
-        </div>
-      )}
+                <div className="text-[11px] text-muted-foreground font-mono truncate">
+                  {item.id}
+                </div>
+              </div>
+              {badge && BadgeIcon && (
+                <span
+                  className={`flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0 ${badge.color}`}
+                >
+                  <BadgeIcon size={11} />
+                  {badge.label}
+                </span>
+              )}
+              {variant === "category" && (
+                <Tag
+                  size={13}
+                  className="text-muted-foreground shrink-0"
+                />
+              )}
+            </button>
+          );
+        })}
+      </Grown>
     </div>
   );
 }

@@ -179,7 +179,7 @@ export function BuyerDashboardView({
       <Link
         href={preview ? "#" : searchHref}
         onClick={preview ? (ev) => ev.preventDefault() : undefined}
-        className="flex items-center gap-3 rounded-xl border border-border-soft bg-card p-6 shadow-card transition-colors hover:bg-muted/30"
+        className="flex justify-start items-center gap-3 rounded-xl border border-border-soft bg-card p-6 shadow-card transition-colors hover:bg-muted/30"
       >
         <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
           <Sparkles size={18} />

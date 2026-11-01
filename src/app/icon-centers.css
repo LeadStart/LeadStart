@@ -1,0 +1,100 @@
+/* Lucide icons drawn off the middle of their own 24×24, moved back so their ink is centred (the icon-centres rule,
+   Daniel, 2026-10-28). Written by `node scripts/style/check-icon-centers.mjs --write` from Lucide's own shapes;
+   `npm run typecheck` fails when an icon LeadStart imports is missing here or Lucide redraws one. The move is in the
+   icon's own units, so it holds at every size and when an icon is turned; the box stays where its holder centres it. */
+/* CalendarClock */
+svg.lucide-calendar-clock > * {
+  translate: -0.5px 0;
+}
+/* Car */
+svg.lucide-car > * {
+  translate: 0 -1px;
+}
+/* CheckIcon */
+svg.lucide-check > * {
+  translate: 0 0.5px;
+}
+/* Droplets */
+svg.lucide-droplets > * {
+  translate: 0 -0.524px;
+}
+/* Filter */
+svg.lucide-funnel > * {
+  translate: 0.001px -0.5px;
+}
+/* Gauge */
+svg.lucide-gauge > * {
+  translate: 0 0.5px;
+}
+/* HardHat */
+svg.lucide-hard-hat > * {
+  translate: 0 0.5px;
+}
+/* Home */
+svg.lucide-house > * {
+  translate: 0 0.5px;
+}
+/* Key */
+svg.lucide-key > * {
+  translate: 0.207px 0.5px;
+}
+/* ListTodo */
+svg.lucide-list-todo > * {
+  translate: 0 0.5px;
+}
+/* MailCheck */
+svg.lucide-mail-check > * {
+  translate: 0 -0.5px;
+}
+/* MessageSquare */
+svg.lucide-message-square > * {
+  translate: 0 -0.498px;
+}
+/* MessageSquareReply */
+svg.lucide-message-square-reply > * {
+  translate: 0 -0.498px;
+}
+/* Paperclip */
+svg.lucide-paperclip > * {
+  translate: -0.329px 0;
+}
+/* Rocket */
+svg.lucide-rocket > * {
+  translate: -0.25px 0.25px;
+}
+/* SprayCan */
+svg.lucide-spray-can > * {
+  translate: 0 -0.5px;
+}
+/* CheckSquare */
+svg.lucide-square-check-big > * {
+  translate: -0.5px 0;
+}
+/* Star */
+svg.lucide-star > * {
+  translate: 0.001px 0.464px;
+}
+/* Stethoscope */
+svg.lucide-stethoscope > * {
+  translate: 0 0.5px;
+}
+/* Store */
+svg.lucide-store > * {
+  translate: -0.001px 0.5px;
+}
+/* ThumbsDown */
+svg.lucide-thumbs-down > * {
+  translate: -0.085px 0;
+}
+/* ThumbsUp */
+svg.lucide-thumbs-up > * {
+  translate: 0.085px 0;
+}
+/* Trees */
+svg.lucide-trees > * {
+  translate: 0.32px -0.5px;
+}
+/* Wallet */
+svg.lucide-wallet > * {
+  translate: -0.5px 0;
+}

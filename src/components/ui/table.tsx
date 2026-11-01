@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 
 import { cn } from "@/lib/utils"
 import { appUrl } from "@/lib/api-url"
+import { useCardPress } from "@/lib/ui/card-press"
 
 // Descendants that own their own click and must NOT trigger a clickable row's
 // navigation (links elsewhere, buttons, menus, form controls). Put
@@ -67,6 +68,9 @@ function TableRow({
   ...props
 }: React.ComponentProps<"tr"> & { href?: string }) {
   const router = useRouter()
+  // On a phone a finger that settles on the row lights it with the chosen look and keeps
+  // it until the row opens (lib/ui/card-press.ts); iOS's own tap highlight is off.
+  const press = useCardPress()
 
   if (!href) {
     return (
@@ -111,11 +115,12 @@ function TableRow({
     <tr
       data-slot="table-row"
       className={cn(
-        "border-b border-border-soft transition-colors hover:bg-muted/60 data-[state=selected]:bg-brand-50 cursor-pointer",
+        "ls-press border-b border-border-soft transition-colors hover:bg-muted/60 data-[state=selected]:bg-brand-50 cursor-pointer",
         className
       )}
       onClick={handleClick}
       onAuxClick={handleAuxClick}
+      {...press()}
       {...props}
     />
   )

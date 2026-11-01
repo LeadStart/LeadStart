@@ -4,7 +4,9 @@ import Link from "next/link";
 import Image from "next/image";
 import leadstartMark from "../../../public/leadstart-mark-transparent.png";
 import { usePathname } from "next/navigation";
+import { useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
+import { pullToClose } from "@/lib/ui/sheet-pull";
 import type { AppRole } from "@/types/app";
 import { roleHomePath } from "@/lib/auth/roles";
 import {
@@ -82,7 +84,7 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
       href={item.href}
       aria-current={active ? "page" : undefined}
       className={cn(
-        "flex items-center gap-3 rounded-xl px-3 py-[9px] text-[13.5px] font-medium transition-[background-color,box-shadow,color] duration-150",
+        "flex justify-start items-center gap-3 rounded-xl px-3 py-[9px] text-[13.5px] font-medium transition-[background-color,box-shadow,color] duration-150",
         active
           ? "bg-primary bg-(image:--tex-brand) text-white shadow-[0_1px_1px_rgba(0,0,0,0.2),0_4px_12px_rgba(5,8,40,0.4)]"
           : "text-[#dbe3f0]/85 hover:bg-white/7 hover:text-white"
@@ -112,6 +114,63 @@ function NavSection({ label, items, pathname }: { label: string; items: NavItem[
 
 export function Sidebar({ role, open = false, onClose }: { role: AppRole; open?: boolean; onClose?: () => void }) {
   const pathname = usePathname();
+  const aside = useRef<HTMLElement>(null);
+  const dim = useRef<HTMLDivElement>(null);
+
+  // Every way out (the popups rule): Esc closes the drawer while it's open.
+  useEffect(() => {
+    if (!open || !onClose) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      e.preventDefault();
+      onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
+  // On a phone the drawer pulls shut to the left from anywhere on it (lib/ui/sheet-pull.ts):
+  // it follows the finger as its dim fades, closes past a third of its width or on a
+  // flick, and springs back otherwise. Let go, the drawer's own transition (globals.css
+  // `.app-rail`) takes it on from where the finger left it, so it never jumps.
+  useEffect(() => {
+    const el = aside.current;
+    if (!el || !onClose) return;
+    const phone = window.matchMedia("(max-width: 1023.98px)");
+    let off: (() => void) | null = null;
+    const wire = () => {
+      off?.();
+      off = null;
+      if (!phone.matches) return;
+      off = pullToClose(el, {
+        axis: "-x",
+        can: () => el.classList.contains("is-open"),
+        begin: () => {
+          el.style.transition = "none";
+          if (dim.current) dim.current.style.transition = "none";
+        },
+        move: (d) => {
+          el.style.transform = `translateX(${-d}px)`;
+          if (dim.current) dim.current.style.opacity = String(Math.max(0, 1 - Math.max(0, d) / el.offsetWidth));
+        },
+        end: (close) => {
+          el.style.transition = "";
+          el.style.transform = "";
+          if (dim.current) {
+            dim.current.style.transition = "";
+            dim.current.style.opacity = "";
+          }
+          if (close) onClose();
+        },
+      });
+    };
+    wire();
+    phone.addEventListener("change", wire);
+    return () => {
+      off?.();
+      phone.removeEventListener("change", wire);
+    };
+  }, [onClose]);
   const isAdmin = role === "owner" || role === "va";
   const isBuyer = role === "buyer";
   const nav = isAdmin ? adminNav : isBuyer ? buyerNav : clientNav;
@@ -129,15 +188,16 @@ export function Sidebar({ role, open = false, onClose }: { role: AppRole; open?:
 
   return (
     <>
-      {/* Mobile backdrop */}
-      {open && (
-        <div
-          onClick={onClose}
-          className="fixed inset-0 z-40 bg-black/50 lg:hidden"
-          aria-hidden="true"
-        />
-      )}
+      {/* The phone drawer's dim: always on the page, fading in and out with the drawer
+          (globals.css `.ls-drawer-dim`), so it never pops. A tap on it only closes. */}
+      <div
+        ref={dim}
+        onClick={onClose}
+        className={cn("ls-drawer-dim lg:hidden", open && "is-open")}
+        aria-hidden="true"
+      />
       <aside
+        ref={aside}
         style={{
           // The navy rail (Forge's frame, which began as this one): brand blue
           // down to navy, with its float shadow from globals.css `.app-rail`.
@@ -148,16 +208,18 @@ export function Sidebar({ role, open = false, onClose }: { role: AppRole; open?:
           backgroundColor: "#0f172a",
         }}
         className={cn(
-          // Mobile: full-height slide-in drawer. Desktop (lg): `.app-rail`
-          // (globals.css) makes it a floating, inset, rounded, elevated card.
-          "app-rail fixed inset-y-0 left-0 z-50 flex w-64 flex-col overflow-hidden transition-transform duration-300 lg:translate-x-0 lg:transition-none",
-          open ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+          // Mobile: a full-height drawer that slides in from the left on the sheet's
+          // curve (globals.css `.app-rail` below lg). Desktop (lg): `.app-rail` makes
+          // it a floating, inset, rounded, elevated card. No overflow clip: the chosen
+          // Settings row's glow fades out past the footer, not against a straight edge.
+          "app-rail fixed inset-y-0 left-0 z-50 flex w-64 flex-col",
+          open && "is-open"
         )}
       >
         {/* Forge's brand row: the mark on a 34px white tile with a soft bloom behind
             it, beside the spaced wordmark, on one line. */}
-        <div className="relative flex items-center justify-center px-4 pt-6 pb-4">
-          <Link href={roleHomePath(role)} className="flex items-center gap-2.5 rounded-md focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#c3ccff]">
+        <div className="relative z-10 flex items-center justify-center px-4 pt-6 pb-4">
+          <Link href={roleHomePath(role)} className="flex justify-start items-center gap-2.5 rounded-md focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#c3ccff]">
             <span className="relative grid size-[34px] shrink-0 place-items-center">
               <span
                 aria-hidden
@@ -193,8 +255,12 @@ export function Sidebar({ role, open = false, onClose }: { role: AppRole; open?:
           </button>
         </div>
 
-        {/* Navigation */}
-        <nav className="flex-1 space-y-0.5 px-3 pt-1 pb-4 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {/* Navigation. The chosen row's drop (4px down, 12px blur) reaches 8px above it
+            and 16px below: the scroller's padding gives it that room on every side, the
+            8px borrowed at the top paid back with a negative margin so the first row
+            stays put, and the brand row above stacks over the borrowed strip to keep
+            its presses (the glows rule). */}
+        <nav className="-mt-2 flex-1 space-y-0.5 px-3 pt-3 pb-4 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {nav.map((item) => (
             <NavLink key={item.href} item={item} active={isNavActive(item, pathname)} />
           ))}
@@ -204,7 +270,7 @@ export function Sidebar({ role, open = false, onClose }: { role: AppRole; open?:
         {/* Footer: a single Settings entry pinned to the bottom. Replaces the
             old profile block; the top-right avatar menu already shows profile. */}
         {settingsItem && (
-          <div className="border-t border-white/8 bg-black/12 p-3">
+          <div className="border-t border-white/8 bg-black/12 p-3 lg:rounded-b-[20px]">
             <NavLink item={settingsItem} active={isNavActive(settingsItem, pathname)} />
           </div>
         )}

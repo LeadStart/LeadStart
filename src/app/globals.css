@@ -52,6 +52,7 @@
   /* Forge's depth: soft card shadow, a float for chrome, one pop tier for overlays. */
   --color-border-soft: var(--border-soft);
   --shadow-card: var(--ls-shadow-card);
+  --shadow-card-tight: var(--ls-shadow-card-tight);
   --shadow-float: var(--ls-shadow-float);
   --shadow-pop: var(--ls-shadow-pop);
 
@@ -131,6 +132,8 @@
   --tex-ink: linear-gradient(140deg, #2a3350, #0f172a);
   --tex-danger: linear-gradient(140deg, #e03a38, #d12323);
   --ls-shadow-card: 0 1px 2px rgba(15, 23, 42, 0.04), 0 2px 12px rgba(15, 23, 42, 0.05);
+  /* The card shadow drawn smaller (reach 8px at the sides, 10px below) for cards in a column with 10px of room, such as the prospects board's: the glow fades out inside the room it has (the glows rule). */
+  --ls-shadow-card-tight: 0 1px 2px rgba(15, 23, 42, 0.04), 0 2px 8px rgba(15, 23, 42, 0.05);
   --ls-shadow-float: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 1px 2px rgba(15, 23, 42, 0.05), 0 12px 32px rgba(15, 23, 42, 0.09);
   --ls-shadow-pop: 0 16px 40px rgba(15, 23, 42, 0.16), 0 2px 6px rgba(15, 23, 42, 0.06);
   /* Motion: Forge's clocks. Things grow in on 220ms and go a little quicker (160ms);
@@ -243,7 +246,12 @@
     box-shadow: 0 22px 44px rgba(15, 23, 42, 0.32), 0 2px 8px rgba(15, 23, 42, 0.14);
   }
   .app-shell-content {
-    margin-left: 248px; /* gap 24 + rail 200 + gap 24 */
+    /* gap 24 + rail 200 + gap 24 = 248 to the content's edge. 12px of it is the
+       scroller's own padding, paid back by the margin, so a card's shadow at the
+       content's edge (--ls-shadow-card reaches 12px) fades out inside the scroller
+       instead of being cut at its padding box (the glows rule, measured). */
+    margin-left: 236px;
+    padding-left: 12px;
   }
   .app-topbar {
     margin: 24px 24px 0 0;
@@ -254,6 +262,29 @@
     padding-left: 0; /* content left edge = topbar left edge, 24px off the rail */
   }
 }
+
+/* Words in a button sit in its middle, up and down (Daniel, 2026-10-29). Chrome floors a
+   line's top half-leading to a whole pixel and gives the rest to the bottom, so a line
+   whose leading isn't an even number of pixels sits high: measured, a 12.5px Poppins run
+   (17px: its rounded ascent 13 + descent 4) on an 18.75px line sat 0.88px above its
+   button's middle. Each size a control's words come in gets a line an even number of
+   pixels taller than Poppins' rounded ascent + descent at that size (10-10.5px: 15;
+   11-11.5px: 16; 12px: 17; 12.5px: 17; 13-13.5px: 19; 14px: 20, which text-sm already is; 15px: 21;
+   16px: 23). Unlayered, so it beats the utility; scoped to controls and pills (.rounded-full
+   chips carry words and counts too) so prose keeps its leading. */
+:where(button, [role="button"], [role="tab"], a:where(.inline-flex, .flex), label:where(.inline-flex, .flex), .group\/badge, .rounded-full) {
+  &.text-\[10px\], &.text-\[10\.5px\] { line-height: 15px; }
+  &.text-\[11px\], &.text-\[11\.5px\] { line-height: 16px; }
+  &.text-xs { line-height: 17px; }
+  &.text-\[12\.5px\] { line-height: 19px; }
+  &.text-\[13px\], &.text-\[13\.5px\] { line-height: 21px; }
+  &.text-\[15px\] { line-height: 23px; }
+  &.text-base { line-height: 25px; }
+}
+
+/* A lone label (src/lib/ui/ink-center.ts slides it onto its ink): inline-block, since a plain
+   inline box takes no translate. */
+[data-ink] { display: inline-block; }
 
 /* Triple-bounce envelope loader (Loader 07): keyframes at top level so Tailwind v4 preserves them */
 @keyframes ls7-bounce {
@@ -524,10 +555,16 @@
 
    `.ls-mnav` is a zero-height fixed anchor just above the safe
    area; the pill hangs off it so page content scrolls *under*
-   the glass. The component (`layout/mobile-tab-bar.tsx`) rewrites
-   the pill / tab widths and the capsule's place per scroll event
-   for the condense; at rest it clears the widths so this flex
-   layout governs.
+   the glass. The pill's box is its open box from the start (the
+   "control that grows and shrinks" rule): as you scroll down it
+   condenses to a glass dot round the active icon, and what looks
+   like it shrinking is its glass, drawn in three pieces, two
+   half-circle caps that slide in and a stretch between them that
+   scales, with the tabs sliding and fading, all on transforms and
+   opacity written per scroll event by `layout/mobile-tab-bar.tsx`.
+   Nothing in it is laid out again as you scroll. Each piece draws
+   the same gradient in the pill's own coordinates (`--mnav-w`, the
+   pill's width, set by the component), so the seams don't show.
    ============================================================ */
 .ls-mnav {
   position: fixed;
@@ -535,37 +572,96 @@
   right: 0;
   bottom: env(safe-area-inset-bottom, 0px);
   height: 0;
-  z-index: 30; /* below the sidebar drawer (backdrop z-40 / drawer z-50) */
+  z-index: 30; /* below the sidebar drawer (dim z-40 / drawer z-50) */
   pointer-events: none;
 }
 .ls-mnav > * { pointer-events: auto; }
 
 .ls-mnav-pill {
   position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
+  left: 16px;
+  right: 16px;
   bottom: 16px;
+  margin: 0 auto;
   height: 58px;
-  width: calc(100vw - 32px);
   max-width: 480px;
-  border-radius: 9999px;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 0 5px;
+}
+/* The glass: three pieces that tile the pill (two half-circle caps, each the half of
+   a half circle each, and a stretch between), the caps' boxes sliding in and
+   the stretch's box scaling as the pill condenses. None draws past its box, so the
+   clipping cuts nothing. The pill's drop below is one halo of its own (.ls-mnav-halo):
+   a transparent pill the glass's width, unclipped, so the glow fades out before
+   anything cuts it (the glows rule); the component sizes it with the glass. */
+.ls-mnav-glass {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.ls-mnav-halo {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 58px;
+  border-radius: 9999px;
+  box-shadow: 0 10px 24px rgba(46, 55, 254, 0.4);
+  transition: left 0.12s linear, width 0.12s linear;
+}
+.ls-mnav-capbox,
+.ls-mnav-midbox {
+  position: absolute;
+  top: 0;
+  height: 58px;
   overflow: hidden;
+  will-change: transform;
+  transition: transform 0.12s linear;
+}
+.ls-mnav-capbox {
+  width: 29px;
+}
+.ls-mnav-capbox.l { left: 0; }
+.ls-mnav-capbox.r { right: 0; }
+.ls-mnav-midbox {
+  left: 29px;
+  right: 29px;
+  transform-origin: 50% 50%;
+}
+.ls-mnav-cap,
+.ls-mnav-mid {
+  position: absolute;
+  top: 0;
+  height: 58px;
   background: radial-gradient(130% 120% at 50% 0%, rgba(90, 97, 255, 0.86) 0%, rgba(46, 55, 254, 0.84) 50%);
+  background-size: var(--mnav-w, 358px) 58px;
+  background-repeat: no-repeat;
   border: 1px solid rgba(255, 255, 255, 0.16);
   -webkit-backdrop-filter: blur(18px) saturate(1.5);
   backdrop-filter: blur(18px) saturate(1.5);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.3),
-    0 10px 24px rgba(46, 55, 254, 0.4);
-  transition: width 0.22s ease-out;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+.ls-mnav-cap {
+  /* Exactly the piece its box shows: a 29px half circle (the radii clamp to the 58px
+     height), so the capbox clips nothing of it (the glows measure counts a gradient
+     fill as a glow layer, and a box cut by its clipper as a cut glow). */
+  width: 29px;
+}
+.ls-mnav-capbox.l > .ls-mnav-cap { left: 0; border-right: 0; border-radius: 9999px 0 0 9999px; background-position: 0 0; }
+.ls-mnav-capbox.r > .ls-mnav-cap { right: 0; border-left: 0; border-radius: 0 9999px 9999px 0; background-position: calc(29px - var(--mnav-w, 358px)) 0; }
+.ls-mnav-mid {
+  left: 0;
+  right: 0;
+  border-left: 0;
+  border-right: 0;
+  border-radius: 0;
+  background-position: -29px 0;
 }
 /* A light capsule under the active tab: flat on the glass (Forge idea #121). It sits
-   inside the active tab, behind its icon and label, so it keeps the tab's width as the
-   pill condenses; the component slides it between tabs. */
+   inside the active tab, behind its icon and label, so it rides with the tab; the
+   component slides it between tabs and fades it as the pill condenses. */
 .ls-mnav-glow {
   position: absolute;
   inset: 0;
@@ -574,6 +670,7 @@
   background: rgba(255, 255, 255, 0.2);
   transform-origin: left center;
   pointer-events: none;
+  transition: opacity 0.12s linear;
 }
 
 .ls-mnav-tab {
@@ -597,32 +694,29 @@
   line-height: 1;
   color: rgba(255, 255, 255, 0.68);
   white-space: nowrap;
-  overflow: hidden;
   text-decoration: none;
   -webkit-tap-highlight-color: transparent;
-  transition: width 0.22s ease-out, opacity 0.18s ease-out,
-    padding 0.22s ease-out, gap 0.22s ease-out, color 0.2s ease;
+  transition: transform 0.12s linear, opacity 0.12s linear, color 0.2s ease;
 }
-/* The active tab never shrinks below its icon (48px), so it needn't clip, and its
-   capsule can slide in from the tab it came from. */
-.ls-mnav-tab.is-on { color: #fff; overflow: visible; }
-.ls-mnav-tab > svg { width: 22px; height: 22px; flex: none; transition: transform 0.12s ease; }
-.ls-mnav-tab:active > svg { transform: scale(0.92); }
+.ls-mnav-tab.is-on { color: #fff; }
+.ls-mnav-tab > svg { width: 22px; height: 22px; flex: none; transition: transform 0.12s linear; }
+.ls-mnav-tab:active > svg { scale: 0.92; }
 .ls-mnav-label {
   display: inline-block;
   overflow: hidden;
   white-space: nowrap;
   max-width: 64px;
-  max-height: 14px;
   line-height: 12px;
-  transition: max-width 0.22s ease-out, max-height 0.22s ease-out,
-    opacity 0.18s ease-out;
+  transition: opacity 0.12s linear;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .ls-mnav-pill,
+  .ls-mnav-halo,
+  .ls-mnav-capbox,
+  .ls-mnav-midbox,
   .ls-mnav-glow,
   .ls-mnav-tab,
+  .ls-mnav-tab > svg,
   .ls-mnav-label {
     transition: none;
   }
@@ -652,8 +746,6 @@
   }
 }
 
-/* A menu drawn by its owner (no Base UI start frame, e.g. the topbar search's
-   results): it grows in from its top on the menu's clock. */
 /* Loading veils (src/components/layout/loading-veil.tsx): the page itself, with its
    bloom, over everything while signing in or loading the dashboard. It fades in
    and fades out; it never pops. */
@@ -687,17 +779,133 @@
   }
 }
 
-@keyframes ls-menu-in {
+/* ============================================================
+   Expand and collapse: one shared fold (components/ui/fold.tsx +
+   lib/ui/fold.ts, a port of Forge's Fold.tsx). The fold and each
+   layer hold their content's margins (flow-root), so the height it
+   glides to is the height it rests at, and nothing outside it moves
+   at once as it opens. The leaving layer sits over the arriving one
+   while they crossfade.
+   ============================================================ */
+.fold {
+  position: relative;
+  display: flow-root;
+  min-width: 0;
+}
+.fold-in,
+.fold-peek {
+  display: flow-root;
+}
+.fold-out {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+}
+/* A chevron turns on the fold's clock (220ms out, 160ms back in): `.ls-chev` points
+   right and turns down when open, `.ls-chev-flip` points down and turns up. */
+.ls-chev,
+.ls-chev-flip {
+  transition: rotate 160ms cubic-bezier(0.4, 0, 1, 1);
+}
+.ls-chev.is-open,
+.ls-chev-flip.is-open {
+  transition: rotate 220ms var(--ease-out-soft);
+}
+.ls-chev.is-open {
+  rotate: 90deg;
+}
+.ls-chev-flip.is-open {
+  rotate: 180deg;
+}
+/* A tab's panel fades in where its room already is (components/ui/tabs.tsx). */
+@keyframes ls-fade-in {
   from {
     opacity: 0;
-    scale: 0.96;
   }
 }
-.ls-menu-in {
-  animation: ls-menu-in 220ms var(--ease-out-soft);
+.ls-tab-in {
+  animation: ls-fade-in 220ms var(--ease-out-soft);
+}
+
+/* ============================================================
+   Cards on a phone: one steady press (lib/ui/card-press.ts, a port
+   of Forge's cardPress.ts). A finger that has settled on a row or
+   card lights it with the chosen look (the selected row's brand
+   tint) and keeps that one look until it lets go or the row opens;
+   iOS's own grey tap highlight is off. A card with a hold menu
+   gives a little while the hold counts (`scale`, never `transform`).
+   Unlayered on purpose: it must win over a row's hover utility.
+   ============================================================ */
+.ls-press {
+  -webkit-tap-highlight-color: transparent;
+  /* A hold shows the chosen look, never iOS's text selection or callout (measured on the
+     iOS 27 simulator: a 1.2s hold on an inbox row selected a word of its preview). */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+.ls-press[data-press] {
+  background-color: #edeeff;
+}
+.ls-press[data-press="count"] {
+  scale: 0.975;
+  transition: scale 360ms cubic-bezier(0.3, 0, 0.6, 1);
+}
+
+/* ============================================================
+   The phone drawer (components/layout/sidebar.tsx below lg): the
+   rail slides in from the left on the sheet's curve and clock
+   (520ms in, 420ms out) as its dim fades, and it leaves the way it
+   came: pulled shut, by its X, a tap on the dim, or Esc. Hidden at
+   rest, it takes no focus and no presses.
+   ============================================================ */
+.ls-drawer-dim {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: rgba(0, 0, 0, 0.5);
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 420ms var(--ease-sheet),
+    visibility 0s linear 420ms;
+}
+.ls-drawer-dim.is-open {
+  opacity: 1;
+  visibility: visible;
+  transition:
+    opacity 520ms var(--ease-sheet),
+    visibility 0s;
+}
+@media (max-width: 1023.98px) {
+  .app-rail {
+    transform: translateX(-100%);
+    visibility: hidden;
+    transition:
+      transform 420ms var(--ease-sheet),
+      visibility 0s linear 420ms;
+  }
+  .app-rail.is-open {
+    transform: none;
+    visibility: visible;
+    transition:
+      transform 520ms var(--ease-sheet),
+      visibility 0s;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
-  .ls-menu-in {
+  .ls-chev,
+  .ls-chev-flip,
+  .ls-drawer-dim,
+  .app-rail {
+    transition: none !important;
+  }
+  .ls-tab-in {
     animation: none;
+  }
+  .ls-press[data-press="count"] {
+    scale: none;
+    transition: none;
   }
 }

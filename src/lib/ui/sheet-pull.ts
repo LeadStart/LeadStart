@@ -1,8 +1,9 @@
 /**
  * Pulling a popup's sheet down to close it on a phone (components/ui/dialog.tsx,
- * alert-dialog.tsx). A port of Forge's lib/sheetPull.ts `pullToClose`: it follows
- * the finger, gives a little and no more if pulled up, and on letting go closes past
- * a third of its height or on a flick down, springing back otherwise.
+ * alert-dialog.tsx), or the rail's drawer shut to the left (layout/sidebar.tsx,
+ * `axis: "-x"`). A port of Forge's lib/sheetPull.ts `pullToClose`: it follows
+ * the finger, gives a little and no more if pulled the other way, and on letting go
+ * closes past a third of its size or on a flick, springing back otherwise.
  *
  * A popup's content often scrolls, so this listens to touches rather than pointers:
  * a drag on content that scrolls scrolls it, and pulls the sheet only from the top of
@@ -42,6 +43,8 @@ function scrollerOf(from: Element | null, sheet: HTMLElement): HTMLElement | nul
 export function pullToClose(
   sheet: HTMLElement,
   o: {
+    /** Which way closes it: down (a sheet, the default) or left (a drawer at the left edge). */
+    axis?: "y" | "-x";
     /** Whether it may be pulled now (not while it's leaving). */
     can: () => boolean;
     /** The finger has taken it (a pull, not a scroll or a tap). */
@@ -52,6 +55,7 @@ export function pullToClose(
     end: (close: boolean, dy: number) => void;
   },
 ): () => void {
+  const left = o.axis === "-x";
   const pulled = (dy: number) => (dy >= 0 ? dy : -give(-dy));
   let g: {
     x0: number;
@@ -70,17 +74,18 @@ export function pullToClose(
       x0: t.clientX,
       y0: t.clientY,
       pulling: false,
-      scroller: scrollerOf(e.target as Element, sheet),
+      scroller: left ? null : scrollerOf(e.target as Element, sheet),
       dy: 0,
-      trail: [{ y: t.clientY, t: e.timeStamp }],
+      trail: [{ y: left ? -t.clientX : t.clientY, t: e.timeStamp }],
     };
   };
   const move = (e: TouchEvent) => {
     if (!g) return;
     if (e.touches.length !== 1) return void finish(false);
     const t = e.touches[0];
-    const dx = t.clientX - g.x0;
-    const dy = t.clientY - g.y0;
+    // Along: how far toward closing (down for a sheet, left for the drawer); across: the other way.
+    const dx = left ? t.clientY - g.y0 : t.clientX - g.x0;
+    const dy = left ? g.x0 - t.clientX : t.clientY - g.y0;
     if (!g.pulling) {
       if (Math.hypot(dx, dy) < SLOP) return;
       // Sideways, or content that scrolls that way: not a pull. A move WebKit won't
@@ -92,7 +97,10 @@ export function pullToClose(
       o.begin();
     }
     e.preventDefault();
-    g.trail = [...g.trail.filter((s) => e.timeStamp - s.t < 90), { y: t.clientY, t: e.timeStamp }];
+    g.trail = [
+      ...g.trail.filter((s) => e.timeStamp - s.t < 90),
+      { y: left ? -t.clientX : t.clientY, t: e.timeStamp },
+    ];
     g.dy = dy;
     o.move(pulled(dy));
   };
@@ -104,7 +112,8 @@ export function pullToClose(
     const b = was.trail[was.trail.length - 1];
     const speed = b.t > a.t ? (b.y - a.y) / (b.t - a.t) : 0;
     const dy = pulled(was.dy);
-    o.end(lifted && (dy > sheet.offsetHeight / 3 || (speed > FLICK && dy > FLICK_MIN)), dy);
+    const size = left ? sheet.offsetWidth : sheet.offsetHeight;
+    o.end(lifted && (dy > size / 3 || (speed > FLICK && dy > FLICK_MIN)), dy);
   };
   const up = () => finish(true);
   const cancel = () => finish(false);

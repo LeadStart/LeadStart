@@ -10,9 +10,11 @@
 // persist. Shared by the per-row tag editor and the bulk "tag selected" panel on
 // Admin → Mailboxes. Mirrors the campaign MailboxPoolPicker's combobox pattern.
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
 import { Check, Plus, X } from "lucide-react";
 import { MAX_TAG_LEN } from "@/lib/mailboxes/tags";
+import { Grown } from "@/components/ui/grown";
 
 type Option =
   | { kind: "existing"; label: string }
@@ -39,6 +41,9 @@ export function TagChipInput({
   const [navigated, setNavigated] = useState(false); // user moved via arrows
   const wrapRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  // The panel is a portal, so it renders only once mounted (the server has no body to put it in).
+  const mounted = useSyncExternalStore(() => () => {}, () => true, () => false);
   const listboxId = useId();
 
   const has = (tag: string) => value.some((t) => t.toLowerCase() === tag.toLowerCase());
@@ -68,11 +73,34 @@ export function TagChipInput({
   useEffect(() => {
     if (!open) return;
     const onDoc = (e: MouseEvent) => {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+      const t = e.target as Node;
+      if (wrapRef.current && !wrapRef.current.contains(t) && !panelRef.current?.contains(t)) setOpen(false);
     };
     document.addEventListener("mousedown", onDoc);
     return () => document.removeEventListener("mousedown", onDoc);
   }, [open]);
+
+  // The panel lives in a portal, placed under the field: inside the card it sat in a table's
+  // sideways scroller, which cut its shadow (the glows rule). Placed before paint, and again on
+  // every scroll and resize while it's open; it keeps its place while it shrinks away.
+  useLayoutEffect(() => {
+    if (!panelOpen) return;
+    const put = () => {
+      const r = wrapRef.current?.getBoundingClientRect();
+      const p = panelRef.current;
+      if (!r || !p) return;
+      p.style.top = `${r.bottom + 4}px`;
+      p.style.left = `${r.left}px`;
+      p.style.width = `${r.width}px`;
+    };
+    put();
+    window.addEventListener("scroll", put, true);
+    window.addEventListener("resize", put);
+    return () => {
+      window.removeEventListener("scroll", put, true);
+      window.removeEventListener("resize", put);
+    };
+  }, [panelOpen]);
 
   function addTag(raw: string) {
     // Adopt an existing tag's canonical casing when the text matches one
@@ -188,61 +216,63 @@ export function TagChipInput({
         />
       </div>
 
-      {panelOpen && (
-        <div
-          id={listboxId}
-          role="listbox"
-          className="absolute left-0 z-30 mt-1 max-h-56 w-full min-w-[13rem] overflow-y-auto overflow-x-hidden ls-menu-in rounded-2xl border border-border bg-popover p-1.5 shadow-pop"
-        >
-          {matches.length > 0 && (
-            <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-              Existing tags
-            </div>
-          )}
-          {options.map((opt, i) => {
-            const highlit = i === safeActive && showHighlight;
-            return (
-              <button
-                key={`${opt.kind}:${opt.label}`}
-                type="button"
-                role="option"
-                aria-selected={highlit}
-                // Keep focus on the input so the panel doesn't close before the
-                // click registers, and so onBlur never fires from a selection.
-                onMouseDown={(e) => e.preventDefault()}
-                onMouseEnter={() => {
-                  setActive(i);
-                  setNavigated(true);
-                }}
-                onClick={() => addTag(opt.label)}
-                className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm ${
-                  highlit ? "bg-muted/70" : "hover:bg-muted/60"
-                }`}
-              >
-                {opt.kind === "create" ? (
-                  <>
-                    <Plus size={13} className="shrink-0 text-primary" />
-                    <span className="min-w-0 flex-1 truncate">
-                      Create <span className="font-medium">“{opt.label}”</span>
-                    </span>
-                    <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-primary">
-                      new
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <Check size={13} className="shrink-0 text-muted-foreground/40" />
-                    <span className="min-w-0 flex-1 truncate">{opt.label}</span>
-                    <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                      tag
-                    </span>
-                  </>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      )}
+      {mounted && createPortal(
+      <Grown
+        ref={panelRef}
+        open={panelOpen}
+        origin="top left"
+        id={listboxId} role="listbox"
+        className="fixed z-[60] max-h-56 min-w-[13rem] overflow-y-auto overflow-x-hidden rounded-2xl border border-border bg-popover p-1.5 shadow-pop overscroll-contain touch-pan-y"
+      >
+        {matches.length > 0 && (
+          <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Existing tags
+          </div>
+        )}
+        {options.map((opt, i) => {
+          const highlit = i === safeActive && showHighlight;
+          return (
+            <button
+              key={`${opt.kind}:${opt.label}`}
+              type="button"
+              role="option"
+              aria-selected={highlit}
+              // Keep focus on the input so the panel doesn't close before the
+              // click registers, and so onBlur never fires from a selection.
+              onMouseDown={(e) => e.preventDefault()}
+              onMouseEnter={() => {
+                setActive(i);
+                setNavigated(true);
+              }}
+              onClick={() => addTag(opt.label)}
+              className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm ${
+                highlit ? "bg-muted/70" : "hover:bg-muted/60"
+              }`}
+            >
+              {opt.kind === "create" ? (
+                <>
+                  <Plus size={13} className="shrink-0 text-primary" />
+                  <span className="min-w-0 flex-1 truncate">
+                    Create <span className="font-medium">“{opt.label}”</span>
+                  </span>
+                  <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-primary">
+                    new
+                  </span>
+                </>
+              ) : (
+                <>
+                  <Check size={13} className="shrink-0 text-muted-foreground/40" />
+                  <span className="min-w-0 flex-1 truncate">{opt.label}</span>
+                  <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    tag
+                  </span>
+                </>
+              )}
+            </button>
+          );
+        })}
+      </Grown>,
+      document.body)}
     </div>
   );
 }

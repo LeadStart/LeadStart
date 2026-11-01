@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/select";
 import { createClient } from "@/lib/supabase/client";
 import { CheckSquare, ListTodo, Clock, CheckCircle2, Plus, Circle, Trash2, Pencil, Check, X } from "lucide-react";
+import { Fold } from "@/components/ui/fold";
 
 export type TaskStatus = "todo" | "in_progress" | "done";
 export type TaskPriority = "low" | "medium" | "high";
@@ -284,14 +285,14 @@ export default function TasksPage() {
           </SelectContent>
         </Select>
 
-        <Button size="sm" onClick={() => setShowAddForm(!showAddForm)} className="ml-auto">
+        <Button size="sm" onClick={() => setShowAddForm(!showAddForm)} aria-expanded={showAddForm} className="ml-auto">
           <Plus size={16} className="mr-1" />
           Add Task
         </Button>
       </div>
 
       {/* Inline add task form */}
-      {showAddForm && (
+      <Fold open={showAddForm} className="mb-0" inner="pb-6">
         <Card>
           <CardHeader className="flex flex-row items-center gap-2 pb-3">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-50">
@@ -324,7 +325,7 @@ export default function TasksPage() {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="task-description">Description</Label>
-              <Textarea
+              <Textarea data-kb-reveal
                 id="task-description"
                 placeholder="Optional description"
                 value={newDescription}
@@ -367,7 +368,7 @@ export default function TasksPage() {
             </div>
           </CardContent>
         </Card>
-      )}
+      </Fold>
 
       {/* Tasks table */}
       <div className="flex items-center gap-2 mb-3">
@@ -412,7 +413,7 @@ export default function TasksPage() {
                             style={{ height: "32px" }}
                             className="text-sm"
                           />
-                          <Textarea
+                          <Textarea data-kb-reveal
                             value={editDescription}
                             onChange={(e) => setEditDescription(e.target.value)}
                             placeholder="Optional description"
@@ -448,7 +449,7 @@ export default function TasksPage() {
                       ) : (
                         <button
                           onClick={() => handleToggleStatus(task)}
-                          className="inline-flex items-center gap-1.5 cursor-pointer group"
+                          className="inline-flex justify-center-safe items-center gap-1.5 cursor-pointer group"
                           title={`Click to change to "${STATUS_LABELS[NEXT_STATUS[task.status]]}"`}
                         >
                           <Badge variant="secondary" className={`border ${STATUS_COLORS[task.status]} group-hover:opacity-80 transition-opacity`}>

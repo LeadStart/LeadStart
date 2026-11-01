@@ -43,7 +43,7 @@ function Dots({ active }: { active: number }) {
       {[1, 2, 3, 4].map((n) => (
         <span
           key={n}
-          className={`h-[7px] rounded-full transition-all ${
+          className={`h-[7px] rounded-full transition-[width,background-color] ${
             n === active ? "w-5 bg-primary" : "w-[7px] bg-border"
           }`}
         />

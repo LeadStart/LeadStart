@@ -1,4 +1,5 @@
 "use client";
+import { Ink } from "@/components/ui/ink";
 import { PageHeader } from "@/components/layout/page-header";
 
 import { useState } from "react";
@@ -47,6 +48,8 @@ import {
   frequencyBadgeLabel,
 } from "@/lib/kpi/schedule";
 import { appUrl } from "@/lib/api-url";
+import { Fold } from "@/components/ui/fold";
+import { useCardPress } from "@/lib/ui/card-press";
 
 const REPORTS_PAGE_SIZE = 25;
 
@@ -57,6 +60,8 @@ export function ReportsClient({
   initialClients: Client[];
   initialReports: KPIReport[];
 }) {
+  // On a phone a finger that settles on a card lights it with the chosen look until it opens (lib/ui/card-press.ts).
+  const press = useCardPress();
   const [clients, setClients] = useState<Client[]>(initialClients);
   const [reports, setReports] = useState<KPIReport[]>(initialReports);
   const [reportsPage, setReportsPage] = useState(1);
@@ -551,7 +556,7 @@ export function ReportsClient({
                   <div key={client.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-xl border border-border-soft p-4 hover:bg-muted/20 transition-colors">
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold text-white shrink-0 bg-primary">
-                        {client.name.charAt(0)}
+                        <Ink>{client.name.charAt(0)}</Ink>
                       </div>
                       <div className="min-w-0">
                         <p className="text-sm font-medium truncate">{client.name}</p>
@@ -749,7 +754,7 @@ export function ReportsClient({
                         />
                         <div className="flex items-center gap-2 flex-1 min-w-0">
                           <div className="flex h-6 w-6 items-center justify-center rounded-md text-[10px] font-bold text-white shrink-0 bg-primary">
-                            {r.name.charAt(0).toUpperCase()}
+                            <Ink>{r.name.charAt(0).toUpperCase()}</Ink>
                           </div>
                           <div className="min-w-0">
                             <p className="text-sm truncate">{r.name}</p>
@@ -827,11 +832,12 @@ export function ReportsClient({
                   <div
                     key={report.id}
                     onClick={() => { setSelectedReport(report); loadRecipients(report.client_id); }}
-                    className="group cursor-pointer flex items-center justify-between rounded-xl border border-border-soft p-4 transition-all hover:border-primary/20 hover:shadow-float"
+                    {...press()}
+                    className="ls-press group cursor-pointer flex items-center justify-between rounded-xl border border-border-soft p-4 transition-[border-color,box-shadow] hover:border-primary/20 hover:shadow-float"
                   >
                     <div className="flex items-center gap-3">
                       <div className="flex h-10 w-10 items-center justify-center rounded-lg text-sm font-bold text-white shrink-0 bg-primary">
-                        {client?.name?.charAt(0) || "?"}
+                        <Ink>{client?.name?.charAt(0) || "?"}</Ink>
                       </div>
                       <div>
                         <p className="font-medium">{client?.name || "Unknown"}</p>
@@ -900,7 +906,7 @@ export function ReportsClient({
             <DialogHeader>
               <DialogTitle className="flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg text-sm font-bold text-foreground bg-primary">
-                  {clientMap.get(selectedReport.client_id)?.name?.charAt(0) || "?"}
+                  <Ink>{clientMap.get(selectedReport.client_id)?.name?.charAt(0) || "?"}</Ink>
                 </div>
                 <div>
                   <span>{clientMap.get(selectedReport.client_id)?.name || "Unknown"}</span>
@@ -949,6 +955,7 @@ export function ReportsClient({
                     size="sm"
                     className="text-xs"
                     onClick={() => setShowPreview(!showPreview)}
+                    aria-expanded={showPreview}
                   >
                     <Eye size={13} className="mr-1" />
                     {showPreview ? "Hide Preview" : "Email Preview"}
@@ -1015,7 +1022,7 @@ export function ReportsClient({
                         />
                         <div className="flex items-center gap-2 flex-1 min-w-0">
                           <div className="flex h-7 w-7 items-center justify-center rounded-md text-[10px] font-bold text-white shrink-0 bg-primary">
-                            {r.name.charAt(0).toUpperCase()}
+                            <Ink>{r.name.charAt(0).toUpperCase()}</Ink>
                           </div>
                           <div className="min-w-0">
                             <p className="text-sm font-medium truncate">{r.name}</p>
@@ -1079,7 +1086,7 @@ export function ReportsClient({
               ))}
 
               {/* Email Preview iframe */}
-              {showPreview && (
+              <Fold open={showPreview} className="mb-0" inner="pb-4">
                 <div className="rounded-xl border border-border-soft overflow-hidden">
                   <div className="bg-muted/30 border-b border-border-soft py-2 px-4 flex items-center gap-3">
                     <div className="flex gap-1.5">
@@ -1095,7 +1102,7 @@ export function ReportsClient({
                     title="Email Preview"
                   />
                 </div>
-              )}
+              </Fold>
             </div>
           </DialogContent>
         </Dialog>

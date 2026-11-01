@@ -130,7 +130,7 @@ export function ClientEmailInline({
         setValue("");
         setEditing(true);
       }}
-      className={`inline-flex items-center gap-1 text-xs text-amber-600 hover:text-amber-700 ${className ?? ""}`}
+      className={`inline-flex justify-center-safe items-center gap-1 text-xs text-amber-600 hover:text-amber-700 ${className ?? ""}`}
     >
       <Plus size={12} />
       Add email on file

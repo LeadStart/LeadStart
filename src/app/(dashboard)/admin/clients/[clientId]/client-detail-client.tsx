@@ -33,6 +33,7 @@ import type {
   LeadFeedback,
   ClientStatus,
 } from "@/types/app";
+import { useCardPress } from "@/lib/ui/card-press";
 
 export interface LinkedClientUser {
   user_id: string;
@@ -71,6 +72,8 @@ export function ClientDetailClient({
   allSnapshots: CampaignSnapshot[];
   linkedUsers: LinkedClientUser[];
 }) {
+  // On a phone a finger that settles on a card lights it with the chosen look until it opens (lib/ui/card-press.ts).
+  const press = useCardPress();
   const router = useRouter();
   const [, startTransition] = useTransition();
   // Default to lifetime (All-Time), because a rolling 30-day reply rate understates it
@@ -281,7 +284,8 @@ export function ClientDetailClient({
                       <Link
                         key={campaign.id}
                         href={`/admin/clients/${clientId}/campaigns/${campaign.id}`}
-                        className="group block rounded-xl border border-border-soft p-4 transition-all hover:border-primary/20 hover:shadow-float"
+                        {...press()}
+                        className="ls-press group block rounded-xl border border-border-soft p-4 transition-[border-color,box-shadow] hover:border-primary/20 hover:shadow-float"
                       >
                         <div className="flex items-center justify-between mb-3">
                           <div className="flex items-center gap-3">

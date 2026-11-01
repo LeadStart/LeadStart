@@ -52,7 +52,7 @@ function watchCursor() {
 
 /** Which keyboard a box brings up, held which way: each has its own height (an email
  *  box's has no suggestions row, a phone box's is a number pad). */
-function kindOf(f: HTMLElement) {
+export function kindOf(f: HTMLElement) {
   const type = f instanceof HTMLInputElement ? f.type : "";
   const mode = f.inputMode;
   const keys =
@@ -63,14 +63,14 @@ function kindOf(f: HTMLElement) {
         : "letters";
   return `${innerWidth > innerHeight ? "side" : "up"}:${keys}`;
 }
-function recall(kind: string): number {
+export function recall(kind: string): number {
   try {
     return Number(JSON.parse(localStorage.getItem(MEMORY) || "{}")[kind]) || 0;
   } catch {
     return 0;
   }
 }
-function remember(kind: string, height: number) {
+export function remember(kind: string, height: number) {
   try {
     const all = JSON.parse(localStorage.getItem(MEMORY) || "{}");
     if (Math.round(all[kind]) === Math.round(height)) return;
@@ -82,10 +82,17 @@ function remember(kind: string, height: number) {
 }
 
 /** The keyboard's height as Safari reports it: what of the page (which keeps its height) the visible area no longer shows. */
-function reportedHeight(): number {
+/**
+ * The keyboard's height above the page's visible foot, as Safari reports it: `innerHeight` is what the page
+ * can see without the keyboard, whether Safari's bars are up or folded away, while `documentElement.clientHeight`
+ * is the page's own viewport, which held sideways is the small one (292pt on an iPhone 18 Pro, bars or no bars):
+ * measured from that, the same keyboard read 178 with the bars folded and 288 with them up, and the 288 was
+ * remembered as the next guess (2026-10-31, iOS 27 simulator).
+ */
+export function reportedHeight(): number {
   const vv = window.visualViewport;
   if (!vv || Math.abs(vv.scale - 1) > 0.01) return 0;
-  const h = document.documentElement.clientHeight - vv.height;
+  const h = window.innerHeight - vv.height;
   return h >= MIN_ROOM ? h : 0;
 }
 
@@ -101,7 +108,7 @@ function safeTop(): number {
 }
 
 /** Puts the cursor at the end of a box's text (boxes for email and numbers have no caret to set). */
-function caretToEnd(f: HTMLElement) {
+export function caretToEnd(f: HTMLElement) {
   if (!(f instanceof HTMLInputElement || f instanceof HTMLTextAreaElement)) return;
   try {
     f.setSelectionRange(f.value.length, f.value.length);
@@ -113,7 +120,7 @@ function caretToEnd(f: HTMLElement) {
 /** How far from a box iOS still counts a tap as on it (its own touch adjustment). */
 const NEAR = 12;
 /** The box a tap at (x, y) is for: the one under it, its label's, or the nearest within reach, as iOS picks. */
-function boxAt(sheet: HTMLElement, on: Element, x: number, y: number): HTMLElement | null {
+export function boxAt(sheet: HTMLElement, on: Element, x: number, y: number): HTMLElement | null {
   const own = on.closest?.("input, textarea, [contenteditable]") ?? on.closest?.("label")?.control ?? null;
   if (own) return isTextField(own) && sheet.contains(own) ? own : null;
   let best: HTMLElement | null = null;
@@ -143,7 +150,7 @@ function scrollerOf(field: HTMLElement, sheet: HTMLElement): HTMLElement {
  * frame, and again from 40ms in on the first frame drawn after a hold in drawing (a
  * gap over 50ms) within its first 400ms: then it moves with the keyboard.
  */
-function withKeyboard(a: Animation) {
+export function withKeyboard(a: Animation) {
   a.pause();
   const begin = performance.now();
   let frames = 0;
@@ -227,7 +234,7 @@ export function sheetKeyboard(sheet: HTMLElement, dim: () => HTMLElement | null)
     sheet.style.maxHeight = "";
     if (lift) {
       // Never past the safe area's top, in the visible part of the page.
-      const room = document.documentElement.clientHeight - lift - panned - safeTop() - 24;
+      const room = window.innerHeight - lift - panned - safeTop() - 24;
       const own = parseFloat(getComputedStyle(sheet).maxHeight);
       sheet.style.maxHeight = `${Math.max(160, Math.min(Number.isFinite(own) ? own : room, room))}px`;
     }

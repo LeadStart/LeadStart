@@ -85,7 +85,7 @@ export function CampaignTagFollow({
             type="button"
             onClick={() => bind(null)}
             disabled={busy}
-            className="inline-flex items-center gap-1 rounded-md border border-border-soft bg-background px-2 py-1 text-[11px] font-medium text-secondary-foreground transition-colors hover:border-primary/50 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex justify-center-safe items-center gap-1 rounded-md border border-border-soft bg-background px-2 py-1 text-[11px] font-medium text-secondary-foreground transition-colors hover:border-primary/50 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {busy && <Loader2 size={11} className="animate-spin" />} Unfollow
           </button>
@@ -138,7 +138,7 @@ export function CampaignTagFollow({
               type="button"
               onClick={() => choice && bind(choice)}
               disabled={busy || !choice}
-              className="inline-flex shrink-0 items-center gap-1 rounded-md bg-primary px-2.5 py-1.5 text-xs font-medium text-white transition-colors hover:bg-[#2731d6] disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex justify-center-safe shrink-0 items-center gap-1 rounded-md bg-primary px-2.5 py-1.5 text-xs font-medium text-white transition-colors hover:bg-[#2731d6] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {busy ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />} Follow
             </button>

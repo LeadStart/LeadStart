@@ -131,7 +131,7 @@ export default function AllCampaignsPage() {
                     </div>
                     <div className="mt-3 flex items-center gap-1 border-t border-border-soft pt-3">
                       <CampaignRowActions campaignId={row.id} campaignName={row.name} status={row.status as "active" | "paused" | "draft" | "completed" | null} sourceChannel={row.source_channel} onChanged={refetch} />
-                      <Link href={campaignHref} className="ml-auto flex items-center gap-1 text-sm font-medium text-primary">View <ArrowRight size={13} /></Link>
+                      <Link href={campaignHref} className="ml-auto flex justify-center-safe items-center gap-1 text-sm font-medium text-primary">View <ArrowRight size={13} /></Link>
                     </div>
                   </div>
                 );

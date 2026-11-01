@@ -924,7 +924,7 @@ function LinkOrphanForm({
       </select>
       <button
         type="submit"
-        className="inline-flex items-center gap-1 rounded-md bg-amber-600 px-3 py-2 text-sm font-medium text-white hover:bg-amber-700"
+        className="inline-flex justify-center-safe items-center gap-1 rounded-md bg-amber-600 px-3 py-2 text-sm font-medium text-white hover:bg-amber-700"
       >
         <CheckCircle2 size={14} /> Link
       </button>

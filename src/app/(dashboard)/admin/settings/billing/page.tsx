@@ -1,5 +1,6 @@
 "use client";
 
+import { Ink } from "@/components/ui/ink";
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -81,6 +82,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useCardPress } from "@/lib/ui/card-press";
 
 // ---------- helpers ----------
 function formatCents(cents: number): string {
@@ -339,7 +341,7 @@ function PlanEditDialog({
 
           <div className="space-y-1.5">
             <Label htmlFor="plan-scope">Scope template (pre-fills new quotes)</Label>
-            <Textarea
+            <Textarea data-kb-sheet
               id="plan-scope"
               value={scopeTemplate}
               onChange={(e) => setScopeTemplate(e.target.value)}
@@ -796,7 +798,7 @@ function NewQuoteDialog({
 
             <div className="space-y-1.5">
               <Label htmlFor="q-scope">Scope of work</Label>
-              <Textarea
+              <Textarea data-kb-sheet
                 id="q-scope"
                 value={scope}
                 onChange={(e) => setScope(e.target.value)}
@@ -807,7 +809,7 @@ function NewQuoteDialog({
 
             <div className="space-y-1.5">
               <Label htmlFor="q-terms">Terms</Label>
-              <Textarea
+              <Textarea data-kb-sheet
                 id="q-terms"
                 value={terms}
                 onChange={(e) => setTerms(e.target.value)}
@@ -892,6 +894,8 @@ function NewQuoteDialog({
 
 // ---------- Page ----------
 export default function BillingPage() {
+  // On a phone a finger that settles on a card lights it with the chosen look until it opens (lib/ui/card-press.ts).
+  const press = useCardPress();
   const [plans, setPlans] = useState<PricingPlan[]>([]);
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [subscriptions, setSubscriptions] = useState<ClientSubscription[]>([]);
@@ -1404,10 +1408,11 @@ export default function BillingPage() {
                   key={plan.id}
                   type="button"
                   onClick={() => setEditingPlan(plan)}
-                  className="text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-xl"
+                  className="text-left transition-[box-shadow] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-xl"
                 >
                   <Card
-                    className={`group transition-all hover:border-primary/40 hover:shadow-float cursor-pointer ${!plan.active ? "opacity-60" : ""}`}
+                    {...press()}
+                    className={`ls-press group transition-[border-color,box-shadow,opacity] hover:border-primary/40 hover:shadow-float cursor-pointer ${!plan.active ? "opacity-60" : ""}`}
                   >
                     <CardContent className="p-5 space-y-3">
                       <div className="flex items-center justify-between">
@@ -1524,7 +1529,7 @@ export default function BillingPage() {
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <div className="flex h-6 w-6 items-center justify-center rounded-md text-[10px] font-bold text-white shrink-0 bg-primary">
-                            {clientName(q.client_id, clients).charAt(0)}
+                            <Ink>{clientName(q.client_id, clients).charAt(0)}</Ink>
                           </div>
                           <span className="text-sm">
                             {clientName(q.client_id, clients)}
@@ -1645,7 +1650,7 @@ export default function BillingPage() {
                         <TableCell>
                           <div className="flex items-center gap-2">
                             <div className="flex h-7 w-7 items-center justify-center rounded-md text-[10px] font-bold text-white shrink-0 bg-primary">
-                              {clientName(s.client_id, clients).charAt(0)}
+                              <Ink>{clientName(s.client_id, clients).charAt(0)}</Ink>
                             </div>
                             <div className="min-w-0">
                               <span className="font-medium block truncate">
@@ -1857,7 +1862,7 @@ export default function BillingPage() {
                               href={inv.hosted_invoice_url}
                               target="_blank"
                               rel="noreferrer"
-                              className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                              className="inline-flex justify-center-safe items-center gap-1 text-xs text-primary hover:underline"
                             >
                               <ExternalLink size={12} />
                               View
@@ -1866,7 +1871,7 @@ export default function BillingPage() {
                               type="button"
                               onClick={() => handleSendInvoiceEmail(inv)}
                               disabled={sendingInvoiceId === inv.id}
-                              className="inline-flex items-center gap-1 text-xs text-primary hover:underline disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                              className="inline-flex justify-center-safe items-center gap-1 text-xs text-primary hover:underline disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                             >
                               <Mail size={12} />
                               {sendingInvoiceId === inv.id ? "Sending…" : "Send"}
@@ -2077,7 +2082,7 @@ export default function BillingPage() {
                 href={portalUrlDialog.url}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                className="inline-flex justify-center-safe items-center gap-1 text-xs text-primary hover:underline"
               >
                 <ExternalLink size={12} />
                 Open in new tab

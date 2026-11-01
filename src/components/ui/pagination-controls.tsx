@@ -35,7 +35,7 @@ export function PaginationControls({
           type="button"
           onClick={() => onPageChange(clampedPage - 1)}
           disabled={atStart}
-          className="flex h-[30px] items-center gap-1 rounded-full border border-border bg-card bg-(image:--tex-white) px-3 text-[12.5px] font-semibold text-foreground transition-[filter] hover:brightness-[0.975] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:brightness-100"
+          className="flex h-[30px] items-center justify-center-safe gap-1 rounded-full border border-border bg-card bg-(image:--tex-white) px-3 text-[12.5px] font-semibold text-foreground transition-[filter] hover:brightness-[0.975] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:brightness-100"
           aria-label="Previous page"
         >
           <ChevronLeft size={14} />
@@ -45,7 +45,7 @@ export function PaginationControls({
           type="button"
           onClick={() => onPageChange(clampedPage + 1)}
           disabled={atEnd}
-          className="flex h-[30px] items-center gap-1 rounded-full border border-border bg-card bg-(image:--tex-white) px-3 text-[12.5px] font-semibold text-foreground transition-[filter] hover:brightness-[0.975] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:brightness-100"
+          className="flex h-[30px] items-center justify-center-safe gap-1 rounded-full border border-border bg-card bg-(image:--tex-white) px-3 text-[12.5px] font-semibold text-foreground transition-[filter] hover:brightness-[0.975] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:brightness-100"
           aria-label="Next page"
         >
           Next

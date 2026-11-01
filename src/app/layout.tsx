@@ -1,8 +1,10 @@
 import type { Metadata, Viewport } from "next";
 import { Poppins, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
+import "./icon-centers.css";
 import { PostLoginOverlay } from "@/components/layout/post-login-overlay";
 import { PressFocus } from "@/components/layout/press-focus";
+import { KeyboardReveal } from "@/components/layout/keyboard-reveal";
 import { Toaster } from "@/components/ui/sonner";
 
 // 800 is loaded because the app actually asks for it: the sidebar wordmark
@@ -56,6 +58,7 @@ export default function RootLayout({
     >
       <body className="h-full font-sans">
         <PressFocus />
+        <KeyboardReveal />
         <PostLoginOverlay />
         {children}
         <Toaster position="bottom-right" richColors />

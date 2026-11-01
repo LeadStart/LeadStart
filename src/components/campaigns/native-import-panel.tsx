@@ -424,7 +424,7 @@ export function NativeImportPanel({ campaignId }: { campaignId: string }) {
       <div>
         <label
           htmlFor={`native-csv-${campaignId}`}
-          className="flex items-center gap-3 rounded-lg border-2 border-dashed border-border-soft px-4 py-6 cursor-pointer hover:border-primary/40 hover:bg-primary/5 transition-colors"
+          className="flex justify-start items-center gap-3 rounded-lg border-2 border-dashed border-border-soft px-4 py-6 cursor-pointer hover:border-primary/40 hover:bg-primary/5 transition-colors"
         >
           <UploadCloud size={24} className="text-muted-foreground" />
           <div className="flex-1">
@@ -809,7 +809,7 @@ export function NativeImportPanel({ campaignId }: { campaignId: string }) {
           </div>
           <div className="h-1.5 w-full overflow-hidden rounded-full bg-primary/15">
             <div
-              className="h-full rounded-full bg-primary transition-all duration-300"
+              className="h-full rounded-full bg-primary transition-[width] duration-300"
               style={{
                 width: `${(importProgress.done / Math.max(1, importProgress.total)) * 100}%`,
               }}

@@ -65,6 +65,7 @@ import type {
 } from "@/types/app";
 import { AddMailboxWizard } from "./add-mailbox-wizard";
 import { DomainProvisioningDetail } from "./domain-provisioning-detail";
+import { Fold } from "@/components/ui/fold";
 
 type MailboxRow = NativeMailbox & {
   sent_today: number;
@@ -147,6 +148,7 @@ export default function MailboxesPage() {
 
   // Which mailbox's detail (health breakdown + placement) is expanded (one at a time).
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [howOpen, setHowOpen] = useState(false);
 
   // Inline test-send form (one at a time): recipient defaults to the login email.
   const [testOpenId, setTestOpenId] = useState<string | null>(null);
@@ -753,7 +755,7 @@ export default function MailboxesPage() {
                       type="button"
                       onClick={() => toggleTagFilter(key)}
                       aria-pressed={on}
-                      className={`inline-flex cursor-pointer items-center rounded-full border px-2 py-0.5 text-xs font-medium transition-colors ${
+                      className={`inline-flex justify-center-safe cursor-pointer items-center rounded-full border px-2 py-0.5 text-xs font-medium transition-colors ${
                         on
                           ? "border-primary bg-primary text-white"
                           : "border-border-soft text-muted-foreground hover:border-primary/50 hover:text-primary"
@@ -771,7 +773,7 @@ export default function MailboxesPage() {
                     <button
                       type="button"
                       onClick={() => setTagFilter(new Set())}
-                      className="inline-flex cursor-pointer items-center gap-0.5 rounded-full px-1.5 py-0.5 text-xs text-muted-foreground hover:text-primary"
+                      className="inline-flex justify-center-safe cursor-pointer items-center gap-0.5 rounded-full px-1.5 py-0.5 text-xs text-muted-foreground hover:text-primary"
                     >
                       <X size={11} /> Clear
                     </button>
@@ -888,7 +890,7 @@ export default function MailboxesPage() {
                 <tbody>
                   {visibleMailboxes.map((mb) => (
                     <Fragment key={mb.id}>
-                    <tr className="border-b last:border-0 align-middle">
+                    <tr className="border-b nth-last-[4]:border-0 align-middle">
                       <td className="py-3 pr-2">
                         <input
                           type="checkbox"
@@ -928,7 +930,7 @@ export default function MailboxesPage() {
                           <button
                             type="button"
                             onClick={() => openTags(mb)}
-                            className="inline-flex cursor-pointer items-center gap-0.5 rounded-full border border-dashed border-border-soft px-1.5 py-0.5 text-[10px] text-muted-foreground hover:border-primary/50 hover:text-primary"
+                            className="inline-flex justify-center-safe cursor-pointer items-center gap-0.5 rounded-full border border-dashed border-border-soft px-1.5 py-0.5 text-[10px] text-muted-foreground hover:border-primary/50 hover:text-primary"
                             aria-expanded={tagsOpenId === mb.id}
                             title="Edit tags"
                           >
@@ -939,7 +941,7 @@ export default function MailboxesPage() {
                           <button
                             type="button"
                             onClick={() => toggleExpanded(mb)}
-                            className="inline-flex cursor-pointer items-center gap-0.5 rounded-full border border-dashed border-border-soft px-1.5 py-0.5 text-[10px] text-muted-foreground hover:border-primary/50 hover:text-primary"
+                            className="inline-flex justify-center-safe cursor-pointer items-center gap-0.5 rounded-full border border-dashed border-border-soft px-1.5 py-0.5 text-[10px] text-muted-foreground hover:border-primary/50 hover:text-primary"
                             aria-expanded={expandedId === mb.id}
                             title="Edit name, signature and warmup"
                           >
@@ -969,7 +971,7 @@ export default function MailboxesPage() {
                           <button
                             type="button"
                             onClick={() => toggleExpanded(mb)}
-                            className="inline-flex items-center gap-1.5 cursor-pointer"
+                            className="inline-flex justify-center-safe items-center gap-1.5 cursor-pointer"
                             title="Show the health breakdown and placement results"
                           >
                             <span className="font-semibold text-foreground">{mb.health_score}</span>
@@ -1063,9 +1065,9 @@ export default function MailboxesPage() {
                         </div>
                       </td>
                     </tr>
-                    {tagsOpenId === mb.id && (
-                      <tr className="bg-slate-50/60 border-b last:border-0">
-                        <td colSpan={6} className="px-3 py-3">
+                    <tr className="bg-slate-50/60">
+                      <td colSpan={6} className="p-0">
+                        <Fold open={tagsOpenId === mb.id} inner="border-b border-border px-3 py-3 [tr:nth-last-child(-n+3)>td>&]:border-b-0">
                           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                             <div className="max-w-lg flex-1">
                               <TagChipInput
@@ -1100,12 +1102,12 @@ export default function MailboxesPage() {
                             Tags group inboxes into named pools you can add to a campaign all at
                             once. Case-insensitive; type and press Enter.
                           </p>
-                        </td>
-                      </tr>
-                    )}
-                    {testOpenId === mb.id && (
-                      <tr className="bg-slate-50/60 border-b last:border-0">
-                        <td colSpan={6} className="px-3 py-3">
+                        </Fold>
+                      </td>
+                    </tr>
+                    <tr className="bg-slate-50/60">
+                      <td colSpan={6} className="p-0">
+                        <Fold open={testOpenId === mb.id} inner="border-b border-border px-3 py-3 [tr:nth-last-child(-n+3)>td>&]:border-b-0">
                           <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
                             <div className="space-y-1 flex-1 max-w-md">
                               <Label htmlFor={`test-to-${mb.id}`} className="text-xs font-medium">
@@ -1146,12 +1148,12 @@ export default function MailboxesPage() {
                             mailbox: not a “TEST” subject line. Sending to this mailbox itself is
                             refused: a self-send never leaves the tenant and always lands in the inbox.
                           </p>
-                        </td>
-                      </tr>
-                    )}
-                    {expandedId === mb.id && (
-                      <tr className="bg-slate-50/60 border-b last:border-0">
-                        <td colSpan={6} className="px-3 py-3">
+                        </Fold>
+                      </td>
+                    </tr>
+                    <tr className="bg-slate-50/60">
+                      <td colSpan={6} className="p-0">
+                        <Fold open={expandedId === mb.id} inner="border-b border-border px-3 py-3 [tr:nth-last-child(-n+3)>td>&]:border-b-0">
                           <div className="mb-4">
                             <MailboxIdentity mailbox={mb} onSaved={load} />
                           </div>
@@ -1198,10 +1200,16 @@ export default function MailboxesPage() {
                                   Last checked {new Date(mb.health_checked_at).toLocaleString()}.
                                 </p>
                               )}
-                              <details className="pt-1 text-xs">
-                                <summary className="cursor-pointer select-none font-medium text-foreground hover:underline">
+                              <div className="pt-1 text-xs">
+                                <button
+                                  type="button"
+                                  onClick={() => setHowOpen((v) => !v)}
+                                  aria-expanded={howOpen}
+                                  className="cursor-pointer select-none font-medium text-foreground hover:underline"
+                                >
                                   How the score works
-                                </summary>
+                                </button>
+                                <Fold open={howOpen}>
                                 <div className="mt-2 space-y-2 rounded-md border bg-card p-3">
                                   <ul className="space-y-1 text-muted-foreground">
                                     {HEALTH_SCALE.map((line) => (
@@ -1220,7 +1228,8 @@ export default function MailboxesPage() {
                                     ))}
                                   </dl>
                                 </div>
-                              </details>
+                                </Fold>
+                              </div>
                             </div>
                             <PlacementPanel
                               mailbox={mb}
@@ -1230,9 +1239,9 @@ export default function MailboxesPage() {
                               onRun={(probe) => handlePlacement(mb, probe)}
                             />
                           </div>
-                        </td>
-                      </tr>
-                    )}
+                        </Fold>
+                      </td>
+                    </tr>
                     </Fragment>
                   ))}
                 </tbody>

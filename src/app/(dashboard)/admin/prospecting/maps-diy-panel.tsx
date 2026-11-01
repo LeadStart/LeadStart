@@ -64,6 +64,8 @@ import {
   estimatePatternMvCost,
 } from "@/lib/apify/pricing";
 import { PlanFloorNote } from "@/components/prospecting/plan-floor-note";
+import { Grown } from "@/components/ui/grown";
+import { useCardPress } from "@/lib/ui/card-press";
 
 // The DIY Google-Maps lead-search flow: a "D + running cart" build experience.
 // LEFT: where your customers are (a Smart Search location picker → multi-region),
@@ -206,6 +208,7 @@ const KIND_META: Record<GeoKind, { group: string; icon: typeof MapPin }> = {
 };
 
 export function MapsDiyPanel() {
+  const press = useCardPress();
   // Build state.
   const [areas, setAreas] = useState<MapsArea[]>([]);
   const [terms, setTerms] = useState<string[]>([]);
@@ -745,7 +748,7 @@ export function MapsDiyPanel() {
                   key={p.id}
                   type="button"
                   onClick={() => applyPreset(p)}
-                  className="inline-flex items-center gap-1 rounded-full border border-border-soft px-2.5 py-1 text-xs hover:bg-muted/50 cursor-pointer"
+                  className="inline-flex justify-center-safe items-center gap-1 rounded-full border border-border-soft px-2.5 py-1 text-xs hover:bg-muted/50 cursor-pointer"
                 >
                   <Bookmark size={11} /> {p.name}
                   {p.is_global && <Badge variant="secondary" className="ml-1 h-4 px-1 text-[10px]">Global</Badge>}
@@ -783,49 +786,51 @@ export function MapsDiyPanel() {
                   {geoLoading && <Loader2 size={14} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-muted-foreground" />}
                 </div>
 
-                {geoOpen && (zipSuggestion || grouped.length > 0 || (locInput.trim().length >= 2 && !geoLoading)) && (
-                  <div className="absolute z-20 mt-1 max-h-80 w-full ls-menu-in overflow-auto rounded-2xl border border-border bg-popover shadow-pop">
-                    {zipSuggestion && (
-                      <button
-                        type="button"
-                        onClick={() => addArea(zipSuggestion)}
-                        className="flex w-full items-center gap-2 border-b border-border-soft px-3 py-2 text-left text-sm hover:bg-muted/50 cursor-pointer"
-                      >
-                        <Hash size={14} className="text-indigo-600" />
-                        <span>
-                          Add ZIP <span className="font-medium">{zipSuggestion.postalCode}</span>
-                        </span>
-                      </button>
-                    )}
-                    {grouped.map((g) => {
-                      const Meta = KIND_META[g.kind];
-                      return (
-                        <div key={g.kind}>
-                          <div className="flex items-center gap-1.5 bg-muted/40 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                            <Meta.icon size={11} /> {Meta.group}
-                          </div>
-                          {g.rows.map((r) => (
-                            <button
-                              key={`${r.kind}-${r.id}`}
-                              type="button"
-                              onClick={() => {
-                                const a = geoResultToArea(r);
-                                if (a) addArea(a);
-                              }}
-                              className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-muted/50 cursor-pointer"
-                            >
-                              <span>{r.label}</span>
-                              <Plus size={13} className="text-muted-foreground" />
-                            </button>
-                          ))}
+                <Grown
+                  open={geoOpen && (!!zipSuggestion || grouped.length > 0 || (locInput.trim().length >= 2 && !geoLoading))}
+                  origin="top left"
+                  className="absolute z-20 mt-1 max-h-80 w-full overflow-auto rounded-2xl border border-border bg-popover shadow-pop overscroll-contain touch-pan-y"
+                >
+                  {zipSuggestion && (
+                    <button
+                      type="button"
+                      onClick={() => addArea(zipSuggestion)}
+                      className="flex w-full items-center gap-2 border-b border-border-soft px-3 py-2 text-left text-sm hover:bg-muted/50 cursor-pointer"
+                    >
+                      <Hash size={14} className="text-indigo-600" />
+                      <span>
+                        Add ZIP <span className="font-medium">{zipSuggestion.postalCode}</span>
+                      </span>
+                    </button>
+                  )}
+                  {grouped.map((g) => {
+                    const Meta = KIND_META[g.kind];
+                    return (
+                      <div key={g.kind}>
+                        <div className="flex items-center gap-1.5 bg-muted/40 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                          <Meta.icon size={11} /> {Meta.group}
                         </div>
-                      );
-                    })}
-                    {!zipSuggestion && grouped.length === 0 && locInput.trim().length >= 2 && !geoLoading && (
-                      <div className="px-3 py-3 text-sm text-muted-foreground">No matches. Check the spelling, or add a ZIP.</div>
-                    )}
-                  </div>
-                )}
+                        {g.rows.map((r) => (
+                          <button
+                            key={`${r.kind}-${r.id}`}
+                            type="button"
+                            onClick={() => {
+                              const a = geoResultToArea(r);
+                              if (a) addArea(a);
+                            }}
+                            className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-muted/50 cursor-pointer"
+                          >
+                            <span>{r.label}</span>
+                            <Plus size={13} className="text-muted-foreground" />
+                          </button>
+                        ))}
+                      </div>
+                    );
+                  })}
+                  {!zipSuggestion && grouped.length === 0 && locInput.trim().length >= 2 && !geoLoading && (
+                    <div className="px-3 py-3 text-sm text-muted-foreground">No matches. Check the spelling, or add a ZIP.</div>
+                  )}
+                </Grown>
               </div>
 
               {/* Quick-add states */}
@@ -878,7 +883,8 @@ export function MapsDiyPanel() {
                       key={a.label}
                       type="button"
                       onClick={() => addAudience(a.terms)}
-                      className={`group flex cursor-pointer flex-col gap-2.5 rounded-xl border p-4 text-left transition-colors ${
+                      {...press()}
+                      className={`ls-press group flex cursor-pointer flex-col gap-2.5 rounded-xl border p-4 text-left transition-colors ${
                         active
                           ? "border-primary bg-primary/[0.04] ring-1 ring-inset ring-primary"
                           : "border-border-soft hover:border-indigo-300"

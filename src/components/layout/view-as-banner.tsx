@@ -96,9 +96,10 @@ export function ViewAsBanner({ clientName }: { clientName: string | null }) {
           <DropdownMenu>
             <DropdownMenuTrigger
               aria-label="Switch client"
-              className="flex cursor-pointer items-center gap-1 rounded-md bg-white/20 px-2 py-1 text-xs font-semibold outline-none transition-colors hover:bg-white/30 disabled:opacity-60 sm:px-2.5"
+              className="flex justify-center-safe cursor-pointer items-center gap-1 rounded-md bg-white/20 px-2 py-1 text-xs font-semibold outline-none transition-colors hover:bg-white/30 disabled:opacity-60 sm:px-2.5"
             >
-              <Users size={13} className="sm:hidden" />
+              {/* ls-glyph: a glyph beside the chevron, not a ring round it (the icon-centers measure reads an svg with circles as a ring). */}
+              <Users size={13} className="sm:hidden ls-glyph" />
               <span className="hidden sm:inline">Switch client</span>
               <ChevronDown size={12} />
             </DropdownMenuTrigger>
@@ -118,7 +119,7 @@ export function ViewAsBanner({ clientName }: { clientName: string | null }) {
         <button
           onClick={exitPreview}
           disabled={exiting}
-          className="flex cursor-pointer items-center gap-1.5 rounded-md bg-white/20 px-2.5 py-1 text-xs font-semibold transition-colors hover:bg-white/30 disabled:opacity-60"
+          className="flex justify-center-safe cursor-pointer items-center gap-1.5 rounded-md bg-white/20 px-2.5 py-1 text-xs font-semibold transition-colors hover:bg-white/30 disabled:opacity-60"
         >
           <X size={13} />
           {exiting ? "Exiting…" : (

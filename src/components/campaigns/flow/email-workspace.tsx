@@ -356,7 +356,7 @@ export function EmailWorkspace({
             </button>
           ))}
         </div>
-        <textarea
+        <textarea data-kb-reveal
           ref={bodyRef}
           className={`${styles.textarea} ${styles.wsBody}`}
           aria-label="Body"

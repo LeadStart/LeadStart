@@ -50,6 +50,7 @@ import {
 } from "lucide-react";
 import type { Organization } from "@/types/app";
 import { appUrl } from "@/lib/api-url";
+import { useCardPress } from "@/lib/ui/card-press";
 
 // Brand icon: Lucide's brand-icon set was removed upstream, so inline.
 function LinkedinIcon({ size = 16, className = "" }: { size?: number; className?: string }) {
@@ -149,6 +150,8 @@ const STATUS = {
 type StatusKey = keyof typeof STATUS;
 
 export default function IntegrationsPage() {
+  // On a phone a finger that settles on a card lights it with the chosen look until it opens (lib/ui/card-press.ts).
+  const press = useCardPress();
   const { organizationId } = useUser();
   // Which provider's dialog is open. null = the grid.
   const [openId, setOpenId] = useState<string | null>(null);
@@ -1084,7 +1087,7 @@ export default function IntegrationsPage() {
                 <Label htmlFor="gmailSaKey" className="text-sm font-medium">
                   Service account private key
                 </Label>
-                <Textarea
+                <Textarea data-kb-reveal
                   id="gmailSaKey"
                   value={gmailSaKey}
                   onChange={(e) => setGmailSaKey(e.target.value)}
@@ -1971,7 +1974,8 @@ export default function IntegrationsPage() {
                     key={id}
                     type="button"
                     onClick={() => setOpenId(id)}
-                    className="group flex w-full flex-col gap-2 rounded-xl border border-border-soft bg-card shadow-card p-4 text-left transition-colors hover:border-primary/40 hover:bg-muted/40"
+                    {...press()}
+                    className="ls-press group flex w-full flex-col gap-2 rounded-xl border border-border-soft bg-card shadow-card p-4 text-left transition-colors hover:border-primary/40 hover:bg-muted/40"
                   >
                     <div className="flex items-center gap-2.5">
                       <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${p.tile}`}>

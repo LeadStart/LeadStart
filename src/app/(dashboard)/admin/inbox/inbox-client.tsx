@@ -53,6 +53,7 @@ import {
 import { Conversation } from "@/components/inbox/conversation";
 import { QuickActionBar } from "@/components/inbox/quick-action-bar";
 import { useReclassifyGroup, classAccent } from "@/components/inbox/reclassify-control";
+import { Fold } from "@/components/ui/fold";
 
 // Narrowed row shape for the inbox. Columns must match the server component's
 // select(): adding a field here without adding it to the query renders undefined.
@@ -315,7 +316,7 @@ function CategoryPill({
   return (
     <button
       onClick={onClick}
-      className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[11.5px] font-semibold transition-colors cursor-pointer ${
+      className={`inline-flex justify-center-safe items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[11.5px] font-semibold transition-colors cursor-pointer ${
         active
           ? "border-primary/25 bg-primary/[0.13] text-primary"
           : "border-transparent bg-muted/60 text-muted-foreground hover:bg-muted"
@@ -387,11 +388,11 @@ function AdminThread({
               </span>
             </div>
             <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px]">
-              <a href={`mailto:${reply.lead_email}`} className="inline-flex items-center gap-1 text-primary hover:underline">
+              <a href={`mailto:${reply.lead_email}`} className="inline-flex justify-center-safe items-center gap-1 text-primary hover:underline">
                 <Mail size={11} /> {reply.lead_email}
               </a>
               {phone && (
-                <a href={phone} className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground">
+                <a href={phone} className="inline-flex justify-center-safe items-center gap-1 text-muted-foreground hover:text-foreground">
                   <Phone size={11} /> {reply.lead_phone_e164}
                 </a>
               )}
@@ -400,7 +401,7 @@ function AdminThread({
                   href={reply.lead_linkedin_url}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex items-center gap-1 text-[#0077b5] hover:underline"
+                  className="inline-flex justify-center-safe items-center gap-1 text-[#0077b5] hover:underline"
                 >
                   LinkedIn <ExternalLink size={11} />
                 </a>
@@ -643,7 +644,7 @@ function AdminComposer({
     content = (
       <button
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-1.5 rounded-full bg-primary bg-(image:--tex-brand) px-4 py-2 text-sm font-semibold text-white cursor-pointer"
+        className="inline-flex justify-center-safe items-center gap-1.5 rounded-full bg-primary bg-(image:--tex-brand) px-4 py-2 text-sm font-semibold text-white cursor-pointer"
       >
         <Send size={14} /> Reply for {reply.client?.name ?? "client"}
         {report.state === "done" && report.link && <span className="font-medium opacity-80">· report link ready</span>}
@@ -670,7 +671,7 @@ function AdminComposer({
             <span className="font-semibold text-foreground/80">Subject:</span> {subject}
           </p>
         </div>
-        <textarea
+        <textarea data-kb-reveal
           autoFocus
           ref={(el) => {
             textRef.current = el;
@@ -717,7 +718,7 @@ function AdminComposer({
               onClick={() => setAttachReport((v) => !v)}
               disabled={sending}
               title="Attached report PDFs have landed in spam; the link is the safer default."
-              className={`inline-flex max-w-full items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[11.5px] cursor-pointer ${
+              className={`inline-flex justify-center-safe max-w-full items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[11.5px] cursor-pointer ${
                 attachReport
                   ? "border-primary/30 bg-primary/[0.07] text-foreground"
                   : "border-dashed border-border text-muted-foreground hover:text-foreground"
@@ -752,7 +753,7 @@ function AdminComposer({
               </button>
             </span>
           ))}
-          <label className="inline-flex cursor-pointer items-center gap-1 rounded-lg px-2 py-1 text-[11.5px] font-semibold text-muted-foreground hover:bg-muted hover:text-foreground">
+          <label className="inline-flex justify-center-safe cursor-pointer items-center gap-1 rounded-lg px-2 py-1 text-[11.5px] font-semibold text-muted-foreground hover:bg-muted hover:text-foreground">
             <Paperclip size={12} /> Attach file
             <input
               type="file"
@@ -792,7 +793,7 @@ function AdminComposer({
           <button
             onClick={send}
             disabled={!hasMessage || sending || !!unfilled}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-primary bg-(image:--tex-brand) px-4 py-2 text-sm font-semibold text-white cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            className="inline-flex justify-center-safe shrink-0 items-center gap-1.5 rounded-full bg-primary bg-(image:--tex-brand) px-4 py-2 text-sm font-semibold text-white cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Send size={14} /> {sending ? "Sending…" : "Send reply"}
           </button>
@@ -832,12 +833,13 @@ function TrailFooter({ reply, onExclude }: { reply: InboxRowReply; onExclude: (v
     <div className="flex-none border-t border-border-soft bg-card">
       <button
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center gap-2 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground hover:bg-muted/40 cursor-pointer sm:px-5"
+        aria-expanded={open}
+        className="flex w-full items-center justify-start gap-2 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground hover:bg-muted/40 cursor-pointer sm:px-5"
       >
         <Bot size={13} className="text-primary" /> Classification trail
-        <ChevronDown size={13} className={`ml-auto transition-transform ${open ? "rotate-180" : ""}`} />
+        <ChevronDown size={13} className={`ml-auto ls-chev-flip${open ? " is-open" : ""}`} />
       </button>
-      {open && (
+      <Fold open={open}>
         <div className="space-y-2.5 px-4 pb-3 text-xs sm:px-5">
           <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
             <div>
@@ -890,7 +892,7 @@ function TrailFooter({ reply, onExclude }: { reply: InboxRowReply; onExclude: (v
             </button>
           </div>
         </div>
-      )}
+      </Fold>
     </div>
   );
 }

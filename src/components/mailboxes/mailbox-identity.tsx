@@ -137,7 +137,7 @@ export function MailboxIdentity({ mailbox, onSaved }: { mailbox: IdentityMailbox
         </div>
         <div className="space-y-1.5">
           <Label htmlFor={`identity-signature-${mailbox.id}`} className="text-xs">Signature ({"{{signature}}"})</Label>
-          <Textarea
+          <Textarea data-kb-reveal
             id={`identity-signature-${mailbox.id}`}
             rows={4}
             value={signature}

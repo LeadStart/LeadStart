@@ -1,5 +1,6 @@
 "use client";
 
+import { Ink } from "@/components/ui/ink";
 import { BackButton } from "@/components/layout/back-button";
 
 // Shared two-pane "unibox" shell for the admin + client inboxes (direction #5).
@@ -9,6 +10,7 @@ import { BackButton } from "@/components/layout/back-button";
 // so each pane scrolls internally instead of the whole page.
 
 import type { ReactNode } from "react";
+import { useCardPress } from "@/lib/ui/card-press";
 
 export function initials(name: string): string {
   const p = name.trim().split(/\s+/).filter(Boolean);
@@ -86,11 +88,14 @@ export function ReplyListRow({
   badges?: ReactNode;
   unread?: boolean;
 }) {
+  // On a phone a finger that settles on a card lights it with the chosen look until it opens (lib/ui/card-press.ts).
+  const press = useCardPress();
   return (
     <button
       data-reply-id={id}
       onClick={onClick}
-      className={`relative flex w-full items-start gap-3 border-b border-border-soft px-3.5 py-3 text-left transition-colors cursor-pointer hover:bg-muted/40 ${
+      {...press()}
+      className={`ls-press relative flex w-full items-start justify-start gap-3 border-b border-border-soft px-3.5 py-3 text-left transition-colors cursor-pointer hover:bg-muted/40 ${
         selected ? "bg-primary/[0.06]" : ""
       }`}
     >
@@ -99,7 +104,7 @@ export function ReplyListRow({
         className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
         style={{ background: accent }}
       >
-        {monogram}
+        <Ink>{monogram}</Ink>
       </span>
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-1.5">

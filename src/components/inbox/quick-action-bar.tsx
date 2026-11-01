@@ -38,7 +38,7 @@ export function QuickActionBar({ groups }: { groups: QuickActionGroup[] }) {
                 key={a.key}
                 onClick={a.onClick}
                 disabled={a.disabled}
-                className="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                className="inline-flex justify-center-safe items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 style={
                   a.active
                     ? { background: a.color ?? "#0f172a", color: "#fff", borderColor: "transparent" }

@@ -55,7 +55,7 @@ function LinkedInGlyph({ size = 16, className }: { size?: number; className?: st
     <svg
       width={size}
       height={size}
-      viewBox="0 0 24 24"
+      viewBox="-0.075 0.25 24 24"
       fill="currentColor"
       aria-hidden="true"
       className={className}
@@ -99,7 +99,7 @@ function CopyButton({ text }: { text: string }) {
           /* clipboard blocked: no-op */
         }
       }}
-      className="inline-flex items-center gap-1 rounded-md border border-border-soft bg-card px-2 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted/40 cursor-pointer"
+      className="inline-flex justify-center-safe items-center gap-1 rounded-md border border-border-soft bg-card px-2 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted/40 cursor-pointer"
       title="Copy message"
     >
       {copied ? <Check size={12} className="text-emerald-600" /> : <Copy size={12} />}
@@ -290,7 +290,7 @@ export default function LinkedInTasksPage() {
                             href={c.linkedin_url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 rounded-md border border-border-soft bg-card px-2 py-1 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-50 cursor-pointer"
+                            className="inline-flex justify-center-safe items-center gap-1 rounded-md border border-border-soft bg-card px-2 py-1 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-50 cursor-pointer"
                             title={c.linkedin_url}
                           >
                             <LinkedInGlyph size={12} />
@@ -332,7 +332,7 @@ export default function LinkedInTasksPage() {
                               type="button"
                               disabled={busy}
                               onClick={() => setTaskStatus(task.id, "done")}
-                              className="inline-flex items-center gap-1 rounded-md bg-emerald-600 px-2.5 py-1 text-xs font-medium text-white transition-colors hover:bg-emerald-700 disabled:opacity-50 cursor-pointer"
+                              className="inline-flex justify-center-safe items-center gap-1 rounded-md bg-emerald-600 px-2.5 py-1 text-xs font-medium text-white transition-colors hover:bg-emerald-700 disabled:opacity-50 cursor-pointer"
                             >
                               <Check size={13} />
                               Done
@@ -341,7 +341,7 @@ export default function LinkedInTasksPage() {
                               type="button"
                               disabled={busy}
                               onClick={() => setTaskStatus(task.id, "skipped")}
-                              className="inline-flex items-center gap-1 rounded-md border border-border-soft bg-card px-2.5 py-1 text-xs font-medium text-[#475569] transition-colors hover:bg-muted/40 disabled:opacity-50 cursor-pointer"
+                              className="inline-flex justify-center-safe items-center gap-1 rounded-md border border-border-soft bg-card px-2.5 py-1 text-xs font-medium text-[#475569] transition-colors hover:bg-muted/40 disabled:opacity-50 cursor-pointer"
                             >
                               <SkipForward size={13} />
                               Skip
@@ -352,7 +352,7 @@ export default function LinkedInTasksPage() {
                             type="button"
                             disabled={busy}
                             onClick={() => setTaskStatus(task.id, "open")}
-                            className="inline-flex items-center gap-1 rounded-md border border-border-soft bg-card px-2.5 py-1 text-xs font-medium text-[#475569] transition-colors hover:bg-muted/40 disabled:opacity-50 cursor-pointer"
+                            className="inline-flex justify-center-safe items-center gap-1 rounded-md border border-border-soft bg-card px-2.5 py-1 text-xs font-medium text-[#475569] transition-colors hover:bg-muted/40 disabled:opacity-50 cursor-pointer"
                           >
                             <RotateCcw size={13} />
                             Reopen

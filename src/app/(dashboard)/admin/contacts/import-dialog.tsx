@@ -651,7 +651,7 @@ export function ImportContactsDialog({
                 <button
                   type="button"
                   onClick={reset}
-                  className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 cursor-pointer"
+                  className="text-xs text-muted-foreground hover:text-foreground flex justify-center-safe items-center gap-1 cursor-pointer"
                 >
                   <X size={12} />
                   Replace file

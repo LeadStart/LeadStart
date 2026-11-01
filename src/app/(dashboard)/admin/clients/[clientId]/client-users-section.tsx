@@ -1,5 +1,6 @@
 "use client";
 
+import { Ink } from "@/components/ui/ink";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -188,7 +189,7 @@ export function ClientUsersSection({
         </CardTitle>
         <Link
           href="/admin/reports"
-          className="text-xs font-medium text-primary hover:underline flex items-center gap-1"
+          className="text-xs font-medium text-primary hover:underline flex justify-center-safe items-center gap-1"
         >
           <Mail size={12} />
           Manage in Reports
@@ -209,7 +210,7 @@ export function ClientUsersSection({
               >
                 <div className="flex items-center gap-3">
                   <div className={`flex h-9 w-9 items-center justify-center rounded-lg text-sm font-bold text-white shrink-0 ${user.invite_status === "pending" ? "bg-gray-400" : "bg-primary"}`}>
-                    {(user.full_name || user.email).charAt(0).toUpperCase()}
+                    <Ink>{(user.full_name || user.email).charAt(0).toUpperCase()}</Ink>
                   </div>
                   <div>
                     <div className="flex items-center gap-2">

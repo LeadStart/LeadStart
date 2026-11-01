@@ -9,7 +9,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit && node scripts/style/check-all.mjs",
+    "check:style": "node scripts/style/check-all.mjs",
+    "measure": "node scripts/style/measure-gate.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.90.0",

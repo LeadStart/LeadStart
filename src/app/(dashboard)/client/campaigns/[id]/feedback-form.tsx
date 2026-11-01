@@ -129,7 +129,7 @@ export function FeedbackForm({ campaignId }: { campaignId: string }) {
           </div>
           <div className="space-y-1">
             <Label htmlFor="comment">Comment (optional)</Label>
-            <Textarea
+            <Textarea data-kb-reveal
               id="comment"
               value={comment}
               onChange={(e) => setComment(e.target.value)}

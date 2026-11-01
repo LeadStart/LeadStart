@@ -1,4 +1,5 @@
 "use client";
+import { Ink } from "@/components/ui/ink";
 import { PageHeader } from "@/components/layout/page-header";
 
 import Link from "next/link";
@@ -57,6 +58,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { Contact, ProspectStage } from "@/types/app";
+import { useCardPress } from "@/lib/ui/card-press";
 
 type StageDef = {
   value: ProspectStage;
@@ -105,6 +107,8 @@ function ProspectCardInner({
   onSelect?: () => void;
   dragging?: boolean;
 }) {
+  // On a phone a finger that settles on a card lights it with the chosen look until it opens (lib/ui/card-press.ts).
+  const press = useCardPress();
   const stage = contact.pipeline_stage;
   const isOverdue =
     !!contact.pipeline_follow_up_date &&
@@ -118,12 +122,13 @@ function ProspectCardInner({
   return (
     <Card
       onClick={onSelect}
-      className={`group cursor-pointer transition-all hover:border-primary/30 hover:shadow-float ${dragging ? "shadow-float ring-2 ring-primary/30" : ""}`}
+      {...press()}
+      className={`ls-press group cursor-pointer shadow-card-tight transition-[border-color,box-shadow] hover:border-primary/30 hover:shadow-float ${dragging ? "shadow-float ring-2 ring-primary/30" : ""}`}
     >
       <CardContent className="p-3">
         <div className="flex items-start gap-2.5 mb-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold text-white shrink-0 bg-primary">
-            {companyInitial}
+            <Ink>{companyInitial}</Ink>
           </div>
           <div className="min-w-0 flex-1">
             <p className="font-semibold text-sm text-foreground truncate">
@@ -544,7 +549,7 @@ export default function ProspectsPage() {
             <DialogHeader>
               <DialogTitle className="flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg text-sm font-bold text-white bg-primary">
-                  {(selected.company_name || selected.email || "?").charAt(0).toUpperCase()}
+                  <Ink>{(selected.company_name || selected.email || "?").charAt(0).toUpperCase()}</Ink>
                 </div>
                 <div className="min-w-0">
                   <div className="truncate">{selected.company_name || displayName(selected)}</div>
@@ -579,7 +584,7 @@ export default function ProspectsPage() {
                   </p>
                   <Link
                     href="/admin/contacts"
-                    className="text-xs font-medium text-primary hover:underline flex items-center gap-1"
+                    className="text-xs font-medium text-primary hover:underline flex justify-center-safe items-center gap-1"
                   >
                     View contact <ExternalLink size={11} />
                   </Link>
@@ -620,7 +625,7 @@ export default function ProspectsPage() {
                 </p>
                 <div className="space-y-1">
                   <Label className="text-sm">Deal notes</Label>
-                  <Textarea
+                  <Textarea data-kb-sheet
                     value={editNotes}
                     onChange={(e) => setEditNotes(e.target.value)}
                     rows={3}
@@ -730,7 +735,7 @@ export default function ProspectsPage() {
                         className="w-full flex items-center gap-3 p-3 hover:bg-muted/40 transition-colors text-left"
                       >
                         <div className="flex h-9 w-9 items-center justify-center rounded-lg text-xs font-bold text-white shrink-0 bg-primary">
-                          {(c.company_name || c.email || "?").charAt(0).toUpperCase()}
+                          <Ink>{(c.company_name || c.email || "?").charAt(0).toUpperCase()}</Ink>
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className="text-sm font-medium truncate">

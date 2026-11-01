@@ -2,11 +2,12 @@
 
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Fold, foldToggle } from "@/components/ui/fold";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { ChevronDown, ChevronRight, Radio, Save, CheckCircle2 } from "lucide-react";
+import { ChevronRight, Radio, Save, CheckCircle2 } from "lucide-react";
 import { appUrl } from "@/lib/api-url";
 import { CLASS_META } from "@/lib/replies/ui";
 import type { Client, ReplyClass } from "@/types/app";
@@ -112,8 +113,8 @@ export function ReplyRoutingSection({
   return (
     <Card>
       <CardHeader
-        className={`flex flex-row items-center gap-2 cursor-pointer select-none ${open ? "pb-3" : ""}`}
-        onClick={() => setOpen((v) => !v)}
+        className="flex flex-row items-center gap-2 cursor-pointer select-none"
+        {...foldToggle(open, () => setOpen((v) => !v))}
       >
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
           <Radio size={16} className="text-white" />
@@ -123,9 +124,9 @@ export function ReplyRoutingSection({
           <span className="whitespace-nowrap">{populatedCount}/8 fields &middot;</span>{" "}
           <span className="whitespace-nowrap">{form.auto_notify_classes.length} hot classes</span>
         </span>
-        {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+        <ChevronRight size={16} className={`ls-chev${open ? " is-open" : ""}`} />
       </CardHeader>
-      {open && (
+      <Fold open={open} className="-mt-4" inner="pt-4">
         <CardContent className="space-y-6">
           <p className="text-xs text-muted-foreground">
             These fields drive the AI reply-routing pipeline: persona used for hot-lead
@@ -233,7 +234,7 @@ export function ReplyRoutingSection({
 
           <div className="space-y-1.5">
             <Label htmlFor="brand_voice">Brand voice</Label>
-            <Textarea
+            <Textarea data-kb-reveal
               id="brand_voice"
               rows={3}
               placeholder="Friendly but direct. No emoji. Avoid marketing jargon."
@@ -244,7 +245,7 @@ export function ReplyRoutingSection({
 
           <div className="space-y-1.5">
             <Label htmlFor="signature_block">Email signature</Label>
-            <Textarea
+            <Textarea data-kb-reveal
               id="signature_block"
               rows={4}
               placeholder={`Sarah Chen\nHead of Partnerships, Acme\nacme.com`}
@@ -303,7 +304,7 @@ export function ReplyRoutingSection({
             {error && <span className="text-xs text-red-600">{error}</span>}
           </div>
         </CardContent>
-      )}
+      </Fold>
     </Card>
   );
 }

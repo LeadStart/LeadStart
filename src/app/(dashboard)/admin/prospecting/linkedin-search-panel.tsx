@@ -76,6 +76,8 @@ import {
 } from "@/lib/apify/sourcing/linkedin-facets";
 import { PipelineStatusPanel } from "./pipeline-status-panel";
 import { fetchActiveEnrichmentRunId } from "@/components/contacts/enrichment-run-banner";
+import { Fold } from "@/components/ui/fold";
+import { Grown } from "@/components/ui/grown";
 
 type Depth = "short" | "full" | "full_email";
 
@@ -553,8 +555,11 @@ function FacetMultiSelect({
           className={`shrink-0 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`}
         />
       </button>
-      {open && (
-        <div className="absolute left-0 top-[42px] z-30 w-full ls-menu-in rounded-2xl border border-border bg-popover p-1.5 shadow-pop">
+      <Grown
+        open={open}
+        origin="top left"
+        className="absolute left-0 top-[42px] z-30 w-full rounded-2xl border border-border bg-popover p-1.5 shadow-pop"
+      >
           {searchable && (
             <input
               autoFocus
@@ -564,7 +569,7 @@ function FacetMultiSelect({
               className="mb-1 w-full rounded-md border border-input bg-transparent px-2 py-1 text-sm outline-none focus:border-primary"
             />
           )}
-          <div className="max-h-56 overflow-auto">
+          <div className="max-h-56 overflow-auto overscroll-contain touch-pan-y">
             {filtered.length === 0 ? (
               <p className="px-2 py-1.5 text-[12px] text-muted-foreground">No matches</p>
             ) : (
@@ -593,8 +598,7 @@ function FacetMultiSelect({
               Clear ({selected.size})
             </button>
           )}
-        </div>
-      )}
+      </Grown>
     </div>
   );
 }
@@ -798,14 +802,17 @@ function SavedSearches({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex shrink-0 cursor-pointer items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-[12px] font-medium text-primary hover:bg-brand-50/50"
+        className="flex justify-center-safe shrink-0 cursor-pointer items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-[12px] font-medium text-primary hover:bg-brand-50/50"
       >
         <Bookmark size={14} fill={presets.length > 0 ? "currentColor" : "none"} />
         Saved{presets.length ? ` (${presets.length})` : ""}
         <ChevronDown size={13} className={`transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
-      {open && (
-        <div className="absolute right-0 top-[40px] z-40 w-72 ls-menu-in rounded-2xl border border-border bg-popover p-2 shadow-pop">
+      <Grown
+        open={open}
+        origin="top right"
+        className="absolute right-0 top-[40px] z-40 w-72 rounded-2xl border border-border bg-popover p-2 shadow-pop"
+      >
           <div className="mb-2">
             <p className="mb-1 px-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
               Save current search
@@ -842,7 +849,7 @@ function SavedSearches({
                 No saved searches yet: name one above.
               </p>
             ) : (
-              <div className="max-h-56 overflow-auto">
+              <div className="max-h-56 overflow-auto overscroll-contain touch-pan-y">
                 {presets.map((p) =>
                   editingId === p.id ? (
                     <div key={p.id} className="flex items-center gap-1 rounded-md px-1">
@@ -916,8 +923,7 @@ function SavedSearches({
               </div>
             )}
           </div>
-        </div>
-      )}
+      </Grown>
     </div>
   );
 }
@@ -1643,7 +1649,7 @@ export function LinkedInSearchPanel() {
               type="button"
               onClick={() => setInfoOpen("tips")}
               aria-haspopup="dialog"
-              className="flex shrink-0 cursor-pointer items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-[12px] font-medium text-primary hover:bg-brand-50/50"
+              className="flex justify-center-safe shrink-0 cursor-pointer items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-[12px] font-medium text-primary hover:bg-brand-50/50"
             >
               <HelpCircle size={14} />
               How to search
@@ -1791,7 +1797,7 @@ export function LinkedInSearchPanel() {
             <button
               type="button"
               onClick={() => setRecentlyChanged((v) => !v)}
-              className={`inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${
+              className={`inline-flex justify-center-safe cursor-pointer items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${
                 recentlyChanged
                   ? "border-primary bg-brand-50 text-brand-500"
                   : "border-border hover:bg-muted"
@@ -1803,7 +1809,7 @@ export function LinkedInSearchPanel() {
             <button
               type="button"
               onClick={() => setActivePosters((v) => !v)}
-              className={`inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${
+              className={`inline-flex justify-center-safe cursor-pointer items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${
                 activePosters
                   ? "border-primary bg-brand-50 text-brand-500"
                   : "border-border hover:bg-muted"
@@ -1911,7 +1917,7 @@ export function LinkedInSearchPanel() {
             <button
               type="button"
               onClick={() => setAdvancedOpen((v) => !v)}
-              className="inline-flex cursor-pointer items-center gap-1 text-sm font-medium text-primary"
+              className="inline-flex justify-center-safe cursor-pointer items-center gap-1 text-sm font-medium text-primary"
             >
               <ChevronDown
                 size={15}
@@ -1946,7 +1952,7 @@ export function LinkedInSearchPanel() {
                     role="switch"
                     aria-checked={autoSegment}
                     onClick={() => setAutoSegment((v) => !v)}
-                    className="inline-flex cursor-pointer items-center gap-2"
+                    className="inline-flex justify-center-safe cursor-pointer items-center gap-2"
                   >
                     <span
                       className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${
@@ -1954,8 +1960,8 @@ export function LinkedInSearchPanel() {
                       }`}
                     >
                       <span
-                        className={`absolute top-0.5 h-4 w-4 rounded-full bg-card shadow-sm transition-all ${
-                          autoSegment ? "left-[18px]" : "left-0.5"
+                        className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-card shadow-sm transition-transform ${
+                          autoSegment ? "translate-x-4" : "translate-x-0"
                         }`}
                       />
                     </span>
@@ -2088,7 +2094,8 @@ export function LinkedInSearchPanel() {
           <button
             type="button"
             onClick={() => setPriorOpen((v) => !v)}
-            className="flex w-full cursor-pointer items-center gap-2.5 px-4 py-3 text-left"
+            aria-expanded={priorOpen}
+            className="flex w-full cursor-pointer items-center justify-start gap-2.5 px-4 py-3 text-left"
           >
             <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-500">
               <History size={15} className="text-white" />
@@ -2101,10 +2108,10 @@ export function LinkedInSearchPanel() {
             </div>
             <ChevronRight
               size={16}
-              className={`shrink-0 text-muted-foreground transition-transform ${priorOpen ? "rotate-90" : ""}`}
+              className={`shrink-0 text-muted-foreground ls-chev${priorOpen ? " is-open" : ""}`}
             />
           </button>
-          {priorOpen && (
+          <Fold open={priorOpen}>
             <div className="border-t border-border-soft p-2">
               <div className="space-y-1">
                 {priorRuns.map((r) => {
@@ -2198,7 +2205,7 @@ export function LinkedInSearchPanel() {
                 })}
               </div>
             </div>
-          )}
+          </Fold>
         </Card>
       )}
 
@@ -2769,7 +2776,7 @@ export function LinkedInSearchPanel() {
                         type="button"
                         onClick={() => startRename(searchId, detail?.query?.name ?? "")}
                         title={detail?.query?.name ? "Rename this search" : "Name this search"}
-                        className="mb-1 inline-flex max-w-full items-center gap-1 rounded-md border border-dashed border-border px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground transition-colors hover:border-primary/60 hover:bg-brand-50/50 hover:text-primary"
+                        className="mb-1 inline-flex justify-center-safe max-w-full items-center gap-1 rounded-md border border-dashed border-border px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground transition-colors hover:border-primary/60 hover:bg-brand-50/50 hover:text-primary"
                       >
                         <Pencil size={11} className="shrink-0" />
                         <span className="truncate">
@@ -2826,15 +2833,12 @@ export function LinkedInSearchPanel() {
                   title={resultsCollapsed ? "Expand" : "Collapse"}
                   className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 >
-                  <ChevronDown
-                    size={18}
-                    className={`transition-transform ${resultsCollapsed ? "-rotate-90" : ""}`}
-                  />
+                  <ChevronRight size={18} className={`ls-chev${resultsCollapsed ? "" : " is-open"}`} />
                 </button>
               </div>
             </div>
           </CardHeader>
-          {!resultsCollapsed && (
+          <Fold open={!resultsCollapsed} className="-mt-4" inner="pt-4">
           <CardContent className="space-y-3">
             {/* Email-outcome radial: person vs company-only vs none. Shows once
                 there's email data (Full+email sourcing or enrichment underway). */}
@@ -2844,7 +2848,7 @@ export function LinkedInSearchPanel() {
               </div>
             )}
             {/* Add-to-campaign inline panel */}
-            {addOpen && selected.size > 0 && (
+            <Fold open={addOpen && selected.size > 0} className="mb-0" inner="pb-3">
               <div className="rounded-lg border border-primary/30 bg-brand-50/40 p-4">
                 <p className="text-sm font-medium text-brand-500">
                   Import {selected.size} to Contacts
@@ -2880,7 +2884,7 @@ export function LinkedInSearchPanel() {
                   </Button>
                 </div>
               </div>
-            )}
+            </Fold>
             {saveMsg && (
               <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
                 <CheckCircle2 size={15} className="text-emerald-600" />
@@ -3059,7 +3063,7 @@ export function LinkedInSearchPanel() {
               </div>
             )}
           </CardContent>
-          )}
+          </Fold>
         </Card>
       )}
 

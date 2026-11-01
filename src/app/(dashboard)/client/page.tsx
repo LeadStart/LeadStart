@@ -1,11 +1,13 @@
 "use client";
 
+import { Ink } from "@/components/ui/ink";
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useClientData } from "./client-data-context";
 import { MonthlyPositiveChart } from "@/components/charts/monthly-positive-chart";
 import { calculateMetrics } from "@/lib/kpi/calculator";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Fold, foldToggle } from "@/components/ui/fold";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,6 +16,7 @@ import Link from "next/link";
 import { PageHeader } from "@/components/layout/page-header";
 import { ArrowRight, TrendingUp, ChevronDown, ChevronUp } from "lucide-react";
 import type { CampaignSnapshot } from "@/types/app";
+import { useCardPress } from "@/lib/ui/card-press";
 
 function getDateRange(preset: string): { start: string; end: string } {
   const today = new Date();
@@ -38,6 +41,8 @@ function getDateRange(preset: string): { start: string; end: string } {
 }
 
 export default function ClientDashboardPage() {
+  // On a phone a finger that settles on a card lights it with the chosen look until it opens (lib/ui/card-press.ts).
+  const press = useCardPress();
   const { client, campaigns, loading: contextLoading, noClient } = useClientData();
   const [snapshots, setSnapshots] = useState<CampaignSnapshot[]>([]);
   const [allTimeSnapshots, setAllTimeSnapshots] = useState<CampaignSnapshot[]>([]);
@@ -184,17 +189,17 @@ export default function ClientDashboardPage() {
         <Card>
           <CardHeader
             className="flex flex-row items-center gap-2 pb-3 cursor-pointer select-none"
-            onClick={() => setCampaignsExpanded((v) => !v)}
+            {...foldToggle(campaignsExpanded, () => setCampaignsExpanded((v) => !v))}
           >
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
               <TrendingUp size={16} className="text-white" />
             </div>
             <CardTitle className="text-base flex-1">Your Campaigns</CardTitle>
             <span className="text-muted-foreground">
-              {campaignsExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+              <ChevronDown size={18} className={`ls-chev-flip${campaignsExpanded ? " is-open" : ""}`} />
             </span>
           </CardHeader>
-          {campaignsExpanded && (
+          <Fold open={campaignsExpanded} className="-mt-4" inner="pt-4">
             <CardContent>
               {campaigns.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No campaigns yet.</p>
@@ -204,10 +209,10 @@ export default function ClientDashboardPage() {
                     const campSnapshots = snapshots.filter((s) => s.campaign_id === campaign.id);
                     const campMetrics = calculateMetrics(campSnapshots);
                     return (
-                      <Link key={campaign.id} href={`/client/campaigns/${campaign.id}`} className="group flex items-center justify-between rounded-xl border border-border-soft p-3 transition-all duration-200 hover:border-primary/20 hover:shadow-float hover:bg-primary/5">
+                      <Link key={campaign.id} href={`/client/campaigns/${campaign.id}`} {...press()} className="ls-press group flex items-center justify-between rounded-xl border border-border-soft p-3 transition-[border-color,box-shadow,background-color] duration-200 hover:border-primary/20 hover:shadow-float hover:bg-primary/5">
                         <div className="flex items-center gap-3">
                           <div className="flex h-9 w-9 items-center justify-center rounded-lg text-sm font-bold text-white shrink-0 bg-primary">
-                            {campaign.name.charAt(0)}
+                            <Ink>{campaign.name.charAt(0)}</Ink>
                           </div>
                           <div className="min-w-0">
                             <p className="font-medium text-sm text-foreground truncate">{campaign.name}</p>
@@ -226,7 +231,7 @@ export default function ClientDashboardPage() {
                 </div>
               )}
             </CardContent>
-          )}
+          </Fold>
         </Card>
       </div>
 

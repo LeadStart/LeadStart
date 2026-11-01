@@ -1,4 +1,5 @@
 "use client";
+import { Ink } from "@/components/ui/ink";
 import { PageHeader } from "@/components/layout/page-header";
 
 // /admin/campaigns/new/linkedin: sequence builder for LinkedIn campaigns.
@@ -299,7 +300,7 @@ export default function NewLinkedinCampaignPage() {
             >
               <div className="flex items-center gap-2">
                 <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-[#0A66C2] px-2 text-xs font-bold text-white">
-                  {i + 1}
+                  <Ink>{i + 1}</Ink>
                 </span>
                 <Select
                   value={step.kind}
@@ -373,7 +374,7 @@ export default function NewLinkedinCampaignPage() {
                   <Label htmlFor={`body-${i}`} className="text-xs">
                     Message
                   </Label>
-                  <Textarea
+                  <Textarea data-kb-reveal
                     id={`body-${i}`}
                     rows={3}
                     placeholder={

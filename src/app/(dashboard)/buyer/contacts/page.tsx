@@ -146,7 +146,7 @@ export default function BuyerContactsPage() {
         </form>
         <a
           href={appUrl("/api/buyer/contacts/export")}
-          className="flex items-center gap-2 rounded-full bg-primary bg-(image:--tex-brand) px-4 py-2 text-sm font-semibold text-white transition-opacity hover:brightness-106"
+          className="flex justify-center-safe items-center gap-2 rounded-full bg-primary bg-(image:--tex-brand) px-4 py-2 text-sm font-semibold text-white transition-opacity hover:brightness-106"
         >
           <Download size={15} /> Download CSV
         </a>
@@ -238,7 +238,7 @@ export default function BuyerContactsPage() {
                 <button
                   disabled={page <= 1 || loading}
                   onClick={() => { setLoading(true); setPage((p) => Math.max(1, p - 1)); }}
-                  className="flex items-center gap-1 rounded-lg border border-border px-3 py-1.5 text-sm disabled:opacity-50"
+                  className="flex justify-center-safe items-center gap-1 rounded-lg border border-border px-3 py-1.5 text-sm disabled:opacity-50"
                 >
                   <ChevronLeft size={15} /> Prev
                 </button>
@@ -246,7 +246,7 @@ export default function BuyerContactsPage() {
                 <button
                   disabled={page >= totalPages || loading}
                   onClick={() => { setLoading(true); setPage((p) => Math.min(totalPages, p + 1)); }}
-                  className="flex items-center gap-1 rounded-lg border border-border px-3 py-1.5 text-sm disabled:opacity-50"
+                  className="flex justify-center-safe items-center gap-1 rounded-lg border border-border px-3 py-1.5 text-sm disabled:opacity-50"
                 >
                   Next <ChevronRight size={15} />
                 </button>

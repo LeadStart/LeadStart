@@ -1,4 +1,5 @@
 "use client";
+import { Ink } from "@/components/ui/ink";
 import { PageHeader } from "@/components/layout/page-header";
 
 // LinkedIn flavor of the admin campaign detail page. Used when
@@ -207,7 +208,7 @@ export function LinkedinCampaignDetail({
                   className="flex items-start gap-3 rounded-xl border border-border-soft p-3"
                 >
                   <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-[#0A66C2] px-2 text-xs font-bold text-white shrink-0">
-                    {s.step_index + 1}
+                    <Ink>{s.step_index + 1}</Ink>
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">

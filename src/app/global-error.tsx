@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Poppins, JetBrains_Mono } from "next/font/google";
 import { AlertTriangle } from "lucide-react";
 import "./globals.css";
+import "./icon-centers.css";
 
 // This boundary REPLACES the root layout when the layout itself fails, so it
 // owns <html>/<body> and declares the font + global styles itself (mirroring

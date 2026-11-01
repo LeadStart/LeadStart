@@ -51,16 +51,18 @@ function isActive(pathname: string, href: string, exact?: boolean) {
 }
 
 // Condense geometry: the pill spans the viewport minus a 16px inset each side,
-// capped at 480px on tablets. On scroll-down it shrinks toward the active
-// tab only; scroll-up (or a route change) re-expands it. Widths are written
-// straight to the DOM per scroll event (no React render) and short CSS
-// transitions smooth the steps, so nothing ever snaps.
-const SIDE_INSET = 16;
+// capped at 480px on tablets. On scroll-down it condenses to a glass dot round the
+// active icon; scroll-up (or a route change) re-expands it. Everything moves on
+// transforms and opacity (the "control that grows and shrinks" rule): the glass's
+// two caps slide in and its stretch scales, the tabs slide toward the middle and
+// fade, the active icon drops to the dot's middle as its label fades. The values are
+// written straight to the DOM per scroll event (no React render, no layout) and a
+// short linear transition smooths the steps between events, so nothing ever snaps.
 const PILL_PAD = 5;
-const MIN_W = 64; // condensed pill: active icon + padding
-const TAB_MIN_ON = 48; // active tab collapsed to icon-only
-const LABEL_MAX_W = 64;
+const MIN_W = 64; // condensed: the active icon on a glass dot
+const CAP = 58; // the glass's end caps: a circle the pill's height
 const CONDENSE_RANGE = 90; // px of scroll that takes the pill 0 -> fully condensed
+const ICON_DROP = 7; // alone on the dot the icon sits in its middle: half its label's room (2 + 12)
 
 /**
  * Mobile-only primary navigation: Forge's phone nav (task #228), a floating
@@ -76,18 +78,93 @@ export function MobileTabBar({ role }: { role: AppRole }) {
   const tabs = isAdmin ? adminTabs : role === "buyer" ? buyerTabs : clientTabs;
 
   const pillRef = useRef<HTMLElement>(null);
+  const capL = useRef<HTMLSpanElement>(null);
+  const capR = useRef<HTMLSpanElement>(null);
+  const mid = useRef<HTMLSpanElement>(null);
+  const halo = useRef<HTMLSpanElement>(null);
   const tabRefs = useRef<(HTMLAnchorElement | null)[]>([]);
   const pRef = useRef(0);
-  // The capsule lives in the active tab, so it follows that tab's width through the
-  // condense on its own. Between tabs it slides (FLIP): where it stood before the
-  // route changed, measured as the old capsule last stood, glides to the new tab.
+  // The capsule lives in the active tab, so it rides with that tab. Between tabs it
+  // slides (FLIP): where it stood before the route changed, measured as the old
+  // capsule last stood, glides to the new tab.
   const glowRef = useRef<HTMLSpanElement>(null);
   const glowWas = useRef<DOMRect | null>(null);
   const noteGlow = useCallback(() => {
     if (glowRef.current) glowWas.current = glowRef.current.getBoundingClientRect();
   }, []);
 
+  // Write the condense state (0 = full pill, 1 = active icon alone on the dot)
+  // directly to the DOM. At rest (p~0) every inline style is cleared so the pill and
+  // its tabs fall back to their CSS layout, which keeps the server-rendered markup
+  // right and avoids a flash before this runs.
+  const apply = useCallback(
+    (raw: number) => {
+      const p = Math.max(0, Math.min(1, raw));
+      pRef.current = p;
+      const pill = pillRef.current;
+      if (!pill) return;
+      const W = pill.clientWidth;
+      pill.style.setProperty("--mnav-w", `${W}px`);
+      const rest = p <= 0.001;
+      const on = tabs.findIndex((t) => isActive(pathname, t.href, t.exact));
+      const tabW = (W - PILL_PAD * 2) / tabs.length;
+      const centre = W / 2;
+
+      // The glass: its caps slide in by d (on whole device pixels, so the seams between
+      // the pieces land on pixels), and the stretch between them scales to what's left.
+      const dpr = window.devicePixelRatio || 1;
+      const d = rest ? 0 : Math.round(((p * (W - MIN_W)) / 2) * dpr) / dpr;
+      const s = (W - CAP - 2 * d) / (W - CAP);
+      if (capL.current) capL.current.style.transform = rest ? "" : `translateX(${d}px)`;
+      if (capR.current) capR.current.style.transform = rest ? "" : `translateX(${-d}px)`;
+      if (mid.current) mid.current.style.transform = rest ? "" : `scaleX(${s.toFixed(4)})`;
+      // The halo under the glass: one unclipped pill the glass's width, so its glow is never cut.
+      if (halo.current) {
+        halo.current.style.left = rest ? "" : `${d}px`;
+        halo.current.style.width = rest ? "" : `${W - 2 * d}px`;
+      }
+
+      tabRefs.current.forEach((t, i) => {
+        if (!t) return;
+        const lab = t.querySelector<HTMLElement>(".ls-mnav-label");
+        const icon = t.querySelector<SVGElement>(":scope > svg");
+        const glow = t.querySelector<HTMLElement>(".ls-mnav-glow");
+        if (rest) {
+          t.style.transform = "";
+          t.style.opacity = "";
+          t.style.pointerEvents = "";
+          if (lab) lab.style.opacity = "";
+          if (icon) icon.style.transform = "";
+          if (glow) glow.style.opacity = "";
+          return;
+        }
+        // Every tab slides toward the pill's middle with the glass; the others fade out
+        // before the glass has passed them, and take no taps once faded.
+        const dx = (centre - (PILL_PAD + tabW * (i + 0.5))) * p;
+        t.style.transform = `translateX(${dx.toFixed(1)}px)`;
+        if (i === on) {
+          t.style.opacity = "";
+          t.style.pointerEvents = "";
+          if (lab) lab.style.opacity = (1 - p).toFixed(3);
+          if (icon) icon.style.transform = `translateY(${(ICON_DROP * p).toFixed(2)}px)`;
+          if (glow) glow.style.opacity = Math.max(0, 1 - p * 2).toFixed(3);
+        } else {
+          const o = Math.max(0, 1 - p * 1.8);
+          t.style.opacity = o.toFixed(3);
+          t.style.pointerEvents = o < 0.05 ? "none" : "";
+          if (lab) lab.style.opacity = "";
+          if (icon) icon.style.transform = "";
+        }
+      });
+    },
+    [pathname, tabs],
+  );
+
+  // Route change (a tab tap or any navigation): the pill re-expands round the new
+  // active tab before the capsule's slide is measured, so the slide starts and ends
+  // at rest. Runs on mount too, where it only clears inline styles.
   useLayoutEffect(() => {
+    apply(0);
     const el = glowRef.current;
     const was = glowWas.current;
     if (!el) return;
@@ -102,82 +179,7 @@ export function MobileTabBar({ role }: { role: AppRole }) {
       ],
       { duration: 320, easing: "cubic-bezier(0.32, 0.72, 0, 1)" },
     );
-  }, [pathname]);
-
-  // Write the condense state (0 = full pill, 1 = active tab only) directly to the
-  // DOM. At rest (p≈0) all inline styles are cleared so the pill/tabs fall back to
-  // their CSS flex layout - that keeps the server-rendered markup correct and
-  // avoids a flash before this runs.
-  const apply = useCallback(
-    (raw: number) => {
-      const p = Math.max(0, Math.min(1, raw));
-      pRef.current = p;
-      const pill = pillRef.current;
-      if (!pill) return;
-
-      if (p <= 0.001) {
-        pill.style.width = "";
-        pill.classList.remove("is-min");
-        tabRefs.current.forEach((t) => {
-          if (!t) return;
-          t.style.flex = "";
-          t.style.width = "";
-          t.style.opacity = "";
-          t.style.paddingLeft = "";
-          t.style.paddingRight = "";
-          t.style.gap = "";
-          const lab = t.querySelector<HTMLElement>(".ls-mnav-label");
-          if (lab) {
-            lab.style.maxWidth = "";
-            lab.style.maxHeight = "";
-            lab.style.opacity = "";
-          }
-        });
-        return;
-      }
-
-      const restW = Math.min(window.innerWidth - SIDE_INSET * 2, 480);
-      const tabW = (restW - PILL_PAD * 2) / tabs.length;
-      pill.style.width = `${(restW - p * (restW - MIN_W)).toFixed(1)}px`;
-      pill.classList.toggle("is-min", p > 0.98);
-
-      tabRefs.current.forEach((t, i) => {
-        if (!t) return;
-        const on = isActive(pathname, tabs[i].href, tabs[i].exact);
-        const lab = t.querySelector<HTMLElement>(".ls-mnav-label");
-        t.style.flex = "0 0 auto";
-        if (on) {
-          t.style.width = `${(tabW - p * (tabW - TAB_MIN_ON)).toFixed(1)}px`;
-          t.style.gap = `${((1 - p) * 2).toFixed(2)}px`;
-          t.style.opacity = "1";
-          t.style.paddingLeft = t.style.paddingRight = "10px";
-          if (lab) {
-            lab.style.maxWidth = `${((1 - p) * LABEL_MAX_W).toFixed(1)}px`;
-            lab.style.maxHeight = `${((1 - p) * 14).toFixed(1)}px`;
-            lab.style.opacity = String(1 - p);
-          }
-        } else {
-          t.style.width = `${((1 - p) * tabW).toFixed(1)}px`;
-          t.style.opacity = String(1 - p);
-          t.style.paddingLeft = t.style.paddingRight = `${(10 * (1 - p)).toFixed(1)}px`;
-          t.style.gap = "2px";
-          if (lab) {
-            lab.style.maxWidth = `${LABEL_MAX_W}px`;
-            lab.style.maxHeight = "14px";
-            lab.style.opacity = "1";
-          }
-        }
-      });
-    },
-    [pathname, tabs],
-  );
-
-  // Route change (a tab tap or any navigation) → the pill re-expands around the
-  // new active tab. Runs on mount too; harmless because at rest it only clears
-  // inline styles.
-  useEffect(() => {
-    apply(0);
-  }, [apply]);
+  }, [pathname, apply]);
 
   // Scroll-linked condense, plus re-layout on viewport resize. The shell's
   // `.app-shell-content` is the scroll container below `lg`; if it isn't present
@@ -213,6 +215,18 @@ export function MobileTabBar({ role }: { role: AppRole }) {
   return (
     <div className="ls-mnav lg:hidden">
       <nav ref={pillRef} className="ls-mnav-pill" aria-label="Primary">
+        <span className="ls-mnav-glass" aria-hidden>
+          <span ref={halo} className="ls-mnav-halo" />
+          <span ref={capL} className="ls-mnav-capbox l">
+            <span className="ls-mnav-cap" />
+          </span>
+          <span ref={mid} className="ls-mnav-midbox">
+            <span className="ls-mnav-mid" />
+          </span>
+          <span ref={capR} className="ls-mnav-capbox r">
+            <span className="ls-mnav-cap" />
+          </span>
+        </span>
         {tabs.map((tab, i) => {
           const active = isActive(pathname, tab.href, tab.exact);
           return (

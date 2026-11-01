@@ -1,7 +1,7 @@
 # Style sweep — LeadStart → Forge style, LeadStart colours (UI_RULES.md)
 
 > Task #228 from LeadStart App's queue, swept 2026-10-26. Living ledger: coverage is proven here by measurement, not from memory. The flat-contract sweep of 2026-08-22 it replaces is summarised at the end.
-> **STATUS: swept.** Tokens, shared parts and the shell are on the new contract; 44 pages measured at 1440, 1024, 390 and 375 with no sideways scroll and no touching or overlapping cards; the debt greps below are at their targets except the items listed under "Remaining".
+> **STATUS: swept, and since 2026-10-31 held to Forge's sixteen rules by code (the pass at the end).** Tokens, shared parts and the shell are on the new contract; 44 pages measured at 1440, 1024, 390 and 375 with no sideways scroll and no touching or overlapping cards; the debt greps below are at their targets except the items listed under "Remaining".
 
 ## Evidence tiers used below
 - **measured** = loaded in headless Chromium against the dev server (signed in through `/app/api/dev/login`, read-only), at 1440×900, 1024×768, 390×844 and 375×667 (the phone sizes as touch devices). Per page: `scrollWidth − clientWidth` of the document and of the shell's scroller is 0, and no two sibling cards touch or overlap. Plus a screenshot at each size, looked at by eye.
@@ -83,6 +83,49 @@ Native selects are counted from each `<select` to its first `<option`, so an arr
 - **Lint**: `npm run lint` reports 157 errors and 40 warnings, the same files and rules as on `master` (compared per file and rule); none come from this work.
 - **Email templates**: out of scope by rule (they stay flat).
 - **Dark mode**: deferred by rule.
+
+## The Forge-rules pass (2026-10-31)
+
+Daniel, 2026-10-31: "Take a deep dive through the app and the styling rules we've built through Forge. You need to adhere to these and restyle the app all the way through and check for conformity." The sixteen rules, their LeadStart parts, checks and measures are the table in `UI_RULES.md` ("The Forge rules, held in code"). Evidence here, per rule. Nothing committed: local only. Built without agents: the session's agent canary ran on the wrong model, so by the agent rule nothing was spawned.
+
+**Evidence tiers added for this pass**
+- **check** = `node scripts/style/check-all.mjs` (in `npm run typecheck`): eight file checks, each a port of Forge's. Green: `npx tsc --noEmit` clean, and `check-styling: 8 checks green`.
+- **gate** = `node scripts/style/measure-gate.mjs` against the dev server on 3030 (signed in through `/app/api/dev/login`, read-only): 41 routes × 1440, 1024, 390 and 375, each at rest, with every fold opened, and with the phone drawer open on the phone sizes. Per screen: sideways (`scrollWidth === clientWidth` on the page and every vertical scroller), stacked cards (no sibling cards touching or overlapping), fold gaps (the same closed and open), glows (`measure-glows.js`), icons (`measure-icon-centers.js`, 0.25px) and buttons (`measure-button-labels.js`, 0.25px across, 0.5px up and down). Result: **156 screens measured, every measure empty.** 16 loads redirected and were not measured: `/buyer`, `/buyer/contacts`, `/buyer/search` and `/login` go to `/app/admin` under the admin login.
+- **simulator** = the iOS 27 simulator (iPhone 18 Pro, Safari, the real on-screen keyboard), the page's own numbers read from a debugging overlay that was in `keyboard-reveal.ts` for the runs and removed after them, the keyboard's and form bar's frames from the accessibility tree where it exposes them (upright only), and the box's frame from the screenshot's pixels (3px = 1pt). The hardware keyboard was off (`axe type` turns it on and hides the soft keyboard; Forge's `scripts/sim/keyboard.swift` turns it off).
+
+**Text boxes on a phone** (`lib/ui/keyboard-reveal.ts`), the runs:
+
+| case | box | result |
+|---|---|---|
+| sideways, Safari's bars up | Welcome paragraph (86pt), buyer experience | guess 288 = reported 288, one reveal, no correction. Safari leaves a 4 to 17pt strip of page above the keyboard there, so no box can show; the box is put at the page's top (12pt). Safari's chrome, not the app. |
+| sideways, bars folded | Saved reply (201pt) inside the campaign Setup tab's own scroller | guess 288 = reported 288, one reveal. The shell scrolled 190 (room lent), the panel's top to 12pt, the box capped to 74px at 24 to 98pt, the keyboard's top at 114pt (`visualViewport`), the form bar's glass from 125pt. Pixels: the box's bottom ring 99.3 to 100.7pt, its right ring 31 to 93pt. Done: the box grows back, the page stays where it was. |
+| upright, bars up | Saved reply, same panel | guess 330 = reported 330. The shell scrolled 89 (49 lent), the panel's top to 155, the box at 167 to 368 in page terms (its ring at 229 and 431.7 to 433pt on screen), 16pt above the visible foot (page 384, screen 446, where Safari's address capsule starts); the form bar at 493. Done leaves the page where it was. The reveal was computed twice to the same place: the first glide's frames did not draw before Safari reported the keyboard (816ms after the tap on the simulator), so the second started from the same state; nothing moved twice. |
+| upright, bars up | Banner text (87pt) on the page's own scroller | scrolled 246: the box's bottom border at 429.7 to 430.3pt on screen (page 368 = 16pt above the visible foot), the capsule at 445, the form bar at 493. Done leaves the page where it was. |
+| upright, bars folded | | not reachable on this shell: `.app-shell-content` is the only scroller and takes every drag (tried on the panel, the page's foot and the Danger zone card), the document never scrolls, and Safari keeps its bars (`BarsKeptMinimized=false`). |
+
+The max cases listed and checked: sideways (the smallest view) with the bars up and folded, the longest box (201pt) inside a nested scroller and a box on the page scroller, the keyboard going by Done, and typing (nothing moves but the text; measured in the earlier Welcome-paragraph run, text scrolling inside a fixed-rows box with the cursor's line in sight). Limits: the checks ran in Safari, not the Home Screen app's mode (its login can't be reached without a password); the first keyboard of a kind has no remembered height, so that first box comes up on Safari's report rather than ahead of it (Forge's rule says the same); the admin inbox composer could not be opened (every Interested thread was already replied to) and LeadStart has no docked chat box, so the chat rule has no surface. Headless WebKit at phone size was used for layout numbers only: its pages' Supabase calls fail on CORS, so lists there are empty.
+
+**The rest, per rule**
+
+| rule | evidence | result |
+|---|---|---|
+| Bleed must be paid back | gate | sideways 0 and stacked 0 on all 156 screens |
+| Glows are never capped | gate (`measure-glows.js`) | 0 cut, 0 borrowed strips over a press; before the fixes the shell's content edge, the prospects board's column and the tag chip input's panel cut card shadows, and the tab bar's clipped glass counted as a cut glow |
+| Shift while typing | focus tier (task #228), unchanged | pass |
+| Chat on a phone | no surface | |
+| Search on a phone | code + gate | the hits list is its own scroller (`overflow-y-auto overscroll-contain touch-pan-y`), back at its top before the frame on each new query; sideways 0 |
+| Text boxes on a phone | check + simulator | the table above |
+| Smooth transitions | check (`check-popups.mjs`, `check-open-in-place.mjs`) | every hand-drawn menu is a `Grown`; no CSS variable eases |
+| Expand and collapse | check (`check-folds.mjs`) + gate | every `aria-expanded` opens a `Fold` or `Grown`; the gate opened every fold on every screen: fold gaps 0 off |
+| Cards on a phone | check (`check-card-press.mjs`) + simulator | every pressable row or card goes through `useCardPress`; a 1.2s hold on an inbox row used to select a word of its preview, now `user-select: none` and no callout |
+| Icons centred | check (`check-icon-centers.mjs`) + gate | 148 Lucide icons centred (24 by `icon-centers.css`); icons 0 off on 156 screens |
+| Button's words centred | check (`check-button-labels.mjs`) + gate | 559 flex or grid buttons say where their words sit, 95 padded controls even; buttons 0 off on 156 screens |
+| A control that grows and shrinks | code + gate | the tab bar's condense on transforms and opacity only; the gate measures glows again at the end of every scroller, where the bar is condensed: 0 cut |
+| Check the max cases | this section | |
+| A screen opens in its place | check (`check-open-in-place.mjs`) | no `useEffect` sets a scroller's end; no eased variable |
+| A conversation reaches back | code | no conversation loads in parts; the opens-in-place half is the check above |
+| Every popup closes the same way | check (`check-popups.mjs`) + popup tier (task #228) | no dim or dialog outside the two popup files; the phone drawer pulls shut, Esc and the dim close it |
+| Buttons are flat | check (`check-flat-buttons.mjs`) | every sheen a 140° linear gradient, no dome |
 
 ## The flat-contract sweep (2026-08-22), replaced
 Started 2026-08-22 via `/style-sweep`: every hero band moved onto the shared `PageHeader`, the sidebar, topbar, primitives and charts went flat, the auth pages became one centred card, and decorative gradients in `.tsx` reached 0 (emails and the disabled site-chat widget excepted). Its full ledger is in git history (`git show 98abf57:STYLE_SWEEP.md`).

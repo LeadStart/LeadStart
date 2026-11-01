@@ -90,7 +90,7 @@ export function ReplyTemplateCard({
         </div>
       </CardHeader>
       <CardContent className="space-y-2">
-        <textarea
+        <textarea data-kb-reveal
           ref={area}
           value={text}
           onChange={(e) => {
@@ -128,7 +128,7 @@ export function ReplyTemplateCard({
           <button
             onClick={save}
             disabled={!dirty || saving}
-            className="inline-flex items-center gap-1.5 rounded-full bg-primary bg-(image:--tex-brand) px-4 py-2 text-sm font-semibold text-white cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            className="inline-flex justify-center-safe items-center gap-1.5 rounded-full bg-primary bg-(image:--tex-brand) px-4 py-2 text-sm font-semibold text-white cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {saving && <Loader2 size={14} className="animate-spin" />}
             {text.trim() ? "Save reply" : saved.trim() ? "Clear saved reply" : "Save reply"}

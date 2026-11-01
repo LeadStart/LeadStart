@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Fold, foldToggle } from "@/components/ui/fold";
 import { Button } from "@/components/ui/button";
 import {
-  ChevronDown,
   ChevronRight,
   Link2,
   Unlink,
@@ -130,16 +130,16 @@ export function LinkedinSection({
     <Card>
       <CardHeader
         className="flex flex-row items-center gap-2 pb-3 cursor-pointer select-none"
-        onClick={() => setOpen((v) => !v)}
+        {...foldToggle(open, () => setOpen((v) => !v))}
       >
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#0A66C2]">
           <LinkedinIcon size={16} className="text-white" />
         </div>
         <CardTitle className="text-base flex-1">LinkedIn channel</CardTitle>
         <StatusPill status={status} />
-        {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+        <ChevronRight size={16} className={`ls-chev${open ? " is-open" : ""}`} />
       </CardHeader>
-      {open && (
+      <Fold open={open} className="-mt-4" inner="pt-4">
         <CardContent className="space-y-4">
           {status === "connected" && accountId && (
             <>
@@ -211,7 +211,7 @@ export function LinkedinSection({
             required when LinkedIn cookies expire (typically every 1–3 months).
           </p>
         </CardContent>
-      )}
+      </Fold>
     </Card>
   );
 }

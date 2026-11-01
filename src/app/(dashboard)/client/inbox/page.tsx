@@ -156,7 +156,7 @@ export default function ClientInboxPage() {
                   <button
                     key={t.key}
                     onClick={() => setFilter(t.key)}
-                    className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[11.5px] font-semibold transition-colors cursor-pointer ${
+                    className={`inline-flex justify-center-safe items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[11.5px] font-semibold transition-colors cursor-pointer ${
                       filter === t.key
                         ? "border-primary/25 bg-primary/[0.13] text-primary"
                         : "border-transparent bg-muted/60 text-muted-foreground hover:bg-muted"
@@ -330,7 +330,7 @@ function ClientThread({
               </p>
             )}
             <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px]">
-              <a href={`mailto:${reply.lead_email}`} className="inline-flex items-center gap-1 text-primary hover:underline">
+              <a href={`mailto:${reply.lead_email}`} className="inline-flex justify-center-safe items-center gap-1 text-primary hover:underline">
                 <Mail size={11} /> {reply.lead_email}
               </a>
               {reply.lead_linkedin_url && (
@@ -338,7 +338,7 @@ function ClientThread({
                   href={reply.lead_linkedin_url}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex items-center gap-1 text-[#0077b5] hover:underline"
+                  className="inline-flex justify-center-safe items-center gap-1 text-[#0077b5] hover:underline"
                 >
                   LinkedIn <ExternalLink size={11} />
                 </a>
@@ -411,7 +411,7 @@ function ClientThread({
               placeholder="Subject"
               className="w-full rounded-lg border border-border-soft px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30"
             />
-            <textarea
+            <textarea data-kb-reveal
               value={bodyText}
               onChange={(e) => setBodyText(e.target.value)}
               rows={3}
@@ -427,7 +427,7 @@ function ClientThread({
               <button
                 onClick={send}
                 disabled={!bodyText.trim() || sending || previewing}
-                className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-primary bg-(image:--tex-brand) px-4 py-2 text-sm font-semibold text-white cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                className="inline-flex justify-center-safe shrink-0 items-center gap-1.5 rounded-full bg-primary bg-(image:--tex-brand) px-4 py-2 text-sm font-semibold text-white cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Send size={14} /> {sending ? "Sending…" : "Send reply"}
               </button>
@@ -436,7 +436,7 @@ function ClientThread({
         ) : canReply ? (
           <button
             onClick={() => setShowComposer(true)}
-            className="inline-flex items-center gap-1.5 rounded-full bg-primary bg-(image:--tex-brand) px-4 py-2 text-sm font-semibold text-white cursor-pointer"
+            className="inline-flex justify-center-safe items-center gap-1.5 rounded-full bg-primary bg-(image:--tex-brand) px-4 py-2 text-sm font-semibold text-white cursor-pointer"
           >
             <Send size={14} /> Reply
           </button>

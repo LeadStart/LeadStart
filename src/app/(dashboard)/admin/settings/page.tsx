@@ -1,12 +1,15 @@
 import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
 import { SETTINGS_GROUPS } from "./settings-nav";
+import { useCardPress } from "@/lib/ui/card-press";
 
 // Settings hub. Everything configurable, grouped by what it affects, with a
 // plain-language line per section so you don't have to open a page to learn
 // what lives in it. Each card is the whole click target; the sub-pages keep
 // their own routes so deep links and the back button still work.
 export default function SettingsIndexPage() {
+  // On a phone a finger that settles on a card lights it with the chosen look until it opens (lib/ui/card-press.ts).
+  const press = useCardPress();
   return (
     <div className="space-y-8">
       {SETTINGS_GROUPS.map((group) => (
@@ -21,7 +24,8 @@ export default function SettingsIndexPage() {
                 <Link
                   key={entry.href}
                   href={entry.href}
-                  className="group flex w-full flex-col gap-1.5 rounded-xl border border-border-soft bg-card shadow-card p-4 transition-colors hover:border-primary/40 hover:bg-muted/40 sm:w-[15.5rem]"
+                  {...press()}
+                  className="ls-press group flex items-stretch w-full flex-col gap-1.5 rounded-xl border border-border-soft bg-card shadow-card p-4 transition-colors hover:border-primary/40 hover:bg-muted/40 sm:w-[15.5rem]"
                 >
                   <div className="flex items-center gap-2">
                     <Icon size={16} className="shrink-0 text-primary" />

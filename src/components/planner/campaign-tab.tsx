@@ -48,6 +48,7 @@ import type { ReplyHistory } from "./planner";
 import { Callout, CheckField, DateField, Hint, NumField, Section, Segmented, SelectField } from "./fields";
 import { Legend, SendsChart } from "./charts";
 import { useDebounced } from "./use-debounced";
+import { Fold } from "@/components/ui/fold";
 
 type Update = (patch: Partial<PlannerState>) => void;
 
@@ -102,6 +103,7 @@ function CampaignInputs({ state: s, update, history }: { state: PlannerState; up
   const inboxes = s.domains * s.inboxesPerDomain;
   const launch = launchDateFor(s.startDate);
   const weSource = s.contactsMode === "we_source";
+  const [rulesOpen, setRulesOpen] = useState(false);
 
   const setEmails = (n: number | null) => update({ waits: withEmailCount(s.waits, n) });
   const setGap = (i: number, v: number | null) => {
@@ -292,17 +294,25 @@ function CampaignInputs({ state: s, update, history }: { state: PlannerState; up
         </Hint>
       </Section>
 
-      <details className="group rounded-xl border border-border-soft bg-card shadow-card p-4">
-        <summary className="flex cursor-pointer list-none items-center gap-1.5 text-sm font-semibold">
+      <div className="rounded-xl border border-border-soft bg-card shadow-card p-4">
+        <button
+          type="button"
+          onClick={() => setRulesOpen((v) => !v)}
+          aria-expanded={rulesOpen}
+          className="flex w-full cursor-pointer items-center justify-start gap-1.5 text-sm font-semibold"
+        >
           <Settings2 size={14} /> Sending rules
-          <span className="ml-auto text-xs font-normal text-muted-foreground group-open:hidden">
+          <span
+            className={`ml-auto text-xs font-normal text-muted-foreground transition-opacity duration-200 ${rulesOpen ? "opacity-0" : ""}`}
+          >
             {s.strategy === "reach_first"
               ? "Reach everyone first"
               : s.newLeadsCap == null
                 ? "Finish first, no new-lead limit"
                 : `Finish first, ${s.newLeadsCap} new/day`}
           </span>
-        </summary>
+        </button>
+        <Fold open={rulesOpen}>
         <div className="mt-3 space-y-3">
           <SelectField
             label="Strategy"
@@ -391,7 +401,8 @@ function CampaignInputs({ state: s, update, history }: { state: PlannerState; up
             hint="Reusing inboxes from an earlier campaign. Leave off for new ones, or ones back from a rest."
           />
         </div>
-      </details>
+        </Fold>
+      </div>
     </div>
   );
 }

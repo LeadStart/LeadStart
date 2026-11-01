@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Search, Users, Mail, UserSquare2 } from "lucide-react";
 import { useSupabaseQuery } from "@/hooks/use-supabase-query";
 import type { Client, Campaign, Contact } from "@/types/app";
+import { Grown } from "@/components/ui/grown";
 
 type ResultKind = "client" | "campaign" | "contact";
 
@@ -30,6 +31,7 @@ export function GlobalSearch() {
   const [activated, setActivated] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
 
   const { data } = useSupabaseQuery(activated ? "topbar-global-search" : null, async (supabase) => {
     const [clientsRes, campaignsRes, contactsRes] = await Promise.all([
@@ -169,6 +171,12 @@ export function GlobalSearch() {
 
   const showDropdown = open && query.trim().length > 0;
 
+  // Each new query starts at its best hit (the phone search rule): the list goes back to its top whenever the
+  // text changes, before the frame is drawn.
+  useLayoutEffect(() => {
+    listRef.current?.scrollTo(0, 0);
+  }, [query]);
+
   const clientResults = results.filter((r) => r.kind === "client");
   const campaignResults = results.filter((r) => r.kind === "campaign");
   const contactResults = results.filter((r) => r.kind === "contact");
@@ -196,48 +204,51 @@ export function GlobalSearch() {
         />
       </div>
 
-      {showDropdown && (
-        <div className="ls-menu ls-menu-in absolute left-0 right-0 top-full mt-2 max-h-96 overflow-y-auto p-1.5 z-50 [--transform-origin:top_center]">
-          {results.length === 0 ? (
-            <div className="px-3 py-4 text-center text-sm text-muted-foreground">
-              No results for &ldquo;{query}&rdquo;
-            </div>
-          ) : (
-            <>
-              {clientResults.length > 0 && (
-                <ResultGroup
-                  title="Clients"
-                  icon={<Users size={12} />}
-                  results={clientResults}
-                  startIndex={0}
-                  highlight={highlight}
-                  onSelect={navigateTo}
-                />
-              )}
-              {campaignResults.length > 0 && (
-                <ResultGroup
-                  title="Campaigns"
-                  icon={<Mail size={12} />}
-                  results={campaignResults}
-                  startIndex={clientResults.length}
-                  highlight={highlight}
-                  onSelect={navigateTo}
-                />
-              )}
-              {contactResults.length > 0 && (
-                <ResultGroup
-                  title="Contacts"
-                  icon={<UserSquare2 size={12} />}
-                  results={contactResults}
-                  startIndex={clientResults.length + campaignResults.length}
-                  highlight={highlight}
-                  onSelect={navigateTo}
-                />
-              )}
-            </>
-          )}
-        </div>
-      )}
+      <Grown
+        ref={listRef}
+        open={showDropdown}
+        origin="top center"
+        className="ls-menu absolute left-0 right-0 top-full mt-2 max-h-96 overflow-y-auto p-1.5 z-50 [--transform-origin:top_center] overscroll-contain touch-pan-y"
+      >
+        {results.length === 0 ? (
+          <div className="px-3 py-4 text-center text-sm text-muted-foreground">
+            No results for &ldquo;{query}&rdquo;
+          </div>
+        ) : (
+          <>
+            {clientResults.length > 0 && (
+              <ResultGroup
+                title="Clients"
+                icon={<Users size={12} />}
+                results={clientResults}
+                startIndex={0}
+                highlight={highlight}
+                onSelect={navigateTo}
+              />
+            )}
+            {campaignResults.length > 0 && (
+              <ResultGroup
+                title="Campaigns"
+                icon={<Mail size={12} />}
+                results={campaignResults}
+                startIndex={clientResults.length}
+                highlight={highlight}
+                onSelect={navigateTo}
+              />
+            )}
+            {contactResults.length > 0 && (
+              <ResultGroup
+                title="Contacts"
+                icon={<UserSquare2 size={12} />}
+                results={contactResults}
+                startIndex={clientResults.length + campaignResults.length}
+                highlight={highlight}
+                onSelect={navigateTo}
+              />
+            )}
+          </>
+        )}
+      </Grown>
     </div>
   );
 }
