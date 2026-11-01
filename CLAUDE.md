@@ -21,6 +21,34 @@ Daniel, 2026-10-14: "Warm up does not mean dont send for 14 days. warm up IS ram
 - **Finish dates:** replay the sender with `simulateCampaign` (`src/lib/planner/engine.ts`), `launchDate` = the first weekday the inboxes are connected (`launchDateFor(start)`), with no warm-up days added. Also state the campaign's `daily_new_leads_cap`: NULL = no limit (the default since 2026-10-14), a number throttles first touches under `finish_first`, 0 pauses them. "Finish the sequence first" is what keeps follow-ups on time, not the cap.
 - **Known conflict, not yet fixed:** `DEFAULT_WARMING_DAYS = 14` (`src/lib/billing/schedule.ts`) still sets the billing quote's launch / first-charge date and the client-facing "launch after 14 calendar days" copy (quote page, welcome page, signup emails). That is a billing decision pending the owner; never use it for a send timeline.
 
+# 🔴 CARDINAL RULE: only proven addresses get a first email, and bounces stop a campaign by themselves (owner, 2026-11-01)
+Daniel, 2026-11-01, on PolishPoint's early bounces: "This needs to be written deep into LeadStart's protocol to never make such a mistake again..."
+
+What went wrong (Claude's notes, measured 2026-11-01):
+- PolishPoint (campaign c598d088) launched 2026-10-26 and bounced 11 of its first 200 first emails (5.5%):
+  - catch-all addresses: 4 of 7;
+  - guessed, then verified ok (`pattern_mv`): 5 of 65;
+  - found on a LinkedIn profile, verified ok: 2 of 110;
+  - from the firm's own site: 0 of 15.
+- The sender was written to send catch-alls: "bounce monitoring + inbox-health auto-pause catch any damage". But inbox health scores bounces only once an inbox has sent 20 in 7 days, and the domain breaker is watch-only, so nothing watched in week one. The only protection was a hold done by hand.
+- An unknown that re-checked as catch-all at its turn still went out (Oct 29) and bounced.
+- Claude assumed "found-first" set the catch-alls aside. It only sorts the app's lists: the sender goes in join order.
+
+The rule, held in code (owner picks 2026-11-01):
+- **Catch-all and unknown addresses get no first email** unless the campaign sends them on purpose (Deliverability tab → "Catch-all and unknown addresses", `campaigns.send_unproven_addresses`, default false on every campaign). The sender parks them out of line: enrollment `paused`, `last_error` starting "Held: unproven address" (`UNPROVEN_HOLD_PREFIX`). Choosing "Send them" puts them back in line.
+  - This holds with verification off too: a catch-all or unknown result already on file still parks a first email.
+  - An unknown out of retries parks; it never sends.
+  - A follow-up to an address that already took email 1 still sends: it didn't bounce.
+- **A first email needs a check from the last 7 days** (`FIRST_EMAIL_TTL_DAYS`); follow-ups keep the 30-day cache. A fresh check isn't proof: Million Verifier answered ok again on 2026-11-01 for 4 of the 7 verified addresses that had bounced (a deleted Google user, a disabled Yahoo account, a full mailbox, a forwarding block).
+- **The bounce stop:** 3 bad-address bounces (`invalid_address`, `mailbox_unavailable`, `unreachable`) in a campaign's last 100 first emails set New contacts per day to Paused and alert the owner (`campaign_bounce_stop`). Follow-ups keep going. It counts only first emails sent after `bounce_stop_at`, so resuming starts a clean window; setting it by hand restarts the count on purpose (PolishPoint's was restarted at go-live, owner pick 2026-11-01). Replayed on PolishPoint, it would have paused at 4:28 PM PDT on launch day (3 of the first 9).
+- Code: `src/lib/millionverifier/policy.ts` (`gateRulesFor`, `parkFromCachedStatus`), `verify-contact.ts`, `parkEnrollment` in `run-native-sequences`, `src/lib/campaigns/bounce-stop.ts` (called by `poll-native-replies`), migration `00140`. Tests: `scripts/test-millionverifier-policy.ts`, `scripts/test-bounce-stop.ts`. Runbook: `docs/native-email-runbook.md` §5.
+
+Before any launch, or before adding contacts to a live campaign, Claude:
+- **Measures the list that will send**, from the database: every contact waiting for email 1, counted by verification result and by where the address came from (`enrichment_data.enrichment.email.provider`, or the SBA tag). Gives exact counts, catch-alls on their own line.
+- **Confirms what the sender will really do** with them, by reading the code it runs (order, holds, caps), never from what an earlier decision was meant to set up.
+- **Re-checks guessed addresses** (`pattern_mv`) before they send. They bounced most among verified addresses.
+- **Says how bounces will be caught in week one** (the bounce stop), and never proposes switching catch-alls on without the bounce numbers for that kind of address.
+
 # CRITICAL: Prospecting/enrichment flow — read the doc, don't reason from memory
 Both prospecting veins (Maps + LinkedIn) and the shared enrichment engine are
 documented canonically, with `file:line` citations and verified actor costs, in

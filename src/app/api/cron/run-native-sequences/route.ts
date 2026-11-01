@@ -54,6 +54,7 @@ import { renderSpintax } from "@/lib/spintax";
 import { buildTokenMap, applyTokens } from "@/lib/native/tokens";
 import { loadVerifierStates, finalizeVerifierStates, VerifierStateLoadError } from "@/lib/millionverifier/org-state";
 import { gateContactVerification } from "@/lib/millionverifier/verify-contact";
+import { gateRulesFor, unprovenHoldReason } from "@/lib/millionverifier/policy";
 import { enqueueOwnerAlert } from "@/lib/notifications/owner-alerts";
 import { domainOpenForNewLeads } from "@/lib/deliverability/lifecycle";
 import {
@@ -103,6 +104,9 @@ type CampaignRow = {
   // Scope for the gate (migration 00130). true = verify the first touch only;
   // follow-ups skip re-verification. Ignored when verify_before_send is false.
   verify_first_send_only: boolean | null;
+  // Migration 00140. false (default) = a first email to a catch-all / unknown
+  // address is parked out of line; true = it sends, flagged risky.
+  send_unproven_addresses: boolean | null;
   // Visual Flow builder graph (migration 00086). NULL = legacy/linear campaign,
   // the sender walks campaign_steps by current_step_index exactly as before.
   // Present = the graph runtime (migration 00089) walks the tree from the
@@ -117,6 +121,9 @@ type CampaignRow = {
 type DispatchResult =
   | { status: "sent"; rfcMessageId: string; threadId: string }
   | { status: "hold"; resultTag: string }
+  // A first email to a catch-all / unknown address on a campaign that doesn't
+  // send them: the enrollment leaves the line (paused, holdReason).
+  | { status: "park"; resultTag: string; holdReason: string }
   | { status: "retry"; resultTag: string }
   | { status: "mailbox_auth"; resultTag: string }
   | { status: "skip"; resultTag: string; failReason: string }
@@ -157,7 +164,7 @@ export async function GET(request: NextRequest) {
   // and fetching per campaign removes that whole class.
   const { data: campaignsData, error: campaignsErr } = await admin
     .from("campaigns")
-    .select("id, organization_id, client_id, status, source_channel, name, send_timezone, send_start_hour, send_end_hour, send_weekdays_only, daily_new_leads_cap, sending_strategy, verify_before_send, verify_first_send_only, flow_graph")
+    .select("id, organization_id, client_id, status, source_channel, name, send_timezone, send_start_hour, send_end_hour, send_weekdays_only, daily_new_leads_cap, sending_strategy, verify_before_send, verify_first_send_only, send_unproven_addresses, flow_graph")
     .eq("source_channel", "native_email")
     .eq("status", "active");
   if (campaignsErr) return prefetchFailed("campaigns", campaignsErr);
@@ -845,12 +852,18 @@ export async function GET(request: NextRequest) {
     const verifierState = gateApplies
       ? verifierByOrg.get(campaign.organization_id) ?? null
       : null;
+    // First email: a check from the last 7 days, and catch-all / unknown parked
+    // unless the campaign opts in. Follow-ups: the 30-day cache, sent as before.
     const gate = await gateContactVerification({
       admin,
       state: verifierState,
       contact,
       now: tickNow,
+      rules: gateRulesFor(stepIndex, campaign.send_unproven_addresses === true),
     });
+    if (gate.action === "park") {
+      return { status: "park", resultTag: `verify_park_${gate.result}`, holdReason: unprovenHoldReason(gate.result) };
+    }
     if (gate.action === "hold") {
       return { status: "hold", resultTag: `verify_hold_${gate.reason}` };
     }
@@ -1229,6 +1242,11 @@ export async function GET(request: NextRequest) {
       await releaseStep(enrollment, stepIndex);
       return { result: d.resultTag };
     }
+    if (d.status === "park") {
+      await releaseStep(enrollment, stepIndex);
+      await parkEnrollment(admin, enrollment.id, d.holdReason);
+      return { result: d.resultTag };
+    }
     if (d.status === "skip" || d.status === "send_failed") {
       await markEnrollmentFailed(admin, enrollment.id, d.failReason);
       return { result: d.resultTag };
@@ -1515,6 +1533,12 @@ export async function GET(request: NextRequest) {
       results.push({ enrollment_id: enrollment.id, result: d.resultTag });
       continue;
     }
+    if (d.status === "park") {
+      await releaseStep(enrollment, linearStep);
+      await parkEnrollment(admin, enrollment.id, d.holdReason);
+      results.push({ enrollment_id: enrollment.id, result: d.resultTag });
+      continue;
+    }
     if (d.status === "skip" || d.status === "send_failed") {
       await markEnrollmentFailed(admin, enrollment.id, d.failReason);
       results.push({ enrollment_id: enrollment.id, result: d.resultTag });
@@ -1603,4 +1627,21 @@ async function markEnrollmentFailed(
     .from("campaign_enrollments")
     .update({ status: "failed", last_error: reason })
     .eq("id", enrollmentId);
+}
+
+// Out of line, not failed: an unproven address waits, paused, until the
+// campaign is set to send catch-all / unknown addresses (that switch releases
+// every enrollment whose last_error starts with UNPROVEN_HOLD_PREFIX). Guarded
+// on active so a reply or bounce that landed mid-tick keeps its state.
+async function parkEnrollment(
+  admin: ReturnType<typeof createAdminClient>,
+  enrollmentId: string,
+  reason: string,
+): Promise<void> {
+  const { error } = await admin
+    .from("campaign_enrollments")
+    .update({ status: "paused", last_error: reason })
+    .eq("id", enrollmentId)
+    .eq("status", "active");
+  if (error) console.error("[cron/native-sequences] park failed for", enrollmentId, error.message);
 }

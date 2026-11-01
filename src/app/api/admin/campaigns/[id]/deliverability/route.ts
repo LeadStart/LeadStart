@@ -10,12 +10,17 @@
 // Million Verifier send-gate controls - verify_before_send (migration 00129, the
 // master on/off) and verify_first_send_only (migration 00130, restricts the gate
 // to the first touch). Together they express the three modes surfaced in the UI:
-// every send / first send only / off.
+// every send / first send only / off. And send_unproven_addresses (migration
+// 00140): false holds first emails to catch-all / unknown addresses out of
+// line; switching it to true puts every contact held that way back in line.
+// Each field is optional; send at least one.
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { checkDomainAuth, scoreCopy, domainOf } from "@/lib/deliverability/check";
+import { UNPROVEN_HOLD_PREFIX } from "@/lib/millionverifier/policy";
+import { escapeLikePattern } from "@/lib/utils";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -83,14 +88,20 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id: campaignId } = await params;
 
-  let body: { verify_before_send?: unknown; verify_first_send_only?: unknown };
+  let body: { verify_before_send?: unknown; verify_first_send_only?: unknown; send_unproven_addresses?: unknown };
   try {
-    body = (await req.json()) as { verify_before_send?: unknown; verify_first_send_only?: unknown };
+    body = (await req.json()) as typeof body;
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
-  if (typeof body.verify_before_send !== "boolean") {
+  if (body.verify_before_send === undefined && body.send_unproven_addresses === undefined) {
+    return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
+  }
+  if (body.verify_before_send !== undefined && typeof body.verify_before_send !== "boolean") {
     return NextResponse.json({ error: "verify_before_send must be a boolean" }, { status: 400 });
+  }
+  if (body.send_unproven_addresses !== undefined && typeof body.send_unproven_addresses !== "boolean") {
+    return NextResponse.json({ error: "send_unproven_addresses must be a boolean" }, { status: 400 });
   }
   if (body.verify_first_send_only !== undefined && typeof body.verify_first_send_only !== "boolean") {
     return NextResponse.json({ error: "verify_first_send_only must be a boolean" }, { status: 400 });
@@ -125,24 +136,42 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     );
   }
 
-  const update: Record<string, unknown> = {
-    verify_before_send: body.verify_before_send,
-    updated_at: new Date().toISOString(),
-  };
+  const update: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if (body.verify_before_send !== undefined) update.verify_before_send = body.verify_before_send;
   if (body.verify_first_send_only !== undefined) {
     update.verify_first_send_only = body.verify_first_send_only;
   }
+  if (body.send_unproven_addresses !== undefined) update.send_unproven_addresses = body.send_unproven_addresses;
 
   const { error } = await admin.from("campaigns").update(update).eq("id", campaignId);
   if (error) {
-    // A 42703 here means migration 00129/00130 hasn't been applied to this DB yet.
+    // A 42703 here means migration 00129/00130/00140 hasn't been applied to this DB yet.
     console.error(`[deliverability] verify settings update failed for ${campaignId}:`, error.message ?? error);
     return NextResponse.json({ error: "Couldn't update the verification setting" }, { status: 500 });
   }
 
+  // Sending unproven addresses again: everyone the sender held for it goes back in line.
+  let released = 0;
+  if (body.send_unproven_addresses === true) {
+    const { data: back, error: releaseError } = await admin
+      .from("campaign_enrollments")
+      .update({ status: "active", last_error: null })
+      .eq("campaign_id", campaignId)
+      .eq("status", "paused")
+      .like("last_error", `${escapeLikePattern(UNPROVEN_HOLD_PREFIX)}%`)
+      .select("id");
+    if (releaseError) {
+      console.error(`[deliverability] releasing held contacts failed for ${campaignId}:`, releaseError.message);
+      return NextResponse.json({ error: "Saved, but the held contacts couldn't be put back in line" }, { status: 500 });
+    }
+    released = (back ?? []).length;
+  }
+
   return NextResponse.json({
     ok: true,
-    verify_before_send: body.verify_before_send,
+    verify_before_send: body.verify_before_send ?? null,
     verify_first_send_only: body.verify_first_send_only ?? null,
+    send_unproven_addresses: body.send_unproven_addresses ?? null,
+    released,
   });
 }

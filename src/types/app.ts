@@ -204,6 +204,14 @@ export interface Campaign {
   // send without re-verifying. Ignored when verify_before_send is false. Off by
   // default (= verify every send).
   verify_first_send_only: boolean;
+  // Migration 00140. false (default) = a first email to a catch-all / unknown
+  // address is held out of line (enrollment paused, last_error "Held: unproven
+  // address ..."); true = it sends, flagged risky. Optional until applied everywhere.
+  send_unproven_addresses?: boolean;
+  // The campaign bounce stop (src/lib/campaigns/bounce-stop.ts) counts only first
+  // emails sent after this. Set when it pauses new contacts, or by hand to restart
+  // the count on purpose. Migration 00140.
+  bounce_stop_at?: string | null;
   // Owner-written saved reply for this campaign's hot leads (migration 00134).
   // Pre-fills the admin inbox reply box, with {{tokens}} filled per lead (e.g.
   // {{report_link}}); see src/lib/replies/saved-reply.ts. NULL = none. Optional

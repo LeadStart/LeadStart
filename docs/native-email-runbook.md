@@ -140,8 +140,10 @@ whenever convenient.
 Every recipient is verified **just before its first send** (migration `00069`).
 The gate lives inside `run-native-sequences` as the last check before the Gmail
 API call, so a credit is only ever spent on an address that would otherwise be
-sent to right now. Results are cached on the contact for **30 days**, so
-follow-up steps to an already-verified address are free.
+sent to right now. A **first email** needs a result from the last **7 days**
+(older is checked again live, about 1 credit); follow-ups reuse a result up to
+**30 days** old, so they are free. Only proven addresses get a first email: see
+the cardinal rule at the top of `CLAUDE.md` (2026-11-01).
 
 **Setup:** paste a Million Verifier key on **Admin → Integrations → Email
 verification** and click **Test connection** (shows the remaining credit
@@ -154,8 +156,8 @@ exactly as before this feature. Get a key at `app.millionverifier.com/api`
 | Result | Action | Charged? |
 |--------|--------|----------|
 | `ok` | send | yes |
-| `catch_all` | **send, flagged risky** (can't confirm/deny; bounce monitoring + inbox-health auto-pause catch any damage) | no |
-| `unknown` | hold + retry (free) up to 3× at 1h apart, then send flagged risky | no |
+| `catch_all` | first email: **held out of line** (enrollment paused, `last_error` "Held: unproven address …") unless the campaign sends them (`send_unproven_addresses`, Deliverability tab); follow-up to an address that took email 1: send flagged risky | no |
+| `unknown` | hold + retry (free) up to 3× at 1h apart, then the same as `catch_all` | no |
 | `invalid` | **skip** — enrollment failed, contact flagged; never sent | yes |
 | `disposable` | **skip** | yes |
 | `error` (per-address) | hold + retry up to 5× at 1h apart, then skip | no |
@@ -180,11 +182,38 @@ contact (catch-all/unknown are free). Check the balance before deploying.
 `verification` array (one entry per org): `mode` (`armed`/`suppressed`/`tripped`/
 `disarmed`), `calls`, `cached`, `held`, `skipped`, `credits`, and a per-result
 `counts` map. Result codes in the `results` array: `verify_hold_*` (backoff /
-budget / verifier down), `verify_skip_invalid|disposable|error`.
+budget / verifier down), `verify_park_catch_all|unknown` (held out of line),
+`verify_skip_invalid|disposable|error`.
+
+**Why catch-alls no longer send (2026-11-01).** The old policy sent them,
+"bounce monitoring + inbox-health auto-pause catch any damage". Inbox health
+scores bounces only once an inbox has sent 20 in 7 days, so in a campaign's
+first week nothing watched. PolishPoint (c598d088, launched 2026-10-26) bounced
+11 of its first 200 first emails: catch-all 4 of 7, guessed-then-verified 5 of
+65, LinkedIn-profile verified 2 of 110, site addresses 0 of 15. A fresh check
+doesn't catch everything: of the 7 verified addresses that bounced, a re-check
+on 2026-11-01 still answered ok for 4 (a deleted Google user, a disabled Yahoo
+account, a full mailbox, a forwarding block), unknown for 1, invalid for 2.
+
+**The switch.** Deliverability tab → "Catch-all and unknown addresses": Hold
+them (default, every campaign) / Send them, flagged risky. Choosing Send puts
+every contact held for it back in line (the PATCH releases them); choosing Hold
+again parks them as they come up. The card shows how many are held.
+
+**The bounce stop.** `src/lib/campaigns/bounce-stop.ts`, run by the reply
+poller after it marks a hard bounce: 3 bad-address bounces (`invalid_address`,
+`mailbox_unavailable`, `unreachable`) in a campaign's last 100 first emails set
+New contacts per day to Paused and send the owner a `campaign_bounce_stop`
+alert. Follow-ups keep going. Spam/auth refusals don't count (they alert as
+`mail_rejected_as_spam`), nor do 5.7 policy refusals. It counts only first
+emails sent after `campaigns.bounce_stop_at`, so resuming starts a clean
+window; setting it by hand restarts the count on purpose (PolishPoint's at
+go-live, owner pick 2026-11-01). The Schedule tab says "the bounce stop paused
+new contacts" only when a `campaign_bounce_stop` alert went out at that time. Replayed on PolishPoint: it would have paused new contacts at 4:28 PM
+PDT on launch day (3 of the first 9 bounced). Test `scripts/test-bounce-stop.ts`.
 
 **Validating the policy.** The send row records what the gate saw
-(`native_sends.email_verification_result`). To check whether "send catch-all,
-flag risky" is holding up, slice bounces by result:
+(`native_sends.email_verification_result`). To see how each result bounces, slice by it:
 
 ```sql
 select email_verification_result, status, count(*)
@@ -193,7 +222,7 @@ where sent_at > now() - interval '7 days'
 group by 1, 2 order by 1, 2;
 ```
 
-If catch-all rows bounce materially more than `ok` rows, revisit the policy.
+A campaign that sends catch-alls on purpose should be watched with this query.
 
 ## 6. Bounces: how they're read and what they mean
 

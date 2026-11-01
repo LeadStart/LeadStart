@@ -48,6 +48,21 @@ import {
 } from "@/lib/flow/progress";
 import { computeVariantStats, type AbNodeStats } from "@/lib/flow/variants";
 import type { Campaign, CampaignSnapshot, Client, ReplyClass } from "@/types/app";
+import { UNPROVEN_HOLD_PREFIX } from "@/lib/millionverifier/policy";
+import { escapeLikePattern } from "@/lib/utils";
+
+// "Oct 26, 4:35 PM PDT" in the campaign's own send time zone, formatted on the
+// server so the client renders the same words.
+function formatStopTime(iso: string, timeZone: string): string {
+  return new Date(iso).toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone,
+    timeZoneName: "short",
+  });
+}
 
 const SNAPSHOT_COLUMNS =
   "id, campaign_id, snapshot_date, total_leads, emails_sent, replies, " +
@@ -334,7 +349,7 @@ export default async function AdminCampaignDetailPage({
     // owner can add/remove inboxes at any time. Contacts-tab badge keys off the
     // launch-readiness contacts warning (enrollment count === 0). `usage` marks
     // inboxes claimed by ANOTHER non-completed campaign (dedicated-inbox policy).
-    const [allMailboxesRes, attachedRes, usage] = await Promise.all([
+    const [allMailboxesRes, attachedRes, usage, heldUnprovenRes] = await Promise.all([
       admin
         .from("native_mailboxes")
         .select("id, email_address, status, tags")
@@ -345,6 +360,13 @@ export default async function AdminCampaignDetailPage({
         .select("mailbox_id")
         .eq("campaign_id", campaign.id),
       mailboxUsageMap(admin, campaign.organization_id, campaign.id),
+      // Waiting for email 1, held by the sender for a catch-all / unknown address.
+      admin
+        .from("campaign_enrollments")
+        .select("id", { count: "exact", head: true })
+        .eq("campaign_id", campaign.id)
+        .eq("status", "paused")
+        .like("last_error", `${escapeLikePattern(UNPROVEN_HOLD_PREFIX)}%`),
     ]);
     const allMailboxes = (
       (allMailboxesRes.data ?? []) as {
@@ -360,6 +382,22 @@ export default async function AdminCampaignDetailPage({
     const attachedMailboxIds = (
       (attachedRes.data ?? []) as { mailbox_id: string }[]
     ).map((r) => r.mailbox_id);
+    // "Paused by the bounce stop": only when the stop itself paused it, i.e. its
+    // alert went out at bounce_stop_at (the column can also mark a count
+    // restarted on purpose, and the owner can pause by hand).
+    let bounceStopLabel: string | null = null;
+    if (campaign.bounce_stop_at && resolveDailyNewLeadsCap(campaign) === 0) {
+      const at = Date.parse(campaign.bounce_stop_at);
+      const { data: stopAlert } = await admin
+        .from("owner_alerts")
+        .select("id")
+        .eq("kind", "campaign_bounce_stop")
+        .eq("context->>campaign_id", campaign.id)
+        .gte("created_at", new Date(at - 60_000).toISOString())
+        .lte("created_at", new Date(at + 10 * 60_000).toISOString())
+        .limit(1);
+      if ((stopAlert ?? []).length > 0) bounceStopLabel = formatStopTime(campaign.bounce_stop_at, sendWindow.timezone);
+    }
     const contactsMissing = (launchReadiness?.warnings ?? []).some(
       (w) => w.key === "contacts",
     );
@@ -379,10 +417,13 @@ export default async function AdminCampaignDetailPage({
         initialGraph={initialGraph}
         initialWindow={sendWindow}
         initialNewLeadsCap={resolveDailyNewLeadsCap(campaign)}
+        bounceStopLabel={bounceStopLabel}
         initialStrategy={sendingStrategy}
         initialAbAutoPauseDefault={campaign.ab_auto_pause_default ?? false}
         initialVerifyBeforeSend={campaign.verify_before_send ?? true}
         initialVerifyFirstSendOnly={campaign.verify_first_send_only ?? false}
+        initialSendUnproven={campaign.send_unproven_addresses ?? false}
+        initialHeldUnproven={heldUnprovenRes.count ?? 0}
         initialReplyTemplate={campaign.reply_template ?? null}
         replyTokens={[
           "first_name",

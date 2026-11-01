@@ -17,6 +17,12 @@ import {
   shouldAlertAccountError,
   shouldAlertLowCredits,
   VERIFICATION_TTL_DAYS,
+  FIRST_EMAIL_TTL_DAYS,
+  FOLLOW_UP_RULES,
+  gateRulesFor,
+  parkFromCachedStatus,
+  unprovenHoldReason,
+  UNPROVEN_HOLD_PREFIX,
   MAX_UNKNOWN_ATTEMPTS,
   MAX_ERROR_ATTEMPTS,
   type CacheView,
@@ -168,6 +174,69 @@ console.log("\ndecideFromResult:");
   assert(patch.email_verification_status === "error", "unknown result string -> error status");
   assert(decision.action === "hold", "unknown result string -> hold (not send)");
 }
+
+// ---------- First emails: only proven addresses (owner picks 2026-11-01) ----------
+// PolishPoint's first 200 first emails: catch-alls bounced 4 of 7. A first email
+// to a catch-all / unknown address is parked unless the campaign opts in, and
+// needs a check from the last 7 days. Follow-ups keep the old rules.
+console.log("\nfirst emails (gateRulesFor):");
+const FIRST = gateRulesFor(0, false);
+const FIRST_OPTED_IN = gateRulesFor(0, true);
+assert(FIRST.holdUnproven === true && FIRST.ttlDays === FIRST_EMAIL_TTL_DAYS, "step 0, not opted in -> hold unproven, 7-day check");
+assert(FIRST_OPTED_IN.holdUnproven === false && FIRST_OPTED_IN.ttlDays === FIRST_EMAIL_TTL_DAYS, "step 0, opted in -> send unproven, still 7-day check");
+assert(gateRulesFor(1, false) === FOLLOW_UP_RULES && gateRulesFor(2, true) === FOLLOW_UP_RULES, "follow-ups -> 30-day cache, never parked");
+assert(FIRST_EMAIL_TTL_DAYS === 7 && VERIFICATION_TTL_DAYS === 30, "the two windows are 7 and 30 days");
+{
+  const d = decideFromCached(cache("catch_all", daysAgo(1)), NOW, FIRST);
+  assert(d.action === "park" && d.result === "catch_all", "first email, cached catch_all -> park");
+}
+{
+  const d = decideFromCached(cache("catch_all", daysAgo(1)), NOW, FIRST_OPTED_IN);
+  assert(d.action === "send" && d.result === "catch_all" && d.risky, "first email, cached catch_all, opted in -> send risky");
+}
+{
+  const d = decideFromCached(cache("catch_all", daysAgo(1)), NOW, gateRulesFor(1, false));
+  assert(d.action === "send" && d.result === "catch_all", "follow-up to a catch_all that took email 1 -> send risky");
+}
+{
+  const d = decideFromCached(cache("unknown", hoursAgo(2), MAX_UNKNOWN_ATTEMPTS), NOW, FIRST);
+  assert(d.action === "park" && d.result === "unknown", "first email, unknown out of retries -> park (never sends)");
+}
+{
+  const d = decideFromCached(cache("unknown", hoursAgo(0.25), 1), NOW, FIRST);
+  assert(d.action === "hold", "first email, unknown with retries left -> hold for the retry, not park yet");
+}
+assert(decideFromCached(cache("ok", daysAgo(8)), NOW, FIRST).action === "verify", "first email, ok checked 8 days ago -> check again");
+assert(decideFromCached(cache("ok", daysAgo(6)), NOW, FIRST).action === "send", "first email, ok checked 6 days ago -> send");
+assert(decideFromCached(cache("ok", daysAgo(20)), NOW, gateRulesFor(1, false)).action === "send", "follow-up, ok checked 20 days ago -> send from cache");
+assert(decideFromCached(cache("invalid", daysAgo(1)), NOW, FIRST).action === "skip", "first email, invalid -> still skipped");
+{
+  const { decision } = decideFromResult(resp({ result: "catch_all", quality: "risky" }), 0, NOW, FIRST);
+  assert(decision.action === "park" && decision.result === "catch_all", "first email, live catch_all -> park (the Oct 29 greenway.com send)");
+}
+{
+  const { decision } = decideFromResult(resp({ result: "unknown" }), MAX_UNKNOWN_ATTEMPTS - 1, NOW, FIRST);
+  assert(decision.action === "park" && decision.result === "unknown", "first email, last unknown retry -> park");
+}
+{
+  const { decision } = decideFromResult(resp({ result: "catch_all" }), 0, NOW, FIRST_OPTED_IN);
+  assert(decision.action === "send" && decision.risky, "first email, live catch_all, opted in -> send risky");
+}
+{
+  const { decision } = decideFromResult(resp({ result: "ok" }), 0, NOW, FIRST);
+  assert(decision.action === "send" && decision.result === "ok", "first email, live ok -> send");
+}
+console.log("\nwith the check off (parkFromCachedStatus):");
+assert(parkFromCachedStatus("catch_all", FIRST)?.action === "park", "gate off, cached catch_all, first email -> park");
+assert(parkFromCachedStatus("unknown", FIRST)?.action === "park", "gate off, cached unknown, first email -> park");
+assert(parkFromCachedStatus("ok", FIRST) === null, "gate off, cached ok -> no park");
+assert(parkFromCachedStatus(null, FIRST) === null, "gate off, never checked -> no park (nothing on file)");
+assert(parkFromCachedStatus("catch_all", FIRST_OPTED_IN) === null, "gate off, opted in -> no park");
+assert(parkFromCachedStatus("catch_all", gateRulesFor(1, false)) === null, "gate off, follow-up -> no park");
+assert(
+  unprovenHoldReason("catch_all").startsWith(UNPROVEN_HOLD_PREFIX) && unprovenHoldReason("unknown").startsWith(UNPROVEN_HOLD_PREFIX),
+  "the hold reason carries the prefix the release matches",
+);
 
 // ---------- shouldAlertLowCredits ----------
 console.log("\nshouldAlertLowCredits:");

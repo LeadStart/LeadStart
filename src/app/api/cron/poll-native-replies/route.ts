@@ -14,11 +14,16 @@
 //     notification pipeline inline. Stop the sequence (enrollment='replied')
 //     unless the message is an auto-reply (OOO), which must NOT halt it.
 //
-// Reply matching is by Gmail threadId only: a reply to our email carries the
-// same threadId as the original send, so we look up native_sends by
-// (mailbox_id, gmail_thread_id). A non-bounce without a thread match is
-// non-campaign mail and is dropped silently: the poller never ingests
-// arbitrary inbox mail.
+// Reply matching is by Gmail threadId first: a reply to our email usually
+// carries the same threadId as the original send, so we look up native_sends by
+// (mailbox_id, gmail_thread_id). Gmail files a reply in a thread of its own when
+// its subject changes (Outlook's "Automatic reply: …"), so a reply with no
+// thread match is then matched by the Message-ID it answers (In-Reply-To /
+// References → native_sends.rfc_message_id). The thread-only match dropped all
+// 3 out-of-office replies PolishPoint got (2026-10-28/29), and would have
+// dropped a real reply filed that way, leaving its sequence running. A
+// non-bounce matching neither is non-campaign mail and is dropped silently: the
+// poller never ingests arbitrary inbox mail.
 //
 // Not gated by the send window: replies and bounces arrive at any hour.
 //
@@ -37,6 +42,7 @@ import { GmailClient, GmailConfigError } from "@/lib/gmail/client";
 import { loadGmailClientForOrg } from "@/lib/gmail/org";
 import {
   parseGmailMessage,
+  replyParentIds,
   isBounce,
   classifyBounce,
   isAutoSubmitted,
@@ -47,6 +53,7 @@ import { findBouncedSend, bounceReasonText } from "@/lib/native/bounce-attributi
 import { escapeLikePattern } from "@/lib/utils";
 import { shouldTripCircuitBreaker, enterTimers, CB_RATE_SAMPLE } from "@/lib/deliverability/lifecycle";
 import { enqueueOwnerAlert } from "@/lib/notifications/owner-alerts";
+import { evaluateBounceStop } from "@/lib/campaigns/bounce-stop";
 import type { NativeMailbox } from "@/types/app";
 
 export const maxDuration = 60;
@@ -80,7 +87,10 @@ type SendRow = {
   enrollment_id: string | null;
   to_email: string;
   status: string;
+  step_index: number;
 };
+
+const SEND_COLS = "id, organization_id, campaign_id, contact_id, enrollment_id, to_email, status, step_index";
 
 export async function GET(request: NextRequest) {
   const authError = checkCronAuth(request);
@@ -117,6 +127,9 @@ export async function GET(request: NextRequest) {
   // loop, by the bounce circuit breaker (fast burn-prevention: a burst of hard
   // bounces tires the domain within a minute, ahead of the hourly health rollup).
   const bouncedDomains = new Set<string>();
+  // Campaigns that took a hard bounce this tick: the campaign bounce stop
+  // (src/lib/campaigns/bounce-stop.ts) re-counts each one's first emails after the loop.
+  const bouncedCampaigns = new Set<string>();
 
   const resolveClient = async (campaignId: string) => {
     let entry = clientByCampaign.get(campaignId);
@@ -208,7 +221,7 @@ export async function GET(request: NextRequest) {
           // Match the inbound thread to a send from this mailbox.
           const { data: sendData } = await admin
             .from("native_sends")
-            .select("id, organization_id, campaign_id, contact_id, enrollment_id, to_email, status")
+            .select(SEND_COLS)
             .eq("mailbox_id", mailbox.id)
             .eq("gmail_thread_id", msg.threadId)
             .order("sent_at", { ascending: false })
@@ -264,8 +277,9 @@ export async function GET(request: NextRequest) {
                   })
                   .eq("id", target.id);
                 await saveBounceDetail(admin, target.id, verdict);
-                // Feed the post-loop breaker only when this notice marked a row.
+                // Feed the post-loop breakers only when this notice marked a row.
                 if (mailbox.domain_id) bouncedDomains.add(mailbox.domain_id);
+                bouncedCampaigns.add(target.campaign_id);
                 if (verdict.bounceClass === "spam_block" || verdict.bounceClass === "auth_failure") {
                   await alertRejectedAsSpam(admin, mailbox.email_address, recipient, verdict);
                 }
@@ -305,7 +319,10 @@ export async function GET(request: NextRequest) {
           }
 
           // ---- Reply branch ----
-          if (!sendRow) {
+          // No thread match: the reply may sit in a thread of its own (a
+          // changed subject), so match the Message-ID it answers.
+          const replySend = sendRow ?? (await findSendByParentIds(admin, mailbox.id, replyParentIds(parsed)));
+          if (!replySend) {
             // Not a reply to any of our campaign sends (spam-foldered or not): ignore.
             summary.dropped++;
             continue;
@@ -314,7 +331,7 @@ export async function GET(request: NextRequest) {
 
           // Resolve the campaign's client (cached). A message from the client's
           // own notification inbox on our thread is the client, not the lead.
-          const client = await resolveClient(sendRow.campaign_id);
+          const client = await resolveClient(replySend.campaign_id);
           if (fromEmail && client.notificationEmail && fromEmail === client.notificationEmail) {
             summary.dropped++;
             continue;
@@ -323,26 +340,26 @@ export async function GET(request: NextRequest) {
           // Stop-on-reply, but never on an auto-reply (OOO), which would
           // wrongly halt the sequence. Human reply → halt + mark replied.
           if (!isAutoSubmitted(parsed)) {
-            if (sendRow.enrollment_id) {
+            if (replySend.enrollment_id) {
               await admin
                 .from("campaign_enrollments")
                 .update({ status: "replied" })
-                .eq("id", sendRow.enrollment_id)
+                .eq("id", replySend.enrollment_id)
                 .eq("status", "active");
             }
             await admin
               .from("contacts")
               .update({ status: "replied" })
-              .eq("id", sendRow.contact_id)
+              .eq("id", replySend.contact_id)
               .neq("status", "bounced")
               .neq("status", "unsubscribed");
           }
 
-          const leadEmail = fromEmail || sendRow.to_email;
+          const leadEmail = fromEmail || replySend.to_email;
           const row = {
             organization_id: mailbox.organization_id,
             client_id: client.clientId,
-            campaign_id: sendRow.campaign_id,
+            campaign_id: replySend.campaign_id,
             source_channel: "native_email" as const,
             gmail_message_id: entry.id,
             gmail_thread_id: msg.threadId,
@@ -445,8 +462,36 @@ export async function GET(request: NextRequest) {
   // Fast bounce circuit breaker: evaluate every domain that took a hard bounce
   // this tick (rare, so at most a few one-off queries per affected domain).
   const breaker = await evaluateCircuitBreakers(admin, [...bouncedDomains], Date.now());
+  // Campaign bounce stop: 3 bad-address bounces in a campaign's last 100 first
+  // emails pause its new contacts and alert the owner. Works from the first
+  // email, unlike inbox health (20 sends a week per inbox) and the domain breaker.
+  const bounceStop = [];
+  for (const campaignId of bouncedCampaigns) bounceStop.push(await evaluateBounceStop(admin, campaignId));
 
-  return NextResponse.json({ status: "ok", processed, fetched, ...summary, breaker });
+  return NextResponse.json({ status: "ok", processed, fetched, ...summary, breaker, bounceStop });
+}
+
+// A reply Gmail filed in a thread of its own: find the send it answers by
+// Message-ID, nearest parent first, among this mailbox's sends.
+async function findSendByParentIds(
+  admin: ReturnType<typeof createAdminClient>,
+  mailboxId: string,
+  ids: string[],
+): Promise<SendRow | null> {
+  if (ids.length === 0) return null;
+  const { data, error } = await admin
+    .from("native_sends")
+    .select(`${SEND_COLS}, rfc_message_id`)
+    .eq("mailbox_id", mailboxId)
+    .in("rfc_message_id", ids.slice(0, 50));
+  if (error) {
+    console.error("[cron/native-replies] Message-ID reply match failed:", error.message);
+    return null;
+  }
+  const rows = (data ?? []) as (SendRow & { rfc_message_id: string })[];
+  if (rows.length === 0) return null;
+  rows.sort((a, b) => ids.indexOf(a.rfc_message_id) - ids.indexOf(b.rfc_message_id));
+  return rows[0];
 }
 
 // ── Bounce circuit breaker ──────────────────────────────────────────────────

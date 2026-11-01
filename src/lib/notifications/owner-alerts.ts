@@ -40,6 +40,8 @@ export type OwnerAlertKind =
   | "inbox_health_degraded"
   | "inbox_health_auto_paused"
   | "mail_rejected_as_spam"
+  // A campaign's first emails hit the bounce stop: new contacts paused (src/lib/campaigns/bounce-stop.ts).
+  | "campaign_bounce_stop"
   | "mailbox_benched"
   | "client_csv_upload"
   | "email_verifier_unavailable"
@@ -262,6 +264,7 @@ const KIND_LABEL: Record<OwnerAlertKind, string> = {
   inbox_health_degraded: "Mailbox health critical",
   inbox_health_auto_paused: "Mailbox auto-paused (health)",
   mail_rejected_as_spam: "Receiving server rejected our mail (spam / authentication)",
+  campaign_bounce_stop: "New contacts paused: first emails bouncing",
   mailbox_benched: "Mailbox benched by the sender",
   client_csv_upload: "Client CSV upload",
   email_verifier_unavailable: "Email verifier unavailable, new sends on hold",
@@ -281,6 +284,7 @@ const KIND_COLOR: Record<OwnerAlertKind, string> = {
   inbox_health_auto_paused: "#b91c1c",
   // A receiver's verdict on our sending reputation: the loudest red there is.
   mail_rejected_as_spam: "#b91c1c",
+  campaign_bounce_stop: "#b91c1c",
   mailbox_benched: "#b91c1c",
   // Informational (not a failure): client self-service activity.
   client_csv_upload: "#2563eb",

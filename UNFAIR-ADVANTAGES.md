@@ -41,8 +41,10 @@ let you shoot your own foot.*
 send — not at import.** The verdict caches on the contact (`contacts.email_verified_at`
 + `email_verification_status`) with a **30-day TTL**
 ([`policy.ts`](src/lib/millionverifier/policy.ts) → `VERIFICATION_TTL_DAYS = 30`,
-`isFresh()`). Inside 30 days it's a free cache hit; past 30 days the address is
-**re-checked before we'll send to it again**. If the verifier is down or out of credits,
+`isFresh()`). A first email needs a check from the last 7 days
+(`FIRST_EMAIL_TTL_DAYS`, since 2026-11-01); follow-ups reuse one up to 30 days old,
+past which the address is **re-checked before we'll send to it again**. Catch-all and
+unknown addresses get no first email unless the campaign opts in. If the verifier is down or out of credits,
 new unverified sends **hold (fail-closed)** and alert the owner — we never silently send
 unverified.
 

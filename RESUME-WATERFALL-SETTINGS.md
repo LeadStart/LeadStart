@@ -98,8 +98,8 @@ waterfall phase (cron tick)
   the existing MV client ([src/lib/millionverifier/client.ts](src/lib/millionverifier/client.ts));
   first `ok` wins → `writeEmail(…, provider 'pattern_mv')`. `catch_all` never
   auto-writes unless the org toggles "accept catch-all guesses" (then write with MV
-  status catch_all, confidence 40 — the send-gate already treats catch-all as
-  risky-but-sendable). MV outage/no-credits: mark items `error`+retry, mirroring the
+  status catch_all, confidence 40). Since 2026-11-01 the send gate holds a first
+  email to a catch-all unless the campaign opts in (`send_unproven_addresses`). MV outage/no-credits: mark items `error`+retry, mirroring the
   send-gate's fail-closed posture ([policy.ts](src/lib/millionverifier/policy.ts)).
   Cost ≈ 1 MV credit/contact typical (~$0.004); real ≤6-credit worst case ≈ $0.022
   at $0.0037/credit. 30-day MV cache applies.

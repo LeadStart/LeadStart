@@ -297,6 +297,22 @@ export interface DsnDetails {
 const ENHANCED_CODE_RE = /\b([245])\.(\d{1,3})\.(\d{1,3})\b/;
 const MESSAGE_ID_RE = /<[^<>\s]+@[^<>\s]+>/g;
 
+/**
+ * The Message-IDs a reply answers: In-Reply-To first, then References newest
+ * first. Gmail files a reply in a thread of its own when the subject changes
+ * (Outlook's "Automatic reply: …" did it to all 3 out-of-office replies on
+ * PolishPoint, 2026-10-28/29), so the thread id alone misses it; these headers
+ * still name the email it answers (native_sends.rfc_message_id).
+ */
+export function replyParentIds(parsed: Pick<ParsedGmailMessage, "inReplyTo" | "references">): string[] {
+  const ids: string[] = [];
+  for (const id of parsed.inReplyTo?.match(MESSAGE_ID_RE) ?? []) if (!ids.includes(id)) ids.push(id);
+  for (const id of [...(parsed.references?.match(MESSAGE_ID_RE) ?? [])].reverse()) {
+    if (!ids.includes(id)) ids.push(id);
+  }
+  return ids;
+}
+
 // "Name: value" lines, with RFC 5322 folded continuation lines joined first.
 function fieldLines(text: string): [string, string][] {
   const out: [string, string][] = [];

@@ -5,7 +5,7 @@
 
 import { AVG_DAYS_PER_MONTH } from "@/lib/deliverability/costs";
 import { MV_CREDIT_COST_USD } from "@/lib/apify/pricing";
-import { VERIFICATION_TTL_DAYS } from "@/lib/millionverifier/policy";
+import { FIRST_EMAIL_TTL_DAYS } from "@/lib/millionverifier/policy";
 import { formatInt, formatNumber, formatUsd } from "@/lib/format";
 import { addDays, addMonths, daysBetween, type CivilDate } from "./dates";
 import type { SimResult } from "./engine";
@@ -134,8 +134,8 @@ export function campaignEconomics(
       formula: `${count(cost.listSize, "contact")} × ${rate(cost.sourcingUsdPerContact)}`,
     });
     // Sourced contacts are verified when sourced; a first touch more than
-    // VERIFICATION_TTL_DAYS later is verified again before it sends.
-    const stale = addDays(cost.startDate, VERIFICATION_TTL_DAYS);
+    // FIRST_EMAIL_TTL_DAYS (7) later is verified again before it sends.
+    const stale = addDays(cost.startDate, FIRST_EMAIL_TTL_DAYS);
     let recheck = 0;
     for (const d of sim.days) if (d.date > stale) recheck += d.firstTouches;
     if (recheck > 0) {
@@ -143,7 +143,7 @@ export function campaignEconomics(
         key: "reverify",
         label: "Re-verification",
         amount: recheck * MV_CREDIT_COST_USD,
-        formula: `${count(recheck, "contact")} first emailed more than ${VERIFICATION_TTL_DAYS} days after sourcing × ${rate(MV_CREDIT_COST_USD)}`,
+        formula: `${count(recheck, "contact")} first emailed more than ${FIRST_EMAIL_TTL_DAYS} days after sourcing × ${rate(MV_CREDIT_COST_USD)}`,
       });
     }
   } else {

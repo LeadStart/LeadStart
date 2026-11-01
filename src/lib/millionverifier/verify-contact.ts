@@ -1,13 +1,15 @@
 // The send-loop verification gate. Given a per-org tick state and a contact,
-// decides send / hold / skip and (when a live call is needed) verifies the
+// decides send / hold / skip / park and (when a live call is needed) verifies the
 // address, persists the result on the contact, and mutates the in-memory
 // contact row so a second enrollment sharing it this tick hits the cache.
 //
 // Called from run-native-sequences as the LAST gate before the Gmail send,
 // after window / suppression / DNC / caps / mailbox / render / Gmail-creds have
 // all passed, so a credit is only ever spent on an address that would send
-// right now. hold/skip never touch the loop's send counters, so a hold leaves
-// the mailbox slot free for the next enrollment in the batch.
+// right now. hold/skip/park never touch the loop's send counters, so a hold
+// leaves the mailbox slot free for the next enrollment in the batch. park = a
+// first email to a catch-all / unknown address on a campaign that doesn't send
+// them: the caller takes the enrollment out of line (policy.ts, migration 00140).
 
 import type { createAdminClient } from "@/lib/supabase/admin";
 import type { Contact } from "@/types/app";
@@ -20,10 +22,13 @@ import type {
 import {
   decideFromCached,
   decideFromResult,
+  parkFromCachedStatus,
   ORG_ERROR_SUPPRESS_MS,
   VERIFY_TIMEOUT_SEC,
+  type GateRules,
   type SendResult,
   type SkipStatus,
+  type UnprovenResult,
 } from "./policy";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
@@ -55,6 +60,7 @@ export interface VerifierTickState {
 
 export type GateResult =
   | { action: "send"; result: SendResult | null }
+  | { action: "park"; result: UnprovenResult }
   | { action: "hold"; reason: string }
   | { action: "skip"; status: SkipStatus; reason: string };
 
@@ -67,15 +73,29 @@ export async function gateContactVerification(args: {
   state: VerifierTickState | null;
   contact: Contact;
   now: Date;
+  /** gateRulesFor(stepIndex, campaign.send_unproven_addresses): the TTL and the hold. */
+  rules: GateRules;
 }): Promise<GateResult> {
-  const { admin, state, contact, now } = args;
+  const { admin, state, contact, now, rules } = args;
 
-  // Disarmed (no per-org state or no key): pass through, result null.
-  if (!state || !state.client) return { action: "send", result: null };
+  // Disarmed (no per-org state or no key, or the campaign skips the check):
+  // pass through, result null. A cached catch-all / unknown still parks a
+  // first email: turning the check off never lets an unproven address out.
+  if (!state || !state.client) {
+    const park = parkFromCachedStatus(contact.email_verification_status, rules);
+    if (park?.action === "park") return { action: "park", result: park.result };
+    return { action: "send", result: null };
+  }
   // Defensive: the loop already guarantees a non-null email before this gate.
   if (!contact.email) return { action: "send", result: null };
 
-  const cached = decideFromCached(contact, now);
+  const cached = decideFromCached(contact, now, rules);
+  if (cached.action === "park") {
+    state.cached++;
+    state.held++;
+    bump(state.counts, cached.result);
+    return { action: "park", result: cached.result };
+  }
   if (cached.action === "send") {
     state.cached++;
     bump(state.counts, cached.result);
@@ -129,7 +149,7 @@ export async function gateContactVerification(args: {
   state.successThisTick = true;
   if (typeof res.credits === "number") state.lastCredits = res.credits;
 
-  const { decision, patch } = decideFromResult(res, contact.email_verification_attempts ?? 0, now);
+  const { decision, patch } = decideFromResult(res, contact.email_verification_attempts ?? 0, now, rules);
   const { error } = await admin.from("contacts").update(patch).eq("id", contact.id);
   if (error) {
     console.error(
@@ -145,6 +165,9 @@ export async function gateContactVerification(args: {
   switch (decision.action) {
     case "send":
       return { action: "send", result: decision.result };
+    case "park":
+      state.held++;
+      return { action: "park", result: decision.result };
     case "skip":
       state.skipped++;
       return { action: "skip", status: decision.status, reason: decision.reason };

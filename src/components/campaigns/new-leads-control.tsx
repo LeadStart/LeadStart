@@ -36,10 +36,13 @@ export function NewLeadsControl({
   value,
   onChange,
   strategy,
+  bounceStopLabel,
 }: {
   value: number | null;
   onChange: (v: number | null) => void;
   strategy: SendingStrategy;
+  /** When the bounce stop paused new contacts ("Oct 26, 4:35 PM PDT"), if it did. */
+  bounceStopLabel?: string | null;
 }) {
   const mode = modeOf(value);
   const [lastLimit, setLastLimit] = useState<number>(value != null && value > 0 ? value : FIRST_LIMIT);
@@ -52,7 +55,9 @@ export function NewLeadsControl({
 
   const hint =
     mode === "paused"
-      ? "No new contacts start. Contacts already in the sequence keep getting their follow-ups."
+      ? bounceStopLabel
+        ? `The bounce stop paused new contacts on ${bounceStopLabel}: 3 of the latest first emails bounced on bad addresses. Follow-ups keep going. Check the list before choosing No limit again.`
+        : "No new contacts start. Contacts already in the sequence keep getting their follow-ups."
       : strategy === "reach_first"
         ? mode === "limit"
           ? "Reach everyone first ignores a limit: new contacts use full inbox capacity. Only Paused applies here."

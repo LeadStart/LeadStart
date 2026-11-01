@@ -6,6 +6,10 @@
 //   first send only -> verify_before_send=true,  verify_first_send_only=true
 //   off             -> verify_before_send=false, verify_first_send_only=false
 //
+// Plus catch-all / unknown addresses (migration 00140, send_unproven_addresses):
+// held by default, so a first email to one waits out of line; "Send them" puts
+// every held contact back in line (the PATCH releases them).
+//
 // Immediate-save (its own PATCH, like CampaignTagFollow): optimistic switch,
 // revert + error on failure. It does NOT join the workspace "Save changes" batch.
 
@@ -31,7 +35,7 @@ const OPTIONS: { value: Mode; title: string; desc: string }[] = [
   {
     value: "all",
     title: "Verify every send",
-    desc: "Check each recipient before every send. Invalid and disposable addresses are skipped, catch-all/unknown ones send flagged risky, and if the verifier is unavailable the send holds. Fresh results (≤30 days) are reused, so most follow-ups cost nothing.",
+    desc: "Check each recipient before every send. Invalid and disposable addresses are skipped, and if the verifier is unavailable the send holds. A first email needs a check from the last 7 days; follow-ups reuse results up to 30 days old, so most cost nothing.",
   },
   {
     value: "first",
@@ -41,7 +45,20 @@ const OPTIONS: { value: Mode; title: string; desc: string }[] = [
   {
     value: "off",
     title: "Don’t verify",
-    desc: "Send without the pre-send check.",
+    desc: "Send without the pre-send check. A catch-all or unknown result already on file still holds a first email unless the setting below sends them.",
+  },
+];
+
+const UNPROVEN_OPTIONS: { value: boolean; title: string; desc: string }[] = [
+  {
+    value: false,
+    title: "Hold them",
+    desc: "A catch-all or unknown address can't be confirmed, so it bounces far more often. Its first email waits, paused, out of line. Follow-ups to an address that already took email 1 still send.",
+  },
+  {
+    value: true,
+    title: "Send them, flagged risky",
+    desc: "They send like any other address. Choosing this puts every contact held for it back in line.",
   },
 ];
 
@@ -49,14 +66,32 @@ export function DeliverabilityGateCard({
   campaignId,
   initialVerifyBeforeSend,
   initialVerifyFirstSendOnly,
+  initialSendUnproven,
+  initialHeldUnproven,
 }: {
   campaignId: string;
   initialVerifyBeforeSend: boolean;
   initialVerifyFirstSendOnly: boolean;
+  initialSendUnproven: boolean;
+  /** Contacts waiting for email 1, held because their address is catch-all / unknown. */
+  initialHeldUnproven: number;
 }) {
   const [mode, setMode] = useState<Mode>(toMode(initialVerifyBeforeSend, initialVerifyFirstSendOnly));
+  const [sendUnproven, setSendUnproven] = useState(initialSendUnproven);
+  const [held, setHeld] = useState(initialHeldUnproven);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  async function save(payload: Record<string, boolean>): Promise<{ released?: number }> {
+    const res = await fetch(appUrl(`/api/admin/campaigns/${campaignId}/deliverability`), {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = (await res.json().catch(() => ({}))) as { error?: string; released?: number };
+    if (!res.ok) throw new Error(data.error ?? "Couldn't update the setting.");
+    return data;
+  }
 
   async function choose(next: Mode) {
     if (busy || next === mode) return;
@@ -65,15 +100,25 @@ export function DeliverabilityGateCard({
     setError(null);
     setMode(next); // optimistic
     try {
-      const res = await fetch(appUrl(`/api/admin/campaigns/${campaignId}/deliverability`), {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(PAYLOAD[next]),
-      });
-      const data = (await res.json().catch(() => ({}))) as { error?: string };
-      if (!res.ok) throw new Error(data.error ?? "Couldn't update the setting.");
+      await save(PAYLOAD[next]);
     } catch (err) {
       setMode(prev); // revert
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function chooseUnproven(next: boolean) {
+    if (busy || next === sendUnproven) return;
+    setBusy(true);
+    setError(null);
+    setSendUnproven(next); // optimistic
+    try {
+      const data = await save({ send_unproven_addresses: next });
+      if (next) setHeld((h) => Math.max(0, h - (data.released ?? 0)));
+    } catch (err) {
+      setSendUnproven(!next); // revert
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);
@@ -147,6 +192,51 @@ export function DeliverabilityGateCard({
           Verification only runs while a Million Verifier key is configured in
           Settings&nbsp;→&nbsp;API.
         </p>
+
+        <div className="space-y-2 border-t border-border-soft pt-3">
+          <div>
+            <p className="text-sm font-semibold text-foreground">Catch-all and unknown addresses</p>
+            <p className="mt-0.5 text-[11px] text-muted-foreground">
+              {held > 0
+                ? `${held.toLocaleString()} contact${held === 1 ? "" : "s"} waiting for email 1 ${held === 1 ? "is" : "are"} held for this.`
+                : "No contacts are held for this right now."}
+            </p>
+          </div>
+          <div className="space-y-2" role="radiogroup" aria-label="Catch-all and unknown addresses">
+            {UNPROVEN_OPTIONS.map((opt) => {
+              const active = sendUnproven === opt.value;
+              return (
+                <button
+                  key={String(opt.value)}
+                  type="button"
+                  role="radio"
+                  aria-checked={active}
+                  disabled={busy}
+                  onClick={() => chooseUnproven(opt.value)}
+                  className={`w-full rounded-lg border p-3 text-left transition-colors disabled:cursor-not-allowed ${
+                    active
+                      ? "border-primary bg-primary/5 ring-1 ring-primary/30"
+                      : "border-border-soft hover:border-border"
+                  }`}
+                >
+                  <span className="flex items-center gap-2">
+                    <span
+                      className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
+                        active ? "border-primary" : "border-muted-foreground/40"
+                      }`}
+                    >
+                      {active && <span className="h-2 w-2 rounded-full bg-primary" />}
+                    </span>
+                    <span className="text-sm font-semibold text-foreground">{opt.title}</span>
+                  </span>
+                  <span className="mt-1 block pl-6 text-[11px] leading-relaxed text-muted-foreground">
+                    {opt.desc}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
         {error && <p className="text-xs text-red-600">{error}</p>}
       </CardContent>
     </Card>

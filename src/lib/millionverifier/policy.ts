@@ -3,18 +3,24 @@
 // response, and the current time, so it is exhaustively unit-testable
 // (scripts/test-millionverifier-policy.ts).
 //
-// Owner-confirmed policy:
+// Policy (owner picks 2026-11-01, after PolishPoint's first emails bounced on
+// catch-alls 4 of 7; cardinal rule "only proven addresses get a first email" in
+// CLAUDE.md):
 //   ok         -> send
-//   catch_all  -> send, flagged risky (can't confirm/deny; bounce monitoring +
-//                 inbox-health auto-pause catch any damage)
-//   unknown    -> hold + retry (free) up to MAX_UNKNOWN_ATTEMPTS, then send
-//                 flagged risky
+//   catch_all  -> FIRST email: park (held out of line) unless the campaign opts
+//                 in (campaigns.send_unproven_addresses), then send flagged risky.
+//                 Follow-up: send flagged risky (the address took email 1).
+//   unknown    -> hold + retry (free) up to MAX_UNKNOWN_ATTEMPTS, then the same
+//                 as catch_all: park a first email unless opted in
 //   invalid    -> skip terminally (enrollment failed, contact flagged)
 //   disposable -> skip terminally
 //   error      -> hold + retry up to MAX_ERROR_ATTEMPTS, then skip terminally
 //   free/role  -> stored as flags only; never affects the send decision
-// Fresh cached results (<= 30 days) reuse the verdict with no API call, so
-// follow-up steps to an already-verified contact are free.
+// A first email needs a result from the last FIRST_EMAIL_TTL_DAYS (7); older is
+// checked again live. Follow-ups reuse anything from the last 30 days for free.
+// The old "catch_all -> send; bounce monitoring + inbox-health auto-pause catch
+// any damage" was wrong: inbox health scores bounces only from 20 sends a week
+// per inbox, so in a campaign's first week nothing watched.
 
 import type {
   Contact,
@@ -26,6 +32,8 @@ import type { MillionVerifierErrorKind, MillionVerifierResponse } from "./client
 const DAY_MS = 86_400_000;
 
 export const VERIFICATION_TTL_DAYS = 30;
+// A first email to an address needs a check this recent (owner pick 2026-11-01).
+export const FIRST_EMAIL_TTL_DAYS = 7;
 export const RETRY_BACKOFF_MS = 60 * 60 * 1000; // 1h between retries of an indeterminate address
 export const MAX_UNKNOWN_ATTEMPTS = 3;
 export const MAX_ERROR_ATTEMPTS = 5;
@@ -38,8 +46,36 @@ export const TRANSIENT_ALERT_STREAK = 3; // consecutive failing ticks before a t
 export type SendResult = "ok" | "catch_all" | "unknown";
 export type SkipStatus = "invalid" | "disposable" | "error";
 
+/** How the gate treats one send. */
+export interface GateRules {
+  /** A cached result older than this many days is checked again live. */
+  ttlDays: number;
+  /** Park a catch-all / unknown address (out of line) instead of sending it. */
+  holdUnproven: boolean;
+}
+
+/** Follow-ups (and non-send callers): 30-day cache, catch-alls send flagged risky. */
+export const FOLLOW_UP_RULES: GateRules = { ttlDays: VERIFICATION_TTL_DAYS, holdUnproven: false };
+
+/** The rules for the email at stepIndex (0 = the first email to this contact). */
+export function gateRulesFor(stepIndex: number, sendUnproven: boolean): GateRules {
+  return stepIndex === 0
+    ? { ttlDays: FIRST_EMAIL_TTL_DAYS, holdUnproven: !sendUnproven }
+    : FOLLOW_UP_RULES;
+}
+
+export type UnprovenResult = "catch_all" | "unknown";
+
+/** The enrollment's last_error while it is parked; the release matches this prefix. */
+export const UNPROVEN_HOLD_PREFIX = "Held: unproven address";
+
+export function unprovenHoldReason(result: UnprovenResult): string {
+  return `${UNPROVEN_HOLD_PREFIX} (${result === "catch_all" ? "catch-all" : "unknown"}). This campaign doesn't send to catch-all or unknown addresses.`;
+}
+
 export type PolicyDecision =
   | { action: "send"; result: SendResult; risky: boolean }
+  | { action: "park"; result: UnprovenResult }
   | { action: "skip"; status: SkipStatus; reason: string }
   | { action: "hold"; reason: string }
   | { action: "verify" };
@@ -85,11 +121,26 @@ function normalizeQuality(quality: string): EmailVerificationQuality | null {
     : null;
 }
 
-export function isFresh(verifiedAt: string | null, now: Date): boolean {
+export function isFresh(verifiedAt: string | null, now: Date, ttlDays: number = VERIFICATION_TTL_DAYS): boolean {
   if (!verifiedAt) return false;
   const ts = Date.parse(verifiedAt);
   if (Number.isNaN(ts)) return false;
-  return now.getTime() - ts <= VERIFICATION_TTL_DAYS * DAY_MS;
+  return now.getTime() - ts <= ttlDays * DAY_MS;
+}
+
+// catch_all, or unknown out of retries: send flagged risky, or park.
+function unproven(result: UnprovenResult, rules: GateRules): PolicyDecision {
+  return rules.holdUnproven ? { action: "park", result } : { action: "send", result, risky: true };
+}
+
+/** With the gate off (no key, or the campaign opted out of checks), a cached
+ *  catch-all / unknown verdict still parks a first email: no API call is made. */
+export function parkFromCachedStatus(
+  status: EmailVerificationStatus | null | undefined,
+  rules: GateRules,
+): PolicyDecision | null {
+  if (!rules.holdUnproven) return null;
+  return status === "catch_all" || status === "unknown" ? { action: "park", result: status } : null;
 }
 
 function withinBackoff(verifiedAt: string | null, now: Date): boolean {
@@ -102,26 +153,28 @@ function withinBackoff(verifiedAt: string | null, now: Date): boolean {
 // Decide from the cached contact row alone. Returns { action: "verify" } when a
 // live API call is required (no fresh cache, or an indeterminate result whose
 // backoff has elapsed). Everything else short-circuits with no API call.
-export function decideFromCached(contact: CacheView, now: Date): PolicyDecision {
+export function decideFromCached(
+  contact: CacheView,
+  now: Date,
+  rules: GateRules = FOLLOW_UP_RULES,
+): PolicyDecision {
   const status = contact.email_verification_status;
   const verifiedAt = contact.email_verified_at;
   const attempts = contact.email_verification_attempts ?? 0;
 
-  if (!status || !isFresh(verifiedAt, now)) return { action: "verify" };
+  if (!status || !isFresh(verifiedAt, now, rules.ttlDays)) return { action: "verify" };
 
   switch (status) {
     case "ok":
       return { action: "send", result: "ok", risky: false };
     case "catch_all":
-      return { action: "send", result: "catch_all", risky: true };
+      return unproven("catch_all", rules);
     case "invalid":
       return { action: "skip", status: "invalid", reason: "address is invalid" };
     case "disposable":
       return { action: "skip", status: "disposable", reason: "address is a disposable domain" };
     case "unknown":
-      if (attempts >= MAX_UNKNOWN_ATTEMPTS) {
-        return { action: "send", result: "unknown", risky: true };
-      }
+      if (attempts >= MAX_UNKNOWN_ATTEMPTS) return unproven("unknown", rules);
       return withinBackoff(verifiedAt, now)
         ? { action: "hold", reason: "unknown_backoff" }
         : { action: "verify" };
@@ -144,6 +197,7 @@ export function decideFromResult(
   res: MillionVerifierResponse,
   attemptsBefore: number,
   now: Date,
+  rules: GateRules = FOLLOW_UP_RULES,
 ): { decision: PolicyDecision; patch: ContactVerificationPatch } {
   const status = normalizeStatus(res.result);
   const indeterminate = status === "unknown" || status === "error";
@@ -166,7 +220,7 @@ export function decideFromResult(
       decision = { action: "send", result: "ok", risky: false };
       break;
     case "catch_all":
-      decision = { action: "send", result: "catch_all", risky: true };
+      decision = unproven("catch_all", rules);
       break;
     case "invalid":
       decision = { action: "skip", status: "invalid", reason: "address is invalid" };
@@ -176,9 +230,7 @@ export function decideFromResult(
       break;
     case "unknown":
       decision =
-        attempts >= MAX_UNKNOWN_ATTEMPTS
-          ? { action: "send", result: "unknown", risky: true }
-          : { action: "hold", reason: "unknown_backoff" };
+        attempts >= MAX_UNKNOWN_ATTEMPTS ? unproven("unknown", rules) : { action: "hold", reason: "unknown_backoff" };
       break;
     case "error":
     default:

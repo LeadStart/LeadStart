@@ -111,10 +111,13 @@ export function CampaignDetailWorkspace({
   initialGraph,
   initialWindow,
   initialNewLeadsCap,
+  bounceStopLabel,
   initialStrategy,
   initialAbAutoPauseDefault,
   initialVerifyBeforeSend,
   initialVerifyFirstSendOnly,
+  initialSendUnproven,
+  initialHeldUnproven,
   initialReplyTemplate,
   replyTokens,
   nativeStats,
@@ -149,10 +152,14 @@ export function CampaignDetailWorkspace({
   initialWindow: SendWindowConfig;
   /** null = no limit (the default); 0 = new contacts paused. */
   initialNewLeadsCap: number | null;
+  /** Set when the bounce stop paused new contacts (preformatted on the server). */
+  bounceStopLabel: string | null;
   initialStrategy: SendingStrategy;
   initialAbAutoPauseDefault: boolean;
   initialVerifyBeforeSend: boolean;
   initialVerifyFirstSendOnly: boolean;
+  initialSendUnproven: boolean;
+  initialHeldUnproven: number;
   // Saved reply for hot leads (campaigns.reply_template, migration 00134) and the
   // tokens the Options tab offers for it.
   initialReplyTemplate: string | null;
@@ -605,7 +612,12 @@ export function CampaignDetailWorkspace({
                   desc="Email #1 goes before follow-ups and uses full inbox capacity, so it reaches the whole list fast, but follow-ups can run days late."
                 />
               </div>
-              <NewLeadsControl value={newLeadsCap} onChange={setNewLeadsCap} strategy={strategy} />
+              <NewLeadsControl
+                value={newLeadsCap}
+                onChange={setNewLeadsCap}
+                strategy={strategy}
+                bounceStopLabel={newLeadsCap === 0 ? bounceStopLabel : null}
+              />
             </div>
 
             <div className="space-y-3 rounded-xl border border-border-soft p-4">
@@ -733,6 +745,8 @@ export function CampaignDetailWorkspace({
             campaignId={campaignId}
             initialVerifyBeforeSend={initialVerifyBeforeSend}
             initialVerifyFirstSendOnly={initialVerifyFirstSendOnly}
+            initialSendUnproven={initialSendUnproven}
+            initialHeldUnproven={initialHeldUnproven}
           />
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={runCheck} disabled={checkLoading} className="gap-1.5">
