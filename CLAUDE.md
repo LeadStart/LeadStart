@@ -89,6 +89,7 @@ customer-facing consumer drifts).
 - **NEVER use `npx vercel --prod`** — that deploys to a personal Vercel account, NOT the LeadStart production site
 - **Supabase project**: exedxjrifprqgftyuroc
 - **Git author**: daniel@leadstart.io / LeadStart
+- **One push per release.** `ci.yml` cancels an in-progress run when a newer push lands on the same ref, so a follow-up push within CI's span leaves the first commit with a cancelled check, which Forge's ship queue counts as failed (2026-10-31: `f523c2d` was cancelled by a docs push 45 seconds later). Put status and changelog words in the shipping commit, and don't push again until that push's CI run has finished. A cancelled run gets a real result with `gh run rerun <run-id>`. The push token has no `workflow` scope: a change under `.github/workflows/` can't be pushed from here.
 
 # LeadStart — Cold Email CMS Platform
 
