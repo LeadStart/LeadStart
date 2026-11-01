@@ -86,7 +86,7 @@ Native selects are counted from each `<select` to its first `<option`, so an arr
 
 ## The Forge-rules pass (2026-10-31)
 
-Daniel, 2026-10-31: "Take a deep dive through the app and the styling rules we've built through Forge. You need to adhere to these and restyle the app all the way through and check for conformity." The sixteen rules, their LeadStart parts, checks and measures are the table in `UI_RULES.md` ("The Forge rules, held in code"). Evidence here, per rule. Nothing committed: local only. Built without agents: the session's agent canary ran on the wrong model, so by the agent rule nothing was spawned.
+Daniel, 2026-10-31: "Take a deep dive through the app and the styling rules we've built through Forge. You need to adhere to these and restyle the app all the way through and check for conformity." The sixteen rules, their LeadStart parts, checks and measures are the table in `UI_RULES.md` ("The Forge rules, held in code"). Evidence here, per rule. Shipped as `f523c2d` from Forge's ship queue (2026-10-31). Built without agents: the session's agent canary ran on the wrong model, so by the agent rule nothing was spawned.
 
 **Evidence tiers added for this pass**
 - **check** = `node scripts/style/check-all.mjs` (in `npm run typecheck`): eight file checks, each a port of Forge's. Green: `npx tsc --noEmit` clean, and `check-styling: 8 checks green`.
