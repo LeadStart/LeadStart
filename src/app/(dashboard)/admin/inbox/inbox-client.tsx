@@ -786,7 +786,8 @@ function AdminComposer({
             </button>
           </p>
         )}
-        <Fold open={editing} id={fieldsId} inner="flex flex-col gap-2 pt-1">
+        {/* The list's 8px gap paid back above and carried inside, so a closed fold leaves no extra room. */}
+        <Fold open={editing} id={fieldsId} className="-mt-2" inner="flex flex-col gap-2 pt-2">
           <div ref={fieldsRef} className="flex flex-col gap-2">
             <div className="space-y-1">
               <p className="text-[11.5px] font-semibold text-foreground/80">To</p>

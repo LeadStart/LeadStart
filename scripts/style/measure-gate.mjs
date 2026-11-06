@@ -14,7 +14,10 @@
 // Anything found fails it, listed. Routes that redirect elsewhere (a client page under an admin login) are reported,
 // not measured.
 //
-//   node scripts/style/measure-gate.mjs [--base http://localhost:3030] [--sizes 1440,1024,390,375] [--routes /admin,/admin/campaigns] [--json /tmp/leadstart-measure-gate.json] [--no-folds] [--no-drawer] [--probe file.js]
+//   node scripts/style/measure-gate.mjs [--base http://localhost:3030] [--sizes 1440,1024,390,375] [--routes /admin,/admin/campaigns] [--json /tmp/leadstart-measure-gate.json] [--no-folds] [--no-drawer] [--before file.js] [--probe file.js]
+// --before evaluates a script of your own in each screen once it has settled and before it's measured, to bring up a
+// state the measures can't reach by themselves (a reply opened in the Inbox, its reply box and Edit open); it must
+// never press anything that sends or saves.
 // --probe evaluates a script of your own in each screen instead of the measures and prints what it returns (a page measure
 // while you work on one thing).
 import { spawn } from 'node:child_process'
@@ -381,6 +384,11 @@ for (let qi = 0; qi < routes.length; qi++) {
             }
           }
         }
+      }
+      if (arg('before')) {
+        r.before = await ev(readFileSync(arg('before'), 'utf8'))
+        await settle()
+        say(`${route} @${width} before: ${typeof r.before === 'string' ? r.before : JSON.stringify(r.before)}`)
       }
       if (arg('probe')) {
         r.probe = await ev(readFileSync(arg('probe'), 'utf8'))

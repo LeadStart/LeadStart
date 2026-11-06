@@ -122,8 +122,11 @@
   const check = (el, label, rect, reach, anchor, position) => {
     glows++
     const paint = { left: rect.left - reach.l, top: rect.top - reach.t, right: rect.right + reach.r, bottom: rect.bottom + reach.b }
-    for (const c of clippers(el, position)) {
-      if (!inside(anchor, c.box, c.x, c.y)) continue
+    const boxes = clippers(el, position)
+    // Fully in view means inside every box that clips it: a field half scrolled out of a reply box isn't, though the
+    // card around that box would still hold it whole.
+    if (boxes.some((c) => !inside(anchor, c.box, c.x, c.y))) return
+    for (const c of boxes) {
       const more = {
         top: c.sy && c.el.scrollTop > 0.5,
         bottom: c.sy && c.el.scrollHeight - c.el.scrollTop - c.el.clientHeight > 0.5,
