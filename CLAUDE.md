@@ -134,7 +134,11 @@ npm run dev
 ```
 
 ## Key Architecture Decisions
-- **Supabase-only**: No demo/mock mode. `.env.local` must point at the real Supabase project (`NEXT_PUBLIC_SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_ANON_KEY`). If you need to work on the UI offline, branch off and stub data locally — don't reintroduce the demo-client / mock-data paths.
+- **Supabase-only**: No demo/mock mode in the app's code. `.env.local` must point at the real Supabase project (`NEXT_PUBLIC_SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_ANON_KEY`). If you need to work on the UI offline, branch off and stub data locally — don't reintroduce the demo-client / mock-data paths.
+- **The sample-data demo** (`npm run demo`, the `leadstart-demo` config in `.claude/launch.json`) is what Forge's `styling_check` measures; `.claude/styling.json` names it with every page and panel. Daniel, 2026-11-06, on where its data lives: "it needs to be hosted on the actual demo itself, not in supabase..". It runs the app's code unchanged against a Postgres held in the demo's own process (`scripts/demo/db.mjs`: PGlite, built fresh on every start from every file in `supabase/migrations` plus the made-up rows of `scripts/demo/sample-data.mjs`), served by `@supabase/lite` at the demo's own address. It never reads `.env.local` and never reaches the live project. So:
+  - every new migration must also apply in PGlite (a failing one stops the demo, and Forge's check with it);
+  - a new page or panel goes into `.claude/styling.json`, and the rows it needs into `sample-data.mjs`, in the same change;
+  - sample data uses no real client names or addresses.
 - **Styling**: Bold & branded theme — indigo/violet gradient sidebar, color-coded KPI cards (green=good, amber=warning, red=bad), area charts with gradient fills. All interactive elements use pointer cursor.
 - **UI Components**: shadcn/ui (Base UI primitives) + Tailwind CSS v4 + Lucide icons. Custom gradient utilities use inline styles (Tailwind v4 @layer utilities don't reliably generate custom gradient classes).
 

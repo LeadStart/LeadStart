@@ -12,7 +12,8 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit && node scripts/style/check-all.mjs",
     "check:style": "node scripts/style/check-all.mjs",
-    "measure": "node scripts/style/measure-gate.mjs"
+    "measure": "node scripts/style/measure-gate.mjs",
+    "demo": "node scripts/demo/serve.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.90.0",
@@ -46,6 +47,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@supabase/lite": "0.11.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",

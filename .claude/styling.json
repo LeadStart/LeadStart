@@ -1,0 +1,320 @@
+{
+  "demo": "leadstart-demo",
+  "pages": [
+    "/app/admin",
+    "/app/admin/campaigns",
+    "/app/admin/campaigns/new/native",
+    "/app/admin/campaigns/new/linkedin",
+    "/app/admin/clients",
+    "/app/admin/contacts",
+    "/app/admin/feedback",
+    "/app/admin/inbox",
+    "/app/admin/linkedin-tasks",
+    "/app/admin/mailboxes",
+    "/app/admin/planner",
+    "/app/admin/prospecting",
+    "/app/admin/prospects",
+    "/app/admin/reports",
+    "/app/admin/reports/preview",
+    "/app/admin/settings",
+    "/app/admin/settings/api",
+    "/app/admin/settings/billing",
+    "/app/admin/settings/buyer-experience",
+    "/app/admin/settings/tags",
+    "/app/admin/settings/tasks",
+    "/app/admin/settings/team",
+    "/app/admin/settings/tokens",
+    "/app/admin/settings/workflows",
+    "/app/admin/workflows",
+    "/app/admin/workflows/onboarding",
+    "/app/buyer",
+    "/app/buyer/contacts",
+    "/app/buyer/search",
+    "/app/client",
+    "/app/client/activity",
+    "/app/client/feedback",
+    "/app/client/inbox",
+    "/app/client/reports",
+    "/app/client/settings",
+    "/app/login",
+    "/app/signup",
+    "/app/reset-password",
+    "/app/update-password",
+    "/app/accept-invite",
+    "/app/billing/welcome",
+    {
+      "path": "/app/admin/campaigns/5435c69e-0000-4000-8000-000000000001",
+      "name": "Campaign (email, A/B first touch)"
+    },
+    {
+      "path": "/app/admin/campaigns/5435c69e-0000-4000-8000-000000000007",
+      "name": "Campaign (LinkedIn)"
+    },
+    {
+      "path": "/app/admin/clients/4a8a08f0-0000-4000-8000-000000000001",
+      "name": "Client"
+    },
+    {
+      "path": "/app/admin/clients/4a8a08f0-0000-4000-8000-000000000001/campaigns/5435c69e-0000-4000-8000-000000000001",
+      "name": "Client's campaign"
+    },
+    {
+      "path": "/app/admin/inbox/b2f5ff47-0000-4000-8000-000000000001",
+      "name": "Reply (admin)"
+    },
+    {
+      "path": "/app/client/campaigns/5435c69e-0000-4000-8000-000000000001",
+      "name": "Campaign (client portal)"
+    },
+    {
+      "path": "/app/client/inbox/b2f5ff47-0000-4000-8000-000000000001",
+      "name": "Reply (client portal)"
+    },
+    {
+      "path": "/app/quote/fbfba2e4-0000-4000-8000-000000000004?t=demo-quote-token-4",
+      "name": "Hosted quote"
+    }
+  ],
+  "panels": [
+    {
+      "name": "Phone drawer (admin)",
+      "page": "/app/admin",
+      "open": [
+        {
+          "click": "button[data-tucked]"
+        },
+        {
+          "text": "All sections",
+          "wait": 700
+        }
+      ],
+      "sizes": [
+        "phone"
+      ]
+    },
+    {
+      "name": "Phone drawer (client)",
+      "page": "/app/client",
+      "open": [
+        {
+          "click": "button[data-tucked]"
+        },
+        {
+          "text": "All sections",
+          "wait": 700
+        }
+      ],
+      "sizes": [
+        "phone"
+      ]
+    },
+    {
+      "name": "Inbox reply box",
+      "page": "/app/admin/inbox",
+      "open": [
+        {
+          "click": "button[data-reply-id]:visible",
+          "wait": 700
+        },
+        {
+          "click": "button:visible:has-text('Reply for')",
+          "wait": 700
+        }
+      ]
+    },
+    {
+      "name": "Inbox reply box, recipients open",
+      "page": "/app/admin/inbox",
+      "open": [
+        {
+          "click": "button[data-reply-id]:visible",
+          "wait": 700
+        },
+        {
+          "click": "button:visible:has-text('Reply for')",
+          "wait": 700
+        },
+        {
+          "click": "button[aria-controls]:visible:has-text('Edit')",
+          "wait": 700
+        }
+      ]
+    },
+    {
+      "name": "Email step editor",
+      "page": "/app/admin/campaigns/5435c69e-0000-4000-8000-000000000001",
+      "open": [
+        {
+          "click": "[data-tile]:visible",
+          "wait": 900
+        }
+      ],
+      "root": "[role=dialog]"
+    },
+    {
+      "name": "Complete campaign",
+      "page": "/app/admin/campaigns",
+      "open": [
+        {
+          "click": "button[aria-label='Campaign actions']:visible",
+          "wait": 500
+        },
+        {
+          "text": "Complete",
+          "exact": true,
+          "wait": 800
+        }
+      ],
+      "root": "[role=dialog]"
+    },
+    {
+      "name": "Delete campaign",
+      "page": "/app/admin/campaigns",
+      "open": [
+        {
+          "click": "button[aria-label='Campaign actions']:visible",
+          "wait": 500
+        },
+        {
+          "text": "Delete",
+          "exact": true,
+          "wait": 800
+        }
+      ],
+      "root": "[role=dialog]"
+    },
+    {
+      "name": "Add contact",
+      "page": "/app/admin/contacts",
+      "open": [
+        {
+          "click": "button:visible:has-text('Add Contact')",
+          "wait": 700
+        }
+      ],
+      "root": "[role=dialog]"
+    },
+    {
+      "name": "Import contacts",
+      "page": "/app/admin/contacts",
+      "open": [
+        {
+          "click": "button:visible:has-text('Import CSV')",
+          "wait": 700
+        }
+      ],
+      "root": "[role=dialog]"
+    },
+    {
+      "name": "Delete client",
+      "page": "/app/admin/clients",
+      "open": [
+        {
+          "click": "button:visible:has-text('Former')",
+          "wait": 600
+        },
+        {
+          "click": "button:visible:text-is('Delete')",
+          "wait": 700
+        }
+      ],
+      "root": "[role=alertdialog]"
+    },
+    {
+      "name": "Add inboxes",
+      "page": "/app/admin/mailboxes",
+      "open": [
+        {
+          "click": "button:visible:text-is('Add')",
+          "wait": 900
+        }
+      ],
+      "root": "[role=dialog]"
+    },
+    {
+      "name": "Add to pipeline",
+      "page": "/app/admin/prospects",
+      "open": [
+        {
+          "click": "button:visible:has-text('Add to Pipeline')",
+          "wait": 700
+        }
+      ],
+      "root": "[role=dialog]"
+    },
+    {
+      "name": "Prospect",
+      "page": "/app/admin/prospects",
+      "open": [
+        {
+          "click": ":visible:text-is('Sunshine Slides and Water Fun Rentals of the Tri-County Area')",
+          "wait": 700
+        }
+      ],
+      "root": "[role=dialog]"
+    },
+    {
+      "name": "Report schedule",
+      "page": "/app/admin/reports",
+      "open": [
+        {
+          "click": "button:visible:has-text('Configure')",
+          "wait": 700
+        }
+      ],
+      "root": "[role=dialog]"
+    },
+    {
+      "name": "Report",
+      "page": "/app/admin/reports",
+      "open": [
+        {
+          "click": "div.ls-press:visible:has-text('Emails Sent'), div.ls-press:visible:has-text('sent')",
+          "wait": 900
+        }
+      ],
+      "root": "[role=dialog]"
+    },
+    {
+      "name": "Integration",
+      "page": "/app/admin/settings/api",
+      "open": [
+        {
+          "click": "button:visible:has-text('Apify')",
+          "wait": 700
+        }
+      ],
+      "root": "[role=dialog]"
+    },
+    {
+      "name": "New quote",
+      "page": "/app/admin/settings/billing",
+      "open": [
+        {
+          "click": "button:visible:has-text('Quotes')",
+          "wait": 500
+        },
+        {
+          "click": "button:visible:has-text('New quote')",
+          "wait": 800
+        }
+      ],
+      "root": "[role=dialog]"
+    }
+  ],
+  "allow": [
+    "fonts.googleapis.com",
+    "fonts.gstatic.com"
+  ],
+  "settle": 1200,
+  "parts": {
+    "popup": [
+      "src/components/ui/dialog.tsx",
+      "src/components/ui/alert-dialog.tsx",
+      "src/components/ui/dropdown-menu.tsx",
+      "src/components/ui/grown.tsx",
+      "src/components/ui/fold.tsx"
+    ]
+  },
+  "init": "/* The demo is the app's dev server: Next's own dev-tools badge (nextjs-portal) is no part of the app a person sees, so it is hidden for the measures. */ (() => { const hide = () => { const st = document.createElement('style'); st.textContent = 'nextjs-portal { display: none !important; }'; (document.head || document.documentElement).appendChild(st); }; if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', hide); else hide(); })()"
+}

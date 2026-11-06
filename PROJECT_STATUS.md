@@ -21,6 +21,14 @@ One line each — see the linked RESUME doc (repo root) or the archive for the f
 
 ## Recently shipped
 
+- **A sample-data demo Forge can measure** (2026-11-06; rule in `CLAUDE.md` under Key Architecture Decisions). Daniel, on where its data lives: "it needs to be hosted on the actual demo itself, not in supabase..".
+  - `npm run demo` (launch config `leadstart-demo`, named by `.claude/styling.json`) builds a Postgres in its own process on every start: PGlite, all 141 migrations, then made-up rows. It takes about 1 second. `@supabase/lite` answers the app's Supabase calls at the demo's own address; the app's code is unchanged.
+  - Each page opens signed in as the sample person who'd see it (owner on /admin, client on /client, buyer on /buyer). No live key is read.
+  - The sample data: 5 clients (one with a very long name), 7 campaigns, 82 contacts, 12 replies (one answerable), 11 inboxes on 4 domains, reports, invoices and tasks, all on `.example` domains.
+  - `.claude/styling.json` lists 49 pages and 17 panels, including the Inbox reply box with its recipients open.
+  - Forge's measures pass over 322 states with no state failing to load, the same 307 distinct problems on three passes (one from a cold start; about 4.3 minutes each). They're the app's existing problems: 362 in all, of which 259 are the topbar notification badge's "2" (icon-centers, dy −1.15). Once this is on master, Forge counts them as main's.
+  - The exception: the Email step editor's 10. Its CSS module class names carry the worktree's folder name (Next takes the main checkout as the project root), so Forge can't match them with main's.
+  - Pinning `turbopack.root` fixed the names, but the Mac panicked twice and was force-restarted once while the pinned demo ran (2026-11-06), so it was reverted.
 - **Inbox reply: edit who it goes to** (2026-11-06, migration `00141` applied). Daniel: "we need to allow us to be able to edit the cc/bcc/to, etc. when replying on behalf of clients." Owner picks: Summary + Edit, the client's copy prefilled and removable, admin Inbox only, save who it went to.
   - The admin Inbox reply box opens on its usual From / To · BCC / Subject lines. **Edit** folds them open into To, Cc, Bcc (the shared address chips) and Subject; "Edited · Reset" shows once anything differs from the default.
   - `/api/replies/[id]/send` takes `to` / `cc` / `bcc` / `subject` from an owner or VA only (a client login gets 403; its subject is still ignored, as before). It checks every address (bare addresses only, at most 10 a field and 20 in all, at least one on To) and records what was sent in `lead_replies.sent_to` / `sent_cc` / `sent_bcc`.
