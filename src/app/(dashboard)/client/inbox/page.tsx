@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import type { LeadReply, ReplyClass, ReplyOutcome } from "@/types/app";
 import { PORTAL_NO_REPLY_CLASSES } from "@/types/app";
+import { clientCopyWent } from "@/lib/replies/recipients";
 import {
   CLASS_META,
   OUTCOME_OPTIONS,
@@ -244,7 +245,7 @@ function ClientThread({
   // Read-only while an admin previews this portal. Without this the preview
   // could SEND A REAL EMAIL to the lead from the client's mailbox, or log an
   // outcome against their pipeline. See src/lib/auth/view-as.ts.
-  const { previewing } = useClientData();
+  const { client, previewing } = useClientData();
   const isReplyable = reply.final_class ? REPLYABLE_CLASSES.includes(reply.final_class) : false;
   const isSent = reply.status === "sent";
   // Every not-yet-sent reply can be answered from the portal EXCEPT the
@@ -400,7 +401,9 @@ function ClientThread({
       <div className="flex-none border-t border-border-soft bg-card px-4 py-3 sm:px-5">
         {isSent ? (
           <div className="flex items-center gap-2 text-[13px] font-medium text-emerald-700">
-            <CheckCircle2 size={15} /> Reply sent {reply.sent_at ? timeSince(reply.sent_at) : ""} · a copy went to your inbox.
+            <CheckCircle2 size={15} /> Reply sent {reply.sent_at ? timeSince(reply.sent_at) : ""}
+            {/* Your LeadStart team can take your copy off a reply they send for you. */}
+            {clientCopyWent(reply, client) === "none" ? "." : " · a copy went to your inbox."}
           </div>
         ) : canReply && showComposer ? (
           <div className="space-y-2">

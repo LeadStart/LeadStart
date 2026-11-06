@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import type { LeadReply, ReplyOutcome } from "@/types/app";
 import { PORTAL_NO_REPLY_CLASSES } from "@/types/app";
+import { clientCopyWent } from "@/lib/replies/recipients";
 import {
   OUTCOME_OPTIONS,
   isReplyActionable,
@@ -435,9 +436,14 @@ export default function ReplyDossierPage() {
                 <p className="text-sm font-semibold text-emerald-900">
                   Reply sent {reply.sent_at ? timeSince(reply.sent_at) : ""}
                 </p>
-                <p className="text-xs text-emerald-800 mt-0.5">
-                  A copy went to your inbox (BCC, so the lead only sees the mailbox they wrote to).
-                </p>
+                {/* Your LeadStart team can move your copy to Cc, or take it off, on a reply they send for you. */}
+                {clientCopyWent(reply, client) !== "none" && (
+                  <p className="text-xs text-emerald-800 mt-0.5">
+                    {clientCopyWent(reply, client) === "visible"
+                      ? "A copy went to your inbox."
+                      : "A copy went to your inbox (BCC, so the lead only sees the mailbox they wrote to)."}
+                  </p>
+                )}
                 {reply.final_body_text && (
                   <div className="mt-3">
                     <button

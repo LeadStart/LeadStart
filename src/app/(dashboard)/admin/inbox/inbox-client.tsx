@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import {
   Select,
@@ -25,6 +25,7 @@ import {
   Paperclip,
   X,
   Link2,
+  Pencil,
 } from "lucide-react";
 import type { ReplyClass, ReplyOutcome, ReplyStatus, ReplyReferralContact, SourceChannel } from "@/types/app";
 import { PORTAL_NO_REPLY_CLASSES } from "@/types/app";
@@ -54,6 +55,17 @@ import { Conversation } from "@/components/inbox/conversation";
 import { QuickActionBar } from "@/components/inbox/quick-action-bar";
 import { useReclassifyGroup, classAccent } from "@/components/inbox/reclassify-control";
 import { Fold } from "@/components/ui/fold";
+import { Input } from "@/components/ui/input";
+import { EmailTagInput } from "@/components/ui/email-tag-input";
+import {
+  MAX_REPLY_FIELD_ADDRESSES,
+  MAX_REPLY_SUBJECT_LENGTH,
+  clientCopyAddresses,
+  defaultReplyRecipients,
+  defaultReplySubject,
+  sameAddresses,
+  type ReplyRecipients,
+} from "@/lib/replies/recipients";
 
 // Narrowed row shape for the inbox. Columns must match the server component's
 // select(): adding a field here without adding it to the query renders undefined.
@@ -82,6 +94,10 @@ export interface InboxRowReply {
   source_channel: SourceChannel;
   sent_at: string | null;
   final_body_text: string | null;
+  // Who the sent reply went to (migration 00141); null before they were recorded.
+  sent_to: string[] | null;
+  sent_cc: string[] | null;
+  sent_bcc: string[] | null;
   client: {
     name: string;
     notification_email: string | null;
@@ -171,10 +187,20 @@ export function InboxClient({ replies }: { replies: InboxRowReply[] }) {
   function handleExclude(excluded: boolean) {
     setRows((prev) => prev.map((r) => (r.id === selectedId ? { ...r, excluded_from_stats: excluded } : r)));
   }
-  function handleSent(sentAt: string, bodyText: string) {
+  function handleSent(sentAt: string, bodyText: string, sentTo: ReplyRecipients | null) {
     setRows((prev) =>
       prev.map((r) =>
-        r.id === selectedId ? { ...r, status: "sent", sent_at: sentAt, final_body_text: bodyText } : r,
+        r.id === selectedId
+          ? {
+              ...r,
+              status: "sent",
+              sent_at: sentAt,
+              final_body_text: bodyText,
+              sent_to: sentTo?.to ?? null,
+              sent_cc: sentTo?.cc ?? null,
+              sent_bcc: sentTo?.bcc ?? null,
+            }
+          : r,
       ),
     );
   }
@@ -340,7 +366,7 @@ function AdminThread({
   onBack: () => void;
   onRetag: (cls: ReplyClass) => void;
   onExclude: (excluded: boolean) => void;
-  onSent: (sentAt: string, bodyText: string) => void;
+  onSent: (sentAt: string, bodyText: string, sentTo: ReplyRecipients | null) => void;
 }) {
   // Bumped after a send so the conversation pane re-pulls the Gmail thread
   // and shows the message we just sent.
@@ -428,8 +454,8 @@ function AdminThread({
       {/* Reply on the client's behalf */}
       <AdminComposer
         reply={reply}
-        onSent={(sentAt, bodyText) => {
-          onSent(sentAt, bodyText);
+        onSent={(sentAt, bodyText, sentTo) => {
+          onSent(sentAt, bodyText, sentTo);
           setThreadKey((k) => k + 1);
         }}
       />
@@ -445,10 +471,13 @@ function AdminThread({
 // message goes out from the inbox the lead replied to, threaded into the same
 // Gmail conversation, and BCCs the client's notification inbox so they get a
 // copy without the lead seeing a third-party address.
-// The subject is shown, not edited: the send route always threads as
-// "Re: <original subject>". The body is prefilled with the sending inbox's
-// signature (same resolver campaign sends use) so the reply signs as the
-// identity the lead has been talking to.
+// Who it goes to and the subject open as those defaults (To the lead, Bcc the
+// client's copy, "Re: <original subject>") in three summary lines; Edit folds
+// them open into To / Cc / Bcc / Subject fields (owner picks 2026-11-06: summary
+// + Edit, the client's copy removable, admin Inbox only). The route records who
+// it really went to, and the sent line names them. The body is prefilled with
+// the sending inbox's signature (same resolver campaign sends use) so the reply
+// signs as the identity the lead has been talking to.
 //
 // The lead's report: when their contact carries a report link (TuBe campaigns,
 // see src/lib/replies/report-attachment.ts) the composer offers the LINK. A
@@ -491,7 +520,7 @@ function AdminComposer({
   onSent,
 }: {
   reply: InboxRowReply;
-  onSent: (sentAt: string, bodyText: string) => void;
+  onSent: (sentAt: string, bodyText: string, sentTo: ReplyRecipients | null) => void;
 }) {
   const senderName = reply.mailbox?.display_name?.trim() || reply.mailbox?.email_address || "";
   const signature = reply.mailbox ? resolveSignature(reply.mailbox.signature, senderName) : "";
@@ -506,6 +535,40 @@ function AdminComposer({
   const textRef = useRef<HTMLTextAreaElement | null>(null);
   const prefilled = useRef(false);
 
+  // Who it goes to: the defaults until Edit changes them.
+  const clientCopy = useMemo(() => clientCopyAddresses(reply.client), [reply.client]);
+  const defaults = useMemo(() => defaultReplyRecipients(reply.lead_email, reply.client), [reply.lead_email, reply.client]);
+  const defaultSubject = defaultReplySubject(reply.subject);
+  const [to, setTo] = useState<string[]>(defaults.to);
+  const [cc, setCc] = useState<string[]>(defaults.cc);
+  const [bcc, setBcc] = useState<string[]>(defaults.bcc);
+  const [subject, setSubject] = useState(defaultSubject);
+  const [editing, setEditing] = useState(false);
+  const fieldsId = useId();
+  const fieldsRef = useRef<HTMLDivElement | null>(null);
+  const edited =
+    !sameAddresses(to, defaults.to) ||
+    !sameAddresses(cc, defaults.cc) ||
+    !sameAddresses(bcc, defaults.bcc) ||
+    (subject.trim() || defaultSubject) !== defaultSubject;
+  function resetRecipients() {
+    setTo(defaults.to);
+    setCc(defaults.cc);
+    setBcc(defaults.bcc);
+    setSubject(defaultSubject);
+  }
+  // Edit puts the cursor in To at once (the shift-focus rule); the page's
+  // keyboard script brings it above a phone's keyboard.
+  useEffect(() => {
+    if (editing) fieldsRef.current?.querySelector<HTMLInputElement>("input")?.focus({ preventScroll: true });
+  }, [editing]);
+  const describeAddress = (email: string) => {
+    const a = email.toLowerCase();
+    if (a === reply.lead_email.toLowerCase() && reply.lead_name) return { name: reply.lead_name };
+    if (clientCopy.includes(a)) return { tag: "client's copy" };
+    return undefined;
+  };
+
   const isSent = reply.status === "sent";
   const isSendable = reply.status === "new" || reply.status === "classified";
   const noReply = reply.final_class ? PORTAL_NO_REPLY_CLASSES.includes(reply.final_class) : false;
@@ -514,13 +577,8 @@ function AdminComposer({
   // The textarea opens prefilled with just the signature; require real text above it.
   const hasMessage = bodyText.trim() !== "" && bodyText.trim() !== signature.trim();
   const unfilled = bodyText.match(UNFILLED_TOKEN)?.[0] ?? null;
+  const noRecipient = to.length === 0;
 
-  const baseSubject = (reply.subject ?? "").trim();
-  const subject = !baseSubject
-    ? "Re: (no subject)"
-    : baseSubject.toLowerCase().startsWith("re:")
-      ? baseSubject
-      : `Re: ${baseSubject}`;
   // Look up the lead's report once the reply is answerable.
   useEffect(() => {
     if (!canReply) return;
@@ -582,13 +640,8 @@ function AdminComposer({
     setUploads(next);
   }
 
-  const bcc = [reply.client?.notification_email, ...(reply.client?.notification_cc_emails ?? [])]
-    .filter((a): a is string => !!a && !!a.trim())
-    .map((a) => a.trim().toLowerCase())
-    .filter((a, i, all) => all.indexOf(a) === i);
-
   async function send() {
-    if (!hasMessage || sending || unfilled) return;
+    if (!hasMessage || sending || unfilled || noRecipient) return;
     setSending(true);
     setSendError(null);
     try {
@@ -606,11 +659,15 @@ function AdminComposer({
           body_text: bodyText,
           attach_report: report.state === "done" && !!report.pdf && attachReport,
           attachments,
+          to,
+          cc,
+          bcc,
+          subject: subject.trim(),
         }),
       });
       const data = await res.json();
       if (!res.ok) setSendError(data.error || "Failed to send.");
-      else onSent(data.sent_at, bodyText.trim());
+      else onSent(data.sent_at, bodyText.trim(), data.recipients ?? null);
     } catch (e) {
       setSendError(e instanceof Error ? e.message : "Network error.");
     } finally {
@@ -620,10 +677,27 @@ function AdminComposer({
 
   let content: ReactNode = null;
   if (isSent) {
+    // Who it went to, as recorded; a reply sent before that (sent_to null)
+    // keeps the old line, worked out from the client's settings.
+    const recorded = reply.sent_to !== null;
+    const sentDetail = recorded
+      ? [
+          `To ${(reply.sent_to ?? []).join(", ")}`,
+          reply.sent_cc?.length ? `Cc ${reply.sent_cc.join(", ")}` : null,
+          reply.sent_bcc?.length ? `Bcc ${reply.sent_bcc.join(", ")}` : null,
+        ]
+          .filter(Boolean)
+          .join(" · ")
+      : clientCopy.length > 0
+        ? `Copy sent to ${clientCopy.join(", ")}`
+        : null;
     content = (
       <div className="flex items-center gap-2 text-[13px] font-medium text-emerald-700">
-        <CheckCircle2 size={15} /> Reply sent {reply.sent_at ? timeSince(reply.sent_at) : ""}
-        {bcc.length > 0 && <span className="font-normal text-emerald-700/80">· Copy sent to {bcc.join(", ")}</span>}
+        <CheckCircle2 size={15} className="shrink-0" />
+        <span className="min-w-0 [overflow-wrap:anywhere]">
+          Reply sent {reply.sent_at ? timeSince(reply.sent_at) : ""}
+          {sentDetail && <span className="font-normal text-emerald-700/80">{" · "}{sentDetail}</span>}
+        </span>
       </div>
     );
   } else if (noReply) {
@@ -653,24 +727,122 @@ function AdminComposer({
   } else if (canReply) {
     content = (
       <div className="space-y-2">
-        <div className="space-y-0.5 text-[11.5px] text-muted-foreground">
-          <p className="truncate">
-            <span className="font-semibold text-foreground/80">From:</span>{" "}
-            {senderName && senderName !== reply.mailbox?.email_address ? `${senderName} <${reply.mailbox?.email_address}>` : reply.mailbox?.email_address}
-          </p>
-          <p className="truncate">
-            <span className="font-semibold text-foreground/80">To:</span> {reply.lead_email}
-            {bcc.length > 0 && (
+        <div className="flex items-start gap-3">
+          <div className="min-w-0 flex-1 space-y-0.5 text-[11.5px] text-muted-foreground">
+            <p className="truncate">
+              <span className="font-semibold text-foreground/80">From:</span>{" "}
+              {senderName && senderName !== reply.mailbox?.email_address ? `${senderName} <${reply.mailbox?.email_address}>` : reply.mailbox?.email_address}
+            </p>
+            <p className="truncate">
+              <span className="font-semibold text-foreground/80">To:</span>{" "}
+              {noRecipient ? <span className="text-red-600">nobody yet</span> : to.join(", ")}
+              {cc.length > 0 && (
+                <>
+                  {" "}
+                  <span className="font-semibold text-foreground/80">CC:</span>{" "}
+                  {cc.join(", ")}
+                </>
+              )}
+              {bcc.length > 0 && (
+                <>
+                  {" "}
+                  <span className="font-semibold text-foreground/80">BCC:</span>{" "}
+                  {bcc.join(", ")}
+                </>
+              )}
+            </p>
+            <p className="truncate">
+              <span className="font-semibold text-foreground/80">Subject:</span>{" "}
+              {subject.trim() || defaultSubject}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setEditing((v) => !v)}
+            disabled={sending}
+            aria-expanded={editing}
+            aria-controls={fieldsId}
+            className="inline-flex justify-center-safe shrink-0 items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1 text-xs font-semibold text-foreground/80 hover:border-slate-300 hover:text-foreground cursor-pointer disabled:opacity-50"
+          >
+            {editing ? (
+              "Done"
+            ) : (
               <>
-                {" "}
-                <span className="font-semibold text-foreground/80">BCC:</span> {bcc.join(", ")}
+                <Pencil size={12} /> Edit
               </>
             )}
-          </p>
-          <p className="truncate">
-            <span className="font-semibold text-foreground/80">Subject:</span> {subject}
-          </p>
+          </button>
         </div>
+        {edited && (
+          <p className="flex items-center gap-1.5 text-[11px] text-amber-700">
+            Edited
+            <button
+              type="button"
+              onClick={resetRecipients}
+              disabled={sending}
+              className="font-semibold text-primary hover:underline cursor-pointer disabled:opacity-50"
+            >
+              Reset
+            </button>
+          </p>
+        )}
+        <Fold open={editing} id={fieldsId} inner="flex flex-col gap-2 pt-1">
+          <div ref={fieldsRef} className="flex flex-col gap-2">
+            <div className="space-y-1">
+              <p className="text-[11.5px] font-semibold text-foreground/80">To</p>
+              <EmailTagInput
+                value={to}
+                onChange={setTo}
+                max={MAX_REPLY_FIELD_ADDRESSES}
+                label="To"
+                placeholder="Add an address"
+                describe={describeAddress}
+                taken={[...cc, ...bcc]}
+                disabled={sending}
+              />
+            </div>
+            <div className="space-y-1">
+              <p className="text-[11.5px] font-semibold text-foreground/80">Cc</p>
+              <EmailTagInput
+                value={cc}
+                onChange={setCc}
+                max={MAX_REPLY_FIELD_ADDRESSES}
+                label="Cc"
+                placeholder="Add an address"
+                describe={describeAddress}
+                taken={[...to, ...bcc]}
+                disabled={sending}
+              />
+            </div>
+            <div className="space-y-1">
+              <p className="text-[11.5px] font-semibold text-foreground/80">Bcc</p>
+              <EmailTagInput
+                value={bcc}
+                onChange={setBcc}
+                max={MAX_REPLY_FIELD_ADDRESSES}
+                label="Bcc"
+                placeholder="Add an address"
+                describe={describeAddress}
+                taken={[...to, ...cc]}
+                disabled={sending}
+              />
+            </div>
+            <div className="space-y-1">
+              <label htmlFor={`${fieldsId}-subject`} className="block text-[11.5px] font-semibold text-foreground/80">
+                Subject
+              </label>
+              <Input
+                id={`${fieldsId}-subject`}
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
+                maxLength={MAX_REPLY_SUBJECT_LENGTH}
+                placeholder={defaultSubject}
+                disabled={sending}
+                className="h-[42px] rounded-xl px-3"
+              />
+            </div>
+          </div>
+        </Fold>
         <textarea data-kb-reveal
           autoFocus
           ref={(el) => {
@@ -771,6 +943,11 @@ function AdminComposer({
             <span className="text-[11px] text-muted-foreground">{formatBytes(uploadBytes)} of 3 MB</span>
           )}
         </div>
+        {noRecipient && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+            Add at least one address on To before sending.
+          </div>
+        )}
         {unfilled && (
           <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
             {report.state === "done" && report.savedReply?.missing.length
@@ -792,7 +969,7 @@ function AdminComposer({
           </button>
           <button
             onClick={send}
-            disabled={!hasMessage || sending || !!unfilled}
+            disabled={!hasMessage || sending || !!unfilled || noRecipient}
             className="inline-flex justify-center-safe shrink-0 items-center gap-1.5 rounded-full bg-primary bg-(image:--tex-brand) px-4 py-2 text-sm font-semibold text-white cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Send size={14} /> {sending ? "Sending…" : "Send reply"}

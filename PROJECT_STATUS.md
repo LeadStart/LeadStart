@@ -1,6 +1,6 @@
 # LeadStart — Project Status
 
-> Last updated: 2026-10-31
+> Last updated: 2026-11-06
 >
 > **Lean current-state index.** This file is `@`-imported by `CLAUDE.md`, so it loads into every session — keep it short. Full per-initiative write-ups, the "What's Built" tables, the file-structure tree, and the backlog detail live in [`docs/PROJECT_STATUS_ARCHIVE.md`](docs/PROJECT_STATUS_ARCHIVE.md) (read on demand — **not** auto-loaded).
 
@@ -21,6 +21,12 @@ One line each — see the linked RESUME doc (repo root) or the archive for the f
 
 ## Recently shipped
 
+- **Inbox reply: edit who it goes to** (2026-11-06, migration `00141` applied). Daniel: "we need to allow us to be able to edit the cc/bcc/to, etc. when replying on behalf of clients." Owner picks: Summary + Edit, the client's copy prefilled and removable, admin Inbox only, save who it went to.
+  - The admin Inbox reply box opens on its usual From / To · BCC / Subject lines. **Edit** folds them open into To, Cc, Bcc (the shared address chips) and Subject; "Edited · Reset" shows once anything differs from the default.
+  - `/api/replies/[id]/send` takes `to` / `cc` / `bcc` / `subject` from an owner or VA only (a client login gets 403; its subject is still ignored, as before). It checks every address (bare addresses only, at most 10 a field and 20 in all, at least one on To) and records what was sent in `lead_replies.sent_to` / `sent_cc` / `sent_bcc`.
+  - The sent line names who it really went to. The client portal stops saying "a copy went to your inbox" on a reply whose copy was taken off.
+  - Open: the client portal's own Subject box still does nothing (the server sends "Re: <original subject>"), flagged for the owner.
+  - Rules in `src/lib/replies/recipients.ts`; test `scripts/test-reply-recipients.ts` (41).
 - **Only proven addresses get a first email; bounces stop a campaign by themselves** (2026-11-01, migration `00140`; cardinal rule at the top of `CLAUDE.md`). PolishPoint bounced 11 of its first 200 first emails (catch-all 4 of 7, guessed-then-verified 5 of 65) and had 0 replies. All 9 inboxes were read directly: no person had replied. Microsoft scored our mail not-spam (SCL 1, SPF/DKIM/DMARC pass), and Gmail placement is unmeasured (0 seed inboxes). Owner picks:
   - the sender holds a first email to a catch-all or unknown address out of line unless the campaign sends them (Deliverability tab → "Catch-all and unknown addresses");
   - a first email needs a check from the last 7 days;

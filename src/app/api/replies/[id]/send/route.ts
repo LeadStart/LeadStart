@@ -4,6 +4,13 @@
 // seeing a third-party address on the thread. The lead's next reply comes back
 // to the sending mailbox, gets ingested, and notifies the client as usual.
 //
+// An owner or VA replying for a client (the admin Inbox) may change who it goes
+// to and the subject: to / cc / bcc / subject in the body, resolved by
+// src/lib/replies/recipients.ts. The client's copy is only a default there, so
+// it can be taken off. A client login can't change recipients (403), and its
+// subject is ignored as before. What was sent is recorded on the row
+// (sent_to / sent_cc / sent_bcc, migration 00141).
+//
 // Flow:
 //   1. Auth + access check (client_users or admin/VA in the org).
 //   2. Per-channel precondition check.
@@ -14,7 +21,8 @@
 //      record the error so the client can retry.
 //
 // Request body: { subject?: string, body_text: string, body_html?: string,
-//                 attach_report?: boolean, attachments?: UploadedAttachment[] }
+//                 attach_report?: boolean, attachments?: UploadedAttachment[],
+//                 to?: string[], cc?: string[], bcc?: string[] }
 //
 // attach_report: fetch the lead's own report PDF (contacts.custom_fields.
 // report_link, see src/lib/replies/report-attachment.ts) and attach it.
@@ -28,6 +36,13 @@ import { computeIdempotencyKey } from "@/lib/replies/send";
 import { loadGmailClientForOrg } from "@/lib/gmail/org";
 import { buildRawEmail, generateMessageId, type EmailAttachment } from "@/lib/gmail/mime";
 import { findReplyReport, fetchReportAttachment } from "@/lib/replies/report-attachment";
+import {
+  defaultReplyRecipients,
+  defaultReplySubject,
+  resolveReplyRecipients,
+  resolveReplySubject,
+  type ReplyRecipients,
+} from "@/lib/replies/recipients";
 import { GmailConfigError, GmailAuthError } from "@/lib/gmail/client";
 import type { LeadReply, SourceChannel } from "@/types/app";
 
@@ -47,6 +62,9 @@ interface SendBody {
   body_html?: string;
   attach_report?: boolean;
   attachments?: UploadedAttachment[];
+  to?: unknown;
+  cc?: unknown;
+  bcc?: unknown;
 }
 
 // Hand-picked uploads ride in the JSON request body. Vercel caps a function's
@@ -158,7 +176,8 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
 
   const role = user.app_metadata?.role;
   const userOrgId = user.app_metadata?.organization_id;
-  if (role === "owner" || role === "va") {
+  const isStaff = role === "owner" || role === "va";
+  if (isStaff) {
     if (pre.organization_id !== userOrgId) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
@@ -194,6 +213,31 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     );
   }
 
+  // ─── Recipients + subject (resolved before the claim) ───────────────────
+  const changesRecipients = body.to !== undefined || body.cc !== undefined || body.bcc !== undefined;
+  if (changesRecipients && !isStaff) {
+    return NextResponse.json(
+      { error: "Only your LeadStart team can change who a reply goes to." },
+      { status: 403 }
+    );
+  }
+  const defaults = defaultReplyRecipients(pre.lead_email || pre.from_address, pre.client);
+  let recipients: ReplyRecipients = defaults;
+  if (changesRecipients) {
+    const resolved = resolveReplyRecipients(body, defaults);
+    if (!resolved.ok) return NextResponse.json({ error: resolved.error }, { status: 400 });
+    recipients = resolved.value;
+  } else if (recipients.to.length === 0) {
+    return NextResponse.json({ error: "This reply has no recipient address to send to." }, { status: 400 });
+  }
+  // A client's subject is still ignored (its portal field is a known open item).
+  let subject = defaultReplySubject(pre.subject);
+  if (isStaff) {
+    const resolved = resolveReplySubject(body.subject, subject);
+    if (!resolved.ok) return NextResponse.json({ error: resolved.error }, { status: 400 });
+    subject = resolved.value;
+  }
+
   // ─── Attachments (resolved before the claim) ────────────────────────────
   let attachments: EmailAttachment[];
   try {
@@ -219,6 +263,9 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       final_body_html: body_html ?? null,
       error: null,
       idempotency_key: idempotencyKey,
+      sent_to: recipients.to,
+      sent_cc: recipients.cc,
+      sent_bcc: recipients.bcc,
     })
     .eq("id", id)
     .in("status", ["new", "classified"])
@@ -235,26 +282,22 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     );
   }
 
-  // BCC the client's primary notification inbox + any teammates they added.
-  // Lowercased + deduped.
-  const bccSet = new Set<string>();
-  if (pre.client?.notification_email) {
-    bccSet.add(pre.client.notification_email.trim().toLowerCase());
-  }
-  for (const addr of pre.client?.notification_cc_emails ?? []) {
-    if (addr && addr.trim()) bccSet.add(addr.trim().toLowerCase());
-  }
-  const bcc = bccSet.size > 0 ? Array.from(bccSet) : undefined;
-
   // ─── Send back through the native Gmail mailbox that received the reply ─
   let sentExternalId: string | null = null;
   try {
-    sentExternalId = await sendNativeReply(admin, pre, body_text, bcc, attachments);
+    sentExternalId = await sendNativeReply(admin, pre, body_text, recipients, subject, attachments);
   } catch (err) {
     console.error("[replies/send] channel send failed:", err);
     await admin
       .from("lead_replies")
-      .update({ status: "classified", sent_at: null, error: truncErr(err) })
+      .update({
+        status: "classified",
+        sent_at: null,
+        sent_to: null,
+        sent_cc: null,
+        sent_bcc: null,
+        error: truncErr(err),
+      })
       .eq("id", id);
     return NextResponse.json(
       { error: `Send failed: ${truncErr(err)}` },
@@ -280,7 +323,9 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     success: true,
     sent_at: sentAt,
     sent_external_email_id: sentExternalId,
-    bcc_addresses: bcc ?? [],
+    recipients,
+    subject,
+    bcc_addresses: recipients.bcc,
     attachments: attachments.map((a) => a.filename),
   });
 }
@@ -294,12 +339,10 @@ async function sendNativeReply(
     native_mailbox_id: string | null;
     gmail_thread_id: string | null;
     gmail_message_id: string | null;
-    lead_email: string | null;
-    from_address: string | null;
-    subject: string | null;
   },
   bodyText: string,
-  bcc: string[] | undefined,
+  recipients: ReplyRecipients,
+  subject: string,
   attachments: EmailAttachment[],
 ): Promise<string> {
   const { data: mbRow } = await admin
@@ -312,9 +355,6 @@ async function sendNativeReply(
   if (!mailbox) {
     throw new Error("The mailbox that received this reply no longer exists.");
   }
-
-  const to = pre.lead_email || pre.from_address;
-  if (!to) throw new Error("This reply has no recipient address to send to.");
 
   let gmail;
   try {
@@ -337,18 +377,12 @@ async function sendNativeReply(
     }
   }
 
-  const baseSubject = (pre.subject ?? "").trim();
-  const subject = !baseSubject
-    ? "Re: (no subject)"
-    : baseSubject.toLowerCase().startsWith("re:")
-      ? baseSubject
-      : `Re: ${baseSubject}`;
-
   const raw = buildRawEmail({
     fromEmail: mailbox.email_address,
     fromName: mailbox.display_name,
-    to,
-    bcc,
+    to: recipients.to.join(", "),
+    cc: recipients.cc,
+    bcc: recipients.bcc,
     attachments,
     subject,
     bodyText,

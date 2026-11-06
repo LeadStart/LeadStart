@@ -856,6 +856,12 @@ export interface LeadReply {
   // Outbound provider id (the Gmail message id, etc.) returned from the
   // reply-send call.
   sent_external_email_id: string | null;
+  // Who the sent reply went to (migration 00141); NULL on replies sent before
+  // they were recorded. An admin reply can change these from the defaults
+  // (To the lead, Bcc the client's copy): src/lib/replies/recipients.ts.
+  sent_to: string[] | null;
+  sent_cc: string[] | null;
+  sent_bcc: string[] | null;
   error: string | null;
   // D2 idempotency tombstone: sha256(reply.id + body_text).slice(0, 16).
   // Stamped on atomic claim; persists through error rollbacks.
