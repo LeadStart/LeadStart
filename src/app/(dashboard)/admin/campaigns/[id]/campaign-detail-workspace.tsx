@@ -60,6 +60,7 @@ import { StageFlowCard, type StageRow } from "./stage-flow-card";
 import { DeliverabilityCard, type DeliverabilityResult } from "./deliverability-card";
 import { DeliverabilityGateCard } from "./deliverability-gate-card";
 import { ReplyTemplateCard } from "./reply-template-card";
+import { FollowUpAlertsCard } from "./follow-up-alerts-card";
 
 const TIMEZONES = [
   { value: "America/Los_Angeles", label: "Pacific" },
@@ -119,6 +120,7 @@ export function CampaignDetailWorkspace({
   initialSendUnproven,
   initialHeldUnproven,
   initialReplyTemplate,
+  initialFollowUpAlerts,
   replyTokens,
   nativeStats,
   flowProgress,
@@ -163,6 +165,8 @@ export function CampaignDetailWorkspace({
   // Saved reply for hot leads (campaigns.reply_template, migration 00134) and the
   // tokens the Options tab offers for it.
   initialReplyTemplate: string | null;
+  // Follow-up alerts (campaigns.follow_up_alerts, migration 00142).
+  initialFollowUpAlerts: boolean;
   replyTokens: string[];
   nativeStats: NativeStatsView;
   flowProgress: FlowProgressData | null;
@@ -650,7 +654,8 @@ export function CampaignDetailWorkspace({
         </TabsContent>
 
         {/* Setup: client link + mailbox pool (configurable at any time) + delete */}
-        <TabsContent value="options" className="min-h-0 overflow-y-auto pt-4">
+        {/* 12px side padding paid back by the margin, so a card's shadow (12px) fades inside the scroller, not cut at its edge. */}
+        <TabsContent value="options" className="-mx-3 min-h-0 overflow-y-auto px-3 pt-4">
           <div className="max-w-2xl space-y-6">
             {/* Client link */}
             <div className="space-y-1.5">
@@ -719,6 +724,9 @@ export function CampaignDetailWorkspace({
 
             {/* Saved reply for hot leads: pre-fills the inbox reply box, per lead */}
             <ReplyTemplateCard campaignId={campaignId} initial={initialReplyTemplate} tokens={replyTokens} />
+
+            {/* Follow-up alerts: every later message from a lead alerts the owner */}
+            <FollowUpAlertsCard campaignId={campaignId} initial={initialFollowUpAlerts} />
 
             {/* Danger zone */}
             <div className="space-y-2 rounded-xl border border-red-200 bg-red-50/40 p-4">

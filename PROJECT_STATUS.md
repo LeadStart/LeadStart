@@ -1,6 +1,6 @@
 # LeadStart — Project Status
 
-> Last updated: 2026-11-06
+> Last updated: 2026-11-09
 >
 > **Lean current-state index.** This file is `@`-imported by `CLAUDE.md`, so it loads into every session — keep it short. Full per-initiative write-ups, the "What's Built" tables, the file-structure tree, and the backlog detail live in [`docs/PROJECT_STATUS_ARCHIVE.md`](docs/PROJECT_STATUS_ARCHIVE.md) (read on demand — **not** auto-loaded).
 
@@ -21,6 +21,14 @@ One line each — see the linked RESUME doc (repo root) or the archive for the f
 
 ## Recently shipped
 
+- **Follow-up alerts, per campaign** (2026-11-09, migration `00142` applied). Daniel: "ANY follow-up response thereafter needs to give us a notification if we choose so for certain campaigns." Before this, a lead's later reply alerted only when the classifier called it hot (interested, a meeting, a question). On 2026-11-09 none of the 5 leads sent a report or demo link (3 TuBe, 2 PolishPoint) had written back. Owner picks:
+  - **How you're told:** a phone push plus an email to the owner logins.
+  - **What counts:** anything a lead sends after their first reply, auto-replies included.
+  - **Where it's on:** TuBe and PolishPoint; off by default everywhere else.
+  - A campaign's Setup tab → **Follow-up alerts**: "Hot replies only" (as before) or "Every follow-up". With it on, every message after the first reply in a conversation (the same Gmail thread, or the same sender in the campaign) alerts, whatever it says. Its push replaces the hot or review push, so a reply pings once; the client's hot-lead email is unchanged.
+  - When the poller takes the newer of two messages first, the older one's pass alerts the newer (within the hour). `lead_replies.follow_up_alerted_at` is claimed before anything sends, so nothing alerts twice. A failed owner email goes to the 5-minute owner digest (`lead_follow_up`).
+  - Rules `src/lib/replies/follow-up-rules.ts`, delivery `follow-up.ts` (called from `pipeline.ts` step 4d); test `scripts/test-follow-up-alerts.ts` (28).
+  - The Setup tab's scroll box now has 12px of side padding paid back by its margin. The new card's shadow and the saved-reply card's were cut at its edge (main showed the saved-reply card cut at 1440). The tab is in `.claude/styling.json` ("Campaign Setup tab"). Measured with the repo's gate on the sample-data demo, Setup tab open, at 1440, 1024, 390 and 375, branch against main: nothing new, and 24 of main's glow cuts on that tab gone. What's left there is the topbar badge's "2", on every page.
 - **A sample-data demo Forge can measure** (2026-11-06; rule in `CLAUDE.md` under Key Architecture Decisions). Daniel, on where its data lives: "it needs to be hosted on the actual demo itself, not in supabase..".
   - `npm run demo` (launch config `leadstart-demo`, named by `.claude/styling.json`) builds a Postgres in its own process on every start: PGlite, all 141 migrations, then made-up rows. It takes about 1 second. `@supabase/lite` answers the app's Supabase calls at the demo's own address; the app's code is unchanged.
   - Each page opens signed in as the sample person who'd see it (owner on /admin, client on /client, buyer on /buyer). No live key is read.

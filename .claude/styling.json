@@ -152,6 +152,17 @@
       "root": "[role=dialog]"
     },
     {
+      "name": "Campaign Setup tab",
+      "page": "/app/admin/campaigns/5435c69e-0000-4000-8000-000000000001",
+      "open": [
+        {
+          "click": "[role=tab]:visible:has-text('Setup')",
+          "wait": 900
+        }
+      ],
+      "root": null
+    },
+    {
       "name": "Complete campaign",
       "page": "/app/admin/campaigns",
       "open": [

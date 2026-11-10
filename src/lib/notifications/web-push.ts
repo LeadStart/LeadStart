@@ -65,7 +65,9 @@ export async function sendHotLeadPush(args: {
   // "hot" (default) = a confirmed call-now lead. "review" = a hot-but-uncertain
   // reply the classifier parked in needs_review; the owner/VA should triage it
   // fast rather than let it sit silent in the inbox (owner call 2026-08-31).
-  kind?: "hot" | "review";
+  // "follow_up" = a lead wrote again in a campaign with follow-up alerts on
+  // (src/lib/replies/follow-up.ts), whatever the reply says.
+  kind?: "hot" | "review" | "follow_up";
 }): Promise<void> {
   try {
     if (!args.organizationId) return;
@@ -84,6 +86,7 @@ export async function sendHotLeadPush(args: {
     const name = args.leadName || "A lead";
     const where = args.leadCompany ? ` (${args.leadCompany})` : "";
     const isReview = args.kind === "review";
+    const isFollowUp = args.kind === "follow_up";
     // A confirmed hot lead (the default) gets a deliberately minimal push: the
     // brand icon plus one line, no name or reply snippet. The vaguer line is on
     // purpose, it reads cleanly at the smallest notification height and the
@@ -91,10 +94,12 @@ export async function sendHotLeadPush(args: {
     // descriptive title so the owner can tell the two apart. (Owner call
     // 2026-09-08.)
     const payload: PushPayload = {
-      title: isReview
-        ? `👀 Needs a look: ${name}${where} replied`
-        : "You have a new sales opportunity",
-      body: isReview ? buildSnippet(args.replySubject, args.replyBodyText) : "",
+      title: isFollowUp
+        ? `💬 Follow-up: ${name}${where} wrote back`
+        : isReview
+          ? `👀 Needs a look: ${name}${where} replied`
+          : "You have a new sales opportunity",
+      body: isReview || isFollowUp ? buildSnippet(args.replySubject, args.replyBodyText) : "",
       url: `/app/admin/inbox/${args.replyId}`,
       tag: `reply-${args.replyId}`,
     };

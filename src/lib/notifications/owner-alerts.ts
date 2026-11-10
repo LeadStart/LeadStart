@@ -50,7 +50,9 @@ export type OwnerAlertKind =
   | "registrar_spend_cap"
   | "domain_provisioning"
   // Pan Pal (the leadstart.io chat helper) got a question his answer book does not cover.
-  | "site_chat_unanswered";
+  | "site_chat_unanswered"
+  // A follow-up alert's direct email failed; the digest carries it (src/lib/replies/follow-up.ts).
+  | "lead_follow_up";
 
 export interface OwnerAlertInput {
   admin: ReturnType<typeof createAdminClient>;
@@ -273,6 +275,7 @@ const KIND_LABEL: Record<OwnerAlertKind, string> = {
   registrar_spend_cap: "Domain purchase blocked by the spend cap",
   domain_provisioning: "Domain provisioning needs attention",
   site_chat_unanswered: "Pan Pal couldn't answer a website visitor",
+  lead_follow_up: "A lead wrote back (follow-up alert)",
 };
 
 const KIND_COLOR: Record<OwnerAlertKind, string> = {
@@ -300,6 +303,8 @@ const KIND_COLOR: Record<OwnerAlertKind, string> = {
   domain_provisioning: "#c2410c",
   // Informational: a question to add to Pan Pal's answer book.
   site_chat_unanswered: "#2563eb",
+  // A lead's message, not a failure (its direct email couldn't send).
+  lead_follow_up: "#2563eb",
 };
 
 function renderEventCard(input: {

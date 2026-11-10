@@ -425,6 +425,7 @@ export default async function AdminCampaignDetailPage({
         initialSendUnproven={campaign.send_unproven_addresses ?? false}
         initialHeldUnproven={heldUnprovenRes.count ?? 0}
         initialReplyTemplate={campaign.reply_template ?? null}
+        initialFollowUpAlerts={campaign.follow_up_alerts ?? false}
         replyTokens={[
           "first_name",
           ...["report_link", "firm"].filter((t) =>

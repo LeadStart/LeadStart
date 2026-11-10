@@ -20,6 +20,7 @@ import { sendHotLeadPush } from "@/lib/notifications/web-push";
 import { deliverReplyAutomations } from "@/lib/notifications/internal-automations";
 import { MissingAnthropicKeyError } from "@/lib/ai/client";
 import { suppressUnsubscribe } from "./suppression";
+import { alertFollowUps } from "./follow-up";
 
 // Two-layer classification (owner decision, 2026-08-31): the deterministic
 // prefilter is Layer 1 (still the sole authority on the compliance hard-
@@ -184,12 +185,19 @@ export async function runReplyPipeline(
     triage: hotUncertain,
   });
 
+  // --- 4d. Follow-up alerts (campaigns.follow_up_alerts, migration 00142) ---
+  // With the campaign's switch on, every message after the lead's first reply
+  // pushes and emails the owner whatever it says (src/lib/replies/follow-up.ts).
+  // Its push replaces the review / hot push below, so a reply pings once.
+  // Self-guarded; runs before the orphan/client gates like the triage push.
+  const followUpAlerted = await alertFollowUps(admin, reply);
+
   // Owner/VA fast-triage push for a hot-but-uncertain reply. Owner-facing, fired
   // here BEFORE the orphan/client gates so it reaches the owner even for an
   // orphan reply or a client with no notification_email. Mutually exclusive with
   // the real-hot push in the client-notify block below (hotUncertain requires
   // needs_review; a real-hot class never is), so no double-ping. Self-guarded.
-  if (hotUncertain) {
+  if (hotUncertain && !followUpAlerted) {
     await sendHotLeadPush({
       admin,
       organizationId: reply.organization_id,
@@ -243,7 +251,8 @@ export async function runReplyPipeline(
   // owner is pinged even when the client has no notification_email. Self-guarded
   // (never throws) and no-ops until VAPID keys are set, so it can't affect the
   // hot-lead email path. Awaited so it completes before this serverless fn ends.
-  await sendHotLeadPush({
+  // A follow-up already pushed above (4d), so it doesn't push again.
+  if (!followUpAlerted) await sendHotLeadPush({
     admin,
     organizationId: reply.organization_id,
     replyId,

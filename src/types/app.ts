@@ -217,6 +217,10 @@ export interface Campaign {
   // {{report_link}}); see src/lib/replies/saved-reply.ts. NULL = none. Optional
   // until the migration is applied everywhere.
   reply_template?: string | null;
+  // Follow-up alerts (migration 00142): true = every message a lead sends after
+  // their first reply pushes and emails the owner, whatever it says
+  // (src/lib/replies/follow-up.ts). Optional until the migration is applied.
+  follow_up_alerts?: boolean;
   // Per-campaign Unipile account binding (migration 00046). Defaults to
   // clients.unipile_account_id but lives on the campaign so accounts can
   // rotate without invalidating campaign history.
@@ -862,6 +866,8 @@ export interface LeadReply {
   sent_to: string[] | null;
   sent_cc: string[] | null;
   sent_bcc: string[] | null;
+  // Stamped when this reply's follow-up alert went out (migration 00142).
+  follow_up_alerted_at?: string | null;
   error: string | null;
   // D2 idempotency tombstone: sha256(reply.id + body_text).slice(0, 16).
   // Stamped on atomic claim; persists through error rollbacks.
