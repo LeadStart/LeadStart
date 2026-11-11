@@ -4,6 +4,17 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* An inbox reply pane (the `thread` container, components/inbox/unibox.tsx) too
+   narrow or too short to pin its header, bars and reply box round the message:
+   the whole thread scrolls as one there. Pinned, those parts took 478 of a
+   390 x 844 phone's 658px pane and left the message 32px (task #603); a pane at
+   least 36rem wide and 37.5rem tall (1280 x 800 and up) keeps them pinned. */
+@custom-variant thread-stack {
+  @container thread (width < 36rem) or (height < 37.5rem) {
+    @slot;
+  }
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);

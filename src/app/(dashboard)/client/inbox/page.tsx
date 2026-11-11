@@ -33,6 +33,7 @@ import {
   Unibox,
   UniboxListHeader,
   UniboxListScroll,
+  UniboxThread,
   ReplyListRow,
   ThreadEmpty,
   MobileBack,
@@ -318,7 +319,7 @@ function ClientThread({
   ];
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <UniboxThread>
       {/* Header */}
       <div className="flex-none border-b border-border-soft px-4 py-3 sm:px-5">
         <MobileBack onBack={onBack} />
@@ -451,6 +452,6 @@ function ClientThread({
           </p>
         ) : null}
       </div>
-    </div>
+    </UniboxThread>
   );
 }

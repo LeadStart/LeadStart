@@ -46,6 +46,7 @@ import {
   Unibox,
   UniboxListHeader,
   UniboxListScroll,
+  UniboxThread,
   ReplyListRow,
   ThreadEmpty,
   MobileBack,
@@ -381,7 +382,7 @@ function AdminThread({
   const phone = telHref(reply.lead_phone_e164);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <UniboxThread>
       {/* Header */}
       <div className="flex-none border-b border-border-soft px-4 py-3 sm:px-5">
         <MobileBack onBack={onBack} />
@@ -462,7 +463,7 @@ function AdminThread({
 
       {/* Classification trail + exclude (collapsible footer) */}
       <TrailFooter reply={reply} onExclude={onExclude} />
-    </div>
+    </UniboxThread>
   );
 }
 
@@ -983,8 +984,11 @@ function AdminComposer({
   if (!content) return null;
   // Shrinks and scrolls: the unibox card is a fixed-height, overflow-hidden
   // column, so a rigid composer pushes Send out of reach on short screens.
+  // When the thread scrolls as one (thread-stack), it takes its full height.
   return (
-    <div className="min-h-[9rem] shrink overflow-y-auto border-t border-border-soft bg-card px-4 py-3 sm:px-5">{content}</div>
+    <div className="min-h-[9rem] shrink overflow-y-auto border-t border-border-soft bg-card px-4 py-3 sm:px-5 thread-stack:min-h-0 thread-stack:shrink-0 thread-stack:overflow-y-visible">
+      {content}
+    </div>
   );
 }
 

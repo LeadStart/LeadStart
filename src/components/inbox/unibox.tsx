@@ -39,14 +39,28 @@ export function Unibox({
       >
         {list}
       </div>
-      {/* Detail: hidden on mobile until a reply is open. */}
+      {/* Detail: hidden on mobile until a reply is open. It's the `thread`
+          container the thread-stack variant (globals.css) measures. */}
       <div
-        className={`min-h-0 min-w-0 flex-1 flex-col sm:flex ${
+        className={`min-h-0 min-w-0 flex-1 flex-col [container:thread/size] sm:flex ${
           hasSelection ? "flex" : "hidden sm:flex"
         }`}
       >
         {detail}
       </div>
+    </div>
+  );
+}
+
+// An open reply's column: its header and bars on top and the reply box at the
+// foot, with the conversation scrolling between them. In a pane too narrow or
+// too short for that (a phone, upright or sideways, a tablet, a small window:
+// the thread-stack variant), the whole column scrolls as one instead and the
+// message shows at its full length, so the bars can't squeeze it to nothing.
+export function UniboxThread({ children }: { children: ReactNode }) {
+  return (
+    <div className="flex min-h-0 flex-1 flex-col thread-stack:overflow-y-auto thread-stack:overscroll-y-contain">
+      {children}
     </div>
   );
 }

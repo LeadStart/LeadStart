@@ -1,6 +1,6 @@
 # LeadStart — Project Status
 
-> Last updated: 2026-11-09
+> Last updated: 2026-11-10
 >
 > **Lean current-state index.** This file is `@`-imported by `CLAUDE.md`, so it loads into every session — keep it short. Full per-initiative write-ups, the "What's Built" tables, the file-structure tree, and the backlog detail live in [`docs/PROJECT_STATUS_ARCHIVE.md`](docs/PROJECT_STATUS_ARCHIVE.md) (read on demand — **not** auto-loaded).
 
@@ -21,6 +21,7 @@ One line each — see the linked RESUME doc (repo root) or the archive for the f
 
 ## Recently shipped
 
+- **Inbox reply view reads on a phone** (2026-11-10, task #603 from LeadStart App's queue). An open reply pinned its header, tag bar, banner, reply box and trail round the message, which was the one part left to shrink: on the sample-data demo at 390 × 844 the message got 32px of its 361 in the admin Inbox (121px in the client portal); 32px too at 1024 × 768 and on a phone held sideways (844 × 390), 73px on an iPad upright (768 × 1024) with the reply box open. Now a reply pane under 36rem wide or 37.5rem tall scrolls as one: the message at full length, the reply box under it (`UniboxThread` in `components/inbox/unibox.tsx`, the `thread-stack` variant in `globals.css`). 1280 × 800 and larger keep the pinned layout unchanged. Measured: the repo's gate's measures on both inboxes at 1440, 1024, 390 and 375 with a reply and its box open, the same 14 problems as master and none new; the iOS 27 simulator with the real keyboard (the reply box above the form bar in both inboxes). → `UI_RULES.md` change log.
 - **Follow-up alerts, per campaign** (2026-11-09, migration `00142` applied). Daniel: "ANY follow-up response thereafter needs to give us a notification if we choose so for certain campaigns." Before this, a lead's later reply alerted only when the classifier called it hot (interested, a meeting, a question). On 2026-11-09 none of the 5 leads sent a report or demo link (3 TuBe, 2 PolishPoint) had written back. Owner picks:
   - **How you're told:** a phone push plus an email to the owner logins.
   - **What counts:** anything a lead sends after their first reply, auto-replies included.

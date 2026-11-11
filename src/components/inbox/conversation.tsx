@@ -105,7 +105,9 @@ export function Conversation({ reply, refreshKey = 0 }: { reply: ConversationRep
   const leadName = reply.lead_name || reply.lead_email;
 
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto bg-[#fbfcfe] px-4 py-4 sm:px-6">
+    // Scrolls between the thread's bars; when its column scrolls as one
+    // (thread-stack, components/inbox/unibox.tsx), it takes its full height.
+    <div className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain bg-[#fbfcfe] px-4 py-4 sm:px-6 thread-stack:shrink-0 thread-stack:basis-auto thread-stack:overflow-y-visible">
       <div className="flex flex-col gap-2.5">
         {thread.state === "ready" ? (
           thread.messages.map((m) => (
