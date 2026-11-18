@@ -339,7 +339,8 @@ export async function GET(request: NextRequest) {
 
           // Stop-on-reply, but never on an auto-reply (OOO), which would
           // wrongly halt the sequence. Human reply → halt + mark replied.
-          if (!isAutoSubmitted(parsed)) {
+          const autoSubmitted = isAutoSubmitted(parsed);
+          if (!autoSubmitted) {
             if (replySend.enrollment_id) {
               await admin
                 .from("campaign_enrollments")
@@ -382,6 +383,9 @@ export async function GET(request: NextRequest) {
               from: parsed.from,
               subject: parsed.subject,
               in_spam: inSpam,
+              // The headers' verdict, read by the classifier: automatic mail
+              // never rings the client (runKeywordPrefilter / decide.ts).
+              auto_submitted: autoSubmitted,
             } as Record<string, unknown>,
             status: "new" as const,
           };

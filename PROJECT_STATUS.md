@@ -1,6 +1,6 @@
 # LeadStart — Project Status
 
-> Last updated: 2026-11-10
+> Last updated: 2026-11-17
 >
 > **Lean current-state index.** This file is `@`-imported by `CLAUDE.md`, so it loads into every session — keep it short. Full per-initiative write-ups, the "What's Built" tables, the file-structure tree, and the backlog detail live in [`docs/PROJECT_STATUS_ARCHIVE.md`](docs/PROJECT_STATUS_ARCHIVE.md) (read on demand — **not** auto-loaded).
 
@@ -20,6 +20,12 @@ One line each — see the linked RESUME doc (repo root) or the archive for the f
 - **Onboarding / billing redesign** — **IN DESIGN.** Client-facing quote → email → welcome flow + an on-site Stripe payment modal + an admin alert. Mockup at [`mockups/client-facing-quote-billing.html`](mockups/client-facing-quote-billing.html). The **Workflows → Onboarding live-preview** (Admin → Workflows → Onboarding) is BUILT (local, unpushed) — renders the real proposal-email / hosted-quote / welcome surfaces from live default config, drift-guarded by `scripts/test-onboarding-preview-sync.ts`. Open items still tracked in the in-app **Tasks** list: native Microsoft channel, SMTP channel, and an admin "Quote signed" email.
 
 ## Recently shipped
+
+- **Automatic mail never rings the client** (2026-11-17, task #860 from LeadStart App's queue). A PolishPoint lead's "I have transitioned to a new email server and can now be reached at …, please update your contacts" notice came 3 seconds after email 1 and was read as true_interest (Claude Haiku 0.82), so the client was emailed. The reply poller had already seen it as automatic mail (it left the sequence running), but that verdict never reached the classifier. Owner picks 2026-11-17:
+  - **Changed-address notices are Out of Office** (silent): the prefilter's new rule (`ADDRESS_CHANGE_PATTERNS`) routes them to ooo unless the reply opens with an answer, asks a question, refuses, or hands off to someone else; the Claude prompt's ooo now covers every automatic notice (rule 13).
+  - **Automatic mail is never client-hot:** the poller keeps its header verdict in `lead_replies.raw_payload.auto_submitted`; a hot class on such mail is held as needs_review with the hot class in the trail, so the owner gets the review push and the client is never emailed (`decide.ts`). No send-it override on automatic mail.
+  - Replayed on all 42 stored replies (42 Haiku calls): 41 unchanged, the misread one now ooo (Claude 0.95). That reply was corrected to ooo in the live data.
+  - Test `scripts/test-reply-classifier.ts` (158 critical, 29 new).
 
 - **Inbox reply view reads on a phone** (2026-11-10, task #603 from LeadStart App's queue). An open reply pinned its header, tag bar, banner, reply box and trail round the message, which was the one part left to shrink: on the sample-data demo at 390 × 844 the message got 32px of its 361 in the admin Inbox (121px in the client portal); 32px too at 1024 × 768 and on a phone held sideways (844 × 390), 73px on an iPad upright (768 × 1024) with the reply box open. Now a reply pane under 36rem wide or 37.5rem tall scrolls as one: the message at full length, the reply box under it (`UniboxThread` in `components/inbox/unibox.tsx`, the `thread-stack` variant in `globals.css`). 1280 × 800 and larger keep the pinned layout unchanged. Measured: the repo's gate's measures on both inboxes at 1440, 1024, 390 and 375 with a reply and its box open, the same 14 problems as master and none new; the iOS 27 simulator with the real keyboard (the reply box above the form bar in both inboxes). → `UI_RULES.md` change log.
 - **Follow-up alerts, per campaign** (2026-11-09, migration `00142` applied). Daniel: "ANY follow-up response thereafter needs to give us a notification if we choose so for certain campaigns." Before this, a lead's later reply alerted only when the classifier called it hot (interested, a meeting, a question). On 2026-11-09 none of the 5 leads sent a report or demo link (3 TuBe, 2 PolishPoint) had written back. Owner picks:

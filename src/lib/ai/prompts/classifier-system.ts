@@ -35,7 +35,7 @@ You MUST return exactly one of these as \`class\`.
 
 ### Silent (no client notification)
 
-- **ooo**: out-of-office auto-reply. Typical phrases: "I'm out of office", "on vacation through X", "will respond when I return", "limited email access". Usually short, impersonal, may name a date.
+- **ooo**: out-of-office auto-reply, and every other automatic notice a mail system or responder sends back on its own. Typical phrases: "I'm out of office", "on vacation through X", "will respond when I return", "limited email access". It also covers changed-address notices ("I have moved to a new email address and can now be reached at …", "please update your contacts", "this mailbox is no longer monitored") and receipt acknowledgements ("we received your message and will respond shortly"). Usually short, impersonal, the same words to every sender, may name a date or a new address. A notice's polite boilerplate ("Thanks for your email", "to avoid delays in receiving a response") is never interest.
 
 - **wrong_person_no_referral**: prospect says "wrong person" or "I don't handle this" WITHOUT providing a forwarding contact. Distinguishes from referral_forward, which has a new contact. Short, polite brush-offs with no path forward.
 
@@ -90,6 +90,10 @@ embedded_emails: <any email addresses the prefilter extracted from the body, or 
 
 Treat the prefilter's suggestion as a HINT, not ground truth. Your job is to read the reply and decide.
 
+Two flags carry more than a hint:
+- \`auto_submitted\`: the message's own mail headers mark it as automatic mail (an auto-responder, not a person typing). Read it as an automatic notice (ooo, or referral_forward when it hands off to a different named person) unless the body is unmistakably a person answering our email. Automatic mail is never routed to the client as a hot reply, whatever class you pick.
+- \`address_change_phrase\`: the reply contains changed-address wording ("can now be reached at", "update your contacts", "no longer monitored").
+
 ## Output format
 
 You will be constrained to a JSON tool-call schema with these fields:
@@ -130,5 +134,7 @@ Return only this structured object. Do not add preamble, do not explain your cha
 11. **Terse opt-outs, e.g. "No more." / "Stop." / "Take me off."** → unsubscribe at ~0.90, even when softened by a sign-off ("No more. Wishing you all the best."). These are removal requests carrying a compliance obligation; they are NOT not_interested. The one exception: the same words clearly attached to something positive ("no more questions, this sounds great" → true_interest). Decide by one test: is the person asking you to stop contacting them? If yes, unsubscribe.
 
 12. **"Send it" and every other request to send what we offered** ("Send it", "Send it over", "Sure, send the report", "Yes please send", "Can you send it to my paralegal?") → true_interest at ~0.90, always, even when the rest of the reply is lukewarm ("not sure we need this, but send it over"). It is a yes to our offer. Only a NEGATED send is not interest: "don't send it" / "no need to send anything" → not_interested. An opt-out still wins ("send it, then take me off your list" → unsubscribe).
+
+13. **Changed-address notices** ("Thanks very much for your email. I have transitioned to a new email server and can now be reached at jane@newfirm.com. Please update your contacts with this new email address to prevent any delays in receiving a response.") → ooo at ~0.90. It is an automatic notice sent to everyone who writes to the old address, not an answer to our offer: nothing in it responds to what we wrote. The new address is the SAME person's, so it is not a referral either; only a DIFFERENT named person to contact makes it referral_forward (rule 1). It stays ooo however warm the boilerplate sounds. Only when the person also answers our email in their own words ("Interested! I can now be reached at …", "Send it to my new address") does that answer decide the class.
 
 Now wait for the reply to classify.`;

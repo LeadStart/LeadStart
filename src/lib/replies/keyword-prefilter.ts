@@ -151,6 +151,28 @@ const OOO_PATTERNS: RegExp[] = [
   /\baway\s+from\s+(my\s+)?(desk|office|e-?mail)\b/i,
 ];
 
+// "My address changed" notices, the other common auto-reply: "I have
+// transitioned to a new email server and can now be reached at …, please update
+// your contacts" (task #860: one read as true_interest and emailed the client).
+// Routed like an out-of-office (a silent auto-reply), but only when nothing in
+// the reply is a person talking: a question, interest, a send-it or a refusal
+// keeps it out, so "Interested! I can now be reached at …" is never an auto-reply.
+const ADDRESS_CHANGE_PATTERNS: RegExp[] = [
+  /\b(?:can|may|will)\s+now\s+be\s+(?:reached|contacted|e-?mailed)\s+(?:at|via|on)\b/i,
+  /\bupdate\s+(?:your|the)\s+(?:contacts?|records?|address\s+book|contact\s+(?:list|info(?:rmation)?|details))\b/i,
+  /\b(?:transitioned|moved|switched|migrated|changed|changing|moving|switching)\s+(?:over\s+)?(?:to\s+)?(?:a\s+|my\s+|our\s+)?(?:new|different)\s+e-?mail\b/i,
+  /\b(?:my|our|this|the)\s+e-?mail(?:\s+address)?\s+(?:has\s+)?(?:changed|been\s+changed)\b/i,
+  /\b(?:e-?mail(?:\s+address)?|address|mailbox|inbox|account)\s+(?:is|will\s+be|has\s+been)\s+no\s+longer\s+(?:being\s+)?(?:monitored|in\s+use|active|checked|valid)\b/i,
+  /\b(?:e-?mail(?:\s+address)?|mailbox|inbox)\s+(?:is|has\s+been)\s+(?:deactivated|discontinued|retired|closed)\b/i,
+];
+
+// Set by the reply poller from the message's own headers (isAutoSubmitted in
+// src/lib/gmail/mime.ts: Auto-Submitted, X-Autoreply, Precedence…) and kept in
+// lead_replies.raw_payload.auto_submitted. Automatic mail never rings the
+// client: decide.ts holds a hot class on it for review instead.
+export const AUTO_SUBMITTED_FLAG = "auto_submitted";
+export const ADDRESS_CHANGE_FLAG = "address_change_phrase";
+
 // Clear rejections (NOT opt-outs, the person is declining but not demanding
 // removal). Kept precise so soft/ambiguous replies ("maybe later") fall
 // through to needs_review instead of being wrongly killed. Checked BEFORE the
@@ -431,16 +453,20 @@ function extractEmbeddedEmails(body: string, senderEmail: string | null): string
  * @param body - plain-text body of the reply
  * @param senderEmail - the `from_address_email` of the reply, used to
  *   exclude the prospect's own address from embedded-email extraction
+ * @param opts.autoSubmitted - the poller's header verdict: the message is
+ *   automatic mail (raw_payload.auto_submitted)
  * @returns flags, embedded emails, and a (conservative) suggested class
  */
 export function runKeywordPrefilter(
   body: string | null | undefined,
-  senderEmail: string | null | undefined
+  senderEmail: string | null | undefined,
+  opts: { autoSubmitted?: boolean } = {}
 ): PrefilterResult {
   // Classify only the fresh reply text, not the quoted thread beneath it.
   const text = stripQuotedReply(body || "");
+  const autoSubmitted = opts.autoSubmitted === true;
   if (!text) {
-    return { flags: [], embedded_emails: [], suggested_class: null, reason: null };
+    return { flags: autoSubmitted ? [AUTO_SUBMITTED_FLAG] : [], embedded_emails: [], suggested_class: null, reason: null };
   }
 
   const flags: string[] = [];
@@ -454,6 +480,7 @@ export function runKeywordPrefilter(
   const referralHit = matchAny(own, REFERRAL_PATTERNS);
   const unsubscribeHit = matchAny(text, UNSUBSCRIBE_PATTERNS);
   const oooHit = matchAny(text, OOO_PATTERNS);
+  const addressChangeHit = matchAny(own, ADDRESS_CHANGE_PATTERNS);
   const notInterestedHit = matchAny(text, NOT_INTERESTED_PATTERNS);
   const meetingHit = matchAny(text, MEETING_PATTERNS);
   const sendItPhrase = hasSendItRequest(text);
@@ -482,15 +509,27 @@ export function runKeywordPrefilter(
     if (negatedStop && !hardOptOutWord) unsubscribeActive = false;
   }
 
-  // The hard send-it override yields to an opt-out (compliance) and to an
-  // out-of-office (an auto-reply's "email it to my assistant" isn't a request).
-  const sendItRequest = sendItPhrase && !unsubscribeActive && !oooHit;
+  // The hard send-it override yields to an opt-out (compliance), to an
+  // out-of-office and to automatic mail (an auto-reply's "email it to my
+  // assistant" isn't a request).
+  const sendItRequest = sendItPhrase && !unsubscribeActive && !oooHit && !autoSubmitted;
+
+  // A changed-address notice reads as an auto-reply only when no one is talking
+  // in it: a question, a refusal or an answer opening the reply ("Interested!",
+  // "Yes, please.") keeps its own class (interest anywhere, a meeting and the
+  // handoff phrases are checked in the OOO branch below). It routes to ooo, a
+  // hard override Claude can't undo, so a person must never fall in here.
+  const firstSentence = own.trim().split(/(?<=[.!?])\s+|\n/)[0] ?? "";
+  const addressChangeNotice =
+    !!addressChangeHit && !questionHit && !notInterestedHit && !matchAny(firstSentence, INTEREST_PATTERNS);
 
   if (wrongPersonHit) flags.push("wrong_person_phrase");
   if (referralHit) flags.push("referral_phrase");
   if (embedded.length > 0) flags.push("referral_email_present");
   if (unsubscribeActive) flags.push("unsubscribe_phrase");
   if (oooHit) flags.push("ooo_phrase");
+  if (addressChangeHit) flags.push(ADDRESS_CHANGE_FLAG);
+  if (autoSubmitted) flags.push(AUTO_SUBMITTED_FLAG);
   if (notInterestedHit) flags.push("not_interested_phrase");
   if (meetingHit) flags.push("meeting_phrase");
   if (interestHit) flags.push("interest_phrase");
@@ -510,11 +549,11 @@ export function runKeywordPrefilter(
   } else if (sendItRequest) {
     suggested_class = "true_interest";
     reason = 'Asked us to send it ("send it" is always a positive reply)';
-  } else if (oooHit && !wrongPersonHit && !referralHit && !interestHit && !meetingHit) {
+  } else if ((oooHit || addressChangeNotice) && !wrongPersonHit && !referralHit && !interestHit && !meetingHit) {
     // Only OOO when there's no competing positive signal: "out until Monday,
     // let's connect then" is a warm lead, not a dead auto-reply.
     suggested_class = "ooo";
-    reason = "Out-of-office phrase matched";
+    reason = oooHit ? "Out-of-office phrase matched" : "Changed-address notice matched (an auto-reply)";
   } else if ((wrongPersonHit || referralHit) && embedded.length > 0) {
     suggested_class = "referral_forward";
     reason = `Handoff phrase + embedded email address${embedded.length > 1 ? "es" : ""}`;

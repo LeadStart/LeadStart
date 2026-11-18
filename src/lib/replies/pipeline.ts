@@ -94,8 +94,12 @@ export async function runReplyPipeline(
     client = clientData as unknown as Client;
   }
 
-  // --- 3. Classification (keyword prefilter is primary; Claude off) ---
-  const prefilter = runKeywordPrefilter(reply.body_text, reply.from_address);
+  // --- 3. Classification (keyword prefilter is Layer 1, Claude Layer 2) ---
+  // The poller's header verdict (automatic mail) rides in as a flag, so Claude
+  // sees it and decide.ts never lets it ring the client.
+  const prefilter = runKeywordPrefilter(reply.body_text, reply.from_address, {
+    autoSubmitted: reply.raw_payload?.auto_submitted === true,
+  });
 
   let claude: ClassifierOutput | null = null;
   if (USE_CLAUDE_CLASSIFIER) {

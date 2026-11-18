@@ -17,7 +17,7 @@
 //     NOT a build gate: many misses are acceptable needs_review fallbacks that
 //     Claude corrects in the live path. It tracks accuracy drift for a human.
 
-import { runKeywordPrefilter, SEND_IT_FLAG } from "@/lib/replies/keyword-prefilter";
+import { runKeywordPrefilter, SEND_IT_FLAG, AUTO_SUBMITTED_FLAG, ADDRESS_CHANGE_FLAG } from "@/lib/replies/keyword-prefilter";
 import { decideFinalClass } from "@/lib/replies/decide";
 import type { ReplyClass } from "@/types/app";
 
@@ -87,6 +87,33 @@ console.log("CRITICAL · out-of-office");
 crit("I'm out of office until Monday with limited email access.", "ooo", "OOO w/ return");
 crit("On vacation through April 26. I will respond when I return.", "ooo", "OOO vacation");
 crit("Automatic reply: I am currently traveling.", "ooo", "OOO auto-reply");
+
+// ── CRITICAL: changed-address notices are auto-replies, never hot (task #860) ─
+// A real one (2026-11-17, names changed) read as true_interest 0.82 and emailed
+// the client. It must land in ooo by the prefilter alone; a person who writes
+// back AND mentions a new address keeps their own class.
+console.log("CRITICAL · changed-address notices (task #860)");
+const MOVED =
+  "Thanks very much for your email. I have transitioned to a new email server and can now be reached at jane@newfirmclean.com. Please update your contacts with this new email address to prevent any delays in receiving a response.\n\nThanks,\nJane\n\n555.010.0199\nwww.NewFirmClean.com\n\n";
+for (const b of [
+  MOVED,
+  "Please note my email address has changed. Kindly update your records: jsmith@newco.com",
+  "This mailbox is no longer monitored. I can now be reached at jsmith@newco.com.",
+  "Hello, I have moved to a new email address. Please update your address book with jsmith@newco.com. Thank you!",
+  "This email address will no longer be monitored after December 1. Please update your contact information.",
+]) {
+  crit(b, "ooo", `changed-address notice: "${b.slice(0, 50)}…"`);
+  critNotHot(b, `changed-address notice is not hot: "${b.slice(0, 50)}…"`);
+}
+if (runKeywordPrefilter(MOVED, "jane@oldfirm.com").flags.includes(ADDRESS_CHANGE_FLAG)) passed++;
+else { failed++; console.log("  ✗ CRIT changed-address notice must carry the address_change_phrase flag"); }
+critNot("Interested! I can now be reached at jane@newfirmclean.com, please update your records.", "ooo", "an answer opening the reply is never an auto-reply");
+critNot("Yes, please. I've moved to a new email address, please update your records: jane@newfirmclean.com", "ooo", "'Yes, please.' opening is never an auto-reply");
+crit("I'm interested. I can now be reached at jane@newfirmclean.com, please update your records.", "true_interest", "interest + new address stays hot");
+crit("Sure, send it to my new email address: jane@newfirmclean.com", "true_interest", "send-it to a new address stays hot");
+crit("Do you work with commercial buildings? I can now be reached at jane@newfirmclean.com.", "qualifying_question", "a question + new address stays a question");
+crit("Not interested. Please update your records, I can now be reached at jane@newfirmclean.com.", "not_interested", "a refusal + new address stays a refusal");
+crit("I'm no longer with the company. Please contact mike@acme.co. This mailbox is no longer monitored.", "referral_forward", "a handoff to another person stays a referral");
 
 // ── CRITICAL: clear rejections must NOT read as hot ──────────────────────────
 console.log("CRITICAL · clear not-interested");
@@ -250,6 +277,34 @@ for (const [body, claude, expected, label] of [
   failed++;
   console.log(`  ✗ CRIT decide: ${label}\n      expected ${expected}, got ${got}`);
 }
+
+// ── CRITICAL: automatic mail never rings the client (task #860) ──────────────
+// The poller's header verdict (raw_payload.auto_submitted) rides in as a flag.
+// A hot answer on automatic mail is held as needs_review with the hot class kept
+// in the trail (so the owner gets the review push); every other class stands.
+console.log("CRITICAL · automatic mail is never client-hot (task #860)");
+const MOVED_NO_PHRASE = "Thanks very much for your email. Glad to hear from you; jane@newfirmclean.com is the best way to reach me going forward.";
+for (const [body, auto, claude, expected, label] of [
+  [MOVED_NO_PHRASE, true, claudeSays("true_interest", 0.82), "needs_review", "auto mail + Claude true_interest 0.82 → held"],
+  [MOVED_NO_PHRASE, true, claudeSays("qualifying_question", 0.9), "needs_review", "auto mail + Claude qualifying_question → held"],
+  [MOVED_NO_PHRASE, true, claudeSays("meeting_booked", 0.9), "needs_review", "auto mail + Claude meeting_booked → held"],
+  [MOVED_NO_PHRASE, true, claudeSays("ooo", 0.9), "ooo", "auto mail + Claude ooo stands"],
+  [MOVED_NO_PHRASE, true, claudeSays("referral_forward", 0.9), "referral_forward", "auto mail + Claude referral stands"],
+  [MOVED_NO_PHRASE, false, claudeSays("true_interest", 0.82), "true_interest", "a person's mail: Claude still rules"],
+  ["Sounds great, let's talk.", true, null, "needs_review", "auto mail + prefilter interest, Claude down → held"],
+  ["Sure, send it over.", true, claudeSays("true_interest", 0.95), "needs_review", "auto mail: no send-it override"],
+  ["Please unsubscribe me.", true, claudeSays("unsubscribe", 0.99), "unsubscribe", "auto mail: an opt-out still suppresses"],
+  [MOVED, false, claudeSays("true_interest", 0.82), "ooo", "task #860's reply: the prefilter's ooo beats Claude's true_interest"],
+] as const) {
+  const prefilter = runKeywordPrefilter(body, "jane@oldfirm.com", { autoSubmitted: auto });
+  const d = decideFinalClass({ prefilter, claude });
+  const keptHot = expected !== "needs_review" || (claude === null ? prefilter.suggested_class !== null : d.claude_class === claude.class);
+  if (d.final_class === expected && keptHot && prefilter.flags.includes(AUTO_SUBMITTED_FLAG) === auto) { passed++; continue; }
+  failed++;
+  console.log(`  ✗ CRIT decide: ${label}\n      expected ${expected}, got ${d.final_class} (claude_class ${d.claude_class}, flags ${prefilter.flags.join(",")})`);
+}
+if (!runKeywordPrefilter("Sure, send it over.", "x@y.com", { autoSubmitted: true }).flags.includes(SEND_IT_FLAG)) passed++;
+else { failed++; console.log("  ✗ CRIT automatic mail must not carry the send-it flag"); }
 
 console.log(`\nCRITICAL result: ${passed} passed, ${failed} failed\n`);
 

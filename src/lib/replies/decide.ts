@@ -8,8 +8,8 @@
 //
 // Pure function. No network. No side effects.
 
-import type { ReplyClass, ReplyReferralContact } from "@/types/app";
-import { SEND_IT_FLAG, type PrefilterResult } from "./keyword-prefilter";
+import { HOT_REPLY_CLASSES, type ReplyClass, type ReplyReferralContact } from "@/types/app";
+import { AUTO_SUBMITTED_FLAG, SEND_IT_FLAG, type PrefilterResult } from "./keyword-prefilter";
 import type { ClassifierOutput } from "@/lib/ai/classifier";
 
 export interface DecideInput {
@@ -69,8 +69,31 @@ const PREFILTER_HARD_OVERRIDES = new Set<ReplyClass>([
  * 4. Claude missing (API failed or skipped) AND prefilter has a suggested
  *    class → use the prefilter suggestion.
  * 5. Claude missing AND prefilter has no suggestion → needs_review.
+ *
+ * Over all of it: automatic mail (the poller's header verdict, flagged
+ * auto_submitted) never lands in a client-hot class. A hot answer on it is held
+ * as needs_review with the hot class kept in the trail, so the owner gets the
+ * review push and the client is never emailed (task #860, owner pick
+ * 2026-11-17: an "I've moved to a new address" auto-notice read as
+ * true_interest 0.82 and emailed the client).
  */
 export function decideFinalClass(input: DecideInput): DecideOutput {
+  const decision = decideByPrecedence(input);
+  if (
+    input.prefilter.flags.includes(AUTO_SUBMITTED_FLAG) &&
+    HOT_REPLY_CLASSES.includes(decision.final_class)
+  ) {
+    return {
+      ...decision,
+      final_class: "needs_review",
+      reason: `Automatic mail (auto-reply headers) is never a hot reply; held for review instead of ${decision.final_class}: ${decision.reason}`,
+      referral_contact: null,
+    };
+  }
+  return decision;
+}
+
+function decideByPrecedence(input: DecideInput): DecideOutput {
   const { prefilter, claude } = input;
 
   // --- Precedence 1: prefilter hard overrides ---
